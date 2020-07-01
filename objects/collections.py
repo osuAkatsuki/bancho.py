@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from typing import Tuple
 from objects.player import Player
 from objects.channel import Channel

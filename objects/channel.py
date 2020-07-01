@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+from typing import Tuple, Union
 from objects.player import Player
 from constants import Privileges
 
@@ -11,12 +14,37 @@ class Channel:
         self.write = kwargs.get('write', Privileges.Verified)
         self.auto_join = kwargs.get('auto_join', True)
 
-    def join(self, p: Player) -> bool:
-        if not p.priv & self.read:
-            return False
+    def __contains__(self, p: Player) -> bool:
+        return p in self.players
 
+    def append(self, p: Player) -> None:
         self.players.append(p)
-        return True
-
-    def leave(self, p: Player) -> None:
+    def remove(self, p: Player) -> None:
         self.players.remove(p)
+
+    @property
+    def basic_info(self) -> Tuple[Union[str, int]]:
+        return (self.name, self.topic, len(self.players))
+
+    ''' I can't think of any reason these shouldn't just be a part of the Player class? '''
+
+    #def join(self, p: Player) -> bool:
+    #    if not p.priv & self.read:
+    #        print(f'{p.name} tried to join {self.name} which they have no access for.')
+    #        return False
+
+    #    if p in self.players:
+    #        print(f'{p.name} tried to join {self.name} which they are already in.')
+    #        return False
+
+    #    self.players.append(p)
+    #    p.join_channel(self)
+    #    return True
+
+    #def leave(self, p: Player) -> None:
+    #    if p not in self.players:
+    #        print(f'{p.name} tried to leave {self.name} which they are not in.')
+    #        return
+
+    #    p.leave_channel(self)
+    #    self.players.remove(p)

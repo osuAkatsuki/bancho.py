@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
+# old ugly code i'll rewrite soon..
+# probably in async for aika, though
+
 from typing import Tuple, Dict, Optional, Union
+from mysql.connector.pooling import MySQLConnectionPool
 from mysql.connector import errors
-from mysql.connector import pooling
 
 class SQLPool:
-    def __init__(self, pool_size: int, config: Dict[str, str]) -> None:
-        self.pool = pooling.MySQLConnectionPool(
+    def __init__(self, pool_size: int, config) -> None:
+        self.pool = MySQLConnectionPool(
             pool_name = 'Aika',
             pool_size = pool_size,
             pool_reset_session = True,
@@ -15,10 +18,8 @@ class SQLPool:
         )
 
     def execute(self, query: str, params: Tuple[Union[str, int, float]]=()) -> Optional[int]:
-        cnx = self.pool.get_connection()
-        if not cnx:
+        if not (cnx := self.pool.get_connection()):
             print('MySQL Error: Failed to retrieve a worker!')
-            return None
 
         cursor = cnx.cursor()
         cursor.execute(query, params)
@@ -32,10 +33,9 @@ class SQLPool:
         return res
 
     def fetch(self, query: str, params: Tuple[Union[str, int, float]] = (), _all: bool = False) -> Optional[Dict[str, Union[str, int, float]]]:
-        cnx = self.pool.get_connection()
-        if not cnx:
+        if not (cnx := self.pool.get_connection()):
             print('MySQL Error: Failed to retrieve a worker!')
-            return None
+            return
 
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(query, params)

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from typing import Tuple
 from random import choices
 from string import ascii_lowercase
@@ -96,7 +98,7 @@ class Player:
         self.status = Status()
         self.channels = []
 
-        self.country = kwargs.get('country', None)
+        self.country = 38#self.country = kwargs.get('country', None)
         self.utc_offset = kwargs.get('utc_offset', 0)
         self.pm_private = kwargs.get('pm_private', False)
 
@@ -105,16 +107,40 @@ class Player:
 
         self.ping_time = 0
 
-    def join_channel(self, chan) -> None:
+    def join_channel(self, chan) -> bool:
+        if self in chan:
+            print(f'{self.name} ({self.id}) tried to double join {chan.name}.')
+            return False
+
+        if not self.priv & chan.read:
+            print(f'{self.name} ({self.id}) tried to join {chan.name} but lacks privs.')
+            return False
+
+        chan.append(self) # Add to channels
+        self.channels.append(chan) # Add to player
         print(f'{self.name} ({self.id}) joined {chan.name}.')
-        self.channels.append(chan)
+        return True
 
     def leave_channel(self, chan) -> None:
+        if self not in chan:
+            print(f'{self.name} ({self.id}) tried to leave {chan.name} but is not in it.')
+            return
+
+        chan.remove(self) # Remove from channels
+        self.channels.remove(chan) # Remove from player
         print(f'{self.name} ({self.id}) left {chan.name}.')
-        self.channels.remove(chan)
+
+    def queue_empty(self) -> bool:
+        return self._queue.empty()
 
     def enqueue(self, b: bytes) -> None:
         self._queue.put_nowait(b)
+
+    def dequeue(self) -> bytes:
+        try:
+            return self._queue.get_nowait()
+        except:
+            print('Empty queue?')
 
     @staticmethod
     def ensure_safe(name: str) -> str:

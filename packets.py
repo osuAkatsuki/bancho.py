@@ -1,4 +1,6 @@
-from typing import Any, Tuple, Dict
+# -*- coding: utf-8 -*-
+
+from typing import Any, Tuple, Dict, Union
 from enum import IntEnum
 import struct
 
@@ -9,6 +11,32 @@ from constants import Type, Mods
 
 PacketParam = Tuple[Any, Type]
 Specifiers = Dict[Type, str]
+Slice = Union[int, slice]
+
+class BinaryArray:
+    def __init__(self) -> None:
+        self._data = bytearray()
+
+    # idk if required along with __getitem__
+    def __bytes__(self) -> bytes:
+        return bytes(self._data)
+
+    def __iadd__(self, other: Union[bytes, bytearray, int]) -> None:
+        #if not isinstance(other, (bytes, bytearray)):
+        #    raise Exception('HOW')
+        self._data.extend(other)
+        return self
+
+    def __getitem__(self, key: Slice) -> Union[bytearray, int]:
+        #in the unsafe speedy mood
+        return self._data[key]
+
+    def __setitem__(self, key: Slice,
+                    value: Union[int, Tuple[int], bytearray]) -> None:
+        self._data[key] = value
+
+    def __len__(self) -> int:
+        return len(self._data)
 
 class PacketReader:
     def __init__(self, data): # take request body in bytes form as param
@@ -41,10 +69,14 @@ class PacketReader:
     def ignore(self, count: int) -> None:
         self._offset += count
 
+    def ignore_packet(self) -> None:
+        self._offset += self.length
+
     def read_packet_header(self) -> Tuple[int]:
         if len(self.data) < 7:
-            self.packetID = 0
-            self._offset += len(self.data) # end transfer
+            # packet is invalid, end connection
+            self.packetID = -1
+            self._offset += len(self.data)
             print(f'Received garbage data? (len: {len(self.data)})')
             return
 
@@ -94,86 +126,107 @@ class PacketReader:
 
         return val
 
-class PacketWriter:
+# TODO: maybe inherit bytearray?
+class PacketStream:
     def __init__(self) -> None:
-        self.headers = [
-            'HTTP/1.0 200 OK'
-            # Content-Length is done on __bytes__()
-            # This is required for some custom situations,
-            # such as login when we need to add token.
+        self.headers = [ # Tuple so we can add to it.
+            'HTTP/1.0 200 OK',
+            # Content-Length is added upon building on the
+            # final packet data, this way we can ensure it's
+            # positions - the osu! client does NOT like it
+            # being out of place.
         ]
-        self.data = bytearray()
-
-    def __bytes__(self) -> bytes:
-        self.headers.insert(1, f'Content-Length: {len(self.data)}') # Must be sent first
-        self.headers.append('\r\n') # Break for body
-
-        return '\r\n'.join(self.headers).encode('utf-8', 'strict') + self.data
-
-    @staticmethod
-    def write_uleb128(num: int) -> bytearray:
-        if num == 0:
-            return bytearray(b'\x00')
-
-        arr = bytearray()
-        length = 0
-
-        while num > 0:
-            arr.append(num & 127)
-            num >>= 7
-            if num != 0:
-                arr[length] |= 128
-            length += 1
-
-        return arr
+        self._data = BinaryArray()
 
     def add_header(self, header: str) -> None:
         self.headers.append(header)
 
-    def write(self, id: int, *args: Tuple[PacketParam]) -> None:
-        self.data.extend(struct.pack('<Hx', id))
-        st_ptr = len(self.data)
+    def __bytes__(self) -> bytes:
+        self.headers.insert(1, f'Content-Length: {len(self._data)}')
+        self.headers.append('\r\n') # Delimit for body
+        return '\r\n'.join(self.headers).encode('utf-8', 'strict') + bytes(self._data)
 
-        for _data, _type in args:
-            if _type == Type.raw: # bytes, just add to self.data
-                self.data += bytearray(_data)
-            elif _type == Type.string:
-                if (length := len(_data)) == 0:
-                    # Empty string
-                    self.data.append(0)
-                    continue
+    def __iadd__(self, other: Union[bytes, bytearray, int]) -> None:
+        self._data += other
+        return self
 
-                # String has content.
-                self.data.append(11)
-                self.data.extend(self.write_uleb128(length))
-                self.data.extend(_data.encode('utf-8', 'replace'))
-            elif _type == Type.i32_list:
-                pass
-            else: # use struct
-                self.data.extend(
-                    struct.pack('<' + {
-                    Type.i8:  'b',
-                    Type.u8:  'B',
-                    Type.i16: 'h',
-                    Type.u16: 'H',
-                    Type.i32: 'i',
-                    Type.u32: 'I',
-                    Type.f32: 'f',
-                    Type.i64: 'q',
-                    Type.u64: 'Q',
-                    Type.f64: 'd'
-                }[_type], _data))
+    def __getitem__(self, key: Slice) -> Union[bytearray, int]:
+        return self._data[key]
 
-        # Add size
-        self.data[st_ptr:st_ptr] = struct.pack('<I', len(self.data) - st_ptr)
+    def __setitem__(self, key: Slice,
+                    value: Union[int, Tuple[int], bytearray]) -> None:
+        self._data[key] = value
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+def write_uleb128(num: int) -> bytearray:
+    if num == 0:
+        return bytearray(b'\x00')
+
+    arr = bytearray()
+    length = 0
+
+    while num > 0:
+        arr.append(num & 127)
+        num >>= 7
+        if num != 0:
+            arr[length] |= 128
+        length += 1
+
+    return arr
+
+def write(id: int, *args: Tuple[PacketParam]) -> bytes:
+    ret = bytearray()
+
+    ret.extend(struct.pack('<Hx', id))
+    st_ptr = len(ret)
+
+    for param, param_type in args:
+        if param_type == Type.raw: # bytes, just add to self.data
+            ret.extend(param)
+        elif param_type == Type.string:
+            if (length := len(param)) == 0:
+                # Empty string
+                ret.append(0)
+                continue
+
+            # String has content.
+            ret.append(11)
+            ret.extend(write_uleb128(length))
+            ret.extend(param.encode('utf-8', 'replace'))
+        elif param_type == Type.i32_list:
+            length = len(param)
+            ret.extend(struct.pack('<h', (length * 4) + 2))
+
+            for i in range(0, length):
+                ret.append(struct.unpack('<i', param))
+        else: # use struct
+            ret.extend(
+                struct.pack('<' + {
+                Type.i8:  'b',
+                Type.u8:  'B',
+                Type.i16: 'h',
+                Type.u16: 'H',
+                Type.i32: 'i',
+                Type.u32: 'I',
+                Type.f32: 'f',
+                Type.i64: 'q',
+                Type.u64: 'Q',
+                Type.f64: 'd'
+            }[param_type], param))
+
+    # Add size
+    ret[st_ptr:st_ptr] = struct.pack('<I', len(ret) - st_ptr)
+    return ret
 
 class Packet(IntEnum):
     # Both server & client packetIDs
-    c_changeAction = 0
+    c_changeAction = 0 # status update
     c_sendPublicMessage = 1
     c_logout = 2
-    c_requestStatusUpdate = 3
-    c_pong = 4
+    c_requestStatusUpdate = 3 # request
+    c_ping = 4
     s_userID = 5
     s_sendMessage = 7
     s_Pong = 8
@@ -276,102 +329,102 @@ class Packet(IntEnum):
 # Packets
 #
 
+def pong() -> bytes:
+    return write(Packet.s_Pong)
+
+def banchoPrivileges(priv: int) -> bytes:
+    return write(
+        Packet.s_supporterGMT,
+        (priv, Type.i32)
+    )
+
+def protocolVersion(num: int) -> bytes:
+    return write(
+        Packet.s_protocolVersion,
+        (num, Type.i32)
+    )
+
+def restartServer(ms: int) -> bytes:
+    return write(
+        Packet.s_restart,
+        (ms, Type.i32)
+    )
+
+def loginResponse(id) -> bytes:
+    # ID Responses:
+    # -1: Authentication Failed
+    # -2: Old Client
+    # -3: Banned
+    # -4: Banned
+    # -5: Error occurred
+    # -6: Needs supporter
+    # -7: Password reset
+    # -8: Requires verification
+    # ??: Valid ID
+    return write(
+        Packet.s_userID,
+        (id, Type.i32)
+    )
+
 def userStats(p: Player) -> bytes:
-    #update cached stats
-    #p.enqueue()#userstats packet
-
-    pw = PacketWriter()
-
-    # status.gamemode will be 0-7 (rx support)
     gm_stats = p.stats[p.status.game_mode]
-
-    if p.id == 2: # Bot
-        pw.write(
-            Packet.s_userStats,
-
-        )
-    pw.write(
+    return write(
         Packet.s_userStats,
-        (p.id, Type.u32),
+        (p.id, Type.i32),
         (p.status.action, Type.i8),
+        (p.status.info_text, Type.string),
         (p.status.beatmap_md5, Type.string),
         (p.status.mods, Type.i32),
         (p.status.game_mode, Type.i8),
         (p.status.beatmap_id, Type.i32),
-        (gm_stats.rscore, Type.u64),
+        (gm_stats.rscore, Type.i64),
         (gm_stats.acc, Type.f32),
-        (gm_stats.playcount, Type.u32),
-        (gm_stats.tscore, Type.u64),
-        (gm_stats.rank, Type.u32),
-        (gm_stats.pp, Type.u16)) # todo: safe with ranked score >32k?
+        (gm_stats.playcount, Type.i32),
+        (gm_stats.tscore, Type.i64),
+        (gm_stats.rank, Type.i32),
+        (gm_stats.pp, Type.i16)) if p.id != 1 else \
+        b'\x10' # TODO: raw bytes for aika
 
-    return bytes(pw.data)
-
-#
-# Events
-#
-
-def statsUpdateRequest(p: Player, pr: PacketReader) -> None:
-    p.enqueue(userStats(p))
-
-def statsRequest(p: Player, pr: PacketReader) -> None:
-    if len(pr.data) < 6:
-        return
-
-    userIDs = pr.read(Type.i32_list)
-    is_online = lambda o: o in glob.players.ids
-
-    for online in filter(is_online, userIDs):
-        target = glob.players.get_by_id(online)
-        p.enqueue(userStats(target))
-
-def joinChannel(p: Player, pr: PacketReader) -> None:
-    if not (chan := pr.read(Type.string)):
-        print(f'{p.name} tried to join nonexistant channel {chan}')
-        return
-
-    chan = chan[0] # need refactor.. this will be an endless uphill battle
-
-    if (c := glob.channels.get(chan)) and c.join(p):
-        print(f'{p.name} joined {chan}.')
-        p.channels.append(c)
-
-        # Another much need refactor to stop stuff like this lol
-        pw = PacketWriter()
-        pw.write(Packet.s_channelJoinSuccess, (c.name, Type.string))
-        p.enqueue(bytes(pw.data))
-    else:
-        print(f'Failed to find channel {chan} that {p.name} attempted to join.')
-
-def statusUpdateRequest(p: Player, pr: PacketReader) -> None:
-    #Osu_RequestStatusUpdate
-    pass
-
-def readStatus(p: Player, pr: PacketReader) -> None:
-    data = pr.read(
-        Type.i8, # actionType
-        Type.string, # infotext
-        Type.string, # beatmap md5
-        Type.i32, # mods
-        Type.i8, # gamemode
-        Type.i32 # beatmapid
+def userPresence(p: Player) -> bytes:
+    gm_stats = p.stats[p.status.game_mode]
+    return write(
+        Packet.s_userPresence,
+        (p.id, Type.i32),
+        (p.name, Type.string),
+        (p.utc_offset, Type.i8),
+        (p.country, Type.i8), # break break
+        (p.bancho_priv, Type.i8),
+        (0.0, Type.f32), # lat
+        (0.0, Type.f32), # long
+        (gm_stats.rank, Type.i32)
     )
 
-    p.status.update(*data) # TODO: probably refactor some status stuff
-    p.rx = p.status.mods & Mods.RELAX
-    glob.players.broadcast(userStats(p))
+def channelJoin(chan: str) -> bytes:
+    return write(
+        Packet.s_channelJoinSuccess,
+        (chan, Type.string)
+    )
 
-def Logout(p: Player, pr: PacketReader) -> None:
-    glob.players.remove(p)
+def channelInfo(name: str, topic: str, p_count: int) -> bytes:
+    return write(
+        Packet.s_channelInfo,
+        (name, Type.string),
+        (topic, Type.string),
+        (p_count, Type.i16)
+    )
 
-    # TODO: logout notif to all players
-    #glob.players.broadcast()
+def channelinfoEnd() -> bytes:
+    return write(Packet.s_channelInfoEnd)
 
-    for c in p.channels:
-        p.leave_channel(c)
+def logout(userID: int) -> bytes:
+    return write(
+        Packet.s_userLogout,
+        (userID, Type.i32),
+        (0, Type.i8)
+    )
 
-    # stop spectating
-    # leave match
-    # remove match if only player
+def notification(notif: str) -> bytes:
+    return write(Packet.s_notification, (notif, Type.string))
 
-    print(f'{p.name} logged out.')
+def RTX(notif: str) -> bytes:
+    return write(Packet.s_RTX, (notif, Type.string))

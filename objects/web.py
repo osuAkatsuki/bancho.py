@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 class Request:
     def __init__(self, data: bytes) -> None:
         # Headers are converted from bytes to a string,

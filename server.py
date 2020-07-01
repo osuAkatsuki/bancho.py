@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # OSU SERVER ATTEMPT #3
 # This is going to be disgusting.
 # I've reached a point where I don't care
@@ -16,6 +18,7 @@ from os import path, chmod, remove
 from random import choices
 from string import ascii_lowercase
 from threading import Thread
+from datetime import datetime as dt
 
 from db.dbConnector import SQLPool
 
@@ -23,7 +26,7 @@ import packets
 import config
 
 from objects import glob
-from objects.player import Player
+from events import events
 from objects.collections import PlayerList, ChannelList
 from objects.channel import Channel
 from objects.web import Request#, Response
@@ -34,6 +37,7 @@ class Server:
         self.run_time = time()
         self.shutdown = False # used to break loop lol
 
+        glob.version = 1.0 # server version
         glob.db = SQLPool(pool_size = 4, config = config.mysql)
 
         # Default channels.
@@ -57,6 +61,18 @@ class Server:
             read = Privileges.Dangerous,
             write = Privileges.Dangerous,
             auto_join = False))
+
+        self.packet_map = {
+            packets.Packet.c_changeAction: events.readStatus, # 0: user wishes to inform otehrs
+            #Packet.c_changeAction: 1,#statusUpdate,
+            packets.Packet.c_logout: events.logout, # 2: logout
+            packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3
+            packets.Packet.c_ping: events.ping, # 4
+            packets.Packet.c_channelJoin: events.channelJoin, # 63
+            packets.Packet.c_channelPart: events.channelPart, # 78
+            packets.Packet.c_userStatsRequest: events.statsRequest, # 85
+            packets.Packet.c_userPresenceRequest: events.userPresenceRequest # 97
+        }
 
         self.start(config.concurrent) # starts server
 
@@ -96,108 +112,55 @@ class Server:
         print('\x1b[0;92mSocket closed..\x1b[0m')
 
     def handle_connection(self, conn: socket.socket) -> None:
-        #from io import BufferedIOBase
         start_time = time()
-        #stream = BufferedIOBase()
-        #stream.read()
+        print('\nReceived packets..')
         data = conn.recv(config.max_bytes)
         while len(data) % config.max_bytes == 0:
             data += conn.recv(config.max_bytes)
 
         req = Request(data)
+        # Input
+        #print(f'\x1b[1;94m{req.body}\x1b[0m')
 
         if 'User-Agent' not in req.headers \
         or req.headers['User-Agent'] != 'osu!':
             return
 
+        ps = packets.PacketStream()
+
         if 'osu-token' not in req.headers:
-            ret = self.handle_login(req)
-        elif not(p := glob.players.get(req.headers['osu-token'])):
+            ps._data, token = events.login(req.body)
+            ps.add_header(f'cho-token: {token}')
+        elif not (p := glob.players.get(req.headers['osu-token'])):
             # A little bit suboptimal, but fine for now?
             print('Token not found, forcing relog.')
-            pw = packets.PacketWriter()
-            pw.write(packets.Packet.s_notification, ('Server is restarting.. one moment', Type.string))
-            pw.write(packets.Packet.s_restart, (500, Type.i32))
-            ret = bytes(pw)
+            ps += packets.notification('Server is restarting.')
+            ps += packets.restartServer(500) # send 0ms since the server is already up!
         else: # Player found, process normal packet.
             pr = packets.PacketReader(req.body)
             while not pr.empty(): # iterate thru available packets
                 pr.read_packet_header()
-                if not (pr.packetID):
+                if pr.packetID == -1:
+                    continue # skip, data empty?
+
+                if pr.packetID not in self.packet_map:
+                    print(f'\x1b[0;93m[X] {pr.packetID} [len {pr.length}]\x1b[0m')
+                    pr.ignore_packet()
                     continue
-                print(f'Handling packet {pr.packetID} (len {pr.length})')
-                if pr.packetID == 4: # Ping, no resp so just
-                    print('pong') # update and kill it
-                    p.ping_time = time()
-                    return
 
-                map = {
-                    packets.Packet.c_changeAction: packets.readStatus, # 0: user wishes to inform otehrs
-                    #Packet.c_changeAction: 1,#statusUpdate,
-                    packets.Packet.c_logout: packets.Logout, # 2: logout
-                    packets.Packet.c_requestStatusUpdate: packets.statsUpdateRequest, # 3
-                    packets.Packet.c_channelJoin: packets.joinChannel, # 63
-                    packets.Packet.c_userStatsRequest: packets.statsRequest # 85
-                }
+                print(f'\x1b[1;95m[Y] {pr.packetID} [len {pr.length}]\x1b[0m')
+                self.packet_map[pr.packetID](p, pr)
 
-                if pr.packetID not in map:
-                    print(f'\x1b[0;93mUnhandled: {pr.packetID} (len {pr.length}) took {(time() - start_time) * 1000:.2f}ms.\x1b[0m')
-                    return
+            while not p.queue_empty():
+                # Read all queued packets into stream
+                ps += p.dequeue()
 
-                ret = map[pr.packetID](p, pr) or b''
+        if ps._data and (resp := bytes(ps)):
+            # Output
+            #print(f'\x1b[1;95m{resp}\x1b[0m')
+            conn.send(resp)
 
-                while not p._queue.empty():
-                    # suboptimal bytestring concat zzzzz
-                    ret += p._queue.get_nowait()
-
-        conn.send(ret)
-        print(f'Packet took {(time() - start_time) * 1000:.2f}ms.')
-
-    def handle_login(self, req: Request) -> None:
-        # TODO: use enqueue
-        username, pw_hash, user_data = [s for s in req.body.decode().split('\n') if s]
-        build_name, utc_offset, display_city, client_hashes, pm_private = user_data.split('|')
-
-        if req.headers['osu-version'] != build_name:
-            return
-
-        if not (res := glob.db.fetch(
-            'SELECT id, name, priv FROM users WHERE name_safe = %s',
-            [Player.ensure_safe(username)]
-        )):
-            # Incorrect login (-1)
-            pw = packets.PacketWriter()
-            pw.add_header(f'cho-token: no')
-            pw.write(packets.Packet.s_userID, (-1, Type.i32))
-            return bytes(pw)
-
-        p = Player(utc_offset = int(utc_offset), pm_private = int(pm_private), **res)
-        glob.players.add(p)
-
-        pw = packets.PacketWriter()
-        pw.add_header(f'cho-token: {p.token}')
-        pw.write(packets.Packet.s_userID, (p.id, Type.i32))
-        pw.write(packets.Packet.s_protocolVersion, (19, Type.i32))
-        pw.write(packets.Packet.s_supporterGMT, (p.bancho_priv, Type.i32))
-        pw.write(packets.Packet.s_notification, ('987654321 Welcome gamers 123456789', Type.string))
-        #pw.write(packets.Packet.s_RTX, ('Test', Type.string))
-
-        # channels
-        pw.write(packets.Packet.s_channelInfoEnd)
-        for c in glob.channels.channels: # TODO: __iter__ and __next__ in all collections
-            if not p.priv & c.read:
-                continue # no priv to read
-
-            pw.write(packets.Packet.s_channelInfo,
-                (c.name, Type.string),
-                (c.topic, Type.string),
-                (len(c.players), Type.i16))
-
-            # Autojoinable channels
-            if c.auto_join and c.join(p):
-                pw.write(packets.Packet.s_channelJoinSuccess, (c.name, Type.string))
-
-        return bytes(pw)
+        #print(f'[{dt.now():%H:%M:%S}] Packet took {(time() - start_time) * 1000:.2f}ms.')
 
 if __name__ == '__main__':
     serv = Server(host = '127.0.0.1', port = 5001)

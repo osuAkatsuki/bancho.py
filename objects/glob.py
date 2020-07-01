@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from objects.collections import PlayerList, ChannelList
 
 players = PlayerList()
