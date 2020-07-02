@@ -23,11 +23,11 @@ from datetime import datetime as dt
 from db.dbConnector import SQLPool
 
 import packets
-import config
 from console import *
 
 from objects import glob
 from events import events
+from objects.player import Player
 from objects.collections import PlayerList, ChannelList
 from objects.channel import Channel
 from objects.web import Request#, Response
@@ -39,9 +39,12 @@ class Server:
         self.run_time = time()
         self.shutdown = False # used to break loop lol
 
-        glob.config = config
         glob.version = 1.0 # server version
-        glob.db = SQLPool(pool_size = 4, config = config.mysql)
+        glob.db = SQLPool(pool_size = 4, config = glob.config.mysql)
+
+        #bot = Player(id = 1, name = glob.config.botname, priv = 280175)
+        #glob.players.add(bot)
+        #bot.stats_from_sql_full()
 
         # Default channels.
         # At some point, this will either be moved
@@ -71,6 +74,9 @@ class Server:
             packets.Packet.c_logout: events.logout, # 2: client logged out
             packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3: client wants their stats updated
             packets.Packet.c_ping: events.ping, # 4: client wants their ping time updated
+            packets.Packet.c_startSpectating: events.startSpectating, # 16: client started spectating another user
+            packets.Packet.c_stopSpectating: events.stopSpectating, # 17: client stopped spectating another user
+            packets.Packet.c_spectateFrames: events.spectateFrames, # 18: client sending spec frames to all specs
             packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage, # 25: client sent a dm
             packets.Packet.c_channelJoin: events.channelJoin, # 63: client joined a channel
             packets.Packet.c_channelPart: events.channelPart, # 78: client left a channel
@@ -78,26 +84,26 @@ class Server:
             packets.Packet.c_userPresenceRequest: events.userPresenceRequest # 97: client wants presence of specific users
         }
 
-        self.start(config.concurrent) # starts server
+        self.start(glob.config.concurrent) # starts server
 
     @staticmethod
     def ping_timeouts() -> None:
         # no idea if this thing works
         current_time = int(time())
         for p in glob.players.players:
-            if p.ping_time + config.max_ping < current_time:
+            if p.ping_time + glob.config.max_ping < current_time:
                 printlog(f'Requesting ping from user {p.name} after {p.ping_time}')
                 p.enqueue(packets.pong())
 
-        sleep(config.max_ping)
+        sleep(glob.config.max_ping)
 
     def start(self, connections: int = 10) -> None:
-        if path.exists(config.sock_file):
-            remove(config.sock_file)
+        if path.exists(glob.config.sock_file):
+            remove(glob.config.sock_file)
 
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.bind(config.sock_file)
-            chmod(config.sock_file, 0o777)
+            s.bind(glob.config.sock_file)
+            chmod(glob.config.sock_file, 0o777)
             s.listen(connections)
 
             # Set up ping pingout loop
@@ -118,9 +124,9 @@ class Server:
 
     def handle_connection(self, conn: socket.socket) -> None:
         start_time = time()
-        data = conn.recv(config.max_bytes)
-        while len(data) % config.max_bytes == 0:
-            data += conn.recv(config.max_bytes)
+        data = conn.recv(glob.config.max_bytes)
+        while len(data) % glob.config.max_bytes == 0:
+            data += conn.recv(glob.config.max_bytes)
 
         req = Request(data)
 

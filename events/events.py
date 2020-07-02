@@ -138,6 +138,55 @@ def login(data: bytes) -> Tuple[bytes, str]:
     printlog(f'{p.name} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(res), p.token
 
+# PacketID: 15
+def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
+    print(pr.data)
+
+# PacketID: 16
+def startSpectating(p: Player, pr: packets.PacketReader) -> None:
+    target_id = pr.read(ctypes.i32)
+
+    if not (t := glob.players.get_by_id(target_id)):
+        printlog(f'{p.name} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
+        return
+
+    p.spectating = t
+
+    fellow = packets.fellowSpectatorJoined(p.id)
+    #spectator channel?
+    for s in t.spectators:
+        t.enqueue(fellow) # #spec?
+        p.enqueue(packets.fellowSpectatorJoined(t.id))
+
+    t.add_spectator(p)
+    t.enqueue(packets.spectatorJoined(p.id))
+    #p.enqueue(packets.channelJoin('#spectator'))
+
+# PacketID: 17
+def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
+    if not p.spectating:
+        printlog(f"{p} Tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
+        return
+
+    host = p.spectating
+    host.remove_spectator(p)
+    # remove #spec channel
+
+    if not host.spectators:
+        # remove host from channel & del channel.
+        # TODO: make 'temp' channels that can delete
+        # themselves upon having 0 members left.
+        pass
+    else:
+        fellow = packets.fellowSpectatorLeft(p.id)
+
+        # channel info
+
+        for t in host.spectators:
+            t.enqueue(fellow)
+
+    host.enqueue(packets.spectatorLef)
+
 # PacketID: 25
 def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
     client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)

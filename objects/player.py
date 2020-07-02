@@ -4,7 +4,6 @@ from typing import Tuple
 from random import choices
 from string import ascii_lowercase
 from constants.privileges import Privileges, BanchoPrivileges
-import config
 from console import printlog
 
 from objects import glob
@@ -96,7 +95,10 @@ class Player:
         self.rx = False # stored for ez use
         self.stats = [ModeData() for i in range(7)]
         self.status = Status()
+
         self.channels = []
+        self.spectators = []
+        self.spectating = None
 
         self.country = 38#self.country = kwargs.get('country', None)
         self.utc_offset = kwargs.get('utc_offset', 0)
@@ -119,26 +121,34 @@ class Player:
 
     def join_channel(self, chan) -> bool:
         if self in chan:
-            printlog(f'{self.name} ({self.id}) tried to double join {chan.name}.')
+            printlog(f'{self} tried to double join {chan.name}.')
             return False
 
         if not self.priv & chan.read:
-            printlog(f'{self.name} ({self.id}) tried to join {chan.name} but lacks privs.')
+            printlog(f'{self} tried to join {chan.name} but lacks privs.')
             return False
 
         chan.append(self) # Add to channels
         self.channels.append(chan) # Add to player
-        printlog(f'{self.name} ({self.id}) joined {chan.name}.')
+        printlog(f'{self} joined {chan.name}.')
         return True
 
     def leave_channel(self, chan) -> None:
         if self not in chan:
-            printlog(f'{self.name} ({self.id}) tried to leave {chan.name} but is not in it.')
+            printlog(f'{self}) tried to leave {chan.name} but is not in it.')
             return
 
         chan.remove(self) # Remove from channels
         self.channels.remove(chan) # Remove from player
-        printlog(f'{self.name} ({self.id}) left {chan.name}.')
+        printlog(f'{self} left {chan.name}.')
+
+    def add_spectator(self, p) -> None:
+        self.spectators.append(p)
+        printlog(f'{p} is now spectating {self}.')
+
+    def remove_spectator(self, p) -> None:
+        self.spectators.remove(p)
+        printlog(f'{p} is no longer spectating {self}.')
 
     def queue_empty(self) -> bool:
         return self._queue.empty()

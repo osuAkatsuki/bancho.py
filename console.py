@@ -52,4 +52,4 @@ def printlog(msg, col: Ansi = None, fd: str = None, st_fmt = '') -> None:
         return
 
     with open(fd, 'a+') as f:
-        f.write(f'[{get_timestamp(True)}] {msg}')
+        f.write(f'[{get_timestamp(True)}] {msg}\n')

@@ -396,9 +396,25 @@ def logout(userID: int) -> bytes:
         (0, ctypes.i8)
     )
 
+# PacketID: 13
+def spectatorJoined(id: int) -> bytes:
+    return write(Packet.s_spectatorJoined, (id, ctypes.i32))
+
+# PacketID: 14
+def spectatorLeft(id: int) -> bytes:
+    return write(Packet.s_spectatorLeft, (id, ctypes.i32))
+
 # PacketID: 24
 def notification(notif: str) -> bytes:
     return write(Packet.s_notification, (notif, ctypes.string))
+
+# PacketID: 42
+def fellowSpectatorJoined(id: int) -> bytes:
+    return write(Packet.s_fellowSpectatorJoined, (id, ctypes.i32))
+
+# PacketID: 43
+def fellowSpectatorLeft(id: int) -> bytes:
+    return write(Packet.s_fellowSpectatorLeft, (id, ctypes.i32))
 
 # PacketID: 64
 def channelJoin(chan: str) -> bytes:
