@@ -3,6 +3,7 @@
 from typing import Tuple
 from time import time
 from datetime import datetime as dt, timezone as tz
+from bcrypt import checkpw
 
 import packets
 from console import *
@@ -86,7 +87,7 @@ def login(data: bytes) -> Tuple[bytes, str]:
         [Player.ensure_safe(username)]
     )): return packets.loginResponse(-1), 'no' # account does not exist
 
-    if pw_hash != res['pw_hash']:
+    if not checkpw(pw_hash.encode(), res['pw_hash'].encode()):
         return packets.loginResponse(-1), 'no' # pw does not match
 
     p = Player(utc_offset = int(utc_offset), pm_private = int(pm_private), **res)
