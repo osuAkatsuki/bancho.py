@@ -86,7 +86,9 @@ def login(data: bytes) -> Tuple[bytes, str]:
     split = split[2].split('|')
     build_name = split[0]
 
-    if not split[1].isnumeric(): return
+    if not split[1].isnumeric():
+        return packets.userID(-1), 'no'
+
     utc_offset = int(split[1])
 
     display_city = split[2]
@@ -94,7 +96,9 @@ def login(data: bytes) -> Tuple[bytes, str]:
 
     # TODO: client hashes
 
-    if not split[4].isnumeric(): return
+    if not split[4].isnumeric():
+        return packets.userID(-1), 'no'
+
     pm_private = int(split[4])
 
     res = glob.db.fetch(
