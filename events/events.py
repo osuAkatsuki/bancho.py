@@ -93,7 +93,7 @@ def login(data: bytes) -> Tuple[bytes, str]:
     res += packets.loginResponse(p.id)
     res += packets.protocolVersion(19)
     res += packets.banchoPrivileges(p.bancho_priv)
-    res += packets.notification(f'Welcome back to The Gulag (v{glob.version:.2f})')
+    res += packets.notification(f'Welcome back to the gulag (v{glob.version:.2f})')
 
     # channels
     res += packets.channelinfoEnd()
@@ -132,6 +132,20 @@ def login(data: bytes) -> Tuple[bytes, str]:
 
     printlog(f'{p.name} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(res), p.token
+
+# PacketID: 25
+def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
+    client, msg, target, client_id = pr.read(*([Type.string] * 3), Type.i32)
+
+    if not (t := glob.players.get_by_name(target)):
+        printlog(f'{p.name} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        return
+
+    msg = msg[:2045] + '...' if msg[2048:] else msg
+    client, client_id = p.name, p.id
+
+    t.enqueue(packets.sendMessage(client, msg, target, client_id))
+    printlog(f'{p.name} @ {target}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:

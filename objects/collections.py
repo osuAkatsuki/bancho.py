@@ -43,6 +43,11 @@ class PlayerList:
             if p.token == token:
                 return p
 
+    def get_by_name(self, name: str) -> Player:
+        for p in self.players: # might copy
+            if p.name == name:
+                return p
+
     def get_by_id(self, id: int) -> Player:
         for p in self.players: # might copy
             if p.id == id:

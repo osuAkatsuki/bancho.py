@@ -70,6 +70,7 @@ class Server:
             packets.Packet.c_logout: events.logout, # 2: client logged out
             packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3: client wants their stats updated
             packets.Packet.c_ping: events.ping, # 4: client wants their ping time updated
+            packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage, # 25: client sent a dm
             packets.Packet.c_channelJoin: events.channelJoin, # 63: client joined a channel
             packets.Packet.c_channelPart: events.channelPart, # 78: client left a channel
             packets.Packet.c_userStatsRequest: events.statsRequest, # 85: client wants everyones stats
