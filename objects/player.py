@@ -93,8 +93,7 @@ class Player:
         self.priv = Privileges(kwargs.get('priv', Privileges.Banned))
 
         self.rx = False # stored for ez use
-        self.stats = [ModeData()] * 7 # disclude mania rx
-        self.stats_from_sql_full() # yeet?
+        self.stats = [ModeData() for i in range(7)]
         self.status = Status()
         self.channels = []
 
@@ -106,6 +105,16 @@ class Player:
         self._queue = SimpleQueue()
 
         self.ping_time = 0
+
+    def __repr__(self) -> str:
+        return f'<{self.name} | {self.id}>'
+
+    @property
+    def gm_stats(self) -> ModeData:
+        if self.status.game_mode == 3 and self.rx:
+            return self.stats[3] # rx mania == vn mania
+
+        return self.stats[self.status.game_mode + (4 if self.rx else 0)]
 
     def join_channel(self, chan) -> bool:
         if self in chan:
@@ -150,9 +159,10 @@ class Player:
     def bancho_priv(self) -> int:
         ret = BanchoPrivileges(0)
         if self.priv & Privileges.Verified:
-            ret |= BanchoPrivileges.Player
-        if self.priv & (Privileges.Supporter | Privileges.Premium):
-            ret |= BanchoPrivileges.Supporter
+            # All players have ingame "supporter".
+            # This enables stuff like osu!direct,
+            # multiplayer in cutting edge, etc.
+            ret |= (BanchoPrivileges.Player | BanchoPrivileges.Supporter)
         if self.priv & Privileges.Mod:
             ret |= BanchoPrivileges.Moderator
         if self.priv & Privileges.Admin:
@@ -175,7 +185,7 @@ class Player:
 
             self.stats[gm].update(**res)
 
-    def stats_from_db(self, id: int, gm: int) -> None:
+    def stats_from_sql(self, id: int, gm: int) -> None:
         if not (res := glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, playcount_{0:sql} playcount, acc_{0:sql} acc, '

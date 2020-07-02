@@ -59,6 +59,9 @@ class PacketReader:
             Type.f64: 'd'
         }
 
+    def __repr__(self) -> str:
+        return f'<id: {self.packetID} | length: {self.length}>'
+
     @property # get data w/ offset accounted for
     def data(self) -> bytearray:
         return self._data[self._offset:]
@@ -159,6 +162,9 @@ class PacketStream:
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def empty(self) -> bool:
+        return len(self._data) == 0
 
 def write_uleb128(num: int) -> bytearray:
     if num == 0:
@@ -329,27 +335,7 @@ class Packet(IntEnum):
 # Packets
 #
 
-def pong() -> bytes:
-    return write(Packet.s_Pong)
-
-def banchoPrivileges(priv: int) -> bytes:
-    return write(
-        Packet.s_supporterGMT,
-        (priv, Type.i32)
-    )
-
-def protocolVersion(num: int) -> bytes:
-    return write(
-        Packet.s_protocolVersion,
-        (num, Type.i32)
-    )
-
-def restartServer(ms: int) -> bytes:
-    return write(
-        Packet.s_restart,
-        (ms, Type.i32)
-    )
-
+# PacketID: 5
 def loginResponse(id) -> bytes:
     # ID Responses:
     # -1: Authentication Failed
@@ -366,8 +352,23 @@ def loginResponse(id) -> bytes:
         (id, Type.i32)
     )
 
+# PacketID: 7
+def sendMessage(client: str, msg: str, target: str,
+                target_id: int) -> bytes:
+    return write(
+        Packet.s_sendMessage,
+        (client, Type.string),
+        (msg, Type.string),
+        (target, Type.string),
+        (target_id, Type.i32)
+    )
+
+# PacketID: 8
+def pong() -> bytes:
+    return write(Packet.s_Pong)
+
+# PacketID: 11
 def userStats(p: Player) -> bytes:
-    gm_stats = p.stats[p.status.game_mode]
     return write(
         Packet.s_userStats,
         (p.id, Type.i32),
@@ -377,16 +378,69 @@ def userStats(p: Player) -> bytes:
         (p.status.mods, Type.i32),
         (p.status.game_mode, Type.i8),
         (p.status.beatmap_id, Type.i32),
-        (gm_stats.rscore, Type.i64),
-        (gm_stats.acc, Type.f32),
-        (gm_stats.playcount, Type.i32),
-        (gm_stats.tscore, Type.i64),
-        (gm_stats.rank, Type.i32),
-        (gm_stats.pp, Type.i16)) if p.id != 1 else \
+        (p.gm_stats.rscore, Type.i64),
+        (p.gm_stats.acc, Type.f32),
+        (p.gm_stats.playcount, Type.i32),
+        (p.gm_stats.tscore, Type.i64),
+        (p.gm_stats.rank, Type.i32),
+        (p.gm_stats.pp, Type.i16)) if p.id != 1 else \
         b'\x10' # TODO: raw bytes for aika
 
+# PacketID: 12
+def logout(userID: int) -> bytes:
+    return write(
+        Packet.s_userLogout,
+        (userID, Type.i32),
+        (0, Type.i8)
+    )
+
+# PacketID: 24
+def notification(notif: str) -> bytes:
+    return write(Packet.s_notification, (notif, Type.string))
+
+# PacketID: 64
+def channelJoin(chan: str) -> bytes:
+    return write(
+        Packet.s_channelJoinSuccess,
+        (chan, Type.string)
+    )
+
+# PacketID: 65
+def channelInfo(name: str, topic: str, p_count: int) -> bytes:
+    return write(
+        Packet.s_channelInfo,
+        (name, Type.string),
+        (topic, Type.string),
+        (p_count, Type.i16)
+    )
+
+# PacketID: 71
+def banchoPrivileges(priv: int) -> bytes:
+    return write(
+        Packet.s_supporterGMT,
+        (priv, Type.i32)
+    )
+
+# PacketID: 75
+def protocolVersion(num: int) -> bytes:
+    return write(
+        Packet.s_protocolVersion,
+        (num, Type.i32)
+    )
+
+# PacketID: 76
+def mainMenuIcon(**urls) -> bytes:
+    return write(
+        Packet.s_mainMenuIcon,
+        ('|'.join([
+            'https://akatsuki.pw/static/logos/logo_ingame.png',
+            'https://akatsuki.pw'
+        ]), Type.string
+        )
+    )
+
+# PacketID: 83
 def userPresence(p: Player) -> bytes:
-    gm_stats = p.stats[p.status.game_mode]
     return write(
         Packet.s_userPresence,
         (p.id, Type.i32),
@@ -396,35 +450,20 @@ def userPresence(p: Player) -> bytes:
         (p.bancho_priv, Type.i8),
         (0.0, Type.f32), # lat
         (0.0, Type.f32), # long
-        (gm_stats.rank, Type.i32)
+        (p.gm_stats.rank, Type.i32)
     )
 
-def channelJoin(chan: str) -> bytes:
+# PacketID: 86
+def restartServer(ms: int) -> bytes:
     return write(
-        Packet.s_channelJoinSuccess,
-        (chan, Type.string)
+        Packet.s_restart,
+        (ms, Type.i32)
     )
 
-def channelInfo(name: str, topic: str, p_count: int) -> bytes:
-    return write(
-        Packet.s_channelInfo,
-        (name, Type.string),
-        (topic, Type.string),
-        (p_count, Type.i16)
-    )
-
+# PacketID: 89
 def channelinfoEnd() -> bytes:
     return write(Packet.s_channelInfoEnd)
 
-def logout(userID: int) -> bytes:
-    return write(
-        Packet.s_userLogout,
-        (userID, Type.i32),
-        (0, Type.i8)
-    )
-
-def notification(notif: str) -> bytes:
-    return write(Packet.s_notification, (notif, Type.string))
-
+# PacketID: 105
 def RTX(notif: str) -> bytes:
     return write(Packet.s_RTX, (notif, Type.string))

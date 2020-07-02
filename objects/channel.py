@@ -22,6 +22,14 @@ class Channel:
     def remove(self, p: Player) -> None:
         self.players.remove(p)
 
+    def enqueue(self, data: bytes, immune = None) -> None:
+        # Enqueue bytes to all players in a channel.
+        # Usually just used for messages.. perhaps more?
+        for p in self.players:
+            if p.id in immune:
+                continue
+            p.enqueue(data)
+
     @property
     def basic_info(self) -> Tuple[Union[str, int]]:
         return (self.name, self.topic, len(self.players))

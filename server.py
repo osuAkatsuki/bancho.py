@@ -24,6 +24,7 @@ from db.dbConnector import SQLPool
 
 import packets
 import config
+from console import *
 
 from objects import glob
 from events import events
@@ -37,6 +38,7 @@ class Server:
         self.run_time = time()
         self.shutdown = False # used to break loop lol
 
+        glob.config = config
         glob.version = 1.0 # server version
         glob.db = SQLPool(pool_size = 4, config = config.mysql)
 
@@ -63,15 +65,15 @@ class Server:
             auto_join = False))
 
         self.packet_map = {
-            packets.Packet.c_changeAction: events.readStatus, # 0: user wishes to inform otehrs
-            #Packet.c_changeAction: 1,#statusUpdate,
-            packets.Packet.c_logout: events.logout, # 2: logout
-            packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3
-            packets.Packet.c_ping: events.ping, # 4
-            packets.Packet.c_channelJoin: events.channelJoin, # 63
-            packets.Packet.c_channelPart: events.channelPart, # 78
-            packets.Packet.c_userStatsRequest: events.statsRequest, # 85
-            packets.Packet.c_userPresenceRequest: events.userPresenceRequest # 97
+            packets.Packet.c_changeAction: events.readStatus, # 0: client changed action
+            packets.Packet.c_sendPublicMessage: events.sendMessage, # 1: client send a message
+            packets.Packet.c_logout: events.logout, # 2: client logged out
+            packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3: client wants their stats updated
+            packets.Packet.c_ping: events.ping, # 4: client wants their ping time updated
+            packets.Packet.c_channelJoin: events.channelJoin, # 63: client joined a channel
+            packets.Packet.c_channelPart: events.channelPart, # 78: client left a channel
+            packets.Packet.c_userStatsRequest: events.statsRequest, # 85: client wants everyones stats
+            packets.Packet.c_userPresenceRequest: events.userPresenceRequest # 97: client wants presence of specific users
         }
 
         self.start(config.concurrent) # starts server
@@ -82,7 +84,8 @@ class Server:
         current_time = int(time())
         for p in glob.players.players:
             if p.ping_time + config.max_ping < current_time:
-                pass#p.enqueue(new packet PLZ)
+                print(f'Requesting ping from user {p.name} after {p.ping_time}')
+                p.enqueue(packets.pong())
 
         sleep(config.max_ping)
 
@@ -96,7 +99,7 @@ class Server:
             s.listen(connections)
 
             # Set up ping pingout loop
-            Thread(target = self.ping_timeouts)
+            Thread(target = self.ping_timeouts).start()
 
             print('\x1b[0;92mListening for connections..\x1b[0m')
 
@@ -109,18 +112,16 @@ class Server:
                                             # only really happens in debugging
                         print('Connection timed out..')
 
-        print('\x1b[0;92mSocket closed..\x1b[0m')
+        printc('Socket closed..', Ansi.LIGHT_GREEN, fd = None)
 
     def handle_connection(self, conn: socket.socket) -> None:
         start_time = time()
-        print('\nReceived packets..')
+        printc('Connection established..', Ansi.LIGHT_CYAN, fd = None, st_fmt = '\n')
         data = conn.recv(config.max_bytes)
         while len(data) % config.max_bytes == 0:
             data += conn.recv(config.max_bytes)
 
         req = Request(data)
-        # Input
-        #print(f'\x1b[1;94m{req.body}\x1b[0m')
 
         if 'User-Agent' not in req.headers \
         or req.headers['User-Agent'] != 'osu!':
@@ -135,7 +136,7 @@ class Server:
             # A little bit suboptimal, but fine for now?
             print('Token not found, forcing relog.')
             ps += packets.notification('Server is restarting.')
-            ps += packets.restartServer(500) # send 0ms since the server is already up!
+            ps += packets.restartServer(0) # send 0ms since the server is already up!
         else: # Player found, process normal packet.
             pr = packets.PacketReader(req.body)
             while not pr.empty(): # iterate thru available packets
@@ -144,23 +145,22 @@ class Server:
                     continue # skip, data empty?
 
                 if pr.packetID not in self.packet_map:
-                    print(f'\x1b[0;93m[X] {pr.packetID} [len {pr.length}]\x1b[0m')
+                    printc(f'[N] {pr!r}', Ansi.LIGHT_YELLOW, fd = None)
                     pr.ignore_packet()
                     continue
 
-                print(f'\x1b[1;95m[Y] {pr.packetID} [len {pr.length}]\x1b[0m')
+                printc(f'[Y] {pr!r}', Ansi.LIGHT_MAGENTA, fd = None)
                 self.packet_map[pr.packetID](p, pr)
 
             while not p.queue_empty():
                 # Read all queued packets into stream
                 ps += p.dequeue()
 
-        if ps._data and (resp := bytes(ps)):
-            # Output
-            #print(f'\x1b[1;95m{resp}\x1b[0m')
-            conn.send(resp)
-
-        #print(f'[{dt.now():%H:%M:%S}] Packet took {(time() - start_time) * 1000:.2f}ms.')
+        # Even if the packet is empty, we have to
+        # send back an empty response so the client
+        # knows it was successfully delivered.
+        conn.send(bytes(ps))
+        printc(f'Packet took {(time() - start_time) * 1000:.2f}ms', Ansi.LIGHT_BLUE, fd = None)
 
 if __name__ == '__main__':
     serv = Server(host = '127.0.0.1', port = 5001)
