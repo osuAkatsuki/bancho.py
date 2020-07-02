@@ -106,7 +106,7 @@ class PacketReader:
                 #ret.extend(struct.unpack('<i', self.data[:i]) for i in range(length, step = 4))
                 #self._offset += length // 4
 
-                for i in range(0, length, 4):
+                for _ in range(length):
                     ret.append(struct.unpack('<i', self.data[:4]))
                     self._offset += 4
             else:
@@ -205,7 +205,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
             length = len(param)
             ret.extend(struct.pack('<h', (length * 4) + 2))
 
-            for i in range(0, length):
+            for _ in range(length):
                 ret.append(struct.unpack('<i', param))
         else: # use struct
             ret.extend(
