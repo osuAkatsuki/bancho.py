@@ -77,6 +77,7 @@ class Server:
             packets.Packet.c_startSpectating: events.startSpectating, # 16: client started spectating another user
             packets.Packet.c_stopSpectating: events.stopSpectating, # 17: client stopped spectating another user
             packets.Packet.c_spectateFrames: events.spectateFrames, # 18: client sending spec frames to all specs
+            packets.Packet.c_cantSpectate: events.cantSpectate, # 21: client wishes to inform fellow specs & host he can't spec
             packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage, # 25: client sent a dm
             packets.Packet.c_channelJoin: events.channelJoin, # 63: client joined a channel
             packets.Packet.c_channelPart: events.channelPart, # 78: client left a channel

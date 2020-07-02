@@ -192,6 +192,19 @@ def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
 
     host.enqueue(packets.spectatorLef)
 
+# PacketID: 21
+def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
+    if not p.spectating:
+        printlog(f"{p} Sent can't spectate while not spectating?", Ansi.LIGHT_RED)
+        return
+
+    host = p.spectating
+    data = packets.spectatorCantSpectate(p.id)
+
+    host.enqueue(data)
+    for t in host.spectators:
+        t.enqueue(data)
+
 # PacketID: 25
 def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
     client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)

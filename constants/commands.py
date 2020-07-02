@@ -14,12 +14,6 @@ import packets
 # msg split (trigger won't be included in split)
 Messageable = Union[Channel, Player]
 
-def help(p: Player, c: Messageable, msg: List[str]) -> str:
-    if not msg or len(msg) > 1:
-        return 'Invalid syntax.'
-
-    return 'yAYeayEYAEYAEAEYEAYEA'
-
 def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) != 2:
         return 'Invalid syntax.'
@@ -31,7 +25,7 @@ def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     return 'pong'
 
 def alert(p: Player, c: Messageable, msg: List[str]) -> str:
-    if len(msg) != 1:
+    if len(msg) < 1:
         return 'Invalid syntax.'
 
     glob.players.broadcast(packets.notification(' '.join(msg)))
@@ -49,10 +43,6 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
 
 glob.commands = (
     {
-        'trigger': '!help',
-        'callback': help,
-        'priv': Privileges.Verified
-    }, {
         'trigger': '!rtx',
         'callback': rtx,
         'priv': Privileges.Dangerous

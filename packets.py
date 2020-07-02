@@ -408,6 +408,10 @@ def spectatorLeft(id: int) -> bytes:
 def spectateFrames(data: bytearray) -> bytes:
     return write(Packet.s_spectateFrames, (data, ctypes.raw))
 
+# PacketID: 22
+def spectatorCantSpectate(id: int) -> bytes:
+    return write(Packet.s_spectatorCantSpectate, (id, ctypes.i32))
+
 # PacketID: 24
 def notification(notif: str) -> bytes:
     return write(Packet.s_notification, (notif, ctypes.string))
