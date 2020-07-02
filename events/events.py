@@ -78,24 +78,40 @@ def login(data: bytes) -> Tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
     # and token in a tuple so that we can pass it as a header
     # in our packetstream obj back in server.py
-    username, pw_hash, user_data = [s for s in data.decode().split('\n') if s]
-    build_name, utc_offset, display_city, client_hashes, pm_private = user_data.split('|')
 
-    if not (res := glob.db.fetch(
-        'SELECT id, name, priv, pw_hash FROM users WHERE name_safe = %s',
-        [Player.ensure_safe(username)]
-    )): return packets.loginResponse(-1), 'no' # account does not exist
+    split = [s for s in data.decode().split('\n') if s]
+    username = split[0]
+    pw_hash = split[1].encode()
 
-    if not checkpw(pw_hash.encode(), res['pw_hash'].encode()):
-        return packets.loginResponse(-1), 'no' # pw does not match
+    split = split[2].split('|')
+    build_name = split[0]
 
-    p = Player(utc_offset = int(utc_offset), pm_private = int(pm_private), **res)
+    if not split[1].isnumeric(): return
+    utc_offset = int(split[1])
+
+    display_city = split[2]
+    client_hashes = split[3].split(':')
+
+    # TODO: client hashes
+
+    if not split[4].isnumeric(): return
+    pm_private = int(split[4])
+
+    res = glob.db.fetch(
+        'SELECT id, name, priv, pw_hash '
+        'FROM users WHERE name_safe = %s',
+        [Player.ensure_safe(username)])
+
+    if not (res and checkpw(pw_hash, res['pw_hash'].encode())):
+        return packets.userID(-1), 'no'
+
+    p = Player(utc_offset = utc_offset, pm_private = pm_private, **res)
     glob.players.add(p)
 
     # No need to use packetstream here,
     # we're only dealing with body w/o headers.
     res = packets.BinaryArray()
-    res += packets.loginResponse(p.id)
+    res += packets.userID(p.id)
     res += packets.protocolVersion(19)
     res += packets.banchoPrivileges(p.bancho_priv)
     res += packets.notification(f'Welcome back to the gulag (v{glob.version:.2f})')
@@ -103,7 +119,7 @@ def login(data: bytes) -> Tuple[bytes, str]:
     # channels
     res += packets.channelinfoEnd()
     for c in glob.channels.channels: # TODO: __iter__ and __next__ in all collections
-        if p.priv & c.read == 0:
+        if not p.priv & c.read:
             continue # no priv to read
 
         res += packets.channelInfo(*c.basic_info)
@@ -147,9 +163,7 @@ def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 16
 def startSpectating(p: Player, pr: packets.PacketReader) -> None:
-    target_id = pr.read(ctypes.i32)
-
-    target_id = target_id[0]
+    target_id = pr.read(ctypes.i32)[0]
 
     if not (t := glob.players.get_by_id(target_id)):
         printlog(f'{p.name} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
@@ -190,7 +204,7 @@ def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
         for t in host.spectators:
             t.enqueue(fellow)
 
-    host.enqueue(packets.spectatorLef)
+    host.enqueue(packets.spectatorLeft(p.id))
 
 # PacketID: 21
 def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
@@ -221,11 +235,9 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(ctypes.string)):
+    if not (chan := pr.read(ctypes.string)[0]):
         printlog(f'{p.name} tried to join nonexistant channel {chan}')
         return
-
-    chan = chan[0] # need refactor.. this will be an endless uphill battle
 
     if (c := glob.channels.get(chan)) and p.join_channel(c):
         p.enqueue(packets.channelJoin(chan))
@@ -234,10 +246,8 @@ def channelJoin(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(ctypes.string)):
+    if not (chan := pr.read(ctypes.string)[0]):
         return
-
-    chan = chan[0]
 
     if (c := glob.channels.get(chan)):
         p.leave_channel(c)

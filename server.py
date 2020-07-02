@@ -69,20 +69,34 @@ class Server:
             auto_join = False))
 
         self.packet_map = {
-            packets.Packet.c_changeAction: events.readStatus, # 0: client changed action
-            packets.Packet.c_sendPublicMessage: events.sendMessage, # 1: client send a message
-            packets.Packet.c_logout: events.logout, # 2: client logged out
-            packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest, # 3: client wants their stats updated
-            packets.Packet.c_ping: events.ping, # 4: client wants their ping time updated
-            packets.Packet.c_startSpectating: events.startSpectating, # 16: client started spectating another user
-            packets.Packet.c_stopSpectating: events.stopSpectating, # 17: client stopped spectating another user
-            packets.Packet.c_spectateFrames: events.spectateFrames, # 18: client sending spec frames to all specs
-            packets.Packet.c_cantSpectate: events.cantSpectate, # 21: client wishes to inform fellow specs & host he can't spec
-            packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage, # 25: client sent a dm
-            packets.Packet.c_channelJoin: events.channelJoin, # 63: client joined a channel
-            packets.Packet.c_channelPart: events.channelPart, # 78: client left a channel
-            packets.Packet.c_userStatsRequest: events.statsRequest, # 85: client wants everyones stats
-            packets.Packet.c_userPresenceRequest: events.userPresenceRequest # 97: client wants presence of specific users
+            # 0: Client changed action
+            packets.Packet.c_changeAction: events.readStatus,
+            # 1: Client sends a message
+            packets.Packet.c_sendPublicMessage: events.sendMessage,
+            # 2: Client logged out.
+            packets.Packet.c_logout: events.logout,
+            # 3: Client wants their stats updated
+            packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest,
+            # 4: Client wants their ping time updated.
+            packets.Packet.c_ping: events.ping,
+            # 16. Client started spectating another user.
+            packets.Packet.c_startSpectating: events.startSpectating,
+            # 17: Client stopped spectating another user.
+            packets.Packet.c_stopSpectating: events.stopSpectating,
+            # 18: Client is sending spectator frames for server to distribute to spectators.
+            packets.Packet.c_spectateFrames: events.spectateFrames,
+            # 21: Client wishes to inform fellow spectators that he cannot spectate.
+            packets.Packet.c_cantSpectate: events.cantSpectate,
+            # 25: Client sends a private message.
+            packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage,
+            # 63: Client joined a channel.
+            packets.Packet.c_channelJoin: events.channelJoin,
+            # 78: Client left a channel.
+            packets.Packet.c_channelPart: events.channelPart,
+            # 85: Client wants everyones stats.
+            packets.Packet.c_userStatsRequest: events.statsRequest,
+            # 97: Client wants presence of specific users.
+            packets.Packet.c_userPresenceRequest: events.userPresenceRequest
         }
 
         self.start(glob.config.concurrent) # starts server
@@ -94,6 +108,7 @@ class Server:
         for p in glob.players.players:
             if p.ping_time + glob.config.max_ping < current_time:
                 printlog(f'Requesting ping from user {p.name} after {p.ping_time}')
+                p.enqueue(packets.notification('Pong!'))
                 p.enqueue(packets.pong())
 
         sleep(glob.config.max_ping)

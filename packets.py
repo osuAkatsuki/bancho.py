@@ -338,7 +338,7 @@ class Packet(IntEnum):
 #
 
 # PacketID: 5
-def loginResponse(id) -> bytes:
+def userID(id) -> bytes:
     # ID Responses:
     # -1: Authentication Failed
     # -2: Old Client
