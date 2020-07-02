@@ -1,6 +1,6 @@
 from typing import Final
 from enum import IntEnum
-from datetime import datetime as dt, timezone as tz
+from datetime import datetime as dt, timezone as tz, timedelta as td
 
 class Ansi(IntEnum):
     # Default colours
@@ -29,14 +29,27 @@ class Ansi(IntEnum):
         return f'\x1b[{self.value}m'
 
 def get_timestamp(full: bool = False) -> str:
-    fmt = '%d/%m/%Y %I:%M:%S%p' if full else '%I:%M:%S:%p'
-    return f'{dt.now(tz = tz.utc):{fmt}}'
+    fmt = '%d/%m/%Y %I:%M:%S%p' if full else '%I:%M:%S%p'
+    tz_est = tz(td(hours = -4), 'EDT')
+    return f'{dt.now(tz = tz_est):{fmt}}'
 
 # TODO: perhaps make some kind of
 # timestamp class with __format__?
-def printc(msg, col: Ansi, fd: str = 'log/chat.log',
-           st_fmt = '') -> None:
-    if fd:
-        with open(fd, 'a+') as f:
-            f.write(f'[{get_timestamp(True)}] {msg}')
-    print(f'{st_fmt}{col!r}[{get_timestamp(False)}] {msg}{Ansi.RESET!r}')
+
+def printlog(msg, col: Ansi = None, fd: str = None, st_fmt = '') -> None:
+    # This can be used both for logging purposes, or also just printing
+    # with colour without having to do inline color codes / ansi objects.
+
+    if st_fmt:
+        print(st_fmt, end = '')
+
+    if col:
+        print(f'{col!r}[{get_timestamp(False)}] {msg}{Ansi.RESET!r}')
+    else:
+        print(f'[{get_timestamp(False)}] {msg}')
+
+    if not fd:
+        return
+
+    with open(fd, 'a+') as f:
+        f.write(f'[{get_timestamp(True)}] {msg}')

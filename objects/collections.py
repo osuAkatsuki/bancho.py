@@ -4,6 +4,7 @@ from typing import Tuple
 from objects.player import Player
 from objects.channel import Channel
 from constants import Privileges
+from console import printlog
 
 class ChannelList:
     def __init__(self):
@@ -16,13 +17,13 @@ class ChannelList:
 
     def add(self, p: Channel) -> None: # bool ret success?
         if p in self.channels:
-            print(f'{p.name} already in channels list!')
+            printlog(f'{p.name} already in channels list!')
             return
-        print(f'Adding {p.name} to channels list.')
+        printlog(f'Adding {p.name} to channels list.')
         self.channels.append(p)
 
     def remove(self, p: Channel) -> None:
-        print(f'Removing {p.name} from channels list.')
+        printlog(f'Removing {p.name} from channels list.')
         self.channels.remove(p)
 
 class PlayerList:
@@ -49,11 +50,11 @@ class PlayerList:
 
     def add(self, p: Player) -> None: # bool ret success?
         if p in self.players:
-            print(f'{p.name} ({p.id}) already in players list!')
+            printlog(f'{p.name} ({p.id}) already in players list!')
             return
-        print(f'Adding {p.name} ({p.id}) to players list.')
+        printlog(f'Adding {p.name} ({p.id}) to players list.')
         self.players.append(p)
 
     def remove(self, p: Player) -> None:
-        print(f'Removing {p.name} ({p.id}) from players list.')
+        printlog(f'Removing {p.name} ({p.id}) from players list.')
         self.players.remove(p)

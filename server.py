@@ -84,7 +84,7 @@ class Server:
         current_time = int(time())
         for p in glob.players.players:
             if p.ping_time + config.max_ping < current_time:
-                print(f'Requesting ping from user {p.name} after {p.ping_time}')
+                printlog(f'Requesting ping from user {p.name} after {p.ping_time}')
                 p.enqueue(packets.pong())
 
         sleep(config.max_ping)
@@ -101,7 +101,7 @@ class Server:
             # Set up ping pingout loop
             Thread(target = self.ping_timeouts).start()
 
-            print('\x1b[0;92mListening for connections..\x1b[0m')
+            printlog('Listening for connections', Ansi.LIGHT_GREEN)
 
             while not self.shutdown:
                 conn, _ = s.accept()
@@ -110,13 +110,12 @@ class Server:
                         self.handle_connection(conn)
                     except BrokenPipeError: # will probably remove in production,
                                             # only really happens in debugging
-                        print('Connection timed out..')
+                        printlog('Connection timed out?')
 
-        printc('Socket closed..', Ansi.LIGHT_GREEN, fd = None)
+        printlog('Socket closed..', Ansi.LIGHT_GREEN)
 
     def handle_connection(self, conn: socket.socket) -> None:
         start_time = time()
-        printc('Connection established..', Ansi.LIGHT_CYAN, fd = None, st_fmt = '\n')
         data = conn.recv(config.max_bytes)
         while len(data) % config.max_bytes == 0:
             data += conn.recv(config.max_bytes)
@@ -134,7 +133,7 @@ class Server:
             ps.add_header(f'cho-token: {token}')
         elif not (p := glob.players.get(req.headers['osu-token'])):
             # A little bit suboptimal, but fine for now?
-            print('Token not found, forcing relog.')
+            printlog('Token not found, forcing relog.')
             ps += packets.notification('Server is restarting.')
             ps += packets.restartServer(0) # send 0ms since the server is already up!
         else: # Player found, process normal packet.
@@ -145,11 +144,10 @@ class Server:
                     continue # skip, data empty?
 
                 if pr.packetID not in self.packet_map:
-                    printc(f'[N] {pr!r}', Ansi.LIGHT_YELLOW, fd = None)
+                    printlog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
                     pr.ignore_packet()
                     continue
 
-                printc(f'[Y] {pr!r}', Ansi.LIGHT_MAGENTA, fd = None)
                 self.packet_map[pr.packetID](p, pr)
 
             while not p.queue_empty():
@@ -160,7 +158,8 @@ class Server:
         # send back an empty response so the client
         # knows it was successfully delivered.
         conn.send(bytes(ps))
-        printc(f'Packet took {(time() - start_time) * 1000:.2f}ms', Ansi.LIGHT_BLUE, fd = None)
+        taken = (time() - start_time) * 1000
+        printlog(f'Packet took {taken:.2f}ms', Ansi.LIGHT_CYAN)
 
 if __name__ == '__main__':
     serv = Server(host = '127.0.0.1', port = 5001)

@@ -5,6 +5,7 @@ from random import choices
 from string import ascii_lowercase
 from constants import Privileges, BanchoPrivileges
 import config
+from console import printlog
 
 from objects import glob
 from enum import IntEnum
@@ -118,26 +119,26 @@ class Player:
 
     def join_channel(self, chan) -> bool:
         if self in chan:
-            print(f'{self.name} ({self.id}) tried to double join {chan.name}.')
+            printlog(f'{self.name} ({self.id}) tried to double join {chan.name}.')
             return False
 
         if not self.priv & chan.read:
-            print(f'{self.name} ({self.id}) tried to join {chan.name} but lacks privs.')
+            printlog(f'{self.name} ({self.id}) tried to join {chan.name} but lacks privs.')
             return False
 
         chan.append(self) # Add to channels
         self.channels.append(chan) # Add to player
-        print(f'{self.name} ({self.id}) joined {chan.name}.')
+        printlog(f'{self.name} ({self.id}) joined {chan.name}.')
         return True
 
     def leave_channel(self, chan) -> None:
         if self not in chan:
-            print(f'{self.name} ({self.id}) tried to leave {chan.name} but is not in it.')
+            printlog(f'{self.name} ({self.id}) tried to leave {chan.name} but is not in it.')
             return
 
         chan.remove(self) # Remove from channels
         self.channels.remove(chan) # Remove from player
-        print(f'{self.name} ({self.id}) left {chan.name}.')
+        printlog(f'{self.name} ({self.id}) left {chan.name}.')
 
     def queue_empty(self) -> bool:
         return self._queue.empty()
@@ -149,7 +150,7 @@ class Player:
         try:
             return self._queue.get_nowait()
         except:
-            print('Empty queue?')
+            printlog('Empty queue?')
 
     @staticmethod
     def ensure_safe(name: str) -> str:

@@ -8,6 +8,7 @@ from objects import glob
 from objects.player import Player
 from objects.web import Request
 from constants import Type, Mods
+from console import printlog, Ansi
 
 PacketParam = Tuple[Any, Type]
 Specifiers = Dict[Type, str]
@@ -80,7 +81,7 @@ class PacketReader:
             # packet is invalid, end connection
             self.packetID = -1
             self._offset += len(self.data)
-            print(f'Received garbage data? (len: {len(self.data)})')
+            printlog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
             return
 
         self.packetID, self.length = struct.unpack('<HxI', self.data[:7])

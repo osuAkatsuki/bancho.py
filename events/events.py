@@ -32,8 +32,7 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     client, msg, target, target_id = pr.read(*([Type.string] * 3), Type.i32)
 
     if not (c := glob.channels.get(target)):
-        printc(f'{p.name} tried to write to a non-exitsant ')
-        print(f'{p.name} tried to write to non-existant channel {target}.')
+        printlog(f'{p.name} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
     # Limit message length to 2048 characters
@@ -42,12 +41,7 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
 
     # Don't enqueue to ourselves
     c.enqueue(packets.sendMessage(client, msg, target, target_id), {p.id})
-    with open('logs/chat.log', 'a+') as f:
-        print(
-            '[{time:%I:%M:%S%p}] {name} @ {target}: {msg}'.format(
-                time = dt.now(tz = tz.utc), name = p.name,
-                target = target, msg = msg
-        ), file = f)
+    printlog(f'{p.name} @ {target}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
 
 # PacketID: 2
 def logout(p: Player, pr: packets.PacketReader) -> None:
@@ -64,7 +58,7 @@ def logout(p: Player, pr: packets.PacketReader) -> None:
     # leave match
     # remove match if only player
 
-    print(f'{p.name} logged out.')
+    printlog(f'{p.name} logged out.', Ansi.LIGHT_YELLOW)
 
 # PacketID: 3
 def statsUpdateRequest(p: Player, pr: packets.PacketReader) -> None:
@@ -136,12 +130,13 @@ def login(data: bytes) -> Tuple[bytes, str]:
     res += packets.mainMenuIcon()
         # TODO: friends list
 
+    printlog(f'{p.name} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(res), p.token
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
     if not (chan := pr.read(Type.string)):
-        print(f'{p.name} tried to join nonexistant channel {chan}')
+        printlog(f'{p.name} tried to join nonexistant channel {chan}')
         return
 
     chan = chan[0] # need refactor.. this will be an endless uphill battle
@@ -149,7 +144,7 @@ def channelJoin(p: Player, pr: packets.PacketReader) -> None:
     if (c := glob.channels.get(chan)) and p.join_channel(c):
         p.enqueue(packets.channelJoin(chan))
     else:
-        print(f'Failed to find channel {chan} that {p.name} attempted to join.')
+        printlog(f'Failed to find channel {chan} that {p.name} attempted to join.')
 
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:
@@ -161,7 +156,7 @@ def channelPart(p: Player, pr: packets.PacketReader) -> None:
     if (c := glob.channels.get(chan)):
         p.leave_channel(c)
     else:
-        print(f'Failed to find channel {chan} that {p.name} attempted to leave.')
+        printlog(f'Failed to find channel {chan} that {p.name} attempted to leave.')
 
 # PacketID: 85
 def statsRequest(p: Player, pr: packets.PacketReader) -> None:
