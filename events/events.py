@@ -12,6 +12,7 @@ from constants.mods import Mods
 from constants import commands
 from objects import glob
 from objects.player import Player
+from constants.privileges import Privileges
 
 # PacketID: 0
 def readStatus(p: Player, pr: packets.PacketReader) -> None:
@@ -86,25 +87,24 @@ def login(data: bytes) -> Tuple[bytes, str]:
     split = split[2].split('|')
     build_name = split[0]
 
-    if not split[1].isnumeric():
+    if not split[1].replace('-', '', 1).isnumeric():
         return packets.userID(-1), 'no'
 
     utc_offset = int(split[1])
+    display_city = split[2] == '1'
 
-    display_city = split[2]
     client_hashes = split[3].split(':')
-
     # TODO: client hashes
 
-    if not split[4].isnumeric():
-        return packets.userID(-1), 'no'
-
-    pm_private = int(split[4])
+    pm_private = split[4] == '1'
 
     res = glob.db.fetch(
         'SELECT id, name, priv, pw_hash '
         'FROM users WHERE name_safe = %s',
         [Player.ensure_safe(username)])
+
+    if res['priv'] == Privileges.Banned:
+        return packets.userID(-3), 'no'
 
     if not (res and checkpw(pw_hash, res['pw_hash'].encode())):
         return packets.userID(-1), 'no'
