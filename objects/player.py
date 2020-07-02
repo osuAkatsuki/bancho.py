@@ -3,7 +3,7 @@
 from typing import Tuple
 from random import choices
 from string import ascii_lowercase
-from constants import Privileges, BanchoPrivileges
+from constants.privileges import Privileges, BanchoPrivileges
 import config
 from console import printlog
 

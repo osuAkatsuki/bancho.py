@@ -31,7 +31,8 @@ from events import events
 from objects.collections import PlayerList, ChannelList
 from objects.channel import Channel
 from objects.web import Request#, Response
-from constants import Privileges, Type
+from constants.types import ctypes
+from constants.privileges import Privileges
 
 class Server:
     def __init__(self, *args, **kwargs) -> None:

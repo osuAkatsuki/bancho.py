@@ -7,19 +7,21 @@ from bcrypt import checkpw
 
 import packets
 from console import *
-from constants import Type, Mods
+from constants.types import ctypes
+from constants.mods import Mods
+from constants import commands
 from objects import glob
 from objects.player import Player
 
 # PacketID: 0
 def readStatus(p: Player, pr: packets.PacketReader) -> None:
     data = pr.read(
-        Type.i8, # actionType
-        Type.string, # infotext
-        Type.string, # beatmap md5
-        Type.i32, # mods
-        Type.i8, # gamemode
-        Type.i32 # beatmapid
+        ctypes.i8, # actionType
+        ctypes.string, # infotext
+        ctypes.string, # beatmap md5
+        ctypes.i32, # mods
+        ctypes.i8, # gamemode
+        ctypes.i32 # beatmapid
     )
 
     p.status.update(*data) # TODO: probably refactor some status stuff
@@ -29,7 +31,7 @@ def readStatus(p: Player, pr: packets.PacketReader) -> None:
 # PacketID: 1
 def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     # target_id only proto >= 14
-    client, msg, target, target_id = pr.read(*([Type.string] * 3), Type.i32)
+    client, msg, target, target_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
 
     if not (c := glob.channels.get(target)):
         printlog(f'{p.name} tried to write to non-existant {target}.', Ansi.YELLOW)
@@ -38,6 +40,9 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     # Limit message length to 2048 characters
     msg = msg[:2045] + '...' if msg[2048:] else msg
     client, target_id = p.name, p.id
+
+    if msg.startswith(glob.config.command_prefix):
+        commands.process_commands(p, c, msg)
 
     # Don't enqueue to ourselves
     c.enqueue(packets.sendMessage(client, msg, target, target_id), {p.id})
@@ -135,7 +140,7 @@ def login(data: bytes) -> Tuple[bytes, str]:
 
 # PacketID: 25
 def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
-    client, msg, target, client_id = pr.read(*([Type.string] * 3), Type.i32)
+    client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
 
     if not (t := glob.players.get_by_name(target)):
         printlog(f'{p.name} tried to write to non-existant user {target}.', Ansi.YELLOW)
@@ -149,7 +154,7 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(Type.string)):
+    if not (chan := pr.read(ctypes.string)):
         printlog(f'{p.name} tried to join nonexistant channel {chan}')
         return
 
@@ -162,7 +167,7 @@ def channelJoin(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(Type.string)):
+    if not (chan := pr.read(ctypes.string)):
         return
 
     chan = chan[0]
@@ -177,7 +182,7 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
     if len(pr.data) < 6:
         return
 
-    userIDs = pr.read(Type.i32_list)
+    userIDs = pr.read(ctypes.i32_list)
     is_online = lambda o: o in glob.players.ids
 
     for online in filter(is_online, userIDs):
@@ -186,5 +191,5 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 97
 def userPresenceRequest(p: Player, pr: packets.PacketReader) -> None:
-    for id in pr.read(Type.i32_list):
+    for id in pr.read(ctypes.i32_list):
         p.enqueue(packets.userPresence(id))

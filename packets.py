@@ -7,11 +7,12 @@ import struct
 from objects import glob
 from objects.player import Player
 from objects.web import Request
-from constants import Type, Mods
+from constants.mods import Mods
+from constants.types import ctypes
 from console import printlog, Ansi
 
-PacketParam = Tuple[Any, Type]
-Specifiers = Dict[Type, str]
+PacketParam = Tuple[Any, ctypes]
+Specifiers = Dict[ctypes, str]
 Slice = Union[int, slice]
 
 class BinaryArray:
@@ -48,16 +49,16 @@ class PacketReader:
         self.length = 0
 
         self.specifiers: Final[Specifiers] = {
-            Type.i8:  'b', # good
-            Type.u8:  'B',  # time
-            Type.i16: 'h',   # to
-            Type.u16: 'H',    # ask
-            Type.i32: 'i',     # my self
-            Type.u32: 'I',      # why im
-            Type.f32: 'f',       # alive
-            Type.i64: 'q',        # B)
-            Type.u64: 'Q',
-            Type.f64: 'd'
+            ctypes.i8:  'b', # good
+            ctypes.u8:  'B',  # time
+            ctypes.i16: 'h',   # to
+            ctypes.u16: 'H',    # ask
+            ctypes.i32: 'i',     # my self
+            ctypes.u32: 'I',      # why im
+            ctypes.f32: 'f',       # alive
+            ctypes.i64: 'q',        # B)
+            ctypes.u64: 'Q',
+            ctypes.f64: 'd'
         }
 
     def __repr__(self) -> str:
@@ -90,7 +91,7 @@ class PacketReader:
     def read(self, *types) -> Tuple[Any]:
         ret = []
         for t in types:
-            if t == Type.string:
+            if t == ctypes.string:
                 self._offset += 1
                 if self._data[self._offset - 1] == 0x00:
                     continue # empty string
@@ -98,7 +99,7 @@ class PacketReader:
                 length = self.read_uleb128()
                 ret.append(self.data[:length].decode())
                 self._offset += length
-            elif t == Type.i32_list:
+            elif t == ctypes.i32_list:
                 # read length
                 length = struct.unpack('<h', self.data[:2])[0]
                 self._offset += 2
@@ -190,9 +191,9 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
     st_ptr = len(ret)
 
     for param, param_type in args:
-        if param_type == Type.raw: # bytes, just add to self.data
+        if param_type == ctypes.raw: # bytes, just add to self.data
             ret.extend(param)
-        elif param_type == Type.string:
+        elif param_type == ctypes.string:
             if (length := len(param)) == 0:
                 # Empty string
                 ret.append(0)
@@ -202,7 +203,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
             ret.append(11)
             ret.extend(write_uleb128(length))
             ret.extend(param.encode('utf-8', 'replace'))
-        elif param_type == Type.i32_list:
+        elif param_type == ctypes.i32_list:
             length = len(param)
             ret.extend(struct.pack('<h', (length * 4) + 2))
 
@@ -211,16 +212,16 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
         else: # use struct
             ret.extend(
                 struct.pack('<' + {
-                Type.i8:  'b',
-                Type.u8:  'B',
-                Type.i16: 'h',
-                Type.u16: 'H',
-                Type.i32: 'i',
-                Type.u32: 'I',
-                Type.f32: 'f',
-                Type.i64: 'q',
-                Type.u64: 'Q',
-                Type.f64: 'd'
+                ctypes.i8:  'b',
+                ctypes.u8:  'B',
+                ctypes.i16: 'h',
+                ctypes.u16: 'H',
+                ctypes.i32: 'i',
+                ctypes.u32: 'I',
+                ctypes.f32: 'f',
+                ctypes.i64: 'q',
+                ctypes.u64: 'Q',
+                ctypes.f64: 'd'
             }[param_type], param))
 
     # Add size
@@ -350,18 +351,18 @@ def loginResponse(id) -> bytes:
     # ??: Valid ID
     return write(
         Packet.s_userID,
-        (id, Type.i32)
+        (id, ctypes.i32)
     )
 
 # PacketID: 7
 def sendMessage(client: str, msg: str, target: str,
-                target_id: int) -> bytes:
+                client_id: int) -> bytes:
     return write(
         Packet.s_sendMessage,
-        (client, Type.string),
-        (msg, Type.string),
-        (target, Type.string),
-        (target_id, Type.i32)
+        (client, ctypes.string),
+        (msg, ctypes.string),
+        (target, ctypes.string),
+        (client_id, ctypes.i32)
     )
 
 # PacketID: 8
@@ -372,61 +373,61 @@ def pong() -> bytes:
 def userStats(p: Player) -> bytes:
     return write(
         Packet.s_userStats,
-        (p.id, Type.i32),
-        (p.status.action, Type.i8),
-        (p.status.info_text, Type.string),
-        (p.status.beatmap_md5, Type.string),
-        (p.status.mods, Type.i32),
-        (p.status.game_mode, Type.i8),
-        (p.status.beatmap_id, Type.i32),
-        (p.gm_stats.rscore, Type.i64),
-        (p.gm_stats.acc, Type.f32),
-        (p.gm_stats.playcount, Type.i32),
-        (p.gm_stats.tscore, Type.i64),
-        (p.gm_stats.rank, Type.i32),
-        (p.gm_stats.pp, Type.i16)) if p.id != 1 else \
+        (p.id, ctypes.i32),
+        (p.status.action, ctypes.i8),
+        (p.status.info_text, ctypes.string),
+        (p.status.beatmap_md5, ctypes.string),
+        (p.status.mods, ctypes.i32),
+        (p.status.game_mode, ctypes.i8),
+        (p.status.beatmap_id, ctypes.i32),
+        (p.gm_stats.rscore, ctypes.i64),
+        (p.gm_stats.acc, ctypes.f32),
+        (p.gm_stats.playcount, ctypes.i32),
+        (p.gm_stats.tscore, ctypes.i64),
+        (p.gm_stats.rank, ctypes.i32),
+        (p.gm_stats.pp, ctypes.i16)) if p.id != 1 else \
         b'\x10' # TODO: raw bytes for aika
 
 # PacketID: 12
 def logout(userID: int) -> bytes:
     return write(
         Packet.s_userLogout,
-        (userID, Type.i32),
-        (0, Type.i8)
+        (userID, ctypes.i32),
+        (0, ctypes.i8)
     )
 
 # PacketID: 24
 def notification(notif: str) -> bytes:
-    return write(Packet.s_notification, (notif, Type.string))
+    return write(Packet.s_notification, (notif, ctypes.string))
 
 # PacketID: 64
 def channelJoin(chan: str) -> bytes:
     return write(
         Packet.s_channelJoinSuccess,
-        (chan, Type.string)
+        (chan, ctypes.string)
     )
 
 # PacketID: 65
 def channelInfo(name: str, topic: str, p_count: int) -> bytes:
     return write(
         Packet.s_channelInfo,
-        (name, Type.string),
-        (topic, Type.string),
-        (p_count, Type.i16)
+        (name, ctypes.string),
+        (topic, ctypes.string),
+        (p_count, ctypes.i16)
     )
 
 # PacketID: 71
 def banchoPrivileges(priv: int) -> bytes:
     return write(
         Packet.s_supporterGMT,
-        (priv, Type.i32)
+        (priv, ctypes.i32)
     )
 
 # PacketID: 75
 def protocolVersion(num: int) -> bytes:
     return write(
         Packet.s_protocolVersion,
-        (num, Type.i32)
+        (num, ctypes.i32)
     )
 
 # PacketID: 76
@@ -436,7 +437,7 @@ def mainMenuIcon(**urls) -> bytes:
         ('|'.join([
             'https://akatsuki.pw/static/logos/logo_ingame.png',
             'https://akatsuki.pw'
-        ]), Type.string
+        ]), ctypes.string
         )
     )
 
@@ -444,21 +445,21 @@ def mainMenuIcon(**urls) -> bytes:
 def userPresence(p: Player) -> bytes:
     return write(
         Packet.s_userPresence,
-        (p.id, Type.i32),
-        (p.name, Type.string),
-        (p.utc_offset, Type.i8),
-        (p.country, Type.i8), # break break
-        (p.bancho_priv, Type.i8),
-        (0.0, Type.f32), # lat
-        (0.0, Type.f32), # long
-        (p.gm_stats.rank, Type.i32)
+        (p.id, ctypes.i32),
+        (p.name, ctypes.string),
+        (p.utc_offset, ctypes.i8),
+        (p.country, ctypes.i8), # break break
+        (p.bancho_priv, ctypes.i8),
+        (0.0, ctypes.f32), # lat
+        (0.0, ctypes.f32), # long
+        (p.gm_stats.rank, ctypes.i32)
     )
 
 # PacketID: 86
 def restartServer(ms: int) -> bytes:
     return write(
         Packet.s_restart,
-        (ms, Type.i32)
+        (ms, ctypes.i32)
     )
 
 # PacketID: 89
@@ -467,4 +468,4 @@ def channelinfoEnd() -> bytes:
 
 # PacketID: 105
 def RTX(notif: str) -> bytes:
-    return write(Packet.s_RTX, (notif, Type.string))
+    return write(Packet.s_RTX, (notif, ctypes.string))

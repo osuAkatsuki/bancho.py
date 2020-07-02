@@ -3,7 +3,7 @@
 from typing import Tuple
 from objects.player import Player
 from objects.channel import Channel
-from constants import Privileges
+from constants.privileges import Privileges
 from console import printlog
 
 class ChannelList:
