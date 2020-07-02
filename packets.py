@@ -404,6 +404,10 @@ def spectatorJoined(id: int) -> bytes:
 def spectatorLeft(id: int) -> bytes:
     return write(Packet.s_spectatorLeft, (id, ctypes.i32))
 
+# PacketID: 15
+def spectateFrames(data: bytearray) -> bytes:
+    return write(Packet.s_spectateFrames, (data, ctypes.raw))
+
 # PacketID: 24
 def notification(notif: str) -> bytes:
     return write(Packet.s_notification, (notif, ctypes.string))

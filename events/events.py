@@ -140,7 +140,10 @@ def login(data: bytes) -> Tuple[bytes, str]:
 
 # PacketID: 15
 def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
-    print(pr.data)
+    data = packets.spectateFrames(pr.data[:pr.length])
+    pr.ignore_packet()
+    for t in p.spectators:
+        t.enqueue(data)
 
 # PacketID: 16
 def startSpectating(p: Player, pr: packets.PacketReader) -> None:
