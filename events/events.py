@@ -149,6 +149,8 @@ def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
 def startSpectating(p: Player, pr: packets.PacketReader) -> None:
     target_id = pr.read(ctypes.i32)
 
+    target_id = target_id[0]
+
     if not (t := glob.players.get_by_id(target_id)):
         printlog(f'{p.name} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
