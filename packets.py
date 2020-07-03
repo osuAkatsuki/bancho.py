@@ -204,11 +204,10 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
             ret.extend(write_uleb128(length))
             ret.extend(param.encode('utf-8', 'replace'))
         elif param_type == ctypes.i32_list:
-            length = len(param)
-            ret.extend(struct.pack('<h', (length * 4) + 2))
+            ret.extend(struct.pack('<h', (len(param) * 4) + 2))
 
-            for _ in range(length):
-                ret.append(struct.unpack('<i', param))
+            for p in param: # most likely slow.. :/
+                ret.extend(struct.pack('<i', p))
         else: # use struct
             ret.extend(
                 struct.pack('<' + {
@@ -377,7 +376,7 @@ def userStats(p: Player) -> bytes:
         (p.status.action, ctypes.i8),
         (p.status.info_text, ctypes.string),
         (p.status.beatmap_md5, ctypes.string),
-        (p.status.mods, ctypes.i32),
+        (p.status.mods, ctypes.i32), # i16 on bancho proto<10
         (p.status.game_mode, ctypes.i8),
         (p.status.beatmap_id, ctypes.i32),
         (p.gm_stats.rscore, ctypes.i64),
@@ -385,8 +384,8 @@ def userStats(p: Player) -> bytes:
         (p.gm_stats.playcount, ctypes.i32),
         (p.gm_stats.tscore, ctypes.i64),
         (p.gm_stats.rank, ctypes.i32),
-        (p.gm_stats.pp, ctypes.i16)) if p.id != 1 else \
-        b'\x10' # TODO: raw bytes for aika
+        (p.gm_stats.pp, ctypes.i16))
+    # TODO: raw bytes for aika
 
 # PacketID: 12
 def logout(userID: int) -> bytes:
@@ -408,9 +407,17 @@ def spectatorLeft(id: int) -> bytes:
 def spectateFrames(data: bytearray) -> bytes:
     return write(Packet.s_spectateFrames, (data, ctypes.raw))
 
+# PacketID: 19
+def versionUpdate() -> bytes:
+    return write(Packet.s_versionUpdate)
+
 # PacketID: 22
 def spectatorCantSpectate(id: int) -> bytes:
     return write(Packet.s_spectatorCantSpectate, (id, ctypes.i32))
+
+# PacketID: 23
+def getAttention() -> bytes:
+    return write(Packet.s_getAttention)
 
 # PacketID: 24
 def notification(notif: str) -> bytes:
@@ -440,11 +447,45 @@ def channelInfo(name: str, topic: str, p_count: int) -> bytes:
         (p_count, ctypes.i16)
     )
 
+# PacketID: 66
+def channelKick(name: str) -> bytes:
+    return write(Packet.s_channelKicked, (name, ctypes.string))
+
+# PacketID: 67
+def channelAutoJoin(name: str, topic: str, p_count: int) -> bytes:
+    return write(
+        Packet.s_channelAutoJoin,
+        (name, ctypes.string),
+        (topic, ctypes.string),
+        (p_count, ctypes.i16)
+    )
+
+# PacketID: 69 TODO - beatmapinforeply [i32 len, ]
+# i32 length
+# length * beatmapinfo struct:
+# i16: id
+# i32: beatmapid
+# i32: beatmapsetid
+# i32: threadid
+# byte: ranked
+# i8: osu rank
+# i8: fruits rank # nice job peppy.. does not follow mode id..
+# i8: taiko rank
+# i8: mania rank
+# str: checksum
+
 # PacketID: 71
 def banchoPrivileges(priv: int) -> bytes:
     return write(
         Packet.s_supporterGMT,
         (priv, ctypes.i32)
+    )
+
+# PacketID: 72
+def friendsList(*friends) -> bytes:
+    return write(
+        Packet.s_friendsList,
+        (friends, ctypes.i32_list)
     )
 
 # PacketID: 75
@@ -455,7 +496,8 @@ def protocolVersion(num: int) -> bytes:
     )
 
 # PacketID: 76
-def mainMenuIcon(**urls) -> bytes:
+def mainMenuIcon() -> bytes:
+    # TODO: unhardcode lol
     return write(
         Packet.s_mainMenuIcon,
         ('|'.join([
@@ -464,6 +506,16 @@ def mainMenuIcon(**urls) -> bytes:
         ]), ctypes.string
         )
     )
+
+# PacketID: 80
+def monitor() -> bytes:
+    # This is a little 'anticheat' feature from ppy himself..
+    # basically, it would screenshot your desktop on command,
+    # and send it to /web/bancho_connect.php?x={file}.
+
+    # This doesn't work on newer clients (and i have), it was
+    # no plan on trying to use it, just coded for completion.
+    return write(Packet.s_monitor)
 
 # PacketID: 83
 def userPresence(p: Player) -> bytes:
@@ -487,9 +539,56 @@ def restartServer(ms: int) -> bytes:
     )
 
 # PacketID: 89
-def channelinfoEnd() -> bytes:
+def channelInfoEnd() -> bytes:
     return write(Packet.s_channelInfoEnd)
+
+# PacketID: 92
+def silenceEnd(delta: int) -> bytes:
+    return write(Packet.s_silenceEnd, (delta, ctypes.i32))
+
+# PacketID: 94
+def userSilenced(id: int) -> bytes:
+    return write(Packet.s_userSilenced, (id, ctypes.i32))
+
+# PacketID: 100
+def userPMBlocked(target: str) -> bytes:
+    return write(
+        Packet.s_userPMBlocked,
+        ('', ctypes.string),
+        ('', ctypes.string),
+        (target, ctypes.string),
+        (0, ctypes.i32)
+    )
+
+# PacketID: 101
+def targetSilenced(target: str) -> bytes:
+    return write(
+        Packet.s_targetIsSilenced,
+        ('', ctypes.string),
+        ('', ctypes.string),
+        (target, ctypes.string),
+        (0, ctypes.i32)
+    )
+
+# PacketID: 102
+def versionUpdateForced() -> bytes:
+    return write(Packet.s_versionUpdateForced)
+
+# PacketID: 103
+def switchServer(t: int) -> bytes: # (idletime < t || match != null)
+    return write(Packet.s_switchServer, (t, ctypes.i32))
 
 # PacketID: 105
 def RTX(notif: str) -> bytes:
+    # Sends a request to the client to show notif
+    # as a popup, black screen, freeze game and
+    # make a beep noise (freezes client) for 5
+    # seconds randomly within the next 3-8 seconds.
     return write(Packet.s_RTX, (notif, ctypes.string))
+
+# PacketID: 107
+def switchTournamentServer(ip: str) -> bytes:
+    # The client only reads the string if it's
+    # not on the client's normal endpoints, but we
+    # can send it either way xd.
+    return write(Packet.s_switchTournamentServer, (ip, ctypes.string))

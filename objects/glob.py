@@ -6,3 +6,4 @@ import config
 players = PlayerList()
 channels = ChannelList()
 db = None # too lazy
+bcrypt_cache = {}

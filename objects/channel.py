@@ -3,6 +3,8 @@
 from typing import Tuple, Union
 from objects.player import Player
 from constants.privileges import Privileges
+from objects import glob
+import packets
 
 class Channel:
     def __init__(self, *args, **kwargs) -> None:
@@ -13,14 +15,25 @@ class Channel:
         self.read = kwargs.get('read', Privileges.Verified)
         self.write = kwargs.get('write', Privileges.Verified)
         self.auto_join = kwargs.get('auto_join', True)
+        self.temp = kwargs.get('temp', False)
 
     def __contains__(self, p: Player) -> bool:
         return p in self.players
 
+    def send(self, msg: str) -> None:
+        self.enqueue(packets.sendMessage(glob.config.botname, msg, self.name, 1))
+
     def append(self, p: Player) -> None:
         self.players.append(p)
+
     def remove(self, p: Player) -> None:
-        self.players.remove(p)
+        if len(self.players) == 1 and self.temp:
+            # If it's a temporary channel and this
+            # is the last member leaving, just remove
+            # the channel from the global list.
+            glob.channels.remove(self)
+        else:
+            self.players.remove(p)
 
     def enqueue(self, data: bytes, immune = []) -> None:
         # Enqueue bytes to all players in a channel.

@@ -75,12 +75,12 @@ def ping(p: Player, pr: packets.PacketReader) -> None:
     p.ping_time = time()
 
 # PacketID: 5
-def login(data: bytes) -> Tuple[bytes, str]:
+def login(origin: bytes) -> Tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
     # and token in a tuple so that we can pass it as a header
     # in our packetstream obj back in server.py
 
-    split = [s for s in data.decode().split('\n') if s]
+    split = [s for s in origin.decode().split('\n') if s]
     username = split[0]
     pw_hash = split[1].encode()
 
@@ -99,46 +99,62 @@ def login(data: bytes) -> Tuple[bytes, str]:
     pm_private = split[4] == '1'
 
     res = glob.db.fetch(
-        'SELECT id, name, priv, pw_hash '
+        'SELECT id, name, priv, pw_hash, silence_end '
         'FROM users WHERE name_safe = %s',
         [Player.ensure_safe(username)])
 
+    if not res: # Account does not exist.
+        return packets.userID(-1), 'no'
+
+    # Account is banned.
     if res['priv'] == Privileges.Banned:
         return packets.userID(-3), 'no'
 
-    if not (res and checkpw(pw_hash, res['pw_hash'].encode())):
-        return packets.userID(-1), 'no'
+    # Password is incorrect.
+    if pw_hash in glob.bcrypt_cache: # ~0.01 ms
+        # Cache hit - this saves ~190ms on subsequent logins.
+        if glob.bcrypt_cache[pw_hash] != res['pw_hash']:
+            return packets.userID(-1), 'no'
+    else: # Cache miss, must be first login.
+        if not checkpw(pw_hash, res['pw_hash'].encode()):
+            return packets.userID(-1), 'no'
+
+        glob.bcrypt_cache.update({pw_hash: res['pw_hash']})
 
     p = Player(utc_offset = utc_offset, pm_private = pm_private, **res)
+    p.silence_end = res['silence_end']
     glob.players.add(p)
 
     # No need to use packetstream here,
     # we're only dealing with body w/o headers.
-    res = packets.BinaryArray()
-    res += packets.userID(p.id)
-    res += packets.protocolVersion(19)
-    res += packets.banchoPrivileges(p.bancho_priv)
-    res += packets.notification(f'Welcome back to the gulag (v{glob.version:.2f})')
+    data = packets.BinaryArray()
+    data += packets.userID(p.id)
+    data += packets.protocolVersion(19)
+    data += packets.banchoPrivileges(p.bancho_priv)
+    data += packets.notification(f'Welcome back to the gulag (v{glob.version:.2f})')
 
-    # channels
-    res += packets.channelinfoEnd()
+    # Channels
+    data += packets.channelInfoEnd() # tells osu client to load channels from config i think?
     for c in glob.channels.channels: # TODO: __iter__ and __next__ in all collections
         if not p.priv & c.read:
             continue # no priv to read
 
-        res += packets.channelInfo(*c.basic_info)
+        data += packets.channelInfo(*c.basic_info)
 
         # Autojoinable channels
         if c.auto_join and p.join_channel(c):
-            res += packets.channelJoin(c.name)
+            data += packets.channelJoin(c.name)
 
+    # Fetch some of the player's
+    # information from sql to be cached.
+    # (stats, friends, etc.)
+    p.query_info()
     # Update our new player's stats, and broadcast them.
-    p.stats_from_sql_full()
     our_presence = packets.userPresence(p)
     our_stats = packets.userStats(p)
 
-    res += our_presence
-    res += our_stats
+    data += our_presence
+    data += our_stats
 
     # o for online, or other
     for o in glob.players.players: # TODO: __iter__ & __next__
@@ -152,11 +168,12 @@ def login(data: bytes) -> Tuple[bytes, str]:
         p.enqueue(packets.userPresence(o))
         p.enqueue(packets.userStats(o))
 
-    res += packets.mainMenuIcon()
-        # TODO: friends list
+    data += packets.mainMenuIcon()
+    data += packets.friendsList(*p.friends)
+    data += packets.silenceEnd(max(p.silence_end - time(), 0))
 
     printlog(f'{p.name} logged in.', Ansi.LIGHT_YELLOW)
-    return bytes(res), p.token
+    return bytes(data), p.token
 
 # PacketID: 15
 def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
@@ -231,6 +248,16 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p.name} tried to write to non-existant user {target}.', Ansi.YELLOW)
         return
 
+    if t.pm_private and p.id not in t.friends:
+        p.enqueue(packets.userPMBlocked(target))
+        printlog(f'{p} tried to message {t}, but they are blocking dms.')
+        return
+
+    if t.silenced:
+        p.enqueue(packets.targetSilenced(target))
+        printlog(f'{p} tried to message {t}, but they are silenced.')
+        return
+
     msg = msg[:2045] + '...' if msg[2048:] else msg
     client, client_id = p.name, p.id
 
@@ -247,6 +274,26 @@ def channelJoin(p: Player, pr: packets.PacketReader) -> None:
         p.enqueue(packets.channelJoin(chan))
     else:
         printlog(f'Failed to find channel {chan} that {p.name} attempted to join.')
+
+# PacketID: 73
+def friendAdd(p: Player, pr: packets.PacketReader) -> None:
+    userID = pr.read(ctypes.i32)[0]
+
+    if not (t := glob.players.get_by_id(userID)):
+        printlog(f'{t} tried to add a user who is not online! ({userID})')
+        return
+
+    p.add_friend(t)
+
+# PacketID: 74
+def friendRemove(p: Player, pr: packets.PacketReader) -> None:
+    userID = pr.read(ctypes.i32)[0]
+
+    if not (t := glob.players.get_by_id(userID)):
+        printlog(f'{t} tried to remove a user who is not online! ({userID})')
+        return
+
+    p.remove_friend(t)
 
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:
@@ -274,3 +321,13 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
 def userPresenceRequest(p: Player, pr: packets.PacketReader) -> None:
     for id in pr.read(ctypes.i32_list):
         p.enqueue(packets.userPresence(id))
+
+# PacketID: 99
+def toggleBlockingDMs(p: Player, pr: packets.PacketReader) -> None:
+    p.pm_private = pr.read(ctypes.i32)[0] == 1
+
+# PacketID: 100
+def setAwayMessage(p: Player, pr: packets.PacketReader) -> None:
+    pr.ignore(3) # why does first string send \x0b\x00?
+    p.away_message = pr.read(ctypes.string)[0]
+    pr.ignore(4)

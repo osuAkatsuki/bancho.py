@@ -3,6 +3,8 @@
 from typing import Tuple
 from random import choices
 from string import ascii_lowercase
+from time import time
+
 from constants.privileges import Privileges, BanchoPrivileges
 from console import printlog
 
@@ -96,17 +98,21 @@ class Player:
         self.stats = [ModeData() for i in range(7)]
         self.status = Status()
 
+        self.friends = [] # userids, not player objects
         self.channels = []
         self.spectators = []
         self.spectating = None
 
-        self.country = 38#self.country = kwargs.get('country', None)
+        # TODO: countries
+        self.country = 38
         self.utc_offset = kwargs.get('utc_offset', 0)
         self.pm_private = kwargs.get('pm_private', False)
 
         # Packet queue
         self._queue = SimpleQueue()
 
+        self.away_message = None
+        self.silence_end = 0
         self.ping_time = 0
 
     def __repr__(self) -> str:
@@ -150,6 +156,32 @@ class Player:
         self.spectators.remove(p)
         printlog(f'{p} is no longer spectating {self}.')
 
+    def add_friend(self, p) -> None:
+        if p.id in self.friends:
+            printlog(f'{self} tried to add {p}, who is already their friend!')
+            return
+
+        self.friends.append(p.id)
+        glob.db.execute(
+            'INSERT INTO friendships '
+            'VALUES (%s, %s)',
+            [self.id, p.id])
+
+        printlog(f'{self} added {p} to their friends.')
+
+    def remove_friend(self, p) -> None:
+        if not p.id in self.friends:
+            printlog(f'{self} tried to remove {p}, who is not their friend!')
+            return
+
+        self.friends.remove(p.id)
+        glob.db.execute(
+            'DELETE FROM friendships '
+            'WHERE user1 = %s AND user2 = %s',
+            [self.id, p.id])
+
+        printlog(f'{self} removed {p} from their friends.')
+
     def queue_empty(self) -> bool:
         return self._queue.empty()
 
@@ -167,6 +199,10 @@ class Player:
         return name.lower().replace(' ', '_')
 
     @property
+    def silenced(self) -> bool:
+        return time() <= self.silence_end
+
+    @property
     def bancho_priv(self) -> int:
         ret = BanchoPrivileges(0)
         if self.priv & Privileges.Verified:
@@ -182,9 +218,20 @@ class Player:
             ret |= BanchoPrivileges.Owner
         return ret
 
-    ##
-    ### User stats
-    ##
+    def query_info(self) -> None:
+        # This is to be ran at login to cache
+        # some general information on users
+        # (such as stats, friends, etc.).
+        self.stats_from_sql_full()
+        self.friends_from_sql()
+
+    def friends_from_sql(self) -> None:
+        res = glob.db.fetchall(
+            'SELECT user2 FROM friendships WHERE user1 = %s',
+            [self.id])
+
+        # Always include self and Aika on friends list.
+        self.friends = [1, self.id] + [i['user2'] for i in res]
 
     def stats_from_sql_full(self) -> None:
         for gm in GameMode:

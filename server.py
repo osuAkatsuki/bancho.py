@@ -42,9 +42,9 @@ class Server:
         glob.version = 1.0 # server version
         glob.db = SQLPool(pool_size = 4, config = glob.config.mysql)
 
-        #bot = Player(id = 1, name = glob.config.botname, priv = 280175)
-        #glob.players.add(bot)
-        #bot.stats_from_sql_full()
+        bot = Player(id = 1, name = glob.config.botname, priv = 280175)
+        glob.players.add(bot)
+        bot.stats_from_sql_full()
 
         # Default channels.
         # At some point, this will either be moved
@@ -91,12 +91,20 @@ class Server:
             packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage,
             # 63: Client joined a channel.
             packets.Packet.c_channelJoin: events.channelJoin,
+            # 73: Client added someone to their friends.
+            packets.Packet.c_friendAdd: events.friendAdd,
+            # 74: Client added someone from their friends.
+            packets.Packet.c_friendRemove: events.friendRemove,
             # 78: Client left a channel.
             packets.Packet.c_channelPart: events.channelPart,
+            # 82: Client wants to update their away message.
+            packets.Packet.c_setAwayMessage: events.setAwayMessage,
             # 85: Client wants everyones stats.
             packets.Packet.c_userStatsRequest: events.statsRequest,
             # 97: Client wants presence of specific users.
-            packets.Packet.c_userPresenceRequest: events.userPresenceRequest
+            packets.Packet.c_userPresenceRequest: events.userPresenceRequest,
+            # 100: Client would like to block dms from non-friends.
+            packets.Packet.c_userToggleBlockNonFriendPM: events.toggleBlockingDMs,
         }
 
         self.start(glob.config.concurrent) # starts server
@@ -124,7 +132,6 @@ class Server:
 
             # Set up ping pingout loop
             Thread(target = self.ping_timeouts).start()
-
             printlog('Listening for connections', Ansi.LIGHT_GREEN)
 
             while not self.shutdown:
