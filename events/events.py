@@ -68,7 +68,7 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     else: # No command.
         t.send(p, msg)
 
-    printlog(f'{p} @ {t}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
+    printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 2
 def logout(p: Player, pr: packets.PacketReader) -> None:
@@ -87,8 +87,8 @@ def logout(p: Player, pr: packets.PacketReader) -> None:
         p.leave_channel(c)
 
     # stop spectating
-    host: Player = p.spectating
-    host.remove_spectator(p)
+    if (host := p.spectating):
+        host.remove_spectator(p)
 
     # leave match
     # remove match if only player
@@ -178,24 +178,22 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     # information from sql to be cached.
     # (stats, friends, etc.)
     p.query_info()
+
     # Update our new player's stats, and broadcast them.
     our_presence = packets.userPresence(p)
     our_stats = packets.userStats(p)
 
-    data += our_presence
-    data += our_stats
+    data += our_presence + our_stats
 
     # o for online, or other
     for o in glob.players:
         # TODO: variadic params for enqueue
 
         # Enqueue us to them
-        o.enqueue(our_presence)
-        o.enqueue(our_stats)
+        o.enqueue(our_presence + our_stats)
 
         # Enqueue them to us
-        p.enqueue(packets.userPresence(o))
-        p.enqueue(packets.userStats(o))
+        p.enqueue(packets.userPresence(o) + packets.userStats(o))
 
     data += packets.mainMenuIcon()
     data += packets.friendsList(*p.friends)
@@ -279,7 +277,7 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
     else: # Not Aika
         t.enqueue(packets.sendMessage(client, msg, target, client_id))
 
-    printlog(f'{p} @ {t}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
+    printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:

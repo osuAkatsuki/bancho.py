@@ -19,6 +19,9 @@ from random import choices
 from string import ascii_lowercase
 from threading import Thread
 from datetime import datetime as dt
+from bcrypt import hashpw, gensalt
+from hashlib import md5
+from re import compile as re_comp, match as re_match
 
 from db.dbConnector import SQLPool
 
@@ -33,6 +36,9 @@ from objects.channel import Channel
 from objects.web import Request#, Response
 from constants.types import ctypes
 from constants.privileges import Privileges
+
+username_regex = re_comp(r'^[\w \[\]-]{2,15}$')
+email_regex = re_comp(r'^[\w\.\+\-]+@[\w\-]+\.[\w\-\.]+$')
 
 class Server:
     def __init__(self, *args, **kwargs) -> None:
@@ -64,12 +70,6 @@ class Server:
             read = Privileges.Verified,
             write = Privileges.Admin,
             auto_join = True))
-        glob.channels.add(Channel(
-            name = '#frosti',
-            topic = 'drinks',
-            read = Privileges.Dangerous,
-            write = Privileges.Dangerous,
-            auto_join = False))
 
         self.packet_map = {
             # 0: Client changed action
@@ -116,7 +116,6 @@ class Server:
         while not self.shutdown:
             current_time = int(time())
             for p in glob.players:
-                print(f'PING: {p}\ncurrent: {current_time}\nmax: {glob.config.max_ping}\nptime: {p.ping_time}')
                 if p.ping_time + glob.config.max_ping < current_time:
                     #printlog(f'Requesting ping from {p} after {p.ping_time}')
                     #p.enqueue(packets.notification('Pong!'))
@@ -126,6 +125,7 @@ class Server:
 
                     glob.players.remove(p)
                     glob.players.broadcast(packets.logout(p.id))
+                    printlog(f'Timing out {p}.', Ansi.YELLOW)
 
             sleep(glob.config.max_ping)
 
@@ -153,11 +153,51 @@ class Server:
 
         printlog('Socket closed..', Ansi.LIGHT_GREEN)
 
+    @staticmethod
+    def registration(data: bytes) -> None:
+        split = [i for i in data.decode().split('--') if i]
+        headers = split[0]
+        name, email, password = [i.split('\r\n')[3] for i in split[2:5]]
+        # peppy sends password as plaintext..?
+
+        if not re_match(username_regex, name):
+            return printlog('Registration: name did not match regex.', Ansi.YELLOW)
+
+        if not re_match(email_regex, email) or len(email) > 254: # TODO: add len checks to regex
+            return printlog('Registration: email did not match regex.', Ansi.YELLOW)
+
+        if len(password) not in range(8, 33):
+            return printlog('Registration: password does not meet length reqs.')
+
+        name_safe = Player.ensure_safe(name)
+
+        if glob.db.fetch('SELECT 1 FROM users WHERE name_safe = %s', [name_safe]):
+            return printlog(f'Registration: user {name} already exists.', Ansi.YELLOW)
+
+        user_id = glob.db.execute(
+            'INSERT INTO users '
+            '(name, name_safe, email, priv, pw_hash) ' # TODO: country
+            'VALUES (%s, %s, %s, %s, %s)', [
+                name,
+                name_safe,
+                email,
+                int(Privileges.Verified),
+                hashpw(md5(password.encode()).digest(), gensalt())
+            ])
+
+        glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [user_id])
+        printlog(f'Registration: <name: {name} | id: {user_id}>.', Ansi.GREEN)
+
     def handle_connection(self, conn: socket.socket) -> None:
         start_time = time()
         data = conn.recv(glob.config.max_bytes)
         while len(data) % glob.config.max_bytes == 0:
             data += conn.recv(glob.config.max_bytes)
+
+        if data.startswith(b'POST /users'):
+            # Handle ingame registrations.
+            # TODO: figure out what to send back xd
+            return self.registration(data)
 
         req = Request(data)
 

@@ -228,6 +228,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
 
 class Packet(IntEnum):
     # Both server & client packetIDs
+    # Packets commented out are unused.
     c_changeAction = 0 # status update
     c_sendPublicMessage = 1
     c_logout = 2
@@ -236,6 +237,8 @@ class Packet(IntEnum):
     s_userID = 5
     s_sendMessage = 7
     s_Pong = 8
+    s_handleIrcChangeUsername = 9
+    s_handleIrcQuit = 10
     s_userStats = 11
     s_userLogout = 12
     s_spectatorJoined = 13
@@ -259,6 +262,9 @@ class Packet(IntEnum):
     c_createMatch = 31
     c_joinMatch = 32
     c_partMatch = 33
+    # unused
+    #c_lobbyJoinMatch = 34
+    #c_lobbyPartMatch = 35
     s_matchJoinSuccess = 36
     s_matchJoinFail = 37
     c_matchChangeSlot = 38
@@ -268,6 +274,7 @@ class Packet(IntEnum):
     s_fellowSpectatorJoined = 42
     s_fellowSpectatorLeft = 43
     c_matchStart = 44
+    s_allPlayerLoaded = 45
     s_matchStart = 46
     c_matchScoreUpdate = 47
     s_matchScoreUpdate = 48
@@ -284,6 +291,7 @@ class Packet(IntEnum):
     c_matchHasBeatmap = 59
     c_matchSkipRequest = 60
     s_matchSkip = 61
+    #s_unauthorized = 62
     c_channelJoin = 63
     s_channelJoinSuccess = 64
     s_channelInfo = 65
@@ -305,6 +313,7 @@ class Packet(IntEnum):
     s_matchPlayerSkipped = 81
     c_setAwayMessage = 82
     s_userPresence = 83
+    c_ircOnly = 84
     c_userStatsRequest = 85
     s_restart = 86
     c_invite = 87
