@@ -42,9 +42,10 @@ class Server:
         glob.version = 1.0 # server version
         glob.db = SQLPool(pool_size = 4, config = glob.config.mysql)
 
-        bot = Player(id = 1, name = glob.config.botname, priv = 280175)
-        glob.players.add(bot)
-        bot.stats_from_sql_full()
+        # Aika
+        glob.bot = Player(id = 1, name = glob.config.botname, priv = 280175)
+        glob.players.add(glob.bot)
+        glob.bot.stats_from_sql_full() # no need to get friends
 
         # Default channels.
         # At some point, this will either be moved
@@ -113,9 +114,9 @@ class Server:
     def ping_timeouts() -> None:
         # no idea if this thing works
         current_time = int(time())
-        for p in glob.players.players:
+        for p in glob.players:
             if p.ping_time + glob.config.max_ping < current_time:
-                printlog(f'Requesting ping from user {p.name} after {p.ping_time}')
+                printlog(f'Requesting ping from {p} after {p.ping_time}')
                 p.enqueue(packets.notification('Pong!'))
                 p.enqueue(packets.pong())
 

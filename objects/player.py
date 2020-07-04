@@ -113,10 +113,28 @@ class Player:
 
         self.away_message = None
         self.silence_end = 0
+        self.login_time = time()
         self.ping_time = 0
 
-    def __repr__(self) -> str:
-        return f'<{self.name} | {self.id}>'
+    @property
+    def silenced(self) -> bool:
+        return time() <= self.silence_end
+
+    @property
+    def bancho_priv(self) -> int:
+        ret = BanchoPrivileges(0)
+        if self.priv & Privileges.Verified:
+            # All players have ingame "supporter".
+            # This enables stuff like osu!direct,
+            # multiplayer in cutting edge, etc.
+            ret |= (BanchoPrivileges.Player | BanchoPrivileges.Supporter)
+        if self.priv & Privileges.Mod:
+            ret |= BanchoPrivileges.Moderator
+        if self.priv & Privileges.Admin:
+            ret |= BanchoPrivileges.Developer
+        if self.priv & Privileges.Dangerous:
+            ret |= BanchoPrivileges.Owner
+        return ret
 
     @property
     def gm_stats(self) -> ModeData:
@@ -125,28 +143,31 @@ class Player:
 
         return self.stats[self.status.game_mode + (4 if self.rx else 0)]
 
-    def join_channel(self, chan) -> bool:
-        if self in chan:
-            printlog(f'{self} tried to double join {chan.name}.')
+    def __repr__(self) -> str:
+        return f'<{self.name} | {self.id}>'
+
+    def join_channel(self, c) -> bool:
+        if self in c:
+            printlog(f'{self} tried to double join {c.name}.')
             return False
 
-        if not self.priv & chan.read:
-            printlog(f'{self} tried to join {chan.name} but lacks privs.')
+        if not self.priv & c.read:
+            printlog(f'{self} tried to join {c.name} but lacks privs.')
             return False
 
-        chan.append(self) # Add to channels
-        self.channels.append(chan) # Add to player
-        printlog(f'{self} joined {chan.name}.')
+        c.append(self) # Add to channels
+        self.channels.append(c) # Add to player
+        printlog(f'{self} joined {c.name}.')
         return True
 
-    def leave_channel(self, chan) -> None:
-        if self not in chan:
-            printlog(f'{self}) tried to leave {chan.name} but is not in it.')
+    def leave_channel(self, c) -> None:
+        if self not in c:
+            printlog(f'{self}) tried to leave {c.name} but is not in it.')
             return
 
-        chan.remove(self) # Remove from channels
-        self.channels.remove(chan) # Remove from player
-        printlog(f'{self} left {chan.name}.')
+        c.remove(self) # Remove from channels
+        self.channels.remove(c) # Remove from player
+        printlog(f'{self} left {c.name}.')
 
     def add_spectator(self, p) -> None:
         self.spectators.append(p)
@@ -198,26 +219,6 @@ class Player:
     def ensure_safe(name: str) -> str:
         return name.lower().replace(' ', '_')
 
-    @property
-    def silenced(self) -> bool:
-        return time() <= self.silence_end
-
-    @property
-    def bancho_priv(self) -> int:
-        ret = BanchoPrivileges(0)
-        if self.priv & Privileges.Verified:
-            # All players have ingame "supporter".
-            # This enables stuff like osu!direct,
-            # multiplayer in cutting edge, etc.
-            ret |= (BanchoPrivileges.Player | BanchoPrivileges.Supporter)
-        if self.priv & Privileges.Mod:
-            ret |= BanchoPrivileges.Moderator
-        if self.priv & Privileges.Admin:
-            ret |= BanchoPrivileges.Developer
-        if self.priv & Privileges.Dangerous:
-            ret |= BanchoPrivileges.Owner
-        return ret
-
     def query_info(self) -> None:
         # This is to be ran at login to cache
         # some general information on users
@@ -239,15 +240,15 @@ class Player:
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, playcount_{0:sql} playcount, acc_{0:sql} acc, '
                 'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
-            ): raise Exception(f"Failed to fetch {self.id}'s {gm!s} user stats.")
+            ): raise Exception(f"Failed to fetch {self}'s {gm} user stats.")
 
             self.stats[gm].update(**res)
 
-    def stats_from_sql(self, id: int, gm: int) -> None:
+    def stats_from_sql(self: int, gm: int) -> None:
         if not (res := glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, playcount_{0:sql} playcount, acc_{0:sql} acc, '
-            'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [id])
-        ): raise Exception(f"Failed to fetch {id}'s {gm} user stats.")
+            'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
+        ): raise Exception(f"Failed to fetch {self}'s {gm} user stats.")
 
         self.stats[gm].update(**res)

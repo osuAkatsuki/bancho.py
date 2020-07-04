@@ -12,6 +12,7 @@ from constants.mods import Mods
 from constants import commands
 from objects import glob
 from objects.player import Player
+from objects.channel import Channel
 from constants.privileges import Privileges
 
 # PacketID: 0
@@ -31,40 +32,59 @@ def readStatus(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 1
 def sendMessage(p: Player, pr: packets.PacketReader) -> None:
-    # target_id only proto >= 14
-    client, msg, target, target_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
+    if p.silenced:
+        printlog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
+        return
 
-    if not (c := glob.channels.get(target)):
-        printlog(f'{p.name} tried to write to non-existant {target}.', Ansi.YELLOW)
+    # client_id only proto >= 14
+    client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
+
+    if not (t := glob.channels.get(target)):
+        printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
     # Limit message length to 2048 characters
-    msg = msg[:2045] + '...' if msg[2048:] else msg
-    client, target_id = p.name, p.id
+    msg = f'{msg[:2045]}...' if msg[2048:] else msg
+    client, client_id = p.name, p.id
 
-    if msg.startswith(glob.config.command_prefix):
-        commands.process_commands(p, c, msg)
+    cmd = msg.startswith(glob.config.command_prefix) \
+        and commands.process_commands(p, t, msg)
 
-    # Don't enqueue to ourselves
-    c.enqueue(packets.sendMessage(client, msg, target, target_id), {p.id})
-    printlog(f'{p.name} @ {target}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
+    if cmd and cmd['resp']:
+        if cmd['public']:
+            # Send our message & response to all in the channel.
+            t.send(p, msg)
+            t.send(glob.bot, cmd['resp'])
+        else: # Send response to only player and staff.
+            staff = {p for p in glob.players if p.priv & Privileges.Mod}
+            t.send_selective(p, msg, staff)
+            t.send_selective(glob.bot, cmd['resp'], {p} | staff)
+    else: # No command.
+        t.send(p, msg)
+
+    printlog(f'{p} @ {t}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
 
 # PacketID: 2
 def logout(p: Player, pr: packets.PacketReader) -> None:
     pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
+
+    if (time() - p.login_time) < 1:
+        # osu! has a weird tendency to log out immediately when
+        # it logs in, then reconnects? not sure why..?
+        return
+
     glob.players.remove(p)
 
     glob.players.broadcast(packets.logout(p.id))
 
     for c in p.channels:
         p.leave_channel(c)
-        #c.leave(p) # player object oriented
 
     # stop spectating
     # leave match
     # remove match if only player
 
-    printlog(f'{p.name} logged out.', Ansi.LIGHT_YELLOW)
+    printlog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
 
 # PacketID: 3
 def statsUpdateRequest(p: Player, pr: packets.PacketReader) -> None:
@@ -135,7 +155,7 @@ def login(origin: bytes) -> Tuple[bytes, str]:
 
     # Channels
     data += packets.channelInfoEnd() # tells osu client to load channels from config i think?
-    for c in glob.channels.channels: # TODO: __iter__ and __next__ in all collections
+    for c in glob.channels:
         if not p.priv & c.read:
             continue # no priv to read
 
@@ -157,7 +177,7 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     data += our_stats
 
     # o for online, or other
-    for o in glob.players.players: # TODO: __iter__ & __next__
+    for o in glob.players:
         # TODO: variadic params for enqueue
 
         # Enqueue us to them
@@ -172,7 +192,7 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     data += packets.friendsList(*p.friends)
     data += packets.silenceEnd(max(p.silence_end - time(), 0))
 
-    printlog(f'{p.name} logged in.', Ansi.LIGHT_YELLOW)
+    printlog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
 
 # PacketID: 15
@@ -187,12 +207,21 @@ def startSpectating(p: Player, pr: packets.PacketReader) -> None:
     target_id = pr.read(ctypes.i32)[0]
 
     if not (t := glob.players.get_by_id(target_id)):
-        printlog(f'{p.name} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
+        printlog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
     p.spectating = t
 
     fellow = packets.fellowSpectatorJoined(p.id)
+
+    if f'#spec_{target_id}' not in glob.channels:
+        glob.channels.add(Channel(
+            name = '#osu',
+            topic = 'First topic',
+            read = Privileges.Verified,
+            write = Privileges.Verified,
+            auto_join = True))
+
     #spectator channel?
     for s in t.spectators:
         t.enqueue(fellow) # #spec?
@@ -242,10 +271,14 @@ def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 25
 def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
+    if p.silenced:
+        printlog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
+        return
+
     client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
 
     if not (t := glob.players.get_by_name(target)):
-        printlog(f'{p.name} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        printlog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
         return
 
     if t.pm_private and p.id not in t.friends:
@@ -261,19 +294,29 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
     msg = msg[:2045] + '...' if msg[2048:] else msg
     client, client_id = p.name, p.id
 
-    t.enqueue(packets.sendMessage(client, msg, target, client_id))
-    printlog(f'{p.name} @ {target}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
+    if t.id == 1:
+        # Target is Aika, check if message is a command.
+        cmd = msg.startswith(glob.config.command_prefix) \
+            and commands.process_commands(p, t, msg)
+
+        if cmd and 'resp' in cmd:
+            # Command triggered and there is a response to send.
+            p.enqueue(packets.sendMessage(t.name, cmd['resp'], client, t.id))
+    else: # Not Aika
+        t.enqueue(packets.sendMessage(client, msg, target, client_id))
+
+    printlog(f'{p} @ {t}: {msg}', Ansi.GRAY, fd = 'logs/chat.log')
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
     if not (chan := pr.read(ctypes.string)[0]):
-        printlog(f'{p.name} tried to join nonexistant channel {chan}')
+        printlog(f'{p} tried to join nonexistant channel {chan}')
         return
 
     if (c := glob.channels.get(chan)) and p.join_channel(c):
         p.enqueue(packets.channelJoin(chan))
     else:
-        printlog(f'Failed to find channel {chan} that {p.name} attempted to join.')
+        printlog(f'Failed to find channel {chan} that {p} attempted to join.')
 
 # PacketID: 73
 def friendAdd(p: Player, pr: packets.PacketReader) -> None:
@@ -303,7 +346,7 @@ def channelPart(p: Player, pr: packets.PacketReader) -> None:
     if (c := glob.channels.get(chan)):
         p.leave_channel(c)
     else:
-        printlog(f'Failed to find channel {chan} that {p.name} attempted to leave.')
+        printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
 
 # PacketID: 85
 def statsRequest(p: Player, pr: packets.PacketReader) -> None:
