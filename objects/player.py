@@ -8,9 +8,11 @@ from time import time
 from constants.privileges import Privileges, BanchoPrivileges
 from console import printlog
 
+from objects.channel import Channel
 from objects import glob
 from enum import IntEnum
 from queue import SimpleQueue
+import packets
 
 class ModeData:
     def __init__(self):
@@ -113,8 +115,11 @@ class Player:
 
         self.away_message = None
         self.silence_end = 0
-        self.login_time = time()
-        self.ping_time = 0
+
+        c_time = time()
+        self.login_time = c_time
+        self.ping_time = c_time
+        del c_time
 
     @property
     def silenced(self) -> bool:
@@ -146,35 +151,81 @@ class Player:
     def __repr__(self) -> str:
         return f'<{self.name} | {self.id}>'
 
-    def join_channel(self, c) -> bool:
+    def join_channel(self, c: Channel) -> bool:
         if self in c:
-            printlog(f'{self} tried to double join {c.name}.')
+            printlog(f'{self} tried to double join {c._name}.')
             return False
 
         if not self.priv & c.read:
-            printlog(f'{self} tried to join {c.name} but lacks privs.')
+            printlog(f'{self} tried to join {c._name} but lacks privs.')
             return False
 
         c.append(self) # Add to channels
         self.channels.append(c) # Add to player
-        printlog(f'{self} joined {c.name}.')
+        printlog(f'{self} joined {c._name}.')
         return True
 
-    def leave_channel(self, c) -> None:
+    def leave_channel(self, c: Channel) -> None:
         if self not in c:
-            printlog(f'{self}) tried to leave {c.name} but is not in it.')
+            printlog(f'{self}) tried to leave {c._name} but is not in it.')
             return
 
         c.remove(self) # Remove from channels
         self.channels.remove(c) # Remove from player
-        printlog(f'{self} left {c.name}.')
+        printlog(f'{self} left {c._name}.')
 
     def add_spectator(self, p) -> None:
         self.spectators.append(p)
+        p.spectating = self
+
+        fellow = packets.fellowSpectatorJoined(p.id)
+
+        chan_name = f'#spec_{self.id}'
+        if not (c := glob.channels.get(chan_name)):
+            # Spec channel does not exist, create it and join.
+            glob.channels.add(Channel( # TODO: maybe make this return channel..? will think abt it
+                name = chan_name,
+                topic = f"{self.name}'s spectator channel.'",
+                read = Privileges.Verified,
+                write = Privileges.Verified,
+                auto_join = True,
+                temp = True))
+
+            c = glob.channels.get(chan_name)
+            if not self.join_channel(c):
+                return print('?')
+
+        if not p.join_channel(c):
+            return print('?')
+
+        for s in self.spectators:
+            self.enqueue(fellow) # #spec?
+            s.enqueue(packets.fellowSpectatorJoined(self.id))
+
+        self.enqueue(packets.spectatorJoined(p.id))
+
         printlog(f'{p} is now spectating {self}.')
 
     def remove_spectator(self, p) -> None:
         self.spectators.remove(p)
+        p.spectating = None
+
+        c = glob.channels.get(f'#spec_{self.id}')
+        p.leave_channel(c)
+
+        if not self.spectators:
+            # Remove host from channel, deleting it.
+            self.leave_channel(c)
+        else:
+            fellow = packets.fellowSpectatorLeft(p.id)
+            c_info = packets.channelInfo(*c.basic_info) # new playercount
+
+            self.enqueue(c_info)
+
+            for t in self.spectators:
+                t.enqueue(fellow + c_info)
+
+        self.enqueue(packets.spectatorLeft(p.id))
         printlog(f'{p} is no longer spectating {self}.')
 
     def add_friend(self, p) -> None:

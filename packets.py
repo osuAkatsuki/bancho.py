@@ -5,7 +5,6 @@ from enum import IntEnum
 import struct
 
 from objects import glob
-from objects.player import Player
 from objects.web import Request
 from constants.mods import Mods
 from constants.types import ctypes
@@ -369,7 +368,7 @@ def pong() -> bytes:
     return write(Packet.s_Pong)
 
 # PacketID: 11
-def userStats(p: Player) -> bytes:
+def userStats(p) -> bytes:
     return write(
         Packet.s_userStats,
         (p.id, ctypes.i32),
@@ -384,8 +383,14 @@ def userStats(p: Player) -> bytes:
         (p.gm_stats.playcount, ctypes.i32),
         (p.gm_stats.tscore, ctypes.i64),
         (p.gm_stats.rank, ctypes.i32),
-        (p.gm_stats.pp, ctypes.i16))
-    # TODO: raw bytes for aika
+        (p.gm_stats.pp, ctypes.i16)
+    ) if p.id != 1 else \
+        b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00' \
+        b'\x00\x08\x0b\x0eout new code..\x00\x00' \
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?' \
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 # PacketID: 12
 def logout(userID: int) -> bytes:
@@ -518,18 +523,21 @@ def monitor() -> bytes:
     return write(Packet.s_monitor)
 
 # PacketID: 83
-def userPresence(p: Player) -> bytes:
+def userPresence(p) -> bytes:
     return write(
         Packet.s_userPresence,
         (p.id, ctypes.i32),
         (p.name, ctypes.string),
-        (p.utc_offset, ctypes.i8),
+        (24 + p.utc_offset, ctypes.i8),
         (p.country, ctypes.i8), # break break
         (p.bancho_priv, ctypes.i8),
         (0.0, ctypes.f32), # lat
         (0.0, ctypes.f32), # long
         (p.gm_stats.rank, ctypes.i32)
-    )
+    ) if p.id != 1 else \
+        b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00' \
+        b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00' \
+        b'\x000B\x00\x00\x00\x00'
 
 # PacketID: 86
 def restartServer(ms: int) -> bytes:

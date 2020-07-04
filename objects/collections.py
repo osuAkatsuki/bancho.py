@@ -29,7 +29,7 @@ class ChannelList(Sequence):
 
     def get(self, name: str) -> Channel:
         for c in self.channels:
-            if c.name == name:
+            if c._name == name:
                 return c
 
     def add(self, c: Channel) -> None: # bool ret success?

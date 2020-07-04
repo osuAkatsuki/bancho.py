@@ -43,9 +43,11 @@ class Server:
         glob.db = SQLPool(pool_size = 4, config = glob.config.mysql)
 
         # Aika
-        glob.bot = Player(id = 1, name = glob.config.botname, priv = 280175)
-        glob.players.add(glob.bot)
+        glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Admin)
+        glob.bot.ping_time = 0x7fffffff
+
         glob.bot.stats_from_sql_full() # no need to get friends
+        glob.players.add(glob.bot)
 
         # Default channels.
         # At some point, this will either be moved
@@ -110,17 +112,22 @@ class Server:
 
         self.start(glob.config.concurrent) # starts server
 
-    @staticmethod
-    def ping_timeouts() -> None:
-        # no idea if this thing works
-        current_time = int(time())
-        for p in glob.players:
-            if p.ping_time + glob.config.max_ping < current_time:
-                printlog(f'Requesting ping from {p} after {p.ping_time}')
-                p.enqueue(packets.notification('Pong!'))
-                p.enqueue(packets.pong())
+    def ping_timeouts(self) -> None:
+        while not self.shutdown:
+            current_time = int(time())
+            for p in glob.players:
+                print(f'PING: {p}\ncurrent: {current_time}\nmax: {glob.config.max_ping}\nptime: {p.ping_time}')
+                if p.ping_time + glob.config.max_ping < current_time:
+                    #printlog(f'Requesting ping from {p} after {p.ping_time}')
+                    #p.enqueue(packets.notification('Pong!'))
+                    #p.enqueue(packets.pong())
+                    for c in p.channels:
+                        p.leave_channel(c)
 
-        sleep(glob.config.max_ping)
+                    glob.players.remove(p)
+                    glob.players.broadcast(packets.logout(p.id))
+
+            sleep(glob.config.max_ping)
 
     def start(self, connections: int = 10) -> None:
         if path.exists(glob.config.sock_file):

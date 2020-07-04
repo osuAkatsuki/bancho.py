@@ -39,6 +39,12 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     # client_id only proto >= 14
     client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
 
+    # no nice wrapper to do it in reverse :P
+    if target == '#spectator':
+        target = f'#spec_{p.spectating.id if p.spectating else p.id}'
+    elif target == '#multiplayer':
+        NotImplemented
+
     if not (t := glob.channels.get(target)):
         printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
@@ -57,7 +63,7 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
             t.send(glob.bot, cmd['resp'])
         else: # Send response to only player and staff.
             staff = {p for p in glob.players if p.priv & Privileges.Mod}
-            t.send_selective(p, msg, staff)
+            t.send_selective(p, msg, staff - {p})
             t.send_selective(glob.bot, cmd['resp'], {p} | staff)
     else: # No command.
         t.send(p, msg)
@@ -81,6 +87,9 @@ def logout(p: Player, pr: packets.PacketReader) -> None:
         p.leave_channel(c)
 
     # stop spectating
+    host: Player = p.spectating
+    host.remove_spectator(p)
+
     # leave match
     # remove match if only player
 
@@ -92,7 +101,7 @@ def statsUpdateRequest(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 4
 def ping(p: Player, pr: packets.PacketReader) -> None:
-    p.ping_time = time()
+    p.ping_time = int(time())
 
 # PacketID: 5
 def login(origin: bytes) -> Tuple[bytes, str]:
@@ -206,30 +215,11 @@ def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
 def startSpectating(p: Player, pr: packets.PacketReader) -> None:
     target_id = pr.read(ctypes.i32)[0]
 
-    if not (t := glob.players.get_by_id(target_id)):
+    if not (host := glob.players.get_by_id(target_id)):
         printlog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
-    p.spectating = t
-
-    fellow = packets.fellowSpectatorJoined(p.id)
-
-    if f'#spec_{target_id}' not in glob.channels:
-        glob.channels.add(Channel(
-            name = '#osu',
-            topic = 'First topic',
-            read = Privileges.Verified,
-            write = Privileges.Verified,
-            auto_join = True))
-
-    #spectator channel?
-    for s in t.spectators:
-        t.enqueue(fellow) # #spec?
-        p.enqueue(packets.fellowSpectatorJoined(t.id))
-
-    t.add_spectator(p)
-    t.enqueue(packets.spectatorJoined(p.id))
-    #p.enqueue(packets.channelJoin('#spectator'))
+    host.add_spectator(p)
 
 # PacketID: 17
 def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
@@ -237,24 +227,8 @@ def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
         printlog(f"{p} Tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
         return
 
-    host = p.spectating
+    host: Player = p.spectating
     host.remove_spectator(p)
-    # remove #spec channel
-
-    if not host.spectators:
-        # remove host from channel & del channel.
-        # TODO: make 'temp' channels that can delete
-        # themselves upon having 0 members left.
-        pass
-    else:
-        fellow = packets.fellowSpectatorLeft(p.id)
-
-        # channel info
-
-        for t in host.spectators:
-            t.enqueue(fellow)
-
-    host.enqueue(packets.spectatorLeft(p.id))
 
 # PacketID: 21
 def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
@@ -262,7 +236,7 @@ def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
         printlog(f"{p} Sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
 
-    host = p.spectating
+    host: Player = p.spectating
     data = packets.spectatorCantSpectate(p.id)
 
     host.enqueue(data)
