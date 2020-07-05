@@ -217,6 +217,9 @@ def startSpectating(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
+    if (c_host := p.spectating):
+        c_host.remove_spectator(p)
+
     host.add_spectator(p)
 
 # PacketID: 17
