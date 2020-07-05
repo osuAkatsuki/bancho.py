@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# 51.161.34.235
+
 # OSU SERVER ATTEMPT #3
 # This is going to be disgusting.
 # I've reached a point where I don't care
@@ -182,7 +184,7 @@ class Server:
                 name_safe,
                 email,
                 int(Privileges.Verified),
-                hashpw(md5(password.encode()).digest(), gensalt())
+                hashpw(md5(password.encode()).hexdigest().encode(), gensalt()).decode()
             ])
 
         glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [user_id])
