@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from collections import Sequence
 
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, Set
 from objects.player import Player
 from objects.channel import Channel
+from objects.match import Match
 from constants.privileges import Privileges
 from console import printlog
 
@@ -27,7 +28,7 @@ class ChannelList(Sequence):
         else:
             return c in self.channels
 
-    def get(self, name: str) -> Channel:
+    def get(self, name: str) -> Optional[Channel]:
         for c in self.channels:
             if c._name == name:
                 return c
@@ -42,6 +43,51 @@ class ChannelList(Sequence):
     def remove(self, c: Channel) -> None:
         printlog(f'Removing {c} from channels list.')
         self.channels.remove(c)
+
+class MatchList(Sequence):
+    def __init__(self):
+        self.matches = [None for _ in range(32)]
+
+    def __getitem__(self, index: Slice) -> Optional[Match]:
+        return self.matches[index]
+
+    def __len__(self) -> int:
+        return len(self.matches)
+
+    def __contains__(self, m: Match) -> bool:
+        return m in self.matches
+
+    def get_free(self) -> Optional[Match]:
+        # Return first free match.
+        for idx, m in enumerate(self.matches):
+            if not m: return idx
+
+    def get_by_id(self, id: int) -> Optional[Match]:
+        for m in self.matches:
+            if not m or id != m.id:
+                continue
+
+            return m
+
+    def add(self, m: Match) -> bool:
+        if m in self.matches:
+            printlog(f'{m} already in matches list!')
+            return False
+
+        if (free := self.get_free()) is None:
+            printlog(f'Match list is full! Could not add {m}.')
+            return False
+
+        m.id = free
+        printlog(f'Adding {m} to matches list.')
+        self.matches[free] = m
+
+    def remove(self, m: Match) -> None:
+        printlog(f'Removing {m} from matches list.')
+        for idx, _m in enumerate(self.matches):
+            if m == _m:
+                self.matches[idx] = None
+                break
 
 class PlayerList(Sequence):
     def __init__(self):
@@ -65,9 +111,10 @@ class PlayerList(Sequence):
     def ids(self) -> Tuple[int]:
         return (p.id for p in self.players)
 
-    def broadcast(self, data: bytes) -> None:
-        for p in self.players: # no idea if it takes ref
-            p.enqueue(data)
+    def enqueue(self, data: bytes, immune: Set[Player] = {}) -> None:
+        for p in self.players:
+            if p not in immune:
+                p.enqueue(data)
 
     def get(self, token: str) -> Player:
         for p in self.players: # might copy

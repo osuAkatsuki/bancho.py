@@ -7,10 +7,10 @@ from bcrypt import checkpw
 
 import packets
 from console import *
-from constants.types import ctypes
+from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
-from objects import glob
+from objects import glob, match
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
@@ -18,17 +18,17 @@ from constants.privileges import Privileges
 # PacketID: 0
 def readStatus(p: Player, pr: packets.PacketReader) -> None:
     data = pr.read(
-        ctypes.i8, # actionType
-        ctypes.string, # infotext
-        ctypes.string, # beatmap md5
-        ctypes.i32, # mods
-        ctypes.i8, # gamemode
-        ctypes.i32 # beatmapid
+        osuTypes.i8, # actionType
+        osuTypes.string, # infotext
+        osuTypes.string, # beatmap md5
+        osuTypes.i32, # mods
+        osuTypes.i8, # gamemode
+        osuTypes.i32 # beatmapid
     )
 
     p.status.update(*data) # TODO: probably refactor some status stuff
     p.rx = p.status.mods & Mods.RELAX > 0
-    glob.players.broadcast(packets.userStats(p))
+    glob.players.enqueue(packets.userStats(p))
 
 # PacketID: 1
 def sendMessage(p: Player, pr: packets.PacketReader) -> None:
@@ -37,13 +37,13 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
         return
 
     # client_id only proto >= 14
-    client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
+    client, msg, target, client_id = pr.read(*([osuTypes.string] * 3), osuTypes.i32)
 
     # no nice wrapper to do it in reverse :P
     if target == '#spectator':
         target = f'#spec_{p.spectating.id if p.spectating else p.id}'
     elif target == '#multiplayer':
-        NotImplemented
+        target = f'#multi_{p.match.id if p.match else 0}'
 
     if not (t := glob.channels.get(target)):
         printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
@@ -81,7 +81,7 @@ def logout(p: Player, pr: packets.PacketReader) -> None:
 
     glob.players.remove(p)
 
-    glob.players.broadcast(packets.logout(p.id))
+    glob.players.enqueue(packets.logout(p.id))
 
     for c in p.channels:
         p.leave_channel(c)
@@ -211,7 +211,7 @@ def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 16
 def startSpectating(p: Player, pr: packets.PacketReader) -> None:
-    target_id = pr.read(ctypes.i32)[0]
+    target_id = pr.read(osuTypes.i32)[0]
 
     if not (host := glob.players.get_by_id(target_id)):
         printlog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
@@ -237,10 +237,11 @@ def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
         printlog(f"{p} Sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
 
-    host: Player = p.spectating
     data = packets.spectatorCantSpectate(p.id)
 
+    host: Player = p.spectating
     host.enqueue(data)
+
     for t in host.spectators:
         t.enqueue(data)
 
@@ -250,7 +251,7 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
-    client, msg, target, client_id = pr.read(*([ctypes.string] * 3), ctypes.i32)
+    client, msg, target, client_id = pr.read(*([osuTypes.string] * 3), osuTypes.i32)
 
     if not (t := glob.players.get_by_name(target)):
         printlog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
@@ -282,20 +283,189 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
 
     printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
+# PacketID: 29
+def lobbyPart(p: Player, pr: packets.PacketReader) -> None:
+    p.in_lobby = False
+
+# PacketID: 30
+def lobbyJoin(p: Player, pr: packets.PacketReader) -> None:
+    p.in_lobby = True
+
+    for m in glob.matches:
+        if m:
+            p.enqueue(packets.newMatch(m))
+
+# PacketID: 31
+def matchCreate(p: Player, pr: packets.PacketReader) -> None:
+    m = pr.read(osuTypes.match)[0]
+
+    m.host = p
+    p.join_match(m, m.passwd)
+    printlog(f'{p} created a new multiplayer match.')
+
+# PacketID: 32
+def matchJoin(p: Player, pr: packets.PacketReader) -> None:
+    id, passwd = pr.read(osuTypes.i32, osuTypes.string)
+    if id not in range(64):
+        return
+
+    if not (m := glob.matches.get_by_id(id)):
+        printlog(f'{p} tried to join a non-existant mp lobby?')
+        return
+
+    p.join_match(m, passwd)
+
+# PacketID: 33
+def matchPart(p: Player, pr: packets.PacketReader) -> None:
+    p.leave_match()
+
+# PacketID: 38
+def matchChangeSlot(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried changing slot outside of a match?')
+        return
+
+    # Ready new slot ID
+    if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
+        return
+
+    if m.slots[slotID].status & match.SlotStatus.has_player:
+        printlog(f'{p} tried to switch to slot {slotID} which has a player.')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            # Swap current slot with
+            m.slots[slotID].copy(s)
+            s.reset()
+            break
+    else:
+        printlog(f"Failed to find {p}'s current slot?")
+        return
+
+    m.enqueue(packets.updateMatch(m))
+
+# PacketID: 39
+def matchReady(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried readying outside of a match? (1)')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            s.status = match.SlotStatus.ready
+            break
+    else:
+        printlog(f'{p} tried readying outside of a match? (2)')
+        return
+
+    m.enqueue(packets.updateMatch(m))
+
+# PacketID: 40
+def matchLock(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried locking a slot outside of a match?')
+        return
+
+    # Ready new slot ID
+    if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
+        return
+
+    slot = m.slots[slotID]
+
+    if slot.status & match.SlotStatus.locked:
+        slot.status = match.SlotStatus.open
+    else:
+        if slot.player:
+            slot.reset()
+        slot.status = match.SlotStatus.locked
+
+    m.enqueue(packets.updateMatch(m))
+
+# PacketID: 41
+def matchChangeSettings(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried changing multi settings outside of a match?')
+        return
+
+    # Read new match data
+    new = pr.read(osuTypes.match)[0]
+
+    # Copy our new match data into our current match.
+    m.copy(new)
+
+    m.enqueue(packets.updateMatch(m))
+
+# PacketID: 44
+def matchStart(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried starting match outside of a match?')
+        return
+
+    m.enqueue(packets.matchStart(m))
+
+# PacketID: 48
+def matchScoreUpdate(p: Player, pr: packets.PacketReader) -> None:
+    pass
+
+# PacketID: 51
+def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried changing multi mods outside of a match?')
+        return
+
+    mods = pr.read(osuTypes.i32)[0]
+    m.mods = mods # cursed?
+
+    m.enqueue(packets.updateMatch(m))
+
+# PacketID: 55
+def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried unreadying outside of a match? (1)')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            s.status = match.SlotStatus.not_ready
+            break
+    else:
+        printlog(f'{p} tried unreadying outside of a match? (2)')
+        return
+
+    m.enqueue(packets.updateMatch(m))
+
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(ctypes.string)[0]):
-        printlog(f'{p} tried to join nonexistant channel {chan}')
+    if not (chan := pr.read(osuTypes.string)[0]):
+        printlog(f'{p} tried to join nonexistant channel {chan}. (1)')
         return
 
     if (c := glob.channels.get(chan)) and p.join_channel(c):
         p.enqueue(packets.channelJoin(chan))
     else:
-        printlog(f'Failed to find channel {chan} that {p} attempted to join.')
+        printlog(f'{p} tried to join nonexistant channel {chan}. (2)')
+
+# PacketID: 70
+def matchTransferHost(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried transferring host of a match? (1)')
+        return
+
+    if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
+        return
+
+    if not (t := m[slotID].player):
+        printlog(f'{p} tried to transfer host to an empty slot?')
+        return
+
+    m.host = t
+    t.enqueue(packets.matchTransferHost())
+    m.enqueue(packets.updateMatch(m))
 
 # PacketID: 73
 def friendAdd(p: Player, pr: packets.PacketReader) -> None:
-    userID = pr.read(ctypes.i32)[0]
+    userID = pr.read(osuTypes.i32)[0]
 
     if not (t := glob.players.get_by_id(userID)):
         printlog(f'{t} tried to add a user who is not online! ({userID})')
@@ -305,7 +475,7 @@ def friendAdd(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 74
 def friendRemove(p: Player, pr: packets.PacketReader) -> None:
-    userID = pr.read(ctypes.i32)[0]
+    userID = pr.read(osuTypes.i32)[0]
 
     if not (t := glob.players.get_by_id(userID)):
         printlog(f'{t} tried to remove a user who is not online! ({userID})')
@@ -313,9 +483,25 @@ def friendRemove(p: Player, pr: packets.PacketReader) -> None:
 
     p.remove_friend(t)
 
+# PacketID: 77
+def matchChangeTeam(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried changing team outside of a match? (1)')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            s.team = match.Teams.blue if s.team == match.Teams.red else match.Teams.red
+            break
+    else:
+        printlog(f'{p} tried changing team outside of a match? (2)')
+        return
+
+    m.enqueue(packets.updateMatch(m))
+
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:
-    if not (chan := pr.read(ctypes.string)[0]):
+    if not (chan := pr.read(osuTypes.string)[0]):
         return
 
     if (c := glob.channels.get(chan)):
@@ -328,7 +514,7 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
     if len(pr.data) < 6:
         return
 
-    userIDs = pr.read(ctypes.i32_list)
+    userIDs = pr.read(osuTypes.i32_list)
     is_online = lambda o: o in glob.players.ids
 
     for online in filter(is_online, userIDs):
@@ -337,15 +523,15 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
 
 # PacketID: 97
 def userPresenceRequest(p: Player, pr: packets.PacketReader) -> None:
-    for id in pr.read(ctypes.i32_list):
+    for id in pr.read(osuTypes.i32_list):
         p.enqueue(packets.userPresence(id))
 
 # PacketID: 99
 def toggleBlockingDMs(p: Player, pr: packets.PacketReader) -> None:
-    p.pm_private = pr.read(ctypes.i32)[0] == 1
+    p.pm_private = pr.read(osuTypes.i32)[0] == 1
 
 # PacketID: 100
 def setAwayMessage(p: Player, pr: packets.PacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
-    p.away_message = pr.read(ctypes.string)[0]
+    p.away_message = pr.read(osuTypes.string)[0]
     pr.ignore(4)

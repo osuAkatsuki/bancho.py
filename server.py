@@ -36,7 +36,7 @@ from objects.player import Player
 from objects.collections import PlayerList, ChannelList
 from objects.channel import Channel
 from objects.web import Request#, Response
-from constants.types import ctypes
+from constants.types import osuTypes
 from constants.privileges import Privileges
 
 username_regex = re_comp(r'^[\w \[\]-]{2,15}$')
@@ -62,16 +62,22 @@ class Server:
         # to db, or possibly just configration.
         glob.channels.add(Channel(
             name = '#osu',
-            topic = 'First topic',
+            topic = 'Gaming  with the GULAG!',
             read = Privileges.Verified,
             write = Privileges.Verified,
             auto_join = True))
         glob.channels.add(Channel(
             name = '#announce',
-            topic = 'Second topic',
+            topic = 'may you see them',
             read = Privileges.Verified,
             write = Privileges.Admin,
             auto_join = True))
+        glob.channels.add(Channel(
+            name = '#lobby',
+            topic = 'Multiplayer lobby chat.',
+            read = Privileges.Verified,
+            write = Privileges.Verified,
+            auto_join = False))
 
         self.packet_map = {
             # 0: Client changed action
@@ -94,12 +100,42 @@ class Server:
             packets.Packet.c_cantSpectate: events.cantSpectate,
             # 25: Client sends a private message.
             packets.Packet.c_sendPrivateMessage: events.sendPrivateMessage,
+            # 29: Client has left the multiplayer lobby.
+            packets.Packet.c_partLobby: events.lobbyPart,
+            # 30: Client has joined the multiplayer lobby.
+            packets.Packet.c_joinLobby: events.lobbyJoin,
+            # 31: Client creates a multiplayer match.
+            packets.Packet.c_createMatch: events.matchCreate,
+            # 32: Client wishes to join a multiplayer match.
+            packets.Packet.c_joinMatch: events.matchJoin,
+            # 33: Client wishes to leave a multiplayer match.
+            packets.Packet.c_partMatch: events.matchPart,
+            # 38: Client wishes to change their slot in multiplayer.
+            packets.Packet.c_matchChangeSlot: events.matchChangeSlot,
+            # 39: Client wishes to ready up in multiplayer.
+            packets.Packet.c_matchReady: events.matchReady,
+            # 40: Client wishes to lock the multiplayer game.
+            packets.Packet.c_matchLock: events.matchLock,
+            # 41: Client wishes to update a multiplayer match.
+            packets.Packet.c_matchChangeSettings: events.matchChangeSettings,
+            # 44: Client wishes to start the multiplayer match.
+            packets.Packet.c_matchStart: events.matchStart,
+            # 48: Client sends a new scoreframe in multiplayer.
+            packets.Packet.c_matchScoreUpdate: events.matchScoreUpdate,
+            # 51: Client wishes to change mods in multiplayer.
+            packets.Packet.c_matchChangeMods: events.matchChangeMods,
+            # 55: Client wishes to unready in multiplayer.
+            packets.Packet.c_matchNotReady: events.matchNotReady,
             # 63: Client joined a channel.
             packets.Packet.c_channelJoin: events.channelJoin,
+            # 70: Client wants to transfer host to another player.
+            packets.Packet.c_matchTransferHost: events.matchTransferHost,
             # 73: Client added someone to their friends.
             packets.Packet.c_friendAdd: events.friendAdd,
             # 74: Client added someone from their friends.
             packets.Packet.c_friendRemove: events.friendRemove,
+            # 77: Client changed their team in multiplayer.
+            packets.Packet.c_matchChangeTeam: events.matchChangeTeam,
             # 78: Client left a channel.
             packets.Packet.c_channelPart: events.channelPart,
             # 82: Client wants to update their away message.
@@ -118,16 +154,9 @@ class Server:
         while not self.shutdown:
             current_time = int(time())
             for p in glob.players:
-                if p.ping_time + glob.config.max_ping < current_time:
-                    #printlog(f'Requesting ping from {p} after {p.ping_time}')
-                    #p.enqueue(packets.notification('Pong!'))
-                    #p.enqueue(packets.pong())
-                    for c in p.channels:
-                        p.leave_channel(c)
-
-                    glob.players.remove(p)
-                    glob.players.broadcast(packets.logout(p.id))
+                if (p.ping_time + glob.config.max_ping) < current_time:
                     printlog(f'Timing out {p}.', Ansi.YELLOW)
+                    p.logout()
 
             sleep(glob.config.max_ping)
 
@@ -229,6 +258,7 @@ class Server:
                     pr.ignore_packet()
                     continue
 
+                printlog(f'Handling {pr!r}')
                 self.packet_map[pr.packetID](p, pr)
 
             while not p.queue_empty():

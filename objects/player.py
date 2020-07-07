@@ -9,6 +9,7 @@ from constants.privileges import Privileges, BanchoPrivileges
 from console import printlog
 
 from objects.channel import Channel
+from objects.match import Match, SlotStatus
 from objects import glob
 from enum import IntEnum
 from queue import SimpleQueue
@@ -104,6 +105,7 @@ class Player:
         self.channels = []
         self.spectators = []
         self.spectating = None
+        self.match = None
 
         # TODO: countries
         self.country = 38
@@ -115,8 +117,9 @@ class Player:
 
         self.away_message = None
         self.silence_end = 0
+        self.in_lobby = False
 
-        c_time = time()
+        c_time = int(time())
         self.login_time = c_time
         self.ping_time = c_time
         del c_time
@@ -149,30 +152,121 @@ class Player:
         return self.stats[self.status.game_mode + (4 if self.rx else 0)]
 
     def __repr__(self) -> str:
-        return f'<{self.name} | {self.id}>'
+        return f'<id: {self.id} | name: {self.name}>'
+
+    def logout(self) -> None:
+        # Invalidate the user's token.
+        self.token = ''
+
+        for c in self.channels:
+            self.leave_channel(c)
+
+        glob.players.remove(self)
+        glob.players.enqueue(packets.logout(self.id), {self})
+
+    def join_match(self, m: Match, passwd: str) -> bool:
+        if self.match:
+            printlog(f'{self} tried to join multiple matches?')
+            self.enqueue(packets.matchJoinFail(m))
+            return False
+
+        if m.chat: # Match already exists, we're simply joining.
+            if passwd != m.passwd: # eff: could add to if? or self.create_m..
+                printlog(f'{self} tried to join {m} with incorrect passwd.')
+                self.enqueue(packets.matchJoinFail(m))
+                return False
+            if (slotID := m.get_free()) is None:
+                printlog(f'{self} tried to join a full match.')
+                self.enqueue(packets.matchJoinFail(m))
+                return False
+        else:
+            # Match is being created
+            slotID = 0
+            glob.matches.add(m) # add to global matchlist
+                                # This will generate an ID.
+
+            glob.channels.add(Channel(
+                name = f'#multi_{m.id}',
+                topic = f"MID {m.id}'s multiplayer channel.",
+                read = Privileges.Verified,
+                write = Privileges.Verified,
+                auto_join = False,
+                temp = True))
+
+            m.chat = glob.channels.get(f'#multi_{m.id}')
+
+        if not self.join_channel(m.chat):
+            printlog(f'{self} failed to join {m.chat}.')
+            return False
+
+        if (lobby := glob.channels.get('#lobby')) in self.channels:
+            self.leave_channel(lobby)
+
+        slot = m.slots[0 if slotID == -1 else slotID]
+
+        slot.status = SlotStatus.not_ready
+        slot.player = self
+        self.match = m
+        self.enqueue(packets.matchJoinSuccess(m))
+        m.enqueue(packets.updateMatch(m))
+
+        return True
+
+    def leave_match(self) -> None:
+        if not self.match:
+            printlog(f'{self} tried leaving a match but is not in one?')
+            return
+
+        for s in self.match.slots:
+            if self == s.player:
+                s.reset()
+                break
+
+        self.leave_channel(self.match.chat)
+
+        if all(s.empty() for s in self.match.slots):
+            # Multi is now empty, chat has been removed.
+            # Remove the multi from the channels list.
+            printlog(f'Match {self.match} finished.')
+            glob.matches.remove(self.match)
+
+            if (lobby := glob.channels.get('#lobby')):
+                lobby.enqueue(packets.disposeMatch(self.match.id))
+        else: # Notify others of our deprature
+            self.match.enqueue(packets.updateMatch(self.match))
+
+        self.match = None
 
     def join_channel(self, c: Channel) -> bool:
         if self in c:
-            printlog(f'{self} tried to double join {c._name}.')
+            printlog(f'{self} tried to double join {c}.')
             return False
 
         if not self.priv & c.read:
-            printlog(f'{self} tried to join {c._name} but lacks privs.')
+            printlog(f'{self} tried to join {c} but lacks privs.')
+            return False
+
+        # Lobby can only be interacted with while in mp lobby.
+        if c._name == '#lobby' and not self.in_lobby:
             return False
 
         c.append(self) # Add to channels
         self.channels.append(c) # Add to player
-        printlog(f'{self} joined {c._name}.')
+
+        self.enqueue(packets.channelJoin(c.name))
+        printlog(f'{self} joined {c}.')
         return True
 
     def leave_channel(self, c: Channel) -> None:
         if self not in c:
-            printlog(f'{self}) tried to leave {c._name} but is not in it.')
+            printlog(f'{self}) tried to leave {c} but is not in it.')
             return
 
         c.remove(self) # Remove from channels
         self.channels.remove(c) # Remove from player
-        printlog(f'{self} left {c._name}.')
+
+        self.enqueue(packets.channelKick(c.name))
+        printlog(f'{self} left {c}.')
 
     def add_spectator(self, p) -> None:
         self.spectators.append(p)
@@ -183,20 +277,18 @@ class Player:
         chan_name = f'#spec_{self.id}'
         if not (c := glob.channels.get(chan_name)):
             # Spec channel does not exist, create it and join.
-            glob.channels.add(Channel( # TODO: maybe make this return channel..? will think abt it
+            glob.channels.add(Channel(
                 name = chan_name,
                 topic = f"{self.name}'s spectator channel.'",
                 read = Privileges.Verified,
                 write = Privileges.Verified,
-                auto_join = True,
+                auto_join = False,
                 temp = True))
 
             c = glob.channels.get(chan_name)
-            if not self.join_channel(c):
-                return print('?')
 
         if not p.join_channel(c):
-            return print('?')
+            return printlog(f'{self} failed to join {c}?')
 
         for s in self.spectators:
             self.enqueue(fellow) # #spec?

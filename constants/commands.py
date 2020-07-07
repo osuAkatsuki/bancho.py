@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import List, Optional, Union
+from typing import List, Dict, Optional, Union
 from time import time
 from random import randrange
 
@@ -14,6 +14,7 @@ import packets
 # for now i'll just send in player, channel and
 # msg split (trigger won't be included in split)
 Messageable = Union[Channel, Player]
+CommandResponse = Dict[str, str]
 
 # TODO: Tuple rather than str for msg
 
@@ -39,7 +40,7 @@ def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax.'
 
-    glob.players.broadcast(packets.notification(' '.join(msg)))
+    glob.players.enqueue(packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
 def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
@@ -51,6 +52,18 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
 
     t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
+
+def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
+    # Syntax: !spack <username> <packetid>
+    if len(msg) < 2 or not msg[-1].isnumeric():
+        return 'Invalid syntax.'
+
+    if not (t := glob.players.get_by_name(' '.join(msg[:-1]))):
+        return 'Could not find a user by that name.'
+
+    packet = packets.Packet(int(msg[-1]))
+    t.enqueue(packets.write(packet))
+    return f'Wrote {packet} to {t}.'
 
 glob.commands = (
     {
@@ -73,11 +86,19 @@ glob.commands = (
         'callback': alert_user,
         'priv': Privileges.Admin,
         'public': False
+    }, {
+        'trigger': '!spack',
+        'callback': send_empty_packet,
+        'priv': Privileges.Dangerous,
+        'public': False
     }
 )
 
-def process_commands(client: Player, target: Messageable, msg: str) -> bool:
-    # Return whether we actually hit any commands.
+def process_commands(client: Player, target: Messageable,
+                     msg: str) -> Union[CommandResponse, bool]:
+    # Basic commands setup for now.
+    # Response is either a CommandResponse if we hit a command,
+    # or simply False if we don't have any command hits.
     start_time = time()
     split = msg.strip().split(' ')
 

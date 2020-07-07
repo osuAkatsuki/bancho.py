@@ -63,12 +63,9 @@ class Channel:
                 ))
 
     def append(self, p) -> None:
-        p.enqueue(packets.channelJoin(self.name))
         self.players.append(p)
 
     def remove(self, p) -> None:
-        p.enqueue(packets.channelKick(self.name))
-
         if len(self.players) == 1 and self.temp:
             # If it's a temporary channel and this
             # is the last member leaving, just remove

@@ -3,7 +3,8 @@
 from enum import IntEnum, unique
 
 @unique
-class ctypes(IntEnum):
+class osuTypes(IntEnum):
+    # integral
     i8  = 0
     u8  = 1
     i16 = 2
@@ -15,6 +16,13 @@ class ctypes(IntEnum):
     u64 = 8
     f64 = 9
 
-    i32_list = 10
-    string = 11
-    raw = 12
+    # osu
+    message = 11
+    channel = 12
+    match = 13
+    scoreframe = 14
+
+    # misc
+    i32_list = 17
+    string = 18
+    raw = 19
