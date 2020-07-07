@@ -402,11 +402,48 @@ def matchStart(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} tried starting match outside of a match?')
         return
 
+    for s in m.slots:
+        if s.status & match.SlotStatus.ready:
+            s.status = match.SlotStatus.playing
+
     m.enqueue(packets.matchStart(m))
 
 # PacketID: 48
 def matchScoreUpdate(p: Player, pr: packets.PacketReader) -> None:
-    pass
+    if not (m := p.match):
+        printlog(f'{p} sent a scoreframe outside of a match?')
+        return
+
+    # Read 37 bytes if using scorev2,
+    # otherwise only read 29 bytes.
+    size = 37 if pr.data[28] else 29
+    m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + pr.data[:size])
+    pr.ignore(size)
+
+# PacketID: 49
+def matchComplete(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} sent a scoreframe outside of a match?')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            s.status = match.SlotStatus.complete
+            break
+
+    all_completed = True
+
+    for s in m.slots:
+        if s.status.playing:
+            all_completed = False
+            break
+
+    if all_completed:
+        m.enqueue(packets.matchComplete())
+
+        for s in m.slots: # Reset match statuses
+            if s.status == match.SlotStatus.complete:
+                s.status = match.SlotStatus.not_ready
 
 # PacketID: 51
 def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
@@ -418,6 +455,26 @@ def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
     m.mods = mods # cursed?
 
     m.enqueue(packets.updateMatch(m))
+
+# PacketID: 52
+def matchLoadComplete(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} sent a scoreframe outside of a match?')
+        return
+
+    all_loaded = True
+
+    for s in m.slots:
+        if p == s.player:
+            s.loaded = True
+        elif s.status & match.SlotStatus.playing and not s.loaded:
+            all_loaded = False
+            break
+
+    if all_loaded:
+        # Enqueue specifically to multi chat since
+        # we don't need to send it to lobby as well.
+        m.chat.enqueue(packets.matchAllPlayerLoaded())
 
 # PacketID: 55
 def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
@@ -434,6 +491,25 @@ def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
         return
 
     m.enqueue(packets.updateMatch(m))
+
+# PacketID: 60
+def matchSkipRequest(p: Player, pr: packets.PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried unreadying outside of a match? (1)')
+        return
+
+    for s in m.slots:
+        if p == s.player:
+            s.skipped = True
+            m.enqueue(packets.matchPlayerSkipped(p.id))
+            break
+
+    for s in m.slots:
+        if s.status & match.SlotStatus.playing and not s.skipped:
+            return
+
+    # All users have skipped, enqueue a skip.
+    m.enqueue(packets.matchSkip())
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
@@ -520,6 +596,10 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
     for online in filter(is_online, userIDs):
         target = glob.players.get_by_id(online)
         p.enqueue(packets.userStats(target))
+
+# PacketID: 87
+def matchInvite(p: Player, pr: packets.PacketReader) -> None:
+    pass
 
 # PacketID: 97
 def userPresenceRequest(p: Player, pr: packets.PacketReader) -> None:

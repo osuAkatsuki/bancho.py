@@ -39,7 +39,7 @@ class MatchScoringTypes(IntEnum):
 @unique
 class MatchTeamTypes(IntEnum):
     head_to_head: Final[int] = 0
-    #tag_coop: Final[int] = 1
+    tag_coop: Final[int] = 1
     team_vs: Final[int] = 2
     tag_team_vs: Final[int] = 3
 
@@ -73,15 +73,20 @@ class ScoreFrame:
         # sv2
         self.score_v2 = False
         self.combo_portion = 0.0
-        self.bonus_portion == 0.0
+        self.bonus_portion = 0.0
 
-    @property
-    def is_failed(self) -> bool: # TODO: test
-        return self.current_hp == 254
+    #@property
+    #def is_failed(self) -> bool: # TODO: test
+    #    return self.current_hp == 254
 
 class Slot:
     def __init__(self) -> None:
-        self.reset()
+        self.player = None
+        self.status = SlotStatus.open
+        self.team = Teams.neutral
+        self.mods = 0
+        self.loaded = False
+        self.skipped = False
 
     def empty(self) -> None:
         return self.player is None
@@ -97,6 +102,8 @@ class Slot:
         self.status = SlotStatus.open
         self.team = Teams.neutral
         self.mods = 0
+        self.loaded = False
+        self.skipped = False
 
 class Match:
     def __init__(self) -> None:
@@ -163,32 +170,3 @@ class Match:
         # m.enqueue() also sends data to lobby.
         lobby = glob.channels.get('#lobby')
         lobby.enqueue(data)
-
-    #def read(self, pr: PacketReader) -> None:
-    #    pr.ignore(3) # matchid, inprogress
-#
-    #    #self.host = p
-#
-    #    self.type, self.mods, self.name, self.passwd, self.beatmap_name, \
-    #    self.beatmap_id, self.beatmap_md5 = pr.read(
-    #        osuTypes.i8, osuTypes.i32, osuTypes.string, osuTypes.string,
-    #        osuTypes.string, osuTypes.i32, osuTypes.string)
-#
-    #    pr.ignore(32) # dont need status/team
-#
-    #    for s in self.slots:
-    #        if s.status & SlotStatus.has_player:
-    #            pr.ignore(4)
-#
-    #    pr.ignore(4)
-#
-    #    #self.host = glob.players.get_by_id(pr.read(osuTypes.i32)[0])
-    #    self.game_mode = pr.read(osuTypes.i8)[0]
-    #    self.match_scoring = pr.read(osuTypes.i8)[0]
-    #    self.team_type = pr.read(osuTypes.i8)[0]
-    #    self.freemods = pr.read(osuTypes.i8)[0] == 1 # is it bool?
-    #    if self.freemods:
-    #        for s in self.slots:
-    #            s.mods = pr.read(osuTypes.i32)[0]
-#
-    #    self.seed = pr.read(osuTypes.i32)[0]

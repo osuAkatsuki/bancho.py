@@ -67,7 +67,7 @@ def read_i32_list(data) -> Tuple[Tuple[int], int]:
     # TODO: speedtest this abomination vs normal way
     length = int.from_bytes(data[:2], 'little') * 4
     #length = struct.unpack('<h', data[:2])[0] * 4
-    return [int.from_bytes(data[i:i+4], 'little') for i in range(2, length + 2, 4)], 2 + length
+    return [int.from_bytes(data[i:i+4], 'little') for i in range(2, length + 2, 4)], length + 2
 
 def read_match(data) -> Tuple[Match, int]:
     # suuuper fucking TODO: make not shit
@@ -194,15 +194,14 @@ class PacketReader:
                 self._offset += offs
                 if data is not None:
                     ret.extend(data)
-                # read length
-                #length = struct.unpack('<h', self.data[:2])[0]
-                #self._offset += 2
-
-                #for _ in range(length):
-                #    ret.append(struct.unpack('<i', self.data[:4]))
-                #    self._offset += 4
-            #elif t == osuTypes.message:
-            #elif t == osuTypes.channel:
+            elif t == osuTypes.channel:
+                for _ in range(2):
+                    data, offs = read_string(self.data)
+                    self._offset += offs
+                    if data is not None:
+                        ret.append(data)
+                ret.append(int.from_bytes(data[:4], 'little'))
+                self._offset += 4
             elif t == osuTypes.message:
                 for _ in range(3):
                     data, offs = read_string(self.data)
@@ -314,6 +313,15 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
     ret.extend(struct.pack('<h', count))
     return ret
 
+def write_scoreframe(s: ScoreFrame) -> bytearray:
+    return bytearray(
+        struct.pack(
+            '<ibHHHHHHIIbbbb', s.time, s.id, s.num300, s.num100, s.num50,
+            s.num_geki, s.num_katu, s.num_miss, s.total_score, s.max_combo,
+            s.perfect, s.current_hp, s.tag_byte, s.score_v2
+        )
+    )
+
 def write_match(m: Match) -> bytearray:
     ret = bytearray()
     ret.extend(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
@@ -329,10 +337,7 @@ def write_match(m: Match) -> bytearray:
     for s in m.slots:
         if s.player:
             ret.extend(s.player.id.to_bytes(4, 'little'))
-    #print(ret)
-    #ret.extend(struct.pack(f'<{"i" * 16}', *((s.player.id if s.player else 0) for s in m.slots)))
-    ##ret.extend((s.player.id if s.player else 0) for s in m.slots)
-    #print(ret)
+
     ret.extend(m.host.id.to_bytes(4, 'little'))
     ret.extend([ # bytes
         m.game_mode,
@@ -367,6 +372,8 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
             ret.extend(write_channel(*param))
         elif param_type == osuTypes.match:
             ret.extend(write_match(param))
+        elif param_type == osuTypes.scoreframe:
+            ret.extend(write_scoreframe(param))
         else: # use struct
             ret.extend(
                 struct.pack('<' + {
@@ -627,10 +634,9 @@ def fellowSpectatorLeft(id: int) -> bytes:
 def matchStart(m: Match) -> bytes:
     return write(Packet.s_matchStart, (m, osuTypes.match))
 
-# TODO: add scoreframe to write()
 # PacketID: 48
-#def matchScoreUpdate(frame: ScoreFrame) -> bytes:
-#    return write(Packet.s_matchScoreUpdate, (frame, osuTypes.scoreframe))
+def matchScoreUpdate(frame: ScoreFrame) -> bytes:
+    return write(Packet.s_matchScoreUpdate, (frame, osuTypes.scoreframe))
 
 # PacketID: 50
 def matchTransferHost() -> bytes:
@@ -638,7 +644,7 @@ def matchTransferHost() -> bytes:
 
 # PacketID: 53
 def matchAllPlayerLoaded() -> bytes:
-    return write(Packet.s_allPlayerLoaded)
+    return write(Packet.s_matchAllPlayersLoaded)
 
 # PacketID: 57
 def matchPlayerFailed(id: int) -> bytes:

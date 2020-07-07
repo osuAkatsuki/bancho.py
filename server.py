@@ -86,9 +86,9 @@ class Server:
             packets.Packet.c_sendPublicMessage: events.sendMessage,
             # 2: Client logged out.
             packets.Packet.c_logout: events.logout,
-            # 3: Client wants their stats updated
+            # 3: Client wishes their stats updated
             packets.Packet.c_requestStatusUpdate: events.statsUpdateRequest,
-            # 4: Client wants their ping time updated.
+            # 4: Client wishes their ping time updated.
             packets.Packet.c_ping: events.ping,
             # 16. Client started spectating another user.
             packets.Packet.c_startSpectating: events.startSpectating,
@@ -120,15 +120,23 @@ class Server:
             packets.Packet.c_matchChangeSettings: events.matchChangeSettings,
             # 44: Client wishes to start the multiplayer match.
             packets.Packet.c_matchStart: events.matchStart,
+            # 47: Client sends new score data to distribute to others match mates.
+            packets.Packet.c_matchScoreUpdate: events.matchScoreUpdate,
             # 48: Client sends a new scoreframe in multiplayer.
             packets.Packet.c_matchScoreUpdate: events.matchScoreUpdate,
+            # 49: Client wishes to inform bancho they're finished their play in multiplayer.
+            packets.Packet.c_matchComplete: events.matchComplete,
             # 51: Client wishes to change mods in multiplayer.
             packets.Packet.c_matchChangeMods: events.matchChangeMods,
+            # 52: Client wishes to inform bancho that it's completed loading
+            packets.Packet.c_matchLoadComplete: events.matchLoadComplete,
             # 55: Client wishes to unready in multiplayer.
             packets.Packet.c_matchNotReady: events.matchNotReady,
+            # 60: Client wishes to skip the current map's intro in multiplayer.
+            packets.Packet.c_matchSkipRequest: events.matchSkipRequest,
             # 63: Client joined a channel.
             packets.Packet.c_channelJoin: events.channelJoin,
-            # 70: Client wants to transfer host to another player.
+            # 70: Client wishes to transfer host to another player.
             packets.Packet.c_matchTransferHost: events.matchTransferHost,
             # 73: Client added someone to their friends.
             packets.Packet.c_friendAdd: events.friendAdd,
@@ -138,11 +146,13 @@ class Server:
             packets.Packet.c_matchChangeTeam: events.matchChangeTeam,
             # 78: Client left a channel.
             packets.Packet.c_channelPart: events.channelPart,
-            # 82: Client wants to update their away message.
+            # 82: Client wishes to update their away message.
             packets.Packet.c_setAwayMessage: events.setAwayMessage,
-            # 85: Client wants everyones stats.
+            # 85: Client wishes everyones stats.
             packets.Packet.c_userStatsRequest: events.statsRequest,
-            # 97: Client wants presence of specific users.
+            # 87: Client is inviting another player to their multiplayer match.
+            packets.Packet.c_invite: events.matchInvite,
+            # 97: Client wishes presence of specific users.
             packets.Packet.c_userPresenceRequest: events.userPresenceRequest,
             # 100: Client would like to block dms from non-friends.
             packets.Packet.c_userToggleBlockNonFriendPM: events.toggleBlockingDMs,
@@ -191,14 +201,14 @@ class Server:
         name, email, password = [i.split('\r\n')[3] for i in split[2:5]]
         # peppy sends password as plaintext..?
 
+        if len(password) not in range(8, 33):
+            return printlog('Registration: password does not meet length reqs.')
+
         if not re_match(username_regex, name):
             return printlog('Registration: name did not match regex.', Ansi.YELLOW)
 
         if not re_match(email_regex, email) or len(email) > 254: # TODO: add len checks to regex
             return printlog('Registration: email did not match regex.', Ansi.YELLOW)
-
-        if len(password) not in range(8, 33):
-            return printlog('Registration: password does not meet length reqs.')
 
         name_safe = Player.ensure_safe(name)
 
