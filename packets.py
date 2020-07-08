@@ -64,10 +64,13 @@ def read_string(data) -> Tuple[str, int]:
     return data[offset:offset+length].decode(), offset + length
 
 def read_i32_list(data) -> Tuple[Tuple[int], int]:
-    # TODO: speedtest this abomination vs normal way
-    length = int.from_bytes(data[:2], 'little') * 4
-    #length = struct.unpack('<h', data[:2])[0] * 4
-    return [int.from_bytes(data[i:i+4], 'little') for i in range(2, length + 2, 4)], length + 2
+    ret = []
+    offs = 2
+    for i in range(struct.unpack('<h', data[:offs])[0]):
+        ret.append(struct.unpack('<i', data[offs:offs+4])[0])
+        offs += 4
+
+    return ret, offs
 
 def read_match(data) -> Tuple[Match, int]:
     # suuuper fucking TODO: make not shit
@@ -226,9 +229,12 @@ class PacketReader:
 
 # TODO: maybe inherit bytearray?
 class PacketStream:
-    def __init__(self) -> None:
+    def __init__(self, code: int = 200) -> None:
         self.headers = [ # Tuple so we can add to it.
-            'HTTP/1.0 200 OK',
+            'HTTP/1.0 ' + {
+                200: '200 OK',
+                404: '404 NOT FOUND'
+            }[code],
             # Content-Length is added upon building on the
             # final packet data, this way we can ensure it's
             # positions - the osu! client does NOT like it
@@ -290,10 +296,10 @@ def write_string(s: str) -> bytearray:
     return ret
 
 def write_i32_list(l: Tuple[int]) -> bytearray:
-    ret = bytearray(((len(l) * 4) + 2).to_bytes(2, 'little'))
+    ret = bytearray(struct.pack('<h', len(l)))
 
     for i in l:
-        ret.extend(i.to_bytes(4, 'little'))
+        ret.extend(struct.pack('<i', i))
 
     return ret
 
@@ -303,7 +309,7 @@ def write_message(client: str, msg: str, target: str,
     ret.extend(write_string(client))
     ret.extend(write_string(msg))
     ret.extend(write_string(target))
-    ret.extend(client_id.to_bytes(4, 'little'))
+    ret.extend(struct.pack('<i', client_id))
     return ret
 
 def write_channel(name: str, topic: str, count: int) -> bytearray:
@@ -513,7 +519,7 @@ class Packet(IntEnum):
 #
 
 # PacketID: 5
-def userID(id) -> bytes:
+def userID(id: int) -> bytes:
     # ID Responses:
     # -1: Authentication Failed
     # -2: Old Client
@@ -584,7 +590,9 @@ def spectatorLeft(id: int) -> bytes:
 
 # PacketID: 15
 def spectateFrames(data: bytearray) -> bytes:
+    # TODO: speedtest
     return write(Packet.s_spectateFrames, (data, osuTypes.raw))
+    #return chr(Packet.s_spectateFrames).encode() + bytes(data)
 
 # PacketID: 19
 def versionUpdate() -> bytes:
@@ -659,11 +667,8 @@ def matchSkip() -> bytes:
     return write(Packet.s_matchSkip)
 
 # PacketID: 64
-def channelJoin(chan: str) -> bytes:
-    return write(
-        Packet.s_channelJoinSuccess,
-        (chan, osuTypes.string)
-    )
+def channelJoin(name: str) -> bytes:
+    return write(Packet.s_channelJoinSuccess, (name, osuTypes.string))
 
 # PacketID: 65
 def channelInfo(name: str, topic: str, p_count: int) -> bytes:
@@ -733,8 +738,9 @@ def mainMenuIcon() -> bytes:
 # PacketID: 80
 def monitor() -> bytes:
     # This is a little 'anticheat' feature from ppy himself..
-    # basically, it would screenshot your desktop on command,
-    # and send it to /web/bancho_connect.php?x={file}.
+    # basically, it would do some checks (most likely for aqn)
+    # screenshot your desktop (and send it to osu! sevrers),
+    # then trigger the processlist to be sent to bancho as well.
 
     # This doesn't work on newer clients (and i have), it was
     # no plan on trying to use it, just coded for completion.
@@ -821,6 +827,6 @@ def matchAbort() -> bytes:
 # PacketID: 107
 def switchTournamentServer(ip: str) -> bytes:
     # The client only reads the string if it's
-    # not on the client's normal endpoints, but we
-    # can send it either way xd.
+    # not on the client's normal endpoints,
+    # but we can send it either way xd.
     return write(Packet.s_switchTournamentServer, (ip, osuTypes.string))

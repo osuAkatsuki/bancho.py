@@ -375,7 +375,7 @@ class Player:
             [self.id])
 
         # Always include self and Aika on friends list.
-        self.friends = [1, self.id] + [i['user2'] for i in res]
+        self.friends = {1, self.id} | {i['user2'] for i in res}
 
     def stats_from_sql_full(self) -> None:
         for gm in GameMode:
