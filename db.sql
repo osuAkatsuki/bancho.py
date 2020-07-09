@@ -13,6 +13,11 @@ create table users
 		unique (name)
 );
 
+-- With this I decided to make a naming scheme rather
+-- than something nescessarily 'readable' or pretty, I
+-- think in practice this will be much easier to use
+-- and memorize quickly compared to other schemes.
+-- Syntax is simply: stat_rxmode_osumode
 create table stats
 (
 	id int auto_increment

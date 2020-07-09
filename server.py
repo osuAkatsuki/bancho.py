@@ -31,7 +31,7 @@ import packets
 from console import *
 
 from objects import glob
-from events import events
+from events import events, web
 from objects.player import Player
 from objects.collections import PlayerList, ChannelList
 from objects.channel import Channel
@@ -158,6 +158,10 @@ class Server:
             packets.Packet.c_userToggleBlockNonFriendPM: events.toggleBlockingDMs,
         }
 
+        self.web_map = {
+            #'osu-osz2-getscores.php': web.getScores,
+        }
+
         self.start(glob.config.concurrent) # starts server
 
     def ping_timeouts(self) -> None:
@@ -193,6 +197,19 @@ class Server:
                         printlog('Connection timed out?')
 
         printlog('Socket closed..', Ansi.LIGHT_GREEN)
+
+    def handle_web(self, conn: socket.socket, original: bytes) -> None:
+        # TODO: make some sort of class to handle this boilerplate quietly.
+        req = original.decode().split(' ', maxsplit = 2)
+        headers = tuple(h for h in req[2].split('\r\n') if h) # might be slow..?
+        endpoint, data = req[1][5:].split('?', maxsplit = 1)
+
+        if endpoint not in self.web_map:
+            printlog(f'Unhandled: {endpoint}.', Ansi.YELLOW)
+            return
+
+        params = {k: v for k, v in (i.split('=') for i in data.split('&'))}
+        conn.send(self.web_map[endpoint](headers, params))
 
     @staticmethod
     def registration(data: bytes) -> None:
@@ -235,7 +252,10 @@ class Server:
         while len(data) % glob.config.max_bytes == 0:
             data += conn.recv(glob.config.max_bytes)
 
-        if data.startswith(b'POST /users'):
+        if b'/web/' in data[4:9]:
+            # Handle non-realtime requests to /web.
+            return self.handle_web(conn, data)
+        elif data.startswith(b'POST /users'):
             # Handle ingame registrations.
             # TODO: figure out what to send back xd
             return self.registration(data)
