@@ -10,7 +10,8 @@ from console import *
 from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
-from objects import glob, match
+from objects import glob
+from objects.match import SlotStatus, Teams
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
@@ -37,13 +38,13 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
         return
 
     # client_id only proto >= 14
-    client, msg, target, client_id = pr.read(*([osuTypes.string] * 3), osuTypes.i32)
+    client, msg, target, client_id = pr.read(osuTypes.message)
 
     # no nice wrapper to do it in reverse :P
     if target == '#spectator':
         target = f'#spec_{p.spectating.id if p.spectating else p.id}'
     elif target == '#multiplayer':
-        target = f'#multi_{p.match.id if p.match else 0}'
+        target = f'#multi_{p.match.id if p.match is not None else 0}'
 
     if not (t := glob.channels.get(target)):
         printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
@@ -251,7 +252,7 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
-    client, msg, target, client_id = pr.read(*([osuTypes.string] * 3), osuTypes.i32)
+    client, msg, target, client_id = pr.read(osuTypes.message)
 
     if not (t := glob.players.get_by_name(target)):
         printlog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
@@ -329,7 +330,7 @@ def matchChangeSlot(p: Player, pr: packets.PacketReader) -> None:
     if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
         return
 
-    if m.slots[slotID].status & match.SlotStatus.has_player:
+    if m.slots[slotID].status & SlotStatus.has_player:
         printlog(f'{p} tried to switch to slot {slotID} which has a player.')
         return
 
@@ -353,7 +354,7 @@ def matchReady(p: Player, pr: packets.PacketReader) -> None:
 
     for s in m.slots:
         if p == s.player:
-            s.status = match.SlotStatus.ready
+            s.status = SlotStatus.ready
             break
     else:
         printlog(f'{p} tried readying outside of a match? (2)')
@@ -373,12 +374,12 @@ def matchLock(p: Player, pr: packets.PacketReader) -> None:
 
     slot = m.slots[slotID]
 
-    if slot.status & match.SlotStatus.locked:
-        slot.status = match.SlotStatus.open
+    if slot.status & SlotStatus.locked:
+        slot.status = SlotStatus.open
     else:
         if slot.player:
             slot.reset()
-        slot.status = match.SlotStatus.locked
+        slot.status = SlotStatus.locked
 
     m.enqueue(packets.updateMatch(m))
 
@@ -403,9 +404,10 @@ def matchStart(p: Player, pr: packets.PacketReader) -> None:
         return
 
     for s in m.slots:
-        if s.status & match.SlotStatus.ready:
-            s.status = match.SlotStatus.playing
+        if s.status & SlotStatus.ready:
+            s.status = SlotStatus.playing
 
+    m.in_progress = True
     m.enqueue(packets.matchStart(m))
 
 # PacketID: 48
@@ -417,7 +419,10 @@ def matchScoreUpdate(p: Player, pr: packets.PacketReader) -> None:
     # Read 37 bytes if using scorev2,
     # otherwise only read 29 bytes.
     size = 37 if pr.data[28] else 29
-    m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + pr.data[:size])
+    data = pr.data[:size]
+    data[4] = m.get_slot_id(p)
+
+    m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + data, lobby = False)
     pr.ignore(size)
 
 # PacketID: 49
@@ -428,7 +433,7 @@ def matchComplete(p: Player, pr: packets.PacketReader) -> None:
 
     for s in m.slots:
         if p == s.player:
-            s.status = match.SlotStatus.complete
+            s.status = SlotStatus.complete
             break
 
     all_completed = True
@@ -439,11 +444,12 @@ def matchComplete(p: Player, pr: packets.PacketReader) -> None:
             break
 
     if all_completed:
+        m.in_progress = False
         m.enqueue(packets.matchComplete())
 
         for s in m.slots: # Reset match statuses
-            if s.status == match.SlotStatus.complete:
-                s.status = match.SlotStatus.not_ready
+            if s.status == SlotStatus.complete:
+                s.status = SlotStatus.not_ready
 
 # PacketID: 51
 def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
@@ -462,19 +468,15 @@ def matchLoadComplete(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} sent a scoreframe outside of a match?')
         return
 
-    all_loaded = True
-
+    # Ready up our player.
     for s in m.slots:
         if p == s.player:
             s.loaded = True
-        elif s.status & match.SlotStatus.playing and not s.loaded:
-            all_loaded = False
             break
 
-    if all_loaded:
-        # Enqueue specifically to multi chat since
-        # we don't need to send it to lobby as well.
-        m.chat.enqueue(packets.matchAllPlayerLoaded())
+    # Check if all players are ready.
+    if not any(s.status & SlotStatus.playing and not s.loaded for s in m.slots):
+        m.enqueue(packets.matchAllPlayerLoaded(), lobby = False)
 
 # PacketID: 55
 def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
@@ -484,13 +486,13 @@ def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
 
     for s in m.slots:
         if p == s.player:
-            s.status = match.SlotStatus.not_ready
+            s.status = SlotStatus.not_ready
             break
     else:
         printlog(f'{p} tried unreadying outside of a match? (2)')
         return
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 60
 def matchSkipRequest(p: Player, pr: packets.PacketReader) -> None:
@@ -505,11 +507,11 @@ def matchSkipRequest(p: Player, pr: packets.PacketReader) -> None:
             break
 
     for s in m.slots:
-        if s.status & match.SlotStatus.playing and not s.skipped:
+        if s.status & SlotStatus.playing and not s.skipped:
             return
 
     # All users have skipped, enqueue a skip.
-    m.enqueue(packets.matchSkip())
+    m.enqueue(packets.matchSkip(), lobby = False)
 
 # PacketID: 63
 def channelJoin(p: Player, pr: packets.PacketReader) -> None:
@@ -536,8 +538,8 @@ def matchTransferHost(p: Player, pr: packets.PacketReader) -> None:
         return
 
     m.host = t
-    t.enqueue(packets.matchTransferHost())
-    m.enqueue(packets.updateMatch(m))
+    m.host.enqueue(packets.matchTransferHost())
+    m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 73
 def friendAdd(p: Player, pr: packets.PacketReader) -> None:
@@ -567,13 +569,13 @@ def matchChangeTeam(p: Player, pr: packets.PacketReader) -> None:
 
     for s in m.slots:
         if p == s.player:
-            s.team = match.Teams.blue if s.team == match.Teams.red else match.Teams.red
+            s.team = Teams.blue if s.team != Teams.blue else Teams.red
             break
     else:
         printlog(f'{p} tried changing team outside of a match? (2)')
         return
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 78
 def channelPart(p: Player, pr: packets.PacketReader) -> None:

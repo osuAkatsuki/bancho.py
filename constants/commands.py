@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Union
 from time import time
 from random import randrange
 from re import match as re_match, compile as re_comp
+from codecs import escape_decode
 
 from objects import glob
 from objects.player import Player
@@ -84,7 +85,7 @@ def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     if not (t := glob.players.get_by_name(re['name'])):
         return 'Could not find a user by that name.'
 
-    t.enqueue(re['bytes'].encode())
+    t.enqueue(escape_decode(re['bytes'])[0])
     return f'Wrote data to {t}.'
 
 glob.commands = (

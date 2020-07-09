@@ -121,7 +121,7 @@ class Match:
         self.game_mode = 0
 
         self.chat = None
-        self.slots = [Slot() for i in range(16)]
+        self.slots = [Slot() for _ in range(16)]
 
         self.type = MatchTypes.standard
         self.team_type = MatchTeamTypes.head_to_head
@@ -146,7 +146,14 @@ class Match:
     def get_free(self) -> Optional[Slot]:
         # Return first free slot.
         for idx, s in enumerate(self.slots):
-            if not s.player: return idx
+            if s.status == SlotStatus.open:
+                return idx
+
+    def get_slot_id(self, p) -> Optional[int]:
+        # Return the slotID of a given player.
+        for idx, s in enumerate(self.slots):
+            if p == s.player:
+                return idx
 
     def copy(self, m) -> None:
         self.beatmap_id = m.beatmap_id
@@ -159,7 +166,7 @@ class Match:
         self.mods = m.mods
         self.name = m.name
 
-    def enqueue(self, data: bytes, immune = {}) -> None:
+    def enqueue(self, data: bytes, lobby: bool = True, immune = {}) -> None:
         if self.chat:
             self.chat.enqueue(data, immune)
         else:
@@ -167,6 +174,5 @@ class Match:
                 if p not in immune:
                     p.enqueue(data)
 
-        # m.enqueue() also sends data to lobby.
-        lobby = glob.channels.get('#lobby')
-        lobby.enqueue(data)
+        if lobby:
+            glob.channels.get('#lobby').enqueue(data)

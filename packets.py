@@ -66,7 +66,7 @@ def read_string(data) -> Tuple[str, int]:
 def read_i32_list(data) -> Tuple[Tuple[int], int]:
     ret = []
     offs = 2
-    for i in range(struct.unpack('<h', data[:offs])[0]):
+    for _ in range(struct.unpack('<h', data[:offs])[0]):
         ret.append(struct.unpack('<i', data[offs:offs+4])[0])
         offs += 4
 
@@ -100,7 +100,6 @@ def read_match(data) -> Tuple[Match, int]:
     for s in m.slots:
         if s.status & SlotStatus.has_player:
             # Dont think we need this?
-            printlog(f'slot id: {int.from_bytes(data[offset:offset+4], "little")}.')
             offset += 4
 
     m.host = glob.players.get_by_id(int.from_bytes(data[offset:offset+4], 'little'))
@@ -173,7 +172,7 @@ class PacketReader:
     def ignore_packet(self) -> None:
         self._offset += self.length
 
-    def read_packet_header(self) -> Tuple[int]:
+    def read_packet_header(self) -> None:
         if len(self.data) < 7:
             # packet is invalid, end connection
             self.packetID = -1
@@ -203,15 +202,15 @@ class PacketReader:
                     self._offset += offs
                     if data is not None:
                         ret.append(data)
-                ret.append(int.from_bytes(data[:4], 'little'))
-                self._offset += 4
+                ret.append(int.from_bytes(self.data[:2], 'little'))
+                self._offset += 2
             elif t == osuTypes.message:
                 for _ in range(3):
                     data, offs = read_string(self.data)
                     self._offset += offs
                     if data is not None:
                         ret.append(data)
-                ret.append(int.from_bytes(data[:4], 'little'))
+                ret.append(int.from_bytes(self.data[:4], 'little'))
                 self._offset += 4
             elif t == osuTypes.match:
                 data, offs = read_match(self.data)
@@ -271,21 +270,21 @@ def write_uleb128(num: int) -> bytearray:
     if num == 0:
         return bytearray(b'\x00')
 
-    arr = bytearray()
+    ret = bytearray()
     length = 0
 
     while num > 0:
-        arr.append(num & 127)
+        ret.append(num & 127)
         num >>= 7
         if num != 0:
-            arr[length] |= 128
+            ret[length] |= 128
         length += 1
 
-    return arr
+    return ret
 
 def write_string(s: str) -> bytearray:
     if (length := len(s)) == 0:
-        return bytearray([0])
+        return bytearray(b'\x00')
 
     ret = bytearray()
 
@@ -366,7 +365,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
     st_ptr = len(ret)
 
     for param, param_type in args:
-        if param_type == osuTypes.raw: # bytes, just add to self.data
+        if param_type == osuTypes.raw:
             ret.extend(param)
         elif param_type == osuTypes.string:
             ret.extend(write_string(param))
@@ -555,7 +554,7 @@ def userStats(p) -> bytes:
         (p.status.action, osuTypes.i8),
         (p.status.info_text, osuTypes.string),
         (p.status.beatmap_md5, osuTypes.string),
-        (p.status.mods, osuTypes.i32), # i16 on bancho proto<10
+        (p.status.mods, osuTypes.i32),
         (p.status.game_mode, osuTypes.i8),
         (p.status.beatmap_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
@@ -684,7 +683,7 @@ def channelKick(name: str) -> bytes:
 # PacketID: 67
 def channelAutoJoin(name: str, topic: str, p_count: int) -> bytes:
     return write(
-        Packet.s_channelInfo,
+        Packet.s_channelAutoJoin,
         ((name, topic, p_count), osuTypes.channel)
     )
 

@@ -98,7 +98,7 @@ class Player:
         self.priv = Privileges(kwargs.get('priv', Privileges.Banned))
 
         self.rx = False # stored for ez use
-        self.stats = [ModeData() for i in range(7)]
+        self.stats = [ModeData() for _ in range(7)]
         self.status = Status()
 
         self.friends = [] # userids, not player objects
@@ -259,7 +259,7 @@ class Player:
 
     def leave_channel(self, c: Channel) -> None:
         if self not in c:
-            printlog(f'{self}) tried to leave {c} but is not in it.')
+            printlog(f'{self} tried to leave {c} but is not in it.')
             return
 
         c.remove(self) # Remove from channels

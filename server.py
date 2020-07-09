@@ -278,7 +278,10 @@ class Server:
         # Even if the packet is empty, we have to
         # send back an empty response so the client
         # knows it was successfully delivered.
-        conn.send(bytes(ps))
+        resp = bytes(ps)
+        if glob.config.debug:
+            printlog(resp, Ansi.MAGENTA)
+        conn.send(resp)
         taken = (time() - start_time) * 1000
         printlog(f'Packet took {taken:.2f}ms', Ansi.LIGHT_CYAN)
 
