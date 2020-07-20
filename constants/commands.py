@@ -88,12 +88,27 @@ def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(escape_decode(re['bytes'])[0])
     return f'Wrote data to {t}.'
 
+def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) < 1:
+        return 'Invalid syntax.'
+
+    if not (t := glob.players.get_by_name(' '.join(msg))):
+        return 'Could not find a user by that name.'
+
+    t.join_match(p.match)
+    return 'Welcome.'
+
 glob.commands = (
     {
         'trigger': '!roll',
         'callback': roll,
         'priv': Privileges.Verified,
         'public': True
+    }, {
+        'trigger': '!mpforce',
+        'callback': mpforce,
+        'priv': Privileges.Admin,
+        'public': False
     }, {
         'trigger': '!rtx',
         'callback': rtx,

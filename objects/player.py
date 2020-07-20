@@ -74,16 +74,16 @@ class Status:
     def __init__(self):
         self.action = 0 # byte
         self.info_text = '' # string
-        self.beatmap_md5 = '' # string
+        self.map_md5 = '' # string
         self.mods = 0 # i32
         self.game_mode = 0 # byte
         self.beatmap_id = 0 # i32
 
-    def update(self, action, info_text, beatmap_md5,
+    def update(self, action, info_text, map_md5,
                mods, game_mode, beatmap_id) -> None:
         self.action = action
         self.info_text = info_text
-        self.beatmap_md5 = beatmap_md5
+        self.map_md5 = map_md5
         self.mods = mods
         self.game_mode = game_mode
         self.beatmap_id = beatmap_id

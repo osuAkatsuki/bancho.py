@@ -114,7 +114,7 @@ class Match:
 
         self.beatmap_id = 0
         self.beatmap_name = ''
-        self.beatmap_md5 = ''
+        self.map_md5 = ''
 
         self.mods = 0
         self.freemods = False
@@ -157,7 +157,7 @@ class Match:
 
     def copy(self, m) -> None:
         self.beatmap_id = m.beatmap_id
-        self.beatmap_md5 = m.beatmap_md5
+        self.map_md5 = m.map_md5
         self.beatmap_name = m.beatmap_name
         self.freemods = m.freemods
         self.game_mode = m.game_mode

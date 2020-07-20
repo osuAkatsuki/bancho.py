@@ -86,7 +86,7 @@ def read_match(data) -> Tuple[Match, int]:
     offset += offs
     m.beatmap_id = int.from_bytes(data[offset:offset+4], 'little')
     offset += 4
-    m.beatmap_md5, offs = read_string(data[offset:])
+    m.map_md5, offs = read_string(data[offset:])
     offset += offs
 
     for s in m.slots:
@@ -334,7 +334,7 @@ def write_match(m: Match) -> bytearray:
     ret.extend(write_string(m.passwd))
     ret.extend(write_string(m.beatmap_name))
     ret.extend(m.beatmap_id.to_bytes(4, 'little'))
-    ret.extend(write_string(m.beatmap_md5))
+    ret.extend(write_string(m.map_md5))
 
     ret.extend(s.status for s in m.slots)
     ret.extend(s.team for s in m.slots)
@@ -553,7 +553,7 @@ def userStats(p) -> bytes:
         (p.id, osuTypes.i32),
         (p.status.action, osuTypes.i8),
         (p.status.info_text, osuTypes.string),
-        (p.status.beatmap_md5, osuTypes.string),
+        (p.status.map_md5, osuTypes.string),
         (p.status.mods, osuTypes.i32),
         (p.status.game_mode, osuTypes.i8),
         (p.status.beatmap_id, osuTypes.i32),

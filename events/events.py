@@ -110,23 +110,23 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     # and token in a tuple so that we can pass it as a header
     # in our packetstream obj back in server.py
 
-    split = [s for s in origin.decode().split('\n') if s]
-    username = split[0]
-    pw_hash = split[1].encode()
+    s = origin.decode().split('\n')
+    username = s[0]
+    pw_hash = s[1].encode()
 
-    split = split[2].split('|')
-    build_name = split[0]
+    s = s[2].split('|')
+    build_name = s[0]
 
-    if not split[1].replace('-', '', 1).isnumeric():
+    if not s[1].replace('-', '', 1).isnumeric():
         return packets.userID(-1), 'no'
 
-    utc_offset = int(split[1])
-    display_city = split[2] == '1'
+    utc_offset = int(s[1])
+    display_city = s[2] == '1'
 
-    client_hashes = split[3].split(':')
+    client_hashes = s[3].split(':')
     # TODO: client hashes
 
-    pm_private = split[4] == '1'
+    pm_private = s[4] == '1'
 
     res = glob.db.fetch(
         'SELECT id, name, priv, pw_hash, silence_end '
@@ -141,15 +141,15 @@ def login(origin: bytes) -> Tuple[bytes, str]:
         return packets.userID(-3), 'no'
 
     # Password is incorrect.
-    if pw_hash in glob.bcrypt_cache: # ~0.01 ms
+    if pw_hash in glob.cache['bcrypt']: # ~0.01 ms
         # Cache hit - this saves ~190ms on subsequent logins.
-        if glob.bcrypt_cache[pw_hash] != res['pw_hash']:
+        if glob.cache['bcrypt'][pw_hash] != res['pw_hash']:
             return packets.userID(-1), 'no'
     else: # Cache miss, must be first login.
         if not checkpw(pw_hash, res['pw_hash'].encode()):
             return packets.userID(-1), 'no'
 
-        glob.bcrypt_cache.update({pw_hash: res['pw_hash']})
+        glob.cache['bcrypt'][pw_hash] = res['pw_hash']
 
     p = Player(utc_offset = utc_offset, pm_private = pm_private, **res)
     p.silence_end = res['silence_end']
