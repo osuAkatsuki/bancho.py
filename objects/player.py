@@ -15,7 +15,19 @@ from enum import IntEnum
 from queue import SimpleQueue
 import packets
 
+__all__ = (
+    'ModeData',
+    'GameMode',
+    'Status',
+    'Player'
+)
+
 class ModeData:
+    __slots__ = (
+        'tscore', 'rscore', 'pp', 'playcount',
+        'acc', 'rank', 'max_combo'
+    )
+
     def __init__(self):
         self.tscore = 0
         self.rscore = 0
@@ -71,6 +83,11 @@ class GameMode(IntEnum):
         }[self.value] if format == 'sql' else str(self.value)
 
 class Status:
+    __slots__ = (
+        'action', 'info_text', 'map_md5',
+        'mods', 'game_mode', 'beatmap_id'
+    )
+
     def __init__(self):
         self.action = 0 # byte
         self.info_text = '' # string
@@ -89,6 +106,15 @@ class Status:
         self.beatmap_id = beatmap_id
 
 class Player:
+    __slots__ = (
+        'token', 'id', 'name', 'safe_name', 'priv',
+        'rx', 'stats', 'status',
+        'friends', 'channels', 'spectators', 'spectating', 'match',
+        'country', 'utc_offset', 'pm_private',
+        'away_message', 'silence_end', 'in_lobby',
+        'login_time', 'ping_time',
+        '_queue'
+    )
     def __init__(self, *args, **kwargs) -> None:
         # not sure why im scared of empty kwargs?
         self.token = kwargs.get('token', ''.join(choices(ascii_lowercase, k = 32)))
@@ -112,9 +138,6 @@ class Player:
         self.utc_offset = kwargs.get('utc_offset', 0)
         self.pm_private = kwargs.get('pm_private', False)
 
-        # Packet queue
-        self._queue = SimpleQueue()
-
         self.away_message = None
         self.silence_end = 0
         self.in_lobby = False
@@ -123,6 +146,9 @@ class Player:
         self.login_time = c_time
         self.ping_time = c_time
         del c_time
+
+        # Packet queue
+        self._queue = SimpleQueue()
 
     @property
     def silenced(self) -> bool:
@@ -146,8 +172,9 @@ class Player:
 
     @property
     def gm_stats(self) -> ModeData:
-        if self.status.game_mode == 3 and self.rx:
-            return self.stats[3] # rx mania == vn mania
+        if self.status.game_mode == 3:
+            # Mania is the same mode on both vn and rx.
+            return self.stats[3]
 
         return self.stats[self.status.game_mode + (4 if self.rx else 0)]
 

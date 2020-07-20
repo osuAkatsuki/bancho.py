@@ -3,6 +3,19 @@ from typing import Final, Optional, Union#, Set
 from constants.types import osuTypes
 from objects import glob
 
+__all__ = (
+    'Slice',
+    'SlotStatus',
+    'Teams',
+    'MatchTypes',
+    'MatchScoringTypes',
+    'MatchTeamTypes',
+    'RankedStatus',
+    'ScoreFrame',
+    'Slot',
+    'Match'
+)
+
 from enum import IntEnum, unique
 Slice = Union[int, slice]
 
@@ -54,6 +67,13 @@ class RankedStatus(IntEnum):
     qualified: Final[int] = 6
 
 class ScoreFrame:
+    __slots__ = (
+        'time', 'id',
+        'num300', 'num100', 'num50', 'num_geki', 'num_katu', 'num_miss',
+        'total_score', 'current_combo', 'max_combo', 'perfect', 'current_hp',
+        'tag_byte', 'score_v2', 'combo_portion', 'bonus_portion'
+    )
+
     def __init__(self) -> None:
         self.time = 0
         self.id = 0
@@ -80,6 +100,8 @@ class ScoreFrame:
     #    return self.current_hp == 254
 
 class Slot:
+    __slots__ = ('player', 'status', 'team', 'mods', 'loaded', 'skipped')
+
     def __init__(self) -> None:
         self.player = None
         self.status = SlotStatus.open
@@ -106,6 +128,15 @@ class Slot:
         self.skipped = False
 
 class Match:
+    __slots__ = (
+        'id', 'name', 'passwd', 'host',
+        'beatmap_id', 'beatmap_name', 'map_md5',
+        'mods', 'freemods', 'game_mode',
+        'chat', 'slots',
+        'type', 'team_type', 'match_scoring',
+        'in_progress', 'seed'
+    )
+
     def __init__(self) -> None:
         self.id = 0
         self.name = ''

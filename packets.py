@@ -16,6 +16,8 @@ Specifiers = Dict[osuTypes, str]
 Slice = Union[int, slice]
 
 class BinaryArray:
+    __slots__ = ('_data',)
+
     def __init__(self) -> None:
         self._data = bytearray()
 
@@ -136,6 +138,8 @@ def read_scoreframe(data) -> Tuple[ScoreFrame, int]:
     return s, offset
 
 class PacketReader:
+    __slots__ = ('_data', '_offset', 'packetID', 'length', 'specifiers')
+
     def __init__(self, data): # take request body in bytes form as param
         self._data = bytearray(data)
         self._offset = 0
@@ -228,6 +232,8 @@ class PacketReader:
 
 # TODO: maybe inherit bytearray?
 class PacketStream:
+    __slots__ = ('_data', 'headers')
+
     def __init__(self, code: int = 200) -> None:
         self.headers = [ # Tuple so we can add to it.
             'HTTP/1.0 ' + {

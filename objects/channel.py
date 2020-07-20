@@ -5,7 +5,12 @@ from constants.privileges import Privileges
 from objects import glob
 import packets
 
+__all__ = ('Channel',)
+
 class Channel:
+    __slots__ = ('_name', 'topic', 'players',
+                 'read', 'write', 'auto_join', 'temp')
+
     def __init__(self, *args, **kwargs) -> None:
         # Use this attribute whenever you need
         # the 'real' name and not the wrapped one.

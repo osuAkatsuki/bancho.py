@@ -70,7 +70,6 @@ class Response:
                 404: '404 NOT FOUND'
             }[code])
         self.headers.insert(1, f'Content-Length: {len(data)}')
-        print('\r\n'.join(self.headers).encode() + b'\r\n\r\n' + data)
         self.sock.send('\r\n'.join(self.headers).encode() + b'\r\n\r\n' + data)
 
 class Connection: # will probably end up removing addr?

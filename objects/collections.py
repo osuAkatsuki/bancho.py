@@ -8,9 +8,18 @@ from objects.match import Match
 from constants.privileges import Privileges
 from console import printlog
 
+__all__ = (
+    'Slice',
+    'ChannelList',
+    'MatchList',
+    'PlayerList'
+)
+
 Slice = Union[int, slice]
 
 class ChannelList(Sequence):
+    __slots__ = ('channels',)
+
     def __init__(self):
         self.channels = []
 
@@ -45,6 +54,8 @@ class ChannelList(Sequence):
         self.channels.remove(c)
 
 class MatchList(Sequence):
+    __slots__ = ('matches',)
+
     def __init__(self):
         self.matches = [None for _ in range(32)]
 
@@ -90,6 +101,8 @@ class MatchList(Sequence):
                 break
 
 class PlayerList(Sequence):
+    __slots__ = ('players',)
+
     def __init__(self):
         self.players = []
 

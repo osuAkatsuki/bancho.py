@@ -2,6 +2,11 @@ from enum import IntEnum, unique
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 
+__all__ = (
+    'Rank',
+    'Score'
+)
+
 @unique
 class Rank(IntEnum):
     XH = 0
@@ -28,6 +33,15 @@ class Rank(IntEnum):
         }[self.value]
 
 class Score:
+    __slots__ = (
+        'id',
+        'pp', 'score', 'max_combo', 'mods',
+        'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'rank',
+        'passed', 'perfect',
+        'game_mode', 'play_time',
+        'client_flags'
+    )
+
     def __init__(self):
         self.id = 0
 

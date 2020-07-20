@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Optional
+from typing import Optional
 from enum import IntEnum, unique
 from time import time
 from requests import get as req_get
@@ -7,9 +7,6 @@ from constants.mods import Mods
 from objects import glob
 from objects.web import Request
 from console import printlog
-
-Headers = Tuple[str]
-GET_Params = Dict[str, str]
 
 # For /web/ requests, we send the
 # data directly back in the event.
@@ -23,12 +20,11 @@ class RankingType(IntEnum):
     Country = 4
 
 # URI: /osu-osz2-getscores.php
-required_params_getScores = (
+required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
     'h', 'a', 'us', 'ha'
-)
-#def getScores(headers: Headers, params: GET_Params) -> Optional[bytes]:
+})
 def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
         printlog(f'get-scores req missing params.')
@@ -55,11 +51,18 @@ def getScores(req: Request) -> Optional[bytes]:
         'SELECT id, set_id, status, name FROM maps WHERE md5 = %s',
         [req.args['c']]
     )):
-        if not (r := req_get(f"https://old.ppy.sh/api/get_beatmaps?k={glob.config.osu_api_key}&h={req.args['c']}")):
-            return # TODO: conv ranked status from api to osu format
+        if not (r := req_get(
+            'https://old.ppy.sh/api/get_beatmaps?k={key}&h={md5}'.format(
+                key = glob.config.osu_api_key, md5 = req.args['c']
+            )
+        )):
+            # Request to osu!api failed.
+            return
 
         if r.text == '[]':
-            return # no api data TODO: return unsubmitted
+            # API returned an empty set.
+            # TODO: return unsubmitted status.
+            return
 
         _apidata = r.json()[0]
         bmap = {
@@ -104,44 +107,52 @@ def getScores(req: Request) -> Optional[bytes]:
         -2: 0 # pending
     }[s]
 
-    res.append('|'.join(str(i) for i in [
+    res.append('|'.join(str(i) for i in (
         status_to_osu(bmap['status']), # ranked status
         'false', # server has osz2
         bmap['id'], # bid
         bmap['set_id'], # bsid
         len(scores)
-    ]).encode())
+    )).encode())
 
-    res.append(b'0') # offset
-    res.append(bmap['name'].encode())
-    res.append(b'10.0') # map rating
-    res.append(b'') # TODO personal best
+    res.extend(
+        b'0', # online offset
+        bmap['name'].encode(), #mapname
+        b'10.0' # map rating
+    )
 
-    if scores:
-        res.extend( # destroys pep8 but i think this is most readable.
-            b'{id}|{name}|{score}|{max_combo}|{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}'.format(
-                rank = idx, has_replay = '0', **s
-            ) for idx, s in enumerate(scores)
-        )
-    else:
+    res.append(b'') # TOOD: personal best
+
+    if not scores:
         res.append(b'')
+        return b'\n'.join(res)
+
+    res.extend(
+        b'{id}|{name}|{score}|{max_combo}|'
+        b'{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
+        b'{perfect}|{mods}|{userid}|{rank}|'
+        b'{time}|0'.format(rank = idx, **s) # TODO: 0 is has_replay
+        for idx, s in enumerate(scores)
+    )
 
     return b'\n'.join(res)
 
 # URI: /check-updates.php
-#def checkUpdates(headers: Headers, params: GET_Params) -> Optional[bytes]:
+valid_osu_streams = frozenset({
+    'cuttingedge', 'stable40', 'beta40', 'stable'
+})
 def checkUpdates(req: Request) -> Optional[bytes]:
     if req.args['action'] != 'check':
         print(f'Received a request to update with an invalid action.')
         return
 
-    if req.args['stream'] not in {'cuttingedge', 'stable40', 'beta40', 'stable'}:
+    if req.args['stream'] not in valid_streams:
         print('Received a request to update a nonexistant stream?')
         return
 
     current_time = int(time())
 
-    # If possible, use cached result (lasts 1 hour).
+    # If possible, use cached result.
     cache = glob.cache['update'][req.args['stream']]
     if cache['timeout'] > current_time:
         return cache['result']
@@ -149,8 +160,7 @@ def checkUpdates(req: Request) -> Optional[bytes]:
     if not (res := req_get(
         'https://old.ppy.sh/web/check-updates.php?{params}'.format(
             params = '&'.join(f'{k}={v}' for k, v in req.args.items())
-        )
-    )): return
+    ))): return
 
     result = res.text.encode()
 
