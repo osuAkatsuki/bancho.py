@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Callable
 from time import time
 from random import randrange
 from re import match as re_match, compile as re_comp
@@ -20,6 +20,24 @@ CommandResponse = Dict[str, str]
 
 # TODO: Tuple rather than str for msg
 
+glob.commands = []
+
+def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Callable:
+    def register_callback(callback: Callable):
+        if trigger is None:
+            trigger = f"!{callback.__name__}"
+
+        glob.commands.append({
+            "trigger": trigger,
+            "callback": callback,
+            "priv": priv,
+            "public": public
+        })
+
+        return callback
+    return register_callback
+
+@command(priv=Privileges.Verified, public=True)
 def roll(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !roll (max)
     maxPoints = ( # Cap !roll to 32767
@@ -29,6 +47,7 @@ def roll(p: Player, c: Messageable, msg: List[str]) -> str:
     points = randrange(0, maxPoints)
     return f'{p.name} rolls {points} points!'
 
+@command(priv=Privileges.Dangerous, public=False)
 def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !rtx <username> <message>
     if len(msg) != 2:
@@ -40,6 +59,7 @@ def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(packets.RTX(msg[1]))
     return 'pong'
 
+@command(priv=Privileges.Admin, public=False)
 def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !alert <message>
     if len(msg) < 1:
@@ -48,6 +68,7 @@ def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     glob.players.enqueue(packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
+@command(trigger="!alertu", priv=Privileges.Admin, public=False)
 def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !alertu <username> <message>
     if len(msg) < 2:
@@ -59,6 +80,7 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
 
+@command(trigger="!spack", priv=Privileges.Dangerous, public=False)
 def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !spack <username> <packetid>
     if len(msg) < 2 or not msg[-1].isnumeric():
@@ -73,6 +95,7 @@ def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
 
 # This ones a bit spooky, so we'll take some extra precautions..
 _sbytes_re = re_comp(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
+@command(trigger="!sbytes", priv=Privileges.Dangerous, public=False)
 def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !sbytes <username> <packetid>
     if len(msg) < 2:
@@ -88,6 +111,7 @@ def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(escape_decode(re['bytes'])[0])
     return f'Wrote data to {t}.'
 
+@command(priv=Privileges.Admin, public=False)
 def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax.'
@@ -97,45 +121,6 @@ def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
 
     t.join_match(p.match)
     return 'Welcome.'
-
-glob.commands = (
-    {
-        'trigger': '!roll',
-        'callback': roll,
-        'priv': Privileges.Verified,
-        'public': True
-    }, {
-        'trigger': '!mpforce',
-        'callback': mpforce,
-        'priv': Privileges.Admin,
-        'public': False
-    }, {
-        'trigger': '!rtx',
-        'callback': rtx,
-        'priv': Privileges.Dangerous,
-        'public': False
-    }, {
-        'trigger': '!alert',
-        'callback': alert,
-        'priv': Privileges.Admin,
-        'public': False
-    }, {
-        'trigger': '!alertu',
-        'callback': alert_user,
-        'priv': Privileges.Admin,
-        'public': False
-    }, {
-        'trigger': '!spack',
-        'callback': send_empty_packet,
-        'priv': Privileges.Dangerous,
-        'public': False
-    }, {
-        'trigger': '!sbytes',
-        'callback': send_bytes,
-        'priv': Privileges.Dangerous,
-        'public': False
-    }
-)
 
 def process_commands(client: Player, target: Messageable,
                      msg: str) -> Union[CommandResponse, bool]:
