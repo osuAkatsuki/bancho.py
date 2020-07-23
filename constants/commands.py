@@ -25,13 +25,13 @@ glob.commands = []
 def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
         if trigger is None:
-            trigger = f"!{callback.__name__}"
+            trigger = f'!{callback.__name__}'
 
         glob.commands.append({
-            "trigger": trigger,
-            "callback": callback,
-            "priv": priv,
-            "public": public
+            'trigger': trigger,
+            'callback': callback,
+            'priv': priv,
+            'public': public
         })
 
         return callback
@@ -68,7 +68,7 @@ def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     glob.players.enqueue(packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
-@command(trigger="!alertu", priv=Privileges.Admin, public=False)
+@command(trigger='!alertu', priv=Privileges.Admin, public=False)
 def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !alertu <username> <message>
     if len(msg) < 2:
@@ -80,7 +80,7 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
 
-@command(trigger="!spack", priv=Privileges.Dangerous, public=False)
+@command(trigger='!spack', priv=Privileges.Dangerous, public=False)
 def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !spack <username> <packetid>
     if len(msg) < 2 or not msg[-1].isnumeric():
@@ -95,7 +95,7 @@ def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
 
 # This ones a bit spooky, so we'll take some extra precautions..
 _sbytes_re = re_comp(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
-@command(trigger="!sbytes", priv=Privileges.Dangerous, public=False)
+@command(trigger='!sbytes', priv=Privileges.Dangerous, public=False)
 def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !sbytes <username> <packetid>
     if len(msg) < 2:
