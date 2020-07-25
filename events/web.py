@@ -5,7 +5,7 @@ from requests import get as req_get
 
 from constants.mods import Mods
 from objects import glob
-from objects.web import Request
+from cmyui.web import Request
 from console import printlog
 
 # For /web/ requests, we send the

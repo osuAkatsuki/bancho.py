@@ -1,2 +1,2 @@
 mysql-connector-python
-cmyui>=1.0.5
+cmyui>=1.1.0

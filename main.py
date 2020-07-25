@@ -11,8 +11,11 @@ if __name__ != '__main__':
 
 from socket import AF_UNIX, SOCK_STREAM
 from time import time
-from cmyui import Server, Connection, MySQLPool, Version
 from typing import Final
+
+from cmyui.web import TCPServer, Connection
+from cmyui.version import Version
+from cmyui.mysql import SQLPool
 
 from console import *
 from handlers import *
@@ -23,7 +26,7 @@ from objects.channel import Channel
 from constants.privileges import Privileges
 
 glob.version: Final[Version] = Version(1, 0, 0)
-glob.db = MySQLPool(pool_size = 4, **glob.config.mysql)
+glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika
 glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Admin)
@@ -54,12 +57,12 @@ glob.channels.add(Channel(
     write = Privileges.Verified,
     auto_join = False))
 
-serv: Server
+serv: TCPServer
 conn: Connection
 
-with Server(AF_UNIX, SOCK_STREAM) as serv:
+with TCPServer('/tmp/gulag.sock') as serv:
     printlog(f'Gulag {glob.version} online!', Ansi.LIGHT_GREEN)
-    for conn in serv.listen('/tmp/gulag.sock', 5):
+    for conn in serv.listen(max_conns = 5):
         st = time()
 
         handler = handle_bancho if conn.request.uri == '/' \

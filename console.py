@@ -49,10 +49,13 @@ def printlog(msg, col: Ansi = None, fd: str = None, st_fmt = '') -> None:
     if st_fmt:
         print(st_fmt, end = '')
 
-    if col:
-        print(f'{Ansi.GRAY!r}[{get_timestamp(False)}] {col!r}{msg}{Ansi.RESET!r}')
-    else:
-        print(f'{Ansi.GRAY!r}[{get_timestamp(False)}]{Ansi.RESET!r} {msg}')
+    print('{gray!r}[{ts}] {col!r}{msg}{reset!r}'.format(
+        gray = Ansi.GRAY,
+        ts = get_timestamp(full = False),
+        col = col if col else Ansi.RESET,
+        msg = msg,
+        reset = Ansi.RESET
+    ))
 
     if not fd:
         return

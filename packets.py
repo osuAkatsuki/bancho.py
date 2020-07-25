@@ -6,7 +6,6 @@ import struct
 
 from objects import glob
 from objects.match import Match, ScoreFrame, SlotStatus
-from objects.web import Request
 from constants.mods import Mods
 from constants.types import osuTypes
 from console import printlog, Ansi

@@ -1,8 +1,8 @@
 import packets
 from packets import Packet
+from cmyui.web import Connection
 
 from objects import glob
-from objects.web import Connection
 
 from events import events, web
 from console import *
