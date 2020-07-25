@@ -3,6 +3,8 @@
 from typing import Final
 from enum import IntFlag, unique
 
+__all__ = ('Privileges', 'BanchoPrivileges')
+
 @unique
 class Privileges(IntFlag):
     # Design inspired from rumoi/ruri.

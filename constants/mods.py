@@ -2,6 +2,8 @@
 
 from enum import IntEnum, IntFlag, unique
 
+__all__ = ('Mods',)
+
 @unique
 class Mods(IntEnum):
     NOMOD = 0

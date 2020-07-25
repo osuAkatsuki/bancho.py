@@ -18,11 +18,10 @@ import packets
 Messageable = Union[Channel, Player]
 CommandResponse = Dict[str, str]
 
-# TODO: Tuple rather than str for msg
-
 glob.commands = []
 
-def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Callable:
+def command(priv: Privileges, public: bool,
+            trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
         glob.commands.append({
             'trigger': trigger if trigger else f'!{callback.__name__}',
@@ -38,7 +37,7 @@ def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Ca
 def roll(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !roll <max>
     maxPoints = ( # Cap !roll to 32767
-        len(msg) and msg[0].isnumeric() and min(int(msg[0]), 32767)
+        msg and msg[0].isnumeric() and min(int(msg[0]), 32767)
     ) or 100
 
     points = randrange(0, maxPoints)
@@ -120,7 +119,7 @@ def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
     return 'Welcome.'
 
 def process_commands(client: Player, target: Messageable,
-                     msg: str) -> Union[CommandResponse, bool]:
+                     msg: str) -> Optional[CommandResponse]:
     # Basic commands setup for now.
     # Response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
@@ -132,12 +131,11 @@ def process_commands(client: Player, target: Messageable,
             # Command found & we have privileges - run it.
             if (res := cmd['callback'](client, target, split[1:])):
                 # Returned a message for us to send back.
-                taken = (time() - start_time) * 1000
+                ms_taken = (time() - start_time) * 1000
 
                 return {
-                    'resp': f'{res} | Elapsed: {taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
                     'public': cmd['public']
                 }
 
             return {'public': True}
-    return False

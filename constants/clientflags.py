@@ -1,5 +1,7 @@
 from enum import IntFlag, unique
 
+__all__ = ('ClientFlags',)
+
 @unique
 class ClientFlags:
     Clean = 0
