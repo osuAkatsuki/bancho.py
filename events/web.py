@@ -19,6 +19,18 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
+# URI: /osu-submit-modular.php
+required_params_submitModular = frozenset({
+    'x', 'ft', 'score', 'fs', 'bmk', 'iv',
+    'c1', 'st', 'pass', 'osuver', 's'
+})
+def submitModularSelector(req: Request) -> Optional[bytes]:
+    if not all(x in req.args for x in required_params_submitModular):
+        printlog(f'submit-modular req missing params.')
+        return
+
+    pass
+
 # URI: /osu-osz2-getscores.php
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
@@ -115,11 +127,11 @@ def getScores(req: Request) -> Optional[bytes]:
         len(scores)
     )).encode())
 
-    res.extend(
+    res.extend((
         b'0', # online offset
         bmap['name'].encode(), #mapname
         b'10.0' # map rating
-    )
+    ))
 
     res.append(b'') # TOOD: personal best
 
@@ -143,10 +155,10 @@ valid_osu_streams = frozenset({
 })
 def checkUpdates(req: Request) -> Optional[bytes]:
     if req.args['action'] != 'check':
-        print(f'Received a request to update with an invalid action.')
+        print('Received a request to update with an invalid action.')
         return
 
-    if req.args['stream'] not in valid_streams:
+    if req.args['stream'] not in valid_osu_streams:
         print('Received a request to update a nonexistant stream?')
         return
 
@@ -158,8 +170,8 @@ def checkUpdates(req: Request) -> Optional[bytes]:
         return cache['result']
 
     if not (res := req_get(
-        'https://old.ppy.sh/web/check-updates.php?{params}'.format(
-            params = '&'.join(f'{k}={v}' for k, v in req.args.items())
+        'https://old.ppy.sh/web/check-updates.php?{p}'.format(
+            p = '&'.join(f'{k}={v}' for k, v in req.args.items())
     ))): return
 
     result = res.text.encode()

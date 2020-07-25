@@ -24,11 +24,8 @@ glob.commands = []
 
 def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
-        if trigger is None:
-            trigger = f'!{callback.__name__}'
-
         glob.commands.append({
-            'trigger': trigger,
+            'trigger': trigger if trigger else f'!{callback.__name__}',
             'callback': callback,
             'priv': priv,
             'public': public
@@ -39,7 +36,7 @@ def command(priv: Privileges, public: bool, trigger: Optional[str] = None) -> Ca
 
 @command(priv=Privileges.Verified, public=True)
 def roll(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !roll (max)
+    # Syntax: !roll <max>
     maxPoints = ( # Cap !roll to 32767
         len(msg) and msg[0].isnumeric() and min(int(msg[0]), 32767)
     ) or 100

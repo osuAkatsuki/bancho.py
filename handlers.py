@@ -102,6 +102,7 @@ bancho_map: WebMap = {
 
 web_map: WebMap = {
     'osu-osz2-getscores.php': web.getScores,
+    'osu-submit-modular-selector.php': web.submitModularSelector, # simply ignore non -selector for now
     'check-updates.php': web.checkUpdates,
 }
 

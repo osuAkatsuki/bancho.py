@@ -161,7 +161,7 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     data += packets.userID(p.id)
     data += packets.protocolVersion(19)
     data += packets.banchoPrivileges(p.bancho_priv)
-    data += packets.notification(f'Welcome back to the gulag (v{glob.version:.2f})')
+    data += packets.notification(f'Welcome back to the gulag ({glob.version})')
 
     # Channels
     data += packets.channelInfoEnd() # tells osu client to load channels from config i think?

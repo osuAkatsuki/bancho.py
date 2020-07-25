@@ -2,6 +2,7 @@
 
 # Test server: 51.161.34.235
 # (Only up once in a while now)
+# (I mostly test this thing locally)
 
 __all__ = ()
 
@@ -10,20 +11,19 @@ if __name__ != '__main__':
 
 from socket import AF_UNIX, SOCK_STREAM
 from time import time
-
-from db.dbConnector import SQLPool
+from cmyui import Server, Connection, MySQLPool, Version
+from typing import Final
 
 from console import *
 from handlers import *
 
 from objects import glob
-from objects.server import Server
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
-glob.version = 1.0 # server version
-glob.db = SQLPool(pool_size = 4, config = glob.config.mysql)
+glob.version: Final[Version] = Version(1, 0, 0)
+glob.db = MySQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika
 glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Admin)
@@ -54,8 +54,12 @@ glob.channels.add(Channel(
     write = Privileges.Verified,
     auto_join = False))
 
-with Server(AF_UNIX, SOCK_STREAM) as s:
-    for conn in s.listen('/tmp/gulag.sock', 5):
+serv: Server
+conn: Connection
+
+with Server(AF_UNIX, SOCK_STREAM) as serv:
+    printlog(f'Gulag {glob.version} online!', Ansi.LIGHT_GREEN)
+    for conn in serv.listen('/tmp/gulag.sock', 5):
         st = time()
 
         handler = handle_bancho if conn.request.uri == '/' \
