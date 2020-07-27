@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple
+from typing import Tuple, Callable
 from time import time
 from datetime import datetime as dt, timezone as tz
 from bcrypt import checkpw
 
 import packets
+from packets import Packet, PacketReader # convenience
+
 from console import *
 from constants.types import osuTypes
 from constants.mods import Mods
@@ -16,8 +18,17 @@ from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
+glob.bancho_map = {}
+
+def bancho_packet(ID: int) -> Callable:
+    def register_callback(callback: Callable) -> Callable:
+        glob.bancho_map.update({ID: callback})
+        return callback
+    return register_callback
+
 # PacketID: 0
-def readStatus(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_changeAction)
+def readStatus(p: Player, pr: PacketReader) -> None:
     data = pr.read(
         osuTypes.i8, # actionType
         osuTypes.string, # infotext
@@ -32,7 +43,8 @@ def readStatus(p: Player, pr: packets.PacketReader) -> None:
     glob.players.enqueue(packets.userStats(p))
 
 # PacketID: 1
-def sendMessage(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_sendPublicMessage)
+def sendMessage(p: Player, pr: PacketReader) -> None:
     if p.silenced:
         printlog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
@@ -72,7 +84,8 @@ def sendMessage(p: Player, pr: packets.PacketReader) -> None:
     printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 2
-def logout(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_logout)
+def logout(p: Player, pr: PacketReader) -> None:
     pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
 
     if (time() - p.login_time) < 1:
@@ -97,18 +110,21 @@ def logout(p: Player, pr: packets.PacketReader) -> None:
     printlog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
 
 # PacketID: 3
-def statsUpdateRequest(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_requestStatusUpdate)
+def statsUpdateRequest(p: Player, pr: PacketReader) -> None:
     p.enqueue(packets.userStats(p))
 
 # PacketID: 4
-def ping(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_ping)
+def ping(p: Player, pr: PacketReader) -> None:
     p.ping_time = int(time())
 
-# PacketID: 5
+# No specific packetID, triggered when the
+# client sends a request without an osu-token.
 def login(origin: bytes) -> Tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
     # and token in a tuple so that we can pass it as a header
-    # in our packetstream obj back in server.py
+    # in our binaryarray obj back in server.py
 
     s = origin.decode().split('\n')
     username = s[0]
@@ -155,7 +171,7 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     p.silence_end = res['silence_end']
     glob.players.add(p)
 
-    # No need to use packetstream here,
+    # No need to use binaryarray here,
     # we're only dealing with body w/o headers.
     data = packets.BinaryArray()
     data += packets.userID(p.id)
@@ -203,15 +219,9 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     printlog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
 
-# PacketID: 15
-def spectateFrames(p: Player, pr: packets.PacketReader) -> None:
-    data = packets.spectateFrames(pr.data[:pr.length])
-    pr.ignore_packet()
-    for t in p.spectators:
-        t.enqueue(data)
-
 # PacketID: 16
-def startSpectating(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_startSpectating)
+def startSpectating(p: Player, pr: PacketReader) -> None:
     target_id = pr.read(osuTypes.i32)[0]
 
     if not (host := glob.players.get_by_id(target_id)):
@@ -224,7 +234,8 @@ def startSpectating(p: Player, pr: packets.PacketReader) -> None:
     host.add_spectator(p)
 
 # PacketID: 17
-def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_stopSpectating)
+def stopSpectating(p: Player, pr: PacketReader) -> None:
     if not p.spectating:
         printlog(f"{p} Tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
         return
@@ -232,8 +243,17 @@ def stopSpectating(p: Player, pr: packets.PacketReader) -> None:
     host: Player = p.spectating
     host.remove_spectator(p)
 
+# PacketID: 18
+@bancho_packet(Packet.c_spectateFrames)
+def spectateFrames(p: Player, pr: PacketReader) -> None:
+    data = packets.spectateFrames(pr.data[:pr.length])
+    pr.ignore_packet()
+    for t in p.spectators:
+        t.enqueue(data)
+
 # PacketID: 21
-def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_cantSpectate)
+def cantSpectate(p: Player, pr: PacketReader) -> None:
     if not p.spectating:
         printlog(f"{p} Sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
@@ -247,7 +267,8 @@ def cantSpectate(p: Player, pr: packets.PacketReader) -> None:
         t.enqueue(data)
 
 # PacketID: 25
-def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_sendPrivateMessage)
+def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
     if p.silenced:
         printlog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
@@ -285,11 +306,13 @@ def sendPrivateMessage(p: Player, pr: packets.PacketReader) -> None:
     printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 29
-def lobbyPart(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_partLobby)
+def lobbyPart(p: Player, pr: PacketReader) -> None:
     p.in_lobby = False
 
 # PacketID: 30
-def lobbyJoin(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_joinLobby)
+def lobbyJoin(p: Player, pr: PacketReader) -> None:
     p.in_lobby = True
 
     for m in glob.matches:
@@ -297,7 +320,8 @@ def lobbyJoin(p: Player, pr: packets.PacketReader) -> None:
             p.enqueue(packets.newMatch(m))
 
 # PacketID: 31
-def matchCreate(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_createMatch)
+def matchCreate(p: Player, pr: PacketReader) -> None:
     m = pr.read(osuTypes.match)[0]
 
     m.host = p
@@ -305,7 +329,8 @@ def matchCreate(p: Player, pr: packets.PacketReader) -> None:
     printlog(f'{p} created a new multiplayer match.')
 
 # PacketID: 32
-def matchJoin(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_joinMatch)
+def matchJoin(p: Player, pr: PacketReader) -> None:
     id, passwd = pr.read(osuTypes.i32, osuTypes.string)
     if id not in range(64):
         return
@@ -317,11 +342,13 @@ def matchJoin(p: Player, pr: packets.PacketReader) -> None:
     p.join_match(m, passwd)
 
 # PacketID: 33
-def matchPart(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_partMatch)
+def matchPart(p: Player, pr: PacketReader) -> None:
     p.leave_match()
 
 # PacketID: 38
-def matchChangeSlot(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchChangeSlot)
+def matchChangeSlot(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried changing slot outside of a match?')
         return
@@ -347,7 +374,8 @@ def matchChangeSlot(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 39
-def matchReady(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchReady)
+def matchReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried readying outside of a match? (1)')
         return
@@ -363,7 +391,8 @@ def matchReady(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 40
-def matchLock(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchLock)
+def matchLock(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried locking a slot outside of a match?')
         return
@@ -384,7 +413,8 @@ def matchLock(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 41
-def matchChangeSettings(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchChangeSettings)
+def matchChangeSettings(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried changing multi settings outside of a match?')
         return
@@ -398,7 +428,8 @@ def matchChangeSettings(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 44
-def matchStart(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchStart)
+def matchStart(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried starting match outside of a match?')
         return
@@ -411,7 +442,8 @@ def matchStart(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.matchStart(m))
 
 # PacketID: 48
-def matchScoreUpdate(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchScoreUpdate)
+def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} sent a scoreframe outside of a match?')
         return
@@ -426,7 +458,8 @@ def matchScoreUpdate(p: Player, pr: packets.PacketReader) -> None:
     pr.ignore(size)
 
 # PacketID: 49
-def matchComplete(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchComplete)
+def matchComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} sent a scoreframe outside of a match?')
         return
@@ -452,7 +485,8 @@ def matchComplete(p: Player, pr: packets.PacketReader) -> None:
                 s.status = SlotStatus.not_ready
 
 # PacketID: 51
-def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchChangeMods)
+def matchChangeMods(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried changing multi mods outside of a match?')
         return
@@ -463,7 +497,8 @@ def matchChangeMods(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 52
-def matchLoadComplete(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchLoadComplete)
+def matchLoadComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} sent a scoreframe outside of a match?')
         return
@@ -479,7 +514,8 @@ def matchLoadComplete(p: Player, pr: packets.PacketReader) -> None:
         m.enqueue(packets.matchAllPlayerLoaded(), lobby = False)
 
 # PacketID: 55
-def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchNotReady)
+def matchNotReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried unreadying outside of a match? (1)')
         return
@@ -495,7 +531,8 @@ def matchNotReady(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 60
-def matchSkipRequest(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchSkipRequest)
+def matchSkipRequest(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried unreadying outside of a match? (1)')
         return
@@ -514,7 +551,8 @@ def matchSkipRequest(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.matchSkip(), lobby = False)
 
 # PacketID: 63
-def channelJoin(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_channelJoin)
+def channelJoin(p: Player, pr: PacketReader) -> None:
     if not (chan := pr.read(osuTypes.string)[0]):
         printlog(f'{p} tried to join nonexistant channel {chan}. (1)')
         return
@@ -525,7 +563,8 @@ def channelJoin(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'{p} tried to join nonexistant channel {chan}. (2)')
 
 # PacketID: 70
-def matchTransferHost(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchTransferHost)
+def matchTransferHost(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried transferring host of a match? (1)')
         return
@@ -542,7 +581,8 @@ def matchTransferHost(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 73
-def friendAdd(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_friendAdd)
+def friendAdd(p: Player, pr: PacketReader) -> None:
     userID = pr.read(osuTypes.i32)[0]
 
     if not (t := glob.players.get_by_id(userID)):
@@ -552,7 +592,8 @@ def friendAdd(p: Player, pr: packets.PacketReader) -> None:
     p.add_friend(t)
 
 # PacketID: 74
-def friendRemove(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_friendRemove)
+def friendRemove(p: Player, pr: PacketReader) -> None:
     userID = pr.read(osuTypes.i32)[0]
 
     if not (t := glob.players.get_by_id(userID)):
@@ -562,7 +603,8 @@ def friendRemove(p: Player, pr: packets.PacketReader) -> None:
     p.remove_friend(t)
 
 # PacketID: 77
-def matchChangeTeam(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_matchChangeTeam)
+def matchChangeTeam(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         printlog(f'{p} tried changing team outside of a match? (1)')
         return
@@ -578,7 +620,8 @@ def matchChangeTeam(p: Player, pr: packets.PacketReader) -> None:
     m.enqueue(packets.updateMatch(m), lobby = False)
 
 # PacketID: 78
-def channelPart(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_channelPart)
+def channelPart(p: Player, pr: PacketReader) -> None:
     if not (chan := pr.read(osuTypes.string)[0]):
         return
 
@@ -588,7 +631,8 @@ def channelPart(p: Player, pr: packets.PacketReader) -> None:
         printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
 
 # PacketID: 85
-def statsRequest(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_userStatsRequest)
+def statsRequest(p: Player, pr: PacketReader) -> None:
     if len(pr.data) < 6:
         return
 
@@ -600,20 +644,24 @@ def statsRequest(p: Player, pr: packets.PacketReader) -> None:
         p.enqueue(packets.userStats(target))
 
 # PacketID: 87
-def matchInvite(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_invite)
+def matchInvite(p: Player, pr: PacketReader) -> None:
     pass
 
 # PacketID: 97
-def userPresenceRequest(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_userPresenceRequest)
+def userPresenceRequest(p: Player, pr: PacketReader) -> None:
     for id in pr.read(osuTypes.i32_list):
         p.enqueue(packets.userPresence(id))
 
 # PacketID: 99
-def toggleBlockingDMs(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_userToggleBlockNonFriendPM)
+def toggleBlockingDMs(p: Player, pr: PacketReader) -> None:
     p.pm_private = pr.read(osuTypes.i32)[0] == 1
 
 # PacketID: 100
-def setAwayMessage(p: Player, pr: packets.PacketReader) -> None:
+@bancho_packet(Packet.c_setAwayMessage)
+def setAwayMessage(p: Player, pr: PacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
     p.away_message = pr.read(osuTypes.string)[0]
     pr.ignore(4)

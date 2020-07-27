@@ -65,9 +65,9 @@ with TCPServer('/tmp/gulag.sock') as serv:
     for conn in serv.listen(max_conns = 5):
         st = time()
 
-        handler = handle_bancho if conn.request.uri == '/' \
-            else handle_web if conn.request.uri.startswith('/web/') \
-            else lambda *_: printlog(f'Unhandled {conn.request.uri}.', Ansi.LIGHT_RED)
+        handler = handle_bancho if conn.req.uri == '/' \
+            else handle_web if conn.req.startswith('/web/') \
+            else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
         handler(conn)
 
         printlog(f'Packet took {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)

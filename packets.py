@@ -20,18 +20,14 @@ class BinaryArray:
     def __init__(self) -> None:
         self._data = bytearray()
 
-    # idk if required along with __getitem__
     def __bytes__(self) -> bytes:
         return bytes(self._data)
 
     def __iadd__(self, other: Union[bytes, bytearray, int]) -> None:
-        #if not isinstance(other, (bytes, bytearray)):
-        #    raise Exception('HOW')
         self._data.extend(other)
         return self
 
     def __getitem__(self, key: Slice) -> Union[bytearray, int]:
-        #in the unsafe speedy mood
         return self._data[key]
 
     def __setitem__(self, key: Slice,
@@ -40,6 +36,9 @@ class BinaryArray:
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def empty(self) -> bool:
+        return len(self._data) == 0
 
 def read_uleb128(data) -> Tuple[int]:#hint
     offset = val = shift = 0
@@ -229,48 +228,6 @@ class PacketReader:
                 self._offset += size
         return ret
 
-# TODO: maybe inherit bytearray?
-class PacketStream:
-    __slots__ = ('_data', 'headers')
-
-    def __init__(self, code: int = 200) -> None:
-        self.headers = [ # Tuple so we can add to it.
-            'HTTP/1.0 ' + {
-                200: '200 OK',
-                404: '404 NOT FOUND'
-            }[code],
-            # Content-Length is added upon building on the
-            # final packet data, this way we can ensure it's
-            # positions - the osu! client does NOT like it
-            # being out of place.
-        ]
-        self._data = BinaryArray()
-
-    def add_header(self, header: str) -> None:
-        self.headers.append(header)
-
-    def __bytes__(self) -> bytes:
-        self.headers.insert(1, f'Content-Length: {len(self._data)}')
-        self.headers.append('\r\n') # Delimit for body
-        return '\r\n'.join(self.headers).encode('utf-8', 'strict') + bytes(self._data)
-
-    def __iadd__(self, other: Union[bytes, bytearray, int]) -> None:
-        self._data += other
-        return self
-
-    def __getitem__(self, key: Slice) -> Union[bytearray, int]:
-        return self._data[key]
-
-    def __setitem__(self, key: Slice,
-                    value: Union[int, Tuple[int], bytearray]) -> None:
-        self._data[key] = value
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def empty(self) -> bool:
-        return len(self._data) == 0
-
 def write_uleb128(num: int) -> bytearray:
     if num == 0:
         return bytearray(b'\x00')
@@ -316,7 +273,8 @@ def write_message(client: str, msg: str, target: str,
     ret.extend(struct.pack('<i', client_id))
     return ret
 
-def write_channel(name: str, topic: str, count: int) -> bytearray:
+def write_channel(name: str, topic: str,
+                  count: int) -> bytearray:
     ret = bytearray()
     ret.extend(write_string(name))
     ret.extend(write_string(topic))
@@ -675,7 +633,8 @@ def channelJoin(name: str) -> bytes:
     return write(Packet.s_channelJoinSuccess, (name, osuTypes.string))
 
 # PacketID: 65
-def channelInfo(name: str, topic: str, p_count: int) -> bytes:
+def channelInfo(name: str, topic: str,
+                p_count: int) -> bytes:
     return write(
         Packet.s_channelInfo,
         ((name, topic, p_count), osuTypes.channel)
@@ -686,7 +645,8 @@ def channelKick(name: str) -> bytes:
     return write(Packet.s_channelKicked, (name, osuTypes.string))
 
 # PacketID: 67
-def channelAutoJoin(name: str, topic: str, p_count: int) -> bytes:
+def channelAutoJoin(name: str, topic: str,
+                    p_count: int) -> bytes:
     return write(
         Packet.s_channelAutoJoin,
         ((name, topic, p_count), osuTypes.channel)

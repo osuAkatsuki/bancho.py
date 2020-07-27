@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable
 from enum import IntEnum, unique
 from time import time
 from requests import get as req_get
@@ -11,6 +11,14 @@ from console import printlog
 # For /web/ requests, we send the
 # data directly back in the event.
 
+glob.web_map = {}
+
+def web_handler(uri: str) -> Callable:
+    def register_callback(callback: Callable) -> Callable:
+        glob.web_map.update({uri: callback})
+        return callback
+    return register_callback
+
 @unique
 class RankingType(IntEnum):
     Local = 0
@@ -19,11 +27,11 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
-# URI: /osu-submit-modular.php
 required_params_submitModular = frozenset({
     'x', 'ft', 'score', 'fs', 'bmk', 'iv',
     'c1', 'st', 'pass', 'osuver', 's'
 })
+@web_handler('osu-submit-modular.php')
 def submitModularSelector(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_submitModular):
         printlog(f'submit-modular req missing params.')
@@ -31,12 +39,12 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
 
     pass
 
-# URI: /osu-osz2-getscores.php
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
     'h', 'a', 'us', 'ha'
 })
+@web_handler('osu-osz2-getscores.php')
 def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
         printlog(f'get-scores req missing params.')
@@ -149,10 +157,10 @@ def getScores(req: Request) -> Optional[bytes]:
 
     return b'\n'.join(res)
 
-# URI: /check-updates.php
 valid_osu_streams = frozenset({
     'cuttingedge', 'stable40', 'beta40', 'stable'
 })
+@web_handler('check-updates.php')
 def checkUpdates(req: Request) -> Optional[bytes]:
     if req.args['action'] != 'check':
         print('Received a request to update with an invalid action.')
