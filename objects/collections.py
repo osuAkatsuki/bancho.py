@@ -18,6 +18,13 @@ __all__ = (
 Slice = Union[int, slice]
 
 class ChannelList(Sequence):
+    """A class to represent all chat channels on the gulag.
+
+    Attributes
+    -----------
+    channels: List[:class:`Channel`]
+        A list of channel objects representing the current chat channels.
+    """
     __slots__ = ('channels',)
 
     def __init__(self):
@@ -54,10 +61,18 @@ class ChannelList(Sequence):
         self.channels.remove(c)
 
 class MatchList(Sequence):
+    """A class to represent all multiplayer matches on the gulag.
+
+    Attributes
+    -----------
+    matches: List[Optional[:class:`Match`]]
+        A list of match objects representing the current mp matches.
+        The size of this attr is constant; slots will be None if not in use.
+    """
     __slots__ = ('matches',)
 
     def __init__(self):
-        self.matches = [None for _ in range(32)]
+        self.matches = [None for _ in range(32)] # Max matches.
 
     def __getitem__(self, index: Slice) -> Optional[Match]:
         return self.matches[index]
@@ -101,6 +116,13 @@ class MatchList(Sequence):
                 break
 
 class PlayerList(Sequence):
+    """A class to represent all players online on the gulag.
+
+    Attributes
+    -----------
+    players: List[:class:`Player`]
+        A list of player objects representing the online users.
+    """
     __slots__ = ('players',)
 
     def __init__(self):
@@ -109,9 +131,6 @@ class PlayerList(Sequence):
     def __getitem__(self, index: Slice) -> Player:
         return self.players[index]
 
-    def __len__(self) -> int:
-        return len(self.players)
-
     def __contains__(self, p: Union[Player, str]) -> bool:
         # Allow us to either pass in the player
         # obj, or the player name as a string.
@@ -119,6 +138,9 @@ class PlayerList(Sequence):
             return p in (player.name for player in self.players)
         else:
             return p in self.players
+
+    def __len__(self) -> int:
+        return len(self.players)
 
     @property
     def ids(self) -> Tuple[int]:

@@ -6,8 +6,35 @@ from objects import glob
 import packets
 
 __all__ = ('Channel',)
-
+import discord
 class Channel:
+    """A class to represent a chat channel.
+
+    Attributes
+    -----------
+    _name: :class:`str`
+        A name string of the channel.
+        The cls.`name` property wraps handling for '#multiplayer' and
+        '#spectator' when communicating with the osu! client; only use
+        this attr when you need the channel's true name.
+    topic: :class:`str`
+        The topic string of the channel.
+    players: List[:class:`Player`]
+        A list of player objects representing the players in the channel.
+        XXX: While channels store a list of player objs, players also
+             store a list of channel objs for channels they're in.
+    read: :class:`Privileges`
+        The privileges required to read messages in the channel.
+    write: :class:`Privileges`
+        The privileges required to write messages in the channel.
+    auto_join: :class:`bool`
+        A bool representing whether the channel should automatically
+        be joined on connection to the server.
+    temp: :class:`bool`
+        A bool representing whether the channel is 'temporary'.
+        Temporary channels are deleted when all players have left;
+        this is useful for things like multiplayer, spectator, etc.
+    """
     __slots__ = ('_name', 'topic', 'players',
                  'read', 'write', 'auto_join', 'temp')
 

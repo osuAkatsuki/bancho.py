@@ -1,44 +1,16 @@
 # -*- coding: utf-8 -*-
 
 from typing import Any, Tuple, Dict, Union
-from enum import IntEnum
+from enum import IntEnum, unique
 import struct
 
 from objects import glob
 from objects.match import Match, ScoreFrame, SlotStatus
-from constants.mods import Mods
 from constants.types import osuTypes
 from console import printlog, Ansi
 
 PacketParam = Tuple[Any, osuTypes]
 Specifiers = Dict[osuTypes, str]
-Slice = Union[int, slice]
-
-class BinaryArray:
-    __slots__ = ('_data',)
-
-    def __init__(self) -> None:
-        self._data = bytearray()
-
-    def __bytes__(self) -> bytes:
-        return bytes(self._data)
-
-    def __iadd__(self, other: Union[bytes, bytearray, int]) -> None:
-        self._data.extend(other)
-        return self
-
-    def __getitem__(self, key: Slice) -> Union[bytearray, int]:
-        return self._data[key]
-
-    def __setitem__(self, key: Slice,
-                    value: Union[int, Tuple[int], bytearray]) -> None:
-        self._data[key] = value
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def empty(self) -> bool:
-        return len(self._data) == 0
 
 def read_uleb128(data) -> Tuple[int]:#hint
     offset = val = shift = 0
@@ -362,6 +334,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
     ret[st_ptr:st_ptr] = struct.pack('<I', len(ret) - st_ptr)
     return ret
 
+@unique
 class Packet(IntEnum):
     # Both server & client packetIDs
     # Packets commented out are unused.

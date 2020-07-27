@@ -1,11 +1,14 @@
 import packets
-from packets import Packet
 from cmyui.web import Connection
 
 from objects import glob
 
-from events import events, web
+from events.events import login as ev_login
 from console import *
+
+# This has to be imported so
+# that the events are loaded.
+from events import web
 
 __all__ = (
     'handle_bancho',
@@ -18,17 +21,23 @@ def handle_bancho(conn: Connection) -> None:
     or conn.req.headers['User-Agent'] != 'osu!':
         return
 
-    resp = packets.BinaryArray()
+    resp = bytearray()
 
     if 'osu-token' not in conn.req.headers:
         # Login is a bit of a special case,
         # so we'll handle it separately.
-        resp._data, token = events.login(conn.req.body)
-        conn.resp.add_header(f'cho-token: {token}')
+        login_data = ev_login(conn.req.body)
+
+        resp.extend(login_data[0])
+        conn.resp.add_header(f'cho-token: {login_data[1]}')
+
     elif not (p := glob.players.get(conn.req.headers['osu-token'])):
         printlog('Token not found, forcing relog.')
-        resp += packets.notification('Server is restarting.')
-        resp += packets.restartServer(0) # send 0ms since the server is already up!
+        resp.extend(
+            packets.notification('Server is restarting.') +
+            packets.restartServer(0) # send 0ms since the server is already up!
+        )
+
     else: # Player found, process normal packet.
         pr = packets.PacketReader(conn.req.body)
 
@@ -49,7 +58,7 @@ def handle_bancho(conn: Connection) -> None:
 
         while not p.queue_empty():
             # Read all queued packets into stream
-            resp += p.dequeue()
+            resp.extend(p.dequeue())
 
     if glob.config.debug:
         print(bytes(resp))

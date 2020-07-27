@@ -2,7 +2,6 @@
 
 from typing import Tuple, Callable
 from time import time
-from datetime import datetime as dt, timezone as tz
 from bcrypt import checkpw
 
 import packets
@@ -15,7 +14,6 @@ from constants import commands
 from objects import glob
 from objects.match import SlotStatus, Teams
 from objects.player import Player
-from objects.channel import Channel
 from constants.privileges import Privileges
 
 glob.bancho_map = {}
@@ -60,6 +58,10 @@ def sendMessage(p: Player, pr: PacketReader) -> None:
 
     if not (t := glob.channels.get(target)):
         printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
+        return
+
+    if not p.priv & t.write:
+        printlog(f'{p} tried to write to {target} without privileges.')
         return
 
     # Limit message length to 2048 characters
@@ -123,8 +125,7 @@ def ping(p: Player, pr: PacketReader) -> None:
 # client sends a request without an osu-token.
 def login(origin: bytes) -> Tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
-    # and token in a tuple so that we can pass it as a header
-    # in our binaryarray obj back in server.py
+    # and token in a tuple - we need both for our response.
 
     s = origin.decode().split('\n')
     username = s[0]
@@ -171,25 +172,26 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     p.silence_end = res['silence_end']
     glob.players.add(p)
 
-    # No need to use binaryarray here,
-    # we're only dealing with body w/o headers.
-    data = packets.BinaryArray()
-    data += packets.userID(p.id)
-    data += packets.protocolVersion(19)
-    data += packets.banchoPrivileges(p.bancho_priv)
-    data += packets.notification(f'Welcome back to the gulag ({glob.version})')
+    data = bytearray(
+        packets.userID(p.id) +
+        packets.protocolVersion(19) +
+        packets.banchoPrivileges(p.bancho_priv) +
+        packets.notification(f'Welcome back to the gulag ({glob.version})') +
+
+        # Tells osu! to load channels from config, I believe?
+        packets.channelInfoEnd()
+    )
 
     # Channels
-    data += packets.channelInfoEnd() # tells osu client to load channels from config i think?
     for c in glob.channels:
         if not p.priv & c.read:
             continue # no priv to read
 
-        data += packets.channelInfo(*c.basic_info)
+        data.extend(packets.channelInfo(*c.basic_info))
 
         # Autojoinable channels
         if c.auto_join and p.join_channel(c):
-            data += packets.channelJoin(c.name)
+            data.extend(packets.channelJoin(c.name))
 
     # Fetch some of the player's
     # information from sql to be cached.
@@ -200,21 +202,19 @@ def login(origin: bytes) -> Tuple[bytes, str]:
     our_presence = packets.userPresence(p)
     our_stats = packets.userStats(p)
 
-    data += our_presence + our_stats
+    data.extend(our_presence + our_stats)
 
     # o for online, or other
     for o in glob.players:
-        # TODO: variadic params for enqueue
-
         # Enqueue us to them
         o.enqueue(our_presence + our_stats)
 
         # Enqueue them to us
         p.enqueue(packets.userPresence(o) + packets.userStats(o))
 
-    data += packets.mainMenuIcon()
-    data += packets.friendsList(*p.friends)
-    data += packets.silenceEnd(max(p.silence_end - time(), 0))
+    data.extend(packets.mainMenuIcon())
+    data.extend(packets.friendsList(*p.friends))
+    data.extend(packets.silenceEnd(max(p.silence_end - time(), 0)))
 
     printlog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
@@ -353,7 +353,7 @@ def matchChangeSlot(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried changing slot outside of a match?')
         return
 
-    # Ready new slot ID
+    # Read new slot ID
     if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
         return
 
@@ -397,7 +397,7 @@ def matchLock(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried locking a slot outside of a match?')
         return
 
-    # Ready new slot ID
+    # Read new slot ID
     if (slotID := pr.read(osuTypes.i32)[0]) not in range(16):
         return
 
@@ -663,5 +663,5 @@ def toggleBlockingDMs(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_setAwayMessage)
 def setAwayMessage(p: Player, pr: PacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
-    p.away_message = pr.read(osuTypes.string)[0]
+    p.away_msg = pr.read(osuTypes.string)[0]
     pr.ignore(4)

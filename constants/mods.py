@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from enum import IntEnum, IntFlag, unique
+from enum import IntEnum, unique
 
 __all__ = ('Mods',)
 

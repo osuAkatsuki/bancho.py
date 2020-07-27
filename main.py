@@ -9,9 +9,9 @@ __all__ = ()
 if __name__ != '__main__':
     raise Exception('main.py is meant to be run directly!')
 
-from socket import AF_UNIX, SOCK_STREAM
 from time import time
 from typing import Final
+from os import chdir, path
 
 from cmyui.web import TCPServer, Connection
 from cmyui.version import Version
@@ -24,6 +24,9 @@ from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
+
+# Set CWD to /gulag.
+chdir(path.dirname(path.realpath(__file__)))
 
 glob.version: Final[Version] = Version(1, 0, 0)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)

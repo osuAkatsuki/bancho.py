@@ -1,5 +1,5 @@
 from typing import Final
-from enum import IntEnum
+from enum import IntEnum, unique
 from datetime import datetime as dt, timezone as tz, timedelta as td
 
 __all__ = (
@@ -8,6 +8,7 @@ __all__ = (
     'printlog'
 )
 
+@unique
 class Ansi(IntEnum):
     # Default colours
     BLACK: Final[int] = 30
@@ -34,7 +35,7 @@ class Ansi(IntEnum):
     def __repr__(self) -> str:
         return f'\x1b[{self.value}m'
 
-ts_fmt = ('%d/%m/%Y %I:%M:%S%p', '%I:%M:%S%p')
+ts_fmt = ('%I:%M:%S%p', '%d/%m/%Y %I:%M:%S%p')
 tz_est = tz(td(hours = -4), 'EDT')
 def get_timestamp(full: bool = False) -> str:
     return f'{dt.now(tz = tz_est):{ts_fmt[full]}}'
