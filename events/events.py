@@ -422,8 +422,41 @@ def matchChangeSettings(p: Player, pr: PacketReader) -> None:
     # Read new match data
     new = pr.read(osuTypes.match)[0]
 
-    # Copy our new match data into our current match.
-    m.copy(new)
+    if new.freemods != m.freemods:
+        # Freemods status has been changed.
+        if new.freemods:
+            # Switching to freemods.
+            # Central mods -> all players mods.
+            for s in m.slots:
+                if s.status & SlotStatus.has_player:
+                    s.mods = m.mods & ~Mods.SPEED_CHANGING
+
+            m.mods = m.mods & Mods.SPEED_CHANGING
+        else:
+            # Switching to centralized mods.
+            # Host mods -> Central mods.
+            for s in m.slots:
+                if s.player and s.player.id == m.host.id:
+                    m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
+                    break
+
+    if m.beatmap_id == (1 << 32) - 1 and not m.map_md5:
+        # Map being changed, unready players.
+        for s in m.slots:
+            if s.status & SlotStatus.ready:
+                s.status = SlotStatus.not_ready
+
+    # Copy basic match info into our match.
+    m.beatmap_id = new.beatmap_id
+    m.map_md5 = new.map_md5
+    m.beatmap_name = new.beatmap_name
+    m.freemods = new.freemods
+    m.game_mode = new.game_mode
+    m.team_type = new.team_type
+    m.match_scoring = new.match_scoring
+    #m.mods = new.mods
+    m.name = new.name
+    #m.copy(new)
 
     m.enqueue(packets.updateMatch(m))
 
@@ -472,7 +505,7 @@ def matchComplete(p: Player, pr: PacketReader) -> None:
     all_completed = True
 
     for s in m.slots:
-        if s.status.playing:
+        if s.status & SlotStatus.playing:
             all_completed = False
             break
 
@@ -492,7 +525,19 @@ def matchChangeMods(p: Player, pr: PacketReader) -> None:
         return
 
     mods = pr.read(osuTypes.i32)[0]
-    m.mods = mods # cursed?
+
+    if m.freemods:
+        if p.id == m.host.id:
+            # Allow host to change speed-changing mods.
+            m.mods = mods & Mods.SPEED_CHANGING
+
+        # Set slot mods
+        for s in m.slots:
+            if p == s.player:
+                s.mods = mods & ~Mods.SPEED_CHANGING
+    else:
+        # Not freemods, set match mods.
+        m.mods = mods
 
     m.enqueue(packets.updateMatch(m))
 

@@ -18,6 +18,9 @@ import packets
 Messageable = Union[Channel, Player]
 CommandResponse = Dict[str, str]
 
+# Not sure if this should be in glob or not,
+# trying to think of some use cases lol..
+# Could be interesting?
 glob.commands = []
 
 def command(priv: Privileges, public: bool,
@@ -36,7 +39,7 @@ def command(priv: Privileges, public: bool,
 @command(priv=Privileges.Verified, public=True)
 def roll(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !roll <max>
-    maxPoints = ( # Cap !roll to 32767
+    maxPoints = ( # Cap !roll to 32767 to prevent spam.
         msg and msg[0].isnumeric() and min(int(msg[0]), 32767)
     ) or 100
 

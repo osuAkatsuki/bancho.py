@@ -168,11 +168,11 @@ class PlayerList(Sequence):
 
     def add(self, p: Player) -> None: # bool ret success?
         if p in self.players:
-            printlog(f'{p}) already in players list!')
+            printlog(f'{p} already in players list!')
             return
-        printlog(f'Adding {p}) to players list.')
+        printlog(f'Adding {p} to players list.')
         self.players.append(p)
 
     def remove(self, p: Player) -> None:
-        printlog(f'Removing {p}) from players list.')
+        printlog(f'Removing {p} from players list.')
         self.players.remove(p)

@@ -1,39 +1,42 @@
 # -*- coding: utf-8 -*-
 
+from typing import Final
 from enum import IntEnum, unique
 
 __all__ = ('Mods',)
 
 @unique
 class Mods(IntEnum):
-    NOMOD = 0
-    NOFAIL = 1 << 0
-    EASY = 1 << 1
-    TOUCHSCREEN = 1 << 2
-    HIDDEN = 1 << 3
-    HARDROCK = 1 << 4
-    SUDDENDEATH = 1 << 5
-    DOUBLETIME = 1 << 6
-    RELAX = 1 << 7
-    HALFTIME = 1 << 8
-    NIGHTCORE = 1 << 9
-    FLASHLIGHT = 1 << 10
-    AUTOPLAY = 1 << 11
-    SPUNOUT = 1 << 12
-    RELAX2 = 1 << 13
-    PERFECT = 1 << 14
-    KEY4 = 1 << 15
-    KEY5 = 1 << 16
-    KEY6 = 1 << 17
-    KEY7 = 1 << 18
-    KEY8 = 1 << 19
-    KEYMOD = 1 << 20
-    FADEIN = 1 << 21
-    RANDOM = 1 << 22
-    LASTMOD = 1 << 23
-    KEY9 = 1 << 24
-    KEY10 = 1 << 25
-    KEY1 = 1 << 26
-    KEY3 = 1 << 27
-    KEY2 = 1 << 28
-    SCOREV2 = 1 << 29
+    NOMOD:          Final[int] = 0
+    NOFAIL:         Final[int] = 1 << 0
+    EASY:           Final[int] = 1 << 1
+    TOUCHSCREEN:    Final[int] = 1 << 2
+    HIDDEN:         Final[int] = 1 << 3
+    HARDROCK:       Final[int] = 1 << 4
+    SUDDENDEATH:    Final[int] = 1 << 5
+    DOUBLETIME:     Final[int] = 1 << 6
+    RELAX:          Final[int] = 1 << 7
+    HALFTIME:       Final[int] = 1 << 8
+    NIGHTCORE:      Final[int] = 1 << 9
+    FLASHLIGHT:     Final[int] = 1 << 10
+    AUTOPLAY:       Final[int] = 1 << 11
+    SPUNOUT:        Final[int] = 1 << 12
+    RELAX2:         Final[int] = 1 << 13
+    PERFECT:        Final[int] = 1 << 14
+    KEY4:           Final[int] = 1 << 15
+    KEY5:           Final[int] = 1 << 16
+    KEY6:           Final[int] = 1 << 17
+    KEY7:           Final[int] = 1 << 18
+    KEY8:           Final[int] = 1 << 19
+    KEYMOD:         Final[int] = 1 << 20
+    FADEIN:         Final[int] = 1 << 21
+    RANDOM:         Final[int] = 1 << 22
+    LASTMOD:        Final[int] = 1 << 23
+    KEY9:           Final[int] = 1 << 24
+    KEY10:          Final[int] = 1 << 25
+    KEY1:           Final[int] = 1 << 26
+    KEY3:           Final[int] = 1 << 27
+    KEY2:           Final[int] = 1 << 28
+    SCOREV2:        Final[int] = 1 << 29
+
+    SPEED_CHANGING: Final[int] = (DOUBLETIME | NIGHTCORE | HALFTIME)

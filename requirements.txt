@@ -1,2 +1,3 @@
 mysql-connector-python
 cmyui>=1.1.0
+py3rijndael>=0.3.3

@@ -4,6 +4,7 @@ from time import time
 from requests import get as req_get
 
 from constants.mods import Mods
+from objects.score import Score
 from objects import glob
 from cmyui.web import Request
 from console import printlog
@@ -31,12 +32,13 @@ required_params_submitModular = frozenset({
     'x', 'ft', 'score', 'fs', 'bmk', 'iv',
     'c1', 'st', 'pass', 'osuver', 's'
 })
-@web_handler('osu-submit-modular.php')
+@web_handler('osu-submit-modular-selector.php')
 def submitModularSelector(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_submitModular):
-        printlog(f'submit-modular req missing params.')
+        printlog(f'submit-modular-selector req missing params.')
         return
 
+    s = Score.from_submission(*(req.args[x] for x in ('score', 'iv', 'osuver')))
     pass
 
 required_params_getScores = frozenset({
