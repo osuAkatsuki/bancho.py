@@ -11,24 +11,24 @@ __all__ = (
 @unique
 class Ansi(IntEnum):
     # Default colours
-    BLACK: Final[int] = 30
-    RED: Final[int] = 31
-    GREEN: Final[int] = 32
-    YELLOW: Final[int] = 33
-    BLUE: Final[int] = 34
+    BLACK:   Final[int] = 30
+    RED:     Final[int] = 31
+    GREEN:   Final[int] = 32
+    YELLOW:  Final[int] = 33
+    BLUE:    Final[int] = 34
     MAGENTA: Final[int] = 35
-    CYAN: Final[int] = 36
-    WHITE: Final[int] = 37
+    CYAN:    Final[int] = 36
+    WHITE:   Final[int] = 37
 
     # Light colours
-    GRAY: Final[int] = 90
-    LIGHT_RED: Final[int] = 91
-    LIGHT_GREEN: Final[int] = 92
-    LIGHT_YELLOW: Final[int] = 93
-    LIGHT_BLUE: Final[int] = 94
+    GRAY:          Final[int] = 90
+    LIGHT_RED:     Final[int] = 91
+    LIGHT_GREEN:   Final[int] = 92
+    LIGHT_YELLOW:  Final[int] = 93
+    LIGHT_BLUE:    Final[int] = 94
     LIGHT_MAGENTA: Final[int] = 95
-    LIGHT_CYAN: Final[int] = 96
-    LIGHT_WHITE: Final[int] = 97
+    LIGHT_CYAN:    Final[int] = 96
+    LIGHT_WHITE:   Final[int] = 97
 
     RESET: Final[int] = 0
 
@@ -43,9 +43,11 @@ def get_timestamp(full: bool = False) -> str:
 # TODO: perhaps make some kind of
 # timestamp class with __format__?
 
-def printlog(msg, col: Ansi = None, fd: str = None, st_fmt = '') -> None:
-    # This can be used both for logging purposes, or also just printing
-    # with colour without having to do inline color codes / ansi objects.
+def printlog(msg, col: Ansi = None,
+             fd: str = None, st_fmt = '') -> None:
+    # This can be used both for logging purposes,
+    # or also just printing with colour without having
+    # to do inline color codes / ansi objects.
 
     if st_fmt:
         print(st_fmt, end = '')

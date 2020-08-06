@@ -21,50 +21,50 @@ Slice = Union[int, slice]
 
 @unique
 class SlotStatus(IntEnum):
-    open: Final[int] = 1
-    locked: Final[int] = 2
-    not_ready: Final[int] = 4
-    ready: Final[int] = 8
-    no_map: Final[int] = 16
-    playing: Final[int] = 32
-    complete: Final[int] = 64
+    open:       Final[int] = 1
+    locked:     Final[int] = 2
+    not_ready:  Final[int] = 4
+    ready:      Final[int] = 8
+    no_map:     Final[int] = 16
+    playing:    Final[int] = 32
+    complete:   Final[int] = 64
     has_player: Final[int] = not_ready | ready | no_map | playing | complete
-    quit: Final[int] = 128
+    quit:       Final[int] = 128
 
 @unique
 class Teams(IntEnum):
     neutral: Final[int] = 0
-    blue: Final[int] = 1
-    red: Final[int] = 2
+    blue:    Final[int] = 1
+    red:     Final[int] = 2
 
 @unique
 class MatchTypes(IntEnum):
-    standard: Final[int] = 0
+    standard:  Final[int] = 0
     powerplay: Final[int] = 1 # Literally no idea what this is for
 
 @unique
 class MatchScoringTypes(IntEnum):
-    score: Final[int] = 0
+    score:    Final[int] = 0
     accuracy: Final[int] = 1
-    combo: Final[int] = 2
-    scorev2: Final[int] = 3
+    combo:    Final[int] = 2
+    scorev2:  Final[int] = 3
 
 @unique
 class MatchTeamTypes(IntEnum):
     head_to_head: Final[int] = 0
-    tag_coop: Final[int] = 1
-    team_vs: Final[int] = 2
-    tag_team_vs: Final[int] = 3
+    tag_coop:     Final[int] = 1
+    team_vs:      Final[int] = 2
+    tag_team_vs:  Final[int] = 3
 
 @unique
 class RankedStatus(IntEnum):
-    unknown: Final[int] = 0
-    unsubmitted: Final[int] = 1
-    pending: Final[int] = 2
+    unknown:         Final[int] = 0
+    unsubmitted:     Final[int] = 1
+    pending:         Final[int] = 2
     editable_cutoff: Final[int] = 3
-    ranked: Final[int] = 4
-    approved: Final[int] = 5
-    qualified: Final[int] = 6
+    ranked:          Final[int] = 4
+    approved:        Final[int] = 5
+    qualified:       Final[int] = 6
 
 class ScoreFrame:
     __slots__ = (

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final
+from typing import Final, Union
 from enum import IntEnum, unique
 
 __all__ = ('Mods',)
@@ -40,3 +40,21 @@ class Mods(IntEnum):
     SCOREV2:        Final[int] = 1 << 29
 
     SPEED_CHANGING: Final[int] = (DOUBLETIME | NIGHTCORE | HALFTIME)
+
+def mods_readable(m: Union[Mods, int]) -> str:
+    if not m: return ''
+
+    r: List[str] = []
+    if m & Mods.NOFAIL:       r.append('NF')
+    if m & Mods.EASY:         r.append('EZ')
+    if m & Mods.TOUCHSCREEN:  r.append('TD')
+    if m & Mods.HIDDEN:       r.append('HD')
+    if m & Mods.HARDROCK:     r.append('HR')
+    if m & Mods.NIGHTCORE:    r.append('NC')
+    elif m & Mods.DOUBLETIME: r.append('DT')
+    if m & Mods.RELAX:        r.append('RX')
+    if m & Mods.HALFTIME:     r.append('HT')
+    if m & Mods.FLASHLIGHT:   r.append('FL')
+    if m & Mods.SPUNOUT:      r.append('SO')
+    if m & Mods.SCOREV2:      r.append('V2')
+    return ''.join(r)

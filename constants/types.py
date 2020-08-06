@@ -8,8 +8,8 @@ __all__ = ('osuTypes',)
 @unique
 class osuTypes(IntEnum):
     # integral
-    i8: Final[int]  = 0
-    u8: Final[int]  = 1
+    i8:  Final[int] = 0
+    u8:  Final[int] = 1
     i16: Final[int] = 2
     u16: Final[int] = 3
     i32: Final[int] = 4

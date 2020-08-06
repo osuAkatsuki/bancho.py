@@ -6,7 +6,7 @@ from objects import glob
 import packets
 
 __all__ = ('Channel',)
-import discord
+
 class Channel:
     """A class to represent a chat channel.
 

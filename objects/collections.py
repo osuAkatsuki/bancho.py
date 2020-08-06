@@ -5,6 +5,7 @@ from typing import Tuple, Union, Optional, Set
 from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match
+from objects import glob
 from constants.privileges import Privileges
 from console import printlog
 
@@ -165,6 +166,32 @@ class PlayerList(Sequence):
         for p in self.players: # might copy
             if p.id == id:
                 return p
+
+    def get_from_cred(self, name: str, pw_md5: str) -> None:
+        # Only used cached results - the user should have
+        # logged into bancho at least once. (This does not
+        # mean they're logged in now).
+
+        # Let them pass as a string for ease of access
+        pw_md5: bytes = pw_md5.encode()
+
+        if pw_md5 not in glob.cache['bcrypt']:
+            # User has not logged in through bancho.
+            return
+
+        res = glob.db.fetch(
+            'SELECT pw_hash FROM users WHERE name_safe = %s',
+            [Player.ensure_safe(name)])
+
+        if not res:
+            # Could not find user in the DB.
+            return
+
+        if glob.cache['bcrypt'][pw_md5] != res['pw_hash']:
+            # Password bcrypts do not match.
+            return
+
+        return self.get_by_name(name)
 
     def add(self, p: Player) -> None: # bool ret success?
         if p in self.players:

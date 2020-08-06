@@ -6,7 +6,7 @@ from string import ascii_lowercase
 from time import time
 
 from constants.privileges import Privileges, BanchoPrivileges
-from console import printlog
+from console import printlog, Ansi
 
 from objects.channel import Channel
 from objects.match import Match, SlotStatus
@@ -250,6 +250,15 @@ class Player:
         self._queue = SimpleQueue()
 
     @property
+    def url(self) -> str:
+        return f'https://akatsuki.pw/u/{self.id}'
+
+    @property
+    def embed(self) -> str:
+        # XXX: perhaps this should be __repr__?
+        return f'[{self.url} {self.name}]'
+
+    @property
     def silenced(self) -> bool:
         return time() <= self.silence_end
 
@@ -289,6 +298,24 @@ class Player:
 
         glob.players.remove(self)
         glob.players.enqueue(packets.logout(self.id), {self})
+
+    def restrict(self) -> None: # TODO: reason
+        self.priv &= ~Privileges.Visible
+        glob.db.execute(
+            'UPDATE users SET priv = %s WHERE id = %s',
+            [self.priv, self.id]
+        )
+
+        printlog(f'Restricted {self}.', Ansi.CYAN)
+
+    def unrestrict(self) -> None:
+        self.priv &= Privileges.Visible
+        glob.db.execute(
+            'UPDATE users SET priv = %s WHERE id = %s',
+            [self.priv, self.id]
+        )
+
+        printlog(f'Unrestricted {self}.', Ansi.CYAN)
 
     def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:
