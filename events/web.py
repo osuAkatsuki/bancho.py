@@ -132,7 +132,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         return b'error: no'
 
     # Parse our score data into a score obj.
-    s: Score = Score.from_submission(*(str(s) for s in (
+    s: Score = Score.from_submission(*(s.decode() for s in (
         req.args['score'], req.args['iv'],
         req.args['osuver'], req.args['pass']
     )))
@@ -197,6 +197,9 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         # Announce the user's #1 score.
         if announce_chan := glob.channels.get('#announce'):
             announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map_id}.')
+
+    # Update the user's most recent score for this mode.
+    s.player.recent_scores[s.player.status.game_mode] = s
 
     printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'

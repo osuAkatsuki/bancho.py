@@ -36,6 +36,11 @@ def command(priv: Privileges, public: bool,
         return callback
     return register_callback
 
+""" User commands
+# The commands below are not considered dangerous,
+# and are granted to any unrestricted players.
+"""
+
 @command(priv=Privileges.Verified, public=True)
 def roll(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !roll <max>
@@ -45,6 +50,18 @@ def roll(p: Player, c: Messageable, msg: List[str]) -> str:
 
     points = randrange(0, maxPoints)
     return f'{p.name} rolls {points} points!'
+
+@command(priv=Privileges.Verified, public=True)
+def last(p: Player, c: Messageable, msg: List[str]) -> str:
+    if not (rc_score := p.recent_scores[p.status.game_mode]):
+        return 'No recent score found for current mode!'
+
+    return f'[#{s.rank} @ {s.map_id}] {s.pp:.2f}pp'
+
+""" Admin commands
+# The commands below are relatively dangerous,
+# and are generally for managing users.
+"""
 
 @command(priv=Privileges.Dangerous, public=False)
 def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
@@ -79,6 +96,22 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
 
+@command(priv=Privileges.Admin, public=False)
+def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) < 1:
+        return 'Invalid syntax.'
+
+    if not (t := glob.players.get_by_name(' '.join(msg))):
+        return 'Could not find a user by that name.'
+
+    t.join_match(p.match)
+    return 'Welcome.'
+
+""" Developer commands
+# The commands below are either dangerous or
+# simply not useful for any other roles.
+"""
+
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False)
 def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     # Syntax: !spack <username> <packetid>
@@ -110,16 +143,13 @@ def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(escape_decode(re['bytes'])[0])
     return f'Wrote data to {t}.'
 
-@command(priv=Privileges.Admin, public=False)
-def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
-    if len(msg) < 1:
+@command(priv=Privileges.Dangerous, public=False)
+def debug(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) != 1 or msg[0] not in {'0', '1'}:
         return 'Invalid syntax.'
 
-    if not (t := glob.players.get_by_name(' '.join(msg))):
-        return 'Could not find a user by that name.'
-
-    t.join_match(p.match)
-    return 'Welcome.'
+    glob.config.debug = msg[0] == '1'
+    return 'Success.'
 
 def process_commands(client: Player, target: Messageable,
                      msg: str) -> Optional[CommandResponse]:

@@ -57,13 +57,13 @@ create table stats
 	playtime_rx_std int not null,
 	playtime_rx_taiko int not null,
 	playtime_rx_catch int not null,
-	acc_vn_std float(5,3) not null,
-	acc_vn_taiko float(5,3) not null,
-	acc_vn_catch float(5,3) not null,
-	acc_vn_mania float(5,3) not null,
-	acc_rx_std float(5,3) not null,
-	acc_rx_taiko float(5,3) not null,
-	acc_rx_catch float(5,3) not null,
+	acc_vn_std float(6,3) not null,
+	acc_vn_taiko float(6,3) not null,
+	acc_vn_catch float(6,3) not null,
+	acc_vn_mania float(6,3) not null,
+	acc_rx_std float(6,3) not null,
+	acc_rx_taiko float(6,3) not null,
+	acc_rx_catch float(6,3) not null,
 	maxcombo_vn_std int not null,
 	maxcombo_vn_taiko int not null,
 	maxcombo_vn_catch int not null,
@@ -73,4 +73,79 @@ create table stats
 	maxcombo_rx_catch int not null,
 	constraint stats_users_id_fk
 		foreign key (id) references users (id)
+);
+
+create table scores_rx
+(
+	id int auto_increment
+		primary key,
+	map_md5 char(32) not null,
+	score int not null,
+	pp float(7,3) not null,
+	acc float(6,3) not null,
+	max_combo int not null,
+	mods int not null,
+	n300 int not null,
+	n100 int not null,
+	n50 int not null,
+	nmiss int not null,
+	ngeki int not null,
+	nkatu int not null,
+	status tinyint not null,
+	game_mode tinyint not null,
+	play_time int not null,
+	client_flags int not null,
+	userid int not null,
+	perfect tinyint(1) not null
+);
+
+create table scores_vn
+(
+	id int auto_increment
+		primary key,
+	map_md5 char(32) not null,
+	score int not null,
+	pp float(7,3) not null,
+	acc float(6,3) not null,
+	max_combo int not null,
+	mods int not null,
+	n300 int not null,
+	n100 int not null,
+	n50 int not null,
+	nmiss int not null,
+	ngeki int not null,
+	nkatu int not null,
+	status tinyint not null,
+	game_mode tinyint not null,
+	play_time int not null,
+	client_flags int not null,
+	userid int not null,
+	perfect tinyint(1) not null
+);
+
+create table maps
+(
+	id int not null
+	    primary key,
+	set_id int not null,
+	status int not null,
+	name varchar(256) not null comment 'Unsure of max length',
+	md5 char(32) not null,
+	constraint maps_id_uindex
+		unique (id),
+	constraint maps_md5_uindex
+		unique (md5)
+);
+
+create table channels
+(
+	id int auto_increment
+		primary key,
+	name varchar(32) not null,
+	topic varchar(256) not null,
+	read_priv int default 1 not null,
+	write_priv int default 2 not null,
+	auto_join tinyint(1) default 0 null,
+	constraint channels_name_uindex
+		unique (name)
 );

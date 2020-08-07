@@ -53,7 +53,7 @@ def handle_bancho(conn: Connection) -> None:
                 pr.ignore_packet()
                 continue
 
-            printlog(f'Handling {pr!r}', Ansi.MAGENTA)
+            printlog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
             glob.bancho_map[pr.packetID](p, pr)
 
         while not p.queue_empty():
@@ -77,13 +77,15 @@ def handle_web(conn: Connection) -> None:
         printlog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
         return
 
-    printlog(f'Handling {conn.req.uri}', Ansi.MAGENTA)
+    printlog(f'Handling {conn.req.uri}', Ansi.LIGHT_MAGENTA)
     if (resp := glob.web_map[handler](conn.req)):
         # XXX: Perhaps web handlers should return
         # a bytearray which could be cast to bytes
         # here at the end? Probably a better soln.
         conn.resp.send(resp, 200)
 
+# XXX: This won't be completed for a while most likely..
+# Focused on other parts of the design (web mostly).
 # username_regex = re_comp(r'^[\w \[\]-]{2,15}$')
 # email_regex = re_comp(r'^[\w\.\+\-]+@[\w\-]+\.[\w\-\.]+$')
 #def registration(data: bytes) -> None:

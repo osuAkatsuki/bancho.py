@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Tuple, Dict, Union
+from typing import Any, Tuple, Dict, Union, Final
 from enum import IntEnum, unique
 import struct
 
@@ -11,6 +11,19 @@ from console import printlog, Ansi
 
 PacketParam = Tuple[Any, osuTypes]
 Specifiers = Dict[osuTypes, str]
+
+_specifiers: Final[Specifiers] = {
+    osuTypes.i8:  'b',
+    osuTypes.u8:  'B',
+    osuTypes.i16: 'h',
+    osuTypes.u16: 'H',
+    osuTypes.i32: 'i',
+    osuTypes.u32: 'I',
+    osuTypes.f32: 'f',
+    osuTypes.i64: 'q',
+    osuTypes.u64: 'Q',
+    osuTypes.f64: 'd'
+}
 
 def read_uleb128(data) -> Tuple[int]:#hint
     offset = val = shift = 0
@@ -117,19 +130,6 @@ class PacketReader:
         self.packetID = 0
         self.length = 0
 
-        self.specifiers: Final[Specifiers] = {
-            osuTypes.i8:  'b', # good
-            osuTypes.u8:  'B',  # time
-            osuTypes.i16: 'h',   # to
-            osuTypes.u16: 'H',    # ask
-            osuTypes.i32: 'i',     # my self
-            osuTypes.u32: 'I',      # why im
-            osuTypes.f32: 'f',       # alive
-            osuTypes.i64: 'q',        # B)
-            osuTypes.u64: 'Q',
-            osuTypes.f64: 'd'
-        }
-
     def __repr__(self) -> str:
         return f'<id: {self.packetID} | length: {self.length}>'
 
@@ -194,7 +194,7 @@ class PacketReader:
                 data, offs = read_scoreframe(self.data)
                 self._offset += offs
             else:
-                fmt = self.specifiers[t]
+                fmt = _specifiers[t]
                 size = struct.calcsize(fmt)
                 ret.extend(struct.unpack(fmt, self.data[:size]))
                 self._offset += size
@@ -315,19 +315,7 @@ def write(id: int, *args: Tuple[PacketParam]) -> bytes:
         elif param_type == osuTypes.scoreframe:
             ret.extend(write_scoreframe(param))
         else: # use struct
-            ret.extend(
-                struct.pack('<' + {
-                osuTypes.i8:  'b',
-                osuTypes.u8:  'B',
-                osuTypes.i16: 'h',
-                osuTypes.u16: 'H',
-                osuTypes.i32: 'i',
-                osuTypes.u32: 'I',
-                osuTypes.f32: 'f',
-                osuTypes.i64: 'q',
-                osuTypes.u64: 'Q',
-                osuTypes.f64: 'd'
-            }[param_type], param))
+            ret.extend(struct.pack('<' + _specifiers[param_type], param))
 
     # Add size
     #ret[st_ptr:st_ptr] = (len(ret) - st_ptr).to_bytes(4, 'little')

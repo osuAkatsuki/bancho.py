@@ -256,7 +256,7 @@ class Player:
         'token', 'id', 'name', 'safe_name', 'priv',
         'rx', 'stats', 'status',
         'friends', 'channels', 'spectators', 'spectating', 'match',
-        'country', 'utc_offset', 'pm_private',
+        'recent_scores', 'country', 'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
         'login_time', 'ping_time',
         '_queue'
@@ -274,11 +274,14 @@ class Player:
         self.stats = [ModeData() for _ in range(7)]
         self.status = Status()
 
-        self.friends = [] # userids, not player objects
+        self.friends = set() # userids, not player objects
         self.channels = []
         self.spectators = []
         self.spectating = None
         self.match = None
+
+        # Store the user's most recently submitted scores for both regular and
+        self.recent_scores = [None for _ in range(7)]
 
         # TODO: countries
         self.country = 38
@@ -532,7 +535,7 @@ class Player:
             printlog(f'{self} tried to add {p}, who is already their friend!')
             return
 
-        self.friends.append(p.id)
+        self.friends.add(p.id)
         glob.db.execute(
             'INSERT INTO friendships '
             'VALUES (%s, %s)',

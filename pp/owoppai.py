@@ -9,13 +9,11 @@ from requests import get
 
 __all__ = ('Owoppai',)
 
-# TODO: async
 class Owoppai:
-    __slots__ = ('filename', 'accuracy', 'mods', 'combo', 'misses', 'gamemode')
+    __slots__ = ('filename', 'accuracy', 'mods',
+                 'combo', 'misses', 'gamemode')
 
     def __init__(self, **kwargs) -> None:
-        chdir(path.dirname(path.realpath(__file__)))
-
         if 'map_id' in kwargs:
             self.open_map(kwargs.get('map_id'))
 
@@ -26,7 +24,7 @@ class Owoppai:
         self.accuracy = kwargs.get('accuracy', -1.0)
 
     def open_map(self, map_id: int) -> None:
-        filename = f'maps/{map_id}.osu'
+        filename = f'pp/maps/{map_id}.osu'
         if not path.exists(filename):
             # Do osu!api request for the map.
             if not (r := get(f'https://old.ppy.sh/osu/{map_id}')):
@@ -43,7 +41,7 @@ class Owoppai:
         if not self.filename: raise Exception(
             'Must open a map prior to calling calculate_pp()')
 
-        args = [f'./oppai {self.filename}']
+        args = [f'./pp/oppai {self.filename}']
         if self.accuracy >= 0.0:
             args.append(f'{self.accuracy:.4f}%')
         if self.mods >= 0:
