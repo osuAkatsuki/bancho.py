@@ -38,27 +38,11 @@ glob.bot.ping_time = 0x7fffffff
 glob.bot.stats_from_sql_full() # no need to get friends
 glob.players.add(glob.bot)
 
-# Default channels.
-# At some point, this will either be moved
-# to db, or possibly just configration.
-glob.channels.add(Channel(
-    name = '#osu',
-    topic = 'General discussion.',
-    read = Privileges.Verified,
-    write = Privileges.Verified,
-    auto_join = True))
-glob.channels.add(Channel(
-    name = '#announce',
-    topic = 'Exceptional performance & announcements.',
-    read = Privileges.Verified,
-    write = Privileges.Admin,
-    auto_join = True))
-glob.channels.add(Channel(
-    name = '#lobby',
-    topic = 'Multiplayer lobby chat.',
-    read = Privileges.Verified,
-    write = Privileges.Verified,
-    auto_join = False))
+# Add all channels from db.
+for chan in glob.db.fetchall(
+    'SELECT name, topic, read_priv, '
+    'write_priv, auto_join FROM channels'
+): glob.channels.add(Channel(**chan))
 
 serv: TCPServer
 conn: Connection

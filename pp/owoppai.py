@@ -16,8 +16,8 @@ class Owoppai:
     def __init__(self, **kwargs) -> None:
         chdir(path.dirname(path.realpath(__file__)))
 
-        if 'beatmap_id' in kwargs:
-            self.open_map(kwargs.get('beatmap_id'))
+        if 'map_id' in kwargs:
+            self.open_map(kwargs.get('map_id'))
 
         self.mods = kwargs.get('mods', 0)
         self.combo = kwargs.get('combo', 0)
@@ -25,12 +25,12 @@ class Owoppai:
         self.gamemode = kwargs.get('mode', 0)
         self.accuracy = kwargs.get('accuracy', -1.0)
 
-    def open_map(self, beatmap_id: int) -> None:
-        filename = f'maps/{beatmap_id}.osu'
+    def open_map(self, map_id: int) -> None:
+        filename = f'maps/{map_id}.osu'
         if not path.exists(filename):
             # Do osu!api request for the map.
-            if not (r := get(f'https://old.ppy.sh/osu/{beatmap_id}')):
-                raise Exception(f'Could not find beatmap {filename}!')
+            if not (r := get(f'https://old.ppy.sh/osu/{map_id}')):
+                raise Exception(f'Could not find map {filename}!')
 
             with open(filename, 'w+') as f:
                 f.write(r.content.decode('utf-8', 'strict'))

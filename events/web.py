@@ -131,24 +131,19 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         printlog(f'submit-modular-selector req missing params.')
         return b'error: no'
 
-    s: Score
-    p: Player
+    # Parse our score data into a score obj.
+    s: Score = Score.from_submission(*(str(s) for s in (
+        req.args['score'], req.args['iv'],
+        req.args['osuver'], req.args['pass']
+    )))
 
-    # Arguments required to create a score object.
-    score_args = (req.args['score'], req.args['iv'], req.args['osuver'])
-
-    # Parse our scoredata into a score object.
-    if not (s := Score.from_submission(*score_args)):
+    if not s:
         printlog('Failed to parse a score - invalid format.', Ansi.YELLOW)
         return b'error: no'
-
-    if not (p := glob.players.get_from_cred(s.player_name, req.args['pass'])):
-        # In this context, the player is most likely using s score submitter
-        # and is not logged into bancho - it is possible for get_from_cred
-        # to return None if the password is incorrect or user does not exist,
-        # but that case is probably unlikely in the context of score submission?
-        printlog('Failed to find user from credentials (submit-modular)', Ansi.LIGHT_YELLOW)
-        return b'error: no' # could return 'error: reset' lol
+    elif not s.player:
+        # Player is not online, return nothing so that their
+        # client will retry submission when they log in.
+        return
 
     table = 'scores_rx' if s.mods & Mods.RELAX else 'scores_vn'
 
@@ -158,21 +153,21 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         f'SELECT 1 FROM {table} WHERE game_mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
         'AND score = %s', [s.game_mode, s.map_md5,
-                           p.id, s.mods, s.score]
+                           s.player.id, s.mods, s.score]
     )
 
     if res:
-        printlog(f'{p} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
+        printlog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
         return b'error: no'
 
-    if not p.priv & Privileges.Whitelisted:
+    if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
-        gm_adjusted = s.game_mode + (4 if p.rx and s.game_mode != 3 else 0)
+        gm_adjusted = s.game_mode + (4 if s.player.rx and s.game_mode != 3 else 0)
         pp_cap = autorestrict_pp[gm_adjusted][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
             printlog(f'{p} restricted for submitting {s.pp} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
-            p.restrict()
+            s.player.restrict()
             return b'error: ban'
 
     if s.status == SubmissionStatus.BEST:
@@ -182,7 +177,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         glob.db.execute(
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 and map_md5 = %s '
-            'AND userid = %s', [s.map_md5, p.id])
+            'AND userid = %s', [s.map_md5, s.player.id])
 
     glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
@@ -194,16 +189,16 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
             s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
             int(s.status), s.game_mode, s.play_time,
-            s.client_flags, p.id, s.perfect
+            s.client_flags, s.player.id, s.perfect
         ]
     )
 
     if s.status == SubmissionStatus.BEST and s.rank == 1:
         # Announce the user's #1 score.
-        announce_chan = glob.channels.get('#announce')
-        announce_chan.send(glob.bot, f'{p.embed} achieved #1 on {s.map_md5}.')
+        if announce_chan := glob.channels.get('#announce'):
+            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map_id}.')
 
-    printlog(f'{p} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
+    printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
 
 required_params_getScores = frozenset({
@@ -216,7 +211,6 @@ def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
         printlog(f'get-scores req missing params.')
         return
-
 
     # Tbh, I don't really care if people request
     # leaderboards from other peoples accounts lol.

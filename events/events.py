@@ -440,16 +440,16 @@ def matchChangeSettings(p: Player, pr: PacketReader) -> None:
                     m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
                     break
 
-    if m.beatmap_id == (1 << 32) - 1 and not m.map_md5:
+    if m.map_id == (1 << 32) - 1 and not m.map_md5:
         # Map being changed, unready players.
         for s in m.slots:
             if s.status & SlotStatus.ready:
                 s.status = SlotStatus.not_ready
 
     # Copy basic match info into our match.
-    m.beatmap_id = new.beatmap_id
+    m.map_id = new.map_id
     m.map_md5 = new.map_md5
-    m.beatmap_name = new.beatmap_name
+    m.map_name = new.map_name
     m.freemods = new.freemods
     m.game_mode = new.game_mode
     m.team_type = new.team_type

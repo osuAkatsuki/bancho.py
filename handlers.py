@@ -53,7 +53,7 @@ def handle_bancho(conn: Connection) -> None:
                 pr.ignore_packet()
                 continue
 
-            printlog(f'Handling {pr!r}')
+            printlog(f'Handling {pr!r}', Ansi.MAGENTA)
             glob.bancho_map[pr.packetID](p, pr)
 
         while not p.queue_empty():
@@ -77,6 +77,7 @@ def handle_web(conn: Connection) -> None:
         printlog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
         return
 
+    printlog(f'Handling {conn.req.uri}', Ansi.MAGENTA)
     if (resp := glob.web_map[handler](conn.req)):
         # XXX: Perhaps web handlers should return
         # a bytearray which could be cast to bytes

@@ -54,9 +54,9 @@ def read_match(data) -> Tuple[Match, int]:
     offset += offs
     m.passwd, offs = read_string(data[offset:])
     offset += offs
-    m.beatmap_name, offs = read_string(data[offset:])
+    m.map_name, offs = read_string(data[offset:])
     offset += offs
-    m.beatmap_id = int.from_bytes(data[offset:offset+4], 'little')
+    m.map_id = int.from_bytes(data[offset:offset+4], 'little')
     offset += 4
     m.map_md5, offs = read_string(data[offset:])
     offset += offs
@@ -267,8 +267,8 @@ def write_match(m: Match) -> bytearray:
     ret.extend(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
     ret.extend(write_string(m.name))
     ret.extend(write_string(m.passwd))
-    ret.extend(write_string(m.beatmap_name))
-    ret.extend(m.beatmap_id.to_bytes(4, 'little'))
+    ret.extend(write_string(m.map_name))
+    ret.extend(m.map_id.to_bytes(4, 'little'))
     ret.extend(write_string(m.map_md5))
 
     ret.extend(s.status for s in m.slots)
@@ -492,7 +492,7 @@ def userStats(p) -> bytes:
         (p.status.map_md5, osuTypes.string),
         (p.status.mods, osuTypes.i32),
         (p.status.game_mode, osuTypes.i8),
-        (p.status.beatmap_id, osuTypes.i32),
+        (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
         (p.gm_stats.acc, osuTypes.f32),
         (p.gm_stats.playcount, osuTypes.i32),

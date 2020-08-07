@@ -62,53 +62,75 @@ class Score:
     -----------
     id: :class:`int`
         The score's unique ID.
+
     map_md5: :class:`str`
         The md5 hash of the .osu file.
+
     map_id: :class:`int`
-        The beatmap's unique ID.
-    player_name: :class:`str`
-        The player's username.
+        The map's unique ID.
+
+    player: Optional[:class:`Player`]
+        A player obj of the player who submitted the score.
+
     pp: :class:`float`
         The score's performance points.
+
     score: :class:`int`
         The score's osu! score value.
+
     max_combo: :class:`int`
         The maximum combo reached in the score.
+
     mods: :class:`int`
         A bitwise value of the osu! mods used in the score.
+
     acc: :class:`float`
         The accuracy of the score.
+
     n300: :class:`int`
         The number of 300s in the score.
+
     n100: :class:`int`
         The number of 100s in the score (150s if taiko).
+
     n50: :class:`int`
         The number of 50s in the score.
+
     nmiss: :class:`int`
         The number of misses in the score.
+
     ngeki: :class:`int`
         The number of gekis in the score.
+
     nkatu: :class:`int`
         The number of katus in the score.
+
     grade: :class:`str`
         The letter grade in the score.
+
     rank: :class:`int`
         The leaderboard placement of the score.
+
     passed: :class:`bool`
         Whether the score completed the map.
+
     perfect: :class:`bool`
         Whether the score is a full-combo.
+
     status: :class:`SubmissionStatus`
         The submission status of the score.
+
     game_mode: :class:`int`
         The game mode of the score.
+
     play_time: :class:`int`
         A UNIX timestamp of the time of score submission.
+
     client_flags: :class:`int`
         osu!'s old anticheat flags.
     """
     __slots__ = (
-        'id', 'map_md5', 'map_id', 'player_name',
+        'id', 'map_md5', 'map_id', 'player',
         'pp', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
@@ -124,7 +146,7 @@ class Score:
         self.map_md5 = ''
         self.map_id = 0
 
-        self.player_name = ''
+        self.player = None
 
         self.pp = 0.0
         self.score = 0
@@ -154,7 +176,8 @@ class Score:
         self.client_flags = ClientFlags.Clean
 
     @classmethod
-    def from_submission(cls, data_enc: str, iv: str, osu_ver: str) -> None:
+    def from_submission(cls, data_enc: str, iv: str,
+                        osu_ver: str, pass_md5: str) -> None:
         """Create a score object from an osu! submission string."""
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
         cbc = RijndaelCbc(
@@ -179,11 +202,21 @@ class Score:
             'SELECT id FROM maps WHERE md5 = %s', [s.map_md5])
         ) else 0
 
-        s.player_name = data[1].rstrip() # WHY does osu make me rstrip
+        # why does osu! make me rstrip lol
+        s.player = glob.players.get_from_cred(data[1].rstrip(), pass_md5)
+        if not s.player:
+            # Return the obj with an empty player to
+            # determine whether the score faield to
+            # be parsed vs. the user could not be found
+            # logged in (we want to not send a reply to
+            # the osu! client if they're simply not logged
+            # in, so that it will retry once they login).
+            return s
 
         # XXX: unused idx 2: online score checksum
         # Perhaps will use to improve security at some point?
 
+        # Ensure all ints are safe to cast.
         if not all(i.isnumeric() for i in data[3:11] + [data[13] + data[15]]):
             print('Invalid parameter passed into submit-modular.')
             return
@@ -237,7 +270,7 @@ class Score:
             return (0.0, 0.0)
 
         owpi: Owoppai = Owoppai(
-            beatmap_id = self.map_id,
+            map_id = self.map_id,
             mods = self.mods,
             combo = self.max_combo,
             misses = self.nmiss,
@@ -258,9 +291,12 @@ class Score:
         # try to find a better pp score than this one.
         # if this exists, it will be s=1
         res = glob.db.fetch(
-            f'SELECT 1 FROM {table} '
-            'WHERE pp > %s AND status = 2',
-            [self.pp]
+            f'SELECT 1 FROM {table} WHERE userid = %s '
+            'AND map_md5 = %s AND game_mode = %s '
+            'AND pp > %s AND status = 2', [
+                self.player.id, self.map_md5,
+                self.game_mode, self.pp
+            ]
         )
 
         self.status = SubmissionStatus.SUBMITTED if res \

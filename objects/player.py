@@ -29,16 +29,22 @@ class ModeData:
     -----------
     tscore: :class:`int`
         The player's total score.
+
     rscore: :class:`int`
         The player's ranked score.
+
     pp: :class:`float`
         The player's total performance points.
+
     playcount: :class:`int`
         The player's playcount.
+
     acc: :class:`float`
         The player's overall accuracy.
+
     rank: :class:`int`
         The player's global rank.
+
     max_combo: :class:`int`
         The player's highest combo.
     """
@@ -115,21 +121,25 @@ class Status:
         6: Watching, 7: Unknown, 8: Testing,
         9: Submitting, 10: Paused, 11: Lobby,
         12: Multiplaying, 13: osu!direct
+
     info_text: :class:`str`
         The text representing the user's action.
+
     map_md5: :class:`str`
-        The beatmap md5 of the map the player is on.
+        The md5 of the map the player is on.
+
     mods: :class:`int`
         The mods the player currently has enabled.
+
     game_mode: :class:`int`
         The current gamemode of the player.
-    beatmap_id: :class:`int`
-        The beatmap id of the map the player is on.
-    """
 
+    map_id: :class:`int`
+        The id of the map the player is on.
+    """
     __slots__ = (
         'action', 'info_text', 'map_md5',
-        'mods', 'game_mode', 'beatmap_id'
+        'mods', 'game_mode', 'map_id'
     )
 
     def __init__(self):
@@ -138,16 +148,16 @@ class Status:
         self.map_md5 = '' # string
         self.mods = 0 # i32
         self.game_mode = 0 # byte
-        self.beatmap_id = 0 # i32
+        self.map_id = 0 # i32
 
     def update(self, action, info_text, map_md5,
-               mods, game_mode, beatmap_id) -> None:
+               mods, game_mode, map_id) -> None:
         self.action = action
         self.info_text = info_text
         self.map_md5 = map_md5
         self.mods = mods
         self.game_mode = game_mode
-        self.beatmap_id = beatmap_id
+        self.map_id = map_id
 
 class Player:
     """A class to represent a player.
@@ -157,52 +167,90 @@ class Player:
     token: :class:`str`
         The player's unique token; used to
         communicate with the osu! client.
+
     id: :class:`int`
         The player's unique ID.
+
     name: :class:`str`
         The player's username (unsafe).
+
     safe_name: :class:`str`
         The player's username (safe).
         XXX: Equivalent to `cls.name.lower().replace(' ', '_')`.
+
     priv: :class:`Privileges`
         The player's privileges.
+
     rx: :class:`bool`
         Whether the player is using rx (used for gamemodes).
+
     stats: List[:class:`ModeData`]
         A list of `ModeData` objs representing
         the player's stats for each gamemode.
+
     status: :class:`Status`
         A `Status` obj representing the player's current status.
+
     friends: List[:class:`int`]
         A list of player ids representing the player's friends.
+
     channels: List[:class:`Channel`]
         A list of `Channel` objs representing the channels the user is in.
+
     spectators: List[:class:`Player`]
         A list of `Player` objs representing the player's spectators.
+
     spectating: Optional[:class:`Player`]
         A `Player` obj representing the player this player is spectating.
+
     match: Optional[:class:`Match`]
         A `Match` obj representing the match the player is in.
+
     country: :class:`int`
         The code of the country the player is from.
+
     utc_offset: :class:`int`
         The player's UTC offset as an integer.
+
     pm_private: :class:`bool`
         Whether the player is blocking pms from non-friends.
+
     away_msg: Optional[:class:`str`]
         A string representing the player's away message.
+
     silence_end: :class:`int`
         The UNIX timestamp the player's silence will end at.
+
     in_lobby: :class:`bool`
         Whether the player is currently in the multiplayer lobby.
+
     login_time: :class:`int`
         The UNIX timestamp of when the player logged in.
+
     ping_time: :class:`int`
         The UNIX timestamp of the last time the client pinged the server.
+
     _queue: :class:`SimpleQueue`
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
+
+    Properties
+    -----------
+    url: :class:`str`
+        The user's url to their profile.
+
+    embed: :class:`str`
+        An osu! chat embed of a user's profile which displays their username.
+
+    silenced: :class:`bool`
+        Whether the user is currently silenced.
+
+    bancho_priv: :class:`BanchoPrivileges`
+        The user's privileges in the osu! client.
+
+    gm_stats: :class:`ModeData`
+        The user's stats for the current gamemode.
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'priv',
@@ -289,6 +337,10 @@ class Player:
     def __repr__(self) -> str:
         return f'<id: {self.id} | name: {self.name}>'
 
+    @staticmethod
+    def ensure_safe(name: str) -> str:
+        return name.lower().replace(' ', '_')
+
     def logout(self) -> None:
         # Invalidate the user's token.
         self.token = ''
@@ -306,6 +358,7 @@ class Player:
             [self.priv, self.id]
         )
 
+        self.enqueue(packets.notification('Your account has been restricted.'))
         printlog(f'Restricted {self}.', Ansi.CYAN)
 
     def unrestrict(self) -> None:
@@ -315,6 +368,7 @@ class Player:
             [self.priv, self.id]
         )
 
+        self.enqueue(packets.notification('Your account has been unrestricted.'))
         printlog(f'Unrestricted {self}.', Ansi.CYAN)
 
     def join_match(self, m: Match, passwd: str) -> bool:
@@ -510,10 +564,6 @@ class Player:
             return self._queue.get_nowait()
         except:
             printlog('Empty queue?')
-
-    @staticmethod
-    def ensure_safe(name: str) -> str:
-        return name.lower().replace(' ', '_')
 
     def query_info(self) -> None:
         # This is to be ran at login to cache
