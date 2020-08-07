@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 mysql-connector-python = "*"
-cmyui = ">=1.1.0"
+cmyui = ">=1.1.6"
 py3rijndael = ">=0.3.3"
 
 [requires]
