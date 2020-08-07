@@ -28,8 +28,9 @@ If you have any difficulties setting up gulag, you can contact me via Discord @ 
 git clone https://github.com/cmyui/gulag.gitcd gulag
 cd gulag
 
-# Install python requirements.
-pip3 install -r requirements.txt
+# Install pipenv and requirements.
+python3 -m pip install pipenv --user
+python3 -m pipenv install
 
 # Import the database structure.
 # NOTE: create an empty database before doing this.
