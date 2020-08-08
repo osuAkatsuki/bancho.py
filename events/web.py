@@ -235,7 +235,7 @@ def getScores(req: Request) -> Optional[bytes]:
 
     req.args['mods'] = int(req.args['mods'])
 
-    res: List[bytes, ...] = []
+    res: List[bytes] = []
 
     if req.args['mods'] & Mods.RELAX:
         table = 'scores_rx'

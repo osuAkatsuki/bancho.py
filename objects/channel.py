@@ -81,7 +81,7 @@ class Channel:
         return self._name
 
     @property
-    def basic_info(self) -> Tuple[Union[str, str, int]]:
+    def basic_info(self) -> Tuple[str, str, int]:
         return (self.name, self.topic, len(self.players))
 
     def __repr__(self) -> str:

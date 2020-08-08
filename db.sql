@@ -149,3 +149,20 @@ create table channels
 	constraint channels_name_uindex
 		unique (name)
 );
+
+# Insert vital stuff, such as bot user & basic channels.
+
+insert into cmyui.users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
+values (1, 'Aika', 'aika', 280175, 'ca', 0, 'aika@gulag.ca',
+        '_______________________my_cool_bcrypt_______________________');
+
+insert into cmyui.stats values (
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+insert into channels (name, topic, read_priv, write_priv, auto_join)
+values
+	('#osu', 'General discussion.', 1, 2, true),
+	('#announce', 'Exemplary performance and public announcements.', 1, 2, true),
+	('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false);

@@ -267,6 +267,8 @@ class Score:
     def calc_diff(self) -> Tuple[float, float]:
         """Calculate PP and star rating for our score."""
         if self.game_mode not in {0, 1}:
+            # Currently only std and taiko are supported,
+            # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
         owpi: Owoppai = Owoppai(
