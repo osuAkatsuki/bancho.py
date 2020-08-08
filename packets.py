@@ -9,7 +9,7 @@ from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
 from console import printlog, Ansi
 
-_specifiers: Final[Tuple[str]] = (
+_specifiers: Final[Tuple[str, ...]] = (
     'b', 'B', # 8
     'h', 'H', # 16
     'i', 'I', 'f', # 32
@@ -673,10 +673,10 @@ def userPresence(p) -> bytes:
         (p.id, osuTypes.i32),
         (p.name, osuTypes.string),
         (24 + p.utc_offset, osuTypes.i8),
-        (p.country, osuTypes.i8), # break break
+        (p.country[0], osuTypes.i8),
         (p.bancho_priv, osuTypes.i8),
-        (0.0, osuTypes.f32), # lat
-        (0.0, osuTypes.f32), # long
+        (p.location[0], osuTypes.f32), # lat
+        (p.location[1], osuTypes.f32), # long
         (p.gm_stats.rank, osuTypes.i32)
     ) if p.id != 1 else \
         b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00' \

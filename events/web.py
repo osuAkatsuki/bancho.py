@@ -143,10 +143,10 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         return b'error: no'
 
     # Parse our score data into a score obj.
-    s: Score = Score.from_submission(*(s.decode() for s in (
+    s: Score = Score.from_submission(
         req.args['score'], req.args['iv'],
         req.args['osuver'], req.args['pass']
-    )))
+    )
 
     if not s:
         printlog('Failed to parse a score - invalid format.', Ansi.YELLOW)

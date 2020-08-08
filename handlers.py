@@ -26,7 +26,7 @@ def handle_bancho(conn: Connection) -> None:
     if 'osu-token' not in conn.req.headers:
         # Login is a bit of a special case,
         # so we'll handle it separately.
-        login_data = ev_login(conn.req.body)
+        login_data = ev_login(conn.req.body, conn.req.headers['X-Real-IP'])
 
         resp.extend(login_data[0])
         conn.resp.add_header(f'cho-token: {login_data[1]}')

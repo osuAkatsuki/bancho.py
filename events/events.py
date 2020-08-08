@@ -123,7 +123,7 @@ def ping(p: Player, pr: PacketReader) -> None:
 
 # No specific packetID, triggered when the
 # client sends a request without an osu-token.
-def login(origin: bytes) -> Tuple[bytes, str]:
+def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
 
@@ -195,8 +195,12 @@ def login(origin: bytes) -> Tuple[bytes, str]:
 
     # Fetch some of the player's
     # information from sql to be cached.
-    # (stats, friends, etc.)
-    p.query_info()
+    p.stats_from_sql_full()
+    p.friends_from_sql()
+
+    # Update their country data with
+    # the IP from the login request.
+    p.fetch_geoloc(ip)
 
     # Update our new player's stats, and broadcast them.
     our_presence = packets.userPresence(p)
