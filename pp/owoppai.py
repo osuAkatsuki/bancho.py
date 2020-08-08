@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from typing import Tuple
-from os import chdir, path
+from os import path
 from subprocess import run, PIPE
 from constants.mods import mods_readable
 from json import loads
-from requests import get
+from requests import get as req_get
 
 __all__ = ('Owoppai',)
 
@@ -27,7 +27,7 @@ class Owoppai:
         filename = f'pp/maps/{map_id}.osu'
         if not path.exists(filename):
             # Do osu!api request for the map.
-            if not (r := get(f'https://old.ppy.sh/osu/{map_id}')):
+            if not (r := req_get(f'https://old.ppy.sh/osu/{map_id}')):
                 raise Exception(f'Could not find map {filename}!')
 
             with open(filename, 'w+') as f:
@@ -35,7 +35,7 @@ class Owoppai:
 
         self.filename = filename
 
-    def calculate_pp(self) -> Tuple[float]:
+    def calculate_pp(self) -> Tuple[float, float]:
         # This function can either return a list of
         # PP values, # or just a single PP value.
         if not self.filename: raise Exception(

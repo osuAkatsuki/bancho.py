@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple, Set, Union
+from typing import Tuple, Union
 from constants.privileges import Privileges
 from objects import glob
 import packets
@@ -48,7 +48,7 @@ class Channel:
         A name string of the channel with #spec_x and #multi_x
         replaced with the more readable '#spectator' and '#multiplayer'.
 
-    basic_info: Tuple[Union[:class:`str`, :class:`int`]]
+    basic_info: Tuple[Union[:class:`str`, :class:`str`, :class:`int`]]
         A tuple containing the channel's name
         (clean output), topic, and playercount.
     """
@@ -81,7 +81,7 @@ class Channel:
         return self._name
 
     @property
-    def basic_info(self) -> Tuple[Union[str, int]]:
+    def basic_info(self) -> Tuple[Union[str, str, int]]:
         return (self.name, self.topic, len(self.players))
 
     def __repr__(self) -> str:
@@ -123,7 +123,7 @@ class Channel:
         else:
             self.players.remove(p)
 
-    def enqueue(self, data: bytes, immune: Set[int] = {}) -> None:
+    def enqueue(self, data: bytes, immune: Tuple[int, ...] = ()) -> None:
         # Enqueue bytes to all players in a channel.
         # Usually just used for messages.. perhaps more?
         for p in self.players:

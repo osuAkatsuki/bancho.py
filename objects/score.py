@@ -264,7 +264,7 @@ class Score:
     # Could be staticmethod?
     # We'll see after some usage of gulag
     # whether it's beneficial or not.
-    def calc_diff(self) -> Tuple[float]:
+    def calc_diff(self) -> Tuple[float, float]:
         """Calculate PP and star rating for our score."""
         if self.game_mode not in {0, 1}:
             return (0.0, 0.0)

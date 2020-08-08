@@ -6,7 +6,6 @@ from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match
 from objects import glob
-from constants.privileges import Privileges
 from console import printlog
 
 __all__ = (
@@ -144,10 +143,10 @@ class PlayerList(Sequence):
         return len(self.players)
 
     @property
-    def ids(self) -> Tuple[int]:
+    def ids(self) -> Tuple[int, ...]:
         return (p.id for p in self.players)
 
-    def enqueue(self, data: bytes, immune: Set[Player] = {}) -> None:
+    def enqueue(self, data: bytes, immune: Tuple[Player, ...] = ()) -> None:
         for p in self.players:
             if p not in immune:
                 p.enqueue(data)

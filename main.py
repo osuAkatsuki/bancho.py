@@ -48,7 +48,7 @@ serv: TCPServer
 conn: Connection
 
 with TCPServer('/tmp/gulag.sock') as serv:
-    printlog(f'Gulag {glob.version} online!', Ansi.LIGHT_GREEN)
+    printlog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
     for conn in serv.listen(max_conns = 5):
         st = time()
 

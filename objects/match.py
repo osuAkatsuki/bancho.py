@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final, Optional, Union
+from typing import Final, Optional, Union, Tuple
 from enum import IntEnum, unique
 from objects import glob
 
@@ -272,12 +272,13 @@ class Match:
         self.mods = m.mods
         self.name = m.name
 
-    def enqueue(self, data: bytes, lobby: bool = True, immune = {}) -> None:
+    def enqueue(self, data: bytes, lobby: bool = True,
+                immune: Tuple[int, ...] = ()) -> None:
         if self.chat:
             self.chat.enqueue(data, immune)
         else:
             for p in (s.player for s in self.slots if s.player):
-                if p not in immune:
+                if p.id not in immune:
                     p.enqueue(data)
 
         if lobby:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Tuple, Dict, Union, Final
+from typing import Any, Tuple, Final
 from enum import IntEnum, unique
 import struct
 
@@ -9,23 +9,14 @@ from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
 from console import printlog, Ansi
 
-PacketParam = Tuple[Any, osuTypes]
-Specifiers = Dict[osuTypes, str]
+_specifiers: Final[Tuple[str]] = (
+    'b', 'B', # 8
+    'h', 'H', # 16
+    'i', 'I', 'f', # 32
+    'q', 'Q', 'd'  # 64
+)
 
-_specifiers: Final[Specifiers] = {
-    osuTypes.i8:  'b',
-    osuTypes.u8:  'B',
-    osuTypes.i16: 'h',
-    osuTypes.u16: 'H',
-    osuTypes.i32: 'i',
-    osuTypes.u32: 'I',
-    osuTypes.f32: 'f',
-    osuTypes.i64: 'q',
-    osuTypes.u64: 'Q',
-    osuTypes.f64: 'd'
-}
-
-def read_uleb128(data) -> Tuple[int]:#hint
+def read_uleb128(data: bytearray) -> Tuple[int, int]:
     offset = val = shift = 0
 
     while True:
@@ -38,7 +29,7 @@ def read_uleb128(data) -> Tuple[int]:#hint
 
     return val, offset
 
-def read_string(data) -> Tuple[str, int]:
+def read_string(data: bytearray) -> Tuple[str, int]:
     offset = 1
     if data[0] == 0x00:
         return '', offset
@@ -48,7 +39,7 @@ def read_string(data) -> Tuple[str, int]:
     #del offs
     return data[offset:offset+length].decode(), offset + length
 
-def read_i32_list(data) -> Tuple[Tuple[int], int]:
+def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
     ret = []
     offs = 2
     for _ in range(struct.unpack('<h', data[:offs])[0]):
@@ -57,7 +48,7 @@ def read_i32_list(data) -> Tuple[Tuple[int], int]:
 
     return ret, offs
 
-def read_match(data) -> Tuple[Match, int]:
+def read_match(data: bytearray) -> Tuple[Match, int]:
     # suuuper fucking TODO: make not shit
     m = Match()
     offset = 3 # Ignore matchID (h), inprogress (b)
@@ -157,7 +148,7 @@ class PacketReader:
         self.packetID, self.length = struct.unpack('<HxI', self.data[:7])
         self._offset += 7 # Read our first 7 bytes for packetid & len
 
-    def read(self, *types) -> Tuple[Any]:
+    def read(self, *types: Tuple[int, ...]) -> Tuple[Any, ...]:
         ret = []
         for t in types:
             if t == osuTypes.string:
@@ -228,7 +219,7 @@ def write_string(s: str) -> bytearray:
     ret.extend(s.encode('utf-8', 'replace'))
     return ret
 
-def write_i32_list(l: Tuple[int]) -> bytearray:
+def write_i32_list(l: Tuple[int, ...]) -> bytearray:
     ret = bytearray(struct.pack('<h', len(l)))
 
     for i in l:
@@ -293,7 +284,7 @@ def write_match(m: Match) -> bytearray:
     ret.extend(m.seed.to_bytes(4, 'little'))
     return ret
 
-def write(id: int, *args: Tuple[PacketParam]) -> bytes:
+def write(id: int, *args: Tuple[Any, ...]) -> bytes:
     ret = bytearray()
 
     ret.extend(struct.pack('<Hx', id))

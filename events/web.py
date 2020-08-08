@@ -26,6 +26,17 @@ def web_handler(uri: str) -> Callable:
         return callback
     return register_callback
 
+@web_handler('bancho_connect.php')
+def banchoConnectHandler(req: Request) -> Optional[bytes]:
+    if 'v' in req.args:
+        # TODO: implement verification..?
+        # Long term. For now, just send an empty reply
+        # so their client immediately attempts login.
+        return b'allez-vous owo'
+
+    # TODO: perhaps handle this..?
+    return
+
 required_params_lastFM = frozenset({
     'b', 'action', 'us', 'ha'
 })
@@ -224,7 +235,7 @@ def getScores(req: Request) -> Optional[bytes]:
 
     req.args['mods'] = int(req.args['mods'])
 
-    res: List[bytes] = []
+    res: List[bytes, ...] = []
 
     if req.args['mods'] & Mods.RELAX:
         table = 'scores_rx'
