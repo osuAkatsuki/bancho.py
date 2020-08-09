@@ -61,7 +61,7 @@ def handle_bancho(conn: Connection) -> None:
             resp.extend(p.dequeue())
 
     if glob.config.debug:
-        print(bytes(resp))
+        printlog(bytes(resp), Ansi.LIGHT_GREEN)
 
     # Even if the packet is empty, we have to
     # send back an empty response so the client
@@ -82,6 +82,10 @@ def handle_web(conn: Connection) -> None:
         # XXX: Perhaps web handlers should return
         # a bytearray which could be cast to bytes
         # here at the end? Probably a better soln.
+
+        if glob.config.debug:
+            printlog(resp, Ansi.LIGHT_GREEN)
+
         conn.resp.send(resp, 200)
 
 # XXX: This won't be completed for a while most likely..

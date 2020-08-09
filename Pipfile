@@ -7,6 +7,8 @@ name = "pypi"
 mysql-connector-python = "*"
 cmyui = ">=1.1.7"
 py3rijndael = ">=0.3.3"
+requests = "*"
+bcrypt = "*"
 
 [requires]
 python_version = "3.8"

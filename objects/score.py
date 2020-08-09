@@ -4,9 +4,11 @@ from enum import IntEnum, unique
 from time import time
 from py3rijndael import RijndaelCbc, ZeroPadding
 from base64 import b64decode
+
 from pp.owoppai import Owoppai
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
+from console import printlog, Ansi
 
 from objects import glob
 
@@ -189,7 +191,7 @@ class Score:
         data = cbc.decrypt(b64decode(data_enc).decode('latin_1')).decode().split(':')
 
         if len(data) != 18:
-            print('Invalid score len?')
+            printlog('Received an invalid score submission.', Ansi.LIGHT_RED)
             return None
 
         s = cls()
@@ -218,7 +220,7 @@ class Score:
 
         # Ensure all ints are safe to cast.
         if not all(i.isnumeric() for i in data[3:11] + [data[13] + data[15]]):
-            print('Invalid parameter passed into submit-modular.')
+            printlog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
             return
 
         s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, \

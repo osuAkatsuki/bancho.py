@@ -156,6 +156,11 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         # client will retry submission when they log in.
         return
 
+    if s.game_mode in {2, 3}: # catch, mania
+        s.player.enqueue(packets.notification(
+            'Score submission only available for std/taiko.'))
+        return b'error: no'
+
     table = 'scores_rx' if s.mods & Mods.RELAX else 'scores_vn'
 
     # Check for score duplicates
@@ -209,8 +214,9 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         if announce_chan := glob.channels.get('#announce'):
             announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map_id}.')
 
-    # Update the user's most recent score for this mode.
+    # Update the user.
     s.player.recent_scores[s.player.status.game_mode] = s
+    s.player.update_stats(s.game_mode)
 
     printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
@@ -280,10 +286,9 @@ def getScores(req: Request) -> Optional[bytes]:
         f'SELECT s.id, s.{scoring} AS _score, s.max_combo, '
         's.n300, s.n100, s.n50, s.nmiss, s.nkatu, s.ngeki, '
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
-        f'FROM {table} s '
-        'LEFT JOIN users u ON u.id = s.userid '
-        'WHERE s.map_md5 = %s AND s.status = 2 '
-        f'ORDER BY _score DESC LIMIT 50', [req.args['c']]
+        f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
+        'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s'
+        f'ORDER BY _score DESC LIMIT 50', [req.args['c'], req.args['m']]
     )
 
     # Syntax
@@ -339,11 +344,11 @@ valid_osu_streams = frozenset({
 @web_handler('check-updates.php')
 def checkUpdates(req: Request) -> Optional[bytes]:
     if req.args['action'] != 'check':
+        # TODO: handle more?
         print('Received a request to update with an invalid action.')
         return
 
     if req.args['stream'] not in valid_osu_streams:
-        print('Received a request to update a nonexistant stream?')
         return
 
     current_time = int(time())

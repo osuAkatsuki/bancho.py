@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, Final
+from typing import Dict, Final, Optional
 from random import choices
 from requests import get as req_get
 from string import ascii_lowercase
@@ -104,12 +104,12 @@ class GameMode(IntEnum):
 
     # This is another place where some
     # inspiration was taken from rumoi/ruri.
-    vn_std = 0,
-    vn_taiko = 1,
-    vn_catch = 2,
-    vn_mania = 3,
-    rx_std = 4,
-    rx_taiko = 5,
+    vn_std = 0
+    vn_taiko = 1
+    vn_catch = 2
+    vn_mania = 3
+    rx_std = 4
+    rx_taiko = 5
     rx_catch = 6
 
     def __str__(self) -> str:
@@ -603,14 +603,54 @@ class Player:
 
     def fetch_geoloc(self, ip: str) -> None:
         if not (res := req_get(f'http://ip-api.com/json/{ip}')):
-            printlog('Failed to get geolocation data.', Ansi.MAGENTA)
+            printlog('Failed to get geoloc data: request failed.', Ansi.LIGHT_RED)
             return
 
         res = res.json()
+
+        if 'status' not in res or res['status'] != 'success':
+            printlog(f"Failed to get geoloc data: {res['message']}.", Ansi.LIGHT_RED)
+            return
+
         country = res['countryCode']
 
         self.country = (countryCodes[country], country)
         self.location = (res['lat'], res['lon'])
+
+    def update_stats(self, gm: int = GameMode.vn_std) -> None:
+        table = 'scores_rx' if gm >= 4 else 'scores_vn'
+        mode = GameMode(gm)
+
+        res = glob.db.fetchall(
+            f'SELECT s.pp, s.acc FROM {table} s '
+            'LEFT JOIN maps m ON s.map_md5 = m.md5 '
+            'WHERE s.userid = %s AND s.game_mode = %s '
+            'AND s.status = 2 AND m.status IN (1, 2) '
+            'ORDER BY s.pp DESC LIMIT 100', [
+                self.id, gm - (4 if gm >= 4 else 0)
+            ]
+        )
+
+        if not res:
+            return # ?
+
+        # Update the user's stats ingame, then update db.
+        self.stats[gm].pp = sum(round(round(row['pp']) * 0.95 ** i)
+                                for i, row in enumerate(res))
+        self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res)) / 100.0
+
+        glob.db.execute(
+            f'UPDATE stats SET pp_{mode:sql} = %s, '
+            f'acc_{mode:sql} = %s WHERE id = %s', [
+                self.stats[gm].pp,
+                self.stats[gm].acc,
+                self.id
+            ]
+        )
+
+        # TODO: finish off other stat related stuff
+
+        printlog(f"Updated {self}'s {mode} stats.")
 
     def friends_from_sql(self) -> None:
         res = glob.db.fetchall(
