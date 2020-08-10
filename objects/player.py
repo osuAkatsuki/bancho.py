@@ -339,7 +339,6 @@ class Player:
 
     @property
     def embed(self) -> str:
-        # XXX: perhaps this should be __repr__?
         return f'[{self.url} {self.name}]'
 
     @property
@@ -381,11 +380,22 @@ class Player:
         # Invalidate the user's token.
         self.token = ''
 
-        for c in self.channels:
-            self.leave_channel(c)
+        # Leave multiplayer.
+        if self.match:
+            self.leave_match()
 
+        # Stop spectating.
+        if h := self.spectating:
+            h.remove_spectator(self)
+
+        # Leave channels
+        while self.channels:
+            self.leave_channel(self.channels[0])
+
+        # Remove from playerlist and
+        # enqueue logout to all users.
         glob.players.remove(self)
-        glob.players.enqueue(packets.logout(self.id), {self})
+        glob.players.enqueue(packets.logout(self.id))
 
     def restrict(self) -> None: # TODO: reason
         self.priv &= ~Privileges.Visible
@@ -532,6 +542,8 @@ class Player:
 
         if not p.join_channel(c):
             return printlog(f'{self} failed to join {c}?')
+
+        p.enqueue(packets.channelJoin(c.name))
 
         for s in self.spectators:
             self.enqueue(fellow) # #spec?

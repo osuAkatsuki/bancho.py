@@ -28,11 +28,11 @@ def bancho_packet(ID: int) -> Callable:
 @bancho_packet(Packet.c_changeAction)
 def readStatus(p: Player, pr: PacketReader) -> None:
     data = pr.read(
-        osuTypes.i8, # actionType
+        osuTypes.u8, # actionType
         osuTypes.string, # infotext
         osuTypes.string, # beatmap md5
-        osuTypes.i32, # mods
-        osuTypes.i8, # gamemode
+        osuTypes.u32, # mods
+        osuTypes.u8, # gamemode
         osuTypes.i32 # beatmapid
     )
 
@@ -95,20 +95,7 @@ def logout(p: Player, pr: PacketReader) -> None:
         # it logs in, then reconnects? not sure why..?
         return
 
-    glob.players.remove(p)
-
-    glob.players.enqueue(packets.logout(p.id))
-
-    for c in p.channels:
-        p.leave_channel(c)
-
-    # stop spectating
-    if (host := p.spectating):
-        host.remove_spectator(p)
-
-    # leave match
-    # remove match if only player
-
+    p.logout()
     printlog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
 
 # PacketID: 3
@@ -128,7 +115,19 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     # and token in a tuple - we need both for our response.
 
     s = origin.decode().split('\n')
-    username = s[0]
+
+    if p := glob.players.get_by_name(username := s[0]):
+        if (time() - p.ping_time) > 20:
+            # If the current player obj online hasn't
+            # pinged the server in > 20 seconds, log
+            # them out and login the new user.
+            p.logout()
+        else: # User is currently online, send back failure.
+            return packets.notification('User already logged in.') \
+                 + packets.userID(-1), 'no'
+
+    del p
+
     pw_hash = s[1].encode()
 
     s = s[2].split('|')
@@ -170,7 +169,6 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
     p = Player(utc_offset = utc_offset, pm_private = pm_private, **res)
     p.silence_end = res['silence_end']
-    glob.players.add(p)
 
     data = bytearray(
         packets.userID(p.id) +
@@ -213,13 +211,14 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         # Enqueue us to them
         o.enqueue(our_presence + our_stats)
 
-        # Enqueue them to us
-        p.enqueue(packets.userPresence(o) + packets.userStats(o))
+        # Enqueue them to us.
+        data.extend(packets.userPresence(o) + packets.userStats(o))
 
     data.extend(packets.mainMenuIcon())
     data.extend(packets.friendsList(*p.friends))
     data.extend(packets.silenceEnd(max(p.silence_end - time(), 0)))
 
+    glob.players.add(p)
     printlog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
 
@@ -319,9 +318,8 @@ def lobbyPart(p: Player, pr: PacketReader) -> None:
 def lobbyJoin(p: Player, pr: PacketReader) -> None:
     p.in_lobby = True
 
-    for m in glob.matches:
-        if m:
-            p.enqueue(packets.newMatch(m))
+    for m in filter(lambda: m is not None, glob.matches):
+        p.enqueue(packets.newMatch(m))
 
 # PacketID: 31
 @bancho_packet(Packet.c_createMatch)
@@ -602,14 +600,13 @@ def matchSkipRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 63
 @bancho_packet(Packet.c_channelJoin)
 def channelJoin(p: Player, pr: PacketReader) -> None:
-    if not (chan := pr.read(osuTypes.string)[0]):
-        printlog(f'{p} tried to join nonexistant channel {chan}. (1)')
+    c = glob.channels.get(pr.read(osuTypes.string)[0])
+
+    if not c or not p.join_channel(c):
+        printlog(f'{p} failed to join {c.name}.', Ansi.YELLOW)
         return
 
-    if (c := glob.channels.get(chan)) and p.join_channel(c):
-        p.enqueue(packets.channelJoin(chan))
-    else:
-        printlog(f'{p} tried to join nonexistant channel {chan}. (2)')
+    p.enqueue(packets.channelJoin(c.name))
 
 # PacketID: 70
 @bancho_packet(Packet.c_matchTransferHost)
@@ -686,7 +683,7 @@ def statsRequest(p: Player, pr: PacketReader) -> None:
         return
 
     userIDs = pr.read(osuTypes.i32_list)
-    is_online = lambda o: o in glob.players.ids
+    is_online = lambda o: o in glob.players.ids and o != p.id
 
     for online in filter(is_online, userIDs):
         target = glob.players.get_by_id(online)
@@ -695,7 +692,19 @@ def statsRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 87
 @bancho_packet(Packet.c_invite)
 def matchInvite(p: Player, pr: PacketReader) -> None:
-    pass
+    if not p.match:
+        printlog(f"{p} tried to invite someone to a match but isn't in one!")
+        pr.ignore(4)
+        return
+
+    userID = pr.read(osuTypes.i32)[0]
+    if not (t := glob.players.get_by_id(userID)):
+        printlog(f'{t} tried to invite a user who is not online! ({userID})')
+        return
+
+    inv = f'Come join my game: {p.match.embed}.'
+    t.enqueue(packets.sendMessage(p.name, inv, t.name, p.id))
+    printlog(f'{p} invited {t} to their match.')
 
 # PacketID: 97
 @bancho_packet(Packet.c_userPresenceRequest)

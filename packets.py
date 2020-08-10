@@ -36,7 +36,6 @@ def read_string(data: bytearray) -> Tuple[str, int]:
 
     length, offs = read_uleb128(data[offset:])
     offset += offs
-    #del offs
     return data[offset:offset+length].decode(), offset + length
 
 def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
@@ -103,7 +102,7 @@ def read_scoreframe(data) -> Tuple[ScoreFrame, int]:
     offset = 29
     s.time, s.id, s.num300, s.num100, s.num50, s.num_geki, s.num_katu, \
     s.num_miss, s.total_score, s.max_combo, s.perfect, s.current_hp, \
-    s.tag_byte, s.score_v2 = struct.unpack('<ibHHHHHHIIbbbb', data[:offset])
+    s.tag_byte, s.score_v2 = struct.unpack('<iBHHHHHHiHH?BB?', data[:offset])
 
     if s.score_v2:
         s.combo_portion, s.bonus_portion = struct.unpack('<ff', data[offset:offset+8])
@@ -288,7 +287,6 @@ def write(id: int, *args: Tuple[Any, ...]) -> bytes:
     ret = bytearray()
 
     ret.extend(struct.pack('<Hx', id))
-    st_ptr = len(ret)
 
     for param, param_type in args:
         if param_type == osuTypes.raw:
@@ -309,8 +307,7 @@ def write(id: int, *args: Tuple[Any, ...]) -> bytes:
             ret.extend(struct.pack('<' + _specifiers[param_type], param))
 
     # Add size
-    #ret[st_ptr:st_ptr] = (len(ret) - st_ptr).to_bytes(4, 'little')
-    ret[st_ptr:st_ptr] = struct.pack('<I', len(ret) - st_ptr)
+    ret[3:3] = struct.pack('<I', len(ret) - 3)
     return ret
 
 @unique
@@ -466,11 +463,11 @@ def userStats(p) -> bytes:
     return write(
         Packet.s_userStats,
         (p.id, osuTypes.i32),
-        (p.status.action, osuTypes.i8),
+        (p.status.action, osuTypes.u8),
         (p.status.info_text, osuTypes.string),
         (p.status.map_md5, osuTypes.string),
         (p.status.mods, osuTypes.i32),
-        (p.status.game_mode, osuTypes.i8),
+        (p.status.game_mode, osuTypes.u8),
         (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
         (p.gm_stats.acc, osuTypes.f32),
@@ -491,7 +488,7 @@ def logout(userID: int) -> bytes:
     return write(
         Packet.s_userLogout,
         (userID, osuTypes.i32),
-        (0, osuTypes.i8)
+        (0, osuTypes.u8)
     )
 
 # PacketID: 13
@@ -672,9 +669,9 @@ def userPresence(p) -> bytes:
         Packet.s_userPresence,
         (p.id, osuTypes.i32),
         (p.name, osuTypes.string),
-        (24 + p.utc_offset, osuTypes.i8),
-        (p.country[0], osuTypes.i8),
-        (p.bancho_priv, osuTypes.i8),
+        (p.utc_offset + 24, osuTypes.u8),
+        (p.country[0], osuTypes.u8),
+        (p.bancho_priv | (p.status.game_mode << 5), osuTypes.u8),
         (p.location[0], osuTypes.f32), # lat
         (p.location[1], osuTypes.f32), # long
         (p.gm_stats.rank, osuTypes.i32)

@@ -236,6 +236,14 @@ class Match:
         self.in_progress = False
         self.seed = 0
 
+    @property
+    def url(self) -> str:
+        return f'osump://{self.id}'
+
+    @property
+    def embed(self) -> str:
+        return f'[{self.url} {self.name}]'
+
     def __contains__(self, p) -> bool:
         return p in {s.player for s in self.slots}
 

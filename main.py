@@ -57,4 +57,4 @@ with TCPServer('/tmp/gulag.sock') as serv:
             else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
         handler(conn)
 
-        printlog(f'Packet took {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
+        printlog(f'Request took {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)

@@ -142,6 +142,9 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         printlog(f'submit-modular-selector req missing params.')
         return b'error: no'
 
+    # TODO: make some kind of beatmap object.
+    # We currently don't check the map's ranked status.
+
     # Parse our score data into a score obj.
     s: Score = Score.from_submission(
         req.args['score'], req.args['iv'],
@@ -175,6 +178,9 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     if res:
         printlog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
         return b'error: no'
+
+    if req.args['i']:
+        breakpoint()
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -233,11 +239,14 @@ def getScores(req: Request) -> Optional[bytes]:
         return
 
     # Tbh, I don't really care if people request
-    # leaderboards from other peoples accounts lol.
+    # leaderboards from other peoples accounts, or are
+    # not logged out.. At the moment, there are no checks
+    # that could put anyone's account in danger :P.
+    # XXX: could be a ddos problem? lol
 
     if len(req.args['c']) != 32 \
     or not req.args['mods'].isnumeric():
-        return
+        return b'-1|false'
 
     req.args['mods'] = int(req.args['mods'])
 
@@ -260,12 +269,12 @@ def getScores(req: Request) -> Optional[bytes]:
             )
         )):
             # Request to osu!api failed.
-            return
+            return b'-1|false'
 
         if r.text == '[]':
             # API returned an empty set.
             # TODO: return unsubmitted status.
-            return
+            return b'-1|false'
 
         _apidata = r.json()[0]
         bmap = {
