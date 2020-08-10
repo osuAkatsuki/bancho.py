@@ -201,15 +201,14 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     p.fetch_geoloc(ip)
 
     # Update our new player's stats, and broadcast them.
-    our_presence = packets.userPresence(p)
-    our_stats = packets.userStats(p)
+    user_data = packets.userPresence(p) + packets.userStats(p)
 
-    data.extend(our_presence + our_stats)
+    data.extend(user_data)
 
     # o for online, or other
     for o in glob.players:
         # Enqueue us to them
-        o.enqueue(our_presence + our_stats)
+        o.enqueue(user_data)
 
         # Enqueue them to us.
         data.extend(packets.userPresence(o) + packets.userStats(o))
@@ -318,7 +317,7 @@ def lobbyPart(p: Player, pr: PacketReader) -> None:
 def lobbyJoin(p: Player, pr: PacketReader) -> None:
     p.in_lobby = True
 
-    for m in filter(lambda: m is not None, glob.matches):
+    for m in filter(lambda m: m is not None, glob.matches):
         p.enqueue(packets.newMatch(m))
 
 # PacketID: 31
@@ -676,6 +675,13 @@ def channelPart(p: Player, pr: PacketReader) -> None:
     else:
         printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
 
+# PacketID: 82
+@bancho_packet(Packet.c_setAwayMessage)
+def setAwayMessage(p: Player, pr: PacketReader) -> None:
+    pr.ignore(3) # why does first string send \x0b\x00?
+    p.away_msg = pr.read(osuTypes.string)[0]
+    pr.ignore(4)
+
 # PacketID: 85
 @bancho_packet(Packet.c_userStatsRequest)
 def statsRequest(p: Player, pr: PacketReader) -> None:
@@ -690,7 +696,7 @@ def statsRequest(p: Player, pr: PacketReader) -> None:
         p.enqueue(packets.userStats(target))
 
 # PacketID: 87
-@bancho_packet(Packet.c_invite)
+@bancho_packet(Packet.c_matchInvite)
 def matchInvite(p: Player, pr: PacketReader) -> None:
     if not p.match:
         printlog(f"{p} tried to invite someone to a match but isn't in one!")
@@ -716,10 +722,3 @@ def userPresenceRequest(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_userToggleBlockNonFriendPM)
 def toggleBlockingDMs(p: Player, pr: PacketReader) -> None:
     p.pm_private = pr.read(osuTypes.i32)[0] == 1
-
-# PacketID: 100
-@bancho_packet(Packet.c_setAwayMessage)
-def setAwayMessage(p: Player, pr: PacketReader) -> None:
-    pr.ignore(3) # why does first string send \x0b\x00?
-    p.away_msg = pr.read(osuTypes.string)[0]
-    pr.ignore(4)

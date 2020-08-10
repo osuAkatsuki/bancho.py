@@ -401,7 +401,7 @@ class Packet(IntEnum):
     c_ircOnly = 84
     c_userStatsRequest = 85
     s_restart = 86
-    c_invite = 87
+    c_matchInvite = 87
     s_invite = 88
     s_channelInfoEnd = 89
     c_matchChangePassword = 90

@@ -17,8 +17,22 @@ __all__ = (
 )
 
 def handle_bancho(conn: Connection) -> None:
-    if 'User-Agent' not in conn.req.headers \
-    or conn.req.headers['User-Agent'] != 'osu!':
+    if 'User-Agent' not in conn.req.headers:
+        return
+
+    if conn.req.headers['User-Agent'] != 'osu!':
+        # Most likely a request from a browser.
+        conn.resp.send(b'<!DOCTYPE html>' + '<br>'.join((
+            f'Running gulag v{glob.version}',
+            f'Players online: {len(glob.players) - 1}',
+            '<a href="https://github.com/cmyui/gulag">Source code</a>',
+            '',
+            '<b>Bancho Handlers</b>',
+            '<br>'.join(f'{int(x)}: {str(x)[9:]}' for x in glob.bancho_map.keys()),
+            '',
+            '<b>/web/ Handlers</b>',
+            '<br>'.join(glob.web_map.keys())
+        )).encode(), 200)
         return
 
     resp = bytearray()
