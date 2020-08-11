@@ -133,7 +133,7 @@ def handle_web(conn: Connection) -> None:
 #            name,
 #            name_safe,
 #            email,
-#            int(Privileges.Verified),
+#            int(Privileges.Normal),
 #            hashpw(md5(password.encode()).hexdigest().encode(), gensalt()).decode()
 #        ])
 #

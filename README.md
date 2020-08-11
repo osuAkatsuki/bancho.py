@@ -1,4 +1,4 @@
-# gulag - A dev-friendly osu! server written in modern python.
+# A dev-friendly osu! server written in modern python
 
 Looking for an easy to use, completely open-source osu! server implementation undergoing rapid development?
 

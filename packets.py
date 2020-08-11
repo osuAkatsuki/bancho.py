@@ -471,7 +471,7 @@ def userStats(p) -> bytes:
         (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
         (p.gm_stats.acc, osuTypes.f32),
-        (p.gm_stats.playcount, osuTypes.i32),
+        (p.gm_stats.plays, osuTypes.i32),
         (p.gm_stats.tscore, osuTypes.i64),
         (p.gm_stats.rank, osuTypes.i32),
         (p.gm_stats.pp, osuTypes.i16)

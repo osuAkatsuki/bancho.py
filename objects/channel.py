@@ -66,8 +66,8 @@ class Channel:
         self.topic = kwargs.get('topic', None)
         self.players = []
 
-        self.read = kwargs.get('read', Privileges.Verified)
-        self.write = kwargs.get('write', Privileges.Verified)
+        self.read = kwargs.get('read', Privileges.Normal)
+        self.write = kwargs.get('write', Privileges.Normal)
         self.auto_join = kwargs.get('auto_join', True)
         self.temp = kwargs.get('temp', False)
 

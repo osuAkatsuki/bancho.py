@@ -2,7 +2,10 @@
 
 from typing import Tuple, Callable
 from time import time
-from bcrypt import checkpw
+from bcrypt import checkpw, hashpw, gensalt
+from hashlib import md5
+from random import choice
+from string import ascii_letters, digits
 
 import packets
 from packets import Packet, PacketReader # convenience
@@ -149,26 +152,59 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         'FROM users WHERE name_safe = %s',
         [Player.ensure_safe(username)])
 
-    if not res: # Account does not exist.
-        return packets.userID(-1), 'no'
+    if res:
+        # Account exists.
+        # Check their account status & credentials against db.
+        if not res['priv'] & Privileges.Normal:
+            return packets.userID(-3), 'no'
 
-    # Account is banned.
-    if res['priv'] == Privileges.Banned:
-        return packets.userID(-3), 'no'
+        # Password is incorrect.
+        if pw_hash in glob.cache['bcrypt']: # ~0.01 ms
+            # Cache hit - this saves ~190ms on subsequent logins.
+            if glob.cache['bcrypt'][pw_hash] != res['pw_hash']:
+                return packets.userID(-1), 'no'
+        else: # Cache miss, must be first login.
+            if not checkpw(pw_hash, res['pw_hash'].encode()):
+                return packets.userID(-1), 'no'
 
-    # Password is incorrect.
-    if pw_hash in glob.cache['bcrypt']: # ~0.01 ms
-        # Cache hit - this saves ~190ms on subsequent logins.
-        if glob.cache['bcrypt'][pw_hash] != res['pw_hash']:
-            return packets.userID(-1), 'no'
-    else: # Cache miss, must be first login.
-        if not checkpw(pw_hash, res['pw_hash'].encode()):
-            return packets.userID(-1), 'no'
+            glob.cache['bcrypt'][pw_hash] = res['pw_hash']
 
-        glob.cache['bcrypt'][pw_hash] = res['pw_hash']
+        p = Player(utc_offset = utc_offset,
+                   pm_private = pm_private,
+                   **res)
+    else:
+        # Account does not exist, register using credentials passed.
+        rstring = lambda l: ''.join(choice(ascii_letters + digits)
+                                    for _ in range(l))
+        pw_bcrypt = hashpw(md5(pw_hash).hexdigest().encode(), gensalt())
+        glob.cache['bcrypt'][pw_hash] = pw_bcrypt.decode()
 
-    p = Player(utc_offset = utc_offset, pm_private = pm_private, **res)
-    p.silence_end = res['silence_end']
+        # Add to `users` table.
+        userID = glob.db.execute(
+            'INSERT INTO users (name, name_safe, pw_hash, email) '
+            'VALUES (%s, %s, %s, %s)', [
+                username, Player.ensure_safe(username),
+                pw_bcrypt, f'{rstring(6)}@gmail.com'
+            ]
+        )
+
+        # Add to `stats` table.
+        glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [userID])
+
+        p = Player(id = userID, name = username,
+                   priv = Privileges.Normal,
+                   silence_end = 0)
+
+        printlog(f'{p} has registered!', Ansi.LIGHT_GREEN)
+
+        p.enqueue(packets.notification('\n'.join((
+            'Your account has been created.',
+            '',
+            'If you have any questions or find any strange server '
+            'behaviour, please contact cmyui directly!',
+            '',
+            'Enjoy!'
+        ))))
 
     data = bytearray(
         packets.userID(p.id) +
@@ -634,6 +670,13 @@ def friendAdd(p: Player, pr: PacketReader) -> None:
         printlog(f'{t} tried to add a user who is not online! ({userID})')
         return
 
+    if t.id in (1, p.id):
+        # Trying to add the bot, or themselves.
+        # These are already appended to the friends list
+        # on login, so disallow the user from *actually*
+        # editing these in the DB.
+        return
+
     p.add_friend(t)
 
 # PacketID: 74
@@ -643,6 +686,13 @@ def friendRemove(p: Player, pr: PacketReader) -> None:
 
     if not (t := glob.players.get_by_id(userID)):
         printlog(f'{t} tried to remove a user who is not online! ({userID})')
+        return
+
+    if t.id in (1, p.id):
+        # Trying to remove the bot, or themselves.
+        # These are already appended to the friends list
+        # on login, so disallow the user from *actually*
+        # editing these in the DB.
         return
 
     p.remove_friend(t)

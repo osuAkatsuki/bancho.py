@@ -4,9 +4,13 @@ create table users
 		primary key,
 	name varchar(32) not null,
 	name_safe varchar(32) not null,
-	priv int null,
+	priv int default 1 null,
 	pw_hash char(60) null,
 	country char(2) default 'xx' not null,
+	silence_end int default 0 not null,
+	email varchar(254) not null,
+	constraint users_email_uindex
+		unique (email),
 	constraint users_name_safe_uindex
 		unique (name_safe),
 	constraint users_name_uindex
@@ -22,57 +26,58 @@ create table stats
 (
 	id int auto_increment
 		primary key,
-	tscore_vn_std int not null,
-	tscore_vn_taiko int not null,
-	tscore_vn_catch int not null,
-	tscore_vn_mania int not null,
-	tscore_rx_std int not null,
-	tscore_rx_taiko int not null,
-	tscore_rx_catch int not null,
-	rscore_vn_std int not null,
-	rscore_vn_taiko int not null,
-	rscore_vn_catch int not null,
-	rscore_vn_mania int not null,
-	rscore_rx_std int not null,
-	rscore_rx_taiko int not null,
-	rscore_rx_catch int not null,
-	pp_vn_std smallint(6) not null,
-	pp_vn_taiko smallint(6) not null,
-	pp_vn_catch smallint(6) not null,
-	pp_vn_mania smallint(6) not null,
-	pp_rx_std smallint(6) not null,
-	pp_rx_taiko smallint(6) not null,
-	pp_rx_catch smallint(6) not null,
-	playcount_vn_std int not null,
-	playcount_vn_taiko int not null,
-	playcount_vn_catch int not null,
-	playcount_vn_mania int not null,
-	playcount_rx_std int not null,
-	playcount_rx_taiko int not null,
-	playcount_rx_catch int not null,
-	playtime_vn_std int not null,
-	playtime_vn_taiko int not null,
-	playtime_vn_catch int not null,
-	playtime_vn_mania int not null,
-	playtime_rx_std int not null,
-	playtime_rx_taiko int not null,
-	playtime_rx_catch int not null,
-	acc_vn_std float(6,3) not null,
-	acc_vn_taiko float(6,3) not null,
-	acc_vn_catch float(6,3) not null,
-	acc_vn_mania float(6,3) not null,
-	acc_rx_std float(6,3) not null,
-	acc_rx_taiko float(6,3) not null,
-	acc_rx_catch float(6,3) not null,
-	maxcombo_vn_std int not null,
-	maxcombo_vn_taiko int not null,
-	maxcombo_vn_catch int not null,
-	maxcombo_vn_mania int not null,
-	maxcombo_rx_std int not null,
-	maxcombo_rx_taiko int not null,
-	maxcombo_rx_catch int not null,
+	tscore_vn_std int default 0 not null,
+	tscore_vn_taiko int default 0 not null,
+	tscore_vn_catch int default 0 not null,
+	tscore_vn_mania int default 0 not null,
+	tscore_rx_std int default 0 not null,
+	tscore_rx_taiko int default 0 not null,
+	tscore_rx_catch int default 0 not null,
+	rscore_vn_std int default 0 not null,
+	rscore_vn_taiko int default 0 not null,
+	rscore_vn_catch int default 0 not null,
+	rscore_vn_mania int default 0 not null,
+	rscore_rx_std int default 0 not null,
+	rscore_rx_taiko int default 0 not null,
+	rscore_rx_catch int default 0 not null,
+	pp_vn_std smallint(6) default 0 not null,
+	pp_vn_taiko smallint(6) default 0 not null,
+	pp_vn_catch smallint(6) default 0 not null,
+	pp_vn_mania smallint(6) default 0 not null,
+	pp_rx_std smallint(6) default 0 not null,
+	pp_rx_taiko smallint(6) default 0 not null,
+	pp_rx_catch smallint(6) default 0 not null,
+	plays_vn_std int default 0 not null,
+	plays_vn_taiko int default 0 not null,
+	plays_vn_catch int default 0 not null,
+	plays_vn_mania int default 0 not null,
+	plays_rx_std int default 0 not null,
+	plays_rx_taiko int default 0 not null,
+	plays_rx_catch int default 0 not null,
+	playtime_vn_std int default 0 not null,
+	playtime_vn_taiko int default 0 not null,
+	playtime_vn_catch int default 0 not null,
+	playtime_vn_mania int default 0 not null,
+	playtime_rx_std int default 0 not null,
+	playtime_rx_taiko int default 0 not null,
+	playtime_rx_catch int default 0 not null,
+	acc_vn_std float(5,3) default 0.000 not null,
+	acc_vn_taiko float(5,3) default 0.000 not null,
+	acc_vn_catch float(5,3) default 0.000 not null,
+	acc_vn_mania float(5,3) default 0.000 not null,
+	acc_rx_std float(5,3) default 0.000 not null,
+	acc_rx_taiko float(5,3) default 0.000 not null,
+	acc_rx_catch float(5,3) default 0.000 not null,
+	maxcombo_vn_std int default 0 not null,
+	maxcombo_vn_taiko int default 0 not null,
+	maxcombo_vn_catch int default 0 not null,
+	maxcombo_vn_mania int default 0 not null,
+	maxcombo_rx_std int default 0 not null,
+	maxcombo_rx_taiko int default 0 not null,
+	maxcombo_rx_catch int default 0 not null,
 	constraint stats_users_id_fk
 		foreign key (id) references users (id)
+			on update cascade on delete cascade
 );
 
 create table scores_rx
@@ -137,6 +142,13 @@ create table maps
 		unique (md5)
 );
 
+create table friendships
+(
+	user1 int not null,
+	user2 int not null,
+	primary key (user1, user2)
+);
+
 create table channels
 (
 	id int auto_increment
@@ -150,7 +162,7 @@ create table channels
 		unique (name)
 );
 
-# Insert vital stuff, such as bot user & basic channels.
+-- Insert vital stuff, such as bot user & basic channels.
 
 insert into cmyui.users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
 values (1, 'Aika', 'aika', 280175, 'ca', 0, 'aika@gulag.ca',

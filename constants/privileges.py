@@ -7,23 +7,30 @@ __all__ = ('Privileges', 'BanchoPrivileges')
 
 @unique
 class Privileges(IntFlag):
-    # Design inspired from rumoi/ruri.
-    # https://github.com/rumoi/ruri/blob/master/ruri/Source.cpp#L13-L42
-    # Spaces left for possible future changes.
-    Banned:      Final[int] = 0
-    Verified:    Final[int] = 1 << 0  # Has verified their account.
-    Visible:     Final[int] = 1 << 1  # Can be seen by normal users.
-    Whitelisted: Final[int] = 1 << 2  # Can bypass basic anticheat measures.
-    Tournament:  Final[int] = 1 << 3  # Is a referee in every match they join.
+    """A class to represent user privileges server-side.
+    Gaps inbetween groups are left for future changes.
+    """
 
-    Supporter:   Final[int] = 1 << 5  # Has tier 1 donor.
-    Premium:     Final[int] = 1 << 6  # Has tier 2 donor.
+    # A normal vanilla user, access intended for all users.
+    # XXX: If a user does not have this bit, they are banned.
+    Normal:      Final[int] = 1 << 0
 
-    Nominator:   Final[int] = 1 << 9  # Can change the ranked-status of beatmaps.
-    Mod:         Final[int] = 1 << 10 # Can use basic moderation tools (silence, kick).
+    # Has bypass to low-ceiling anticheat measures (trusted).
+    Whitelisted: Final[int] = 1 << 1
 
-    Admin:       Final[int] = 1 << 14 # Can access user information, and restrict/ban/etc.
-    Dangerous:   Final[int] = 1 << 18 # Can access potentially dangerous information.
+    # Donation tiers, receives some extra benefits.
+    Supporter:   Final[int] = 1 << 4
+    Premium:     Final[int] = 1 << 5
+
+    # Notable users, receives some extra benefits.
+    Alumni:      Final[int] = 1 << 7
+
+    # Staff permissions, able to manage server state.
+    Tournament:  Final[int] = 1 << 10 # Able to manage match state without host.
+    Nominator:   Final[int] = 1 << 11 # Able to manage maps ranked status.
+    Mod:         Final[int] = 1 << 12 # Able to manage users (level 1).
+    Admin:       Final[int] = 1 << 13 # Able to manage users (level 2).
+    Dangerous:   Final[int] = 1 << 14 # Able to manage full server state.
 
 @unique
 class BanchoPrivileges(IntFlag):

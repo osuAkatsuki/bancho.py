@@ -64,8 +64,8 @@ class ModeData:
     pp: :class:`float`
         The player's total performance points.
 
-    playcount: :class:`int`
-        The player's playcount.
+    plays: :class:`int`
+        The player's number of total plays.
 
     acc: :class:`float`
         The player's overall accuracy.
@@ -77,7 +77,7 @@ class ModeData:
         The player's highest combo.
     """
     __slots__ = (
-        'tscore', 'rscore', 'pp', 'playcount',
+        'tscore', 'rscore', 'pp', 'plays',
         'acc', 'rank', 'max_combo'
     )
 
@@ -85,7 +85,7 @@ class ModeData:
         self.tscore = 0
         self.rscore = 0
         self.pp = 0
-        self.playcount = 0
+        self.plays = 0
         self.acc = 0.0
         self.rank = 0
         self.max_combo = 0
@@ -94,7 +94,7 @@ class ModeData:
         self.tscore = kwargs.get('tscore', 0)
         self.rscore = kwargs.get('rscore', 0)
         self.pp = kwargs.get('pp', 0)
-        self.playcount = kwargs.get('playcount', 0)
+        self.plays = kwargs.get('plays', 0)
         self.acc = kwargs.get('acc', 0.0)
         self.rank = kwargs.get('rank', 0)
         self.max_combo = kwargs.get('max_combo', 0)
@@ -294,13 +294,12 @@ class Player:
         '_queue'
     )
 
-    def __init__(self, *args, **kwargs) -> None:
-        # not sure why im scared of empty kwargs?
+    def __init__(self, **kwargs) -> None:
         self.token = kwargs.get('token', ''.join(choices(ascii_lowercase, k = 32)))
         self.id = kwargs.get('id', None)
         self.name = kwargs.get('name', None)
         self.safe_name = self.ensure_safe(self.name) if self.name else None
-        self.priv = Privileges(kwargs.get('priv', Privileges.Banned))
+        self.priv = Privileges(kwargs.get('priv', Privileges.Normal))
 
         self.rx = False # stored for ez use
         self.stats = [ModeData() for _ in range(7)]
@@ -322,7 +321,7 @@ class Player:
         self.pm_private = kwargs.get('pm_private', False)
 
         self.away_msg = None
-        self.silence_end = 0
+        self.silence_end = kwargs.get('silence_end', 0)
         self.in_lobby = False
 
         c_time = int(time())
@@ -348,7 +347,7 @@ class Player:
     @property
     def bancho_priv(self) -> int:
         ret = BanchoPrivileges(0)
-        if self.priv & Privileges.Verified:
+        if self.priv & Privileges.Normal:
             # All players have ingame "supporter".
             # This enables stuff like osu!direct,
             # multiplayer in cutting edge, etc.
@@ -398,7 +397,7 @@ class Player:
         glob.players.enqueue(packets.logout(self.id))
 
     def restrict(self) -> None: # TODO: reason
-        self.priv &= ~Privileges.Visible
+        self.priv &= ~Privileges.Normal
         glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
             [self.priv, self.id]
@@ -408,7 +407,7 @@ class Player:
         printlog(f'Restricted {self}.', Ansi.CYAN)
 
     def unrestrict(self) -> None:
-        self.priv &= Privileges.Visible
+        self.priv &= Privileges.Normal
         glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
             [self.priv, self.id]
@@ -441,8 +440,8 @@ class Player:
             glob.channels.add(Channel(
                 name = f'#multi_{m.id}',
                 topic = f"MID {m.id}'s multiplayer channel.",
-                read = Privileges.Verified,
-                write = Privileges.Verified,
+                read = Privileges.Normal,
+                write = Privileges.Normal,
                 auto_join = False,
                 temp = True))
 
@@ -533,8 +532,8 @@ class Player:
             glob.channels.add(Channel(
                 name = chan_name,
                 topic = f"{self.name}'s spectator channel.'",
-                read = Privileges.Verified,
-                write = Privileges.Verified,
+                read = Privileges.Normal,
+                write = Privileges.Normal,
                 auto_join = False,
                 temp = True))
 
@@ -676,7 +675,7 @@ class Player:
         for gm in GameMode:
             if not (res := glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
-                'pp_{0:sql} pp, playcount_{0:sql} playcount, acc_{0:sql} acc, '
+                'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
                 'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
             ): raise Exception(f"Failed to fetch {self}'s {gm} user stats.")
 
@@ -685,7 +684,7 @@ class Player:
     def stats_from_sql(self: int, gm: int) -> None:
         if not (res := glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
-            'pp_{0:sql} pp, playcount_{0:sql} playcount, acc_{0:sql} acc, '
+            'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
             'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
         ): raise Exception(f"Failed to fetch {self}'s {gm} user stats.")
 
