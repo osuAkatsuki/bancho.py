@@ -28,11 +28,11 @@ from constants.privileges import Privileges
 # Set CWD to /gulag.
 chdir(path.dirname(path.realpath(__file__)))
 
-glob.version: Final[Version] = Version(1, 0, 0)
+glob.version: Final[Version] = Version(1, 4, 0)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika
-glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Admin)
+glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
 glob.bot.ping_time = 0x7fffffff
 
 glob.bot.stats_from_sql_full() # no need to get friends
@@ -47,13 +47,14 @@ for chan in glob.db.fetchall(
 serv: TCPServer
 conn: Connection
 
-with TCPServer('/tmp/gulag.sock') as serv:
+with TCPServer(glob.config.server_addr) as serv:
     printlog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
     for conn in serv.listen(max_conns = 5):
         st = time()
 
         handler = handle_bancho if conn.req.uri == '/' \
             else handle_web if conn.req.startswith('/web/') \
+            else handle_ss if conn.req.startswith('/ss/') \
             else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
         handler(conn)
 

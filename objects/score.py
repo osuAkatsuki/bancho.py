@@ -1,5 +1,5 @@
 
-from typing import Final, Tuple
+from typing import Final, Tuple, Optional
 from enum import IntEnum, unique
 from time import time
 from py3rijndael import RijndaelCbc, ZeroPadding
@@ -10,6 +10,8 @@ from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from console import printlog, Ansi
 
+from objects.beatmap import Beatmap
+from objects.player import Player
 from objects import glob
 
 __all__ = (
@@ -65,11 +67,8 @@ class Score:
     id: :class:`int`
         The score's unique ID.
 
-    map_md5: :class:`str`
-        The md5 hash of the .osu file.
-
-    map_id: :class:`int`
-        The map's unique ID.
+    map: Optional[:class:`Beatmap`]
+        A beatmap obj representing the osu map.
 
     player: Optional[:class:`Player`]
         A player obj of the player who submitted the score.
@@ -132,7 +131,7 @@ class Score:
         osu!'s old anticheat flags.
     """
     __slots__ = (
-        'id', 'map_md5', 'map_id', 'player',
+        'id', 'map', 'player',
         'pp', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
@@ -143,12 +142,8 @@ class Score:
     def __init__(self):
         self.id = 0
 
-        # TODO: maaaaaaaybe beatmap class?
-        # somewhat reluctant on this one.
-        self.map_md5 = ''
-        self.map_id = 0
-
-        self.player = None
+        self.map: Optional[Beatmap] = None
+        self.player: Optional[Player] = None
 
         self.pp = 0.0
         self.score = 0
@@ -196,13 +191,10 @@ class Score:
 
         s = cls()
 
-        s.map_md5 = data[0]
-        if len(s.map_md5) != 32:
+        if len(map_md5 := data[0]) != 32:
             return
 
-        s.map_id = res['id'] if (res := glob.db.fetch(
-            'SELECT id FROM maps WHERE md5 = %s', [s.map_md5])
-        ) else 0
+        s.map = Beatmap.from_md5(map_md5)
 
         # why does osu! make me rstrip lol
         s.player = glob.players.get_from_cred(data[1].rstrip(), pass_md5)
@@ -237,9 +229,16 @@ class Score:
         # All data read from submission.
         # Now we can calculate things based on our data.
         s.calc_accuracy()
-        s.pp = s.calc_diff()[0] if s.map_id else 0.0 # Ignore SR for now.
-        s.calc_status()
-        s.rank = s.calc_lb_placement()
+
+        if s.map:
+            # Ignore SR for now.
+            s.pp = s.calc_diff()[0]
+            s.calc_status()
+            s.rank = s.calc_lb_placement()
+        else:
+            s.pp = 0.0
+            s.status = SubmissionStatus.SUBMITTED if s.passed \
+                  else SubmissionStatus.FAILED
 
         return s
 
@@ -257,7 +256,7 @@ class Score:
             'SELECT COUNT(*) AS c FROM {t} '
             'WHERE map_md5 = %s AND game_mode = %s '
             'AND status = 2 AND {s} > %s'.format(t = table, s = scoring), [
-                self.map_md5, self.game_mode, score
+                self.map.md5, self.game_mode, score
             ]
         )
 
@@ -274,7 +273,7 @@ class Score:
             return (0.0, 0.0)
 
         owpi: Owoppai = Owoppai(
-            map_id = self.map_id,
+            map_id = self.map.id,
             mods = self.mods,
             combo = self.max_combo,
             misses = self.nmiss,
@@ -298,7 +297,7 @@ class Score:
             f'SELECT 1 FROM {table} WHERE userid = %s '
             'AND map_md5 = %s AND game_mode = %s '
             'AND pp > %s AND status = 2', [
-                self.player.id, self.map_md5,
+                self.player.id, self.map.md5,
                 self.game_mode, self.pp
             ]
         )

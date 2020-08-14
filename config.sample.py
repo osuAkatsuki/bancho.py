@@ -1,21 +1,40 @@
 # -*- coding: utf-8 -*-
 
-sock_file = '/tmp/gulag.sock'
-concurrent = 10
-max_bytes = 1024
-max_ping = 300
+# The address which the server runs on.
+# The server supports both INET4 and UNIX sockets.
+# For INET sockets, set to (addr: str, port: int),
+# For UNIX sockets, set to the path of the socket.
+server_addr = '/tmp/gulag.sock'
 
+# Your MySQL authentication info.
 mysql = {
     'database': 'gulag',
     'host': 'localhost',
-    'password': 'lol123',
+    'password': 'supersecure',
     'user': 'cmyui'
 }
 
-osu_api_key = 'hahahaahhaahaahaaahahhhhahhahhhh'
+# Your osu!api key. This is required for fetching
+# many things, such as beatmap information!
+osu_api_key = ''
 
-# image_url, link_url
-menu_icon = ('', '')
+# The menu icon displayed on
+# the main menu of osu! ingame.
+menu_icon = (
+    # Image URL
+    'https://link.to/my_image.png',
+    # Hyperlink URL
+    'https://github.com/cmyui/gulag'
+)
 
+# Ingame bot command prefix.
 command_prefix = '!'
-debug = False # prints bytes sent/received
+
+# Displays additional information in the
+# console, generally for debugging purposes.
+debug = False
+
+# Whether the server is running in 'production mode'.
+# Having this as false will disable some features that
+# aren't used during testing.
+server_build = True

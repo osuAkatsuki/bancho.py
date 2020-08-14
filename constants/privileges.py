@@ -32,6 +32,8 @@ class Privileges(IntFlag):
     Admin:       Final[int] = 1 << 13 # Able to manage users (level 2).
     Dangerous:   Final[int] = 1 << 14 # Able to manage full server state.
 
+    Staff:       Final[int] = Mod | Admin | Dangerous
+
 @unique
 class BanchoPrivileges(IntFlag):
     Player:     Final[int] = 1 << 0

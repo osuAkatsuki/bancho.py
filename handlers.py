@@ -1,4 +1,5 @@
 import packets
+from os.path import exists
 from cmyui.web import Connection
 
 from objects import glob
@@ -13,6 +14,7 @@ from events import web
 __all__ = (
     'handle_bancho',
     'handle_web',
+    'handle_ss',
     #'registration'
 )
 
@@ -101,6 +103,19 @@ def handle_web(conn: Connection) -> None:
             printlog(resp, Ansi.LIGHT_GREEN)
 
         conn.resp.send(resp, 200)
+
+def handle_ss(conn: Connection) -> None:
+    if len(conn.req.uri) != 16:
+        conn.resp.send(b'No file found!', 404)
+        return
+
+    path = f'screenshots/{conn.req.uri[4:]}'
+
+    if not exists(path):
+        return
+
+    with open(path, 'rb') as f:
+        conn.resp.send(f.read(), 200)
 
 # XXX: This won't be completed for a while most likely..
 # Focused on other parts of the design (web mostly).

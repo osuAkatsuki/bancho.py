@@ -4,8 +4,7 @@ from typing import Tuple, Callable
 from time import time
 from bcrypt import checkpw, hashpw, gensalt
 from hashlib import md5
-from random import choice
-from string import ascii_letters, digits
+from cmyui.utils import rstring
 
 import packets
 from packets import Packet, PacketReader # convenience
@@ -16,7 +15,7 @@ from constants.mods import Mods
 from constants import commands
 from objects import glob
 from objects.match import SlotStatus, Teams
-from objects.player import Player
+from objects.player import Player, PresenceFilter
 from constants.privileges import Privileges
 
 glob.bancho_map = {}
@@ -74,16 +73,18 @@ def sendMessage(p: Player, pr: PacketReader) -> None:
     cmd = msg.startswith(glob.config.command_prefix) \
         and commands.process_commands(p, t, msg)
 
-    if cmd and cmd['resp']:
+    if cmd: # A command was triggered.
         if cmd['public']:
-            # Send our message & response to all in the channel.
             t.send(p, msg)
-            t.send(glob.bot, cmd['resp'])
-        else: # Send response to only player and staff.
-            staff = {p for p in glob.players if p.priv & Privileges.Mod}
+            if 'resp' in cmd:
+                t.send(glob.bot, cmd['resp'])
+        else:
+            staff = {p for p in glob.players if p.priv & Privileges.Staff}
             t.send_selective(p, msg, staff - {p})
-            t.send_selective(glob.bot, cmd['resp'], {p} | staff)
-    else: # No command.
+            if 'resp' in cmd:
+                t.send_selective(glob.bot, cmd['resp'], {p} | staff)
+
+    else: # No command was triggered.
         t.send(p, msg)
 
     printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
@@ -93,7 +94,7 @@ def sendMessage(p: Player, pr: PacketReader) -> None:
 def logout(p: Player, pr: PacketReader) -> None:
     pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
 
-    if (time() - p.login_time) < 1:
+    if (time() - p.login_time) < 2:
         # osu! has a weird tendency to log out immediately when
         # it logs in, then reconnects? not sure why..?
         return
@@ -142,8 +143,13 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     utc_offset = int(s[1])
     display_city = s[2] == '1'
 
-    client_hashes = s[3].split(':')
-    # TODO: client hashes
+    # TODO: use these
+    # 0: md5(osu path)
+    # 1: adapters (network physical addresses delimited by '.')
+    # 2: md5(adapters)
+    # 3: md5(uniqueid) (osu! uninstall id)
+    # 4: md5(uniqueid2) (disk signature/serial num)
+    client_hashes = s[3].split(':')[:-1]
 
     pm_private = s[4] == '1'
 
@@ -174,10 +180,8 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                    **res)
     else:
         # Account does not exist, register using credentials passed.
-        rstring = lambda l: ''.join(choice(ascii_letters + digits)
-                                    for _ in range(l))
-        pw_bcrypt = hashpw(md5(pw_hash).hexdigest().encode(), gensalt())
-        glob.cache['bcrypt'][pw_hash] = pw_bcrypt.decode()
+        pw_bcrypt = hashpw(pw_hash, gensalt()).decode()
+        glob.cache['bcrypt'][pw_hash] = pw_bcrypt
 
         # Add to `users` table.
         userID = glob.db.execute(
@@ -232,9 +236,10 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     p.stats_from_sql_full()
     p.friends_from_sql()
 
-    # Update their country data with
-    # the IP from the login request.
-    p.fetch_geoloc(ip)
+    if glob.config.server_build:
+        # Update their country data with
+        # the IP from the login request.
+        p.fetch_geoloc(ip)
 
     # Update our new player's stats, and broadcast them.
     user_data = packets.userPresence(p) + packets.userStats(p)
@@ -274,11 +279,12 @@ def startSpectating(p: Player, pr: PacketReader) -> None:
 # PacketID: 17
 @bancho_packet(Packet.c_stopSpectating)
 def stopSpectating(p: Player, pr: PacketReader) -> None:
-    if not p.spectating:
+    host: Player = p.spectating
+
+    if not host:
         printlog(f"{p} Tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
         return
 
-    host: Player = p.spectating
     host.remove_spectator(p)
 
 # PacketID: 18
@@ -368,11 +374,11 @@ def matchCreate(p: Player, pr: PacketReader) -> None:
 # PacketID: 32
 @bancho_packet(Packet.c_joinMatch)
 def matchJoin(p: Player, pr: PacketReader) -> None:
-    id, passwd = pr.read(osuTypes.i32, osuTypes.string)
-    if id not in range(64):
+    m_id, passwd = pr.read(osuTypes.i32, osuTypes.string)
+    if m_id not in range(64):
         return
 
-    if not (m := glob.matches.get_by_id(id)):
+    if not (m := glob.matches.get_by_id(m_id)):
         printlog(f'{p} tried to join a non-existant mp lobby?')
         return
 
@@ -398,16 +404,10 @@ def matchChangeSlot(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried to switch to slot {slotID} which has a player.')
         return
 
-    for s in m.slots:
-        if p == s.player:
-            # Swap current slot with
-            m.slots[slotID].copy(s)
-            s.reset()
-            break
-    else:
-        printlog(f"Failed to find {p}'s current slot?")
-        return
-
+    # Swap with current slot.
+    s = m.get_slot(p)
+    m.slots[slotID].copy(s)
+    s.reset()
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 39
@@ -417,14 +417,7 @@ def matchReady(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried readying outside of a match? (1)')
         return
 
-    for s in m.slots:
-        if p == s.player:
-            s.status = SlotStatus.ready
-            break
-    else:
-        printlog(f'{p} tried readying outside of a match? (2)')
-        return
-
+    m.get_slot(p).status = SlotStatus.ready
     m.enqueue(packets.updateMatch(m))
 
 # PacketID: 40
@@ -534,10 +527,7 @@ def matchComplete(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} sent a scoreframe outside of a match?')
         return
 
-    for s in m.slots:
-        if p == s.player:
-            s.status = SlotStatus.complete
-            break
+    m.get_slot(p).status = SlotStatus.complete
 
     all_completed = True
 
@@ -569,9 +559,7 @@ def matchChangeMods(p: Player, pr: PacketReader) -> None:
             m.mods = mods & Mods.SPEED_CHANGING
 
         # Set slot mods
-        for s in m.slots:
-            if p == s.player:
-                s.mods = mods & ~Mods.SPEED_CHANGING
+        m.get_slot(p).mods = mods & ~Mods.SPEED_CHANGING
     else:
         # Not freemods, set match mods.
         m.mods = mods
@@ -586,14 +574,20 @@ def matchLoadComplete(p: Player, pr: PacketReader) -> None:
         return
 
     # Ready up our player.
-    for s in m.slots:
-        if p == s.player:
-            s.loaded = True
-            break
+    m.get_slot(p).loaded = True
 
     # Check if all players are ready.
     if not any(s.status & SlotStatus.playing and not s.loaded for s in m.slots):
         m.enqueue(packets.matchAllPlayerLoaded(), lobby = False)
+
+# PacketID: 54
+@bancho_packet(Packet.c_matchNoBeatmap)
+def matchNoBeatmap(p: Player, pr: PacketReader) -> None:
+    if not (m := p.match):
+        return
+
+    m.get_slot(p).status = SlotStatus.no_map
+    m.enqueue(packets.updateMatch(m))
 
 # PacketID: 55
 @bancho_packet(Packet.c_matchNotReady)
@@ -602,15 +596,25 @@ def matchNotReady(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried unreadying outside of a match? (1)')
         return
 
-    for s in m.slots:
-        if p == s.player:
-            s.status = SlotStatus.not_ready
-            break
-    else:
-        printlog(f'{p} tried unreadying outside of a match? (2)')
+    m.get_slot(p).status = SlotStatus.not_ready
+    m.enqueue(packets.updateMatch(m), lobby = False)
+
+# PacketID: 56
+@bancho_packet(Packet.c_matchFailed)
+def matchFailed(p: Player, pr: PacketReader) -> None:
+    if not (m := p.match):
         return
 
-    m.enqueue(packets.updateMatch(m), lobby = False)
+    m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)))
+
+# PacketID: 59
+@bancho_packet(Packet.c_matchHasBeatmap)
+def matchHasBeatmap(p: Player, pr: PacketReader) -> None:
+    if not (m := p.match):
+        return
+
+    m.get_slot(p).status = SlotStatus.not_ready
+    m.enqueue(packets.updateMatch(m))
 
 # PacketID: 60
 @bancho_packet(Packet.c_matchSkipRequest)
@@ -619,11 +623,8 @@ def matchSkipRequest(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried unreadying outside of a match? (1)')
         return
 
-    for s in m.slots:
-        if p == s.player:
-            s.skipped = True
-            m.enqueue(packets.matchPlayerSkipped(p.id))
-            break
+    m.get_slot(p).skipped = True
+    m.enqueue(packets.matchPlayerSkipped(p.id))
 
     for s in m.slots:
         if s.status & SlotStatus.playing and not s.skipped:
@@ -724,6 +725,15 @@ def channelPart(p: Player, pr: PacketReader) -> None:
         p.leave_channel(c)
     else:
         printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
+
+# PacketID: 79
+@bancho_packet(Packet.c_ReceiveUpdates)
+def receiveUpdates(p: Player, pr: PacketReader) -> None:
+    if (f := pr.read(osuTypes.i32)[0]) not in range(3):
+        printlog(f'{p} tried to set his presence filter to {f}?')
+        return
+
+    p.pres_filter = PresenceFilter(f)
 
 # PacketID: 82
 @bancho_packet(Packet.c_setAwayMessage)

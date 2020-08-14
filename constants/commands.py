@@ -5,10 +5,12 @@ from time import time
 from random import randrange
 from re import match as re_match, compile as re_comp
 from codecs import escape_decode
+from collections import defaultdict
 
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
+from objects.match import Match, SlotStatus
 from constants.privileges import Privileges
 import packets
 
@@ -88,18 +90,6 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
 
-# Force a user into a multiplayer match by username.
-@command(priv=Privileges.Admin, public=False)
-def mpforce(p: Player, c: Messageable, msg: List[str]) -> str:
-    if len(msg) < 1:
-        return 'Invalid syntax.'
-
-    if not (t := glob.players.get_by_name(' '.join(msg))):
-        return 'Could not find a user by that name.'
-
-    t.join_match(p.match)
-    return 'Welcome.'
-
 """ Developer commands
 # The commands below are either dangerous or
 # simply not useful for any other roles.
@@ -162,18 +152,160 @@ def debug(p: Player, c: Messageable, msg: List[str]) -> str:
     glob.config.debug = msg[0] == '1'
     return 'Success.'
 
-def process_commands(client: Player, target: Messageable,
+# Set permissions for a user (by username).
+# XXX: If no username is provided, edit self.
+@command(priv=Privileges.Dangerous, public=False)
+def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
+    if (msg_len := len(msg)) > 2 or not msg[-1].isnumeric():
+        return 'Invalid syntax'
+
+    t = glob.players.get_by_name(msg[1]) if msg_len == 2 else p
+    if not t: # TODO: db? if this cmd stays
+        return 'Could not find user.'
+
+    glob.db.execute('UPDATE users SET priv = %s WHERE id = %s',
+                    [newpriv := int(msg[0]), t.id])
+
+    t.priv = Privileges(newpriv)
+    return 'Success.'
+
+@command(priv=Privileges.Dangerous, public=False)
+def mapsearch(p: Player, c: Messageable, msg: List[str]) -> str:
+    # Wild ass command idea i had, definitely not safe. at all.
+    if not (res := glob.db.fetchall(
+        'SELECT id, set_id, artist, title, version '
+        'FROM maps WHERE title LIKE %s '
+        'LIMIT 50', [f'%{" ".join(msg)}%']
+    )): return 'No matches found :('
+
+    return '\n'.join(
+        '[https://osu.gatari.pw/d/{set_id} DL] [https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
+        for row in res
+    ) + f'\nMaps: {len(res)}'
+
+@command(priv=Privileges.Dangerous, public=False)
+def ev(p: Player, c: Messageable, msg: List[str]) -> str:
+    try: # pinnacle of the gulag
+        eval(' '.join(msg))
+    except Exception as e:
+        return str(e)
+
+""" Multiplayer commands
+# The commands below are specifically for
+# multiplayer match management.
+"""
+
+# Start a match.
+def mp_start(p: Player, m: Match, msg: List[str]) -> str:
+    for s in m.slots:
+        if s.status & SlotStatus.has_player \
+        and not s.status & SlotStatus.no_map:
+            s.status = SlotStatus.playing
+
+    m.in_progress = True
+    m.enqueue(packets.matchStart(m))
+    return 'Good luck!'
+
+# Abort a match in progress.
+def mp_abort(p: Player, m: Match, msg: List[str]) -> str:
+    if not m.in_progress:
+        return 'Abort what?'
+
+    for s in m.slots:
+        if s.status & SlotStatus.playing:
+            s.status = SlotStatus.not_ready
+
+    m.in_progress = False
+    m.enqueue(packets.updateMatch(m))
+    m.enqueue(packets.matchAbort())
+    return 'Match aborted.'
+
+# Force a user into a multiplayer match by username.
+def mp_force(p: Player, m: Match, msg: List[str]) -> str:
+    if len(msg) < 1:
+        return 'Invalid syntax.'
+
+    if not (t := glob.players.get_by_name(' '.join(msg))):
+        return 'Could not find a user by that name.'
+
+    t.join_match(m)
+    return 'Welcome.'
+
+# Set the current beatmap (by id).
+def mp_map(p: Player, m: Match, msg: List[str]) -> str:
+    if len(msg) < 1 or not msg[0].isnumeric():
+        return 'Invalid syntax.'
+
+    if not (res := glob.db.fetch(
+        'SELECT id, md5, name '
+        'FROM maps WHERE id = %s',
+        [msg[0]], _dict = False     # return a tuple for
+    )): return 'Beatmap not found.' # quick assignment
+
+    m.map_id, m.map_md5, m.map_name = res
+    m.enqueue(packets.updateMatch(m))
+
+_mp_triggers = defaultdict(lambda: None, {
+    'force': {
+        'callback': mp_force,
+        'priv': Privileges.Admin
+    },
+    'abort': {
+        'callback': mp_abort,
+        'priv': Privileges.Normal
+    },
+    'start': {
+        'callback': mp_start,
+        'priv': Privileges.Normal
+    },
+    'map': {
+        'callback': mp_map,
+        'priv': Privileges.Normal
+    }
+})
+# Routing command for all !mp subcommands.
+@command(trigger='!mp', priv=Privileges.Normal, public=True)
+def multiplayer(p: Player, c: Messageable, msg: List[str]) -> str:
+    # Used outside of a multiplayer match.
+    if not (c._name.startswith('#multi_') and (m := p.match)):
+        return
+
+    # No subcommand specified, send back a list.
+    if not msg:
+        # TODO: maybe filter to only the commands they can actually use?
+        return f"Available subcommands: {', '.join(_mp_triggers.keys())}."
+
+    # No valid subcommands triggered.
+    if not (trigger := _mp_triggers[msg[0]]):
+        return 'Invalid subcommand.'
+
+    # Missing privileges to use mp commands.
+    if not (p == m.host or p.priv & Privileges.Tournament):
+        return
+
+    # Missing privileges to run this specific mp command.
+    if not p.priv & trigger['priv']:
+        return
+
+    # Forward the params to the specific command.
+    # XXX: Here, rather than sending the channel
+    # as the 2nd arg, we'll send the match obj.
+    # This is used much more frequently, and we've
+    # already asserted than p.match.chat == c anyways.
+    return trigger['callback'](p, m, msg[1:])
+
+def process_commands(p: Player, t: Messageable,
                      msg: str) -> Optional[CommandResponse]:
     # Basic commands setup for now.
     # Response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
     start_time = time()
-    split = msg.strip().split(' ')
+    trigger, *args = msg.strip().split(' ')
 
     for cmd in glob.commands:
-        if split[0] == cmd['trigger'] and client.priv & cmd['priv']:
+        if trigger == cmd['trigger'] and p.priv & cmd['priv']:
             # Command found & we have privileges - run it.
-            if (res := cmd['callback'](client, target, split[1:])):
+            if (res := cmd['callback'](p, t, args)):
                 # Returned a message for us to send back.
                 ms_taken = (time() - start_time) * 1000
 

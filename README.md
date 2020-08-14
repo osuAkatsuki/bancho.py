@@ -25,35 +25,47 @@ This is simply the result of my programming values and time thrown together; I'd
 
 ## Setup
 
-Setup is pretty simple, install mysql & nginx if you haven't already, and the commands below should basically be pastable.
+Setup is pretty simple, the commands below should basically be copy-pastable.
 
 If you have any difficulties setting up gulag, you can contact me via Discord @ cmyui#0425 for support.
 
 ```sh
+# Install our database & reverse proxy, if not already installed.
+sudo apt install mysql-server nginx
+
 # Clone gulag from github.
 git clone https://github.com/cmyui/gulag.git
 cd gulag
 
+# Create empty data directories.
+mkdir certs screenshots replays logs pp/maps
+
 # Install pipenv and requirements.
-python3 -m pip install pipenv --user
-python3 -m pipenv install
+python3.8 -m pip install pipenv --user
+python3.8 -m pipenv install
 
 # Import the database structure.
 # NOTE: create an empty database before doing this.
 # This will also insert basic osu! channels & the bot.
 mysql -u your_sql_username -p your_db_name < db.sql
 
-# Add gulag's nginx config to your nginx/sites-available.
+# Add gulag's nginx config to your nginx/sites-enabled.
 # NOTE: default unix socket location is `/tmp/gulag.sock`.
-ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
+sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
 
 # Reload nginx after adding new config.
-nginx -s reload
+sudo nginx -s reload
 
 # Configure gulag.
 mv config.sample.py config.py
 nano config.py
 
+# Create certificate.
+# When filling this out, set 'Common Name' to '*.ppy.sh', the rest are unimportant.
+# You'll need to install this on windows like after creating it.
+# You'll also need to edit nginx.conf's certificate paths to the ones created here.
+openssl req -newkey rsa:4096 -x509 -sha256 -days 3650 -nodes -out certs/server.crt -keyout certs/server.key
+
 # Start the server.
-python3.8 gulag.py
+python3.8 main.py
 ```

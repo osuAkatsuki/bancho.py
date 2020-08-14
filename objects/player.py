@@ -8,6 +8,7 @@ from time import time
 from json import loads
 
 from constants.privileges import Privileges, BanchoPrivileges
+from constants.gamemodes import GameMode
 from console import printlog, Ansi
 
 from objects.channel import Channel
@@ -19,7 +20,6 @@ import packets
 
 __all__ = (
     'ModeData',
-    'GameMode',
     'Status',
     'Player'
 )
@@ -99,43 +99,12 @@ class ModeData:
         self.rank = kwargs.get('rank', 0)
         self.max_combo = kwargs.get('max_combo', 0)
 
-class GameMode(IntEnum):
-    """A class to represent a gamemode."""
+class PresenceFilter(IntEnum):
+    """A class to represent the update scope the client wishes to receive."""
 
-    # This is another place where some
-    # inspiration was taken from rumoi/ruri.
-    vn_std = 0
-    vn_taiko = 1
-    vn_catch = 2
-    vn_mania = 3
-    rx_std = 4
-    rx_taiko = 5
-    rx_catch = 6
-
-    def __str__(self) -> str:
-        return {
-            0: 'vn!std',
-            1: 'vn!taiko',
-            2: 'vn!catch',
-            3: 'vn!mania',
-
-            4: 'rx!std',
-            5: 'rx!taiko',
-            6: 'rx!catch'
-        }[self.value]
-
-    def __format__(self, format: str) -> str:
-        # lmao
-        return {
-            0: 'vn_std',
-            1: 'vn_taiko',
-            2: 'vn_catch',
-            3: 'vn_mania',
-
-            4: 'rx_std',
-            5: 'rx_taiko',
-            6: 'rx_catch'
-        }[self.value] if format == 'sql' else str(self.value)
+    Nil:     Final[int] = 0
+    All:     Final[int] = 1
+    Friends: Final[int] = 2
 
 class Status:
     """A class to represent the current status of a player.
@@ -178,8 +147,8 @@ class Status:
         self.game_mode = 0 # byte
         self.map_id = 0 # i32
 
-    def update(self, action, info_text, map_md5,
-               mods, game_mode, map_id) -> None:
+    def update(self, action: int, info_text: str, map_md5: str,
+               mods: int, game_mode: int, map_id: int) -> None:
         self.action = action
         self.info_text = info_text
         self.map_md5 = map_md5
@@ -261,6 +230,9 @@ class Player:
     ping_time: :class:`int`
         The UNIX timestamp of the last time the client pinged the server.
 
+    pres_filter: :class:`PresenceFilter`
+        The scope of users the client can currently see.
+
     _queue: :class:`SimpleQueue`
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
@@ -290,15 +262,15 @@ class Player:
         'recent_scores', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'ping_time',
+        'login_time', 'ping_time', 'pres_filter',
         '_queue'
     )
 
     def __init__(self, **kwargs) -> None:
-        self.token = kwargs.get('token', ''.join(choices(ascii_lowercase, k = 32)))
-        self.id = kwargs.get('id', None)
-        self.name = kwargs.get('name', None)
-        self.safe_name = self.ensure_safe(self.name) if self.name else None
+        self.token: str = kwargs.get('token', ''.join(choices(ascii_lowercase, k = 32)))
+        self.id: Optional[int] = kwargs.get('id', None)
+        self.name: Optional[str] = kwargs.get('name', None)
+        self.safe_name: Optional[str] = self.ensure_safe(self.name) if self.name else None
         self.priv = Privileges(kwargs.get('priv', Privileges.Normal))
 
         self.rx = False # stored for ez use
@@ -308,8 +280,8 @@ class Player:
         self.friends = set() # userids, not player objects
         self.channels = []
         self.spectators = []
-        self.spectating = None
-        self.match = None
+        self.spectating: Optional[Player] = None
+        self.match: Optional[Match] = None
 
         # Store the user's most recently submitted scores for both regular and
         self.recent_scores = [None for _ in range(7)]
@@ -317,17 +289,19 @@ class Player:
         self.country = (0, 'XX') # (code , letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset = kwargs.get('utc_offset', 0)
-        self.pm_private = kwargs.get('pm_private', False)
+        self.utc_offset: int = kwargs.get('utc_offset', 0)
+        self.pm_private: bool = kwargs.get('pm_private', False)
 
-        self.away_msg = None
-        self.silence_end = kwargs.get('silence_end', 0)
+        self.away_msg: Optional[str] = None
+        self.silence_end: int = kwargs.get('silence_end', 0)
         self.in_lobby = False
 
         c_time = int(time())
         self.login_time = c_time
         self.ping_time = c_time
         del c_time
+
+        self.pres_filter = PresenceFilter.Nil
 
         # Packet queue
         self._queue = SimpleQueue()
@@ -521,11 +495,6 @@ class Player:
         printlog(f'{self} left {c}.')
 
     def add_spectator(self, p) -> None:
-        self.spectators.append(p)
-        p.spectating = self
-
-        fellow = packets.fellowSpectatorJoined(p.id)
-
         chan_name = f'#spec_{self.id}'
         if not (c := glob.channels.get(chan_name)):
             # Spec channel does not exist, create it and join.
@@ -543,13 +512,16 @@ class Player:
             return printlog(f'{self} failed to join {c}?')
 
         p.enqueue(packets.channelJoin(c.name))
+        p_joined = packets.fellowSpectatorJoined(p.id)
 
         for s in self.spectators:
-            self.enqueue(fellow) # #spec?
-            s.enqueue(packets.fellowSpectatorJoined(self.id))
+            s.enqueue(p_joined)
+            p.enqueue(packets.fellowSpectatorJoined(s.id))
+
+        self.spectators.append(p)
+        p.spectating = self
 
         self.enqueue(packets.spectatorJoined(p.id))
-
         printlog(f'{p} is now spectating {self}.')
 
     def remove_spectator(self, p) -> None:
@@ -568,8 +540,8 @@ class Player:
 
             self.enqueue(c_info)
 
-            for t in self.spectators:
-                t.enqueue(fellow + c_info)
+            for s in self.spectators:
+                s.enqueue(fellow + c_info)
 
         self.enqueue(packets.spectatorLeft(p.id))
         printlog(f'{p} is no longer spectating {self}.')
@@ -646,21 +618,34 @@ class Player:
             return # ?
 
         # Update the user's stats ingame, then update db.
+        self.stats[gm].plays += 1
         self.stats[gm].pp = sum(round(round(row['pp']) * 0.95 ** i)
                                 for i, row in enumerate(res))
         self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res)) / 100.0
 
         glob.db.execute(
-            f'UPDATE stats SET pp_{mode:sql} = %s, '
-            f'acc_{mode:sql} = %s WHERE id = %s', [
+            'UPDATE stats SET pp_{0:sql} = %s, '
+            'plays_{0:sql} = plays_{0:sql} + 1, '
+            'acc_{0:sql} = %s WHERE id = %s'.format(mode), [
                 self.stats[gm].pp,
                 self.stats[gm].acc,
                 self.id
             ]
         )
 
+        # Calculate rank
+        res = glob.db.fetch(
+            'SELECT COUNT(*) AS c FROM stats '
+            'LEFT JOIN users USING(id) '
+            f'WHERE pp_{mode:sql} > %s '
+            'AND priv & 1', [
+                self.stats[gm].pp
+            ])
+
         # TODO: finish off other stat related stuff
 
+        self.stats[gm].rank = res['c'] + 1
+        self.enqueue(packets.userStats(self))
         printlog(f"Updated {self}'s {mode} stats.")
 
     def friends_from_sql(self) -> None:

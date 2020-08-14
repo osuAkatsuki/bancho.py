@@ -39,7 +39,7 @@ class Mods(IntEnum):
     KEY2:           Final[int] = 1 << 28
     SCOREV2:        Final[int] = 1 << 29
 
-    SPEED_CHANGING: Final[int] = (DOUBLETIME | NIGHTCORE | HALFTIME)
+    SPEED_CHANGING: Final[int] = DOUBLETIME | NIGHTCORE | HALFTIME
 
 def mods_readable(m: Union[Mods, int]) -> str:
     if not m: return ''

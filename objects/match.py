@@ -238,7 +238,7 @@ class Match:
 
     @property
     def url(self) -> str:
-        return f'osump://{self.id}'
+        return f'osump://{self.id}/{self.passwd}'
 
     @property
     def embed(self) -> str:
@@ -257,16 +257,22 @@ class Match:
     def __repr__(self) -> str:
         return f'<id: {self.id} | name: {self.name}>'
 
-    def get_free(self) -> Optional[Slot]:
-        # Return first free slot.
-        for idx, s in enumerate(self.slots):
-            if s.status == SlotStatus.open:
-                return idx
+    def get_slot(self, p) -> Optional[Slot]:
+        # Get the slot containing a given player.
+        for s in self.slots:
+            if p == s.player:
+                return s
 
     def get_slot_id(self, p) -> Optional[int]:
-        # Return the slotID of a given player.
+        # Get the slot index containing a given player.
         for idx, s in enumerate(self.slots):
             if p == s.player:
+                return idx
+
+    def get_free(self) -> Optional[Slot]:
+        # Get the first free slot index.
+        for idx, s in enumerate(self.slots):
+            if s.status == SlotStatus.open:
                 return idx
 
     def copy(self, m) -> None:

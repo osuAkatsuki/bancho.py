@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from typing import Final
 from enum import IntFlag, unique
 

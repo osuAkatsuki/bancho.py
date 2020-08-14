@@ -314,10 +314,10 @@ def write(id: int, *args: Tuple[Any, ...]) -> bytes:
 class Packet(IntEnum):
     # Both server & client packetIDs
     # Packets commented out are unused.
-    c_changeAction = 0 # status update
+    c_changeAction = 0
     c_sendPublicMessage = 1
     c_logout = 2
-    c_requestStatusUpdate = 3 # request
+    c_requestStatusUpdate = 3
     c_ping = 4
     s_userID = 5
     s_sendMessage = 7
@@ -333,7 +333,7 @@ class Packet(IntEnum):
     c_stopSpectating = 17
     c_spectateFrames = 18
     s_versionUpdate = 19
-    c_errorReport = 20
+    #c_errorReport = 20
     c_cantSpectate = 21
     s_spectatorCantSpectate = 22
     s_getAttention = 23
@@ -347,7 +347,6 @@ class Packet(IntEnum):
     c_createMatch = 31
     c_joinMatch = 32
     c_partMatch = 33
-    # unused
     #c_lobbyJoinMatch = 34
     #c_lobbyPartMatch = 35
     s_matchJoinSuccess = 36
@@ -420,7 +419,7 @@ class Packet(IntEnum):
     s_switchServer = 103
     s_accountRestricted = 104
     s_RTX = 105
-    s_matchAbort = 106
+    s_matchAbort = 106 # osu labels this as a client packet LOL
     s_switchTournamentServer = 107
     c_tournamentJoinMatchChannel = 108
     c_tournamentLeaveMatchChannel = 109
@@ -638,14 +637,9 @@ def protocolVersion(num: int) -> bytes:
 
 # PacketID: 76
 def mainMenuIcon() -> bytes:
-    # TODO: unhardcode lol
     return write(
         Packet.s_mainMenuIcon,
-        ('|'.join([
-            'https://akatsuki.pw/static/logos/logo_ingame.png',
-            'https://akatsuki.pw'
-        ]), osuTypes.string
-        )
+        ('|'.join(glob.config.menu_icon), osuTypes.string)
     )
 
 # PacketID: 80

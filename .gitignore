@@ -2,6 +2,8 @@
 /__pycache__
 /config.py
 /logs
+/screenshots
+/replays
 pp/oppai
 pp/maps
 Pipfile.lock

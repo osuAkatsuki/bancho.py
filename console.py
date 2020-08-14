@@ -1,10 +1,9 @@
 from typing import Final
 from enum import IntEnum, unique
-from datetime import datetime as dt, timezone as tz, timedelta as td
+from cmyui.utils import get_timestamp
 
 __all__ = (
     'Ansi',
-    'get_timestamp',
     'printlog'
 )
 
@@ -34,14 +33,6 @@ class Ansi(IntEnum):
 
     def __repr__(self) -> str:
         return f'\x1b[{self.value}m'
-
-ts_fmt = ('%I:%M:%S%p', '%d/%m/%Y %I:%M:%S%p')
-tz_est = tz(td(hours = -4), 'EDT')
-def get_timestamp(full: bool = False) -> str:
-    return f'{dt.now(tz = tz_est):{ts_fmt[full]}}'
-
-# TODO: perhaps make some kind of
-# timestamp class with __format__?
 
 def printlog(msg, col: Ansi = None,
              fd: str = None, st_fmt = '') -> None:

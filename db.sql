@@ -1,3 +1,11 @@
+drop table if exists stats;
+drop table if exists users;
+drop table if exists scores_rx;
+drop table if exists scores_vn;
+drop table if exists maps;
+drop table if exists friendships;
+drop table if exists channels;
+
 create table users
 (
 	id int auto_increment
@@ -134,8 +142,10 @@ create table maps
 	    primary key,
 	set_id int not null,
 	status int not null,
-	name varchar(256) not null comment 'Unsure of max length',
 	md5 char(32) not null,
+	artist varchar(64) not null,
+	title varchar(64) not null,
+	version varchar(64) not null,
 	constraint maps_id_uindex
 		unique (id),
 	constraint maps_md5_uindex
@@ -164,14 +174,13 @@ create table channels
 
 -- Insert vital stuff, such as bot user & basic channels.
 
-insert into cmyui.users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
+insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
         '_______________________my_cool_bcrypt_______________________');
 
-insert into cmyui.stats (id) values (1);
+insert into stats (id) values (1);
 
 insert into channels (name, topic, read_priv, write_priv, auto_join)
-values
-	('#osu', 'General discussion.', 1, 2, true),
-	('#announce', 'Exemplary performance and public announcements.', 1, 2, true),
-	('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false);
+values ('#osu', 'General discussion.', 1, 2, true),
+	   ('#announce', 'Exemplary performance and public announcements.', 1, 2, true),
+	   ('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false);
