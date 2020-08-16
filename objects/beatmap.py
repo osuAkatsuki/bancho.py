@@ -83,23 +83,54 @@ class Beatmap:
     """
     __slots__ = ('md5', 'id', 'set_id', 'artist', 'title', 'version', 'status')
 
-    def __init__(self):
-        self.md5 = ''
-        self.id = 0
-        self.set_id = 0
+    def __init__(self, **kwargs):
+        self.md5 = kwargs.pop('md5', '')
+        self.id = kwargs.pop('id', 0)
+        self.set_id = kwargs.pop('set_id', 0)
 
-        self.artist = ''
-        self.title = ''
-        self.version = ''
+        self.artist = kwargs.pop('artist', 0)
+        self.title = kwargs.pop('title', 0)
+        self.version = kwargs.pop('version', 0)
 
-        self.status = RankedStatus(0)
+        self.status = RankedStatus(kwargs.pop('status', 0))
 
     @property
     def filename(self) -> str:
         return f'{self.id}.osu'
 
-    def __repr__(self) -> str:
+    @property
+    def full(self) -> str:
         return f'{self.artist} - {self.title} [{self.version}]'
+
+    @property
+    def url(self, _set: bool = False):
+        return f'https://osu.ppy.sh/s/{self.set_id}' if _set \
+          else f'https://osu.ppy.sh/b/{self.id}'
+
+    @property
+    def embed(self) -> str:
+        return f'[{self.url} {self.full}]'
+
+    @classmethod
+    def from_bid(cls, bid: int):
+        # Try to get from sql.
+        if (m := cls.from_bid_sql(bid)):
+            return m
+
+        # TODO: perhaps implement osuapi GET?
+        # not sure how useful it would be..
+        # I think i'll have md5 most times lol.
+
+    @classmethod
+    def from_bid_sql(cls, bid: int):
+        if not (res := glob.db.fetch(
+            'SELECT md5, set_id, status, artist, title, version '
+            'FROM maps WHERE id = %s',
+            [bid]
+        )): return
+
+        res['id'] = bid
+        return cls(**res)
 
     @classmethod
     def from_md5(cls, md5: str):
@@ -118,15 +149,11 @@ class Beatmap:
         if not (res := glob.db.fetch(
             'SELECT id, set_id, status, artist, title, version '
             'FROM maps WHERE md5 = %s',
-            [md5], _dict = False
+            [md5]
         )): return
 
-        m = cls()
-        m.md5 = md5
-        m.id, m.set_id = res[:2]
-        m.status = RankedStatus(res[2])
-        m.artist, m.title, m.version = res[3:]
-        return m
+        res['md5'] = md5
+        return cls(**res)
 
     @classmethod
     def from_md5_osuapi(cls, md5: str):
@@ -149,7 +176,7 @@ class Beatmap:
 
         # Save this beatmap to our database.
         m.save_to_sql()
-        printlog(f'Retrieved {m} from the osu!api.', Ansi.LIGHT_GREEN)
+        printlog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
 
     def save_to_sql(self) -> None:

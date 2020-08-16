@@ -151,7 +151,7 @@ class RankingType(IntEnum):
     Friends: Final[int] = 3
     Country: Final[int] = 4
 
-UNDEF = (1 << 31) - 1
+UNDEF = 9999
 autorestrict_pp = (
     # Values for autorestriction. This is the simplest
     # form of "anticheat", simply ban a user if they are not
@@ -228,7 +228,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         pp_cap = autorestrict_pp[gm][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            printlog(f'{p} restricted for submitting {s.pp} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
+            printlog(f'{s.player} restricted for submitting {s.pp} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
             s.player.restrict()
             return b'error: ban'
 
@@ -282,7 +282,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     if s.status == SubmissionStatus.BEST and s.rank == 1:
         # Announce the user's #1 score.
         if announce_chan := glob.channels.get('#announce'):
-            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map!r}.')
+            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map.embed}.')
 
     # Update the user.
     s.player.recent_scores[gm] = s
@@ -371,7 +371,7 @@ def getScores(req: Request) -> Optional[bytes]:
     res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores)}'.encode())
 
     # offset, name, rating
-    res.append(f'0\n{bmap!r}\n10.0'.encode())
+    res.append(f'0\n{bmap.full}\n10.0'.encode())
 
     # TODO: personal best
     res.append(b'')

@@ -57,10 +57,56 @@ def roll(p: Player, c: Messageable, msg: List[str]) -> str:
 # Send information about the user's most recent score.
 @command(priv=Privileges.Normal, public=True)
 def last(p: Player, c: Messageable, msg: List[str]) -> str:
-    if not (rc_score := p.recent_scores[p.status.game_mode]):
+    if not (s := p.recent_scores[p.status.game_mode]):
         return 'No recent score found for current mode!'
 
-    return f'[#{s.rank} @ {s.map_id}] {s.pp:.2f}pp'
+    return f'[#{s.rank} @ {s.map.full}] {s.pp:.2f}pp'
+
+# Find all maps matching %title%.
+@command(priv=Privileges.Normal, public=False)
+def mapsearch(p: Player, c: Messageable, msg: List[str]) -> str:
+    if not (res := glob.db.fetchall(
+        'SELECT id, set_id, artist, title, version '
+        'FROM maps WHERE title LIKE %s '
+        'LIMIT 50', [f'%{" ".join(msg)}%']
+    )): return 'No matches found :('
+
+    return '\n'.join(
+        '[https://osu.gatari.pw/d/{set_id} DL] [https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
+        for row in res
+    ) + f'\nMaps: {len(res)}'
+
+""" Nominators commands
+# The commands below allow users to
+# manage  the server's state of beatmaps.
+"""
+
+# Change the ranked status of the last beatmap /np'ed.
+@command(priv=Privileges.Nominator, public=True)
+def map(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) != 2 \
+    or msg[0] not in {'rank', 'unrank', 'love'} \
+    or msg[1] not in {'set', 'map'}:
+        return 'Invalid syntax! - !map <rank/unrank/love> <map/set>'
+
+    if not p.last_np:
+        return 'You must /np a map first!'
+
+    _set = msg[0] == 'set'
+    params = ('set_id', p.last_np.set_id) if _set \
+        else ('id', p.last_np.id)
+
+    status = {
+        'rank': 2,
+        'unrank': 0,
+        'love': 5
+    }[msg[0]]
+
+    glob.db.execute(
+        f'UPDATE maps SET status = %s WHERE {params[0]} = %s',
+        [status, params[1]]
+    )
+    return 'Map updated!'
 
 """ Admin commands
 # The commands below are relatively dangerous,
@@ -168,20 +214,6 @@ def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
 
     t.priv = Privileges(newpriv)
     return 'Success.'
-
-@command(priv=Privileges.Dangerous, public=False)
-def mapsearch(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Wild ass command idea i had, definitely not safe. at all.
-    if not (res := glob.db.fetchall(
-        'SELECT id, set_id, artist, title, version '
-        'FROM maps WHERE title LIKE %s '
-        'LIMIT 50', [f'%{" ".join(msg)}%']
-    )): return 'No matches found :('
-
-    return '\n'.join(
-        '[https://osu.gatari.pw/d/{set_id} DL] [https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
-        for row in res
-    ) + f'\nMaps: {len(res)}'
 
 @command(priv=Privileges.Dangerous, public=False)
 def ev(p: Player, c: Messageable, msg: List[str]) -> str:

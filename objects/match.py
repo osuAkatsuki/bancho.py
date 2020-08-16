@@ -10,7 +10,6 @@ __all__ = (
     'MatchTypes',
     'MatchScoringTypes',
     'MatchTeamTypes',
-    'RankedStatus',
     'ScoreFrame',
     'Slot',
     'Match'
@@ -52,16 +51,6 @@ class MatchTeamTypes(IntEnum):
     tag_coop:     Final[int] = 1
     team_vs:      Final[int] = 2
     tag_team_vs:  Final[int] = 3
-
-@unique
-class RankedStatus(IntEnum):
-    unknown:         Final[int] = 0
-    unsubmitted:     Final[int] = 1
-    pending:         Final[int] = 2
-    editable_cutoff: Final[int] = 3
-    ranked:          Final[int] = 4
-    approved:        Final[int] = 5
-    qualified:       Final[int] = 6
 
 class ScoreFrame:
     __slots__ = (

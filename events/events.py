@@ -5,6 +5,7 @@ from time import time
 from bcrypt import checkpw, hashpw, gensalt
 from hashlib import md5
 from cmyui.utils import rstring
+from re import compile as re_compile
 
 import packets
 from packets import Packet, PacketReader # convenience
@@ -15,7 +16,8 @@ from constants.mods import Mods
 from constants import commands
 from objects import glob
 from objects.match import SlotStatus, Teams
-from objects.player import Player, PresenceFilter
+from objects.player import Player, PresenceFilter, Action
+from objects.beatmap import Beatmap
 from constants.privileges import Privileges
 
 glob.bancho_map = {}
@@ -42,6 +44,7 @@ def readStatus(p: Player, pr: PacketReader) -> None:
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(packets.userStats(p))
 
+_np_regex = re_compile(r'^\x01ACTION is (?:editing|watching|listening to) \[https://osu.ppy.sh/b/(?P<bid>\d+) .+\]\x01$')
 # PacketID: 1
 @bancho_packet(Packet.c_sendPublicMessage)
 def sendMessage(p: Player, pr: PacketReader) -> None:
@@ -71,7 +74,7 @@ def sendMessage(p: Player, pr: PacketReader) -> None:
     client, client_id = p.name, p.id
 
     cmd = msg.startswith(glob.config.command_prefix) \
-        and commands.process_commands(p, t, msg)
+      and commands.process_commands(p, t, msg)
 
     if cmd: # A command was triggered.
         if cmd['public']:
@@ -85,6 +88,12 @@ def sendMessage(p: Player, pr: PacketReader) -> None:
                 t.send_selective(glob.bot, cmd['resp'], {p} | staff)
 
     else: # No command was triggered.
+        if _match := _np_regex.match(msg):
+            # User is /np'ing a map.
+            # Save it to their player instance
+            # so we can use this elsewhere owo..
+            p.last_np = Beatmap.from_bid(int(_match['bid']))
+
         t.send(p, msg)
 
     printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
@@ -282,7 +291,7 @@ def stopSpectating(p: Player, pr: PacketReader) -> None:
     host: Player = p.spectating
 
     if not host:
-        printlog(f"{p} Tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
+        printlog(f"{p} tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
         return
 
     host.remove_spectator(p)
@@ -299,7 +308,7 @@ def spectateFrames(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_cantSpectate)
 def cantSpectate(p: Player, pr: PacketReader) -> None:
     if not p.spectating:
-        printlog(f"{p} Sent can't spectate while not spectating?", Ansi.LIGHT_RED)
+        printlog(f"{p} sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
 
     data = packets.spectatorCantSpectate(p.id)
@@ -335,6 +344,10 @@ def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
 
     msg = msg[:2045] + '...' if msg[2048:] else msg
     client, client_id = p.name, p.id
+
+    if t.status.action == Action.Afk and t.away_msg:
+        # Send away message if target is afk and has one set.
+        p.enqueue(packets.sendMessage(client, t.away_msg, target, client_id))
 
     if t.id == 1:
         # Target is Aika, check if message is a command.
@@ -636,10 +649,11 @@ def matchSkipRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 63
 @bancho_packet(Packet.c_channelJoin)
 def channelJoin(p: Player, pr: PacketReader) -> None:
-    c = glob.channels.get(pr.read(osuTypes.string)[0])
+    chan_name = pr.read(osuTypes.string)[0]
+    c = glob.channels.get(chan_name)
 
     if not c or not p.join_channel(c):
-        printlog(f'{p} failed to join {c.name}.', Ansi.YELLOW)
+        printlog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
     p.enqueue(packets.channelJoin(c.name))

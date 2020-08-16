@@ -28,7 +28,7 @@ from constants.privileges import Privileges
 # Set CWD to /gulag.
 chdir(path.dirname(path.realpath(__file__)))
 
-glob.version: Final[Version] = Version(1, 4, 0)
+glob.version: Final[Version] = Version(1, 4, 2)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika
@@ -39,10 +39,8 @@ glob.bot.stats_from_sql_full() # no need to get friends
 glob.players.add(glob.bot)
 
 # Add all channels from db.
-for chan in glob.db.fetchall(
-    'SELECT name, topic, read_priv, '
-    'write_priv, auto_join FROM channels'
-): glob.channels.add(Channel(**chan))
+for chan in glob.db.fetchall('SELECT * FROM channels'):
+    glob.channels.add(Channel(**chan))
 
 serv: TCPServer
 conn: Connection

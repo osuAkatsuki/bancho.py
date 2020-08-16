@@ -112,6 +112,7 @@ def handle_ss(conn: Connection) -> None:
     path = f'screenshots/{conn.req.uri[4:]}'
 
     if not exists(path):
+        conn.resp.send(b'No file found!', 404)
         return
 
     with open(path, 'rb') as f:
