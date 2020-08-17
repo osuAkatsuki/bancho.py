@@ -64,13 +64,13 @@ def handle_bancho(conn: Connection) -> None:
             if pr.packetID == -1:
                 continue # skip, data empty?
 
-            if pr.packetID not in glob.bancho_map:
+            if pr.packetID in glob.bancho_map:
+                # Server is able to handle the packet.
+                printlog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
+                glob.bancho_map[pr.packetID](p, pr)
+            else: # Packet reading behaviour not yet defined.
                 printlog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
                 pr.ignore_packet()
-                continue
-
-            printlog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
-            glob.bancho_map[pr.packetID](p, pr)
 
         while not p.queue_empty():
             # Read all queued packets into stream

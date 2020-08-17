@@ -88,12 +88,10 @@ class MatchList(Sequence):
         for idx, m in enumerate(self.matches):
             if not m: return idx
 
-    def get_by_id(self, id: int) -> Optional[Match]:
+    def get_by_id(self, mid: int) -> Optional[Match]:
         for m in self.matches:
-            if not m or id != m.id:
-                continue
-
-            return m
+            if m and m.id == mid:
+                return m
 
     def add(self, m: Match) -> bool:
         if m in self.matches:
@@ -156,10 +154,23 @@ class PlayerList(Sequence):
             if p.token == token:
                 return p
 
-    def get_by_name(self, name: str) -> Player:
+    def get_by_name(self, name: str, sql: bool = False) -> Player:
         for p in self.players: # might copy
             if p.name == name:
                 return p
+
+        if not sql:
+            # Don't fetch from SQL
+            # if not specified.
+            return
+
+        # Try to get from SQL.
+        if not (res := glob.db.fetch(
+            'SELECT id, priv, silence_end '
+            'FROM users WHERE name = %s', [name]
+        )): return
+
+        return Player(**res)
 
     def get_by_id(self, id: int) -> Player:
         for p in self.players: # might copy

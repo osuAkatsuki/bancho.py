@@ -357,6 +357,12 @@ def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
         if cmd and 'resp' in cmd:
             # Command triggered and there is a response to send.
             p.enqueue(packets.sendMessage(t.name, cmd['resp'], client, t.id))
+        else: # No command triggered.
+            if _match := _np_regex.match(msg):
+                # User is /np'ing a map.
+                # Save it to their player instance
+                # so we can use this elsewhere owo..
+                p.last_np = Beatmap.from_bid(int(_match['bid']))
     else: # Not Aika
         t.enqueue(packets.sendMessage(client, msg, target, client_id))
 

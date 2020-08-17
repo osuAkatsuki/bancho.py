@@ -60,7 +60,7 @@ def last(p: Player, c: Messageable, msg: List[str]) -> str:
     if not (s := p.recent_scores[p.status.game_mode]):
         return 'No recent score found for current mode!'
 
-    return f'[#{s.rank} @ {s.map.full}] {s.pp:.2f}pp'
+    return f'#{s.rank} @ {s.map.embed} ({s.pp:.2f}pp)'
 
 # Find all maps matching %title%.
 @command(priv=Privileges.Normal, public=False)
@@ -81,13 +81,18 @@ def mapsearch(p: Player, c: Messageable, msg: List[str]) -> str:
 # manage  the server's state of beatmaps.
 """
 
+status_to_id = lambda s: {
+    'rank': 2,
+    'unrank': 0,
+    'love': 5
+}[s]
 # Change the ranked status of the last beatmap /np'ed.
 @command(priv=Privileges.Nominator, public=True)
 def map(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) != 2 \
     or msg[0] not in {'rank', 'unrank', 'love'} \
     or msg[1] not in {'set', 'map'}:
-        return 'Invalid syntax! - !map <rank/unrank/love> <map/set>'
+        return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if not p.last_np:
         return 'You must /np a map first!'
@@ -96,15 +101,9 @@ def map(p: Player, c: Messageable, msg: List[str]) -> str:
     params = ('set_id', p.last_np.set_id) if _set \
         else ('id', p.last_np.id)
 
-    status = {
-        'rank': 2,
-        'unrank': 0,
-        'love': 5
-    }[msg[0]]
-
     glob.db.execute(
         f'UPDATE maps SET status = %s WHERE {params[0]} = %s',
-        [status, params[1]]
+        [status_to_id(msg[0]), params[1]]
     )
     return 'Map updated!'
 
@@ -113,12 +112,41 @@ def map(p: Player, c: Messageable, msg: List[str]) -> str:
 # and are generally for managing users.
 """
 
+@command(priv=Privileges.Admin, public=False)
+def ban(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) < 2:
+        return 'Invalid syntax: !ban <name> <reason>'
+
+    # Find any user matching (including offline).
+    if not (t := glob.players.get_by_name(msg[0], sql=True)):
+        return f'"{msg[0]}" not found.'
+
+    if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
+        return 'Only developers can manage staff members.'
+
+    t.restrict() # TODO: use reason as param?
+    return f'{t} was banned.'
+
+@command(priv=Privileges.Admin, public=False)
+def unban(p: Player, c: Messageable, msg: List[str]) -> str:
+    if len(msg) < 2:
+        return 'Invalid syntax: !ban <name> <reason>'
+
+    # Find any user matching (including offline).
+    if not (t := glob.players.get_by_name(msg[0], sql=True)):
+        return f'"{msg[0]}" not found.'
+
+    if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
+        return 'Only developers can manage staff members.'
+
+    t.unrestrict() # TODO: use reason as param?
+    return f'{t} was unbanned.'
+
 # Send a notification to all players.
 @command(priv=Privileges.Admin, public=False)
 def alert(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !alert <message>
     if len(msg) < 1:
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !alert <msg>'
 
     glob.players.enqueue(packets.notification(' '.join(msg)))
     return 'Alert sent.'
@@ -126,9 +154,8 @@ def alert(p: Player, c: Messageable, msg: List[str]) -> str:
 # Send a notification to a specific user by name.
 @command(trigger='!alertu', priv=Privileges.Admin, public=False)
 def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !alertu <username> <message>
     if len(msg) < 2:
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !alertu <name> <msg>'
 
     if not (t := glob.players.get_by_name(msg[0])):
         return 'Could not find a user by that name.'
@@ -144,9 +171,8 @@ def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
 # Send an RTX request with a message to a user by name.
 @command(priv=Privileges.Dangerous, public=False)
 def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !rtx <username> <message>
     if len(msg) != 2:
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !rtx <name> <msg>'
 
     if not (t := glob.players.get_by_name(msg[0])):
         return 'Could not find a user by that name.'
@@ -158,9 +184,8 @@ def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
 # XXX: Not very useful, mostly just for testing/fun.
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False)
 def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !spack <username> <packetid>
     if len(msg) < 2 or not msg[-1].isnumeric():
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !spack <name> <packetid>'
 
     if not (t := glob.players.get_by_name(' '.join(msg[:-1]))):
         return 'Could not find a user by that name.'
@@ -175,9 +200,8 @@ _sbytes_re = re_comp(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
 # XXX: Not very useful, mostly just for testing/fun.
 @command(trigger='!sbytes', priv=Privileges.Dangerous, public=False)
 def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
-    # Syntax: !sbytes <username> <packetid>
     if len(msg) < 2:
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !sbytes <name> <packetid>'
 
     content = ' '.join(msg)
     if not (re := re_match(_sbytes_re, content)):
@@ -198,23 +222,42 @@ def debug(p: Player, c: Messageable, msg: List[str]) -> str:
     glob.config.debug = msg[0] == '1'
     return 'Success.'
 
+str_to_priv = lambda p: defaultdict(lambda: None, {
+    'normal': Privileges.Normal,
+    'whitelisted': Privileges.Whitelisted,
+    'supporter': Privileges.Supporter,
+    'premium': Privileges.Premium,
+    'tournament': Privileges.Tournament,
+    'nominator': Privileges.Nominator,
+    'mod': Privileges.Mod,
+    'admin': Privileges.Admin,
+    'dangerous': Privileges.Dangerous
+})[p]
 # Set permissions for a user (by username).
-# XXX: If no username is provided, edit self.
 @command(priv=Privileges.Dangerous, public=False)
 def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
-    if (msg_len := len(msg)) > 2 or not msg[-1].isnumeric():
-        return 'Invalid syntax'
+    if (msg_len := len(msg)) < 2:
+        return 'Invalid syntax: !setpriv <name> <role1 | role2 | ...>'
 
-    t = glob.players.get_by_name(msg[1]) if msg_len == 2 else p
-    if not t: # TODO: db? if this cmd stays
+    # A mess that gets each unique privilege out of msg.
+    priv = [str_to_priv(i) for i in set(''.join(msg[1:]).replace(' ', '').lower().split('|'))]
+    if any(x is None for x in priv):
+        return 'Invalid privileges.'
+
+    if not (t := glob.players.get_by_name(msg[0])): # TODO: db?
         return 'Could not find user.'
 
     glob.db.execute('UPDATE users SET priv = %s WHERE id = %s',
-                    [newpriv := int(msg[0]), t.id])
+                    [newpriv := sum(priv), t.id])
 
     t.priv = Privileges(newpriv)
     return 'Success.'
 
+# XXX: This actually comes in handy sometimes, I initially
+# wrote it completely as a joke, but I might keep it in for
+# devs.. Comes in handy when debugging to be able to run something
+# like `!ev print(glob.players.get_by_name('cmyui').status.action)`
+# or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
 def ev(p: Player, c: Messageable, msg: List[str]) -> str:
     try: # pinnacle of the gulag
@@ -255,7 +298,7 @@ def mp_abort(p: Player, m: Match, msg: List[str]) -> str:
 # Force a user into a multiplayer match by username.
 def mp_force(p: Player, m: Match, msg: List[str]) -> str:
     if len(msg) < 1:
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !mp force <name>'
 
     if not (t := glob.players.get_by_name(' '.join(msg))):
         return 'Could not find a user by that name.'
@@ -266,7 +309,7 @@ def mp_force(p: Player, m: Match, msg: List[str]) -> str:
 # Set the current beatmap (by id).
 def mp_map(p: Player, m: Match, msg: List[str]) -> str:
     if len(msg) < 1 or not msg[0].isnumeric():
-        return 'Invalid syntax.'
+        return 'Invalid syntax: !mp map <beatmapid>'
 
     if not (res := glob.db.fetch(
         'SELECT id, md5, name '

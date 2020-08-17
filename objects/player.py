@@ -376,7 +376,18 @@ class Player:
             [int(self.priv), self.id]
         )
 
-        self.enqueue(packets.notification('Your account has been restricted.'))
+        if self in glob.players:
+            # If user is online, notify and log them out.
+            # XXX: If you want to lock the player's
+            # client, you can send -3 rather than -1.
+            self.enqueue(packets.userID(-1))
+            self.enqueue(packets.notification(
+                'Your account has been banned.\n\n'
+                'If you believe this was a mistake or '
+                'have waited >= 2 months, you can appeal '
+                'using the appeal form on the website.'
+            ))
+
         printlog(f'Restricted {self}.', Ansi.CYAN)
 
     def unrestrict(self) -> None:
@@ -386,7 +397,6 @@ class Player:
             [int(self.priv), self.id]
         )
 
-        self.enqueue(packets.notification('Your account has been unrestricted.'))
         printlog(f'Unrestricted {self}.', Ansi.CYAN)
 
     def join_match(self, m: Match, passwd: str) -> bool:
@@ -639,8 +649,6 @@ class Player:
             'AND priv & 1', [
                 self.stats[gm].pp
             ])
-
-        # TODO: finish off other stat related stuff
 
         self.stats[gm].rank = res['c'] + 1
         self.enqueue(packets.userStats(self))
