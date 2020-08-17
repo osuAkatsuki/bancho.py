@@ -244,7 +244,7 @@ def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
     if any(x is None for x in priv):
         return 'Invalid privileges.'
 
-    if not (t := glob.players.get_by_name(msg[0])): # TODO: db?
+    if not (t := glob.players.get_by_name(msg[0], sql=True)):
         return 'Could not find user.'
 
     glob.db.execute('UPDATE users SET priv = %s WHERE id = %s',

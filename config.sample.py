@@ -21,10 +21,8 @@ osu_api_key = ''
 # The menu icon displayed on
 # the main menu of osu! ingame.
 menu_icon = (
-    # Image URL
-    'https://link.to/my_image.png',
-    # Hyperlink URL
-    'https://github.com/cmyui/gulag'
+    'https://link.to/my_image.png', # Image url
+    'https://github.com/cmyui/gulag' # Onclick url
 )
 
 # Ingame bot command prefix.

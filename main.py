@@ -28,7 +28,7 @@ from constants.privileges import Privileges
 # Set CWD to /gulag.
 chdir(path.dirname(path.realpath(__file__)))
 
-glob.version: Final[Version] = Version(1, 4, 3)
+glob.version: Final[Version] = Version(1, 4, 4)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika

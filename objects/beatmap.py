@@ -5,10 +5,11 @@ from enum import IntEnum, unique
 from requests import get as req_get
 from collections import defaultdict
 
+from pp.owoppai import Owoppai
 from console import printlog, Ansi
 from objects import glob
 
-__all__ = ('Beatmap',)
+__all__ = ('RankedStatus', 'Beatmap')
 
 # For some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
@@ -17,10 +18,9 @@ __all__ = ('Beatmap',)
 
 @unique
 class RankedStatus(IntEnum):
-    # Statuses used in getscores.php.
-    # We'll use these for storing things
-    # on the gulag side, and convert other
-    # status enums to this instead for use.
+    """A class to represent osu! ranked statuses server-side for gulag.
+       These are the same as the statuses used in osu!'s getscores.php.
+    """
     NotSubmitted = -1
     Pending = 0
     UpdateAvailable = 1
@@ -80,8 +80,14 @@ class Beatmap:
     status: :class:`RankedStatus`
         The beatmap's name, including difficulty.
         # XXX: diff may be split off one day?
+
+    pp_values: List[:class:`float`]
+        A list of cached pp values for common accuracy values
+        following fmt: [90%, 95%, 98%, 99%, 100%].
     """
-    __slots__ = ('md5', 'id', 'set_id', 'artist', 'title', 'version', 'status')
+    __slots__ = ('md5', 'id', 'set_id',
+                 'artist', 'title', 'version',
+                 'status', 'pp_values')
 
     def __init__(self, **kwargs):
         self.md5 = kwargs.pop('md5', '')
@@ -93,6 +99,8 @@ class Beatmap:
         self.version = kwargs.pop('version', 0)
 
         self.status = RankedStatus(kwargs.pop('status', 0))
+        self.pp_values = [0.0, 0.0, 0.0, 0.0, 0.0]
+        #                [90,  95,  98,  99,  100].
 
     @property
     def filename(self) -> str:
@@ -103,18 +111,24 @@ class Beatmap:
         return f'{self.artist} - {self.title} [{self.version}]'
 
     @property
-    def url(self, _set: bool = False):
-        return f'https://osu.ppy.sh/s/{self.set_id}' if _set \
-          else f'https://osu.ppy.sh/b/{self.id}'
+    def url(self):
+        return f'https://osu.ppy.sh/b/{self.id}'
+
+    @property
+    def set_url(self) -> str:
+        return f'https://osu.ppy.sh/s/{self.set_id}'
 
     @property
     def embed(self) -> str:
         return f'[{self.url} {self.full}]'
 
     @classmethod
-    def from_bid(cls, bid: int):
+    def from_bid(cls, bid: int, cache_pp: bool = False):
         # Try to get from sql.
         if (m := cls.from_bid_sql(bid)):
+            if cache_pp:
+                m.cache_pp()
+
             return m
 
         # TODO: perhaps implement osuapi GET?
@@ -133,9 +147,12 @@ class Beatmap:
         return cls(**res)
 
     @classmethod
-    def from_md5(cls, md5: str):
+    def from_md5(cls, md5: str, cache_pp: bool = False):
         # Try to get from sql.
         if (m := cls.from_md5_sql(md5)):
+            if cache_pp:
+                m.cache_pp()
+
             return m
 
         # Not in sql, get from osu!api.
@@ -169,7 +186,7 @@ class Beatmap:
         m = cls()
         m.md5 = md5
 
-        m.id, m.set_id = (int(x) for x in (apidata['beatmap_id'], apidata['beatmapset_id']))
+        m.id, m.set_id = int(apidata['beatmap_id']), int(apidata['beatmapset_id'])
         m.status = RankedStatus.from_osuapi_status(int(apidata['approved']))
         m.artist, m.title, m.version = \
             apidata['artist'], apidata['title'], apidata['version']
@@ -178,6 +195,13 @@ class Beatmap:
         m.save_to_sql()
         printlog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
+
+    def cache_pp(self) -> None:
+        owpi = Owoppai(map_id = self.id)
+
+        for idx, acc in enumerate((90, 95, 98, 99, 100)):
+            owpi.accuracy = acc
+            self.pp_values[idx] = owpi.calculate_pp()[0]
 
     def save_to_sql(self) -> None:
         if any(x is None for x in (

@@ -20,8 +20,12 @@ This is simply the result of my programming values and time thrown together; I'd
 
 1. Developer sanity. Many other osu! server implementations are far too complicated for the job; either in an
    overkill sense, or sometimes through poor abstraction. With this project I aim to keep the code as simple
-   and concise as possible, while still maintaining high performance in times which matter - critical loops,
-   and expensive/common handlers - not all situations are created equal, and nor should they be treated this way.
+   and concise as possible, while still maintaining high performance in times which matter (critical loops,
+   common/expensive handlers, etc.).
+
+   Developing features for the server should be an enjoyable and thought-provoking experience of finding new ideas;
+   when the codebase makes that difficult, programming loses the aspect of fun and everything becomes an activity
+   that requires effort - I'm trying my best to never let this code get to that state.
 
 ## Setup
 

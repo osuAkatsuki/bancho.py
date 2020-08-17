@@ -234,11 +234,16 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         if not p.priv & c.read:
             continue # no priv to read
 
-        data.extend(packets.channelInfo(*c.basic_info))
-
         # Autojoinable channels
         if c.auto_join and p.join_channel(c):
             data.extend(packets.channelJoin(c.name))
+
+            # Inform other client's that we've joined the channel.
+            # XXX: Don't need to use `immune = {p}` here since
+            #      we're not added to glob.players yet :P..
+            glob.players.enqueue(packets.channelInfo(*c.basic_info))
+
+        data.extend(packets.channelInfo(*c.basic_info))
 
     # Fetch some of the player's
     # information from sql to be cached.
@@ -342,7 +347,7 @@ def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} tried to message {t}, but they are silenced.')
         return
 
-    msg = msg[:2045] + '...' if msg[2048:] else msg
+    msg = f'{msg[:2045]}...' if msg[2048:] else msg
     client, client_id = p.name, p.id
 
     if t.status.action == Action.Afk and t.away_msg:
@@ -358,11 +363,24 @@ def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
             # Command triggered and there is a response to send.
             p.enqueue(packets.sendMessage(t.name, cmd['resp'], client, t.id))
         else: # No command triggered.
-            if _match := _np_regex.match(msg):
+            if match := _np_regex.match(msg):
                 # User is /np'ing a map.
                 # Save it to their player instance
                 # so we can use this elsewhere owo..
-                p.last_np = Beatmap.from_bid(int(_match['bid']))
+                p.last_np = Beatmap.from_bid(int(match['bid']), cache_pp=True)
+
+                # Since this is a DM to the bot, we should
+                # send back a list of general PP values.
+                # TODO: !acc and !mods in commands to
+                #       modify these values :P
+                pp_vals = 'PP Values: ' + ' | '.join(
+                    f'{acc}%: {pp:.2f}pp'
+                    for acc, pp in zip(
+                        (90, 95, 98, 99, 100),
+                        p.last_np.pp_values
+                    )
+                )
+                p.enqueue(packets.sendMessage(t.name, pp_vals, client, t.id))
     else: # Not Aika
         t.enqueue(packets.sendMessage(client, msg, target, client_id))
 
@@ -662,6 +680,10 @@ def channelJoin(p: Player, pr: PacketReader) -> None:
         printlog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
+    # Enqueue new channelinfo (playercount) to all players.
+    glob.players.enqueue(packets.channelInfo(*c.basic_info))
+
+    # Enqueue channelJoin to our player.
     p.enqueue(packets.channelJoin(c.name))
 
 # PacketID: 70
@@ -741,10 +763,15 @@ def channelPart(p: Player, pr: PacketReader) -> None:
     if not (chan := pr.read(osuTypes.string)[0]):
         return
 
-    if (c := glob.channels.get(chan)):
-        p.leave_channel(c)
-    else:
+    if not (c := glob.channels.get(chan)):
         printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
+        return
+
+    # Leave the channel server-side.
+    p.leave_channel(c)
+
+    # Enqueue new channelinfo (playercount) to all players.
+    glob.players.enqueue(packets.channelInfo(*c.basic_info))
 
 # PacketID: 79
 @bancho_packet(Packet.c_ReceiveUpdates)
@@ -795,8 +822,9 @@ def matchInvite(p: Player, pr: PacketReader) -> None:
 # PacketID: 97
 @bancho_packet(Packet.c_userPresenceRequest)
 def userPresenceRequest(p: Player, pr: PacketReader) -> None:
-    for id in pr.read(osuTypes.i32_list):
-        p.enqueue(packets.userPresence(id))
+    for pid in pr.read(osuTypes.i32_list):
+        if t := glob.players.get_by_id(pid):
+            p.enqueue(packets.userPresence(t))
 
 # PacketID: 99
 @bancho_packet(Packet.c_userToggleBlockNonFriendPM)

@@ -1,3 +1,4 @@
+# Remove pre-existing tables.
 drop table if exists stats;
 drop table if exists users;
 drop table if exists scores_rx;
@@ -25,11 +26,11 @@ create table users
 		unique (name)
 );
 
--- With this I decided to make a naming scheme rather
--- than something nescessarily 'readable' or pretty, I
--- think in practice this will be much easier to use
--- and memorize quickly compared to other schemes.
--- Syntax is simply: stat_rxmode_osumode
+# With this I decided to make a naming scheme rather
+# than something nescessarily 'readable' or pretty, I
+# think in practice this will be much easier to use
+# and memorize quickly compared to other schemes.
+# Syntax is simply: stat_rxmode_osumode
 create table stats
 (
 	id int auto_increment
@@ -136,6 +137,7 @@ create table scores_vn
 	perfect tinyint(1) not null
 );
 
+# TODO: find the real max lengths for strings
 create table maps
 (
 	id int not null
@@ -143,9 +145,9 @@ create table maps
 	set_id int not null,
 	status int not null,
 	md5 char(32) not null,
-	artist varchar(64) not null,
-	title varchar(64) not null,
-	version varchar(64) not null,
+	artist varchar(128) not null,
+	title varchar(128) not null,
+	version varchar(128) not null,
 	constraint maps_id_uindex
 		unique (id),
 	constraint maps_md5_uindex
@@ -172,7 +174,7 @@ create table channels
 		unique (name)
 );
 
--- Insert vital stuff, such as bot user & basic channels.
+# Insert vital stuff, such as bot user & basic channels.
 
 insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
