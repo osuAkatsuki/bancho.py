@@ -607,7 +607,7 @@ class Player:
         country = res['countryCode']
 
         self.country = (country_codes[country], country)
-        self.location = (res['lat'], res['lon'])
+        self.location = (res['lon'], res['lat'])
 
     def update_stats(self, gm: GameMode = GameMode.vn_std) -> None:
         table = 'scores_rx' if gm >= 4 else 'scores_vn'

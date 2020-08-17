@@ -666,8 +666,8 @@ def userPresence(p) -> bytes:
         (p.utc_offset + 24, osuTypes.u8),
         (p.country[0], osuTypes.u8),
         (p.bancho_priv | (p.status.game_mode << 5), osuTypes.u8),
-        (p.location[0], osuTypes.f32), # lat
-        (p.location[1], osuTypes.f32), # long
+        (p.location[0], osuTypes.f32), # long
+        (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
     ) if p.id != 1 else \
         b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00' \
