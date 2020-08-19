@@ -373,14 +373,15 @@ def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
                 # send back a list of general PP values.
                 # TODO: !acc and !mods in commands to
                 #       modify these values :P
-                pp_vals = 'PP Values: ' + ' | '.join(
+                msg = 'PP Values: ' + ' | '.join(
                     f'{acc}%: {pp:.2f}pp'
                     for acc, pp in zip(
                         (90, 95, 98, 99, 100),
                         p.last_np.pp_values
-                    )
-                )
-                p.enqueue(packets.sendMessage(t.name, pp_vals, client, t.id))
+                    )) if p.last_np else 'Could not find map.'
+
+                p.enqueue(packets.sendMessage(t.name, msg, client, t.id))
+
     else: # Not Aika
         t.enqueue(packets.sendMessage(client, msg, target, client_id))
 

@@ -4,6 +4,7 @@ from typing import Final
 from enum import IntEnum, unique
 from requests import get as req_get
 from collections import defaultdict
+from datetime import datetime as dt
 
 from pp.owoppai import Owoppai
 from console import printlog, Ansi
@@ -77,6 +78,10 @@ class Beatmap:
     version: :class:`str`
         The difficulty name of the beatmap.
 
+    last_update: :class:`datetime`
+        The datetime of the beatmap's last update.
+        Used for making sure we always have the newest version.
+
     status: :class:`RankedStatus`
         The beatmap's name, including difficulty.
         # XXX: diff may be split off one day?
@@ -87,7 +92,7 @@ class Beatmap:
     """
     __slots__ = ('md5', 'id', 'set_id',
                  'artist', 'title', 'version',
-                 'status', 'pp_values')
+                 'status', 'last_update', 'pp_values')
 
     def __init__(self, **kwargs):
         self.md5 = kwargs.pop('md5', '')
@@ -98,6 +103,7 @@ class Beatmap:
         self.title = kwargs.pop('title', 0)
         self.version = kwargs.pop('version', 0)
 
+        self.last_update: dt = kwargs.pop('last_update', dt(1, 1, 1))
         self.status = RankedStatus(kwargs.pop('status', 0))
         self.pp_values = [0.0, 0.0, 0.0, 0.0, 0.0]
         #                [90,  95,  98,  99,  100].
@@ -185,14 +191,46 @@ class Beatmap:
 
         m = cls()
         m.md5 = md5
-
-        m.id, m.set_id = int(apidata['beatmap_id']), int(apidata['beatmapset_id'])
+        m.id = int(apidata['beatmap_id'])
+        m.set_id = int(apidata['beatmapset_id'])
         m.status = RankedStatus.from_osuapi_status(int(apidata['approved']))
         m.artist, m.title, m.version = \
-            apidata['artist'], apidata['title'], apidata['version']
+            apidata['artist'], \
+            apidata['title'], \
+            apidata['version']
 
-        # Save this beatmap to our database.
-        m.save_to_sql()
+        date_format = '%Y-%m-%d %H:%M:%S'
+        m.last_update = dt.strptime(apidata['last_update'], date_format)
+
+        res = glob.db.fetch(
+            'SELECT * FROM maps WHERE id = %s',
+            [apidata['beatmap_id']]
+        )
+
+        if res:
+            # If a map with this ID exists, check if the api
+            # data if newer than the data we have server-side;
+            # the map may have been updated by its creator.
+
+            # XXX: temp fix for local server
+            if not res['last_update']:
+                res['last_update'] = '0001-01-01 00:00:00'
+
+            old = dt.strptime(res['last_update'], date_format)
+
+            if m.last_update > old:
+                if res['frozen'] and m.status != res['status']:
+                    # Keep the ranked status of maps through updates,
+                    # if we've specified to (by 'freezing' it).
+                    m.status = res['status']
+
+                m.save_to_sql()
+            else:
+                printlog(f'\nImpossible I think..? [temp test]\n', Ansi.RED)
+        else:
+            # New map, just save to DB.
+            m.save_to_sql()
+
         printlog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
 
@@ -212,10 +250,10 @@ class Beatmap:
             return
 
         glob.db.execute(
-            'INSERT INTO maps (id, set_id, status, md5, '
-            'artist, title, version) VALUES '
-            '(%s, %s, %s, %s, %s, %s, %s)', [
+            'REPLACE INTO maps (id, set_id, status, md5, '
+            'artist, title, version, last_update) VALUES '
+            '(%s, %s, %s, %s, %s, %s, %s, %s)', [
                 self.id, self.set_id, int(self.status), self.md5,
-                self.artist, self.title, self.version
+                self.artist, self.title, self.version, self.last_update
             ]
         )
