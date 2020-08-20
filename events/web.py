@@ -5,6 +5,8 @@ from os.path import exists
 from requests import get as req_get
 from random import randrange
 from cmyui.utils import rstring
+from urllib.parse import unquote
+from re import compile as re_comp
 
 import packets
 from constants.mods import Mods
@@ -129,19 +131,95 @@ class DirectDisplaySetting(IntEnum):
     RankedPlayed = 7
     Loved = 8
 
-required_params_osuSearch = frozenset({
-    'u', 'h', 'r', 'q', 'm', 'p'
-})
+ranked_from_direct = {
+    DirectDisplaySetting.Ranked: RankedStatus.Ranked,
+    DirectDisplaySetting.Pending: RankedStatus.Pending,
+    DirectDisplaySetting.Qualified: RankedStatus.Qualified,
+    DirectDisplaySetting.Graveyard: RankedStatus.Pending,
+    DirectDisplaySetting.RankedPlayed: RankedStatus.Ranked, # TODO
+    DirectDisplaySetting.Loved: RankedStatus.Loved
+}
 @web_handler('osu-search.php')
-def osuSearch(req: Request) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_osuSearch):
-        printlog(f'submit-modular-selector req missing params.')
-        return
-
+def osuSearchHandler(req: Request) -> Optional[bytes]:
+    # u: username
+    # h: password md5
+    # r: ranked option selection
+    # q: querystring
+    # m: gamemode
+    # p: page
     if not (p := glob.players.get_from_cred(req.args['u'], req.args['h'])):
         return
 
-    p.enqueue(packets.notification('Hey! osu!direct is not currently working.'))
+    if not req.args['p'].isnumeric():
+        return
+
+    query = req.args['q'].replace('+', ' ') # TODO: allow empty
+    offset = int(req.args['p']) * 100
+
+    # Get all set data.
+    if not (res := glob.db.fetchall(
+        'SELECT DISTINCT set_id, artist, '
+        'title, status, creator, last_update '
+        'FROM maps WHERE title LIKE %s '
+        'LIMIT %s, 100', # paginate through sql lol
+        [f"%{query}%", offset]
+    )): return b'-1\nNo matches found.'
+
+    # We'll construct the response as a list of
+    # strings, then join and encode when returning.
+    ret = [f'{len(res)}']
+
+    # For each beatmap set
+    for bmapset in res:
+        # retrieve the data for each difficulty
+        if not (bmaps := glob.db.fetchall(
+            # Remove ',' from diffname since it's our split char.
+            "SELECT REPLACE(version, ',', '') AS version, "
+            'mode, cs, od, ar, hp, diff '
+            'FROM maps WHERE set_id = %s '
+            # Order difficulties by mode > star rating > ar.
+            'ORDER BY mode ASC, diff ASC, ar ASC',
+            [bmapset['set_id']]
+        )): continue
+
+        # Construct difficulty-specific information.
+        diffs = ','.join(
+            '[{diff:.2f}⭐] {version} {{CS{cs} OD{od} AR{ar} HP{hp}}}@{mode}'.format(**row)
+            for row in bmapset
+        )
+
+        ret.append(
+            '{set_id}.osz|{artist}|{title}|{creator}|'
+            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
+            '0|0|0|0|0|{diffs}'.format(**bmapset, diffs=diffs)
+        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+
+    return '\n'.join(ret).encode()
+
+@web_handler('osu-search-set.php')
+def osuSearchSetHandler(req: Request) -> Optional[bytes]:
+    # Since we only need set-specific data, we can basically
+    # just do same same query with either bid or bsid.
+    if 's' in req.args:
+        k, v = ('set_id', req.args['s'])
+    elif 'b' in req.args:
+        k, v = ('id', req.args['b'])
+    else:
+        return b''
+
+    # Get all set data.
+    # XXX: order by anything?
+    if not (bmapset := glob.db.fetch(
+        'SELECT DISTINCT set_id, artist, '
+        'title, status, creator, last_update '
+        f'FROM maps WHERE {k} = %s', [v]
+    )): return b''
+
+    # TODO: rating
+    return ('{set_id}.osz|{artist}|{title}|{creator}|'
+            '{status}|10.0|{last_update}|{set_id}|'
+            '0|0|0|0|0').format(**bmapset).encode()
+    # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 @unique
 class RankingType(IntEnum):
@@ -424,3 +502,37 @@ def checkUpdates(req: Request) -> Optional[bytes]:
     }
 
     return result
+
+_map_regex = re_comp(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
+def updateBeatmap(req: Request) -> Optional[bytes]:
+    # XXX: This currently works in updating the map, but
+    # seems to get the checksum something like that wrong?
+    # Will have to look into it :P
+    if not (re := _map_regex.match(unquote(req.uri[10:]))):
+        return b'' # Regex match failed? TODO: test
+
+    if not (res := glob.db.fetch(
+        'SELECT id, md5 FROM maps WHERE '
+        'artist = %s AND title = %s '
+        'AND creator = %s AND version = %s', [
+            re['artist'],
+            re['title'],
+            re['creator'],
+            re['version']
+        ]
+    )): return b'' # no map found
+
+    if exists(filepath := f"pp/maps/{res['id']}.osu"):
+        with open(filepath, 'r') as f:
+            content = f.read()
+    else:
+        # We don't have map, get from osu!
+        if not (r := req_get(f"https://old.ppy.sh/osu/{res['id']}")):
+            raise Exception(f'Could not find map {filepath}!')
+
+        content = r.content.decode()
+
+        with open(filepath, 'w+') as f:
+            f.write(content)
+
+    return content.encode()

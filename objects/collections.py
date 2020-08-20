@@ -167,14 +167,15 @@ class PlayerList(Sequence):
         # Try to get from SQL.
         if not (res := glob.db.fetch(
             'SELECT id, priv, silence_end '
-            'FROM users WHERE name = %s', [name]
+            'FROM users WHERE name = %s',
+            [name]
         )): return
 
         return Player(**res)
 
-    def get_by_id(self, id: int) -> Player:
+    def get_by_id(self, pid: int) -> Player:
         for p in self.players: # might copy
-            if p.id == id:
+            if p.id == pid:
                 return p
 
     def get_from_cred(self, name: str, pw_md5: str) -> None:

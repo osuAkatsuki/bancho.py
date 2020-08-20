@@ -9,6 +9,8 @@ from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
 from console import printlog, Ansi
 
+# Tuple of some of struct's format specifiers
+# for clean access within packet pack/unpack.
 _specifiers: Final[Tuple[str, ...]] = (
     'b', 'B', # 8
     'h', 'H', # 16
@@ -17,6 +19,7 @@ _specifiers: Final[Tuple[str, ...]] = (
 )
 
 def read_uleb128(data: bytearray) -> Tuple[int, int]:
+    """ Read an unsigned LEB128 (used for string length) from `data`. """
     offset = val = shift = 0
 
     while True:
@@ -30,6 +33,7 @@ def read_uleb128(data: bytearray) -> Tuple[int, int]:
     return val, offset
 
 def read_string(data: bytearray) -> Tuple[str, int]:
+    """ Read a string (ULEB128 & string) from `data`. """
     offset = 1
     if data[0] == 0x00:
         return '', offset
@@ -39,6 +43,7 @@ def read_string(data: bytearray) -> Tuple[str, int]:
     return data[offset:offset+length].decode(), offset + length
 
 def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
+    """ Read an int32 list from `data`. """
     ret = []
     offs = 2
     for _ in range(struct.unpack('<h', data[:offs])[0]):
@@ -48,7 +53,7 @@ def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
     return ret, offs
 
 def read_match(data: bytearray) -> Tuple[Match, int]:
-    # suuuper fucking TODO: make not shit
+    """ Read an osu! match from `data`. """
     m = Match()
     offset = 3 # Ignore matchID (h), inprogress (b)
     m.type, m.mods = struct.unpack('<bI', data[offset:offset+5])
@@ -97,12 +102,10 @@ def read_match(data: bytearray) -> Tuple[Match, int]:
     m.seed = int.from_bytes(data[offset:offset+4], 'little')
     return m, offset + 4
 
-def read_scoreframe(data) -> Tuple[ScoreFrame, int]:
-    s = ScoreFrame()
+def read_scoreframe(data: bytearray) -> Tuple[ScoreFrame, int]:
+    """ Read an osu! scoreframe from `data`. """
     offset = 29
-    s.time, s.id, s.num300, s.num100, s.num50, s.num_geki, s.num_katu, \
-    s.num_miss, s.total_score, s.max_combo, s.perfect, s.current_hp, \
-    s.tag_byte, s.score_v2 = struct.unpack('<iBHHHHHHiHH?BB?', data[:offset])
+    s = ScoreFrame(*struct.unpack('<iBHHHHHHiHH?BB?', data[:offset]))
 
     if s.score_v2:
         s.combo_portion, s.bonus_portion = struct.unpack('<ff', data[offset:offset+8])
@@ -111,19 +114,45 @@ def read_scoreframe(data) -> Tuple[ScoreFrame, int]:
     return s, offset
 
 class PacketReader:
-    __slots__ = ('_data', '_offset', 'packetID', 'length', 'specifiers')
+    """A class dedicated to reading osu! packets.
+
+    Attributes
+    -----------
+    _data: :class:`bytearray`
+        The entire bytearray including all data.
+        XXX: You should use the `data` property if you want
+             data starting from the current offset.
+
+    _offset: :class:`int`
+        The offset of the reader; bytes behind the offset
+        have already been read, bytes ahead are yet to be read.
+
+    packetID: :class:`int`
+        The packetID of the current packet being read.
+        -1 if no packet has been read, or packet was corrupt.
+
+    length: :class:`int`
+        The length (in bytes) of the current packet.
+
+    Properties
+    -----------
+    data: :class:`bytearray`
+        The data starting from the current offset.
+    """
+    __slots__ = ('_data', '_offset',
+                 'packetID', 'length')
 
     def __init__(self, data): # take request body in bytes form as param
         self._data = bytearray(data)
         self._offset = 0
 
-        self.packetID = 0
+        self.packetID = -1
         self.length = 0
 
     def __repr__(self) -> str:
         return f'<id: {self.packetID} | length: {self.length}>'
 
-    @property # get data w/ offset accounted for
+    @property
     def data(self) -> bytearray:
         return self._data[self._offset:]
 
@@ -151,16 +180,19 @@ class PacketReader:
         ret = []
         for t in types:
             if t == osuTypes.string:
+                # Read a string
                 data, offs = read_string(self.data)
                 self._offset += offs
                 if data is not None:
                     ret.append(data)
             elif t == osuTypes.i32_list:
+                # Read an i32 list
                 data, offs = read_i32_list(self.data)
                 self._offset += offs
                 if data is not None:
                     ret.extend(data)
             elif t == osuTypes.channel:
+                # Read an osu! channel
                 for _ in range(2):
                     data, offs = read_string(self.data)
                     self._offset += offs
@@ -169,6 +201,7 @@ class PacketReader:
                 ret.append(int.from_bytes(self.data[:2], 'little'))
                 self._offset += 2
             elif t == osuTypes.message:
+                # Read an osu! message
                 for _ in range(3):
                     data, offs = read_string(self.data)
                     self._offset += offs
@@ -177,13 +210,16 @@ class PacketReader:
                 ret.append(int.from_bytes(self.data[:4], 'little'))
                 self._offset += 4
             elif t == osuTypes.match:
+                # Read an osu! match
                 data, offs = read_match(self.data)
                 self._offset += offs
                 ret.append(data)
             elif t == osuTypes.scoreframe:
+                # Read an osu! scoreframe
                 data, offs = read_scoreframe(self.data)
                 self._offset += offs
             else:
+                # Read a normal datatype
                 fmt = _specifiers[t]
                 size = struct.calcsize(fmt)
                 ret.extend(struct.unpack(fmt, self.data[:size]))
@@ -191,6 +227,7 @@ class PacketReader:
         return ret
 
 def write_uleb128(num: int) -> bytearray:
+    """ Write `num` into an unsigned LEB128. """
     if num == 0:
         return bytearray(b'\x00')
 
@@ -207,6 +244,7 @@ def write_uleb128(num: int) -> bytearray:
     return ret
 
 def write_string(s: str) -> bytearray:
+    """ Write `s` into bytes (ULEB128 & string). """
     if (length := len(s)) == 0:
         return bytearray(b'\x00')
 
@@ -219,6 +257,7 @@ def write_string(s: str) -> bytearray:
     return ret
 
 def write_i32_list(l: Tuple[int, ...]) -> bytearray:
+    """ Write `l` into bytes (int32 list). """
     ret = bytearray(struct.pack('<h', len(l)))
 
     for i in l:
@@ -228,6 +267,7 @@ def write_i32_list(l: Tuple[int, ...]) -> bytearray:
 
 def write_message(client: str, msg: str, target: str,
                   client_id: int) -> bytearray:
+    """ Write params into bytes (osu! message). """
     ret = bytearray()
     ret.extend(write_string(client))
     ret.extend(write_string(msg))
@@ -237,6 +277,7 @@ def write_message(client: str, msg: str, target: str,
 
 def write_channel(name: str, topic: str,
                   count: int) -> bytearray:
+    """ Write params into bytes (osu! channel). """
     ret = bytearray()
     ret.extend(write_string(name))
     ret.extend(write_string(topic))
@@ -244,15 +285,15 @@ def write_channel(name: str, topic: str,
     return ret
 
 def write_scoreframe(s: ScoreFrame) -> bytearray:
-    return bytearray(
-        struct.pack(
-            '<ibHHHHHHIIbbbb', s.time, s.id, s.num300, s.num100, s.num50,
-            s.num_geki, s.num_katu, s.num_miss, s.total_score, s.max_combo,
-            s.perfect, s.current_hp, s.tag_byte, s.score_v2
-        )
-    )
+    """ Write `s` into bytes (osu! scoreframe). """
+    return bytearray(struct.pack('<ibHHHHHHIIbbbb',
+        s.time, s.id, s.num300, s.num100, s.num50, s.num_geki,
+        s.num_katu, s.num_miss, s.total_score, s.max_combo,
+        s.perfect, s.current_hp, s.tag_byte, s.score_v2
+    ))
 
 def write_match(m: Match) -> bytearray:
+    """ Write `m` into bytes (osu! match). """
     ret = bytearray()
     ret.extend(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
     ret.extend(write_string(m.name))
@@ -284,6 +325,7 @@ def write_match(m: Match) -> bytearray:
     return ret
 
 def write(id: int, *args: Tuple[Any, ...]) -> bytes:
+    """ Write `args` into bytes. """
     ret = bytearray()
 
     ret.extend(struct.pack('<Hx', id))
@@ -474,13 +516,14 @@ def userStats(p) -> bytes:
         (p.gm_stats.tscore, osuTypes.i64),
         (p.gm_stats.rank, osuTypes.i32),
         (p.gm_stats.pp, osuTypes.i16)
-    ) if p.id != 1 else \
-        b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00' \
-        b'\x00\x08\x0b\x0eout new code..\x00\x00' \
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?' \
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
+    ) if p.id != 1 else (
+        b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
+        b'\x00\x08\x0b\x0eout new code..\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?'
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    )
 
 # PacketID: 12
 def logout(userID: int) -> bytes:
@@ -644,13 +687,13 @@ def mainMenuIcon() -> bytes:
 
 # PacketID: 80
 def monitor() -> bytes:
-    # This is a little 'anticheat' feature from ppy himself..
-    # basically, it would do some checks (most likely for aqn)
-    # screenshot your desktop (and send it to osu! sevrers),
-    # then trigger the processlist to be sent to bancho as well.
+    # This is an older (now removed) 'anticheat' feature of the osu!
+    # client; basically, it would do some checks (most likely for aqn)
+    # screenshot your desktop (and send it to osu! sevrers), then trigger
+    # the processlist to be sent to bancho as well (also now unused).
 
-    # This doesn't work on newer clients (and i have), it was
-    # no plan on trying to use it, just coded for completion.
+    # This doesn't work on newer clients, and I had no plans
+    # of trying to put it to use - just coded for completion.
     return write(Packet.s_monitor)
 
 # PacketID: 81
@@ -669,10 +712,11 @@ def userPresence(p) -> bytes:
         (p.location[0], osuTypes.f32), # long
         (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
-    ) if p.id != 1 else \
-        b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00' \
-        b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00' \
+    ) if p.id != 1 else (
+        b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00'
+        b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00'
         b'\x000B\x00\x00\x00\x00'
+    )
 
 # PacketID: 86
 def restartServer(ms: int) -> bytes:
@@ -721,10 +765,10 @@ def switchServer(t: int) -> bytes: # (idletime < t || match != null)
 
 # PacketID: 105
 def RTX(notif: str) -> bytes:
-    # Sends a request to the client to show notif
-    # as a popup, black screen, freeze game and
-    # make a beep noise (freezes client) for 5
-    # seconds randomly within the next 3-8 seconds.
+    # Bit of a weird one, sends a request to the client
+    # to show some visual effects on screen for 5 seconds:
+    # - Black screenk, freeze game, beeps loudly.
+    # within the next 3-8 seconds at random.
     return write(Packet.s_RTX, (notif, osuTypes.string))
 
 # PacketID: 106

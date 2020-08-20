@@ -215,8 +215,8 @@ class Score:
             printlog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
             return
 
-        s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, \
-        s.score, s.max_combo = (int(i) for i in data[3:11])
+        (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,
+         s.score, s.max_combo) = (int(i) for i in data[3:11])
 
         s.perfect = data[11] == '1'
         s.grade = data[12] # letter grade

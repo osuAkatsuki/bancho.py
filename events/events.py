@@ -175,7 +175,7 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         # Password is incorrect.
         if pw_hash in glob.cache['bcrypt']: # ~0.01 ms
-            # Cache hit - this saves ~190ms on subsequent logins.
+            # Cache hit - this saves ~200ms on subsequent logins.
             if glob.cache['bcrypt'][pw_hash] != res['pw_hash']:
                 return packets.userID(-1), 'no'
         else: # Cache miss, must be first login.
@@ -508,11 +508,15 @@ def matchChangeSettings(p: Player, pr: PacketReader) -> None:
                     m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
                     break
 
-    if m.map_id == (1 << 32) - 1 and not m.map_md5:
+    if new.map_id == (1 << 32) - 1 and not new.map_md5:
         # Map being changed, unready players.
         for s in m.slots:
             if s.status & SlotStatus.ready:
                 s.status = SlotStatus.not_ready
+    else:
+        # TODO: send the new map in m.chat once
+        #       finished the match map refactor.
+        pass
 
     # Copy basic match info into our match.
     m.map_id = new.map_id

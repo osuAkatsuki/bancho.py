@@ -50,10 +50,11 @@ with TCPServer(glob.config.server_addr) as serv:
     for conn in serv.listen(max_conns = 5):
         st = time()
 
-        handler = handle_bancho if conn.req.uri == '/' \
-            else handle_web if conn.req.startswith('/web/') \
-            else handle_ss if conn.req.startswith('/ss/') \
-            else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
+        handler = (handle_bancho if conn.req.uri == '/'
+              else handle_web if conn.req.startswith('/web/')
+              else handle_ss if conn.req.startswith('/ss/')
+              else handle_dl if conn.req.startswith('/d/')
+              else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED))
         handler(conn)
 
         printlog(f'Request took {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)

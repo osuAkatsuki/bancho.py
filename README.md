@@ -12,7 +12,7 @@ This is simply the result of my programming values and time thrown together; I'd
 
 ### Features
 
-- Fully functional multiplayer, spectator, leaderboards, score submission, and most other features of an osu! server.
+- Fully functional multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
 - Undergoing active development; an osu! server has always been a large goal of mine, so motivation is very high.
 - Clean and concise code, easy to make small modifications & add to the codebase; designed around this idea.
 
@@ -42,7 +42,7 @@ git clone https://github.com/cmyui/gulag.git
 cd gulag
 
 # Create empty data directories.
-mkdir certs screenshots replays logs pp/maps
+mkdir certs screenshots replays logs pp/maps mapsets
 
 # Install pipenv and requirements.
 python3.8 -m pip install pipenv --user

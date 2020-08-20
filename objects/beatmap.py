@@ -9,6 +9,7 @@ from datetime import datetime as dt
 from pp.owoppai import Owoppai
 from console import printlog, Ansi
 from objects import glob
+from constants.gamemodes import GameMode
 
 __all__ = ('RankedStatus', 'Beatmap')
 
@@ -78,33 +79,75 @@ class Beatmap:
     version: :class:`str`
         The difficulty name of the beatmap.
 
+    creator: :class:`str`
+        The beatmap's creator.
+
     last_update: :class:`datetime`
         The datetime of the beatmap's last update.
         Used for making sure we always have the newest version.
 
     status: :class:`RankedStatus`
-        The beatmap's name, including difficulty.
-        # XXX: diff may be split off one day?
+        The ranked status of the beatmap.
+
+    frozen: :class:`bool`
+        Whether the beatmap's status is to be kept when a newer
+        version is found in the osu!api.
+        # XXX: This is set when a map's status is manually changed.
+
+    mode: :class:`GameMode`
+        The primary gamemode of the map.
+
+    bpm: :class:`float`
+        The BPM of the map.
+
+    cs: :class:`float`
+        The circle size of the beatmap.
+
+    od: :class:`float`
+        The overall difficulty of the beatmap.
+
+    ar: :class:`float`
+        The approach rate of the beatmap.
+
+    hp: :class:`float`
+        The health drain of the beatmap.
+
+    diff: :class:`float`
+        A float representing the star rating for the map's primary gamemode.
 
     pp_values: List[:class:`float`]
         A list of cached pp values for common accuracy values
         following fmt: [90%, 95%, 98%, 99%, 100%].
+        # XXX: These are only cached for the map's primary mode.
     """
     __slots__ = ('md5', 'id', 'set_id',
-                 'artist', 'title', 'version',
-                 'status', 'last_update', 'pp_values')
+                 'artist', 'title', 'version', 'creator',
+                 'status', 'last_update', 'frozen',
+                 'mode', 'bpm', 'cs', 'od', 'ar', 'hp',
+                 'diff', 'pp_values')
 
     def __init__(self, **kwargs):
         self.md5 = kwargs.pop('md5', '')
         self.id = kwargs.pop('id', 0)
         self.set_id = kwargs.pop('set_id', 0)
 
-        self.artist = kwargs.pop('artist', 0)
-        self.title = kwargs.pop('title', 0)
-        self.version = kwargs.pop('version', 0)
+        self.artist = kwargs.pop('artist', '')
+        self.title = kwargs.pop('title', '')
+        self.version = kwargs.pop('version', '')
+        self.creator = kwargs.pop('creator', '')
 
         self.last_update: dt = kwargs.pop('last_update', dt(1, 1, 1))
         self.status = RankedStatus(kwargs.pop('status', 0))
+        self.frozen = kwargs.pop('frozen', False)
+        self.mode = GameMode(kwargs.pop('mode', 0))
+
+        self.bpm = kwargs.pop('bpm', 0.0)
+        self.cs = kwargs.pop('cs', 0.0)
+        self.od = kwargs.pop('od', 0.0)
+        self.ar = kwargs.pop('ar', 0.0)
+        self.hp = kwargs.pop('hp', 0.0)
+
+        self.diff = kwargs.pop('diff', 0.00)
         self.pp_values = [0.0, 0.0, 0.0, 0.0, 0.0]
         #                [90,  95,  98,  99,  100].
 
@@ -144,7 +187,8 @@ class Beatmap:
     @classmethod
     def from_bid_sql(cls, bid: int):
         if not (res := glob.db.fetch(
-            'SELECT md5, set_id, status, artist, title, version '
+            'SELECT md5, set_id, status, '
+            'artist, title, version '
             'FROM maps WHERE id = %s',
             [bid]
         )): return
@@ -170,7 +214,8 @@ class Beatmap:
     @classmethod
     def from_md5_sql(cls, md5: str):
         if not (res := glob.db.fetch(
-            'SELECT id, set_id, status, artist, title, version '
+            'SELECT id, set_id, status, '
+            'artist, title, version '
             'FROM maps WHERE md5 = %s',
             [md5]
         )): return
@@ -194,16 +239,28 @@ class Beatmap:
         m.id = int(apidata['beatmap_id'])
         m.set_id = int(apidata['beatmapset_id'])
         m.status = RankedStatus.from_osuapi_status(int(apidata['approved']))
-        m.artist, m.title, m.version = \
-            apidata['artist'], \
-            apidata['title'], \
-            apidata['version']
+        m.artist, m.title, m.version, m.creator = (
+            apidata['artist'],
+            apidata['title'],
+            apidata['version'],
+            apidata['creator']
+        )
 
         date_format = '%Y-%m-%d %H:%M:%S'
         m.last_update = dt.strptime(apidata['last_update'], date_format)
 
+        m.mode = GameMode(int(apidata['mode']))
+        m.bpm = float(apidata['bpm'])
+        m.cs = float(apidata['diff_size'])
+        m.od = float(apidata['diff_overall'])
+        m.ar = float(apidata['diff_approach'])
+        m.hp = float(apidata['diff_drain'])
+
+        m.diff = float(apidata['difficultyrating'])
+
         res = glob.db.fetch(
-            'SELECT * FROM maps WHERE id = %s',
+            'SELECT last_update, status, frozen '
+            'FROM maps WHERE id = %s',
             [apidata['beatmap_id']]
         )
 
@@ -223,6 +280,7 @@ class Beatmap:
                     # Keep the ranked status of maps through updates,
                     # if we've specified to (by 'freezing' it).
                     m.status = res['status']
+                    m.frozen = res['frozen']
 
                 m.save_to_sql()
             else:
@@ -244,16 +302,22 @@ class Beatmap:
     def save_to_sql(self) -> None:
         if any(x is None for x in (
             self.md5, self.id, self.set_id, self.status,
-            self.artist, self.title, self.version
+            self.artist, self.title, self.version, self.creator,
+            self.last_update, self.frozen, self.mode, self.bpm,
+            self.cs, self.od, self.ar, self.hp, self.diff
         )):
             printlog('Tried to save invalid beatmap to SQL!', Ansi.LIGHT_RED)
             return
 
         glob.db.execute(
             'REPLACE INTO maps (id, set_id, status, md5, '
-            'artist, title, version, last_update) VALUES '
-            '(%s, %s, %s, %s, %s, %s, %s, %s)', [
+            'artist, title, version, creator, last_update, '
+            'frozen, mode, bpm, cs, od, ar, hp, diff) VALUES ('
+            '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
+            '%s, %s, %s, %s, %s, %s, %s, %s)', [
                 self.id, self.set_id, int(self.status), self.md5,
-                self.artist, self.title, self.version, self.last_update
+                self.artist, self.title, self.version, self.creator,
+                self.last_update, self.frozen, int(self.mode), self.bpm,
+                self.cs, self.od, self.ar, self.hp, self.diff
             ]
         )

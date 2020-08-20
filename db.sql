@@ -148,6 +148,16 @@ create table maps
 	artist varchar(128) not null,
 	title varchar(128) not null,
 	version varchar(128) not null,
+	creator varchar(128) not null,
+	last_update datetime null comment 'will be NOT NULL in future',
+	frozen tinyint default 1 null,
+	mode tinyint(1) default 0 not null,
+	bpm float(9,2) default 0.00 not null,
+	cs float(4,2) default 0.00 not null,
+	od float(4,2) default 0.00 not null,
+	ar float(4,2) default 0.00 not null,
+	hp float(4,2) default 0.00 not null,
+	diff float(6,3) default 0.000 not null,
 	constraint maps_id_uindex
 		unique (id),
 	constraint maps_md5_uindex

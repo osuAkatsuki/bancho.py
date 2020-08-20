@@ -24,16 +24,16 @@ class Owoppai:
         self.accuracy = kwargs.get('accuracy', -1.0)
 
     def open_map(self, map_id: int) -> None:
-        filename = f'pp/maps/{map_id}.osu'
-        if not path.exists(filename):
+        filepath = f'pp/maps/{map_id}.osu'
+        if not path.exists(filepath):
             # Do osu!api request for the map.
             if not (r := req_get(f'https://old.ppy.sh/osu/{map_id}')):
-                raise Exception(f'Could not find map {filename}!')
+                raise Exception(f'Could not find map {filepath}!')
 
-            with open(filename, 'w+') as f:
-                f.write(r.content.decode('utf-8', 'strict'))
+            with open(filepath, 'w+') as f:
+                f.write(r.content.decode())
 
-        self.filename = filename
+        self.filename = filepath
 
     def calculate_pp(self) -> Tuple[float, float]:
         # This function can either return a list of

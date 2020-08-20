@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from typing import Final, Optional, Union, Tuple
+from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
+from objects.channel import Channel
 
 __all__ = (
     'SlotStatus',
@@ -52,38 +54,27 @@ class MatchTeamTypes(IntEnum):
     team_vs:      Final[int] = 2
     tag_team_vs:  Final[int] = 3
 
+@dataclass
 class ScoreFrame:
-    __slots__ = (
-        'time', 'id',
-        'num300', 'num100', 'num50', 'num_geki', 'num_katu', 'num_miss',
-        'total_score', 'current_combo', 'max_combo', 'perfect', 'current_hp',
-        'tag_byte', 'score_v2', 'combo_portion', 'bonus_portion'
-    )
+    time: int
+    id: int
+    num300: int
+    num100: int
+    num50: int
+    num_geki: int
+    num_katu: int
+    num_miss: int
+    total_score: int
+    current_combo: int
+    max_combo: int
+    perfect: bool
+    current_hp: int
+    tag_byte: int
 
-    def __init__(self) -> None:
-        self.time = 0
-        self.id = 0
-        self.num300 = 0
-        self.num100 = 0
-        self.num50 = 0
-        self.num_geki = 0
-        self.num_katu = 0
-        self.num_miss = 0
-        self.total_score = 0
-        self.current_combo = 0
-        self.max_combo = 0
-        self.perfect = False
-        self.current_hp = 0
-        self.tag_byte = 0
-
-        # sv2
-        self.score_v2 = False
-        self.combo_portion = 0.0
-        self.bonus_portion = 0.0
-
-    #@property
-    #def is_failed(self) -> bool: # TODO: test
-    #    return self.current_hp == 254
+    # scorev2 only
+    score_v2: Optional[bool] = None
+    combo_portion: Optional[int] = None
+    bonus_portion: Optional[int] = None
 
 class Slot:
     """A class to represent a single slot in an osu! multiplayer match.
@@ -215,7 +206,7 @@ class Match:
         self.freemods = False
         self.game_mode = 0
 
-        self.chat = None
+        self.chat: Optional[Channel] = None
         self.slots = [Slot() for _ in range(16)]
 
         self.type = MatchTypes.standard

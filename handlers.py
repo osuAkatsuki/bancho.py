@@ -1,20 +1,20 @@
 import packets
 from os.path import exists
 from cmyui.web import Connection
+from requests import get as req_get
 
 from objects import glob
 
 from events.events import login as ev_login
 from console import *
 
-# This has to be imported so
-# that the events are loaded.
 from events import web
 
 __all__ = (
     'handle_bancho',
     'handle_web',
     'handle_ss',
+    'handle_dl',
     #'registration'
 )
 
@@ -90,6 +90,13 @@ def handle_web(conn: Connection) -> None:
     # Connections to /web/ only send a single request
     # at a time; no need to iterate through received data.
     if handler not in glob.web_map:
+        if handler.startswith('maps/'):
+            printlog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
+            # Special case for updating maps.
+            if (resp := web.updateBeatmap(conn.req)):
+                conn.resp.send(resp, 200)
+            return
+
         printlog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
         return
 
@@ -117,6 +124,38 @@ def handle_ss(conn: Connection) -> None:
 
     with open(path, 'rb') as f:
         conn.resp.send(f.read(), 200)
+
+def handle_dl(conn: Connection) -> None:
+    if not all(x in conn.req.args for x in ('u', 'h', 'vv')):
+        conn.resp.send(b'Method requires authorization.', 401)
+        return
+
+    if not (p := glob.players.get_from_cred(conn.req.args['u'], conn.req.args['h'])):
+        return
+
+    if not conn.req.uri[3:].isnumeric():
+        # Set ID requested is not a number.
+        return
+
+    set_id = int(conn.req.uri[3:])
+
+    if exists(filepath := f'mapsets/{set_id}.osz'):
+        with open(filepath, 'rb') as f:
+            content = f.read()
+    else:
+        # Map not cached, get from a mirror
+        # XXX: I'm considering handling this myself, aswell..
+        if not (r := req_get(f'https://osu.gatari.pw/d/{set_id}')):
+            conn.resp.send(b'ERROR: DOWNLOAD_NOT_AVAILABLE')
+            return
+
+        content = r.content
+
+        # Save to disk.
+        with open(filepath, 'wb+') as f:
+            f.write(content)
+
+    conn.resp.send(content, 200)
 
 # XXX: This won't be completed for a while most likely..
 # Focused on other parts of the design (web mostly).
