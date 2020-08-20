@@ -52,27 +52,45 @@ def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
 
     return ret, offs
 
+from objects.beatmap import Beatmap
 def read_match(data: bytearray) -> Tuple[Match, int]:
     """ Read an osu! match from `data`. """
     m = Match()
-    offset = 3 # Ignore matchID (h), inprogress (b)
+
+    # Ignore match id (i32) & inprogress (i8).
+    offset = 3
+
+    # Read type & match mods.
     m.type, m.mods = struct.unpack('<bI', data[offset:offset+5])
     offset += 5
+
+    # Read match name & password.
     m.name, offs = read_string(data[offset:])
     offset += offs
     m.passwd, offs = read_string(data[offset:])
     offset += offs
-    m.map_name, offs = read_string(data[offset:])
-    offset += offs
-    m.map_id = int.from_bytes(data[offset:offset+4], 'little')
+
+    # Ignore map's name.
+    offset += 1
+    if data[offset - 1] == 0x0b:
+        offset += sum(read_uleb128(data[offset:]))
+
+    # Ignore map's id.
     offset += 4
-    m.map_md5, offs = read_string(data[offset:])
+
+    # Read map's md5 (only thing needed to get map).
+    map_md5, offs = read_string(data[offset:])
     offset += offs
 
+    # Get beatmap object for map selected.
+    m.bmap = Beatmap.from_md5(map_md5)
+
+    # Read slot statuses.
     for s in m.slots:
         s.status = data[offset]
         offset += 1
 
+    # Read slot teams.
     for s in m.slots:
         s.team = data[offset]
         offset += 1
@@ -82,9 +100,12 @@ def read_match(data: bytearray) -> Tuple[Match, int]:
             # Dont think we need this?
             offset += 4
 
+    # Read match host.
     m.host = glob.players.get_by_id(int.from_bytes(data[offset:offset+4], 'little'))
     offset += 4
 
+    # Read match mode, match scoring,
+    # team type, and freemods.
     m.game_mode = data[offset]
     offset += 1
     m.match_scoring = data[offset]
@@ -94,11 +115,15 @@ def read_match(data: bytearray) -> Tuple[Match, int]:
     m.freemods = data[offset]
     offset += 1
 
+    # If we're in freemods mode,
+    # read individual slot mods.
     if m.freemods:
         for s in m.slots:
             s.mods = int.from_bytes(data[offset:offset+4], 'little')
             offset += 4
 
+    # Read the seed from multi.
+    # XXX: Used for mania random mod.
     m.seed = int.from_bytes(data[offset:offset+4], 'little')
     return m, offset + 4
 
@@ -298,9 +323,15 @@ def write_match(m: Match) -> bytearray:
     ret.extend(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
     ret.extend(write_string(m.name))
     ret.extend(write_string(m.passwd))
-    ret.extend(write_string(m.map_name))
-    ret.extend(m.map_id.to_bytes(4, 'little'))
-    ret.extend(write_string(m.map_md5))
+
+    if m.bmap:
+        ret.extend(write_string(m.bmap.full))
+        ret.extend(m.bmap.id.to_bytes(4, 'little'))
+        ret.extend(write_string(m.bmap.md5))
+    else:
+        ret.extend(write_string('')) # name
+        ret.extend(((1 << 32) - 1).to_bytes(4, 'little')) # id
+        ret.extend(write_string('')) # md5
 
     ret.extend(s.status for s in m.slots)
     ret.extend(s.team for s in m.slots)

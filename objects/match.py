@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
 from objects.channel import Channel
+from objects.beatmap import Beatmap
 
 __all__ = (
     'SlotStatus',
@@ -143,14 +144,8 @@ class Match:
     host: :class:`Player`
         A player obj of the match's host.
 
-    map_id: :class:`int`
-        The id of the currently selected map.
-
-    map_name: :class:`str`
-        The name of the currently selected map.
-
-    map_md5: :class:`str`
-        The md5 of the currently selected map.
+    bmap: Optional[:class:`Beatmap`]
+        A beatmap obj representing the osu map.
 
     mods: :class:`int`
         The match's currently selected mods.
@@ -185,7 +180,7 @@ class Match:
     """
     __slots__ = (
         'id', 'name', 'passwd', 'host',
-        'map_id', 'map_name', 'map_md5',
+        'bmap',
         'mods', 'freemods', 'game_mode',
         'chat', 'slots',
         'type', 'team_type', 'match_scoring',
@@ -195,12 +190,10 @@ class Match:
     def __init__(self) -> None:
         self.id = 0
         self.name = ''
-        self.passwd = ''
+        self.passwd = '' # TODO: filter from lobby
         self.host = None
 
-        self.map_id = 0
-        self.map_name = ''
-        self.map_md5 = ''
+        self.bmap: Optional[Beatmap] = None
 
         self.mods = 0
         self.freemods = False
@@ -256,9 +249,7 @@ class Match:
                 return idx
 
     def copy(self, m) -> None:
-        self.map_id = m.map_id
-        self.map_md5 = m.map_md5
-        self.map_name = m.map_name
+        self.bmap = m.bmap
         self.freemods = m.freemods
         self.game_mode = m.game_mode
         self.team_type = m.team_type

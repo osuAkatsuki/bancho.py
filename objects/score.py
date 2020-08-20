@@ -67,7 +67,7 @@ class Score:
     id: :class:`int`
         The score's unique ID.
 
-    map: Optional[:class:`Beatmap`]
+    bmap: Optional[:class:`Beatmap`]
         A beatmap obj representing the osu map.
 
     player: Optional[:class:`Player`]
@@ -142,7 +142,7 @@ class Score:
     def __init__(self):
         self.id = 0
 
-        self.map: Optional[Beatmap] = None
+        self.bmap: Optional[Beatmap] = None
         self.player: Optional[Player] = None
 
         self.pp = 0.0
@@ -194,7 +194,7 @@ class Score:
         if len(map_md5 := data[0]) != 32:
             return
 
-        s.map = Beatmap.from_md5(map_md5)
+        s.bmap = Beatmap.from_md5(map_md5)
 
         # why does osu! make me rstrip lol
         s.player = glob.players.get_from_cred(data[1].rstrip(), pass_md5)
@@ -230,7 +230,7 @@ class Score:
         # Now we can calculate things based on our data.
         s.calc_accuracy()
 
-        if s.map:
+        if s.bmap:
             # Ignore SR for now.
             s.pp = s.calc_diff()[0]
             s.calc_status()
@@ -256,7 +256,7 @@ class Score:
             'SELECT COUNT(*) AS c FROM {t} '
             'WHERE map_md5 = %s AND game_mode = %s '
             'AND status = 2 AND {s} > %s'.format(t = table, s = scoring), [
-                self.map.md5, self.game_mode, score
+                self.bmap.md5, self.game_mode, score
             ]
         )
 
@@ -273,7 +273,7 @@ class Score:
             return (0.0, 0.0)
 
         owpi: Owoppai = Owoppai(
-            map_id = self.map.id,
+            map_id = self.bmap.id,
             mods = self.mods,
             combo = self.max_combo,
             misses = self.nmiss,
@@ -297,7 +297,7 @@ class Score:
             f'SELECT 1 FROM {table} WHERE userid = %s '
             'AND map_md5 = %s AND game_mode = %s '
             'AND pp > %s AND status = 2', [
-                self.player.id, self.map.md5,
+                self.player.id, self.bmap.md5,
                 self.game_mode, self.pp
             ]
         )

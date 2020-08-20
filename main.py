@@ -10,7 +10,6 @@ if __name__ != '__main__':
     raise Exception('main.py is meant to be run directly!')
 
 from time import time
-from typing import Final
 from os import chdir, path
 
 from cmyui.web import TCPServer, Connection
@@ -28,7 +27,7 @@ from constants.privileges import Privileges
 # Set CWD to /gulag.
 chdir(path.dirname(path.realpath(__file__)))
 
-glob.version: Final[Version] = Version(1, 4, 4)
+glob.version = Version(1, 5, 2)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika

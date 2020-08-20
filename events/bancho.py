@@ -3,7 +3,6 @@
 from typing import Tuple, Callable
 from time import time
 from bcrypt import checkpw, hashpw, gensalt
-from hashlib import md5
 from cmyui.utils import rstring
 from re import compile as re_compile
 
@@ -40,7 +39,7 @@ def readStatus(p: Player, pr: PacketReader) -> None:
         osuTypes.i32 # beatmapid
     )
 
-    p.status.update(*data) # TODO: probably refactor some status stuff
+    p.status.update(*data)
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(packets.userStats(p))
 
@@ -508,27 +507,22 @@ def matchChangeSettings(p: Player, pr: PacketReader) -> None:
                     m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
                     break
 
-    if new.map_id == (1 << 32) - 1 and not new.map_md5:
+    if not new.bmap:
         # Map being changed, unready players.
         for s in m.slots:
             if s.status & SlotStatus.ready:
                 s.status = SlotStatus.not_ready
-    else:
-        # TODO: send the new map in m.chat once
-        #       finished the match map refactor.
-        pass
+    elif not m.bmap:
+        # New map has been chosen, send to match chat.
+        m.chat.send(glob.bot, f'Map selected: {new.bmap.embed}.')
 
     # Copy basic match info into our match.
-    m.map_id = new.map_id
-    m.map_md5 = new.map_md5
-    m.map_name = new.map_name
+    m.bmap = new.bmap
     m.freemods = new.freemods
     m.game_mode = new.game_mode
     m.team_type = new.team_type
     m.match_scoring = new.match_scoring
-    #m.mods = new.mods
     m.name = new.name
-    #m.copy(new)
 
     m.enqueue(packets.updateMatch(m))
 
@@ -823,6 +817,19 @@ def matchInvite(p: Player, pr: PacketReader) -> None:
     inv = f'Come join my game: {p.match.embed}.'
     t.enqueue(packets.sendMessage(p.name, inv, t.name, p.id))
     printlog(f'{p} invited {t} to their match.')
+
+# PacketID: 90
+@bancho_packet(Packet.c_matchChangePassword)
+def matchChangePassword(p: Player, pr: PacketReader) -> None:
+    if not (m := p.match):
+        printlog(f'{p} tried changing match passwd outside of a match?')
+        return
+
+    # Read new match data
+    new = pr.read(osuTypes.match)[0]
+
+    m.passwd = new.passwd
+    m.enqueue(packets.updateMatch(m), lobby=False)
 
 # PacketID: 97
 @bancho_packet(Packet.c_userPresenceRequest)

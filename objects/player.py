@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, Final, Optional
+from typing import Final, Optional
 from random import choices
 from requests import get as req_get
 from string import ascii_lowercase
 from time import time
-from json import loads
 
 from constants.privileges import Privileges, BanchoPrivileges
 from constants.gamemodes import GameMode
@@ -14,6 +13,7 @@ from console import printlog, Ansi
 
 from objects.channel import Channel
 from objects.match import Match, SlotStatus
+from objects.beatmap import Beatmap
 from objects import glob
 from enum import IntEnum, unique
 from queue import SimpleQueue
@@ -139,6 +139,9 @@ class Status:
 
     def update(self, action: int, info_text: str, map_md5: str,
                mods: int, game_mode: int, map_id: int) -> None:
+        # osu! sends both map id and md5, but
+        # we'll only need one since we fetch a
+        # beatmap obj from cache/sql anyways..
         self.action = Action(action)
         self.info_text = info_text
         self.map_md5 = map_md5

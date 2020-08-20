@@ -5,10 +5,10 @@ from requests import get as req_get
 
 from objects import glob
 
-from events.events import login as ev_login
+from events.bancho import login as loginEvent
 from console import *
 
-from events import web
+from events.web import updateBeatmap
 
 __all__ = (
     'handle_bancho',
@@ -42,7 +42,7 @@ def handle_bancho(conn: Connection) -> None:
     if 'osu-token' not in conn.req.headers:
         # Login is a bit of a special case,
         # so we'll handle it separately.
-        login_data = ev_login(conn.req.body, conn.req.headers['X-Real-IP'])
+        login_data = loginEvent(conn.req.body, conn.req.headers['X-Real-IP'])
 
         resp.extend(login_data[0])
         conn.resp.add_header(f'cho-token: {login_data[1]}')
@@ -93,7 +93,7 @@ def handle_web(conn: Connection) -> None:
         if handler.startswith('maps/'):
             printlog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
             # Special case for updating maps.
-            if (resp := web.updateBeatmap(conn.req)):
+            if (resp := updateBeatmap(conn.req)):
                 conn.resp.send(resp, 200)
             return
 

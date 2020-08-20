@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Final
+from typing import Optional, Callable, Final, List
 from enum import IntEnum, unique
 from time import time
 from os.path import exists
@@ -13,7 +13,7 @@ from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from objects.score import Score, SubmissionStatus
-from objects.player import Player, Privileges
+from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
 from cmyui.web import Request
@@ -139,14 +139,15 @@ ranked_from_direct = {
     DirectDisplaySetting.RankedPlayed: RankedStatus.Ranked, # TODO
     DirectDisplaySetting.Loved: RankedStatus.Loved
 }
+required_params_osuSearch = frozenset({
+    'u', 'h', 'r', 'q', 'm', 'p'
+})
 @web_handler('osu-search.php')
 def osuSearchHandler(req: Request) -> Optional[bytes]:
-    # u: username
-    # h: password md5
-    # r: ranked option selection
-    # q: querystring
-    # m: gamemode
-    # p: page
+    if not all(x in req.args for x in required_params_osuSearch):
+        printlog(f'osu-search req missing params.')
+        return
+
     if not (p := glob.players.get_from_cred(req.args['u'], req.args['h'])):
         return
 
@@ -185,7 +186,7 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
         # Construct difficulty-specific information.
         diffs = ','.join(
             '[{diff:.2f}⭐] {version} {{CS{cs} OD{od} AR{ar} HP{hp}}}@{mode}'.format(**row)
-            for row in bmapset
+            for row in bmaps
         )
 
         ret.append(
@@ -274,10 +275,10 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
-    elif not s.map:
+    elif not s.bmap:
         # Map does not exist, most likely unsubmitted.
         return b'error: no'
-    elif s.map.status == RankedStatus.Pending:
+    elif s.bmap.status == RankedStatus.Pending:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
 
@@ -288,7 +289,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     res = glob.db.fetch(
         f'SELECT 1 FROM {table} WHERE game_mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
-        'AND score = %s', [s.game_mode, s.map.md5,
+        'AND score = %s', [s.game_mode, s.bmap.md5,
                            s.player.id, s.mods, s.score]
     )
 
@@ -306,7 +307,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         pp_cap = autorestrict_pp[gm][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            printlog(f'{s.player} restricted for submitting {s.pp} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
+            printlog(f'{s.player} restricted for submitting {s.pp:.2f} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
             s.player.restrict()
             return b'error: ban'
 
@@ -317,7 +318,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         glob.db.execute(
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 and map_md5 = %s '
-            'AND userid = %s', [s.map.md5, s.player.id])
+            'AND userid = %s', [s.bmap.md5, s.player.id])
 
     s.id = glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
@@ -326,7 +327,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         '%s, %s, %s, '
         '%s, %s, %s'
         ')', [
-            s.map.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
+            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
             int(s.status), s.game_mode, s.play_time,
             s.client_flags, s.player.id, s.perfect
@@ -345,7 +346,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
                 f.write(req.files['score'])
 
     s.player.stats[gm].tscore += s.score
-    if s.map.status in {RankedStatus.Ranked, RankedStatus.Approved}:
+    if s.bmap.status in {RankedStatus.Ranked, RankedStatus.Approved}:
         s.player.stats[gm].rscore += s.score
 
     glob.db.execute(
@@ -360,7 +361,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     if s.status == SubmissionStatus.BEST and s.rank == 1:
         # Announce the user's #1 score.
         if announce_chan := glob.channels.get('#announce'):
-            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.map.embed}.')
+            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.bmap.embed}.')
 
     # Update the user.
     s.player.recent_scores[gm] = s
@@ -368,7 +369,6 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
 
     printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
-
 
 required_params_getReplay = frozenset({
     'c', 'm', 'u', 'h'
@@ -421,7 +421,9 @@ def getScores(req: Request) -> Optional[bytes]:
         scoring = 'score'
 
     if not (bmap := Beatmap.from_md5(req.args['c'])):
-        return b'1|false'
+        # Couldn't find in db or at osu! api.
+        # The beatmap must not be submitted.
+        return b'-1|false'
 
     if bmap.status < 2:
         # Only show leaderboards for ranked,
@@ -509,30 +511,30 @@ def updateBeatmap(req: Request) -> Optional[bytes]:
     # seems to get the checksum something like that wrong?
     # Will have to look into it :P
     if not (re := _map_regex.match(unquote(req.uri[10:]))):
-        return b'' # Regex match failed? TODO: test
+        printlog(f'Requested invalid map update {req.uri}.', Ansi.RED)
+        return b''
 
     if not (res := glob.db.fetch(
         'SELECT id, md5 FROM maps WHERE '
         'artist = %s AND title = %s '
         'AND creator = %s AND version = %s', [
-            re['artist'],
-            re['title'],
-            re['creator'],
-            re['version']
+            re['artist'], re['title'],
+            re['creator'], re['version']
         ]
     )): return b'' # no map found
 
     if exists(filepath := f"pp/maps/{res['id']}.osu"):
-        with open(filepath, 'r') as f:
+        # Map found on disk.
+        with open(filepath, 'rb') as f:
             content = f.read()
     else:
         # We don't have map, get from osu!
         if not (r := req_get(f"https://old.ppy.sh/osu/{res['id']}")):
             raise Exception(f'Could not find map {filepath}!')
 
-        content = r.content.decode()
+        content = r.content
 
-        with open(filepath, 'w+') as f:
+        with open(filepath, 'wb+') as f:
             f.write(content)
 
-    return content.encode()
+    return content

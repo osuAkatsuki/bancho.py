@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple, Union
+from typing import Tuple
 from constants.privileges import Privileges
 from objects import glob
 import packets

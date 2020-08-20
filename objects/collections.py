@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import Sequence
 
-from typing import Tuple, Union, Optional, Set
+from typing import Tuple, Union, Optional
 from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match

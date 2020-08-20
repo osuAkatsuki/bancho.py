@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from objects.beatmap import Beatmap
 from typing import List, Dict, Optional, Union, Callable
 from time import time
 from random import randrange
@@ -60,7 +61,7 @@ def last(p: Player, c: Messageable, msg: List[str]) -> str:
     if not (s := p.recent_scores[p.status.game_mode]):
         return 'No recent score found for current mode!'
 
-    return f'#{s.rank} @ {s.map.embed} ({s.pp:.2f}pp)'
+    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp)'
 
 # Find all maps matching %title%.
 @command(priv=Privileges.Normal, public=False)
@@ -311,14 +312,12 @@ def mp_map(p: Player, m: Match, msg: List[str]) -> str:
     if len(msg) < 1 or not msg[0].isnumeric():
         return 'Invalid syntax: !mp map <beatmapid>'
 
-    if not (res := glob.db.fetch(
-        'SELECT id, md5, name '
-        'FROM maps WHERE id = %s',
-        [msg[0]], _dict = False     # return a tuple for
-    )): return 'Beatmap not found.' # quick assignment
+    if not (bmap := Beatmap.from_bid(int(msg[0]))):
+        return 'Beatmap not found.'
 
-    m.map_id, m.map_md5, m.map_name = res
+    m.bmap = bmap
     m.enqueue(packets.updateMatch(m))
+    return f'Map selected: {bmap.embed}.'
 
 _mp_triggers = defaultdict(lambda: None, {
     'force': {

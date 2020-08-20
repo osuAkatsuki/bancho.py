@@ -30,8 +30,8 @@ class Owoppai:
             if not (r := req_get(f'https://old.ppy.sh/osu/{map_id}')):
                 raise Exception(f'Could not find map {filepath}!')
 
-            with open(filepath, 'w+') as f:
-                f.write(r.content.decode())
+            with open(filepath, 'wb+') as f:
+                f.write(r.content)
 
         self.filename = filepath
 
