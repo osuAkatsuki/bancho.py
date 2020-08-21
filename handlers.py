@@ -130,12 +130,16 @@ def handle_dl(conn: Connection) -> None:
         conn.resp.send(b'Method requires authorization.', 401)
         return
 
-    if not (p := glob.players.get_from_cred(conn.req.args['u'], conn.req.args['h'])):
+    if not conn.req.uri[3:].isnumeric():
+        # Requested set id is not a number.
         return
 
-    if not conn.req.uri[3:].isnumeric():
-        # Set ID requested is not a number.
+    username = conn.req.args['u']
+    pass_md5 = conn.req.args['h']
+
+    if not (p := glob.players.get_login(username, pass_md5)):
         return
+
 
     set_id = int(conn.req.uri[3:])
 

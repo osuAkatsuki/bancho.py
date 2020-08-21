@@ -26,6 +26,19 @@ create table users
 		unique (name)
 );
 
+create table user_hashes
+(
+	id int auto_increment
+		primary key,
+	osupath char(32) not null,
+	adapters char(32) not null,
+	uninstall_id char(32) not null,
+	disk_serial char(32) not null,
+	constraint user_hashes_users_id_fk
+		foreign key (id) references users (id)
+			on update cascade on delete cascade
+);
+
 # With this I decided to make a naming scheme rather
 # than something nescessarily 'readable' or pretty, I
 # think in practice this will be much easier to use

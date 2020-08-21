@@ -129,9 +129,9 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     s = origin.decode().split('\n')
 
     if p := glob.players.get_by_name(username := s[0]):
-        if (time() - p.ping_time) > 20:
+        if (time() - p.ping_time) > 10:
             # If the current player obj online hasn't
-            # pinged the server in > 20 seconds, log
+            # pinged the server in > 10 seconds, log
             # them out and login the new user.
             p.logout()
         else: # User is currently online, send back failure.
@@ -166,6 +166,9 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         'FROM users WHERE name_safe = %s',
         [Player.ensure_safe(username)])
 
+    # Get our bcrypt cache.
+    bcrypt_cache = glob.cache['bcrypt']
+
     if res:
         # Account exists.
         # Check their account status & credentials against db.
@@ -173,15 +176,15 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
             return packets.userID(-3), 'no'
 
         # Password is incorrect.
-        if pw_hash in glob.cache['bcrypt']: # ~0.01 ms
+        if pw_hash in bcrypt_cache: # ~0.01 ms
             # Cache hit - this saves ~200ms on subsequent logins.
-            if glob.cache['bcrypt'][pw_hash] != res['pw_hash']:
+            if bcrypt_cache[pw_hash] != res['pw_hash']:
                 return packets.userID(-1), 'no'
         else: # Cache miss, must be first login.
             if not checkpw(pw_hash, res['pw_hash'].encode()):
                 return packets.userID(-1), 'no'
 
-            glob.cache['bcrypt'][pw_hash] = res['pw_hash']
+            bcrypt_cache[pw_hash] = res['pw_hash']
 
         p = Player(utc_offset = utc_offset,
                    pm_private = pm_private,
@@ -189,7 +192,7 @@ def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     else:
         # Account does not exist, register using credentials passed.
         pw_bcrypt = hashpw(pw_hash, gensalt()).decode()
-        glob.cache['bcrypt'][pw_hash] = pw_bcrypt
+        bcrypt_cache[pw_hash] = pw_bcrypt
 
         # Add to `users` table.
         userID = glob.db.execute(

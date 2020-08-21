@@ -193,11 +193,12 @@ class Score:
 
         if len(map_md5 := data[0]) != 32:
             return
+        username = data[1].rstrip() # why does osu! make me rstrip lol
 
         s.bmap = Beatmap.from_md5(map_md5)
 
-        # why does osu! make me rstrip lol
-        s.player = glob.players.get_from_cred(data[1].rstrip(), pass_md5)
+
+        s.player = glob.players.get_login(username, pass_md5)
         if not s.player:
             # Return the obj with an empty player to
             # determine whether the score faield to

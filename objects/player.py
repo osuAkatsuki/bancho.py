@@ -39,40 +39,45 @@ class ModeData:
     pp: :class:`float`
         The player's total performance points.
 
-    plays: :class:`int`
-        The player's number of total plays.
-
     acc: :class:`float`
         The player's overall accuracy.
 
+    plays: :class:`int`
+        The player's number of total plays.
+
+    playtime: :class:`int`
+        The player's total playtime (in seconds).
+
+    maxcombo: :class:`int`
+        The player's highest combo.
+
     rank: :class:`int`
         The player's global rank.
-
-    max_combo: :class:`int`
-        The player's highest combo.
     """
     __slots__ = (
-        'tscore', 'rscore', 'pp', 'plays',
-        'acc', 'rank', 'max_combo'
+        'tscore', 'rscore', 'pp', 'acc',
+        'plays', 'playtime', 'maxcombo', 'rank'
     )
 
     def __init__(self):
         self.tscore = 0
         self.rscore = 0
         self.pp = 0
-        self.plays = 0
         self.acc = 0.0
+        self.plays = 0
+        self.playtime = 0
+        self.maxcombo = 0
         self.rank = 0
-        self.max_combo = 0
 
     def update(self, **kwargs) -> None:
         self.tscore = kwargs.get('tscore', 0)
         self.rscore = kwargs.get('rscore', 0)
         self.pp = kwargs.get('pp', 0)
-        self.plays = kwargs.get('plays', 0)
         self.acc = kwargs.get('acc', 0.0)
+        self.plays = kwargs.get('plays', 0)
+        self.playtime = kwargs.get('playtime', 0)
+        self.maxcombo = kwargs.get('maxcombo', 0)
         self.rank = kwargs.get('rank', 0)
-        self.max_combo = kwargs.get('max_combo', 0)
 
 @unique
 class PresenceFilter(IntEnum):
@@ -621,7 +626,7 @@ class Player:
             'WHERE s.userid = %s AND s.game_mode = %s '
             'AND s.status = 2 AND m.status IN (1, 2) '
             'ORDER BY s.pp DESC LIMIT 100', [
-                self.id, gm - (4 if gm >= 4 else 0)
+                self.id, gm % 4
             ]
         )
 
@@ -671,7 +676,8 @@ class Player:
             if not (res := glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-                'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
+                'playtime_{0:sql} playtime, maxcombo_{0:sql} maxcombo '
+                'FROM stats WHERE id = %s'.format(gm), [self.id])
             ): raise Exception(f"Failed to fetch {self}'s {gm!r} user stats.")
 
             # Calculate rank.
@@ -688,7 +694,8 @@ class Player:
         if not (res := glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-            'maxcombo_{0:sql} FROM stats WHERE id = %s'.format(gm), [self.id])
+            'playtime_{0:sql} playtime, maxcombo_{0:sql} maxcombo '
+            'FROM stats WHERE id = %s'.format(gm), [self.id])
         ): raise Exception(f"Failed to fetch {self}'s {gm!r} user stats.")
 
         # Calculate rank.

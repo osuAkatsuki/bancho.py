@@ -1,3 +1,4 @@
+from objects.collections import PlayerList
 from typing import Optional, Callable, Final, List
 from enum import IntEnum, unique
 from time import time
@@ -55,8 +56,10 @@ def osuScreenshot(req: Request) -> Optional[bytes]:
     if 'ss' not in req.files:
         printlog(f'screenshot req missing file.')
         return
+    username = req.args['u']
+    pass_md5 = req.args['p']
 
-    if not (p := glob.players.get_from_cred(req.args['u'], req.args['p'])):
+    if not (p := glob.players.get_login(username, pass_md5)):
         return
 
     filename = f'{rstring(8)}.png'
@@ -75,8 +78,10 @@ def lastFM(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_lastFM):
         printlog(f'lastfm req missing params.')
         return
+    username = req.args['us']
+    pass_md5 = req.args['ha']
 
-    if not (p := glob.players.get_from_cred(req.args['us'], req.args['ha'])):
+    if not (p := glob.players.get_login(username, pass_md5)):
         return
 
     if not req.args['b'].startswith('a') \
@@ -148,7 +153,10 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
         printlog(f'osu-search req missing params.')
         return
 
-    if not (p := glob.players.get_from_cred(req.args['u'], req.args['h'])):
+    username = req.args['u']
+    pass_md5 = req.args['h']
+
+    if not (p := glob.players.get_login(username, pass_md5)):
         return
 
     if not req.args['p'].isnumeric():
@@ -262,9 +270,6 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         printlog(f'submit-modular-selector req missing params.')
         return b'error: no'
 
-    # TODO: make some kind of beatmap object.
-    # We currently don't check the map's ranked status.
-
     # Parse our score data into a score obj.
     s: Score = Score.from_submission(
         req.args['score'], req.args['iv'],
@@ -303,7 +308,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     if req.args['i']:
         breakpoint()
 
-    gm = GameMode(s.game_mode + (4 if s.player.rx and s.game_mode != 3 else 0))
+    gm = GameMode(s.game_mode + (4 if s.mods & Mods.RELAX and s.game_mode != 3 else 0))
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -348,21 +353,30 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
             with open(f'replays/{s.id}.osr', 'wb') as f:
                 f.write(req.files['score'])
 
-    s.player.stats[gm].tscore += s.score
+    if not (time_elapsed := req.args['st' if s.passed else 'ft']).isnumeric():
+        return
+
+    # Get the user's stats for current mode.
+    stats = s.player.stats[gm]
+
+    stats.playtime += int(time_elapsed)
+    stats.tscore += s.score
     if s.bmap.status in {RankedStatus.Ranked, RankedStatus.Approved}:
-        s.player.stats[gm].rscore += s.score
+        stats.rscore += s.score
 
     glob.db.execute(
         'UPDATE stats SET rscore_{0:sql} = %s, '
-        'tscore_{0:sql} = %s WHERE id = %s'.format(gm), [
-            s.player.stats[gm].rscore,
-            s.player.stats[gm].tscore,
-            s.player.id
+        'tscore_{0:sql} = %s, playtime_{0:sql} = %s '
+        'WHERE id = %s'.format(gm), [
+            stats.rscore, stats.tscore,
+            stats.playtime, s.player.id
         ]
     )
 
     if s.status == SubmissionStatus.BEST and s.rank == 1:
         # Announce the user's #1 score.
+        # XXX: Could perhaps add old #1 to the msg?
+        # but it would require an extra query ://///
         if announce_chan := glob.channels.get('#announce'):
             announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.bmap.embed}.')
 
@@ -391,6 +405,7 @@ def getReplay(req: Request) -> Optional[bytes]:
 
     return data
 
+_map_regex = re_comp(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
@@ -402,18 +417,20 @@ def getScores(req: Request) -> Optional[bytes]:
         printlog(f'get-scores req missing params.')
         return
 
-    if not (p := glob.players.get_from_cred(req.args['us'], req.args['ha'])):
+    username = req.args['us']
+    pass_md5 = req.args['ha']
+
+    if not (p := glob.players.get_login(username, pass_md5)):
         return
 
-    if len(req.args['c']) != 32 \
-    or not req.args['mods'].isnumeric():
+    if len(req.args['c']) != 32 or not req.args['mods'].isnumeric():
         return b'-1|false'
 
-    req.args['mods'] = int(req.args['mods'])
+    mods = int(req.args['mods'])
 
     res: List[bytes] = []
 
-    if req.args['mods'] & Mods.RELAX:
+    if mods & Mods.RELAX:
         table = 'scores_rx'
         scoring = 'pp'
     else:
@@ -421,9 +438,24 @@ def getScores(req: Request) -> Optional[bytes]:
         scoring = 'score'
 
     if not (bmap := Beatmap.from_md5(req.args['c'])):
-        # Couldn't find in db or at osu! api.
-        # The beatmap must not be submitted.
-        return b'-1|false'
+        # Couldn't find in db or at osu! api by md5.
+        # Check if we have the map in our db (by filename).
+
+        filename = req.args['f'].replace('+', ' ')
+        if not (re := _map_regex.match(unquote(filename))):
+            printlog(f'Requested invalid file - {filename}.', Ansi.RED)
+            return
+
+        set_exists = glob.db.fetch(
+            'SELECT 1 FROM maps WHERE '
+            'artist = %s AND title = %s '
+            'AND creator = %s AND version = %s', [
+                re['artist'], re['title'],
+                re['creator'], re['version']
+            ]
+        )
+
+        return f'{1 if set_exists else -1}|false'.encode()
 
     if bmap.status < 2:
         # Only show leaderboards for ranked,
@@ -497,48 +529,42 @@ def getScores(req: Request) -> Optional[bytes]:
     res.extend(
         score_fmt.format(
             **s, score = int(s['_score']),
-            has_replay = '1', rank = idx
+            has_replay = '1', rank = idx + 1
         ).encode() for idx, s in enumerate(scores)
     )
 
     return b'\n'.join(res)
 
-valid_osu_streams = frozenset({
-    'cuttingedge', 'stable40', 'beta40', 'stable'
-})
+_valid_actions = frozenset({'check', 'path'})
+_valid_streams = frozenset({'cuttingedge', 'stable40',
+                            'beta40', 'stable'})
 @web_handler('check-updates.php')
 def checkUpdates(req: Request) -> Optional[bytes]:
-    if req.args['action'] != 'check':
-        # TODO: handle more?
-        print('Received a request to update with an invalid action.')
-        return
+    if (action := req.args['action']) not in _valid_actions:
+        return b'Invalid action.'
 
-    if req.args['stream'] not in valid_osu_streams:
-        return
+    if (stream := req.args['stream']) not in _valid_streams:
+        return b'Invalid stream.'
 
+    cache = glob.cache['update'][stream]
     current_time = int(time())
 
-    # If possible, use cached result.
-    cache = glob.cache['update'][req.args['stream']]
-    if cache['timeout'] > current_time:
-        return cache['result']
+    if cache[action] and cache['timeout'] > current_time:
+        return cache[action]
 
     if not (res := req_get(
         'https://old.ppy.sh/web/check-updates.php?{p}'.format(
-            p = '&'.join(f'{k}={v}' for k, v in req.args.items())
-    ))): return
+            p = '&'.join('='.join(i) for i in req.args.items())
+    ))): return b'Failed to retrieve data from osu!'
 
-    result = res.text.encode()
+    result = res.content
 
-    # Overwrite cache
-    glob.cache['update'][req.args['stream']] = {
-        'result': result,
-        'timeout': current_time + 3600
-    }
+    # Update the cached result.
+    cache[action] = result
+    cache['timeout'] = current_time + 3600
 
     return result
 
-_map_regex = re_comp(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 def updateBeatmap(req: Request) -> Optional[bytes]:
     # XXX: This currently works in updating the map, but
     # seems to get the checksum something like that wrong?

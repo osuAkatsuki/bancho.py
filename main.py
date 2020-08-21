@@ -27,7 +27,7 @@ from constants.privileges import Privileges
 # Set CWD to /gulag.
 chdir(path.dirname(path.realpath(__file__)))
 
-glob.version = Version(1, 5, 2)
+glob.version = Version(1, 5, 5)
 glob.db = SQLPool(pool_size = 4, **glob.config.mysql)
 
 # Aika
@@ -49,11 +49,11 @@ with TCPServer(glob.config.server_addr) as serv:
     for conn in serv.listen(max_conns = 5):
         st = time()
 
-        handler = (handle_bancho if conn.req.uri == '/'
-              else handle_web if conn.req.startswith('/web/')
-              else handle_ss if conn.req.startswith('/ss/')
-              else handle_dl if conn.req.startswith('/d/')
+        handler = (handle_bancho if conn.req.uri == '/' # bancho handlers
+              else handle_web if conn.req.startswith('/web/') # /web/* handlers
+              else handle_ss if conn.req.startswith('/ss/') # screenshots
+              else handle_dl if conn.req.startswith('/d/') # osu!direct
               else lambda *_: printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED))
         handler(conn)
 
-        printlog(f'Request took {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
+        printlog(f'Handled in {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)

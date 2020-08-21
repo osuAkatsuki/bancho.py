@@ -9,7 +9,7 @@ __all__ = ('players', 'channels', 'matches', 'db', 'cache')
 players = PlayerList()
 channels = ChannelList()
 matches = MatchList()
-db: SQLPool = None # too lazy
+db: SQLPool = None
 
 # Gulag's main cache.
 # The idea here is simple - keep a copy of things either from SQL or
@@ -22,19 +22,13 @@ cache = {
     # with bcrypt, but to remove some of this performance hit, we only
     # do it on the user's first login.
     'bcrypt': {},
-    # Update cache is used to cache a result from the official osu!
-    # server's /web/check-updates.php page for users on the server.
-    # This is requested whenever the osu! updater is run while connected,
-    # whenever the osu! client returns to the main menu from beatmap
-    # selection, and also can be requested from the client's options.
-    # Doing a request to peppy's server every time (and in a manner
-    # that can easily be spammed ingame) is something I'd rather avoid,
-    # so a basic cache for this was nescessary.
+    # We'll cache results for osu! client update requests since they
+    # are relatively frequently and won't change very frequently.
     'update': { # Default timeout is 1h, set on request.
-        'cuttingedge': {'result': None, 'timeout': 0},
-        'stable40': {'result': None, 'timeout': 0},
-        'beta40': {'result': None, 'timeout': 0},
-        'stable': {'result': None, 'timeout': 0}
+        'cuttingedge': {'check': None, 'path': None, 'timeout': 0},
+        'stable40': {'check': None, 'path': None, 'timeout': 0},
+        'beta40': {'check': None, 'path': None, 'timeout': 0},
+        'stable': {'check': None, 'path': None, 'timeout': 0}
     }
     # XXX: I want to do some sort of beatmap cache, I'm just not yet
     #      quite sure on how I want it setup..

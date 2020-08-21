@@ -178,7 +178,7 @@ class PlayerList(Sequence):
             if p.id == pid:
                 return p
 
-    def get_from_cred(self, name: str, pw_md5: str) -> None:
+    def get_login(self, name: str, pw_md5: str) -> Optional[Player]:
         # Only used cached results - the user should have
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
@@ -186,7 +186,9 @@ class PlayerList(Sequence):
         # Let them pass as a string for ease of access
         pw_md5: bytes = pw_md5.encode()
 
-        if pw_md5 not in glob.cache['bcrypt']:
+        bcrypt_cache = glob.cache['bcrypt']
+
+        if pw_md5 not in bcrypt_cache:
             # User has not logged in through bancho.
             return
 
@@ -198,7 +200,7 @@ class PlayerList(Sequence):
             # Could not find user in the DB.
             return
 
-        if glob.cache['bcrypt'][pw_md5] != res['pw_hash']:
+        if bcrypt_cache[pw_md5] != res['pw_hash']:
             # Password bcrypts do not match.
             return
 

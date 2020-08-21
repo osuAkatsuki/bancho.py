@@ -41,4 +41,4 @@ class BanchoPrivileges(IntFlag):
     Supporter:  Final[int] = 1 << 2
     Owner:      Final[int] = 1 << 3
     Developer:  Final[int] = 1 << 4
-    Tournament: Final[int] = 1 << 5 # Note: not sent to/from client/server
+    Tournament: Final[int] = 1 << 5 # NOTE: Not used in comms w/ osu!
