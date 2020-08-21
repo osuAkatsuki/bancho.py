@@ -209,12 +209,15 @@ def osuSearchSetHandler(req: Request) -> Optional[bytes]:
         return b''
 
     # Get all set data.
-    # XXX: order by anything?
-    if not (bmapset := glob.db.fetch(
+    bmapset = glob.db.fetch(
         'SELECT DISTINCT set_id, artist, '
         'title, status, creator, last_update '
         f'FROM maps WHERE {k} = %s', [v]
-    )): return b''
+    )
+
+    if not bmapset:
+        # TODO: get from osu!
+        return b''
 
     # TODO: rating
     return ('{set_id}.osz|{artist}|{title}|{creator}|'
@@ -399,11 +402,8 @@ def getScores(req: Request) -> Optional[bytes]:
         printlog(f'get-scores req missing params.')
         return
 
-    # Tbh, I don't really care if people request
-    # leaderboards from other peoples accounts, or are
-    # not logged out.. At the moment, there are no checks
-    # that could put anyone's account in danger :P.
-    # XXX: could be a ddos problem? lol
+    if not (p := glob.players.get_from_cred(req.args['us'], req.args['ha'])):
+        return
 
     if len(req.args['c']) != 32 \
     or not req.args['mods'].isnumeric():
@@ -433,7 +433,7 @@ def getScores(req: Request) -> Optional[bytes]:
     # statuses: 0: failed, 1: passed but not top, 2: passed top
     scores = glob.db.fetchall(
         f'SELECT s.id, s.{scoring} AS _score, s.max_combo, '
-        's.n300, s.n100, s.n50, s.nmiss, s.nkatu, s.ngeki, '
+        's.n50, s.n100, s.n300, s.nmiss, s.nkatu, s.ngeki, '
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
         f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
         'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s'
@@ -453,18 +453,51 @@ def getScores(req: Request) -> Optional[bytes]:
     # offset, name, rating
     res.append(f'0\n{bmap.full}\n10.0'.encode())
 
-    # TODO: personal best
-    res.append(b'')
-
     if not scores:
         # Simply return an empty set.
-        return b'\n'.join(res + [b''])
+        return b'\n'.join(res + [b'', b''])
+
+    score_fmt = ('{id}|{name}|{score}|{max_combo}|'
+                 '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
+                 '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}')
+
+    p_best = glob.db.fetch(
+        f'SELECT id, {scoring} AS _score, max_combo, '
+        'n50, n100, n300, nmiss, nkatu, ngeki, '
+        f'perfect, mods, play_time time FROM {table} '
+        'WHERE map_md5 = %s AND game_mode = %s '
+        'AND userid = %s AND status = 2 '
+        'ORDER BY _score DESC LIMIT 1', [
+            req.args['c'], req.args['m'], p.id
+        ]
+    )
+
+    if p_best:
+        # Calculate the rank of the score.
+        p_best_rank = glob.db.fetch(
+            f'SELECT COUNT(*) AS count FROM {table} '
+            'WHERE map_md5 = %s AND game_mode = %s '
+            f'AND status = 2 AND {scoring} > %s', [
+                req.args['c'], req.args['m'],
+                p_best['_score']
+            ]
+        )['count']
+
+        res.append(
+            score_fmt.format(
+                **p_best,
+                name = p.name, userid = p.id,
+                score = int(p_best['_score']),
+                has_replay = '1', rank = p_best_rank + 1
+            ).encode()
+        )
+    else:
+        res.append(b'')
 
     res.extend(
-        '{id}|{name}|{score}|{max_combo}|'
-        '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
-        '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}'.format(
-            **s, score = int(s['_score']), has_replay = '1', rank = idx
+        score_fmt.format(
+            **s, score = int(s['_score']),
+            has_replay = '1', rank = idx
         ).encode() for idx, s in enumerate(scores)
     )
 

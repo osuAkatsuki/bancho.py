@@ -131,7 +131,7 @@ class Score:
         osu!'s old anticheat flags.
     """
     __slots__ = (
-        'id', 'map', 'player',
+        'id', 'bmap', 'player',
         'pp', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
