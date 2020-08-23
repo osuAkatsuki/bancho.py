@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final
 from enum import IntEnum, unique
-from requests import get as req_get
 from collections import defaultdict
 from datetime import datetime as dt
+from os.path import exists
 
 from pp.owoppai import Owoppai
 from console import printlog, Ansi
@@ -172,11 +171,14 @@ class Beatmap:
         return f'[{self.url} {self.full}]'
 
     @classmethod
-    def from_bid(cls, bid: int, cache_pp: bool = False):
+    async def from_bid(cls, bid: int, cache_pp: bool = False):
         # Try to get from sql.
-        if (m := cls.from_bid_sql(bid)):
+        if (m := await cls.from_bid_sql(bid)):
             if cache_pp:
-                m.cache_pp()
+                if not exists('pp/oppai'):
+                    printlog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
+                else:
+                    await m.cache_pp()
 
             return m
 
@@ -185,8 +187,8 @@ class Beatmap:
         # I think i'll have md5 most times lol.
 
     @classmethod
-    def from_bid_sql(cls, bid: int):
-        if not (res := glob.db.fetch(
+    async def from_bid_sql(cls, bid: int):
+        if not (res := await glob.db.fetch(
             'SELECT md5, set_id, status, '
             'artist, title, version '
             'FROM maps WHERE id = %s',
@@ -197,23 +199,23 @@ class Beatmap:
         return cls(**res)
 
     @classmethod
-    def from_md5(cls, md5: str, cache_pp: bool = False):
+    async def from_md5(cls, md5: str, cache_pp: bool = False):
         # Try to get from sql.
-        if (m := cls.from_md5_sql(md5)):
+        if (m := await cls.from_md5_sql(md5)):
             if cache_pp:
-                m.cache_pp()
+                await m.cache_pp()
 
             return m
 
         # Not in sql, get from osu!api.
         if glob.config.osu_api_key:
-            return cls.from_md5_osuapi(md5)
+            return await cls.from_md5_osuapi(md5)
 
         printlog('Fetching beatmap requires osu!api key.', Ansi.LIGHT_RED)
 
     @classmethod
-    def from_md5_sql(cls, md5: str):
-        if not (res := glob.db.fetch(
+    async def from_md5_sql(cls, md5: str):
+        if not (res := await glob.db.fetch(
             'SELECT id, set_id, status, '
             'artist, title, version '
             'FROM maps WHERE md5 = %s',
@@ -224,15 +226,13 @@ class Beatmap:
         return cls(**res)
 
     @classmethod
-    def from_md5_osuapi(cls, md5: str):
-        if not (r := req_get(
-            'https://old.ppy.sh/api/get_beatmaps?k={key}&h={md5}'.format(
-                key = glob.config.osu_api_key, md5 = md5
-            )
-        )) or r.text == '[]':
-            return # osu!api request failed.
+    async def from_md5_osuapi(cls, md5: str):
+        params = {'k': glob.config.osu_api_key, 'h': md5}
+        async with glob.http.get(f'https://old.ppy.sh/api/get_beatmaps', params = params) as resp:
+            if not resp or resp.status != 200 or await resp.read() == b'[]':
+                return # osu!api request failed.
 
-        apidata = r.json()[0]
+            apidata = (await resp.json())[0]
 
         m = cls()
         m.md5 = md5
@@ -258,7 +258,7 @@ class Beatmap:
 
         m.diff = float(apidata['difficultyrating'])
 
-        res = glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT last_update, status, frozen '
             'FROM maps WHERE id = %s',
             [apidata['beatmap_id']]
@@ -271,35 +271,34 @@ class Beatmap:
 
             # XXX: temp fix for local server
             if not res['last_update']:
-                res['last_update'] = '0001-01-01 00:00:00'
+                res['last_update'] = dt(1, 1, 1)#'0001-01-01 00:00:00'
 
-            old = dt.strptime(res['last_update'], date_format)
+            #old = dt.strptime(res['last_update'], date_format)
 
-            if m.last_update > old:
+            if m.last_update > res['last_update']:
                 if res['frozen'] and m.status != res['status']:
                     # Keep the ranked status of maps through updates,
                     # if we've specified to (by 'freezing' it).
                     m.status = res['status']
                     m.frozen = res['frozen']
 
-                m.save_to_sql()
-            else:
-                printlog(f'\nImpossible I think..? [temp test]\n', Ansi.RED)
+                await m.save_to_sql()
         else:
             # New map, just save to DB.
-            m.save_to_sql()
+            await m.save_to_sql()
 
         printlog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
 
-    def cache_pp(self) -> None:
-        owpi = Owoppai(map_id = self.id)
+    async def cache_pp(self) -> None:
+        owpi = Owoppai()
+        await owpi.open_map(self.id)
 
         for idx, acc in enumerate((90, 95, 98, 99, 100)):
             owpi.accuracy = acc
-            self.pp_values[idx] = owpi.calculate_pp()[0]
+            self.pp_values[idx] = (await owpi.calculate_pp())[0]
 
-    def save_to_sql(self) -> None:
+    async def save_to_sql(self) -> None:
         if any(x is None for x in (
             self.md5, self.id, self.set_id, self.status,
             self.artist, self.title, self.version, self.creator,
@@ -309,7 +308,7 @@ class Beatmap:
             printlog('Tried to save invalid beatmap to SQL!', Ansi.LIGHT_RED)
             return
 
-        glob.db.execute(
+        await glob.db.execute(
             'REPLACE INTO maps (id, set_id, status, md5, '
             'artist, title, version, creator, last_update, '
             'frozen, mode, bpm, cs, od, ar, hp, diff) VALUES ('

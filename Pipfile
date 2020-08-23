@@ -4,11 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-mysql-connector-python = "*"
-cmyui = ">=1.1.9"
-py3rijndael = ">=0.3.3"
-requests = "*"
+cmyui = ">=1.2.0"
+py3rijndael = "*"
 bcrypt = "*"
+aiohttp = "*"
+aiomysql = "*"
 
 [requires]
 python_version = "3.8"

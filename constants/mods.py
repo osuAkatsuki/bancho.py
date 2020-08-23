@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final, Union
+from typing import Final, Union, List
 from enum import IntEnum, unique
 
 __all__ = ('Mods',)

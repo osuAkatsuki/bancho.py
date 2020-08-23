@@ -154,7 +154,7 @@ class PlayerList(Sequence):
             if p.token == token:
                 return p
 
-    def get_by_name(self, name: str, sql: bool = False) -> Player:
+    async def get_by_name(self, name: str, sql: bool = False) -> Player:
         for p in self.players: # might copy
             if p.name == name:
                 return p
@@ -165,7 +165,7 @@ class PlayerList(Sequence):
             return
 
         # Try to get from SQL.
-        if not (res := glob.db.fetch(
+        if not (res := await glob.db.fetch(
             'SELECT id, priv, silence_end '
             'FROM users WHERE name = %s',
             [name]
@@ -178,7 +178,7 @@ class PlayerList(Sequence):
             if p.id == pid:
                 return p
 
-    def get_login(self, name: str, pw_md5: str) -> Optional[Player]:
+    async def get_login(self, name: str, pw_md5: str) -> Optional[Player]:
         # Only used cached results - the user should have
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
@@ -192,7 +192,7 @@ class PlayerList(Sequence):
             # User has not logged in through bancho.
             return
 
-        res = glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT pw_hash FROM users WHERE name_safe = %s',
             [Player.ensure_safe(name)])
 
@@ -204,7 +204,7 @@ class PlayerList(Sequence):
             # Password bcrypts do not match.
             return
 
-        return self.get_by_name(name)
+        return await self.get_by_name(name)
 
     def add(self, p: Player) -> None: # bool ret success?
         if p in self.players:

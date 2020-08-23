@@ -2,6 +2,7 @@
 from typing import Final, Tuple, Optional
 from enum import IntEnum, unique
 from time import time
+from os.path import exists
 from py3rijndael import RijndaelCbc, ZeroPadding
 from base64 import b64decode
 
@@ -127,6 +128,9 @@ class Score:
     play_time: :class:`int`
         A UNIX timestamp of the time of score submission.
 
+    time_elapsed: :class:`int`
+        The total elapsed time of the play (in seconds).
+
     client_flags: :class:`int`
         osu!'s old anticheat flags.
     """
@@ -135,7 +139,7 @@ class Score:
         'pp', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
-        'game_mode', 'play_time',
+        'game_mode', 'play_time', 'time_elapsed',
         'client_flags'
     )
 
@@ -168,12 +172,13 @@ class Score:
 
         self.game_mode = 0
         self.play_time = 0
+        self.time_elapsed = 0
 
         # osu!'s client 'anticheat'.
         self.client_flags = ClientFlags.Clean
 
     @classmethod
-    def from_submission(cls, data_enc: str, iv: str,
+    async def from_submission(cls, data_enc: str, iv: str,
                         osu_ver: str, pass_md5: str) -> None:
         """Create a score object from an osu! submission string."""
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
@@ -195,10 +200,10 @@ class Score:
             return
         username = data[1].rstrip() # why does osu! make me rstrip lol
 
-        s.bmap = Beatmap.from_md5(map_md5)
+        s.bmap = await Beatmap.from_md5(map_md5)
 
 
-        s.player = glob.players.get_login(username, pass_md5)
+        s.player = await glob.players.get_login(username, pass_md5)
         if not s.player:
             # Return the obj with an empty player to
             # determine whether the score faield to
@@ -233,9 +238,14 @@ class Score:
 
         if s.bmap:
             # Ignore SR for now.
-            s.pp = s.calc_diff()[0]
-            s.calc_status()
-            s.rank = s.calc_lb_placement()
+            if not exists('pp/oppai'):
+                printlog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
+                s.pp = 0.0
+            else:
+                s.pp = (await s.calc_diff())[0]
+
+            await s.calc_status()
+            s.rank = await s.calc_lb_placement()
         else:
             s.pp = 0.0
             s.status = SubmissionStatus.SUBMITTED if s.passed \
@@ -243,7 +253,7 @@ class Score:
 
         return s
 
-    def calc_lb_placement(self) -> int:
+    async def calc_lb_placement(self) -> int:
         if self.mods & Mods.RELAX:
             table = 'scores_rx'
             scoring = 'pp'
@@ -253,7 +263,7 @@ class Score:
             scoring = 'score'
             score = self.pp
 
-        res = glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM {t} '
             'WHERE map_md5 = %s AND game_mode = %s '
             'AND status = 2 AND {s} > %s'.format(t = table, s = scoring), [
@@ -266,7 +276,7 @@ class Score:
     # Could be staticmethod?
     # We'll see after some usage of gulag
     # whether it's beneficial or not.
-    def calc_diff(self) -> Tuple[float, float]:
+    async def calc_diff(self) -> Tuple[float, float]:
         """Calculate PP and star rating for our score."""
         if self.game_mode not in {0, 1}:
             # Currently only std and taiko are supported,
@@ -274,7 +284,6 @@ class Score:
             return (0.0, 0.0)
 
         owpi: Owoppai = Owoppai(
-            map_id = self.bmap.id,
             mods = self.mods,
             combo = self.max_combo,
             misses = self.nmiss,
@@ -282,10 +291,12 @@ class Score:
             accuracy = self.acc
         )
 
-        # Returns (pp, sr)
-        return owpi.calculate_pp()
+        await owpi.open_map(self.bmap.id)
 
-    def calc_status(self) -> None:
+        # Returns (pp, sr)
+        return await owpi.calculate_pp()
+
+    async def calc_status(self) -> None:
         if not self.passed:
             self.status = SubmissionStatus.FAILED
             return
@@ -294,7 +305,7 @@ class Score:
 
         # try to find a better pp score than this one.
         # if this exists, it will be s=1
-        res = glob.db.fetch(
+        res = await glob.db.fetch(
             f'SELECT 1 FROM {table} WHERE userid = %s '
             'AND map_md5 = %s AND game_mode = %s '
             'AND pp > %s AND status = 2', [

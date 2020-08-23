@@ -1,6 +1,6 @@
 # A dev-friendly osu! server written in modern python
 
-Looking for an easy to use, completely open-source osu! server implementation undergoing rapid development?
+Looking for an easy to use, async & completely open-source osu! server implementation undergoing rapid development?
 
 ## There are many other osu! server implementations, what makes this any different?
 
@@ -12,6 +12,7 @@ This is simply the result of my programming values and time thrown together; I'd
 
 ### Features
 
+- Asynchronous server design, allowing for high efficiency along with many cool features unavailable on most other servers.
 - Fully functional multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
 - Undergoing active development; an osu! server has always been a large goal of mine, so motivation is very high.
 - Clean and concise code, easy to make small modifications & add to the codebase; designed around this idea.
@@ -53,22 +54,25 @@ python3.8 -m pipenv install
 # This will also insert basic osu! channels & the bot.
 mysql -u your_sql_username -p your_db_name < db.sql
 
-# Add gulag's nginx config to your nginx/sites-enabled.
-# NOTE: default unix socket location is `/tmp/gulag.sock`.
-sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
-
-# Reload nginx after adding new config.
-sudo nginx -s reload
-
-# Configure gulag.
-mv config.sample.py config.py
-nano config.py
-
 # Create certificate.
 # When filling this out, set 'Common Name' to '*.ppy.sh', the rest are unimportant.
 # You'll need to install this on windows like after creating it.
 # You'll also need to edit nginx.conf's certificate paths to the ones created here.
 openssl req -newkey rsa:4096 -x509 -sha256 -days 3650 -nodes -out certs/server.crt -keyout certs/server.key
+
+# Edit the nginx config to match the path of the cert and key you created.
+nano nginx.conf
+
+# Add gulag's nginx config to your nginx/sites-enabled.
+# NOTE: default unix socket location is `/tmp/gulag.sock`.
+sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
+
+# Reload nginx to put the reverse proxy online.
+sudo nginx -s reload
+
+# Configure gulag.
+mv config.sample.py config.py
+nano config.py
 
 # Start the server.
 python3.8 main.py

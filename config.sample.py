@@ -8,7 +8,7 @@ server_addr = '/tmp/gulag.sock'
 
 # Your MySQL authentication info.
 mysql = {
-    'database': 'gulag',
+    'db': 'gulag',
     'host': 'localhost',
     'password': 'supersecure',
     'user': 'cmyui'

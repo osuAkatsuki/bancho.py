@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from typing import Optional
+from aiohttp.client import ClientSession
 from objects.collections import PlayerList, ChannelList, MatchList
 from cmyui import SQLPool
 import config
@@ -9,7 +11,8 @@ __all__ = ('players', 'channels', 'matches', 'db', 'cache')
 players = PlayerList()
 channels = ChannelList()
 matches = MatchList()
-db: SQLPool = None
+db: Optional[SQLPool] = None
+http: Optional[ClientSession] = None
 
 # Gulag's main cache.
 # The idea here is simple - keep a copy of things either from SQL or

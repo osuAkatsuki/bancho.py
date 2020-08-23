@@ -1,9 +1,7 @@
-from objects.collections import PlayerList
 from typing import Optional, Callable, Final, List
 from enum import IntEnum, unique
 from time import time
 from os.path import exists
-from requests import get as req_get
 from random import randrange
 from cmyui.utils import rstring
 from urllib.parse import unquote
@@ -25,6 +23,7 @@ from console import printlog, Ansi
 
 # TODO:
 # osu-rate.php: Beatmap rating on score submission.
+
 glob.web_map = {}
 
 def web_handler(uri: str) -> Callable:
@@ -34,7 +33,7 @@ def web_handler(uri: str) -> Callable:
     return register_callback
 
 @web_handler('bancho_connect.php')
-def banchoConnect(req: Request) -> Optional[bytes]:
+async def banchoConnect(req: Request) -> Optional[bytes]:
     if 'v' in req.args:
         # TODO: implement verification..?
         # Long term. For now, just send an empty reply
@@ -48,7 +47,7 @@ required_params_screemshot = frozenset({
     'u', 'p', 'v'
 })
 @web_handler('osu-screenshot.php')
-def osuScreenshot(req: Request) -> Optional[bytes]:
+async def osuScreenshot(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_screemshot):
         printlog(f'screenshot req missing params.')
         return
@@ -59,7 +58,7 @@ def osuScreenshot(req: Request) -> Optional[bytes]:
     username = req.args['u']
     pass_md5 = req.args['p']
 
-    if not (p := glob.players.get_login(username, pass_md5)):
+    if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
     filename = f'{rstring(8)}.png'
@@ -74,14 +73,14 @@ required_params_lastFM = frozenset({
     'b', 'action', 'us', 'ha'
 })
 @web_handler('lastfm.php')
-def lastFM(req: Request) -> Optional[bytes]:
+async def lastFM(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_lastFM):
         printlog(f'lastfm req missing params.')
         return
     username = req.args['us']
     pass_md5 = req.args['ha']
 
-    if not (p := glob.players.get_login(username, pass_md5)):
+    if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
     if not req.args['b'].startswith('a') \
@@ -94,7 +93,7 @@ def lastFM(req: Request) -> Optional[bytes]:
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
-        p.restrict()
+        await p.restrict()
         return
 
     if flags & ClientFlags.RegistryEdits:
@@ -105,10 +104,10 @@ def lastFM(req: Request) -> Optional[bytes]:
 
         if randrange(32) == 0:
             # Random chance (1/32) for a restriction.
-            p.restrict()
+            await p.restrict()
             return
 
-        p.enqueue(packets.notification('\n'.join([
+        p.enqueue(await packets.notification('\n'.join([
             "Hey!",
             "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
             "This tool leaves a change in your registry that the osu! client can detect.",
@@ -148,7 +147,7 @@ required_params_osuSearch = frozenset({
     'u', 'h', 'r', 'q', 'm', 'p'
 })
 @web_handler('osu-search.php')
-def osuSearchHandler(req: Request) -> Optional[bytes]:
+async def osuSearchHandler(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_osuSearch):
         printlog(f'osu-search req missing params.')
         return
@@ -156,7 +155,7 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
     username = req.args['u']
     pass_md5 = req.args['h']
 
-    if not (p := glob.players.get_login(username, pass_md5)):
+    if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
     if not req.args['p'].isnumeric():
@@ -166,7 +165,7 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
     offset = int(req.args['p']) * 100
 
     # Get all set data.
-    if not (res := glob.db.fetchall(
+    if not (res := await glob.db.fetchall(
         'SELECT DISTINCT set_id, artist, '
         'title, status, creator, last_update '
         'FROM maps WHERE title LIKE %s '
@@ -181,7 +180,7 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
     # For each beatmap set
     for bmapset in res:
         # retrieve the data for each difficulty
-        if not (bmaps := glob.db.fetchall(
+        if not (bmaps := await glob.db.fetchall(
             # Remove ',' from diffname since it's our split char.
             "SELECT REPLACE(version, ',', '') AS version, "
             'mode, cs, od, ar, hp, diff '
@@ -205,8 +204,9 @@ def osuSearchHandler(req: Request) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
+# TODO: required params
 @web_handler('osu-search-set.php')
-def osuSearchSetHandler(req: Request) -> Optional[bytes]:
+async def osuSearchSetHandler(req: Request) -> Optional[bytes]:
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
     if 's' in req.args:
@@ -217,7 +217,7 @@ def osuSearchSetHandler(req: Request) -> Optional[bytes]:
         return b''
 
     # Get all set data.
-    bmapset = glob.db.fetch(
+    bmapset = await glob.db.fetch(
         'SELECT DISTINCT set_id, artist, '
         'title, status, creator, last_update '
         f'FROM maps WHERE {k} = %s', [v]
@@ -255,8 +255,7 @@ autorestrict_pp = (
 
     (1500, 1000),   # rx!std
     (UNDEF, UNDEF), # rx!taiko
-    (UNDEF, UNDEF), # rx!catch
-    (UNDEF, UNDEF)  # rx!mania
+    (UNDEF, UNDEF)  # rx!catch
 )
 del UNDEF
 
@@ -265,13 +264,13 @@ required_params_submitModular = frozenset({
     'c1', 'st', 'pass', 'osuver', 's'
 })
 @web_handler('osu-submit-modular-selector.php')
-def submitModularSelector(req: Request) -> Optional[bytes]:
+async def submitModularSelector(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_submitModular):
         printlog(f'submit-modular-selector req missing params.')
         return b'error: no'
 
     # Parse our score data into a score obj.
-    s: Score = Score.from_submission(
+    s: Score = await Score.from_submission(
         req.args['score'], req.args['iv'],
         req.args['osuver'], req.args['pass']
     )
@@ -294,7 +293,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
 
     # Check for score duplicates
     # TODO: might need to improve?
-    res = glob.db.fetch(
+    res = await glob.db.fetch(
         f'SELECT 1 FROM {table} WHERE game_mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
         'AND score = %s', [s.game_mode, s.bmap.md5,
@@ -316,19 +315,19 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
 
         if s.pp > pp_cap:
             printlog(f'{s.player} restricted for submitting {s.pp:.2f} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
-            s.player.restrict()
+            await s.player.restrict()
             return b'error: ban'
 
     if s.status == SubmissionStatus.BEST:
         # Our score is our best score.
         # Update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
-        glob.db.execute(
+        await glob.db.execute(
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 and map_md5 = %s '
             'AND userid = %s', [s.bmap.md5, s.player.id])
 
-    s.id = glob.db.execute(
+    s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, %s, %s, '
@@ -347,7 +346,7 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         # If not, they may be using a score submitter.
         if 'score' not in req.files or req.files['score'] == b'\r\n':
             printlog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
-            s.player.restrict()
+            await s.player.restrict()
         else:
             # Save our replay
             with open(f'replays/{s.id}.osr', 'wb') as f:
@@ -356,15 +355,17 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
     if not (time_elapsed := req.args['st' if s.passed else 'ft']).isnumeric():
         return
 
+    s.time_elapsed = int(time_elapsed) / 1000
+
     # Get the user's stats for current mode.
     stats = s.player.stats[gm]
 
-    stats.playtime += int(time_elapsed)
+    stats.playtime += s.time_elapsed
     stats.tscore += s.score
     if s.bmap.status in {RankedStatus.Ranked, RankedStatus.Approved}:
         stats.rscore += s.score
 
-    glob.db.execute(
+    await glob.db.execute(
         'UPDATE stats SET rscore_{0:sql} = %s, '
         'tscore_{0:sql} = %s, playtime_{0:sql} = %s '
         'WHERE id = %s'.format(gm), [
@@ -378,11 +379,11 @@ def submitModularSelector(req: Request) -> Optional[bytes]:
         # XXX: Could perhaps add old #1 to the msg?
         # but it would require an extra query ://///
         if announce_chan := glob.channels.get('#announce'):
-            announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.bmap.embed}.')
+            await announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.bmap.embed}.')
 
     # Update the user.
     s.player.recent_scores[gm] = s
-    s.player.update_stats(gm)
+    await s.player.update_stats(gm)
 
     printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
@@ -391,9 +392,15 @@ required_params_getReplay = frozenset({
     'c', 'm', 'u', 'h'
 })
 @web_handler('osu-getreplay.php')
-def getReplay(req: Request) -> Optional[bytes]:
+async def getReplay(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getReplay):
         printlog(f'get-scores req missing params.')
+        return
+
+    username = req.args['u']
+    pass_md5 = req.args['h']
+
+    if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
     path = f"replays/{req.args['c']}.osr"
@@ -412,7 +419,7 @@ required_params_getScores = frozenset({
     'h', 'a', 'us', 'ha'
 })
 @web_handler('osu-osz2-getscores.php')
-def getScores(req: Request) -> Optional[bytes]:
+async def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
         printlog(f'get-scores req missing params.')
         return
@@ -420,7 +427,7 @@ def getScores(req: Request) -> Optional[bytes]:
     username = req.args['us']
     pass_md5 = req.args['ha']
 
-    if not (p := glob.players.get_login(username, pass_md5)):
+    if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
     if len(req.args['c']) != 32 or not req.args['mods'].isnumeric():
@@ -437,7 +444,7 @@ def getScores(req: Request) -> Optional[bytes]:
         table = 'scores_vn'
         scoring = 'score'
 
-    if not (bmap := Beatmap.from_md5(req.args['c'])):
+    if not (bmap := await Beatmap.from_md5(req.args['c'])):
         # Couldn't find in db or at osu! api by md5.
         # Check if we have the map in our db (by filename).
 
@@ -446,7 +453,7 @@ def getScores(req: Request) -> Optional[bytes]:
             printlog(f'Requested invalid file - {filename}.', Ansi.RED)
             return
 
-        set_exists = glob.db.fetch(
+        set_exists = await glob.db.fetch(
             'SELECT 1 FROM maps WHERE '
             'artist = %s AND title = %s '
             'AND creator = %s AND version = %s', [
@@ -463,7 +470,7 @@ def getScores(req: Request) -> Optional[bytes]:
         return f'{int(bmap.status)}|false'.encode()
 
     # statuses: 0: failed, 1: passed but not top, 2: passed top
-    scores = glob.db.fetchall(
+    scores = await glob.db.fetchall(
         f'SELECT s.id, s.{scoring} AS _score, s.max_combo, '
         's.n50, s.n100, s.n300, s.nmiss, s.nkatu, s.ngeki, '
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
@@ -480,7 +487,7 @@ def getScores(req: Request) -> Optional[bytes]:
     # score_id|username|score|combo|n50|n100|n300|nmiss|nkatu|ngeki|bool(perfect)|mods|userid|int(rank)|int(time)|int(server_has_replay)
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
-    res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores)}'.encode())
+    res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores) if scores else 0}'.encode())
 
     # offset, name, rating
     res.append(f'0\n{bmap.full}\n10.0'.encode())
@@ -493,7 +500,7 @@ def getScores(req: Request) -> Optional[bytes]:
                  '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
                  '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}')
 
-    p_best = glob.db.fetch(
+    p_best = await glob.db.fetch(
         f'SELECT id, {scoring} AS _score, max_combo, '
         'n50, n100, n300, nmiss, nkatu, ngeki, '
         f'perfect, mods, play_time time FROM {table} '
@@ -506,14 +513,14 @@ def getScores(req: Request) -> Optional[bytes]:
 
     if p_best:
         # Calculate the rank of the score.
-        p_best_rank = glob.db.fetch(
+        p_best_rank = (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} '
             'WHERE map_md5 = %s AND game_mode = %s '
             f'AND status = 2 AND {scoring} > %s', [
                 req.args['c'], req.args['m'],
                 p_best['_score']
             ]
-        )['count']
+        ))['count']
 
         res.append(
             score_fmt.format(
@@ -539,7 +546,7 @@ _valid_actions = frozenset({'check', 'path'})
 _valid_streams = frozenset({'cuttingedge', 'stable40',
                             'beta40', 'stable'})
 @web_handler('check-updates.php')
-def checkUpdates(req: Request) -> Optional[bytes]:
+async def checkUpdates(req: Request) -> Optional[bytes]:
     if (action := req.args['action']) not in _valid_actions:
         return b'Invalid action.'
 
@@ -552,12 +559,11 @@ def checkUpdates(req: Request) -> Optional[bytes]:
     if cache[action] and cache['timeout'] > current_time:
         return cache[action]
 
-    if not (res := req_get(
-        'https://old.ppy.sh/web/check-updates.php?{p}'.format(
-            p = '&'.join('='.join(i) for i in req.args.items())
-    ))): return b'Failed to retrieve data from osu!'
+    async with glob.http.get('https://old.ppy.sh/web/check-updates.php', params = req.args) as resp:
+        if not resp or resp.status != 200:
+            return b'Failed to retrieve data from osu!'
 
-    result = res.content
+        result = await resp.read()
 
     # Update the cached result.
     cache[action] = result
@@ -565,7 +571,7 @@ def checkUpdates(req: Request) -> Optional[bytes]:
 
     return result
 
-def updateBeatmap(req: Request) -> Optional[bytes]:
+async def updateBeatmap(req: Request) -> Optional[bytes]:
     # XXX: This currently works in updating the map, but
     # seems to get the checksum something like that wrong?
     # Will have to look into it :P
@@ -573,7 +579,7 @@ def updateBeatmap(req: Request) -> Optional[bytes]:
         printlog(f'Requested invalid map update {req.uri}.', Ansi.RED)
         return b''
 
-    if not (res := glob.db.fetch(
+    if not (res := await glob.db.fetch(
         'SELECT id, md5 FROM maps WHERE '
         'artist = %s AND title = %s '
         'AND creator = %s AND version = %s', [
@@ -588,10 +594,11 @@ def updateBeatmap(req: Request) -> Optional[bytes]:
             content = f.read()
     else:
         # We don't have map, get from osu!
-        if not (r := req_get(f"https://old.ppy.sh/osu/{res['id']}")):
-            raise Exception(f'Could not find map {filepath}!')
+        async with glob.http.get(f"https://old.ppy.sh/osu/{res['id']}") as resp:
+            if not resp or resp.status != 200:
+                raise Exception(f'Could not find map {filepath}!')
 
-        content = r.content
+            content = await resp.read()
 
         with open(filepath, 'wb+') as f:
             f.write(content)
