@@ -6,11 +6,11 @@ from datetime import datetime as dt
 from os.path import exists
 
 from pp.owoppai import Owoppai
-from console import printlog, Ansi
+from console import plog, Ansi
 from objects import glob
 from constants.gamemodes import GameMode
 
-__all__ = ('RankedStatus', 'Beatmap')
+__all__ = 'RankedStatus', 'Beatmap'
 
 # For some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
@@ -176,7 +176,7 @@ class Beatmap:
         if (m := await cls.from_bid_sql(bid)):
             if cache_pp:
                 if not exists('pp/oppai'):
-                    printlog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
+                    await plog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
                 else:
                     await m.cache_pp()
 
@@ -211,7 +211,7 @@ class Beatmap:
         if glob.config.osu_api_key:
             return await cls.from_md5_osuapi(md5)
 
-        printlog('Fetching beatmap requires osu!api key.', Ansi.LIGHT_RED)
+        await plog('Fetching beatmap requires osu!api key.', Ansi.LIGHT_RED)
 
     @classmethod
     async def from_md5_sql(cls, md5: str):
@@ -287,7 +287,7 @@ class Beatmap:
             # New map, just save to DB.
             await m.save_to_sql()
 
-        printlog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
+        await plog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
 
     async def cache_pp(self) -> None:
@@ -305,7 +305,7 @@ class Beatmap:
             self.last_update, self.frozen, self.mode, self.bpm,
             self.cs, self.od, self.ar, self.hp, self.diff
         )):
-            printlog('Tried to save invalid beatmap to SQL!', Ansi.LIGHT_RED)
+            await plog('Tried to save invalid beatmap to SQL!', Ansi.LIGHT_RED)
             return
 
         await glob.db.execute(

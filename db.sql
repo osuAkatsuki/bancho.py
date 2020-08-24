@@ -179,7 +179,7 @@ create table maps
 
 create table friendships
 (
-	user1 int not null,
+  	user1 int not null,
 	user2 int not null,
 	primary key (user1, user2)
 );
@@ -204,6 +204,12 @@ values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
         '_______________________my_cool_bcrypt_______________________');
 
 insert into stats (id) values (1);
+
+# userid 2 is reserved for ppy in osu!, and the
+# client will not allow users to pm this id.
+# If you want this, simply remove these two lines.
+alter table users auto_increment = 3;
+alter table stats auto_increment = 3;
 
 insert into channels (name, topic, read_priv, write_priv, auto_join)
 values ('#osu', 'General discussion.', 1, 2, true),

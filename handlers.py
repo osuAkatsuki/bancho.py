@@ -49,7 +49,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         await conn.resp.add_header(f'cho-token: {login_data[1]}')
 
     elif not (p := glob.players.get(conn.req.headers['osu-token'])):
-        printlog('Token not found, forcing relog.')
+        await plog('Token not found, forcing relog.')
         resp.extend(
             await packets.notification('Server is restarting.') +
             await packets.restartServer(0) # send 0ms since the server is already up!
@@ -61,24 +61,24 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         # Bancho connections can send multiple packets at a time.
         # Iter through packets received and them handle indivudally.
         while not pr.empty():
-            pr.read_packet_header()
+            await pr.read_packet_header()
             if pr.packetID == -1:
                 continue # skip, data empty?
 
             if pr.packetID in glob.bancho_map:
                 # Server is able to handle the packet.
-                printlog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
+                await plog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
                 await glob.bancho_map[pr.packetID](p, pr)
             else: # Packet reading behaviour not yet defined.
-                printlog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
+                await plog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
                 pr.ignore_packet()
 
         while not p.queue_empty():
             # Read all queued packets into stream
-            resp.extend(p.dequeue())
+            resp.extend(await p.dequeue())
 
     if glob.config.debug:
-        printlog(bytes(resp), Ansi.LIGHT_GREEN)
+        await plog(bytes(resp), Ansi.LIGHT_GREEN)
 
     # Even if the packet is empty, we have to
     # send back an empty response so the client
@@ -92,23 +92,23 @@ async def handle_web(conn: AsyncConnection) -> None:
     # at a time; no need to iterate through received data.
     if handler not in glob.web_map:
         if handler.startswith('maps/'):
-            printlog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
+            await plog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
             # Special case for updating maps.
             if (resp := await updateBeatmap(conn.req)):
                 await conn.resp.send(resp, HTTPStatus.Ok)
             return
 
-        printlog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
+        await plog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
         return
 
-    printlog(f'Handling {conn.req.uri}', Ansi.LIGHT_MAGENTA)
+    await plog(f'Handling {conn.req.uri}', Ansi.LIGHT_MAGENTA)
     if (resp := await glob.web_map[handler](conn.req)):
         # XXX: Perhaps web handlers should return
         # a bytearray which could be cast to bytes
         # here at the end? Probably a better soln.
 
         if glob.config.debug:
-            printlog(resp, Ansi.LIGHT_GREEN)
+            await plog(resp, Ansi.LIGHT_GREEN)
 
         await conn.resp.send(resp, HTTPStatus.Ok)
 
@@ -144,8 +144,8 @@ async def handle_dl(conn: AsyncConnection) -> None:
     set_id = int(conn.req.uri[3:])
 
     if exists(filepath := f'mapsets/{set_id}.osz'):
-        with open(filepath, 'rb') as f:
-            content = f.read()
+        async with aiofiles.open(filepath, 'rb') as f:
+            content = await f.read()
     else:
         # Map not cached, get from a mirror
         # XXX: I'm considering handling this myself, aswell..
@@ -180,18 +180,18 @@ async def handle_avatar(conn: AsyncConnection) -> None:
 #    # peppy sends password as plaintext..?
 #
 #    if len(password) not in range(8, 33):
-#        return printlog('Registration: password does not meet length reqs.')
+#        return await plog('Registration: password does not meet length reqs.')
 #
 #    if not re_match(username_regex, name):
-#        return printlog('Registration: name did not match regex.', Ansi.YELLOW)
+#        return await plog('Registration: name did not match regex.', Ansi.YELLOW)
 #
 #    if not re_match(email_regex, email) or len(email) > 254: # TODO: add len checks to regex
-#        return printlog('Registration: email did not match regex.', Ansi.YELLOW)
+#        return await plog('Registration: email did not match regex.', Ansi.YELLOW)
 #
 #    name_safe = Player.ensure_safe(name)
 #
 #    if await glob.db.fetch('SELECT 1 FROM users WHERE name_safe = %s', [name_safe]):
-#        return printlog(f'Registration: user {name} already exists.', Ansi.YELLOW)
+#        return await plog(f'Registration: user {name} already exists.', Ansi.YELLOW)
 #
 #    user_id = await glob.db.execute(
 #        'INSERT INTO users '
@@ -205,4 +205,4 @@ async def handle_avatar(conn: AsyncConnection) -> None:
 #        ])
 #
 #    await glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [user_id])
-#    printlog(f'Registration: <name: {name} | id: {user_id}>.', Ansi.GREEN)
+#    await plog(f'Registration: <name: {name} | id: {user_id}>.', Ansi.GREEN)

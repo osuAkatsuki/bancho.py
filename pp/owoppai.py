@@ -4,12 +4,14 @@ import asyncio
 from typing import Tuple
 from os import path
 
+import aiofiles
+
 from objects import glob
-from console import printlog, Ansi
+from console import plog, Ansi
 from constants.mods import mods_readable
 from orjson import loads
 
-__all__ = ('Owoppai',)
+__all__ = 'Owoppai',
 
 class Owoppai:
     __slots__ = ('filename', 'accuracy', 'mods',
@@ -30,13 +32,13 @@ class Owoppai:
             # Do osu!api request for the map.
             async with glob.http.get(f'https://old.ppy.sh/osu/{map_id}') as resp:
                 if not resp or resp.status != 200:
-                    printlog(f'Could not find map {filepath}!', Ansi.LIGHT_RED) # osu!api request failed.
+                    await plog(f'Could not find map {filepath}!', Ansi.LIGHT_RED) # osu!api request failed.
                     return
 
                 content = await resp.read()
 
-            with open(filepath, 'wb+') as f:
-                f.write(content)
+            async with aiofiles.open(filepath, 'wb+') as f:
+                await f.write(content)
 
         self.filename = filepath
 
@@ -44,7 +46,7 @@ class Owoppai:
         # This function can either return a list of
         # PP values, # or just a single PP value.
         if not self.filename:
-            printlog('Called calculate_pp() without a map open.', Ansi.LIGHT_RED)
+            await plog('Called calculate_pp() without a map open.', Ansi.LIGHT_RED)
             return
 
         args = [f'./pp/oppai {self.filename}']
@@ -73,7 +75,7 @@ class Owoppai:
 
         important = ('code', 'errstr', 'pp', 'stars')
         if any(i not in output for i in important) or output['code'] != 200:
-            printlog('Error while calculating PP.', Ansi.LIGHT_RED)
+            await plog('Error while calculating PP.', Ansi.LIGHT_RED)
             return
 
         return output['pp'], output['stars']

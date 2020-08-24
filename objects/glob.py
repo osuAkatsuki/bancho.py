@@ -6,7 +6,8 @@ from objects.collections import PlayerList, ChannelList, MatchList
 from cmyui import SQLPool
 import config
 
-__all__ = ('players', 'channels', 'matches', 'db', 'cache')
+__all__ = ('players', 'channels',
+           'matches', 'db', 'cache')
 
 players = PlayerList()
 channels = ChannelList()

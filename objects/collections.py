@@ -6,7 +6,7 @@ from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match
 from objects import glob
-from console import printlog
+from console import plog
 
 __all__ = (
     'Slice',
@@ -49,15 +49,15 @@ class ChannelList(Sequence):
             if c._name == name:
                 return c
 
-    def add(self, c: Channel) -> None:
+    async def add(self, c: Channel) -> None:
         if c in self.channels:
-            printlog(f'{c} already in channels list!')
+            await plog(f'{c} already in channels list!')
             return
-        printlog(f'Adding {c} to channels list.')
+        await plog(f'Adding {c} to channels list.')
         self.channels.append(c)
 
-    def remove(self, c: Channel) -> None:
-        printlog(f'Removing {c} from channels list.')
+    async def remove(self, c: Channel) -> None:
+        await plog(f'Removing {c} from channels list.')
         self.channels.remove(c)
 
 class MatchList(Sequence):
@@ -93,21 +93,21 @@ class MatchList(Sequence):
             if m and m.id == mid:
                 return m
 
-    def add(self, m: Match) -> bool:
+    async def add(self, m: Match) -> bool:
         if m in self.matches:
-            printlog(f'{m} already in matches list!')
+            await plog(f'{m} already in matches list!')
             return False
 
         if (free := self.get_free()) is None:
-            printlog(f'Match list is full! Could not add {m}.')
+            await plog(f'Match list is full! Could not add {m}.')
             return False
 
         m.id = free
-        printlog(f'Adding {m} to matches list.')
+        await plog(f'Adding {m} to matches list.')
         self.matches[free] = m
 
-    def remove(self, m: Match) -> None:
-        printlog(f'Removing {m} from matches list.')
+    async def remove(self, m: Match) -> None:
+        await plog(f'Removing {m} from matches list.')
         for idx, _m in enumerate(self.matches):
             if m == _m:
                 self.matches[idx] = None
@@ -171,12 +171,26 @@ class PlayerList(Sequence):
             [name]
         )): return
 
-        return Player(**res)
+        return Player(**res, name = name)
 
-    def get_by_id(self, pid: int) -> Player:
+    async def get_by_id(self, pid: int, sql: bool = False) -> Player:
         for p in self.players:
             if p.id == pid:
                 return p
+
+        if not sql:
+            # Don't fetch from SQL
+            # if not specified.
+            return
+
+        # Try to get from SQL.
+        if not (res := await glob.db.fetch(
+            'SELECT name, priv, silence_end '
+            'FROM users WHERE id = %s',
+            [pid]
+        )): return
+
+        return Player(**res, id = pid)
 
     async def get_login(self, name: str, pw_md5: str) -> Optional[Player]:
         # Only used cached results - the user should have
@@ -206,13 +220,13 @@ class PlayerList(Sequence):
 
         return await self.get_by_name(name)
 
-    def add(self, p: Player) -> None:
+    async def add(self, p: Player) -> None:
         if p in self.players:
-            printlog(f'{p} already in players list!')
+            await plog(f'{p} already in players list!')
             return
-        printlog(f'Adding {p} to players list.')
+        await plog(f'Adding {p} to players list.')
         self.players.append(p)
 
-    def remove(self, p: Player) -> None:
-        printlog(f'Removing {p} from players list.')
+    async def remove(self, p: Player) -> None:
+        await plog(f'Removing {p} from players list.')
         self.players.remove(p)

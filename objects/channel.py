@@ -5,7 +5,7 @@ from constants.privileges import Privileges
 from objects import glob
 import packets
 
-__all__ = ('Channel',)
+__all__ = 'Channel',
 
 class Channel:
     """A class to represent a chat channel.
@@ -37,9 +37,9 @@ class Channel:
         A bool representing whether the channel should automatically
         be joined on connection to the server.
 
-    temp: :class:`bool`
-        A bool representing whether the channel is 'temporary'.
-        Temporary channels are deleted when all players have left;
+    instance: :class:`bool`
+        A bool representing whether the channel is an instance.
+        Instanced channels are deleted when all players have left;
         this is useful for things like multiplayer, spectator, etc.
 
     Properties
@@ -53,7 +53,8 @@ class Channel:
         (clean output), topic, and playercount.
     """
     __slots__ = ('_name', 'topic', 'players',
-                 'read', 'write', 'auto_join', 'temp')
+                 'read', 'write',
+                 'auto_join', 'instance')
 
     def __init__(self, *args, **kwargs) -> None:
         # Use this attribute whenever you need
@@ -69,7 +70,7 @@ class Channel:
         self.read = kwargs.get('read', Privileges.Normal)
         self.write = kwargs.get('write', Privileges.Normal)
         self.auto_join = kwargs.get('auto_join', True)
-        self.temp = kwargs.get('temp', False)
+        self.instance = kwargs.get('instance', False)
 
     @property
     def name(self) -> str:
@@ -91,35 +92,32 @@ class Channel:
         return p in self.players
 
     async def send(self, client, msg: str) -> None:
-        self.enqueue(
-            await packets.sendMessage(
-                client = client.name,
-                msg = msg,
-                target = self.name,
-                client_id = client.id
-            ), immune = {client.id}
-        )
+        self.enqueue(await packets.sendMessage(
+            client = client.name,
+            msg = msg,
+            target = self.name,
+            client_id = client.id
+        ), immune = {client.id})
 
     async def send_selective(self, client, msg: str, targets) -> None:
         # Accept a set of players to enqueue the data to.
         for p in targets:
-            p.enqueue(
-                await packets.sendMessage(
-                    client = client.name,
-                    msg = msg,
-                    target = self.name,
-                    client_id = client.id
-                ))
+            p.enqueue(await packets.sendMessage(
+                client = client.name,
+                msg = msg,
+                target = self.name,
+                client_id = client.id
+            ))
 
     def append(self, p) -> None:
         self.players.append(p)
 
-    def remove(self, p) -> None:
-        if len(self.players) == 1 and self.temp:
-            # If it's a temporary channel and this
+    async def remove(self, p) -> None:
+        if len(self.players) == 1 and self.instance:
+            # If it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.
-            glob.channels.remove(self)
+            await glob.channels.remove(self)
         else:
             self.players.remove(p)
 

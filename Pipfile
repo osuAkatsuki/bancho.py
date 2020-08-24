@@ -9,6 +9,8 @@ py3rijndael = "*"
 bcrypt = "*"
 aiohttp = "*"
 aiomysql = "*"
+orjson = "*"
+aiofiles = "*"
 
 [requires]
 python_version = "3.8"

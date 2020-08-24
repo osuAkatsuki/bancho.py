@@ -43,12 +43,12 @@ async def readStatus(p: Player, pr: PacketReader) -> None:
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
-_np_regex = re_compile(r'^\x01ACTION is (?:editing|watching|listening to) \[https://osu.ppy.sh/b/(?P<bid>\d+) .+\]\x01$')
+_np_regex = re_compile(r'^\*ACTION is (?:playing|editing|watching|listening to) \[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\](?P<mods>(?: (?:-|\+|~)\w+~?)+)\*$')
 # PacketID: 1
 @bancho_packet(Packet.c_sendPublicMessage)
 async def sendMessage(p: Player, pr: PacketReader) -> None:
     if p.silenced:
-        printlog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
+        await plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
 
     # client_id only proto >= 14
@@ -61,11 +61,11 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
         target = f'#multi_{p.match.id if p.match is not None else 0}'
 
     if not (t := glob.channels.get(target)):
-        printlog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
+        await plog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
     if not p.priv & t.write:
-        printlog(f'{p} tried to write to {target} without privileges.')
+        await plog(f'{p} tried to write to {target} without privileges.')
         return
 
     # Limit message length to 2048 characters
@@ -95,7 +95,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
 
         await t.send(p, msg)
 
-    printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
+    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 2
 @bancho_packet(Packet.c_logout)
@@ -108,7 +108,7 @@ async def logout(p: Player, pr: PacketReader) -> None:
         return
 
     await p.logout()
-    printlog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
+    await plog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
 
 # PacketID: 3
 @bancho_packet(Packet.c_requestStatusUpdate)
@@ -151,12 +151,12 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     utc_offset = int(s[1])
     display_city = s[2] == '1'
 
-    # TODO: use these
-    # 0: md5(osu path)
-    # 1: adapters (network physical addresses delimited by '.')
-    # 2: md5(adapters)
-    # 3: md5(uniqueid) (osu! uninstall id)
-    # 4: md5(uniqueid2) (disk signature/serial num)
+    # Client hashes contain a few values useful to us.
+    # [0]: md5(osu path)
+    # [1]: adapters (network physical addresses delimited by '.')
+    # [2]: md5(adapters)
+    # [3]: md5(uniqueid) (osu! uninstall id)
+    # [4]: md5(uniqueid2) (disk signature/serial num)
     client_hashes = s[3].split(':')[:-1]
 
     pm_private = s[4] == '1'
@@ -195,7 +195,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         bcrypt_cache[pw_hash] = pw_bcrypt
 
         # Add to `users` table.
-        userID = await glob.db.execute(
+        user_id = await glob.db.execute(
             'INSERT INTO users (name, name_safe, pw_hash, email) '
             'VALUES (%s, %s, %s, %s)', [
                 username, Player.ensure_safe(username),
@@ -204,13 +204,13 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         )
 
         # Add to `stats` table.
-        await glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [userID])
+        await glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [user_id])
 
-        p = Player(id = userID, name = username,
+        p = Player(id = user_id, name = username,
                    priv = Privileges.Normal,
                    silence_end = 0)
 
-        printlog(f'{p} has registered!', Ansi.LIGHT_GREEN)
+        await plog(f'{p} has registered!', Ansi.LIGHT_GREEN)
 
         p.enqueue(await packets.notification('\n'.join((
             'Your account has been created.',
@@ -238,12 +238,10 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         # Autojoinable channels
         if c.auto_join and await p.join_channel(c):
+            # NOTE: p.join_channel enqueues channelJoin, but
+            # if we don't send this back in this specific request,
+            # the client will attempt to join the channel again.
             data.extend(await packets.channelJoin(c.name))
-
-            # Inform other client's that we've joined the channel.
-            # XXX: Don't need to use `immune = {p}` here since
-            #      we're not added to glob.players yet :P..
-            glob.players.enqueue(await packets.channelInfo(*c.basic_info))
 
         data.extend(await packets.channelInfo(*c.basic_info))
 
@@ -276,17 +274,17 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                 await packets.friendsList(*p.friends) +
                 await packets.silenceEnd(max(p.silence_end - time(), 0)))
 
-    glob.players.add(p)
-    printlog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
+    await glob.players.add(p)
+    await plog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
 
 # PacketID: 16
 @bancho_packet(Packet.c_startSpectating)
 async def startSpectating(p: Player, pr: PacketReader) -> None:
-    target_id = (await pr.read(osuTypes.i32))[0]
+    target_id, = await pr.read(osuTypes.i32)
 
-    if not (host := glob.players.get_by_id(target_id)):
-        printlog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
+    if not (host := await glob.players.get_by_id(target_id)):
+        await plog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
     if (c_host := p.spectating):
@@ -300,7 +298,7 @@ async def stopSpectating(p: Player, pr: PacketReader) -> None:
     host: Player = p.spectating
 
     if not host:
-        printlog(f"{p} tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
+        await plog(f"{p} tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
         return
 
     await host.remove_spectator(p)
@@ -317,7 +315,7 @@ async def spectateFrames(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_cantSpectate)
 async def cantSpectate(p: Player, pr: PacketReader) -> None:
     if not p.spectating:
-        printlog(f"{p} sent can't spectate while not spectating?", Ansi.LIGHT_RED)
+        await plog(f"{p} sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
 
     data = await packets.spectatorCantSpectate(p.id)
@@ -332,23 +330,23 @@ async def cantSpectate(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_sendPrivateMessage)
 async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
     if p.silenced:
-        printlog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
+        await plog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
     client, msg, target, client_id = await pr.read(osuTypes.message)
 
     if not (t := await glob.players.get_by_name(target)):
-        printlog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        await plog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
         return
 
     if t.pm_private and p.id not in t.friends:
         p.enqueue(await packets.userPMBlocked(target))
-        printlog(f'{p} tried to message {t}, but they are blocking dms.')
+        await plog(f'{p} tried to message {t}, but they are blocking dms.')
         return
 
     if t.silenced:
         p.enqueue(await packets.targetSilenced(target))
-        printlog(f'{p} tried to message {t}, but they are silenced.')
+        await plog(f'{p} tried to message {t}, but they are silenced.')
         return
 
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
@@ -389,7 +387,7 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
     else: # Not Aika
         t.enqueue(await packets.sendMessage(client, msg, target, client_id))
 
-    printlog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
+    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
 
 # PacketID: 29
 @bancho_packet(Packet.c_partLobby)
@@ -407,11 +405,11 @@ async def lobbyJoin(p: Player, pr: PacketReader) -> None:
 # PacketID: 31
 @bancho_packet(Packet.c_createMatch)
 async def matchCreate(p: Player, pr: PacketReader) -> None:
-    m = (await pr.read(osuTypes.match))[0]
+    m, = await pr.read(osuTypes.match)
 
     m.host = p
     await p.join_match(m, m.passwd)
-    printlog(f'{p} created a new multiplayer match.')
+    await plog(f'{p} created a new multiplayer match.')
 
 # PacketID: 32
 @bancho_packet(Packet.c_joinMatch)
@@ -421,7 +419,7 @@ async def matchJoin(p: Player, pr: PacketReader) -> None:
         return
 
     if not (m := glob.matches.get_by_id(m_id)):
-        printlog(f'{p} tried to join a non-existant mp lobby?')
+        await plog(f'{p} tried to join a non-existant mp lobby?')
         return
 
     await p.join_match(m, passwd)
@@ -435,20 +433,21 @@ async def matchPart(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeSlot)
 async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried changing slot outside of a match?')
+        await plog(f'{p} tried changing slot outside of a match?')
         return
 
     # Read new slot ID
-    if (slotID := (await pr.read(osuTypes.i32))[0]) not in range(16):
+    slot_id, = await pr.read(osuTypes.i32)
+    if slot_id not in range(16):
         return
 
-    if m.slots[slotID].status & SlotStatus.has_player:
-        printlog(f'{p} tried to switch to slot {slotID} which has a player.')
+    if m.slots[slot_id].status & SlotStatus.has_player:
+        await plog(f'{p} tried to switch to slot {slot_id} which has a player.')
         return
 
     # Swap with current slot.
     s = m.get_slot(p)
-    m.slots[slotID].copy(s)
+    m.slots[slot_id].copy(s)
     s.reset()
     m.enqueue(await packets.updateMatch(m))
 
@@ -456,7 +455,7 @@ async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchReady)
 async def matchReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried readying outside of a match? (1)')
+        await plog(f'{p} tried readying outside of a match? (1)')
         return
 
     m.get_slot(p).status = SlotStatus.ready
@@ -466,14 +465,15 @@ async def matchReady(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchLock)
 async def matchLock(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried locking a slot outside of a match?')
+        await plog(f'{p} tried locking a slot outside of a match?')
         return
 
     # Read new slot ID
-    if (slotID := (await pr.read(osuTypes.i32))[0]) not in range(16):
+    slot_id, = await pr.read(osuTypes.i32)
+    if slot_id not in range(16):
         return
 
-    slot = m.slots[slotID]
+    slot = m.slots[slot_id]
 
     if slot.status & SlotStatus.locked:
         slot.status = SlotStatus.open
@@ -488,11 +488,11 @@ async def matchLock(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeSettings)
 async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried changing multi settings outside of a match?')
+        await plog(f'{p} tried changing multi settings outside of a match?')
         return
 
     # Read new match data
-    new = (await pr.read(osuTypes.match))[0]
+    new, = await pr.read(osuTypes.match)
 
     if new.freemods != m.freemods:
         # Freemods status has been changed.
@@ -535,7 +535,7 @@ async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchStart)
 async def matchStart(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried starting match outside of a match?')
+        await plog(f'{p} tried starting match outside of a match?')
         return
 
     for s in m.slots:
@@ -549,7 +549,7 @@ async def matchStart(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchScoreUpdate)
 async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} sent a scoreframe outside of a match?')
+        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     # Read 37 bytes if using scorev2,
@@ -565,7 +565,7 @@ async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchComplete)
 async def matchComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} sent a scoreframe outside of a match?')
+        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     m.get_slot(p).status = SlotStatus.complete
@@ -589,10 +589,10 @@ async def matchComplete(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeMods)
 async def matchChangeMods(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried changing multi mods outside of a match?')
+        await plog(f'{p} tried changing multi mods outside of a match?')
         return
 
-    mods = (await pr.read(osuTypes.i32))[0]
+    mods, = await pr.read(osuTypes.i32)
 
     if m.freemods:
         if p.id == m.host.id:
@@ -611,7 +611,7 @@ async def matchChangeMods(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchLoadComplete)
 async def matchLoadComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} sent a scoreframe outside of a match?')
+        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     # Ready up our player.
@@ -634,7 +634,7 @@ async def matchNoBeatmap(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchNotReady)
 async def matchNotReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried unreadying outside of a match? (1)')
+        await plog(f'{p} tried unreadying outside of a match? (1)')
         return
 
     m.get_slot(p).status = SlotStatus.not_ready
@@ -661,7 +661,7 @@ async def matchHasBeatmap(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchSkipRequest)
 async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried unreadying outside of a match? (1)')
+        await plog(f'{p} tried unreadying outside of a match? (1)')
         return
 
     m.get_slot(p).skipped = True
@@ -677,15 +677,15 @@ async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 63
 @bancho_packet(Packet.c_channelJoin)
 async def channelJoin(p: Player, pr: PacketReader) -> None:
-    chan_name = (await pr.read(osuTypes.string))[0]
+    chan_name, = await pr.read(osuTypes.string)
     c = glob.channels.get(chan_name)
 
     if not c or not await p.join_channel(c):
-        printlog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
+        await plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
-    # Enqueue new channelinfo (playercount) to all players.
-    glob.players.enqueue(await packets.channelInfo(*c.basic_info))
+    # Enqueue new channelinfo (playercount) to a ll players.
+    #glob.players.enqueue(await packets.channelInfo(*c.basic_info))
 
     # Enqueue channelJoin to our player.
     p.enqueue(await packets.channelJoin(c.name))
@@ -694,14 +694,16 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchTransferHost)
 async def matchTransferHost(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried transferring host of a match? (1)')
+        await plog(f'{p} tried transferring host of a match? (1)')
         return
 
-    if (slotID := (await pr.read(osuTypes.i32))[0]) not in range(16):
+    # Read new slot ID
+    slot_id, = await pr.read(osuTypes.i32)
+    if slot_id not in range(16):
         return
 
-    if not (t := m[slotID].player):
-        printlog(f'{p} tried to transfer host to an empty slot?')
+    if not (t := m[slot_id].player):
+        await plog(f'{p} tried to transfer host to an empty slot?')
         return
 
     m.host = t
@@ -711,10 +713,10 @@ async def matchTransferHost(p: Player, pr: PacketReader) -> None:
 # PacketID: 73
 @bancho_packet(Packet.c_friendAdd)
 async def friendAdd(p: Player, pr: PacketReader) -> None:
-    userID = (await pr.read(osuTypes.i32))[0]
+    user_id, = await pr.read(osuTypes.i32)
 
-    if not (t := glob.players.get_by_id(userID)):
-        printlog(f'{t} tried to add a user who is not online! ({userID})')
+    if not (t := await glob.players.get_by_id(user_id)):
+        await plog(f'{t} tried to add a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -729,10 +731,10 @@ async def friendAdd(p: Player, pr: PacketReader) -> None:
 # PacketID: 74
 @bancho_packet(Packet.c_friendRemove)
 async def friendRemove(p: Player, pr: PacketReader) -> None:
-    userID = (await pr.read(osuTypes.i32))[0]
+    user_id, = await pr.read(osuTypes.i32)
 
-    if not (t := glob.players.get_by_id(userID)):
-        printlog(f'{t} tried to remove a user who is not online! ({userID})')
+    if not (t := await glob.players.get_by_id(user_id)):
+        await plog(f'{t} tried to remove a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -748,7 +750,7 @@ async def friendRemove(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeTeam)
 async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried changing team outside of a match? (1)')
+        await plog(f'{p} tried changing team outside of a match? (1)')
         return
 
     for s in m.slots:
@@ -756,7 +758,7 @@ async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
             s.team = Teams.blue if s.team != Teams.blue else Teams.red
             break
     else:
-        printlog(f'{p} tried changing team outside of a match? (2)')
+        await plog(f'{p} tried changing team outside of a match? (2)')
         return
 
     m.enqueue(await packets.updateMatch(m), lobby = False)
@@ -764,11 +766,17 @@ async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
 # PacketID: 78
 @bancho_packet(Packet.c_channelPart)
 async def channelPart(p: Player, pr: PacketReader) -> None:
-    if not (chan := (await pr.read(osuTypes.string))[0]):
+    chan, = await pr.read(osuTypes.string)
+
+    if not chan:
         return
 
     if not (c := glob.channels.get(chan)):
-        printlog(f'Failed to find channel {chan} that {p} attempted to leave.')
+        await plog(f'Failed to find channel {chan} that {p} attempted to leave.')
+        return
+
+    if p not in c:
+        # User not in channel.
         return
 
     # Leave the channel server-side.
@@ -780,17 +788,19 @@ async def channelPart(p: Player, pr: PacketReader) -> None:
 # PacketID: 79
 @bancho_packet(Packet.c_ReceiveUpdates)
 async def receiveUpdates(p: Player, pr: PacketReader) -> None:
-    if (f := (await pr.read(osuTypes.i32))[0]) not in range(3):
-        printlog(f'{p} tried to set his presence filter to {f}?')
+    val, = await pr.read(osuTypes.i32)
+
+    if val not in range(3):
+        await plog(f'{p} tried to set his presence filter to {val}?')
         return
 
-    p.pres_filter = PresenceFilter(f)
+    p.pres_filter = PresenceFilter(val)
 
 # PacketID: 82
 @bancho_packet(Packet.c_setAwayMessage)
 async def setAwayMessage(p: Player, pr: PacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
-    p.away_msg = (await pr.read(osuTypes.string))[0]
+    p.away_msg, = await pr.read(osuTypes.string)
     pr.ignore(4)
 
 # PacketID: 85
@@ -803,35 +813,35 @@ async def statsRequest(p: Player, pr: PacketReader) -> None:
     is_online = lambda o: o in glob.players.ids and o != p.id
 
     for online in filter(is_online, userIDs):
-        target = glob.players.get_by_id(online)
-        p.enqueue(await packets.userStats(target))
+        if t := await glob.players.get_by_id(online):
+            p.enqueue(await packets.userStats(t))
 
 # PacketID: 87
 @bancho_packet(Packet.c_matchInvite)
 async def matchInvite(p: Player, pr: PacketReader) -> None:
     if not p.match:
-        printlog(f"{p} tried to invite someone to a match but isn't in one!")
+        await plog(f"{p} tried to invite someone to a match but isn't in one!")
         pr.ignore(4)
         return
 
-    userID = (await pr.read(osuTypes.i32))[0]
-    if not (t := glob.players.get_by_id(userID)):
-        printlog(f'{t} tried to invite a user who is not online! ({userID})')
+    user_id, = await pr.read(osuTypes.i32)
+    if not (t := await glob.players.get_by_id(user_id)):
+        await plog(f'{t} tried to invite a user who is not online! ({user_id})')
         return
 
     inv = f'Come join my game: {p.match.embed}.'
     t.enqueue(await packets.sendMessage(p.name, inv, t.name, p.id))
-    printlog(f'{p} invited {t} to their match.')
+    await plog(f'{p} invited {t} to their match.')
 
 # PacketID: 90
 @bancho_packet(Packet.c_matchChangePassword)
 async def matchChangePassword(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        printlog(f'{p} tried changing match passwd outside of a match?')
+        await plog(f'{p} tried changing match passwd outside of a match?')
         return
 
     # Read new match data
-    new = (await pr.read(osuTypes.match))[0]
+    new, = await pr.read(osuTypes.match)
 
     m.passwd = new.passwd
     m.enqueue(await packets.updateMatch(m), lobby=False)
@@ -840,7 +850,7 @@ async def matchChangePassword(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_userPresenceRequest)
 async def userPresenceRequest(p: Player, pr: PacketReader) -> None:
     for pid in await pr.read(osuTypes.i32_list):
-        if t := glob.players.get_by_id(pid):
+        if t := await glob.players.get_by_id(pid):
             p.enqueue(await packets.userPresence(t))
 
 # PacketID: 99

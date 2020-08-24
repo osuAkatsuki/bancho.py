@@ -8,7 +8,7 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
-from console import printlog, Ansi
+from console import plog, Ansi
 
 # Tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -56,7 +56,6 @@ async def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
 
     return ret, offs
 
-
 async def read_match(data: bytearray) -> Tuple[Match, int]:
     """ Read an osu! match from `data`. """
     m = Match()
@@ -79,15 +78,20 @@ async def read_match(data: bytearray) -> Tuple[Match, int]:
     if data[offset - 1] == 0x0b:
         offset += sum(await read_uleb128(data[offset:]))
 
-    # Ignore map's id.
+    # Read beatmap information (id & md5).
+    map_id = int.from_bytes(data[offset:offset+4], 'little')
     offset += 4
 
-    # Read map's md5 (only thing needed to get map).
     map_md5, offs = await read_string(data[offset:])
     offset += offs
 
     # Get beatmap object for map selected.
     m.bmap = await Beatmap.from_md5(map_md5)
+    if not m.bmap and map_id != (1 << 32) - 1:
+        # If they pick an unsubmitted map,
+        # just give them Vivid [Insane] lol.
+        vivid_md5 = '1cf5b2c2edfafd055536d2cefcb89c0e'
+        m.bmap = await Beatmap.from_md5(vivid_md5)
 
     # Read slot statuses.
     for s in m.slots:
@@ -105,7 +109,8 @@ async def read_match(data: bytearray) -> Tuple[Match, int]:
             offset += 4
 
     # Read match host.
-    m.host = glob.players.get_by_id(int.from_bytes(data[offset:offset+4], 'little'))
+    user_id = int.from_bytes(data[offset:offset+4], 'little')
+    m.host = await glob.players.get_by_id(user_id)
     offset += 4
 
     # Read match mode, match scoring,
@@ -194,12 +199,12 @@ class PacketReader:
     def ignore_packet(self) -> None:
         self._offset += self.length
 
-    def read_packet_header(self) -> None:
+    async def read_packet_header(self) -> None:
         if len(self.data) < 7:
             # packet is invalid, end connection
             self.packetID = -1
             self._offset += len(self.data)
-            printlog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
+            await plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
             return
 
         self.packetID, self.length = struct.unpack('<HxI', self.data[:7])

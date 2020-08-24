@@ -68,14 +68,14 @@ async def handle_conn(conn: AsyncConnection):
         await handler(conn)
     else:
         # We have no such handler.
-        printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
+        await plog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
         await conn.resp.send(b'Request handler not implemented.',
                              HTTPStatus.BadRequest)
 
-    printlog(f'Handled in {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
+    await plog(f'Handled in {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
 
 async def run_server(loop: uvloop.Loop, addr: Address):
-    glob.version = Version(2, 1, 0)
+    glob.version = Version(2, 1, 2)
     glob.http = ClientSession(json_serialize=dumps) # use orjson for speed
 
     glob.db = AsyncSQLPool()
@@ -86,14 +86,14 @@ async def run_server(loop: uvloop.Loop, addr: Address):
     glob.bot.ping_time = 0x7fffffff
 
     await glob.bot.stats_from_sql_full() # no need to get friends
-    glob.players.add(glob.bot)
+    await glob.players.add(glob.bot)
 
     # Add all channels from db.
     for chan in await glob.db.fetchall('SELECT * FROM channels'):
-        glob.channels.add(Channel(**chan))
+        await glob.channels.add(Channel(**chan))
 
     async with AsyncTCPServer(addr) as serv:
-        printlog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
+        await plog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
         async for conn in serv.listen(loop, max_conns = 50):
             asyncio.create_task(handle_conn(conn))
 

@@ -1,11 +1,9 @@
+import aiofiles
 from typing import Final
 from enum import IntEnum, unique
 from cmyui.utils import get_timestamp
 
-__all__ = (
-    'Ansi',
-    'printlog'
-)
+__all__ = 'Ansi', 'plog'
 
 @unique
 class Ansi(IntEnum):
@@ -34,8 +32,8 @@ class Ansi(IntEnum):
     def __repr__(self) -> str:
         return f'\x1b[{self.value}m'
 
-def printlog(msg, col: Ansi = None,
-             fd: str = None, st_fmt = '') -> None:
+async def plog(msg, col: Ansi = None,
+                   fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,
     # or also just printing with colour without having
     # to do inline color codes / ansi objects.
@@ -54,5 +52,5 @@ def printlog(msg, col: Ansi = None,
     if not fd:
         return
 
-    with open(fd, 'a+') as f:
-        f.write(f'[{get_timestamp(True)}] {msg}\n')
+    async with aiofiles.open(fd, 'a+') as f:
+        await f.write(f'[{get_timestamp(True)}] {msg}\n')

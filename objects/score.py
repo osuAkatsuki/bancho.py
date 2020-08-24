@@ -9,7 +9,7 @@ from base64 import b64decode
 from pp.owoppai import Owoppai
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
-from console import printlog, Ansi
+from console import plog, Ansi
 
 from objects.beatmap import Beatmap
 from objects.player import Player
@@ -191,7 +191,7 @@ class Score:
         data = cbc.decrypt(b64decode(data_enc).decode('latin_1')).decode().split(':')
 
         if len(data) != 18:
-            printlog('Received an invalid score submission.', Ansi.LIGHT_RED)
+            await plog('Received an invalid score submission.', Ansi.LIGHT_RED)
             return None
 
         s = cls()
@@ -201,7 +201,6 @@ class Score:
         username = data[1].rstrip() # why does osu! make me rstrip lol
 
         s.bmap = await Beatmap.from_md5(map_md5)
-
 
         s.player = await glob.players.get_login(username, pass_md5)
         if not s.player:
@@ -218,7 +217,7 @@ class Score:
 
         # Ensure all ints are safe to cast.
         if not all(i.isnumeric() for i in data[3:11] + [data[13] + data[15]]):
-            printlog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
+            await plog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
             return
 
         (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,
@@ -239,7 +238,7 @@ class Score:
         if s.bmap:
             # Ignore SR for now.
             if not exists('pp/oppai'):
-                printlog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
+                await plog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
                 s.pp = 0.0
             else:
                 s.pp = (await s.calc_diff())[0]

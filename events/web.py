@@ -3,6 +3,7 @@ from enum import IntEnum, unique
 from time import time
 from os.path import exists
 from random import randrange
+import aiofiles
 from cmyui.utils import rstring
 from urllib.parse import unquote
 from re import compile as re_comp
@@ -16,7 +17,7 @@ from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
 from cmyui.web import Request
-from console import printlog, Ansi
+from console import plog, Ansi
 
 # For /web/ requests, we send the
 # data directly back in the event.
@@ -50,11 +51,11 @@ async def banchoConnect(req: Request) -> Optional[bytes]:
 #@web_handler('osu-osz2-bmsubmit-upload.php')
 #async def osuMapBMSubmitUpload(req: Request) -> Optional[bytes]:
 #    if not all(x in req.args for x in required_params_bmsubmit_upload):
-#        printlog(f'bmsubmit-upload req missing params.', Ansi.LIGHT_RED)
+#        await plog(f'bmsubmit-upload req missing params.', Ansi.LIGHT_RED)
 #        return
 #
 #    if not 'osz2' in req.files:
-#        printlog(f'bmsubmit-upload sent without an osz2.', Ansi.LIGHT_RED)
+#        await plog(f'bmsubmit-upload sent without an osz2.', Ansi.LIGHT_RED)
 #        return
 #
 #    ...
@@ -65,7 +66,7 @@ async def banchoConnect(req: Request) -> Optional[bytes]:
 #@web_handler('osu-osz2-bmsubmit-getid.php')
 #async def osuMapBMSubmitGetID(req: Request) -> Optional[bytes]:
 #    if not all(x in req.args for x in required_params_bmsubmit_getid):
-#        printlog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
+#        await plog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
 #        return
 #
 #    return b'6\nDN'
@@ -77,11 +78,11 @@ required_params_screemshot = frozenset({
 @web_handler('osu-screenshot.php')
 async def osuScreenshot(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_screemshot):
-        printlog(f'screenshot req missing params.', Ansi.LIGHT_RED)
+        await plog(f'screenshot req missing params.', Ansi.LIGHT_RED)
         return
 
     if 'ss' not in req.files:
-        printlog(f'screenshot req missing file.', Ansi.LIGHT_RED)
+        await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)
         return
     username = unquote(req.args['u'])
     pass_md5 = req.args['p']
@@ -91,10 +92,10 @@ async def osuScreenshot(req: Request) -> Optional[bytes]:
 
     filename = f'{rstring(8)}.png'
 
-    with open(f'screenshots/{filename}', 'wb+') as f:
-        f.write(req.files['ss'])
+    async with aiofiles.open(f'screenshots/{filename}', 'wb+') as f:
+        await f.write(req.files['ss'])
 
-    printlog(f'{p} uploaded {filename}.')
+    await plog(f'{p} uploaded {filename}.')
     return filename.encode()
 
 required_params_lastFM = frozenset({
@@ -103,7 +104,7 @@ required_params_lastFM = frozenset({
 @web_handler('lastfm.php')
 async def lastFM(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_lastFM):
-        printlog(f'lastfm req missing params.', Ansi.LIGHT_RED)
+        await plog(f'lastfm req missing params.', Ansi.LIGHT_RED)
         return
     username = unquote(req.args['us'])
     pass_md5 = req.args['ha']
@@ -177,7 +178,7 @@ required_params_osuSearch = frozenset({
 @web_handler('osu-search.php')
 async def osuSearchHandler(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_osuSearch):
-        printlog(f'osu-search req missing params.', Ansi.LIGHT_RED)
+        await plog(f'osu-search req missing params.', Ansi.LIGHT_RED)
         return
 
     username = unquote(req.args['u'])
@@ -294,7 +295,7 @@ required_params_submitModular = frozenset({
 @web_handler('osu-submit-modular-selector.php')
 async def submitModularSelector(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_submitModular):
-        printlog(f'submit-modular-selector req missing params.', Ansi.LIGHT_RED)
+        await plog(f'submit-modular-selector req missing params.', Ansi.LIGHT_RED)
         return b'error: no'
 
     # Parse our score data into a score obj.
@@ -304,7 +305,7 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
     )
 
     if not s:
-        printlog('Failed to parse a score - invalid format.', Ansi.LIGHT_RED)
+        await plog('Failed to parse a score - invalid format.', Ansi.LIGHT_RED)
         return b'error: no'
     elif not s.player:
         # Player is not online, return nothing so that their
@@ -329,7 +330,7 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
     )
 
     if res:
-        printlog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
+        await plog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
         return b'error: no'
 
     if req.args['i']:
@@ -342,7 +343,7 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
         pp_cap = autorestrict_pp[gm][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            printlog(f'{s.player} restricted for submitting {s.pp:.2f} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
+            await plog(f'{s.player} restricted for submitting {s.pp:.2f} score on gm {s.game_mode}.', Ansi.LIGHT_RED)
             await s.player.restrict()
             return b'error: ban'
 
@@ -373,12 +374,12 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
         if 'score' not in req.files or req.files['score'] == b'\r\n':
-            printlog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
+            await plog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
             await s.player.restrict()
         else:
             # Save our replay
-            with open(f'replays/{s.id}.osr', 'wb') as f:
-                f.write(req.files['score'])
+            async with aiofiles.open(f'replays/{s.id}.osr', 'wb') as f:
+                await f.write(req.files['score'])
 
     if not (time_elapsed := req.args['st' if s.passed else 'ft']).isnumeric():
         return
@@ -413,7 +414,7 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
     s.player.recent_scores[gm] = s
     await s.player.update_stats(gm)
 
-    printlog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
+    await plog(f'{s.player} submitted a score! ({s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
 
 required_params_getReplay = frozenset({
@@ -422,7 +423,7 @@ required_params_getReplay = frozenset({
 @web_handler('osu-getreplay.php')
 async def getReplay(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getReplay):
-        printlog(f'get-scores req missing params.', Ansi.LIGHT_RED)
+        await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
     username = unquote(req.args['u'])
@@ -435,10 +436,10 @@ async def getReplay(req: Request) -> Optional[bytes]:
     if not exists(path):
         return b''
 
-    with open(path, 'rb') as f:
-        data = f.read()
+    async with aiofiles.open(path, 'rb') as f:
+        content = await f.read()
 
-    return data
+    return content
 
 _map_regex = re_comp(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 required_params_getScores = frozenset({
@@ -449,7 +450,7 @@ required_params_getScores = frozenset({
 @web_handler('osu-osz2-getscores.php')
 async def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
-        printlog(f'get-scores req missing params.', Ansi.LIGHT_RED)
+        await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
     username = unquote(req.args['us'])
@@ -478,7 +479,7 @@ async def getScores(req: Request) -> Optional[bytes]:
 
         filename = req.args['f'].replace('+', ' ')
         if not (re := _map_regex.match(unquote(filename))):
-            printlog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
+            await plog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
             return
 
         set_exists = await glob.db.fetch(
@@ -605,7 +606,7 @@ async def updateBeatmap(req: Request) -> Optional[bytes]:
     # seems to get the checksum something like that wrong?
     # Will have to look into it :P
     if not (re := _map_regex.match(unquote(req.uri[10:]))):
-        printlog(f'Requested invalid map update {req.uri}.', Ansi.LIGHT_RED)
+        await plog(f'Requested invalid map update {req.uri}.', Ansi.LIGHT_RED)
         return b''
 
     if not (res := await glob.db.fetch(
@@ -619,18 +620,19 @@ async def updateBeatmap(req: Request) -> Optional[bytes]:
 
     if exists(filepath := f"pp/maps/{res['id']}.osu"):
         # Map found on disk.
-        with open(filepath, 'rb') as f:
-            content = f.read()
+
+        async with aiofiles.open(filepath, 'rb') as f:
+            content = await f.read()
     else:
         # We don't have map, get from osu!
         async with glob.http.get(f"https://old.ppy.sh/osu/{res['id']}") as resp:
             if not resp or resp.status != 200:
-                printlog(f'Could not find map {filepath}!', Ansi.LIGHT_RED)
+                await plog(f'Could not find map {filepath}!', Ansi.LIGHT_RED)
                 return
 
             content = await resp.read()
 
-        with open(filepath, 'wb+') as f:
-            f.write(content)
+        async with aiofiles.open(filepath, 'wb+') as f:
+            await f.write(content)
 
     return content

@@ -266,5 +266,5 @@ class Match:
                 if p.id not in immune:
                     p.enqueue(data)
 
-        if lobby:
-            glob.channels.get('#lobby').enqueue(data)
+        if lobby and (lchan := glob.channels.get('#lobby')):
+            lchan.enqueue(data)
