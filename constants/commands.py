@@ -9,6 +9,7 @@ from codecs import escape_decode
 from collections import defaultdict
 
 from objects import glob
+from objects.score import Score
 from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match, SlotStatus
@@ -63,10 +64,11 @@ async def roll(p: Player, c: Messageable, msg: List[str]) -> str:
 _last_doc: Final[str] = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: List[str]) -> str:
+    s: Score
     if not (s := p.recent_scores[p.status.game_mode]):
         return 'No recent score found for current mode!'
 
-    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp)'
+    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp) {s.game_mode}'
 
 _mapsearch_doc: Final[str] = ('Search map titles with '
                               'user input as a wildcard.')

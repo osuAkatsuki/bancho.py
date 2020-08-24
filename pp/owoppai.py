@@ -7,7 +7,7 @@ from os import path
 from objects import glob
 from console import printlog, Ansi
 from constants.mods import mods_readable
-from json import loads
+from orjson import loads
 
 __all__ = ('Owoppai',)
 
@@ -19,8 +19,8 @@ class Owoppai:
         self.filename = ''
         self.mods = kwargs.get('mods', 0)
         self.combo = kwargs.get('combo', 0)
-        self.misses = kwargs.get('nmiss', 0)
-        self.gamemode = kwargs.get('mode', 0)
+        self.misses = kwargs.get('misses', 0)
+        self.gamemode = kwargs.get('gamemode', 0)
         self.accuracy = kwargs.get('accuracy', -1.0)
 
     async def open_map(self, map_id: int) -> None:
@@ -30,7 +30,7 @@ class Owoppai:
             # Do osu!api request for the map.
             async with glob.http.get(f'https://old.ppy.sh/osu/{map_id}') as resp:
                 if not resp or resp.status != 200:
-                    printlog(f'Could not find map {filepath}!', Ansi.RED) # osu!api request failed.
+                    printlog(f'Could not find map {filepath}!', Ansi.LIGHT_RED) # osu!api request failed.
                     return
 
                 content = await resp.read()
@@ -44,7 +44,7 @@ class Owoppai:
         # This function can either return a list of
         # PP values, # or just a single PP value.
         if not self.filename:
-            printlog('Called calculate_pp() without a map open.', Ansi.RED)
+            printlog('Called calculate_pp() without a map open.', Ansi.LIGHT_RED)
             return
 
         args = [f'./pp/oppai {self.filename}']
@@ -57,7 +57,7 @@ class Owoppai:
         if self.misses:
             args.append(f'{self.misses}m')
         if self.gamemode == 1: # taiko support
-            args.append('-taiko')
+            args.extend(('-taiko', '-m1'))
 
         # Output in json format
         args.append('-ojson')
@@ -73,7 +73,7 @@ class Owoppai:
 
         important = ('code', 'errstr', 'pp', 'stars')
         if any(i not in output for i in important) or output['code'] != 200:
-            printlog('Error while calculating PP.', Ansi.RED)
+            printlog('Error while calculating PP.', Ansi.LIGHT_RED)
             return
 
         return output['pp'], output['stars']

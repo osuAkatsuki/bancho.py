@@ -43,19 +43,47 @@ async def banchoConnect(req: Request) -> Optional[bytes]:
     # TODO: perhaps handle this..?
     return
 
+""" TODO: beatmap submission system """
+#required_params_bmsubmit_upload = frozenset({
+#    'u', 'h', 't', 'vv', 'z', 's'
+#})
+#@web_handler('osu-osz2-bmsubmit-upload.php')
+#async def osuMapBMSubmitUpload(req: Request) -> Optional[bytes]:
+#    if not all(x in req.args for x in required_params_bmsubmit_upload):
+#        printlog(f'bmsubmit-upload req missing params.', Ansi.LIGHT_RED)
+#        return
+#
+#    if not 'osz2' in req.files:
+#        printlog(f'bmsubmit-upload sent without an osz2.', Ansi.LIGHT_RED)
+#        return
+#
+#    ...
+#
+#required_params_bmsubmit_getid = frozenset({
+#    'h', 's', 'b', 'z', 'vv'
+#})
+#@web_handler('osu-osz2-bmsubmit-getid.php')
+#async def osuMapBMSubmitGetID(req: Request) -> Optional[bytes]:
+#    if not all(x in req.args for x in required_params_bmsubmit_getid):
+#        printlog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
+#        return
+#
+#    return b'6\nDN'
+#
+
 required_params_screemshot = frozenset({
     'u', 'p', 'v'
 })
 @web_handler('osu-screenshot.php')
 async def osuScreenshot(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_screemshot):
-        printlog(f'screenshot req missing params.')
+        printlog(f'screenshot req missing params.', Ansi.LIGHT_RED)
         return
 
     if 'ss' not in req.files:
-        printlog(f'screenshot req missing file.')
+        printlog(f'screenshot req missing file.', Ansi.LIGHT_RED)
         return
-    username = req.args['u']
+    username = unquote(req.args['u'])
     pass_md5 = req.args['p']
 
     if not (p := await glob.players.get_login(username, pass_md5)):
@@ -75,9 +103,9 @@ required_params_lastFM = frozenset({
 @web_handler('lastfm.php')
 async def lastFM(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_lastFM):
-        printlog(f'lastfm req missing params.')
+        printlog(f'lastfm req missing params.', Ansi.LIGHT_RED)
         return
-    username = req.args['us']
+    username = unquote(req.args['us'])
     pass_md5 = req.args['ha']
 
     if not (p := await glob.players.get_login(username, pass_md5)):
@@ -149,10 +177,10 @@ required_params_osuSearch = frozenset({
 @web_handler('osu-search.php')
 async def osuSearchHandler(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_osuSearch):
-        printlog(f'osu-search req missing params.')
+        printlog(f'osu-search req missing params.', Ansi.LIGHT_RED)
         return
 
-    username = req.args['u']
+    username = unquote(req.args['u'])
     pass_md5 = req.args['h']
 
     if not (p := await glob.players.get_login(username, pass_md5)):
@@ -266,7 +294,7 @@ required_params_submitModular = frozenset({
 @web_handler('osu-submit-modular-selector.php')
 async def submitModularSelector(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_submitModular):
-        printlog(f'submit-modular-selector req missing params.')
+        printlog(f'submit-modular-selector req missing params.', Ansi.LIGHT_RED)
         return b'error: no'
 
     # Parse our score data into a score obj.
@@ -276,7 +304,7 @@ async def submitModularSelector(req: Request) -> Optional[bytes]:
     )
 
     if not s:
-        printlog('Failed to parse a score - invalid format.', Ansi.YELLOW)
+        printlog('Failed to parse a score - invalid format.', Ansi.LIGHT_RED)
         return b'error: no'
     elif not s.player:
         # Player is not online, return nothing so that their
@@ -394,10 +422,10 @@ required_params_getReplay = frozenset({
 @web_handler('osu-getreplay.php')
 async def getReplay(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getReplay):
-        printlog(f'get-scores req missing params.')
+        printlog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
-    username = req.args['u']
+    username = unquote(req.args['u'])
     pass_md5 = req.args['h']
 
     if not (p := await glob.players.get_login(username, pass_md5)):
@@ -421,10 +449,10 @@ required_params_getScores = frozenset({
 @web_handler('osu-osz2-getscores.php')
 async def getScores(req: Request) -> Optional[bytes]:
     if not all(x in req.args for x in required_params_getScores):
-        printlog(f'get-scores req missing params.')
+        printlog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
-    username = req.args['us']
+    username = unquote(req.args['us'])
     pass_md5 = req.args['ha']
 
     if not (p := await glob.players.get_login(username, pass_md5)):
@@ -450,7 +478,7 @@ async def getScores(req: Request) -> Optional[bytes]:
 
         filename = req.args['f'].replace('+', ' ')
         if not (re := _map_regex.match(unquote(filename))):
-            printlog(f'Requested invalid file - {filename}.', Ansi.RED)
+            printlog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
             return
 
         set_exists = await glob.db.fetch(
@@ -559,7 +587,8 @@ async def checkUpdates(req: Request) -> Optional[bytes]:
     if cache[action] and cache['timeout'] > current_time:
         return cache[action]
 
-    async with glob.http.get('https://old.ppy.sh/web/check-updates.php', params = req.args) as resp:
+    url = 'https://old.ppy.sh/web/check-updates.php'
+    async with glob.http.get(url, params = req.args) as resp:
         if not resp or resp.status != 200:
             return b'Failed to retrieve data from osu!'
 
@@ -576,7 +605,7 @@ async def updateBeatmap(req: Request) -> Optional[bytes]:
     # seems to get the checksum something like that wrong?
     # Will have to look into it :P
     if not (re := _map_regex.match(unquote(req.uri[10:]))):
-        printlog(f'Requested invalid map update {req.uri}.', Ansi.RED)
+        printlog(f'Requested invalid map update {req.uri}.', Ansi.LIGHT_RED)
         return b''
 
     if not (res := await glob.db.fetch(
@@ -596,7 +625,8 @@ async def updateBeatmap(req: Request) -> Optional[bytes]:
         # We don't have map, get from osu!
         async with glob.http.get(f"https://old.ppy.sh/osu/{res['id']}") as resp:
             if not resp or resp.status != 200:
-                raise Exception(f'Could not find map {filepath}!')
+                printlog(f'Could not find map {filepath}!', Ansi.LIGHT_RED)
+                return
 
             content = await resp.read()
 

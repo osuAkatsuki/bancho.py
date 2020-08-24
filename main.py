@@ -9,15 +9,18 @@ __all__ = ()
 if __name__ != '__main__':
     raise Exception('main.py is meant to be run directly!')
 
-from aiohttp.client import ClientSession
 import asyncio, uvloop
-from cmyui.web import Address, AsyncConnection, AsyncTCPServer
+from aiohttp.client import ClientSession
 from time import time
 from os import chdir, path
+from orjson import dumps
 
-#from cmyui.web import TCPServer, Connection
 from cmyui.version import Version
 from cmyui.mysql import AsyncSQLPool
+from cmyui.web import (
+    Address, HTTPStatus,
+    AsyncConnection, AsyncTCPServer
+)
 
 from console import *
 from handlers import *
@@ -27,12 +30,53 @@ from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
-async def run_server(loop: uvloop.Loop, addr: Address):
-    # Set CWD to /gulag.
-    chdir(path.dirname(path.realpath(__file__)))
+from re import compile as re_comp
+_bancho_re = re_comp(r'^c(?:e|[4-6])?\.ppy\.sh$')
 
-    glob.version = Version(2, 0, 0)
-    glob.http = ClientSession()
+# Set CWD to /gulag.
+chdir(path.dirname(path.realpath(__file__)))
+
+async def handle_conn(conn: AsyncConnection):
+    if 'Host' not in conn.req.headers:
+        await conn.resp.send(b'Missing required headers.',
+                                HTTPStatus.BadRequest)
+        return
+
+    st = time()
+    handler = None
+
+    if _bancho_re.match(conn.req.headers['Host']):
+        # Bancho handlers.
+        if conn.req.uri == '/':
+            handler = handle_bancho
+
+    elif conn.req.headers['Host'] == 'osu.ppy.sh':
+        # /web handlers, screenshots, and osu!direct downloads.
+        if conn.req.startswith('/web/'):
+            handler = handle_web
+        elif conn.req.startswith('/ss/'):
+            handler = handle_ss
+        elif conn.req.startswith('/d/'):
+            handler = handle_dl
+
+    elif conn.req.headers['Host'] == 'a.ppy.sh':
+        # Avatars.
+        handler = handle_avatar
+
+    if handler:
+        # We have a handler for this request.
+        await handler(conn)
+    else:
+        # We have no such handler.
+        printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED)
+        await conn.resp.send(b'Request handler not implemented.',
+                             HTTPStatus.BadRequest)
+
+    printlog(f'Handled in {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
+
+async def run_server(loop: uvloop.Loop, addr: Address):
+    glob.version = Version(2, 1, 0)
+    glob.http = ClientSession(json_serialize=dumps) # use orjson for speed
 
     glob.db = AsyncSQLPool()
     await glob.db.connect(loop, **glob.config.mysql)
@@ -48,30 +92,15 @@ async def run_server(loop: uvloop.Loop, addr: Address):
     for chan in await glob.db.fetchall('SELECT * FROM channels'):
         glob.channels.add(Channel(**chan))
 
-    serv: AsyncTCPServer
-    conn: AsyncConnection
     async with AsyncTCPServer(addr) as serv:
         printlog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
         async for conn in serv.listen(loop, max_conns = 50):
-            st = time()
-
-            handler = (handle_bancho if conn.req.uri == '/' # bancho handlers
-                else handle_web if conn.req.startswith('/web/') # /web/* handlers
-                else handle_ss if conn.req.startswith('/ss/') # screenshots
-                else handle_dl if conn.req.startswith('/d/') # osu!direct
-                else printlog(f'Unhandled {conn.req.uri}.', Ansi.LIGHT_RED))
-
-            if handler:
-                await handler(conn)
-
-            printlog(f'Handled in {1000 * (time() - st):.2f}ms', Ansi.LIGHT_CYAN)
-
-SOCKADDR = glob.config.server_addr
+            asyncio.create_task(handle_conn(conn))
 
 # use uvloop for speed boost
 loop = uvloop.new_event_loop()
 asyncio.set_event_loop(loop)
-loop.create_task(run_server(loop, SOCKADDR))
+loop.create_task(run_server(loop, glob.config.server_addr))
 
 try:
     loop.run_forever()

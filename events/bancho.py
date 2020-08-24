@@ -361,7 +361,7 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
     if t.id == 1:
         # Target is Aika, check if message is a command.
         cmd = msg.startswith(glob.config.command_prefix) \
-            and commands.process_commands(p, t, msg)
+            and await commands.process_commands(p, t, msg)
 
         if cmd and 'resp' in cmd:
             # Command triggered and there is a response to send.

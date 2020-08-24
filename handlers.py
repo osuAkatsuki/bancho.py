@@ -1,6 +1,7 @@
 import packets
+import aiofiles
 from os.path import exists
-from cmyui.web import Connection
+from cmyui.web import AsyncConnection, HTTPStatus
 
 from objects import glob
 
@@ -14,10 +15,11 @@ __all__ = (
     'handle_web',
     'handle_ss',
     'handle_dl',
+    'handle_avatar',
     #'registration'
 )
 
-async def handle_bancho(conn: Connection) -> None:
+async def handle_bancho(conn: AsyncConnection) -> None:
     if 'User-Agent' not in conn.req.headers:
         return
 
@@ -33,7 +35,7 @@ async def handle_bancho(conn: Connection) -> None:
             '',
             '<b>/web/ Handlers</b>',
             '<br>'.join(glob.web_map.keys())
-        )).encode(), 200)
+        )).encode(), HTTPStatus.Ok)
         return
 
     resp = bytearray()
@@ -81,9 +83,9 @@ async def handle_bancho(conn: Connection) -> None:
     # Even if the packet is empty, we have to
     # send back an empty response so the client
     # knows it was successfully delivered.
-    await conn.resp.send(bytes(resp), 200)
+    await conn.resp.send(bytes(resp), HTTPStatus.Ok)
 
-async def handle_web(conn: Connection) -> None:
+async def handle_web(conn: AsyncConnection) -> None:
     handler = conn.req.uri[5:] # cut off /web/
 
     # Connections to /web/ only send a single request
@@ -93,7 +95,7 @@ async def handle_web(conn: Connection) -> None:
             printlog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
             # Special case for updating maps.
             if (resp := await updateBeatmap(conn.req)):
-                await conn.resp.send(resp, 200)
+                await conn.resp.send(resp, HTTPStatus.Ok)
             return
 
         printlog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
@@ -108,25 +110,25 @@ async def handle_web(conn: Connection) -> None:
         if glob.config.debug:
             printlog(resp, Ansi.LIGHT_GREEN)
 
-        await conn.resp.send(resp, 200)
+        await conn.resp.send(resp, HTTPStatus.Ok)
 
-async def handle_ss(conn: Connection) -> None:
+async def handle_ss(conn: AsyncConnection) -> None:
     if len(conn.req.uri) != 16:
-        await conn.resp.send(b'No file found!', 404)
+        await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
         return
 
     path = f'screenshots/{conn.req.uri[4:]}'
 
     if not exists(path):
-        await conn.resp.send(b'No file found!', 404)
+        await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
         return
 
-    with open(path, 'rb') as f:
-        await conn.resp.send(f.read(), 200)
+    async with aiofiles.open(path, 'rb') as f:
+        await conn.resp.send(await f.read(), HTTPStatus.Ok)
 
-async def handle_dl(conn: Connection) -> None:
+async def handle_dl(conn: AsyncConnection) -> None:
     if not all(x in conn.req.args for x in ('u', 'h', 'vv')):
-        await conn.resp.send(b'Method requires authorization.', 401)
+        await conn.resp.send(b'Method requires authorization.', HTTPStatus.Unauthorized)
         return
 
     if not conn.req.uri[3:].isnumeric():
@@ -139,7 +141,6 @@ async def handle_dl(conn: Connection) -> None:
     if not (p := await glob.players.get_login(username, pass_md5)):
         return
 
-
     set_id = int(conn.req.uri[3:])
 
     if exists(filepath := f'mapsets/{set_id}.osz'):
@@ -148,7 +149,6 @@ async def handle_dl(conn: Connection) -> None:
     else:
         # Map not cached, get from a mirror
         # XXX: I'm considering handling this myself, aswell..
-
         async with glob.http.get(f'https://osu.gatari.pw/d/{set_id}') as resp:
             if not resp or resp.status != 200:
                 return
@@ -156,10 +156,18 @@ async def handle_dl(conn: Connection) -> None:
             content = await resp.read()
 
         # Save to disk.
-        with open(filepath, 'wb+') as f:
-            f.write(content)
+        async with aiofiles.open(filepath, 'wb+') as f:
+            await f.write(content)
 
-    await conn.resp.send(content, 200)
+    await conn.resp.send(content, HTTPStatus.Ok)
+
+async def handle_avatar(conn: AsyncConnection) -> None:
+    pid = conn.req.uri[1:]
+    found = pid.isnumeric() and exists(f'avatars/{pid}')
+    path = f"avatars/{pid if found else 'default'}.jpg"
+
+    async with aiofiles.open(path, 'rb') as f:
+        await conn.resp.send(await f.read(), HTTPStatus.Ok)
 
 # XXX: This won't be completed for a while most likely..
 # Focused on other parts of the design (web mostly).

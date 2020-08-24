@@ -49,7 +49,7 @@ class ChannelList(Sequence):
             if c._name == name:
                 return c
 
-    def add(self, c: Channel) -> None: # bool ret success?
+    def add(self, c: Channel) -> None:
         if c in self.channels:
             printlog(f'{c} already in channels list!')
             return
@@ -150,12 +150,12 @@ class PlayerList(Sequence):
                 p.enqueue(data)
 
     def get(self, token: str) -> Player:
-        for p in self.players: # might copy
+        for p in self.players:
             if p.token == token:
                 return p
 
     async def get_by_name(self, name: str, sql: bool = False) -> Player:
-        for p in self.players: # might copy
+        for p in self.players:
             if p.name == name:
                 return p
 
@@ -174,7 +174,7 @@ class PlayerList(Sequence):
         return Player(**res)
 
     def get_by_id(self, pid: int) -> Player:
-        for p in self.players: # might copy
+        for p in self.players:
             if p.id == pid:
                 return p
 
@@ -206,7 +206,7 @@ class PlayerList(Sequence):
 
         return await self.get_by_name(name)
 
-    def add(self, p: Player) -> None: # bool ret success?
+    def add(self, p: Player) -> None:
         if p in self.players:
             printlog(f'{p} already in players list!')
             return
