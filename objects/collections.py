@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
+from typing import Set, Tuple, Union, Optional
 from collections import Sequence
 
-from typing import Tuple, Union, Optional
 from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match
+from constants.privileges import Privileges
 from objects import glob
 from console import plog
 
@@ -52,9 +53,9 @@ class ChannelList(Sequence):
     async def add(self, c: Channel) -> None:
         if c in self.channels:
             await plog(f'{c} already in channels list!')
-            return
-        await plog(f'Adding {c} to channels list.')
-        self.channels.append(c)
+        else:
+            await plog(f'Adding {c} to channels list.')
+            self.channels.append(c)
 
     async def remove(self, c: Channel) -> None:
         await plog(f'Removing {c} from channels list.')
@@ -93,18 +94,17 @@ class MatchList(Sequence):
             if m and m.id == mid:
                 return m
 
-    async def add(self, m: Match) -> bool:
+    async def add(self, m: Match) -> None:
         if m in self.matches:
             await plog(f'{m} already in matches list!')
-            return False
+            return
 
-        if (free := self.get_free()) is None:
+        if free := self.get_free():
+            m.id = free
+            await plog(f'Adding {m} to matches list.')
+            self.matches[free] = m
+        else:
             await plog(f'Match list is full! Could not add {m}.')
-            return False
-
-        m.id = free
-        await plog(f'Adding {m} to matches list.')
-        self.matches[free] = m
 
     async def remove(self, m: Match) -> None:
         await plog(f'Removing {m} from matches list.')
@@ -144,6 +144,10 @@ class PlayerList(Sequence):
     def ids(self) -> Tuple[int, ...]:
         return (p.id for p in self.players)
 
+    @property
+    def staff(self) -> Set[Player]:
+        return {p for p in self.players if p.priv & Privileges.Staff}
+
     def enqueue(self, data: bytes, immune: Tuple[Player, ...] = ()) -> None:
         for p in self.players:
             if p not in immune:
@@ -165,13 +169,13 @@ class PlayerList(Sequence):
             return
 
         # Try to get from SQL.
-        if not (res := await glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT id, priv, silence_end '
             'FROM users WHERE name = %s',
             [name]
-        )): return
+        )
 
-        return Player(**res, name = name)
+        return Player(**res, name = name) if res else None
 
     async def get_by_id(self, pid: int, sql: bool = False) -> Player:
         for p in self.players:
@@ -184,25 +188,25 @@ class PlayerList(Sequence):
             return
 
         # Try to get from SQL.
-        if not (res := await glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT name, priv, silence_end '
             'FROM users WHERE id = %s',
             [pid]
-        )): return
+        )
 
-        return Player(**res, id = pid)
+        return Player(**res, id = pid) if res else None
 
-    async def get_login(self, name: str, pw_md5: str) -> Optional[Player]:
+    async def get_login(self, name: str, phash: str) -> Optional[Player]:
         # Only used cached results - the user should have
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
 
         # Let them pass as a string for ease of access
-        pw_md5: bytes = pw_md5.encode()
+        phash = phash.encode()
 
         bcrypt_cache = glob.cache['bcrypt']
 
-        if pw_md5 not in bcrypt_cache:
+        if phash not in bcrypt_cache:
             # User has not logged in through bancho.
             return
 
@@ -214,7 +218,7 @@ class PlayerList(Sequence):
             # Could not find user in the DB.
             return
 
-        if bcrypt_cache[pw_md5] != res['pw_hash']:
+        if bcrypt_cache[phash] != res['pw_hash']:
             # Password bcrypts do not match.
             return
 

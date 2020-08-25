@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple, Callable
-from time import time
-from bcrypt import checkpw, hashpw, gensalt
+from typing import Tuple, Final, Callable
+import time
+import bcrypt
+import re
+
 from cmyui.utils import rstring
-from re import compile as re_compile
 
 import packets
 from packets import Packet, PacketReader # convenience
@@ -43,7 +44,11 @@ async def readStatus(p: Player, pr: PacketReader) -> None:
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
-_np_regex = re_compile(r'^\*ACTION is (?:playing|editing|watching|listening to) \[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\](?P<mods>(?: (?:-|\+|~)\w+~?)+)\*$')
+_np_regex = re.compile(
+    r'^\x01ACTION is (?:playing|editing|watching|listening to) '
+    r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
+    r'(?P<mods>(?: (?:-|\+|~)\w+~?)+)?\x01$'
+)
 # PacketID: 1
 @bancho_packet(Packet.c_sendPublicMessage)
 async def sendMessage(p: Player, pr: PacketReader) -> None:
@@ -81,7 +86,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
             if 'resp' in cmd:
                 await t.send(glob.bot, cmd['resp'])
         else:
-            staff = {p for p in glob.players if p.priv & Privileges.Staff}
+            staff = glob.players.staff
             await t.send_selective(p, msg, staff - {p})
             if 'resp' in cmd:
                 await t.send_selective(glob.bot, cmd['resp'], {p} | staff)
@@ -102,7 +107,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
 async def logout(p: Player, pr: PacketReader) -> None:
     pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
 
-    if (time() - p.login_time) < 2:
+    if (time.time() - p.login_time) < 2:
         # osu! has a weird tendency to log out immediately when
         # it logs in, then reconnects? not sure why..?
         return
@@ -118,8 +123,20 @@ async def statsUpdateRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 4
 @bancho_packet(Packet.c_ping)
 async def ping(p: Player, pr: PacketReader) -> None:
-    p.ping_time = int(time())
+    p.ping_time = int(time.time())
 
+registration_msg: Final[str] = '\n'.join((
+    "Hey! Welcome to the gulag.",
+    "",
+    "Since it's your first time here, I thought i'd show you around a bit.",
+    "Command help: !help",
+    "",
+    "If you have any questions or find any strange behaviour,",
+    "please feel feel free to contact cmyui(#0425) directly!",
+    "",
+    "Staff online: {}.",
+    "Source code: https://github.com/cmyui/gulag/"
+))
 # No specific packetID, triggered when the
 # client sends a request without an osu-token.
 async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
@@ -129,7 +146,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     s = origin.decode().split('\n')
 
     if p := await glob.players.get_by_name(username := s[0]):
-        if (time() - p.ping_time) > 10:
+        if (time.time() - p.ping_time) > 10:
             # If the current player obj online hasn't
             # pinged the server in > 10 seconds, log
             # them out and login the new user.
@@ -181,7 +198,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
             if bcrypt_cache[pw_hash] != res['pw_hash']:
                 return await packets.userID(-1), 'no'
         else: # Cache miss, must be first login.
-            if not checkpw(pw_hash, res['pw_hash'].encode()):
+            if not bcrypt.checkpw(pw_hash, res['pw_hash'].encode()):
                 return await packets.userID(-1), 'no'
 
             bcrypt_cache[pw_hash] = res['pw_hash']
@@ -191,7 +208,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                    **res)
     else:
         # Account does not exist, register using credentials passed.
-        pw_bcrypt = hashpw(pw_hash, gensalt()).decode()
+        pw_bcrypt = bcrypt.hashpw(pw_hash, bcrypt.gensalt()).decode()
         bcrypt_cache[pw_hash] = pw_bcrypt
 
         # Add to `users` table.
@@ -212,14 +229,11 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         await plog(f'{p} has registered!', Ansi.LIGHT_GREEN)
 
-        p.enqueue(await packets.notification('\n'.join((
-            'Your account has been created.',
-            '',
-            'If you have any questions or find any strange server '
-            'behaviour, please contact cmyui directly!',
-            '',
-            'Enjoy!'
-        ))))
+        # Enqueue registration message to the user.
+        _msg = registration_msg.format(glob.players.staff)
+        p.enqueue(await packets.sendMessage(
+            glob.bot.name, _msg, p.name, p.id
+        ))
 
     data = bytearray(
         await packets.userID(p.id) +
@@ -272,7 +286,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
     data.extend(await packets.mainMenuIcon() +
                 await packets.friendsList(*p.friends) +
-                await packets.silenceEnd(max(p.silence_end - time(), 0)))
+                await packets.silenceEnd(max(p.silence_end - time.time(), 0)))
 
     await glob.players.add(p)
     await plog(f'{p} logged in.', Ansi.LIGHT_YELLOW)

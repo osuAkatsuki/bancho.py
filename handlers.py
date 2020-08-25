@@ -1,20 +1,24 @@
 import packets
 import aiofiles
-from os.path import exists
+import os
+
 from cmyui.web import AsyncConnection, HTTPStatus
+from urllib.parse import unquote
 
 from objects import glob
 
-from events.bancho import login as loginEvent
 from console import *
 
-from events.web import updateBeatmap
+# NOTE: these also load the handler
+# maps for each of the event categories.
+from events import web, api, bancho
 
 __all__ = (
     'handle_bancho',
     'handle_web',
     'handle_ss',
     'handle_dl',
+    'handle_api',
     'handle_avatar',
     #'registration'
 )
@@ -43,7 +47,8 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     if 'osu-token' not in conn.req.headers:
         # Login is a bit of a special case,
         # so we'll handle it separately.
-        login_data = await loginEvent(conn.req.body, conn.req.headers['X-Real-IP'])
+        login_data = await bancho.login(conn.req.body,
+                                        conn.req.headers['X-Real-IP'])
 
         resp.extend(login_data[0])
         await conn.resp.add_header(f'cho-token: {login_data[1]}')
@@ -86,7 +91,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     await conn.resp.send(bytes(resp), HTTPStatus.Ok)
 
 async def handle_web(conn: AsyncConnection) -> None:
-    handler = conn.req.uri[5:] # cut off /web/
+    handler = conn.req.path[5:] # cut off /web/
 
     # Connections to /web/ only send a single request
     # at a time; no need to iterate through received data.
@@ -94,14 +99,14 @@ async def handle_web(conn: AsyncConnection) -> None:
         if handler.startswith('maps/'):
             await plog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
             # Special case for updating maps.
-            if (resp := await updateBeatmap(conn.req)):
+            if (resp := await web.updateBeatmap(conn.req)):
                 await conn.resp.send(resp, HTTPStatus.Ok)
             return
 
-        await plog(f'Unhandled: {conn.req.uri}.', Ansi.YELLOW)
+        await plog(f'Unhandled: {conn.req.path}.', Ansi.YELLOW)
         return
 
-    await plog(f'Handling {conn.req.uri}', Ansi.LIGHT_MAGENTA)
+    await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
     if (resp := await glob.web_map[handler](conn.req)):
         # XXX: Perhaps web handlers should return
         # a bytearray which could be cast to bytes
@@ -113,13 +118,13 @@ async def handle_web(conn: AsyncConnection) -> None:
         await conn.resp.send(resp, HTTPStatus.Ok)
 
 async def handle_ss(conn: AsyncConnection) -> None:
-    if len(conn.req.uri) != 16:
+    if len(conn.req.path) != 16:
         await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
         return
 
-    path = f'screenshots/{conn.req.uri[4:]}'
+    path = f'screenshots/{conn.req.path[4:]}'
 
-    if not exists(path):
+    if not os.path.exists(path):
         await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
         return
 
@@ -131,19 +136,19 @@ async def handle_dl(conn: AsyncConnection) -> None:
         await conn.resp.send(b'Method requires authorization.', HTTPStatus.Unauthorized)
         return
 
-    if not conn.req.uri[3:].isnumeric():
+    if not conn.req.path[3:].isnumeric():
         # Requested set id is not a number.
         return
 
-    username = conn.req.args['u']
-    pass_md5 = conn.req.args['h']
+    pname = unquote(conn.req.args['u'])
+    phash = conn.req.args['h']
 
-    if not (p := await glob.players.get_login(username, pass_md5)):
+    if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    set_id = int(conn.req.uri[3:])
+    set_id = int(conn.req.path[3:])
 
-    if exists(filepath := f'mapsets/{set_id}.osz'):
+    if os.path.exists(filepath := f'mapsets/{set_id}.osz'):
         async with aiofiles.open(filepath, 'rb') as f:
             content = await f.read()
     else:
@@ -162,12 +167,26 @@ async def handle_dl(conn: AsyncConnection) -> None:
     await conn.resp.send(content, HTTPStatus.Ok)
 
 async def handle_avatar(conn: AsyncConnection) -> None:
-    pid = conn.req.uri[1:]
-    found = pid.isnumeric() and exists(f'avatars/{pid}')
+    pid = conn.req.path[1:]
+    found = pid.isnumeric() and os.path.exists(f'avatars/{pid}')
     path = f"avatars/{pid if found else 'default'}.jpg"
 
     async with aiofiles.open(path, 'rb') as f:
         await conn.resp.send(await f.read(), HTTPStatus.Ok)
+
+async def handle_api(conn: AsyncConnection) -> None:
+    handler = conn.req.path[5:] # cut off /api/
+
+    if handler not in glob.api_map:
+        await plog(f'Unhandled: {conn.req.path}.', Ansi.YELLOW)
+        return
+
+    await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
+    if (resp := await glob.api_map[handler](conn.req)):
+        if glob.config.debug:
+            await plog(resp, Ansi.LIGHT_GREEN)
+
+        await conn.resp.send(resp, HTTPStatus.Ok)
 
 # XXX: This won't be completed for a while most likely..
 # Focused on other parts of the design (web mostly).

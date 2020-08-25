@@ -1,10 +1,10 @@
 
 from typing import Final, Tuple, Optional
 from enum import IntEnum, unique
-from time import time
-from os.path import exists
+import time
+import os
+import base64
 from py3rijndael import RijndaelCbc, ZeroPadding
-from base64 import b64decode
 
 from pp.owoppai import Owoppai
 from constants.mods import Mods
@@ -179,30 +179,31 @@ class Score:
 
     @classmethod
     async def from_submission(cls, data_enc: str, iv: str,
-                        osu_ver: str, pass_md5: str) -> None:
+                              osu_ver: str, phash: str) -> None:
         """Create a score object from an osu! submission string."""
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
         cbc = RijndaelCbc(
             f'osu!-scoreburgr---------{osu_ver}',
-            iv = b64decode(iv).decode('latin_1'),
+            iv = base64.b64decode(iv).decode('latin_1'),
             padding = ZeroPadding(32), block_size =  32
         )
 
-        data = cbc.decrypt(b64decode(data_enc).decode('latin_1')).decode().split(':')
+        data = cbc.decrypt(base64.b64decode(data_enc).decode('latin_1')).decode().split(':')
 
         if len(data) != 18:
             await plog('Received an invalid score submission.', Ansi.LIGHT_RED)
-            return None
+            return
 
         s = cls()
 
         if len(map_md5 := data[0]) != 32:
             return
-        username = data[1].rstrip() # why does osu! make me rstrip lol
+
+        pname = data[1].rstrip() # why does osu! make me rstrip lol
 
         s.bmap = await Beatmap.from_md5(map_md5)
 
-        s.player = await glob.players.get_login(username, pass_md5)
+        s.player = await glob.players.get_login(pname, phash)
         if not s.player:
             # Return the obj with an empty player to
             # determine whether the score faield to
@@ -216,7 +217,7 @@ class Score:
         # Perhaps will use to improve security at some point?
 
         # Ensure all ints are safe to cast.
-        if not all(i.isnumeric() for i in data[3:11] + [data[13] + data[15]]):
+        if not all(i.isnumeric() for i in data[3:11] + [data[13], data[15]]):
             await plog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
             return
 
@@ -228,7 +229,7 @@ class Score:
         s.mods = int(data[13])
         s.passed = data[14] == 'True'
         s.game_mode = int(data[15])
-        s.play_time = int(time()) # (yyMMddHHmmss)
+        s.play_time = int(time.time()) # (yyMMddHHmmss)
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
         # All data read from submission.
@@ -237,7 +238,7 @@ class Score:
 
         if s.bmap:
             # Ignore SR for now.
-            if not exists('pp/oppai'):
+            if not os.path.exists('pp/oppai'):
                 await plog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
                 s.pp = 0.0
             else:

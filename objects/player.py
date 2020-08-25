@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from typing import Final, Optional
-from random import choices
-from string import ascii_lowercase
-from time import time
+import random
+import string
+import time
 
 from constants.privileges import Privileges, BanchoPrivileges
 from constants.gamemodes import GameMode
@@ -270,7 +270,7 @@ class Player:
     )
 
     def __init__(self, **kwargs) -> None:
-        self.token: str = kwargs.get('token', ''.join(choices(ascii_lowercase, k = 32)))
+        self.token: str = kwargs.get('token', ''.join(random.choices(string.ascii_lowercase, k = 32)))
         self.id: Optional[int] = kwargs.get('id', None)
         self.name: Optional[str] = kwargs.get('name', None)
         self.safe_name: Optional[str] = self.ensure_safe(self.name) if self.name else None
@@ -302,7 +302,7 @@ class Player:
         self.silence_end: int = kwargs.get('silence_end', 0)
         self.in_lobby = False
 
-        c_time = int(time())
+        c_time = int(time.time())
         self.login_time = c_time
         self.ping_time = c_time
         del c_time
@@ -322,7 +322,7 @@ class Player:
 
     @property
     def silenced(self) -> bool:
-        return time() <= self.silence_end
+        return time.time() <= self.silence_end
 
     @property
     def bancho_priv(self) -> int:
@@ -683,15 +683,9 @@ class Player:
         await plog(f"Updated {self}'s {gm!r} stats.")
 
     async def friends_from_sql(self) -> None:
-        res = await glob.db.fetchall(
-            'SELECT user2 FROM friendships WHERE user1 = %s',
-            [self.id])
-
-        # Always include self and Aika on friends list.
-        self.friends = {1, self.id}
-
-        if res:
-            self.friends.update(i['user2'] for i in res)
+        self.friends = {row['id'] async for row in glob.db.iterall(
+            'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
+        )} | {1, self.id} # Always have bot & self added.
 
     async def stats_from_sql_full(self) -> None:
         for gm in GameMode:

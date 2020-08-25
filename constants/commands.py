@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 
-from objects.beatmap import Beatmap
-from typing import List, Dict, Optional, Union, Callable, Final
-from time import time
-from random import randrange
-from re import match as re_match, compile as re_comp
-from codecs import escape_decode
+from typing import (List, Dict, Optional,
+                    Union, Callable, Final)
+import time
+import random
+import re
+import codecs
 from collections import defaultdict
 
+import packets
 from objects import glob
-from objects.score import Score
 from objects.player import Player
 from objects.channel import Channel
+from objects.beatmap import Beatmap
 from objects.match import Match, SlotStatus
 from constants.privileges import Privileges
-import packets
 
 Messageable = Union[Channel, Player]
 CommandResponse = Dict[str, str]
@@ -48,23 +48,25 @@ _help_doc: Final[str] = 'Show information of all documented commands.'
 @command(priv=Privileges.Normal, public=False, doc=_help_doc)
 async def help(p: Player, c: Messageable, msg: List[str]) -> str:
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
-                     for cmd in glob.commands if cmd['doc'])
+                     for cmd in glob.commands if cmd['doc']
+                     if p.priv & cmd['priv'])
 
 _roll_doc: Final[str] = ('Roll an n-sided die where n is the '
                          'number you write (100 if empty).')
 @command(priv=Privileges.Normal, public=True, doc=_roll_doc)
 async def roll(p: Player, c: Messageable, msg: List[str]) -> str:
-    maxPoints = ( # Cap !roll to 32767 to help prevent spam.
-        msg and msg[0].isnumeric() and min(int(msg[0]), 32767)
-    ) or 100
+    if msg and msg[0].isnumeric():
+        # Cap roll to 32767 to prevent spam.
+        max_roll = min(int(msg[0]), 32767)
+    else:
+        max_roll = 100
 
-    points = randrange(0, maxPoints)
+    points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
 _last_doc: Final[str] = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: List[str]) -> str:
-    s: Score
     if not (s := p.recent_scores[p.status.game_mode]):
         return 'No recent score found for current mode!'
 
@@ -207,7 +209,7 @@ async def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     return f'Wrote {packet} to {t}.'
 
 # This ones a bit spooky, so we'll take some extra precautions..
-_sbytes_re = re_comp(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
+_sbytes_re = re.compile(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
 # Send specific bytes to a user.
 # XXX: Not very useful, mostly just for testing/fun.
 @command(trigger='!sbytes', priv=Privileges.Dangerous, public=False)
@@ -216,13 +218,13 @@ async def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
         return 'Invalid syntax: !sbytes <name> <packetid>'
 
     content = ' '.join(msg)
-    if not (re := re_match(_sbytes_re, content)):
+    if not (r := re.match(_sbytes_re, content)):
         return 'Invalid syntax.'
 
-    if not (t := await glob.players.get_by_name(re['name'])):
+    if not (t := await glob.players.get_by_name(r['name'])):
         return 'Could not find a user by that name.'
 
-    t.enqueue(escape_decode(re['bytes'])[0])
+    t.enqueue(codecs.escape_decode(r['bytes'])[0])
     return f'Wrote data to {t}.'
 
 # Enable/disable debug printing to the console.
@@ -385,7 +387,7 @@ async def process_commands(p: Player, t: Messageable,
     # Basic commands setup for now.
     # Response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
-    start_time = time()
+    st = time.time_ns()
     trigger, *args = msg.strip().split(' ')
 
     for cmd in glob.commands:
@@ -393,10 +395,11 @@ async def process_commands(p: Player, t: Messageable,
             # Command found & we have privileges - run it.
             if (res := await cmd['callback'](p, t, args)):
                 # Returned a message for us to send back.
-                ms_taken = (time() - start_time) * 1000
+                # Print elapsed time in milliseconds.
+                time_taken = (time.time_ns() - st) / 1000000
 
                 return {
-                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {time_taken:.2f}ms',
                     'public': cmd['public']
                 }
 
