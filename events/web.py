@@ -72,7 +72,6 @@ async def banchoConnect(req: AsyncRequest) -> Optional[bytes]:
 #        return
 #
 #    return b'6\nDN'
-#
 
 required_params_screemshot = frozenset({
     'u', 'p', 'v'
@@ -402,7 +401,7 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
 
     stats.playtime += s.time_elapsed
     stats.tscore += s.score
-    if s.bmap.status in {RankedStatus.Ranked, RankedStatus.Approved}:
+    if s.bmap.status in (RankedStatus.Ranked, RankedStatus.Approved):
         stats.rscore += s.score
 
     await glob.db.execute(
@@ -425,7 +424,7 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
     s.player.recent_scores[gm] = s
     await s.player.update_stats(gm)
 
-    await plog(f'{s.player} submitted a score! ({gm}, {s.status})', Ansi.LIGHT_GREEN)
+    await plog(f'{s.player} submitted a score! ({gm!r}, {s.status})', Ansi.LIGHT_GREEN)
     return b'well done bro'
 
 required_params_getReplay = frozenset({
@@ -440,17 +439,15 @@ async def getReplay(req: AsyncRequest) -> Optional[bytes]:
     pname = unquote(req.args['u'])
     phash = req.args['h']
 
-    if not (p := await glob.players.get_login(pname, phash)):
-        return
+    if await glob.players.get_login(pname, phash):
+        path = f"replays/{req.args['c']}.osr"
+        if not os.path.exists(path):
+            return b''
 
-    path = f"replays/{req.args['c']}.osr"
-    if not os.path.exists(path):
-        return b''
+        async with aiofiles.open(path, 'rb') as f:
+            content = await f.read()
 
-    async with aiofiles.open(path, 'rb') as f:
-        content = await f.read()
-
-    return content
+        return content
 
 _map_regex = re.compile(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 required_params_getScores = frozenset({
@@ -472,7 +469,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
 
     mods = req.args['mods']
 
-    if len(req.args['c']) != 32 or not isinstance(mods, int):
+    if not isinstance(mods, int):
         return b'-1|false'
 
     res: List[bytes] = []
@@ -553,7 +550,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
 
     if p_best:
         # Calculate the rank of the score.
-        p_best_rank = (await glob.db.fetch(
+        p_best_rank = 1 + (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} '
             'WHERE map_md5 = %s AND game_mode = %s '
             f'AND status = 2 AND {scoring} > %s', [
@@ -567,7 +564,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
                 **p_best,
                 name = p.name, userid = p.id,
                 score = int(p_best['_score']),
-                has_replay = '1', rank = p_best_rank + 1
+                has_replay = '1', rank = p_best_rank
             ).encode()
         )
     else:

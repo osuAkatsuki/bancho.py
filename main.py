@@ -10,7 +10,6 @@ if __name__ != '__main__':
     raise Exception('main.py is meant to be run directly!')
 
 import asyncio
-from random import random
 import uvloop # faster than stdlib asyncio event loop
 import aiohttp
 import orjson # faster & more accurate than stdlib json
@@ -77,7 +76,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
-    glob.version = cmyui.Version(2, 2, 0)
+    glob.version = cmyui.Version(2, 2, 1)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()

@@ -3,7 +3,7 @@
 from typing import Final
 from enum import IntFlag, unique
 
-__all__ = ('ClientFlags',)
+__all__ = 'ClientFlags',
 
 @unique
 class ClientFlags(IntFlag):

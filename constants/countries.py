@@ -2,7 +2,7 @@
 
 from typing import Dict, Final
 
-__all__ = ('country_codes',)
+__all__ = 'country_codes',
 
 country_codes: Final[Dict[str, int]] = { # Talk about ugly lol
     'XX':  0,  'OC':   1, 'EU':   2, 'AD':   3, 'AE':   4, 'AF':   5, 'AG':   6, 'AI':   7, 'AL':   8, 'AM':   9, 'AN':  10,

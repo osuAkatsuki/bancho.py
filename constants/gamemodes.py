@@ -1,9 +1,29 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final
+from typing import Final, Tuple
 from enum import IntEnum, unique
 
-__all__ = ('GameMode',)
+__all__ = 'GameMode',
+
+gm_str: Tuple[str, ...] = (
+    'vn!std',
+    'vn!taiko',
+    'vn!catch',
+    'vn!mania',
+    'rx!std',
+    'rx!taiko',
+    'rx!catch'
+)
+
+gm_sql: Tuple[str, ...] = (
+    'vn_std',
+    'vn_taiko',
+    'vn_catch',
+    'vn_mania',
+    'rx_std',
+    'rx_taiko',
+    'rx_catch'
+)
 
 @unique
 class GameMode(IntEnum):
@@ -20,23 +40,8 @@ class GameMode(IntEnum):
     rx_catch: Final[int] = 6
 
     def __str__(self) -> str:
-        return (
-            'vn!std',
-            'vn!taiko',
-            'vn!catch',
-            'vn!mania',
-            'rx!std',
-            'rx!taiko',
-            'rx!catch'
-        )[self.value]
+        return gm_str[self.value]
 
-    def __format__(self, format: str) -> str:
-        return (
-            'vn_std',
-            'vn_taiko',
-            'vn_catch',
-            'vn_mania',
-            'rx_std',
-            'rx_taiko',
-            'rx_catch'
-        )[self.value] if format == 'sql' else str(self.value)
+    def __format__(self, fmt: str) -> str:
+        return gm_sql[self.value] if fmt == 'sql' \
+          else str(self.value)

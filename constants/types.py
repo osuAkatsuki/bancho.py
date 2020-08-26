@@ -3,7 +3,7 @@
 from typing import Final
 from enum import IntEnum, unique
 
-__all__ = ('osuTypes',)
+__all__ = 'osuTypes',
 
 @unique
 class osuTypes(IntEnum):

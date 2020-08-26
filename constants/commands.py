@@ -4,8 +4,6 @@ from typing import (List, Dict, Optional,
                     Union, Callable, Final)
 import time
 import random
-import re
-import codecs
 from collections import defaultdict
 
 import packets
@@ -103,8 +101,8 @@ _map_doc: Final[str] = ("Changes the ranked status of "
 @command(priv=Privileges.Nominator, public=True, doc=_map_doc)
 async def map(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) != 2 \
-    or msg[0] not in {'rank', 'unrank', 'love'} \
-    or msg[1] not in {'set', 'map'}:
+    or msg[0] not in ('rank', 'unrank', 'love') \
+    or msg[1] not in ('set', 'map'):
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if not p.last_np:
@@ -123,10 +121,11 @@ async def map(p: Player, c: Messageable, msg: List[str]) -> str:
 
 """ Admin commands
 # The commands below are relatively dangerous,
-# and are generally for managing users.
+# and are generally for managing players.
 """
 
-@command(priv=Privileges.Admin, public=False)
+_ban_doc: Final[str] = "Ban a player's account, with a reason."
+@command(priv=Privileges.Admin, public=False, doc=_ban_doc)
 async def ban(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !ban <name> <reason>'
@@ -141,7 +140,8 @@ async def ban(p: Player, c: Messageable, msg: List[str]) -> str:
     await t.restrict() # TODO: use reason as param?
     return f'{t} was banned.'
 
-@command(priv=Privileges.Admin, public=False)
+_unban_doc: Final[str] = "Unban a player's account, with a reason."
+@command(priv=Privileges.Admin, public=False, doc=_unban_doc)
 async def unban(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !ban <name> <reason>'
@@ -156,8 +156,8 @@ async def unban(p: Player, c: Messageable, msg: List[str]) -> str:
     await t.unrestrict() # TODO: use reason as param?
     return f'{t} was unbanned.'
 
-# Send a notification to all players.
-@command(priv=Privileges.Admin, public=False)
+_alert_doc: Final[str] = 'Send a notification to all players.'
+@command(priv=Privileges.Admin, public=False, doc=_alert_doc)
 async def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !alert <msg>'
@@ -165,8 +165,8 @@ async def alert(p: Player, c: Messageable, msg: List[str]) -> str:
     glob.players.enqueue(await packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
-# Send a notification to a specific user by name.
-@command(trigger='!alertu', priv=Privileges.Admin, public=False)
+_alertu_doc: Final[str] = 'Send a notification to a specific player by name.'
+@command(trigger='!alertu', priv=Privileges.Admin, public=False, doc=_alertu_doc)
 async def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !alertu <name> <msg>'
@@ -182,8 +182,8 @@ async def alert_user(p: Player, c: Messageable, msg: List[str]) -> str:
 # simply not useful for any other roles.
 """
 
-# Send an RTX request with a message to a user by name.
-@command(priv=Privileges.Dangerous, public=False)
+_rtx_doc: Final[str] = 'Send an RTX packet with a message to a user.'
+@command(priv=Privileges.Dangerous, public=False, doc=_rtx_doc)
 async def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) != 2:
         return 'Invalid syntax: !rtx <name> <msg>'
@@ -194,9 +194,9 @@ async def rtx(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(await packets.RTX(msg[1]))
     return 'pong'
 
-# Send a specific (empty) packet by id to a user.
 # XXX: Not very useful, mostly just for testing/fun.
-@command(trigger='!spack', priv=Privileges.Dangerous, public=False)
+_spack_doc: Final[str] = 'Send a specific (empty) packet by id to a player.'
+@command(trigger='!spack', priv=Privileges.Dangerous, public=False, doc=_spack_doc)
 async def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     if len(msg) < 2 or not msg[-1].isnumeric():
         return 'Invalid syntax: !spack <name> <packetid>'
@@ -208,33 +208,12 @@ async def send_empty_packet(p: Player, c: Messageable, msg: List[str]) -> str:
     t.enqueue(await packets.write(packet))
     return f'Wrote {packet} to {t}.'
 
-# This ones a bit spooky, so we'll take some extra precautions..
-_sbytes_re = re.compile(r"^(?P<name>[\w \[\]-]{2,15}) '(?P<bytes>[\w \\\[\]-]+)'$")
-# Send specific bytes to a user.
-# XXX: Not very useful, mostly just for testing/fun.
-@command(trigger='!sbytes', priv=Privileges.Dangerous, public=False)
-async def send_bytes(p: Player, c: Messageable, msg: List[str]) -> str:
-    if len(msg) < 2:
-        return 'Invalid syntax: !sbytes <name> <packetid>'
-
-    content = ' '.join(msg)
-    if not (r := re.match(_sbytes_re, content)):
-        return 'Invalid syntax.'
-
-    if not (t := await glob.players.get_by_name(r['name'])):
-        return 'Could not find a user by that name.'
-
-    t.enqueue(codecs.escape_decode(r['bytes'])[0])
-    return f'Wrote data to {t}.'
-
-# Enable/disable debug printing to the console.
-@command(priv=Privileges.Dangerous, public=False)
+_debug_doc: Final[str] = "Toggle the console's debug setting."
+@command(priv=Privileges.Dangerous, public=False, doc=_debug_doc)
 async def debug(p: Player, c: Messageable, msg: List[str]) -> str:
-    if len(msg) != 1 or msg[0] not in {'0', '1'}:
-        return 'Invalid syntax.'
+    glob.config.debug = not glob.config.debug
 
-    glob.config.debug = msg[0] == '1'
-    return 'Success.'
+    return f"Toggled {'on' if glob.config.debug else 'off'}."
 
 str_to_priv = lambda p: defaultdict(lambda: None, {
     'normal': Privileges.Normal,
@@ -247,8 +226,8 @@ str_to_priv = lambda p: defaultdict(lambda: None, {
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
 })[p]
-# Set permissions for a user (by username).
-@command(priv=Privileges.Dangerous, public=False)
+_setpriv_doc: Final[str] = 'Set privileges for a player (by name).'
+@command(priv=Privileges.Dangerous, public=False, doc=_setpriv_doc)
 async def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
     if (msg_len := len(msg)) < 2:
         return 'Invalid syntax: !setpriv <name> <role1 | role2 | ...>'
@@ -274,9 +253,12 @@ async def setpriv(p: Player, c: Messageable, msg: List[str]) -> str:
 # like `!ev print(await glob.players.get_by_name('cmyui').status.action)`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
-async def ev(p: Player, c: Messageable, msg: List[str]) -> str:
+async def ex(p: Player, c: Messageable, msg: List[str]) -> str:
+    lines = '\n '.join(' '.join(msg).split('\\n'))
     try: # pinnacle of the gulag
-        eval(' '.join(msg))
+        exec(f"async def __ex():\n {lines}")
+        await locals()['__ex']()
+        return 'Success.'
     except Exception as e:
         return str(e)
 
@@ -351,7 +333,8 @@ _mp_triggers = defaultdict(lambda: None, {
         'priv': Privileges.Normal
     }
 })
-_mp_doc: Final[str] = 'A parent command to subcommands for multiplayer match manipulation.'
+_mp_doc: Final[str] = ('A parent command to subcommands '
+                       'for multiplayer match manipulation.')
 @command(trigger='!mp', priv=Privileges.Normal, public=True, doc=_mp_doc)
 async def multiplayer(p: Player, c: Messageable, msg: List[str]) -> str:
     # Used outside of a multiplayer match.

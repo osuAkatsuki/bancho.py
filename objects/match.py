@@ -100,7 +100,8 @@ class Slot:
     skipped: :class:`bool`
         Whether the player has decided to skip the current map intro.
     """
-    __slots__ = ('player', 'status', 'team', 'mods', 'loaded', 'skipped')
+    __slots__ = ('player', 'status', 'team',
+                 'mods', 'loaded', 'skipped')
 
     def __init__(self) -> None:
         self.player = None

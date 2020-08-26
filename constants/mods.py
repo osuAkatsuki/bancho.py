@@ -3,7 +3,7 @@
 from typing import Final, Union, List
 from enum import IntEnum, unique
 
-__all__ = ('Mods',)
+__all__ = 'Mods',
 
 @unique
 class Mods(IntEnum):

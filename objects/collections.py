@@ -87,7 +87,8 @@ class MatchList(Sequence):
     def get_free(self) -> Optional[Match]:
         # Return first free match.
         for idx, m in enumerate(self.matches):
-            if not m: return idx
+            if not m:
+                return idx
 
     def get_by_id(self, mid: int) -> Optional[Match]:
         for m in self.matches:
@@ -99,7 +100,7 @@ class MatchList(Sequence):
             await plog(f'{m} already in matches list!')
             return
 
-        if free := self.get_free():
+        if (free := self.get_free()) is not None:
             m.id = free
             await plog(f'Adding {m} to matches list.')
             self.matches[free] = m

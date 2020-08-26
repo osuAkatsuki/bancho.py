@@ -47,7 +47,7 @@ async def readStatus(p: Player, pr: PacketReader) -> None:
 _np_regex = re.compile(
     r'^\x01ACTION is (?:playing|editing|watching|listening to) '
     r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
-    r'(?P<mods>(?: (?:-|\+|~)\w+~?)+)?\x01$'
+    r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
 )
 # PacketID: 1
 @bancho_packet(Packet.c_sendPublicMessage)

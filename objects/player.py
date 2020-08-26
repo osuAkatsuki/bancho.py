@@ -683,7 +683,7 @@ class Player:
         await plog(f"Updated {self}'s {gm!r} stats.")
 
     async def friends_from_sql(self) -> None:
-        self.friends = {row['id'] async for row in glob.db.iterall(
+        self.friends = {row['user2'] async for row in glob.db.iterall(
             'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
         )} | {1, self.id} # Always have bot & self added.
 

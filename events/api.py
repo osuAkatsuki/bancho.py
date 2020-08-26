@@ -43,7 +43,7 @@ async def getStats(req: AsyncRequest) -> Optional[bytes]:
 
     res = await glob.db.fetch(
         'SELECT * FROM stats '
-        f'WHERE id = %s',
+        'WHERE id = %s',
         [pid]
     )
 

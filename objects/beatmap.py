@@ -3,7 +3,7 @@
 from enum import IntEnum, unique
 from collections import defaultdict
 from datetime import datetime as dt
-from os.path import exists
+import os
 
 from pp.owoppai import Owoppai
 from console import plog, Ansi
@@ -175,7 +175,7 @@ class Beatmap:
         # Try to get from sql.
         if (m := await cls.from_bid_sql(bid)):
             if cache_pp:
-                if not exists('pp/oppai'):
+                if not os.path.exists('pp/oppai'):
                     await plog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
                 else:
                     await m.cache_pp()

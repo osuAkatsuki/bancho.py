@@ -33,7 +33,7 @@ class Ansi(IntEnum):
         return f'\x1b[{self.value}m'
 
 async def plog(msg, col: Ansi = None,
-                   fd: str = None, st_fmt = '') -> None:
+               fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,
     # or also just printing with colour without having
     # to do inline color codes / ansi objects.
