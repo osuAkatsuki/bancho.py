@@ -1,3 +1,5 @@
+[![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
+
 # A dev-friendly osu! server written in modern python
 
 Looking for an easy to use, async & completely open-source osu! server implementation undergoing rapid development?
@@ -32,7 +34,7 @@ This is simply the result of my programming values and time thrown together; I'd
 
 Setup is pretty simple, the commands below should basically be copy-pastable.
 
-If you have any difficulties setting up gulag, you can contact me via Discord @ cmyui#0425 for support.
+If you have any difficulties setting up gulag, feel free to join the Discord server at the top of the README.
 
 NOTE: I will not be able to help you out with creating a certificate to connect on the latest osu! versions.
 
