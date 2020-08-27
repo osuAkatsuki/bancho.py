@@ -6,7 +6,6 @@ import os
 import time
 import random
 import aiofiles
-import re
 from cmyui.utils import rstring
 from urllib.parse import unquote
 
@@ -14,6 +13,7 @@ import packets
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
+from constants import regexes
 from objects.score import Score, SubmissionStatus
 from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
@@ -449,7 +449,6 @@ async def getReplay(req: AsyncRequest) -> Optional[bytes]:
 
         return content
 
-_map_regex = re.compile(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
@@ -486,7 +485,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
         # Check if we have the map in our db (by filename).
 
         filename = req.args['f'].replace('+', ' ')
-        if not (re := _map_regex.match(unquote(filename))):
+        if not (re := regexes.mapfile.match(unquote(filename))):
             await plog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
             return
 
@@ -613,7 +612,7 @@ async def updateBeatmap(req: AsyncRequest) -> Optional[bytes]:
     # XXX: This currently works in updating the map, but
     # seems to get the checksum something like that wrong?
     # Will have to look into it :P
-    if not (re := _map_regex.match(unquote(req.path[10:]))):
+    if not (re := regexes.mapfile.match(unquote(req.path[10:]))):
         await plog(f'Requested invalid map update {req.path}.', Ansi.LIGHT_RED)
         return b''
 

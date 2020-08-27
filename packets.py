@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Tuple, Final
+from typing import Any, Sequence, Tuple, Final
 from enum import IntEnum, unique
 import struct
 
 from objects import glob
-from objects.beatmap import Beatmap
+from objects.beatmap import Beatmap, BeatmapInfo, BeatmapInfoRequest
 from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
 from console import plog, Ansi
@@ -46,10 +46,11 @@ async def read_string(data: bytearray) -> Tuple[str, int]:
     offset += offs
     return data[offset:offset+length].decode(), offset + length
 
-async def read_i32_list(data: bytearray) -> Tuple[Tuple[int, ...], int]:
+async def read_i32_list(data: bytearray, long_len: bool = False
+                       ) -> Tuple[Tuple[int, ...], int]:
     """ Read an int32 list from `data`. """
     ret = []
-    offs = 2
+    offs = 4 if long_len else 2
     for _ in range(int.from_bytes(data[:offs], 'little')):
         ret.append(int.from_bytes(data[offs:offs+4], 'little'))
         offs += 4
@@ -147,6 +148,21 @@ async def read_scoreframe(data: bytearray) -> Tuple[ScoreFrame, int]:
 
     return s, offset
 
+async def read_mapInfoRequest(data: bytearray) -> Tuple[Beatmap, int]:
+    """ Read an osu! beatmapInfoRequest from `data`. """
+    fnames = ids = []
+
+    # Read filenames
+    offset = 4
+    for _ in range(int.from_bytes(data[:offset], 'little')): # filenames
+        fname, offs = await read_string(data[offset:])
+        offset += offs
+        fnames.append(fname)
+
+    # Read ids
+    ids, offs = await read_i32_list(data[offset:], long_len=True)
+    return BeatmapInfoRequest(fnames, ids), offset + offs
+
 class PacketReader:
     """A class dedicated to reading osu! packets.
 
@@ -201,7 +217,8 @@ class PacketReader:
 
     async def read_packet_header(self) -> None:
         if len(self.data) < 7:
-            # packet is invalid, end connection
+            # Packet not even minimal legnth.
+            # End the connection immediately.
             self.packetID = -1
             self._offset += len(self.data)
             await plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
@@ -210,8 +227,10 @@ class PacketReader:
         self.packetID, self.length = struct.unpack('<HxI', self.data[:7])
         self._offset += 7 # Read our first 7 bytes for packetid & len
 
-    async def read(self, *types: Tuple[int, ...]) -> Tuple[Any, ...]:
+    async def read(self, *types: Tuple[osuTypes, ...]) -> Tuple[Any, ...]:
         ret = []
+
+        # Iterate through all types to be read.
         for t in types:
             if t == osuTypes.string:
                 # Read a string
@@ -219,9 +238,10 @@ class PacketReader:
                 self._offset += offs
                 if data is not None:
                     ret.append(data)
-            elif t == osuTypes.i32_list:
+            elif t in (osuTypes.i32_list, osuTypes.i32_list4l):
                 # Read an i32 list
-                data, offs = await read_i32_list(self.data)
+                _longlen = t == osuTypes.i32_list4l
+                data, offs = await read_i32_list(self.data, _longlen)
                 self._offset += offs
                 if data is not None:
                     ret.extend(data)
@@ -252,6 +272,11 @@ class PacketReader:
                 # Read an osu! scoreframe
                 data, offs = await read_scoreframe(self.data)
                 self._offset += offs
+            elif t == osuTypes.mapInfoRequest:
+                # Read an osu! beatmapInfoRequest.
+                data, offs = await read_mapInfoRequest(self.data)
+                self._offset += offs
+                ret.append(data)
             else:
                 # Read a normal datatype
                 fmt = _specifiers[t]
@@ -320,13 +345,19 @@ async def write_channel(name: str, topic: str,
         count.to_bytes(2, 'little')
     )
 
-async def write_scoreframe(s: ScoreFrame) -> bytearray:
-    """ Write `s` into bytes (osu! scoreframe). """
-    return bytearray(struct.pack('<ibHHHHHHIIbbbb',
-        s.time, s.id, s.num300, s.num100, s.num50, s.num_geki,
-        s.num_katu, s.num_miss, s.total_score, s.max_combo,
-        s.perfect, s.current_hp, s.tag_byte, s.score_v2
-    ))
+async def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
+    """ Write `maps` into bytes (osu! map info). """
+    ret = bytearray(len(maps).to_bytes(4, 'little'))
+
+    # Write files
+    for m in maps:
+        ret.extend(struct.pack('<hiiiBbbbb',
+            m.id, m.map_id, m.set_id, m.thread_id, m.status,
+            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
+        ))
+        ret.extend(await write_string(m.map_md5))
+
+    return ret
 
 async def write_match(m: Match) -> bytearray:
     """ Write `m` into bytes (osu! match). """
@@ -367,6 +398,14 @@ async def write_match(m: Match) -> bytearray:
     ret.extend(m.seed.to_bytes(4, 'little'))
     return ret
 
+async def write_scoreframe(s: ScoreFrame) -> bytearray:
+    """ Write `s` into bytes (osu! scoreframe). """
+    return bytearray(struct.pack('<ibHHHHHHIIbbbb',
+        s.time, s.id, s.num300, s.num100, s.num50, s.num_geki,
+        s.num_katu, s.num_miss, s.total_score, s.max_combo,
+        s.perfect, s.current_hp, s.tag_byte, s.score_v2
+    ))
+
 async def write(packid: int, *args: Tuple[Any, ...]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('Hx', packid))
@@ -386,6 +425,8 @@ async def write(packid: int, *args: Tuple[Any, ...]) -> bytes:
             ret.extend(await write_match(p))
         elif p_type == osuTypes.scoreframe:
             ret.extend(await write_scoreframe(p))
+        elif p_type == osuTypes.mapInfoReply:
+            ret.extend(await write_mapInfoReply(p))
         else: # use struct
             ret.extend(struct.pack(f'<{_specifiers[p_type]}', p))
 
@@ -627,19 +668,31 @@ async def matchJoinFail(m: Match) -> bytes:
 
 # PacketID: 42
 async def fellowSpectatorJoined(id: int) -> bytes:
-    return await write(Packet.s_fellowSpectatorJoined, (id, osuTypes.i32))
+    return await write(
+        Packet.s_fellowSpectatorJoined,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 43
 async def fellowSpectatorLeft(id: int) -> bytes:
-    return await write(Packet.s_fellowSpectatorLeft, (id, osuTypes.i32))
+    return await write(
+        Packet.s_fellowSpectatorLeft,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 46
 async def matchStart(m: Match) -> bytes:
-    return await write(Packet.s_matchStart, (m, osuTypes.match))
+    return await write(
+        Packet.s_matchStart,
+        (m, osuTypes.match)
+    )
 
 # PacketID: 48
 async def matchScoreUpdate(frame: ScoreFrame) -> bytes:
-    return await write(Packet.s_matchScoreUpdate, (frame, osuTypes.scoreframe))
+    return await write(
+        Packet.s_matchScoreUpdate,
+        (frame, osuTypes.scoreframe)
+    )
 
 # PacketID: 50
 async def matchTransferHost() -> bytes:
@@ -650,8 +703,11 @@ async def matchAllPlayerLoaded() -> bytes:
     return await write(Packet.s_matchAllPlayersLoaded)
 
 # PacketID: 57
-async def matchPlayerFailed(id: int) -> bytes:
-    return await write(Packet.s_matchPlayerFailed, (id, osuTypes.i32))
+async def matchPlayerFailed(slot_id: int) -> bytes:
+    return await write(
+        Packet.s_matchPlayerFailed,
+        (slot_id, osuTypes.i32)
+    )
 
 # PacketID: 58
 async def matchComplete() -> bytes:
@@ -663,7 +719,10 @@ async def matchSkip() -> bytes:
 
 # PacketID: 64
 async def channelJoin(name: str) -> bytes:
-    return await write(Packet.s_channelJoinSuccess, (name, osuTypes.string))
+    return await write(
+        Packet.s_channelJoinSuccess,
+        (name, osuTypes.string)
+    )
 
 # PacketID: 65
 async def channelInfo(name: str, topic: str,
@@ -675,7 +734,10 @@ async def channelInfo(name: str, topic: str,
 
 # PacketID: 66
 async def channelKick(name: str) -> bytes:
-    return await write(Packet.s_channelKicked, (name, osuTypes.string))
+    return await write(
+        Packet.s_channelKicked,
+        (name, osuTypes.string)
+    )
 
 # PacketID: 67
 async def channelAutoJoin(name: str, topic: str,
@@ -685,19 +747,12 @@ async def channelAutoJoin(name: str, topic: str,
         ((name, topic, p_count), osuTypes.channel)
     )
 
-# PacketID: 69 TODO - beatmapinforeply [i32 len, ]
-# i32 length
-# length * beatmapinfo struct:
-# i16: id
-# i32: beatmapid
-# i32: beatmapsetid
-# i32: threadid
-# byte: ranked
-# i8: osu rank
-# i8: fruits rank # nice job peppy.. does not follow mode id..
-# i8: taiko rank
-# i8: mania rank
-# str: checksum
+# PacketID: 69
+async def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
+    return await write(
+        Packet.s_beatmapInfoReply,
+        (maps, osuTypes.mapInfoReply)
+    )
 
 # PacketID: 71
 async def banchoPrivileges(priv: int) -> bytes:
@@ -740,7 +795,10 @@ async def monitor() -> bytes:
 
 # PacketID: 81
 async def matchPlayerSkipped(pid: int) -> bytes:
-    return await write(Packet.s_matchPlayerSkipped, (pid, osuTypes.i32))
+    return await write(
+        Packet.s_matchPlayerSkipped,
+        (pid, osuTypes.i32)
+    )
 
 # PacketID: 83
 async def userPresence(p) -> bytes:
@@ -773,15 +831,24 @@ async def channelInfoEnd() -> bytes:
 
 # PacketID: 91
 async def matchChangePassword(new: str) -> bytes:
-    return await write(Packet.s_matchChangePassword, (new, osuTypes.string))
+    return await write(
+        Packet.s_matchChangePassword,
+        (new, osuTypes.string)
+    )
 
 # PacketID: 92
 async def silenceEnd(delta: int) -> bytes:
-    return await write(Packet.s_silenceEnd, (delta, osuTypes.i32))
+    return await write(
+        Packet.s_silenceEnd,
+        (delta, osuTypes.i32)
+    )
 
 # PacketID: 94
-async def userSilenced(id: int) -> bytes:
-    return await write(Packet.s_userSilenced, (id, osuTypes.i32))
+async def userSilenced(pid: int) -> bytes:
+    return await write(
+        Packet.s_userSilenced,
+        (pid, osuTypes.i32)
+    )
 
 # PacketID: 100
 async def userPMBlocked(target: str) -> bytes:
@@ -803,7 +870,14 @@ async def versionUpdateForced() -> bytes:
 
 # PacketID: 103
 async def switchServer(t: int) -> bytes: # (idletime < t || match != null)
-    return await write(Packet.s_switchServer, (t, osuTypes.i32))
+    return await write(
+        Packet.s_switchServer,
+        (t, osuTypes.i32)
+    )
+
+# PacketID: 104
+async def accountRestricted() -> bytes:
+    return await write(Packet.s_accountRestricted)
 
 # PacketID: 105
 async def RTX(notif: str) -> bytes:
@@ -811,7 +885,10 @@ async def RTX(notif: str) -> bytes:
     # to show some visual effects on screen for 5 seconds:
     # - Black screenk, freeze game, beeps loudly.
     # within the next 3-8 seconds at random.
-    return await write(Packet.s_RTX, (notif, osuTypes.string))
+    return await write(
+        Packet.s_RTX,
+        (notif, osuTypes.string)
+    )
 
 # PacketID: 106
 async def matchAbort() -> bytes:
@@ -822,4 +899,7 @@ async def switchTournamentServer(ip: str) -> bytes:
     # The client only reads the string if it's
     # not on the client's normal endpoints,
     # but we can send it either way xd.
-    return await write(Packet.s_switchTournamentServer, (ip, osuTypes.string))
+    return await write(
+        Packet.s_switchTournamentServer,
+        (ip, osuTypes.string)
+    )

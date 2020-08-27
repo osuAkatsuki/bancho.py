@@ -6,6 +6,10 @@
 # For UNIX sockets, set to the path of the socket.
 server_addr = '/tmp/gulag.sock'
 
+# The max amount of concurrent
+# connections gulag will hold.
+max_conns = 16
+
 # Your MySQL authentication info.
 mysql = {
     'db': 'gulag',

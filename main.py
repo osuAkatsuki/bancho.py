@@ -16,7 +16,6 @@ import orjson # faster & more accurate than stdlib json
 import cmyui # web & db
 import time
 import os
-import re
 
 from console import *
 from handlers import *
@@ -25,8 +24,7 @@ from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
-
-_bancho_re = re.compile(r'^c(?:e|[4-6])?\.ppy\.sh$')
+from constants import regexes
 
 # Set CWD to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -40,7 +38,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     st = time.time_ns()
     handler = None
 
-    if _bancho_re.match(conn.req.headers['Host']):
+    if regexes.bancho_domain.match(conn.req.headers['Host']):
         # Bancho handlers.
         if conn.req.path == '/':
             handler = handle_bancho
@@ -76,7 +74,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
-    glob.version = cmyui.Version(2, 2, 1)
+    glob.version = cmyui.Version(2, 2, 6)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()

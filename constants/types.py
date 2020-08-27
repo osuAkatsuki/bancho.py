@@ -20,12 +20,15 @@ class osuTypes(IntEnum):
     f64: Final[int] = 9
 
     # osu
-    message:    Final[int] = 11
-    channel:    Final[int] = 12
-    match:      Final[int] = 13
-    scoreframe: Final[int] = 14
+    message:        Final[int] = 11
+    channel:        Final[int] = 12
+    match:          Final[int] = 13
+    scoreframe:     Final[int] = 14
+    mapInfoRequest: Final[int] = 15
+    mapInfoReply:   Final[int] = 16
 
     # misc
-    i32_list: Final[int] = 17
-    string:   Final[int] = 18
-    raw:      Final[int] = 19
+    i32_list:   Final[int] = 17 # 2 bytes len
+    i32_list4l: Final[int] = 18 # 4 bytes len
+    string:     Final[int] = 19
+    raw:        Final[int] = 20

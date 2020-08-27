@@ -3,7 +3,6 @@
 from typing import Tuple, Final, Callable
 import time
 import bcrypt
-import re
 
 from cmyui.utils import rstring
 
@@ -14,10 +13,11 @@ from console import *
 from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
+from constants import regexes
 from objects import glob
 from objects.match import SlotStatus, Teams
 from objects.player import Player, PresenceFilter, Action
-from objects.beatmap import Beatmap
+from objects.beatmap import Beatmap, BeatmapInfo, BeatmapInfoRequest
 from constants.privileges import Privileges
 
 glob.bancho_map = {}
@@ -44,11 +44,6 @@ async def readStatus(p: Player, pr: PacketReader) -> None:
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
-_np_regex = re.compile(
-    r'^\x01ACTION is (?:playing|editing|watching|listening to) '
-    r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
-    r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
-)
 # PacketID: 1
 @bancho_packet(Packet.c_sendPublicMessage)
 async def sendMessage(p: Player, pr: PacketReader) -> None:
@@ -92,7 +87,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
                 await t.send_selective(glob.bot, cmd['resp'], {p} | staff)
 
     else: # No command was triggered.
-        if _match := _np_regex.match(msg):
+        if _match := regexes.now_playing.match(msg):
             # User is /np'ing a map.
             # Save it to their player instance
             # so we can use this elsewhere owo..
@@ -379,7 +374,7 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
             # Command triggered and there is a response to send.
             p.enqueue(await packets.sendMessage(t.name, cmd['resp'], client, t.id))
         else: # No command triggered.
-            if match := _np_regex.match(msg):
+            if match := regexes.now_playing.match(msg):
                 # User is /np'ing a map.
                 # Save it to their player instance
                 # so we can use this elsewhere owo..
@@ -703,6 +698,64 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
 
     # Enqueue channelJoin to our player.
     p.enqueue(await packets.channelJoin(c.name))
+
+# PacketID: 68
+@bancho_packet(Packet.c_beatmapInfoRequest)
+async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
+    req: BeatmapInfoRequest
+    req, = await pr.read(osuTypes.mapInfoRequest)
+
+    info_list = []
+
+    # Filenames
+    for fname in req.filenames:
+        # Attempt to regex pattern match the filename.
+        # If there is no match, simply ignore this map.
+        # XXX: Sometimes a map will be requested without a
+        # diff name, not really sure how to handle this? lol
+        if not (r := regexes.mapfile.match(fname)):
+            continue
+
+        res = await glob.db.fetch(
+            'SELECT id, set_id, status, md5 '
+            'FROM maps WHERE artist = %s AND '
+            'title = %s AND creator = %s AND '
+            'version = %s', [
+                r['artist'], r['title'],
+                r['creator'], r['version']
+            ]
+        )
+
+        if not res:
+            continue
+
+        to_osuapi_status = lambda s: {
+            0: 0,
+            2: 1,
+            3: 2,
+            4: 3,
+            5: 4
+        }[s]
+
+        info_list.append(BeatmapInfo(
+            0, res['id'], res['set_id'], 0,
+            to_osuapi_status(res['status']),
+
+            # TODO: best grade letter rank
+            # Enum: XH, SH, X, S, A, B, C, D, F, N
+            # the order of these doesn't follow
+            # gamemode ids in osu! either.
+            # (std, ctb, taiko, mania)
+            9, 9, 9, 9,
+
+            res['md5']
+        ))
+
+    # Ids
+    for m in req.ids:
+        breakpoint()
+
+    p.enqueue(await packets.beatmapInfoReply(info_list))
 
 # PacketID: 70
 @bancho_packet(Packet.c_matchTransferHost)

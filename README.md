@@ -34,6 +34,8 @@ Setup is pretty simple, the commands below should basically be copy-pastable.
 
 If you have any difficulties setting up gulag, you can contact me via Discord @ cmyui#0425 for support.
 
+NOTE: I will not be able to help you out with creating a certificate to connect on the latest osu! versions.
+
 ```sh
 # Install our database & reverse proxy, if not already installed.
 sudo apt install mysql-server nginx
@@ -43,7 +45,7 @@ git clone https://github.com/cmyui/gulag.git
 cd gulag
 
 # Create empty data directories.
-mkdir certs screenshots replays logs pp/maps mapsets
+mkdir screenshots replays logs mapsets avatars pp/maps
 
 # Install pipenv and requirements.
 python3.8 -m pip install pipenv --user
@@ -53,15 +55,6 @@ python3.8 -m pipenv install
 # NOTE: create an empty database before doing this.
 # This will also insert basic osu! channels & the bot.
 mysql -u your_sql_username -p your_db_name < db.sql
-
-# Create certificate.
-# When filling this out, set 'Common Name' to '*.ppy.sh', the rest are unimportant.
-# You'll need to install this on windows like after creating it.
-# You'll also need to edit nginx.conf's certificate paths to the ones created here.
-openssl req -newkey rsa:4096 -x509 -sha256 -days 3650 -nodes -out certs/server.crt -keyout certs/server.key
-
-# Edit the nginx config to match the path of the cert and key you created.
-nano nginx.conf
 
 # Add gulag's nginx config to your nginx/sites-enabled.
 # NOTE: default unix socket location is `/tmp/gulag.sock`.

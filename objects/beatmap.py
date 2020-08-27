@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from typing import Sequence, Tuple
 from enum import IntEnum, unique
-from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime as dt
+from collections import defaultdict
 import os
 
 from pp.owoppai import Owoppai
@@ -54,6 +56,24 @@ class RankedStatus(IntEnum):
                  4: cls.Loved
             })[osuapi_status]
         )
+
+@dataclass
+class BeatmapInfoRequest:
+    filenames: Sequence[str]
+    ids: Sequence[int]
+
+@dataclass
+class BeatmapInfo:
+    id: int # i16
+    map_id: int # i32
+    set_id: int # i32
+    thread_id: int # i32
+    status: int # u8
+    osu_rank: int # u8
+    fruits_rank: int # u8
+    taiko_rank: int # u8
+    mania_rank: int # u8
+    map_md5: str
 
 class Beatmap:
     """A class representing an osu! beatmap.
