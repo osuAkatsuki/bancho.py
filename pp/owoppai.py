@@ -1,81 +1,131 @@
 # -*- coding: utf-8 -*-
 
-import asyncio
-from typing import Tuple
-from os import path
+from typing import Optional, Tuple, Any
+import os
 
 import aiofiles
 
+from oppai import *
 from objects import glob
 from console import plog, Ansi
-from constants.mods import mods_readable
-from orjson import loads
 
 __all__ = 'Owoppai',
 
 class Owoppai:
-    __slots__ = ('filename', 'accuracy', 'mods',
-                 'combo', 'misses', 'gamemode')
+    __slots__ = ('map_id', 'mods', 'combo',
+                 'nmiss', 'mode', 'acc', 'ez')
 
-    def __init__(self, **kwargs) -> None:
-        self.filename = ''
-        self.mods = kwargs.get('mods', 0)
-        self.combo = kwargs.get('combo', 0)
-        self.misses = kwargs.get('misses', 0)
-        self.gamemode = kwargs.get('gamemode', 0)
-        self.accuracy = kwargs.get('accuracy', -1.0)
+    def __init__(self, map_id: int, **kwargs) -> None:
+        self.map_id = map_id
 
-    async def open_map(self, map_id: int) -> None:
-        filepath = f'pp/maps/{map_id}.osu'
+        self.mods: int = kwargs.get('mods', 0)
+        self.combo: int = kwargs.get('combo', 0)
+        self.nmiss: int = kwargs.get('nmiss', 0)
+        self.mode: int = kwargs.get('mode', 0)
+        self.acc: float = kwargs.get('acc', -1.0)
 
-        if not path.exists(filepath):
-            # Do osu!api request for the map.
-            async with glob.http.get(f'https://old.ppy.sh/osu/{map_id}') as resp:
-                if not resp or resp.status != 200:
-                    await plog(f'Could not find map {filepath}!', Ansi.LIGHT_RED) # osu!api request failed.
-                    return
+        # Instance of oppai-ng.
+        # Will stay as None until a valid
+        # beatmap file has been found on disk.
+        self.ez: Optional[Any] = None
 
-                content = await resp.read()
+    async def __aenter__(self):
+        filename = f'pp/maps/{self.map_id}.osu'
 
-            async with aiofiles.open(filepath, 'wb+') as f:
-                await f.write(content)
+        # Get file from either disk, or the osu!api if not found.
+        if os.path.exists(filename) or await self.get_from_osuapi(filename):
+            self.ez = ezpp_new()
+            ezpp(self.ez, filename)
 
-        self.filename = filepath
+            # Update state from any kwargs passed in.
+            if self.mods != 0:
+                ezpp_set_mods(self.ez, self.mods)
 
-    async def calculate_pp(self) -> Tuple[float, float]:
-        # This function can either return a list of
-        # PP values, # or just a single PP value.
-        if not self.filename:
-            await plog('Called calculate_pp() without a map open.', Ansi.LIGHT_RED)
+            if self.combo != 0:
+                ezpp_set_combo(self.ez, self.combo)
+
+            if self.nmiss != 0:
+                ezpp_set_nmiss(self.ez, self.nmiss)
+
+            if self.acc != -1:
+                ezpp_set_accuracy_percent(self.ez, self.acc)
+
+            if self.mode == 1: # taiko support
+                ezpp_set_mode(self.ez, 1)
+                ezpp_set_mode_override(self.ez, 1)
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        ezpp_free(self.ez)
+
+    """ Customization"""
+    def set_mods(self, mods: int) -> None:
+        ezpp_set_mods(self.ez, mods)
+
+    def set_combo(self, combo: int) -> None:
+        ezpp_set_combo(self.ez, combo)
+
+    def set_nmiss(self, nmiss: int) -> None:
+        ezpp_set_nmiss(self.ez, nmiss)
+
+    def set_mode(self, mode: int) -> None:
+        if mode not in (0, 1):
             return
 
-        args = [f'./pp/oppai {self.filename}']
-        if self.accuracy >= 0.0:
-            args.append(f'{self.accuracy:.4f}%')
-        if self.mods >= 0:
-            args.append(f'+{mods_readable(self.mods)}')
-        if self.combo:
-            args.append(f'{self.combo}x')
-        if self.misses:
-            args.append(f'{self.misses}m')
-        if self.gamemode == 1: # taiko support
-            args.extend(('-taiko', '-m1'))
+        ezpp_set_mods(self.ez, mode)
+        ezpp_set_mode_override(self.ez, mode == 1)
 
-        # Output in json format
-        args.append('-ojson')
+    def set_acc(self, acc: float) -> None:
+        ezpp_set_accuracy_percent(self.ez, acc)
 
-        proc = await asyncio.create_subprocess_shell(
-            ' '.join(args),
-            stdout = asyncio.subprocess.PIPE,
-            stderr = asyncio.subprocess.PIPE
-        )
+    """ PP """
+    @property
+    def pp(self) -> float:
+        if self.ez:
+            if self.mode == 0 and self.mods & 128:
+                # Relax osu!std - no speed pp.
+                return ezpp_aim_pp(self.ez) + ezpp_acc_pp(self.ez)
+            else: # For any other mode, return normal pp.
+                return ezpp_pp(self.ez)
+        else: # No map found
+            return 0.0
 
-        stdout, stderr = await proc.communicate()
-        output = loads(stdout.decode())
+    @property
+    def aim_pp(self) -> float:
+        return ezpp_aim_pp(self.ez) if self.ez else 0.0
 
-        important = ('code', 'errstr', 'pp', 'stars')
-        if any(i not in output for i in important) or output['code'] != 200:
-            await plog('Error while calculating PP.', Ansi.LIGHT_RED)
-            return
+    @property
+    def speed_pp(self) -> float:
+        return ezpp_speed_pp(self.ez) if self.ez else 0.0
 
-        return output['pp'], output['stars']
+    @property
+    def acc_pp(self) -> float:
+        return ezpp_acc_pp(self.ez) if self.ez else 0.0
+
+    """ Stars """
+    @property
+    def stars(self) -> float:
+        return ezpp_stars(self.ez) if self.ez else 0.0
+
+    @property
+    def aim_stars(self) -> float:
+        return ezpp_aim_stars(self.ez) if self.ez else 0.0
+
+    @property
+    def speed_stars(self) -> float:
+        return ezpp_speed_stars(self.ez) if self.ez else 0.0
+
+    async def get_from_osuapi(self, filename: str) -> bool:
+        # Get the map's .osu file from the osu!api.
+        async with glob.http.get(f'https://old.ppy.sh/osu/{self.map_id}') as resp:
+            if not resp or resp.status != 200:
+                await plog(f'Could not find map {filename}!', Ansi.LIGHT_RED) # osu!api request failed.
+                return False
+
+            content = await resp.read()
+
+        async with aiofiles.open(filename, 'wb+') as f:
+            await f.write(content)
+
+        return True

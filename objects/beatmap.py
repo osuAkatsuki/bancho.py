@@ -311,12 +311,10 @@ class Beatmap:
         return m
 
     async def cache_pp(self) -> None:
-        owpi = Owoppai()
-        await owpi.open_map(self.id)
-
-        for idx, acc in enumerate((90, 95, 98, 99, 100)):
-            owpi.accuracy = acc
-            self.pp_values[idx] = (await owpi.calculate_pp())[0]
+        async with Owoppai(self.id) as owo:
+            for idx, acc in enumerate((90, 95, 98, 99, 100)):
+                owo.set_acc(acc)
+                self.pp_values[idx] = owo.pp
 
     async def save_to_sql(self) -> None:
         if any(x is None for x in (

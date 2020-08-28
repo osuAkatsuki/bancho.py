@@ -32,6 +32,7 @@ class Rank(IntEnum):
     C:  Final[int] = 6
     D:  Final[int] = 7
     F:  Final[int] = 8
+    N:  Final[int] = 9
 
     def __str__(self) -> str:
         return {
@@ -283,18 +284,18 @@ class Score:
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
-        owpi: Owoppai = Owoppai(
-            mods = self.mods,
-            combo = self.max_combo,
-            misses = self.nmiss,
-            gamemode = self.game_mode,
-            accuracy = self.acc
-        )
+        pp_params = {
+            'mods': self.mods,
+            'combo': self.max_combo,
+            'nmiss': self.nmiss,
+            'mode': self.game_mode,
+            'acc': self.acc
+        }
 
-        await owpi.open_map(self.bmap.id)
+        async with Owoppai(self.bmap.id, **pp_params) as owo:
+            ret = (owo.pp, owo.stars)
 
-        # Returns (pp, sr)
-        return await owpi.calculate_pp()
+        return ret
 
     async def calc_status(self) -> None:
         if not self.passed:

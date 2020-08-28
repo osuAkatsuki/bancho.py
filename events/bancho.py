@@ -15,6 +15,7 @@ from constants.mods import Mods
 from constants import commands
 from constants import regexes
 from objects import glob
+from objects.score import Rank
 from objects.match import SlotStatus, Teams
 from objects.player import Player, PresenceFilter, Action
 from objects.beatmap import Beatmap, BeatmapInfo, BeatmapInfoRequest
@@ -742,11 +743,10 @@ async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
             to_osuapi_status(res['status']),
 
             # TODO: best grade letter rank
-            # Enum: XH, SH, X, S, A, B, C, D, F, N
             # the order of these doesn't follow
             # gamemode ids in osu! either.
             # (std, ctb, taiko, mania)
-            9, 9, 9, 9,
+            Rank.N, Rank.N, Rank.N, Rank.N,
 
             res['md5']
         ))
