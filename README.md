@@ -2,7 +2,7 @@
 
 # A dev-friendly osu! server written in modern python
 
-Looking for an easy to use, async & completely open-source osu! server implementation undergoing rapid development?
+Looking for a well-organized, async & completely open-source osu! server implementation undergoing rapid development?
 
 ## There are many other osu! server implementations, what makes this any different?
 
@@ -15,7 +15,7 @@ This is simply the result of my programming values and time thrown together; I'd
 ### Features
 
 - Asynchronous server design, allowing for high efficiency along with many cool features unavailable on most other servers.
-- Fully functional multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
+- Nearly full completion of multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
 - Undergoing active development; an osu! server has always been a large goal of mine, so motivation is very high.
 - Clean and concise code, easy to make small modifications & add to the codebase; designed around this idea.
 
@@ -49,9 +49,8 @@ cd gulag
 # Create empty data directories.
 mkdir screenshots replays logs mapsets avatars pp/maps
 
-# Install pipenv and requirements.
-python3.8 -m pip install pipenv --user
-python3.8 -m pipenv install
+# Install project requirements.
+python3.8 -m pip install -r requirements.txt
 
 # Import the database structure.
 # NOTE: create an empty database before doing this.

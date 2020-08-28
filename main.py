@@ -31,32 +31,29 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 async def handle_conn(conn: cmyui.AsyncConnection):
     if 'Host' not in conn.req.headers:
-        await conn.resp.send(b'Missing required headers.',
-                             HTTPStatus.BadRequest)
+        await conn.resp.send(400, b'Missing required headers.')
         return
 
     st = time.time_ns()
     handler = None
 
+    # Match the host & uri to the correct handlers.
     if regexes.bancho_domain.match(conn.req.headers['Host']):
-        # Bancho handlers.
         if conn.req.path == '/':
             handler = handle_bancho
 
     elif conn.req.headers['Host'] == 'osu.ppy.sh':
-        # /web handlers, screenshots, and osu!direct downloads.
         if conn.req.startswith('/web/'):
             handler = handle_web
         elif conn.req.startswith('/ss/'):
-            handler = handle_ss
+            handler = handle_ss # screenshots
         elif conn.req.startswith('/d/'):
-            handler = handle_dl
+            handler = handle_dl # osu!direct
         elif conn.req.startswith('/api/'):
-            handler = handle_api
+            handler = handle_api # gulag!api
 
     elif conn.req.headers['Host'] == 'a.ppy.sh':
-        # Avatars.
-        handler = handle_avatar
+        handler = handle_avatar # avatars
 
     if handler:
         # We have a handler for this request.
@@ -64,8 +61,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     else:
         # We have no such handler.
         await plog(f'Unhandled {conn.req.path}.', Ansi.LIGHT_RED)
-        await conn.resp.send(b'Request handler not implemented.',
-                             cmyui.HTTPStatus.BadRequest)
+        await conn.resp.send(400, b'Request handler not implemented.')
 
     time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
     time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
@@ -74,7 +70,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
-    glob.version = cmyui.Version(2, 2, 7)
+    glob.version = cmyui.Version(2, 2, 8)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()
@@ -95,6 +91,10 @@ async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
         await plog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
         async for conn in serv.listen(loop, glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
+
+# TODO: add some kind of config insurance to
+# check for small incompatabilities, such
+# as a trailing / in a url.
 
 # Create the event loop & run the server.
 loop = uvloop.new_event_loop()

@@ -1,0 +1,8 @@
+cmyui>=1.2.3
+py3rijndael
+bcrypt
+aiohttp
+aiomysql
+orjson
+aiofiles
+oppai

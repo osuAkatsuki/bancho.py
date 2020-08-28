@@ -25,7 +25,9 @@ from console import plog, Ansi
 # data directly back in the event.
 
 # TODO:
-# osu-rate.php: Beatmap rating on score submission.
+# osu-rate.php: beatmap rating on score submission.
+# osu-osz2-bmsubmit-upload.php: beatmap submission upload
+# osu-osz2-bmsubmit-getid.php: beatmap submission getinfo
 
 glob.web_map = {}
 
@@ -198,14 +200,21 @@ async def osuSearchHandler(req: AsyncRequest) -> Optional[bytes]:
     query = req.args['q'].replace('+', ' ') # TODO: allow empty
     offset = req.args['p'] * 100
 
-    # Get all set data.
-    if not (res := await glob.db.fetchall(
-        'SELECT DISTINCT set_id, artist, '
-        'title, status, creator, last_update '
-        'FROM maps WHERE title LIKE %s '
-        'LIMIT %s, 100', # paginate through sql lol
-        [f"%{query}%", offset]
-    )): return b'-1\nNo matches found.'
+    sql_query: List[str] = [
+        'SELECT DISTINCT set_id, artist, title,',
+        'status, creator, last_update FROM maps',
+        'LIMIT %s, 100'
+    ]
+
+    sql_params = [offset]
+
+    if query not in ('Newest', 'Top Rated', 'Most Played'):
+        # They're searching something specifically.
+        sql_query.insert(2, 'WHERE title LIKE %s')
+        sql_params.insert(0, f'%{query}%')
+
+    if not (res := await glob.db.fetchall(' '.join(sql_query), sql_params)):
+        return b'-1\nNo matches found.'
 
     # We'll construct the response as a list of
     # strings, then join and encode when returning.
@@ -413,12 +422,23 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
         ]
     )
 
-    if s.status == SubmissionStatus.BEST and s.rank == 1:
+    if s.status == SubmissionStatus.BEST and s.rank == 1 \
+    and (announce_chan := glob.channels.get('#announce')):
         # Announce the user's #1 score.
-        # XXX: Could perhaps add old #1 to the msg?
-        # but it would require an extra query ://///
-        if announce_chan := glob.channels.get('#announce'):
-            await announce_chan.send(glob.bot, f'{s.player.embed} achieved #1 on {s.bmap.embed}.')
+        prev_n1 = await glob.db.fetch(
+            'SELECT u.id, name FROM users u '
+            f'LEFT JOIN {table} s ON u.id = s.userid '
+            'WHERE s.map_md5 = %s AND game_mode = %s '
+            'ORDER BY pp DESC LIMIT 1, 1',
+            [s.bmap.md5, s.game_mode]
+        )
+
+        ann: List[str] = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
+
+        if prev_n1: # If there was previously a score on the map, add old #1.
+            ann.append('(Prev: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+
+        await announce_chan.send(glob.bot, ' '.join(ann))
 
     # Update the user.
     s.player.recent_scores[gm] = s
@@ -609,9 +629,6 @@ async def checkUpdates(req: AsyncRequest) -> Optional[bytes]:
     return result
 
 async def updateBeatmap(req: AsyncRequest) -> Optional[bytes]:
-    # XXX: This currently works in updating the map, but
-    # seems to get the checksum something like that wrong?
-    # Will have to look into it :P
     if not (re := regexes.mapfile.match(unquote(req.path[10:]))):
         await plog(f'Requested invalid map update {req.path}.', Ansi.LIGHT_RED)
         return b''

@@ -19,8 +19,7 @@ __all__ = (
     'handle_ss',
     'handle_dl',
     'handle_api',
-    'handle_avatar',
-    #'registration'
+    'handle_avatar'
 )
 
 async def handle_bancho(conn: AsyncConnection) -> None:
@@ -29,7 +28,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 
     if conn.req.headers['User-Agent'] != 'osu!':
         # Most likely a request from a browser.
-        await conn.resp.send(b'<!DOCTYPE html>' + '<br>'.join((
+        await conn.resp.send(200, b'<!DOCTYPE html>' + '<br>'.join((
             f'Running gulag v{glob.version}',
             f'Players online: {len(glob.players) - 1}',
             '<a href="https://github.com/cmyui/gulag">Source code</a>',
@@ -39,7 +38,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             '',
             '<b>/web/ Handlers</b>',
             '<br>'.join(glob.web_map.keys())
-        )).encode(), HTTPStatus.Ok)
+        )).encode())
         return
 
     resp = bytearray()
@@ -88,52 +87,53 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     # Even if the packet is empty, we have to
     # send back an empty response so the client
     # knows it was successfully delivered.
-    await conn.resp.send(bytes(resp), HTTPStatus.Ok)
+    await conn.resp.send(200, bytes(resp))
+
+# XXX: perhaps (web) handlers should return
+# a bytearray which could be cast to bytes
+# here at the end? Probably a better soln.
 
 async def handle_web(conn: AsyncConnection) -> None:
     handler = conn.req.path[5:] # cut off /web/
 
-    # Connections to /web/ only send a single request
-    # at a time; no need to iterate through received data.
-    if handler not in glob.web_map:
-        if handler.startswith('maps/'):
-            await plog(f'Handling beatmap update.', Ansi.LIGHT_MAGENTA)
-            # Special case for updating maps.
-            if (resp := await web.updateBeatmap(conn.req)):
-                await conn.resp.send(resp, HTTPStatus.Ok)
-            return
+    if handler in glob.web_map:
+        await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
 
+        if resp := await glob.web_map[handler](conn.req):
+            # We have data to send back to the client.
+            if glob.config.debug:
+                await plog(resp, Ansi.LIGHT_GREEN)
+
+            await conn.resp.send(200, resp)
+
+    elif handler.startswith('maps/'):
+        await plog(f'Handling map update.', Ansi.LIGHT_MAGENTA)
+
+        # Special case for updating maps.
+        if resp := await web.updateBeatmap(conn.req):
+            # Map found, send back the data.
+            await conn.resp.send(200, resp)
+
+    else: # Handler not found
         await plog(f'Unhandled: {conn.req.path}.', Ansi.YELLOW)
-        return
-
-    await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
-    if (resp := await glob.web_map[handler](conn.req)):
-        # XXX: Perhaps web handlers should return
-        # a bytearray which could be cast to bytes
-        # here at the end? Probably a better soln.
-
-        if glob.config.debug:
-            await plog(resp, Ansi.LIGHT_GREEN)
-
-        await conn.resp.send(resp, HTTPStatus.Ok)
 
 async def handle_ss(conn: AsyncConnection) -> None:
     if len(conn.req.path) != 16:
-        await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
+        await conn.resp.send(404, b'No file found!')
         return
 
     path = f'screenshots/{conn.req.path[4:]}'
 
     if not os.path.exists(path):
-        await conn.resp.send(b'No file found!', HTTPStatus.NotFound)
+        await conn.resp.send(404, b'No file found!')
         return
 
     async with aiofiles.open(path, 'rb') as f:
-        await conn.resp.send(await f.read(), HTTPStatus.Ok)
+        await conn.resp.send(200, await f.read())
 
 async def handle_dl(conn: AsyncConnection) -> None:
     if not all(x in conn.req.args for x in ('u', 'h', 'vv')):
-        await conn.resp.send(b'Method requires authorization.', HTTPStatus.Unauthorized)
+        await conn.resp.send(401, b'Method requires authorization.')
         return
 
     if not conn.req.path[3:].isnumeric():
@@ -148,23 +148,35 @@ async def handle_dl(conn: AsyncConnection) -> None:
 
     set_id = int(conn.req.path[3:])
 
-    if os.path.exists(filepath := f'mapsets/{set_id}.osz'):
-        async with aiofiles.open(filepath, 'rb') as f:
-            content = await f.read()
-    else:
-        # Map not cached, get from a mirror
-        # XXX: I'm considering handling this myself, aswell..
-        async with glob.http.get(f'https://osu.gatari.pw/d/{set_id}') as resp:
-            if not resp or resp.status != 200:
-                return
+    # TODO: at the moment, if a map's dl is disabled on osu it
+    # will send back 'This download has been disabled by peppy',
+    # which gulag will save into a file.. We'll need a var in
+    # the db to store whether a map has been disabled, i guess.
 
-            content = await resp.read()
+    if glob.config.mirror: # Use gulag as a mirror (cache maps on disk).
+        if os.path.exists(filepath := f'mapsets/{set_id}.osz'):
+            # We have the map in cache.
+            async with aiofiles.open(filepath, 'rb') as f:
+                content = await f.read()
 
-        # Save to disk.
-        async with aiofiles.open(filepath, 'wb+') as f:
-            await f.write(content)
+        else: # Get the map for our mirror & client.
+            bmap_url = f'{glob.config.external_mirror}/d/{set_id}'
+            async with glob.http.get(bmap_url) as resp:
+                if not resp or resp.status != 200:
+                    return
 
-    await conn.resp.send(content, HTTPStatus.Ok)
+                content = await resp.read()
+
+            # Save to disk.
+            async with aiofiles.open(filepath, 'wb+') as f:
+                await f.write(content)
+
+        await conn.resp.send(200, content)
+
+    else: # Don't use gulag as a mirror, just reflect another.
+        bmap_url = f'{glob.config.external_mirror}/d/{set_id}'
+        await conn.resp.add_header(f'Location: {bmap_url}')
+        await conn.resp.send(302, None)
 
 async def handle_avatar(conn: AsyncConnection) -> None:
     pid = conn.req.path[1:]
@@ -172,18 +184,20 @@ async def handle_avatar(conn: AsyncConnection) -> None:
     path = f"avatars/{pid if found else 'default'}.jpg"
 
     async with aiofiles.open(path, 'rb') as f:
-        await conn.resp.send(await f.read(), HTTPStatus.Ok)
+        await conn.resp.send(200, await f.read())
 
 async def handle_api(conn: AsyncConnection) -> None:
     handler = conn.req.path[5:] # cut off /api/
 
-    if handler not in glob.api_map:
+    if handler in glob.api_map:
+        await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
+
+        if resp := await glob.api_map[handler](conn.req):
+            # We have data to send back to the client.
+            if glob.config.debug:
+                await plog(resp, Ansi.LIGHT_GREEN)
+
+            await conn.resp.send(200, resp)
+
+    else: # Handler not found.
         await plog(f'Unhandled: {conn.req.path}.', Ansi.YELLOW)
-        return
-
-    await plog(f'Handling {conn.req.path}', Ansi.LIGHT_MAGENTA)
-    if (resp := await glob.api_map[handler](conn.req)):
-        if glob.config.debug:
-            await plog(resp, Ansi.LIGHT_GREEN)
-
-        await conn.resp.send(resp, HTTPStatus.Ok)
