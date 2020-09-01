@@ -70,7 +70,7 @@ async def handle_conn(conn: cmyui.AsyncConnection):
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
-    glob.version = cmyui.Version(2, 2, 8)
+    glob.version = cmyui.Version(2, 3, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()

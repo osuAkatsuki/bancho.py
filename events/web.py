@@ -370,7 +370,7 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
         # records with SubmissionStatus.SUBMITTED.
         await glob.db.execute(
             f'UPDATE {table} SET status = 1 '
-            'WHERE status = 2 and map_md5 = %s '
+            'WHERE status = 2 AND map_md5 = %s '
             'AND userid = %s', [s.bmap.md5, s.player.id])
 
     s.id = await glob.db.execute(
@@ -500,7 +500,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
         table = 'scores_vn'
         scoring = 'score'
 
-    if not (bmap := await Beatmap.from_md5(req.args['c'])):
+    if not (bmap := await Beatmap.from_md5(req.args['c'], set_id=req.args['i'])):
         # Couldn't find in db or at osu! api by md5.
         # Check if we have the map in our db (by filename).
 
@@ -517,6 +517,15 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
                 re['creator'], re['version']
             ]
         )
+
+        if set_exists:
+            # Map can be updated.
+            return b'1|false'
+        else:
+            # Map is unsubmitted.
+            # Add this map to the unsubmitted cache, so
+            # that we don't have to make this request again.
+            glob.cache['unsubmitted'].add(req.args['c'])
 
         return f'{1 if set_exists else -1}|false'.encode()
 

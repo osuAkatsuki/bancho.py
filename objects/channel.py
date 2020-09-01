@@ -127,4 +127,5 @@ class Channel:
         for p in self.players:
             if p.id in immune:
                 continue
+
             p.enqueue(data)

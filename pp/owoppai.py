@@ -37,6 +37,9 @@ class Owoppai:
             self.ez = ezpp_new()
             ezpp(self.ez, filename)
 
+            # Auto recalc when changing any param.
+            ezpp_set_autocalc(self.ez, 1)
+
             # Update state from any kwargs passed in.
             if self.mods != 0:
                 ezpp_set_mods(self.ez, self.mods)

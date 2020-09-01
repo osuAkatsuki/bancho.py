@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 from typing import Final, Optional
 import random
 import string
@@ -310,7 +311,7 @@ class Player:
         self.pres_filter = PresenceFilter.Nil
 
         # Packet queue
-        self._queue = SimpleQueue()
+        self._queue = asyncio.Queue()
 
     @property
     def url(self) -> str:
@@ -614,7 +615,7 @@ class Player:
     def enqueue(self, b: bytes) -> None:
         self._queue.put_nowait(b)
 
-    async def dequeue(self) -> bytes:
+    async def dequeue(self) -> Optional[bytes]:
         try:
             return self._queue.get_nowait()
         except:

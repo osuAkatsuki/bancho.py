@@ -33,7 +33,11 @@ cache = {
         'stable40': {'check': None, 'path': None, 'timeout': 0},
         'beta40': {'check': None, 'path': None, 'timeout': 0},
         'stable': {'check': None, 'path': None, 'timeout': 0}
-    }
-    # XXX: I want to do some sort of beatmap cache, I'm just not yet
-    #      quite sure on how I want it setup..
+    },
+    # Cache all beatmap data calculated while online. This way,
+    # the most requested maps will inevitably always end up cached.
+    'beatmap': {}, # {md5: Beatmap}
+    # Cache all beatmaps which we failed to get from the osuapi,
+    # so that we do not have to perform this request multiple times.
+    'unsubmitted': set()
 }

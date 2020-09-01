@@ -379,7 +379,7 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
                 # User is /np'ing a map.
                 # Save it to their player instance
                 # so we can use this elsewhere owo..
-                p.last_np = await Beatmap.from_bid(int(match['bid']), cache_pp=True)
+                p.last_np = await Beatmap.from_bid(int(match['bid']))
 
                 # Since this is a DM to the bot, we should
                 # send back a list of general PP values.
