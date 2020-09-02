@@ -633,7 +633,8 @@ async def checkUpdates(req: AsyncRequest) -> Optional[bytes]:
 
     # Update the cached result.
     cache[action] = result
-    cache['timeout'] = current_time + 3600
+    cache['timeout'] = (glob.config.updates_cache_timeout +
+                        current_time)
 
     return result
 

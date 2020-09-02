@@ -136,7 +136,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
         await conn.resp.send(401, b'Method requires authorization.')
         return
 
-    if not conn.req.path[3:].isnumeric():
+    if not conn.req.path[3:].isdecimal():
         # Requested set id is not a number.
         return
 
@@ -180,7 +180,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
 
 async def handle_avatar(conn: AsyncConnection) -> None:
     pid = conn.req.path[1:]
-    found = pid.isnumeric() and os.path.exists(f'avatars/{pid}')
+    found = pid.isdecimal() and os.path.exists(f'avatars/{pid}')
     path = f"avatars/{pid if found else 'default'}.jpg"
 
     async with aiofiles.open(path, 'rb') as f:

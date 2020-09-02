@@ -182,7 +182,6 @@ class Score:
     async def from_submission(cls, data_enc: str, iv: str,
                               osu_ver: str, phash: str) -> None:
         """Create a score object from an osu! submission string."""
-        aes_key = f'osu!-scoreburgr---------{osu_ver}'
         cbc = RijndaelCbc(
             f'osu!-scoreburgr---------{osu_ver}',
             iv = base64.b64decode(iv).decode('latin_1'),
@@ -202,9 +201,10 @@ class Score:
 
         pname = data[1].rstrip() # why does osu! make me rstrip lol
 
+        # Get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
-
         s.player = await glob.players.get_login(pname, phash)
+
         if not s.player:
             # Return the obj with an empty player to
             # determine whether the score faield to
@@ -218,7 +218,7 @@ class Score:
         # Perhaps will use to improve security at some point?
 
         # Ensure all ints are safe to cast.
-        if not all(i.isnumeric() for i in data[3:11] + [data[13], data[15]]):
+        if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
             await plog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
             return
 
@@ -304,8 +304,8 @@ class Score:
 
         table = 'scores_rx' if self.mods & Mods.RELAX else 'scores_vn'
 
-        # try to find a better pp score than this one.
-        # if this exists, it will be s=1
+        # Try to find a better score; if
+        # one exists, it will be status=1.
         res = await glob.db.fetch(
             f'SELECT 1 FROM {table} WHERE userid = %s '
             'AND map_md5 = %s AND game_mode = %s '
@@ -320,7 +320,8 @@ class Score:
 
     def calc_accuracy(self) -> None:
         if self.game_mode == 0: # osu!
-            if not (total := sum((self.n300, self.n100, self.n50, self.nmiss))):
+            if not (total := sum((self.n300, self.n100,
+                                  self.n50, self.nmiss))):
                 self.acc = 0.0
                 return
 
@@ -331,7 +332,8 @@ class Score:
             )) / (total * 300.0)
 
         elif self.game_mode == 1: # osu!taiko
-            if not (total := sum((self.n300, self.n100, self.nmiss))):
+            if not (total := sum((self.n300, self.n100,
+                                  self.nmiss))):
                 self.acc = 0.0
                 return
 
@@ -342,7 +344,8 @@ class Score:
 
         elif self.game_mode == 2:
             # osu!catch
-            pass
+            NotImplemented
+
         elif self.game_mode == 3:
             # osu!mania
-            pass
+            NotImplemented

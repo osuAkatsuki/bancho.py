@@ -51,6 +51,7 @@ async def read_i32_list(data: bytearray, long_len: bool = False
     """ Read an int32 list from `data`. """
     ret = []
     offs = 4 if long_len else 2
+
     for _ in range(int.from_bytes(data[:offs], 'little')):
         ret.append(int.from_bytes(data[offs:offs+4], 'little'))
         offs += 4

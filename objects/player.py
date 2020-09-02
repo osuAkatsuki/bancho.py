@@ -343,8 +343,8 @@ class Player:
 
     @property
     def gm_stats(self) -> ModeData:
+        # Mania is the same mode on both vn and rx.
         if self.status.game_mode == 3:
-            # Mania is the same mode on both vn and rx.
             return self.stats[3]
 
         return self.stats[self.status.game_mode + (4 if self.rx else 0)]

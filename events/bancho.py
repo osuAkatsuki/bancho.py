@@ -158,7 +158,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     s = s[2].split('|')
     build_name = s[0]
 
-    if not s[1].replace('-', '', 1).isnumeric():
+    if not s[1].replace('-', '', 1).isdecimal():
         return await packets.userID(-1), 'no'
 
     utc_offset = int(s[1])

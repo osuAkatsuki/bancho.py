@@ -29,7 +29,7 @@ from constants import regexes
 # Set CWD to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-async def handle_conn(conn: cmyui.AsyncConnection):
+async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     if 'Host' not in conn.req.headers:
         await conn.resp.send(400, b'Missing required headers.')
         return
@@ -69,12 +69,12 @@ async def handle_conn(conn: cmyui.AsyncConnection):
 
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
-async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
-    glob.version = cmyui.Version(2, 3, 0)
+async def run_server(addr: cmyui.Address) -> None:
+    glob.version = cmyui.Version(2, 3, 1)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()
-    await glob.db.connect(loop, **glob.config.mysql)
+    await glob.db.connect(**glob.config.mysql)
 
     # Aika
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
@@ -89,17 +89,13 @@ async def run_server(loop: uvloop.Loop, addr: cmyui.Address):
 
     async with cmyui.AsyncTCPServer(addr) as serv:
         await plog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
-        async for conn in serv.listen(loop, glob.config.max_conns):
+        async for conn in serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
-
-# TODO: add some kind of config insurance to
-# check for small incompatabilities, such
-# as a trailing / in a url.
 
 # Create the event loop & run the server.
 loop = uvloop.new_event_loop()
 asyncio.set_event_loop(loop)
-loop.create_task(run_server(loop, glob.config.server_addr))
+loop.create_task(run_server(glob.config.server_addr))
 
 try:
     loop.run_forever()

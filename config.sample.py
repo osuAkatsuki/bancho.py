@@ -58,3 +58,14 @@ menu_icon = (
 
 # Ingame bot command prefix.
 command_prefix = '!'
+
+""" caching settings """
+# The max duration to
+# cache a beatmap for.
+# Recommended: ~1 hour.
+map_cache_timeout = 3600
+
+# The max duration to cache
+# osu-checkupdates requests for.
+# Recommended: ~1 hour.
+updates_cache_timeout = 3600

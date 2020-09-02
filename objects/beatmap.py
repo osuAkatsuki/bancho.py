@@ -3,9 +3,9 @@
 from typing import Sequence, Optional
 from enum import IntEnum, unique
 from dataclasses import dataclass
-from datetime import datetime as dt
+from datetime import datetime
 from collections import defaultdict
-import os
+import time
 
 from pp.owoppai import Owoppai
 from console import plog, Ansi
@@ -155,7 +155,7 @@ class Beatmap:
         self.version = kwargs.pop('version', '')
         self.creator = kwargs.pop('creator', '')
 
-        self.last_update: dt = kwargs.pop('last_update', dt(1970, 1, 1))
+        self.last_update = kwargs.pop('last_update', datetime(1970, 1, 1))
         self.status = RankedStatus(kwargs.pop('status', 0))
         self.frozen = kwargs.pop('frozen', False) == 1
         self.mode = GameMode(kwargs.pop('mode', 0))
@@ -201,7 +201,10 @@ class Beatmap:
 
             # Add the map to our cache.
             if m.md5 not in glob.cache['beatmap']:
-                glob.cache['beatmap'][m.md5] = m
+                glob.cache['beatmap'][m.md5] = {
+                    'timeout': time.time() + glob.config.map_cache_timeout,
+                    'map': m
+                }
 
             return m
 
@@ -225,7 +228,15 @@ class Beatmap:
     async def from_md5(cls, md5: str, set_id: Optional[int] = None):
         # Check if the map is in the cache.
         if md5 in glob.cache['beatmap']:
-            return glob.cache['beatmap'][md5]
+            # Check if our cached result is within timeout.
+            cached = glob.cache['beatmap'][md5]
+
+            if (time.time() - cached['timeout']) <= 0:
+                # Cache is within timeout.
+                return cached['map']
+
+            # Cache is outdated and should be deleted.
+            del glob.cache['beatmap'][md5]
 
         # Check if the map is in the unsubmitted cache.
         if md5 in glob.cache['unsubmitted']:
@@ -246,7 +257,13 @@ class Beatmap:
                 return
 
         await m.cache_pp()
-        glob.cache['beatmap'][md5] = m
+
+        # Save our map to the cache.
+        glob.cache['beatmap'][md5] = {
+            'timeout': (glob.config.map_cache_timeout +
+                        time.time()),
+            'map': m
+        }
         return m
 
     @classmethod
@@ -295,7 +312,9 @@ class Beatmap:
 
                     # Convert the map's last_update time to datetime.
                     date_format = '%Y-%m-%d %H:%M:%S'
-                    bmap['last_update'] = dt.strptime(bmap['last_update'], date_format)
+                    bmap['last_update'] = datetime.strptime(
+                        bmap['last_update'], date_format
+                    )
 
                     if bmap['last_update'] > current_data[map_id]['last_update']:
                         # The map we're receiving is indeed newer, check if the
@@ -364,7 +383,9 @@ class Beatmap:
         )
 
         date_format = '%Y-%m-%d %H:%M:%S'
-        m.last_update = dt.strptime(apidata['last_update'], date_format)
+        m.last_update = datetime.strptime(
+            apidata['last_update'], date_format
+        )
 
         m.mode = GameMode(int(apidata['mode']))
         m.bpm = float(apidata['bpm'])

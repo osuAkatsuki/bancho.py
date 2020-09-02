@@ -36,7 +36,7 @@ cache = {
     },
     # Cache all beatmap data calculated while online. This way,
     # the most requested maps will inevitably always end up cached.
-    'beatmap': {}, # {md5: Beatmap}
+    'beatmap': {}, # {md5: {timeout, map}, ...}
     # Cache all beatmaps which we failed to get from the osuapi,
     # so that we do not have to perform this request multiple times.
     'unsubmitted': set()

@@ -53,7 +53,7 @@ _roll_doc: Final[str] = ('Roll an n-sided die where n is the '
                          'number you write (100 if empty).')
 @command(priv=Privileges.Normal, public=True, doc=_roll_doc)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    if msg and msg[0].isnumeric():
+    if msg and msg[0].isdecimal():
         # Cap roll to 32767 to prevent spam.
         max_roll = min(int(msg[0]), 32767)
     else:
@@ -198,7 +198,7 @@ async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 _spack_doc: Final[str] = 'Send a specific (empty) packet by id to a player.'
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False, doc=_spack_doc)
 async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    if len(msg) < 2 or not msg[-1].isnumeric():
+    if len(msg) < 2 or not msg[-1].isdecimal():
         return 'Invalid syntax: !spack <name> <packetid>'
 
     if not (t := await glob.players.get_by_name(' '.join(msg[:-1]))):
@@ -305,7 +305,7 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
 
 # Set the current beatmap (by id).
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
-    if len(msg) < 1 or not msg[0].isnumeric():
+    if len(msg) < 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
 
     if not (bmap := await Beatmap.from_bid(int(msg[0]))):
