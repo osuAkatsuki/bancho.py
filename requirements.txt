@@ -7,5 +7,5 @@ orjson
 aiofiles
 oppai
 uvloop
-mysql-connector
+mysql-connector-python
 asyncpg
