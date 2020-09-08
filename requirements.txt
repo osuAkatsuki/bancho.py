@@ -6,3 +6,6 @@ aiomysql
 orjson
 aiofiles
 oppai
+uvloop
+mysql-connector-python
+asyncpg
