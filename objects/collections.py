@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 from typing import Set, Tuple, Union, Optional
 from collections import Sequence
 
@@ -109,8 +110,8 @@ class MatchList(Sequence):
 
     async def remove(self, m: Match) -> None:
         await plog(f'Removing {m} from matches list.')
-        for idx, _m in enumerate(self.matches):
-            if m == _m:
+        for idx, i in enumerate(self.matches):
+            if m == i:
                 self.matches[idx] = None
                 break
 
@@ -176,7 +177,7 @@ class PlayerList(Sequence):
             [name]
         )
 
-        return Player(**res, name = name) if res else None
+        return Player(**res, name=name) if res else None
 
     async def get_by_id(self, pid: int, sql: bool = False) -> Player:
         for p in self.players:
@@ -213,7 +214,8 @@ class PlayerList(Sequence):
 
         res = await glob.db.fetch(
             'SELECT pw_hash FROM users WHERE name_safe = %s',
-            [Player.ensure_safe(name)])
+            [Player.ensure_safe(name)]
+        )
 
         if not res:
             # Could not find user in the DB.
@@ -229,6 +231,7 @@ class PlayerList(Sequence):
         if p in self.players:
             await plog(f'{p} already in players list!')
             return
+
         await plog(f'Adding {p} to players list.')
         self.players.append(p)
 

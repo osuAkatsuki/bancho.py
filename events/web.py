@@ -96,7 +96,7 @@ async def osuScreenshot(req: AsyncRequest) -> Optional[bytes]:
 
     filename = f'{rstring(8)}.png'
 
-    async with aiofiles.open(f'screenshots/{filename}', 'wb+') as f:
+    async with aiofiles.open(f'screenshots/{filename}', 'wb') as f:
         await f.write(req.files['ss'])
 
     await plog(f'{p} uploaded {filename}.')
@@ -666,7 +666,7 @@ async def updateBeatmap(req: AsyncRequest) -> Optional[bytes]:
 
             content = await resp.read()
 
-        async with aiofiles.open(filepath, 'wb+') as f:
+        async with aiofiles.open(filepath, 'wb') as f:
             await f.write(content)
 
     return content

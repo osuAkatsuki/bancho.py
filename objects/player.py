@@ -16,7 +16,6 @@ from objects.match import Match, SlotStatus
 from objects.beatmap import Beatmap
 from objects import glob
 from enum import IntEnum, unique
-from queue import SimpleQueue
 import packets
 
 __all__ = (

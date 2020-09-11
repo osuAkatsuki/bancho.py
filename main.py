@@ -10,11 +10,12 @@ if __name__ != '__main__':
     raise Exception('main.py is meant to be run directly!')
 
 import asyncio
-import uvloop # faster than stdlib asyncio event loop
+import importlib
 import aiohttp
 import orjson # faster & more accurate than stdlib json
 import cmyui # web & db
 import time
+import sys
 import os
 
 from console import *
@@ -70,7 +71,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 3, 1)
+    glob.version = cmyui.Version(2, 3, 2)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()
@@ -92,12 +93,12 @@ async def run_server(addr: cmyui.Address) -> None:
         async for conn in serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 
-# Create the event loop & run the server.
-loop = uvloop.new_event_loop()
-asyncio.set_event_loop(loop)
-loop.create_task(run_server(glob.config.server_addr))
+# Use uvloop if available (much faster).
+if spec := importlib.util.find_spec('uvloop'):
+    module = importlib.util.module_from_spec(spec)
+    sys.modules['uvloop'] = module
+    spec.loader.exec_module(module)
 
-try:
-    loop.run_forever()
-finally:
-    loop.close()
+    asyncio.set_event_loop_policy(module.EventLoopPolicy())
+
+asyncio.run(run_server(glob.config.server_addr))

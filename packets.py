@@ -618,11 +618,17 @@ async def logout(userID: int) -> bytes:
 
 # PacketID: 13
 async def spectatorJoined(id: int) -> bytes:
-    return await write(Packet.s_spectatorJoined, (id, osuTypes.i32))
+    return await write(
+        Packet.s_spectatorJoined,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 14
 async def spectatorLeft(id: int) -> bytes:
-    return await write(Packet.s_spectatorLeft, (id, osuTypes.i32))
+    return await write(
+        Packet.s_spectatorLeft,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 15
 async def spectateFrames(data: bytearray) -> bytes:
@@ -637,31 +643,49 @@ async def versionUpdate() -> bytes:
 
 # PacketID: 22
 async def spectatorCantSpectate(id: int) -> bytes:
-    return await write(Packet.s_spectatorCantSpectate, (id, osuTypes.i32))
+    return await write(
+        Packet.s_spectatorCantSpectate,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 23
 async def getAttention() -> bytes:
     return await write(Packet.s_getAttention)
 
 # PacketID: 24
-async def notification(notif: str) -> bytes:
-    return await write(Packet.s_notification, (notif, osuTypes.string))
+async def notification(msg: str) -> bytes:
+    return await write(
+        Packet.s_notification,
+        (msg, osuTypes.string)
+    )
 
 # PacketID: 26
 async def updateMatch(m: Match) -> bytes:
-    return await write(Packet.s_updateMatch, (m, osuTypes.match))
+    return await write(
+        Packet.s_updateMatch,
+        (m, osuTypes.match)
+    )
 
 # PacketID: 27
 async def newMatch(m: Match) -> bytes:
-    return await write(Packet.s_newMatch, (m, osuTypes.match))
+    return await write(
+        Packet.s_newMatch,
+        (m, osuTypes.match)
+    )
 
 # PacketID: 28
 async def disposeMatch(id: int) -> bytes:
-    return await write(Packet.s_disposeMatch, (id, osuTypes.i32))
+    return await write(
+        Packet.s_disposeMatch,
+        (id, osuTypes.i32)
+    )
 
 # PacketID: 36
 async def matchJoinSuccess(m: Match) -> bytes:
-    return await write(Packet.s_matchJoinSuccess, (m, osuTypes.match))
+    return await write(
+        Packet.s_matchJoinSuccess,
+        (m, osuTypes.match)
+    )
 
 # PacketID: 37
 async def matchJoinFail(m: Match) -> bytes:
@@ -770,10 +794,10 @@ async def friendsList(*friends) -> bytes:
     )
 
 # PacketID: 75
-async def protocolVersion(num: int) -> bytes:
+async def protocolVersion(ver: int) -> bytes:
     return await write(
         Packet.s_protocolVersion,
-        (num, osuTypes.i32)
+        (ver, osuTypes.i32)
     )
 
 # PacketID: 76
@@ -881,14 +905,14 @@ async def accountRestricted() -> bytes:
     return await write(Packet.s_accountRestricted)
 
 # PacketID: 105
-async def RTX(notif: str) -> bytes:
+async def RTX(msg: str) -> bytes:
     # Bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:
     # - Black screenk, freeze game, beeps loudly.
     # within the next 3-8 seconds at random.
     return await write(
         Packet.s_RTX,
-        (notif, osuTypes.string)
+        (msg, osuTypes.string)
     )
 
 # PacketID: 106

@@ -332,6 +332,7 @@ class Beatmap:
                             # Map is not frozen, update
                             # it's status from the osu!api.
                             bmap['approved'] = api_status
+                            bmap['frozen'] = 0
                     else:
                         # Map is not newer than our current
                         # version, simply skip this map.

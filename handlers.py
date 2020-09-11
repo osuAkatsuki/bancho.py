@@ -2,7 +2,7 @@ import packets
 import aiofiles
 import os
 
-from cmyui.web import AsyncConnection, HTTPStatus
+from cmyui.web import AsyncConnection
 from urllib.parse import unquote
 
 from objects import glob
@@ -129,7 +129,9 @@ async def handle_ss(conn: AsyncConnection) -> None:
         return
 
     async with aiofiles.open(path, 'rb') as f:
-        await conn.resp.send(200, await f.read())
+        content = await f.read()
+
+    await conn.resp.send(200, content)
 
 async def handle_dl(conn: AsyncConnection) -> None:
     if not all(x in conn.req.args for x in ('u', 'h', 'vv')):
@@ -168,7 +170,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
                 content = await resp.read()
 
             # Save to disk.
-            async with aiofiles.open(filepath, 'wb+') as f:
+            async with aiofiles.open(filepath, 'wb') as f:
                 await f.write(content)
 
         await conn.resp.send(200, content)
@@ -184,7 +186,9 @@ async def handle_avatar(conn: AsyncConnection) -> None:
     path = f"avatars/{pid if found else 'default'}.jpg"
 
     async with aiofiles.open(path, 'rb') as f:
-        await conn.resp.send(200, await f.read())
+        content = await f.read()
+
+    await conn.resp.send(200, content)
 
 async def handle_api(conn: AsyncConnection) -> None:
     handler = conn.req.path[5:] # cut off /api/

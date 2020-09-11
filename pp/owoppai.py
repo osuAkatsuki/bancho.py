@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Tuple, Any
+from typing import Optional, Any
 import os
 
 import aiofiles
@@ -128,7 +128,7 @@ class Owoppai:
 
             content = await resp.read()
 
-        async with aiofiles.open(filename, 'wb+') as f:
+        async with aiofiles.open(filename, 'wb') as f:
             await f.write(content)
 
         return True
