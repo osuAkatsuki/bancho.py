@@ -6,7 +6,7 @@ import os
 import time
 import random
 import aiofiles
-from cmyui.utils import rstring
+from cmyui import AsyncConnection, rstring
 from urllib.parse import unquote
 
 import packets
@@ -18,7 +18,6 @@ from objects.score import Score, SubmissionStatus
 from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
-from cmyui.web import AsyncRequest
 from console import plog, Ansi
 
 # For /web/ requests, we send the
@@ -38,8 +37,8 @@ def web_handler(uri: str) -> Callable:
     return register_callback
 
 @web_handler('bancho_connect.php')
-async def banchoConnect(req: AsyncRequest) -> Optional[bytes]:
-    if 'v' in req.args:
+async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
+    if 'v' in conn.args:
         # TODO: implement verification..?
         # Long term. For now, just send an empty reply
         # so their client immediately attempts login.
@@ -53,12 +52,12 @@ async def banchoConnect(req: AsyncRequest) -> Optional[bytes]:
 #    'u', 'h', 't', 'vv', 'z', 's'
 #})
 #@web_handler('osu-osz2-bmsubmit-upload.php')
-#async def osuMapBMSubmitUpload(req: AsyncRequest) -> Optional[bytes]:
-#    if not all(x in req.args for x in required_params_bmsubmit_upload):
+#async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
+#    if not all(x in conn.args for x in required_params_bmsubmit_upload):
 #        await plog(f'bmsubmit-upload req missing params.', Ansi.LIGHT_RED)
 #        return
 #
-#    if not 'osz2' in req.files:
+#    if not 'osz2' in conn.files:
 #        await plog(f'bmsubmit-upload sent without an osz2.', Ansi.LIGHT_RED)
 #        return
 #
@@ -68,8 +67,8 @@ async def banchoConnect(req: AsyncRequest) -> Optional[bytes]:
 #    'h', 's', 'b', 'z', 'vv'
 #})
 #@web_handler('osu-osz2-bmsubmit-getid.php')
-#async def osuMapBMSubmitGetID(req: AsyncRequest) -> Optional[bytes]:
-#    if not all(x in req.args for x in required_params_bmsubmit_getid):
+#async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
+#    if not all(x in conn.args for x in required_params_bmsubmit_getid):
 #        await plog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
 #        return
 #
@@ -79,17 +78,17 @@ required_params_screemshot = frozenset({
     'u', 'p', 'v'
 })
 @web_handler('osu-screenshot.php')
-async def osuScreenshot(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_screemshot):
+async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_screemshot):
         await plog(f'screenshot req missing params.', Ansi.LIGHT_RED)
         return
 
-    if 'ss' not in req.files:
+    if 'ss' not in conn.files:
         await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(req.args['u'])
-    phash = req.args['p']
+    pname = unquote(conn.args['u'])
+    phash = conn.args['p']
 
     if not (p := await glob.players.get_login(pname, phash)):
         return
@@ -97,7 +96,7 @@ async def osuScreenshot(req: AsyncRequest) -> Optional[bytes]:
     filename = f'{rstring(8)}.png'
 
     async with aiofiles.open(f'screenshots/{filename}', 'wb') as f:
-        await f.write(req.files['ss'])
+        await f.write(conn.files['ss'])
 
     await plog(f'{p} uploaded {filename}.')
     return filename.encode()
@@ -106,24 +105,22 @@ required_params_lastFM = frozenset({
     'b', 'action', 'us', 'ha'
 })
 @web_handler('lastfm.php')
-async def lastFM(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_lastFM):
+async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_lastFM):
         await plog(f'lastfm req missing params.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(req.args['us'])
-    phash = req.args['ha']
+    pname = unquote(conn.args['us'])
+    phash = conn.args['ha']
 
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if isinstance(req.args['b'], int):
-        # If it's an int, it's a real beatmap id.
-        # XXX: If anyone cares, I could probably
-        # implement actual lastfm support?
+    if conn.args['b'][0] != 'a':
+        # not anticheat related
         return
 
-    flags = ClientFlags(int(req.args['b'][1:]))
+    flags = ClientFlags(int(conn.args['b'][1:]))
 
     if flags & (ClientFlags.HQAssembly | ClientFlags.HQFile):
         # Player is currently running hq!osu; could possibly
@@ -183,22 +180,22 @@ required_params_osuSearch = frozenset({
     'u', 'h', 'r', 'q', 'm', 'p'
 })
 @web_handler('osu-search.php')
-async def osuSearchHandler(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_osuSearch):
+async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_osuSearch):
         await plog(f'osu-search req missing params.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(req.args['u'])
-    phash = req.args['h']
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
 
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if not isinstance(req.args['p'], int):
+    if not conn.args['p'].isdecimal():
         return
 
-    query = req.args['q'].replace('+', ' ') # TODO: allow empty
-    offset = req.args['p'] * 100
+    query = conn.args['q'].replace('+', ' ') # TODO: allow empty
+    offset = int(conn.args['p']) * 100
 
     sql_query: List[str] = [
         'SELECT DISTINCT set_id, artist, title,',
@@ -249,13 +246,13 @@ async def osuSearchHandler(req: AsyncRequest) -> Optional[bytes]:
 
 # TODO: required params
 @web_handler('osu-search-set.php')
-async def osuSearchSetHandler(req: AsyncRequest) -> Optional[bytes]:
+async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
-    if 's' in req.args:
-        k, v = ('set_id', req.args['s'])
-    elif 'b' in req.args:
-        k, v = ('id', req.args['b'])
+    if 's' in conn.args:
+        k, v = ('set_id', conn.args['s'])
+    elif 'b' in conn.args:
+        k, v = ('id', conn.args['b'])
     else:
         return b''
 
@@ -307,15 +304,17 @@ required_params_submitModular = frozenset({
     'c1', 'st', 'pass', 'osuver', 's'
 })
 @web_handler('osu-submit-modular-selector.php')
-async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_submitModular):
+async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
+    mp_args = conn.multipart_args
+
+    if not all(x in mp_args for x in required_params_submitModular):
         await plog(f'submit-modular-selector req missing params.', Ansi.LIGHT_RED)
         return b'error: no'
 
     # Parse our score data into a score obj.
     s: Score = await Score.from_submission(
-        req.args['score'], req.args['iv'],
-        req.args['osuver'], req.args['pass']
+        mp_args['score'], mp_args['iv'],
+        mp_args['osuver'], mp_args['pass']
     )
 
     if not s:
@@ -347,7 +346,7 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
         await plog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
         return b'error: no'
 
-    if req.args['i']:
+    if conn.args['i']:
         breakpoint()
 
     gm = GameMode(s.game_mode + (4 if s.mods & Mods.RELAX and s.game_mode != 3 else 0))
@@ -390,20 +389,20 @@ async def submitModularSelector(req: AsyncRequest) -> Optional[bytes]:
     if s.status != SubmissionStatus.FAILED:
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
-        if 'score' not in req.files or req.files['score'] == b'\r\n':
+        if 'score' not in conn.files or conn.files['score'] == b'\r\n':
             await plog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
             await s.player.restrict()
         else:
             # Save our replay
             async with aiofiles.open(f'replays/{s.id}.osr', 'wb') as f:
-                await f.write(req.files['score'])
+                await f.write(conn.files['score'])
 
-    time_elapsed = req.args['st' if s.passed else 'ft']
+    time_elapsed = mp_args['st' if s.passed else 'ft']
 
-    if not isinstance(time_elapsed, int):
+    if not time_elapsed.isdecimal():
         return
 
-    s.time_elapsed = time_elapsed / 1000
+    s.time_elapsed = int(time_elapsed) / 1000
 
     # Get the user's stats for current mode.
     stats = s.player.stats[gm]
@@ -451,16 +450,16 @@ required_params_getReplay = frozenset({
     'c', 'm', 'u', 'h'
 })
 @web_handler('osu-getreplay.php')
-async def getReplay(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_getReplay):
+async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_getReplay):
         await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(req.args['u'])
-    phash = req.args['h']
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
 
     if await glob.players.get_login(pname, phash):
-        path = f"replays/{req.args['c']}.osr"
+        path = f"replays/{conn.args['c']}.osr"
         if not os.path.exists(path):
             return b''
 
@@ -475,21 +474,21 @@ required_params_getScores = frozenset({
     'h', 'a', 'us', 'ha'
 })
 @web_handler('osu-osz2-getscores.php')
-async def getScores(req: AsyncRequest) -> Optional[bytes]:
-    if not all(x in req.args for x in required_params_getScores):
+async def getScores(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_getScores):
         await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(req.args['us'])
-    phash = req.args['ha']
+    pname = unquote(conn.args['us'])
+    phash = conn.args['ha']
 
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    mods = req.args['mods']
-
-    if not isinstance(mods, int):
+    if not conn.args['mods'].isdecimal():
         return b'-1|false'
+
+    mods = int(conn.args['mods'])
 
     res: List[bytes] = []
 
@@ -500,11 +499,11 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
         table = 'scores_vn'
         scoring = 'score'
 
-    if not (bmap := await Beatmap.from_md5(req.args['c'], set_id=req.args['i'])):
+    if not (bmap := await Beatmap.from_md5(conn.args['c'], set_id=int(conn.args['i']))):
         # Couldn't find in db or at osu! api by md5.
         # Check if we have the map in our db (by filename).
 
-        filename = req.args['f'].replace('+', ' ')
+        filename = conn.args['f'].replace('+', ' ')
         if not (re := regexes.mapfile.match(unquote(filename))):
             await plog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
             return
@@ -525,7 +524,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
             # Map is unsubmitted.
             # Add this map to the unsubmitted cache, so
             # that we don't have to make this request again.
-            glob.cache['unsubmitted'].add(req.args['c'])
+            glob.cache['unsubmitted'].add(conn.args['c'])
 
         return f'{1 if set_exists else -1}|false'.encode()
 
@@ -541,7 +540,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
         f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
         'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s '
-        f'ORDER BY _score DESC LIMIT 50', [req.args['c'], req.args['m']]
+        f'ORDER BY _score DESC LIMIT 50', [conn.args['c'], conn.args['m']]
     )
 
     # Syntax
@@ -572,7 +571,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
         'WHERE map_md5 = %s AND game_mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
-            req.args['c'], req.args['m'], p.id
+            conn.args['c'], conn.args['m'], p.id
         ]
     )
 
@@ -582,7 +581,7 @@ async def getScores(req: AsyncRequest) -> Optional[bytes]:
             f'SELECT COUNT(*) AS count FROM {table} '
             'WHERE map_md5 = %s AND game_mode = %s '
             f'AND status = 2 AND {scoring} > %s', [
-                req.args['c'], req.args['m'],
+                conn.args['c'], conn.args['m'],
                 p_best['_score']
             ]
         ))['count']
@@ -611,11 +610,11 @@ _valid_actions = frozenset({'check', 'path'})
 _valid_streams = frozenset({'cuttingedge', 'stable40',
                             'beta40', 'stable'})
 @web_handler('check-updates.php')
-async def checkUpdates(req: AsyncRequest) -> Optional[bytes]:
-    if (action := req.args['action']) not in _valid_actions:
+async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
+    if (action := conn.args['action']) not in _valid_actions:
         return b'Invalid action.'
 
-    if (stream := req.args['stream']) not in _valid_streams:
+    if (stream := conn.args['stream']) not in _valid_streams:
         return b'Invalid stream.'
 
     cache = glob.cache['update'][stream]
@@ -625,7 +624,7 @@ async def checkUpdates(req: AsyncRequest) -> Optional[bytes]:
         return cache[action]
 
     url = 'https://old.ppy.sh/web/check-updates.php'
-    async with glob.http.get(url, params = req.args) as resp:
+    async with glob.http.get(url, params = conn.args) as resp:
         if not resp or resp.status != 200:
             return b'Failed to retrieve data from osu!'
 
@@ -638,9 +637,9 @@ async def checkUpdates(req: AsyncRequest) -> Optional[bytes]:
 
     return result
 
-async def updateBeatmap(req: AsyncRequest) -> Optional[bytes]:
-    if not (re := regexes.mapfile.match(unquote(req.path[10:]))):
-        await plog(f'Requested invalid map update {req.path}.', Ansi.LIGHT_RED)
+async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
+    if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
+        await plog(f'Requested invalid map update {conn.path}.', Ansi.LIGHT_RED)
         return b''
 
     if not (res := await glob.db.fetch(

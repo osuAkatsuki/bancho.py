@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from cmyui import AsyncConnection
 import orjson
 from typing import Callable, Optional
-from cmyui.web import AsyncRequest
 from urllib.parse import unquote
 
 from objects import glob
@@ -16,17 +16,17 @@ def api_handler(uri: str) -> Callable:
     return register_callback
 
 @api_handler('get_stats')
-async def getStats(req: AsyncRequest) -> Optional[bytes]:
-    if 'name' not in req.args and 'id' not in req.args:
+async def getStats(conn: AsyncConnection) -> Optional[bytes]:
+    if 'name' not in conn.args and 'id' not in conn.args:
         return b'Must provide either id or name!'
 
-    if 'id' in req.args:
-        if isinstance(req.args['id'], str):
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
             return b'Invalid player id.'
 
-        pid = req.args['id']
+        pid = conn.args['id']
     else:
-        if len(name := unquote(req.args['name'])) > 16:
+        if len(name := unquote(conn.args['name'])) > 16:
             return b'Invalid player name.'
 
         # Get their id from username.

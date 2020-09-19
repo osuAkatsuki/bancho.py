@@ -31,7 +31,7 @@ from constants import regexes
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 async def handle_conn(conn: cmyui.AsyncConnection) -> None:
-    if 'Host' not in conn.req.headers:
+    if 'Host' not in conn.headers:
         await conn.resp.send(400, b'Missing required headers.')
         return
 
@@ -39,21 +39,21 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     handler = None
 
     # Match the host & uri to the correct handlers.
-    if regexes.bancho_domain.match(conn.req.headers['Host']):
-        if conn.req.path == '/':
+    if regexes.bancho_domain.match(conn.headers['Host']):
+        if conn.path == '/':
             handler = handle_bancho
 
-    elif conn.req.headers['Host'] == 'osu.ppy.sh':
-        if conn.req.startswith('/web/'):
+    elif conn.headers['Host'] == 'osu.ppy.sh':
+        if conn.path.startswith('/web/'):
             handler = handle_web
-        elif conn.req.startswith('/ss/'):
+        elif conn.path.startswith('/ss/'):
             handler = handle_ss # screenshots
-        elif conn.req.startswith('/d/'):
+        elif conn.path.startswith('/d/'):
             handler = handle_dl # osu!direct
-        elif conn.req.startswith('/api/'):
+        elif conn.path.startswith('/api/'):
             handler = handle_api # gulag!api
 
-    elif conn.req.headers['Host'] == 'a.ppy.sh':
+    elif conn.headers['Host'] == 'a.ppy.sh':
         handler = handle_avatar # avatars
 
     if handler:
@@ -61,7 +61,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         await handler(conn)
     else:
         # We have no such handler.
-        await plog(f'Unhandled {conn.req.path}.', Ansi.LIGHT_RED)
+        await plog(f'Unhandled {conn.path}.', Ansi.LIGHT_RED)
         await conn.resp.send(400, b'Request handler not implemented.')
 
     time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
@@ -71,7 +71,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 3, 2)
+    glob.version = cmyui.Version(2, 4, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     glob.db = cmyui.AsyncSQLPool()

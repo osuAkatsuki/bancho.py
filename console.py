@@ -1,7 +1,7 @@
 import aiofiles
 from typing import Final
 from enum import IntEnum, unique
-from cmyui.utils import get_timestamp
+from cmyui import get_timestamp
 
 __all__ = 'Ansi', 'plog'
 

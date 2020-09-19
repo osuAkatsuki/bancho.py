@@ -4,7 +4,7 @@ from typing import Tuple, Final, Callable
 import time
 import bcrypt
 
-from cmyui.utils import rstring
+from cmyui import rstring
 
 import packets
 from packets import Packet, PacketReader # convenience
