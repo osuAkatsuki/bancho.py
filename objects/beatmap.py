@@ -69,23 +69,23 @@ class RankedStatus(IntEnum):
             })[status_str]
         )
 
-@dataclass
-class BeatmapInfoRequest:
-    filenames: Sequence[str]
-    ids: Sequence[int]
+#@dataclass
+#class BeatmapInfoRequest:
+#    filenames: Sequence[str]
+#    ids: Sequence[int]
 
-@dataclass
-class BeatmapInfo:
-    id: int # i16
-    map_id: int # i32
-    set_id: int # i32
-    thread_id: int # i32
-    status: int # u8
-    osu_rank: int # u8
-    fruits_rank: int # u8
-    taiko_rank: int # u8
-    mania_rank: int # u8
-    map_md5: str
+#@dataclass
+#class BeatmapInfo:
+#    id: int # i16
+#    map_id: int # i32
+#    set_id: int # i32
+#    thread_id: int # i32
+#    status: int # u8
+#    osu_rank: int # u8
+#    fruits_rank: int # u8
+#    taiko_rank: int # u8
+#    mania_rank: int # u8
+#    map_md5: str
 
 class Beatmap:
     """A class representing an osu! beatmap.

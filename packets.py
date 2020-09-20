@@ -5,7 +5,7 @@ from enum import IntEnum, unique
 import struct
 
 from objects import glob
-from objects.beatmap import Beatmap, BeatmapInfo, BeatmapInfoRequest
+from objects.beatmap import Beatmap
 from objects.match import Match, ScoreFrame, SlotStatus
 from constants.types import osuTypes
 from console import plog, Ansi
@@ -149,20 +149,20 @@ async def read_scoreframe(data: bytearray) -> Tuple[ScoreFrame, int]:
 
     return s, offset
 
-async def read_mapInfoRequest(data: bytearray) -> Tuple[Beatmap, int]:
-    """ Read an osu! beatmapInfoRequest from `data`. """
-    fnames = ids = []
-
-    # Read filenames
-    offset = 4
-    for _ in range(int.from_bytes(data[:offset], 'little')): # filenames
-        fname, offs = await read_string(data[offset:])
-        offset += offs
-        fnames.append(fname)
-
-    # Read ids
-    ids, offs = await read_i32_list(data[offset:], long_len=True)
-    return BeatmapInfoRequest(fnames, ids), offset + offs
+#async def read_mapInfoRequest(data: bytearray) -> Tuple[Beatmap, int]:
+#    """ Read an osu! beatmapInfoRequest from `data`. """
+#    fnames = ids = []
+#
+#    # Read filenames
+#    offset = 4
+#    for _ in range(int.from_bytes(data[:offset], 'little')): # filenames
+#        fname, offs = await read_string(data[offset:])
+#        offset += offs
+#        fnames.append(fname)
+#
+#    # Read ids
+#    ids, offs = await read_i32_list(data[offset:], long_len=True)
+#    return BeatmapInfoRequest(fnames, ids), offset + offs
 
 class PacketReader:
     """A class dedicated to reading osu! packets.
@@ -273,11 +273,11 @@ class PacketReader:
                 # Read an osu! scoreframe
                 data, offs = await read_scoreframe(self.data)
                 self._offset += offs
-            elif t == osuTypes.mapInfoRequest:
-                # Read an osu! beatmapInfoRequest.
-                data, offs = await read_mapInfoRequest(self.data)
-                self._offset += offs
-                ret.append(data)
+            #elif t == osuTypes.mapInfoRequest:
+            #    # Read an osu! beatmapInfoRequest.
+            #    data, offs = await read_mapInfoRequest(self.data)
+            #    self._offset += offs
+            #    ret.append(data)
             else:
                 # Read a normal datatype
                 fmt = _specifiers[t]
@@ -346,19 +346,19 @@ async def write_channel(name: str, topic: str,
         count.to_bytes(2, 'little')
     )
 
-async def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
-    """ Write `maps` into bytes (osu! map info). """
-    ret = bytearray(len(maps).to_bytes(4, 'little'))
-
-    # Write files
-    for m in maps:
-        ret.extend(struct.pack('<hiiiBbbbb',
-            m.id, m.map_id, m.set_id, m.thread_id, m.status,
-            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
-        ))
-        ret.extend(await write_string(m.map_md5))
-
-    return ret
+#async def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
+#    """ Write `maps` into bytes (osu! map info). """
+#    ret = bytearray(len(maps).to_bytes(4, 'little'))
+#
+#    # Write files
+#    for m in maps:
+#        ret.extend(struct.pack('<hiiiBbbbb',
+#            m.id, m.map_id, m.set_id, m.thread_id, m.status,
+#            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
+#        ))
+#        ret.extend(await write_string(m.map_md5))
+#
+#    return ret
 
 async def write_match(m: Match) -> bytearray:
     """ Write `m` into bytes (osu! match). """
@@ -426,8 +426,8 @@ async def write(packid: int, *args: Tuple[Any, ...]) -> bytes:
             ret.extend(await write_match(p))
         elif p_type == osuTypes.scoreframe:
             ret.extend(await write_scoreframe(p))
-        elif p_type == osuTypes.mapInfoReply:
-            ret.extend(await write_mapInfoReply(p))
+        #elif p_type == osuTypes.mapInfoReply:
+        #    ret.extend(await write_mapInfoReply(p))
         else: # use struct
             ret.extend(struct.pack(f'<{_specifiers[p_type]}', p))
 
@@ -506,8 +506,8 @@ class Packet(IntEnum):
     s_channelInfo = 65
     s_channelKicked = 66
     s_channelAutoJoin = 67
-    c_beatmapInfoRequest = 68
-    s_beatmapInfoReply = 69
+    #c_beatmapInfoRequest = 68
+    #s_beatmapInfoReply = 69
     c_matchTransferHost = 70
     s_supporterGMT = 71
     s_friendsList = 72
@@ -518,7 +518,7 @@ class Packet(IntEnum):
     c_matchChangeTeam = 77
     c_channelPart = 78
     c_ReceiveUpdates = 79
-    s_monitor = 80
+    #s_monitor = 80
     s_matchPlayerSkipped = 81
     c_setAwayMessage = 82
     s_userPresence = 83
@@ -773,11 +773,11 @@ async def channelAutoJoin(name: str, topic: str,
     )
 
 # PacketID: 69
-async def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
-    return await write(
-        Packet.s_beatmapInfoReply,
-        (maps, osuTypes.mapInfoReply)
-    )
+#async def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
+#    return await write(
+#        Packet.s_beatmapInfoReply,
+#        (maps, osuTypes.mapInfoReply)
+#    )
 
 # PacketID: 71
 async def banchoPrivileges(priv: int) -> bytes:

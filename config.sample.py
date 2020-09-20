@@ -33,6 +33,17 @@ mysql = {
 # many things, such as beatmap information!
 osu_api_key = ''
 
+# The level of gzip compression to use for different tasks.
+# When we want to quickly compress something and send it to
+# the client immediately, we'd want to focus on optimizing
+# both ends (server & client) for overall speed improvement.
+# When we are sent data from the client to store long-term and
+# serve in the distant future, we want to focus on size &
+# decompression speed on the client-side. Remember that higher
+# levels will result in diminishing returns; more info below.
+# https://www.rootusers.com/gzip-vs-bzip2-vs-xz-performance-comparison/
+gzip = {'web': 4, 'disk': 9}
+
 """ osu!direct """
 # TODO: add max size to cache on disk.
 # perhaps could even make a system to track

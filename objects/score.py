@@ -226,12 +226,14 @@ class Score:
          s.score, s.max_combo) = (int(i) for i in data[3:11])
 
         s.perfect = data[11] == '1'
-        s.grade = data[12] # letter grade
+        _grade = data[12] # letter grade
         s.mods = int(data[13])
         s.passed = data[14] == 'True'
         s.game_mode = int(data[15])
         s.play_time = int(time.time()) # (yyMMddHHmmss)
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
+
+        s.grade = _grade if s.passed else 'F'
 
         # All data read from submission.
         # Now we can calculate things based on our data.

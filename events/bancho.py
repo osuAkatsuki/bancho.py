@@ -18,7 +18,7 @@ from objects import glob
 from objects.score import Rank
 from objects.match import SlotStatus, Teams
 from objects.player import Player, PresenceFilter, Action
-from objects.beatmap import Beatmap, BeatmapInfo, BeatmapInfoRequest
+from objects.beatmap import Beatmap
 from constants.privileges import Privileges
 
 glob.bancho_map = {}
@@ -119,6 +119,8 @@ async def statsUpdateRequest(p: Player, pr: PacketReader) -> None:
 # PacketID: 4
 @bancho_packet(Packet.c_ping)
 async def ping(p: Player, pr: PacketReader) -> None:
+    # TODO: this should be last packet time, not just
+    # ping.. this handler shouldn't even exist lol
     p.ping_time = int(time.time())
 
 registration_msg: Final[str] = '\n'.join((
@@ -701,61 +703,61 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
     p.enqueue(await packets.channelJoin(c.name))
 
 # PacketID: 68
-@bancho_packet(Packet.c_beatmapInfoRequest)
-async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
-    req: BeatmapInfoRequest
-    req, = await pr.read(osuTypes.mapInfoRequest)
-
-    info_list = []
-
-    # Filenames
-    for fname in req.filenames:
-        # Attempt to regex pattern match the filename.
-        # If there is no match, simply ignore this map.
-        # XXX: Sometimes a map will be requested without a
-        # diff name, not really sure how to handle this? lol
-        if not (r := regexes.mapfile.match(fname)):
-            continue
-
-        res = await glob.db.fetch(
-            'SELECT id, set_id, status, md5 '
-            'FROM maps WHERE artist = %s AND '
-            'title = %s AND creator = %s AND '
-            'version = %s', [
-                r['artist'], r['title'],
-                r['creator'], r['version']
-            ]
-        )
-
-        if not res:
-            continue
-
-        to_osuapi_status = lambda s: {
-            0: 0,
-            2: 1,
-            3: 2,
-            4: 3,
-            5: 4
-        }[s]
-
-        info_list.append(BeatmapInfo(
-            0, res['id'], res['set_id'], 0,
-            to_osuapi_status(res['status']),
-
-            # TODO: best grade letter rank
-            # the order of these doesn't follow
-            # gamemode ids in osu! either.
-            # (std, ctb, taiko, mania)
-            Rank.N, Rank.N, Rank.N, Rank.N,
-
-            res['md5']
-        ))
-
-    # Ids
-    for m in req.ids:
-        breakpoint()
-
-    p.enqueue(await packets.beatmapInfoReply(info_list))
+#@bancho_packet(Packet.c_beatmapInfoRequest)
+#async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
+#    req: BeatmapInfoRequest
+#    req, = await pr.read(osuTypes.mapInfoRequest)
+#
+#    info_list = []
+#
+#    # Filenames
+#    for fname in req.filenames:
+#        # Attempt to regex pattern match the filename.
+#        # If there is no match, simply ignore this map.
+#        # XXX: Sometimes a map will be requested without a
+#        # diff name, not really sure how to handle this? lol
+#        if not (r := regexes.mapfile.match(fname)):
+#            continue
+#
+#        res = await glob.db.fetch(
+#            'SELECT id, set_id, status, md5 '
+#            'FROM maps WHERE artist = %s AND '
+#            'title = %s AND creator = %s AND '
+#            'version = %s', [
+#                r['artist'], r['title'],
+#                r['creator'], r['version']
+#            ]
+#        )
+#
+#        if not res:
+#            continue
+#
+#        to_osuapi_status = lambda s: {
+#            0: 0,
+#            2: 1,
+#            3: 2,
+#            4: 3,
+#            5: 4
+#        }[s]
+#
+#        info_list.append(BeatmapInfo(
+#            0, res['id'], res['set_id'], 0,
+#            to_osuapi_status(res['status']),
+#
+#            # TODO: best grade letter rank
+#            # the order of these doesn't follow
+#            # gamemode ids in osu! either.
+#            # (std, ctb, taiko, mania)
+#            Rank.N, Rank.N, Rank.N, Rank.N,
+#
+#            res['md5']
+#        ))
+#
+#    # Ids
+#    for m in req.ids:
+#        breakpoint()
+#
+#    p.enqueue(await packets.beatmapInfoReply(info_list))
 
 # PacketID: 70
 @bancho_packet(Packet.c_matchTransferHost)

@@ -5,7 +5,9 @@ from enum import IntEnum, unique
 import os
 import time
 import random
+import orjson
 import aiofiles
+from aiofiles.threadpool.binary import AsyncBufferedIOBase, AsyncBufferedReader
 from cmyui import AsyncConnection, rstring
 from urllib.parse import unquote
 
@@ -79,7 +81,7 @@ required_params_screemshot = frozenset({
 })
 @web_handler('osu-screenshot.php')
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_screemshot):
+    if not all(x in conn.multipart_args for x in required_params_screemshot):
         await plog(f'screenshot req missing params.', Ansi.LIGHT_RED)
         return
 
@@ -87,8 +89,8 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
         await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)
         return
 
-    pname = unquote(conn.args['u'])
-    phash = conn.args['p']
+    pname = unquote(conn.multipart_args['u'])
+    phash = conn.multipart_args['p']
 
     if not (p := await glob.players.get_login(pname, phash)):
         return
@@ -100,6 +102,80 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
 
     await plog(f'{p} uploaded {filename}.')
     return filename.encode()
+
+required_params_osuGetBeatmapInfo = frozenset({
+    'u', 'h'
+})
+@web_handler('osu-getbeatmapinfo.php')
+async def osuGetBeatmapInfo(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_osuGetBeatmapInfo):
+        await plog(f'getmapinfo req missing params.', Ansi.LIGHT_RED)
+        return
+
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    data = orjson.loads(conn.body)
+    ret = []
+
+    to_osuapi_status = lambda s: {
+        0: 0,
+        2: 1,
+        3: 2,
+        4: 3,
+        5: 4
+    }[s]
+
+    for idx, fname in enumerate(data['Filenames']):
+        # Attempt to regex pattern match the filename.
+        # If there is no match, simply ignore this map.
+        # XXX: Sometimes a map will be requested without a
+        # diff name, not really sure how to handle this? lol
+        if not (r := regexes.mapfile.match(fname)):
+            continue
+
+        # try getting the map from sql
+        res = await glob.db.fetch(
+            'SELECT id, set_id, status, md5 '
+            'FROM maps WHERE artist = %s AND '
+            'title = %s AND creator = %s AND '
+            'version = %s', [
+                r['artist'], r['title'],
+                r['creator'], r['version']
+            ]
+        )
+
+        if not res:
+            # no map found
+            continue
+
+        # convert from gulag -> osu!api status
+        res['status'] = to_osuapi_status(res['status'])
+
+        # try to get the user's grades on the map osu!
+        # only allows us to send back one per gamemode,
+        # so we'll just send back relax for the time being..
+        # XXX: perhaps user-customizable in the future?
+        ranks = ['N', 'N', 'N', 'N']
+
+        async for score in glob.db.iterall(
+            'SELECT grade, game_mode FROM scores_rx '
+            'WHERE map_md5 = %s AND userid = %s '
+            'AND status = 2',
+            [res['md5'], p.id]
+        ): ranks[score['game_mode']] = score['grade']
+
+        ret.append('{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
+            i = idx, ranks = '|'.join(ranks), **res
+        ))
+
+    for bid in data['Ids']:
+        breakpoint()
+
+    return '\n'.join(ret).encode()
 
 required_params_lastFM = frozenset({
     'b', 'action', 'us', 'ha'
@@ -370,18 +446,20 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         await glob.db.execute(
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 AND map_md5 = %s '
-            'AND userid = %s', [s.bmap.md5, s.player.id])
+            'AND userid = %s AND game_mode = %s',
+            [s.bmap.md5, s.player.id, s.game_mode]
+        )
 
     s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, %s, %s, '
-        '%s, %s, %s, '
+        '%s, %s, %s, %s, '
         '%s, %s, %s'
         ')', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            int(s.status), s.game_mode, s.play_time,
+            s.grade, int(s.status), s.game_mode, s.play_time,
             s.client_flags, s.player.id, s.perfect
         ]
     )
@@ -606,7 +684,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
     return b'\n'.join(res)
 
-_valid_actions = frozenset({'check', 'path'})
+_valid_actions = frozenset({'check', 'path', 'error'})
 _valid_streams = frozenset({'cuttingedge', 'stable40',
                             'beta40', 'stable'})
 @web_handler('check-updates.php')
@@ -616,6 +694,10 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 
     if (stream := conn.args['stream']) not in _valid_streams:
         return b'Invalid stream.'
+
+    if action == 'error':
+        # client is just reporting an error updating
+        return b''
 
     cache = glob.cache['update'][stream]
     current_time = int(time.time())

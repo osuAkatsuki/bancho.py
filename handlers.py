@@ -1,6 +1,7 @@
 import packets
 import aiofiles
 import os
+import gzip
 
 from cmyui import AsyncConnection
 from urllib.parse import unquote
@@ -62,12 +63,25 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     else: # Player found, process normal packet.
         pr = packets.PacketReader(conn.body)
 
+        # keep track of the packetIDs we've already handled, the osu
+        # client will stack many packets of the same type into one
+        # connection (200iq design), theres no point double replying.
+        packets_handled = []
+
         # Bancho connections can send multiple packets at a time.
         # Iter through packets received and them handle indivudally.
         while not pr.empty():
             await pr.read_packet_header()
             if pr.packetID == -1:
                 continue # skip, data empty?
+
+            if pr.packetID in packets_handled:
+                # we've already handled a packet of
+                # this type during this connection.
+                pr.ignore_packet()
+                continue
+
+            packets_handled.append(pr.packetID)
 
             if pr.packetID in glob.bancho_map:
                 # Server is able to handle the packet.
@@ -81,13 +95,24 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             # Read all queued packets into stream
             resp.extend(await p.dequeue())
 
+    resp = bytes(resp)
+
     if glob.config.debug:
-        await plog(bytes(resp), Ansi.LIGHT_GREEN)
+        await plog(resp, Ansi.LIGHT_GREEN)
+
+    # Compress with gzip if enabled.
+    if glob.config.gzip['web'] > 0:
+        resp = gzip.compress(resp, glob.config.gzip['web'])
+        await conn.add_resp_header('Content-Encoding: gzip')
+
+    # Add headers and such
+    await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+    #await conn.add_resp_header('Connection: keep-alive')
 
     # Even if the packet is empty, we have to
     # send back an empty response so the client
     # knows it was successfully delivered.
-    await conn.send(200, bytes(resp))
+    await conn.send(200, resp)
 
 # XXX: perhaps (web) handlers should return
 # a bytearray which could be cast to bytes
@@ -103,6 +128,15 @@ async def handle_web(conn: AsyncConnection) -> None:
             # We have data to send back to the client.
             if glob.config.debug:
                 await plog(resp, Ansi.LIGHT_GREEN)
+
+            # Compress with gzip if enabled.
+            if glob.config.gzip['web'] > 0:
+                resp = gzip.compress(resp, glob.config.gzip['web'])
+                await conn.add_resp_header('Content-Encoding: gzip')
+
+            # Add headers and such
+            await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+            #await conn.add_resp_header('Connection: keep-alive')
 
             await conn.send(200, resp)
 
