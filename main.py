@@ -32,7 +32,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     if 'Host' not in conn.headers:
-        await conn.resp.send(400, b'Missing required headers.')
+        await conn.send(400, b'Missing required headers.')
         return
 
     st = time.time_ns()
@@ -62,7 +62,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     else:
         # We have no such handler.
         await plog(f'Unhandled {conn.path}.', Ansi.LIGHT_RED)
-        await conn.resp.send(400, b'Request handler not implemented.')
+        await conn.send(400, b'Request handler not implemented.')
 
     time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
     time_str = (f'{time_taken:.2f}μs' if time_taken < 1000

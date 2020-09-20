@@ -57,6 +57,18 @@ class RankedStatus(IntEnum):
             })[osuapi_status]
         )
 
+    @classmethod
+    def from_str(cls, status_str: str):
+        return cls( # could perhaps have `'unranked': cls.Pending`?
+            defaultdict(lambda: cls.UpdateAvailable, {
+                'pending': cls.Pending,
+                'ranked': cls.Ranked,
+                'approved': cls.Approved,
+                'qualified': cls.Qualified,
+                'loved': cls.Loved
+            })[status_str]
+        )
+
 @dataclass
 class BeatmapInfoRequest:
     filenames: Sequence[str]

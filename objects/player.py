@@ -2,9 +2,8 @@
 
 import asyncio
 from typing import Final, Optional
-import random
-import string
 import time
+import uuid
 
 from constants.privileges import Privileges, BanchoPrivileges
 from constants.gamemodes import GameMode
@@ -270,7 +269,7 @@ class Player:
     )
 
     def __init__(self, **kwargs) -> None:
-        self.token: str = kwargs.get('token', ''.join(random.choices(string.ascii_lowercase, k = 32)))
+        self.token: str = kwargs.get('token', str(uuid.uuid4()))
         self.id: Optional[int] = kwargs.get('id', None)
         self.name: Optional[str] = kwargs.get('name', None)
         self.safe_name: Optional[str] = self.ensure_safe(self.name) if self.name else None
