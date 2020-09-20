@@ -10,7 +10,7 @@ import packets
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
-from objects.beatmap import Beatmap
+from objects.beatmap import Beatmap, RankedStatus
 from objects.match import Match, SlotStatus
 from constants.privileges import Privileges
 
@@ -108,15 +108,38 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not p.last_np:
         return 'You must /np a map first!'
 
-    params = (
-        ('id', p.last_np.id),
-        ('set_id', p.last_np.set_id)
-    )[msg[1] == 'set']
+    new_status = status_to_id(msg[0])
 
-    await glob.db.execute(
-        f'UPDATE maps SET status = %s WHERE {params[0]} = %s',
-        [status_to_id(msg[0]), params[1]]
-    )
+    # update sql & cache based on scope
+    # XXX: not sure if getting md5s from sql
+    # for updating cache would be faster?
+    # surely this will not scale as well..
+
+    if msg[1] == 'set': # update whole set
+        await glob.db.execute(
+            'UPDATE maps SET status = %s '
+            'WHERE set_id = %s',
+            [new_status, p.last_np.set_id]
+        )
+
+        for cached in glob.cache['beatmap'].values():
+            # not going to bother checking timeout
+            if cached['map'].set_id == p.last_np.set_id:
+                cached['map'].status = RankedStatus(new_status)
+
+    else: # update only map
+        await glob.db.execute(
+            'UPDATE maps SET status = %s '
+            'WHERE id = %s',
+            [new_status, p.last_np.id]
+        )
+
+        for cached in glob.cache['beatmap'].values():
+            # not going to bother checking timeout
+            if cached['map'].id == p.last_np.id:
+                cached['map'].status = RankedStatus(new_status)
+                break
+
     return 'Map updated!'
 
 """ Admin commands
