@@ -163,9 +163,7 @@ async def handle_ss(conn: AsyncConnection) -> None:
         return
 
     async with aiofiles.open(path, 'rb') as f:
-        content = await f.read()
-
-    await conn.send(200, content)
+        await conn.send(200, await f.read())
 
 async def handle_dl(conn: AsyncConnection) -> None:
     if not all(x in conn.args for x in ('u', 'h', 'vv')):
@@ -220,9 +218,7 @@ async def handle_avatar(conn: AsyncConnection) -> None:
     path = f"avatars/{pid if found else 'default'}.jpg"
 
     async with aiofiles.open(path, 'rb') as f:
-        content = await f.read()
-
-    await conn.send(200, content)
+        await conn.send(200, await f.read())
 
 async def handle_api(conn: AsyncConnection) -> None:
     handler = conn.path[5:] # cut off /api/

@@ -7,7 +7,6 @@ import time
 import random
 import orjson
 import aiofiles
-from aiofiles.threadpool.binary import AsyncBufferedIOBase, AsyncBufferedReader
 from cmyui import AsyncConnection, rstring
 from urllib.parse import unquote
 
@@ -471,7 +470,10 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             await plog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
             await s.player.restrict()
         else:
-            # Save our replay
+            # TODO: the replay is currently sent from the osu!
+            # client compressed with LZMA; this compression can
+            # be improved pretty decently by serializing it
+            # manually, so we'll probably do that in the future.
             async with aiofiles.open(f'replays/{s.id}.osr', 'wb') as f:
                 await f.write(conn.files['score'])
 
@@ -542,9 +544,7 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
             return b''
 
         async with aiofiles.open(path, 'rb') as f:
-            content = await f.read()
-
-        return content
+            return await f.read()
 
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
