@@ -224,12 +224,8 @@ class Match:
     def __getitem__(self, key: Union[int, slice]) -> Slot:
         return self.slots[key]
 
-    #def __setitem__(self, key: Union[int, slice],
-    #                value: Slot) -> None:
-    #    self.slots[key] = value
-
     def __repr__(self) -> str:
-        return f'<id: {self.id} | name: {self.name}>'
+        return f'<{self.name} ({self.id})>'
 
     def get_slot(self, p) -> Optional[Slot]:
         # Get the slot containing a given player.

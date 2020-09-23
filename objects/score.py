@@ -130,10 +130,13 @@ class Score:
         A UNIX timestamp of the time of score submission.
 
     time_elapsed: :class:`int`
-        The total elapsed time of the play (in seconds).
+        The total elapsed time of the play (in milliseconds).
 
     client_flags: :class:`int`
         osu!'s old anticheat flags.
+
+    previous_best: Optional[:class:`Score`]
+        The previous best score before this, if applicable.
     """
     __slots__ = (
         'id', 'bmap', 'player',
@@ -141,7 +144,7 @@ class Score:
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
         'game_mode', 'play_time', 'time_elapsed',
-        'client_flags'
+        'client_flags', 'previous_best'
     )
 
     def __init__(self):
@@ -153,7 +156,7 @@ class Score:
         self.pp = 0.0
         self.score = 0
         self.max_combo = 0
-        self.mods = Mods.NOMOD
+        self.mods = 0
 
         self.acc = 0.0
         # TODO: perhaps abstract these differently
@@ -178,6 +181,45 @@ class Score:
         # osu!'s client 'anticheat'.
         self.client_flags = ClientFlags.Clean
 
+        self.previous_best = None
+
+    @classmethod
+    async def from_sql(cls, scoreid: int, rx: bool = False):
+        t = 'scores_rx' if rx else 'scores_vn'
+        res = await glob.db.fetch(
+            'SELECT id, map_md5, userid, pp, score, '
+            'max_combo, mods, acc, n300, n100, n50, '
+            'nmiss, ngeki, nkatu, grade, perfect, '
+            'status, game_mode, play_time, '
+            'time_elapsed, client_flags '
+            f'FROM {t} WHERE id = %s',
+            [scoreid], _dict = False
+        )
+
+        if not res:
+            return
+
+        s = cls()
+
+        s.id = res[0]
+        s.bmap = await Beatmap.from_md5(res[1])
+        s.player = await glob.players.get_by_id(res[2], sql=True)
+
+        (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
+         s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
+         s.perfect, s.status, s.game_mode, s.play_time,
+         s.time_elapsed, s.client_flags) = res[3:]
+
+        # fix some types
+        s.passed = s.status != 0
+        s.status = SubmissionStatus(s.status)
+        s.client_flags = ClientFlags(s.client_flags)
+
+        if s.bmap:
+            s.rank = await s.calc_lb_placement()
+
+        return s
+
     @classmethod
     async def from_submission(cls, data_enc: str, iv: str,
                               osu_ver: str, phash: str) -> None:
@@ -188,7 +230,9 @@ class Score:
             padding = ZeroPadding(32), block_size =  32
         )
 
-        data = cbc.decrypt(base64.b64decode(data_enc).decode('latin_1')).decode().split(':')
+        data = cbc.decrypt(
+            base64.b64decode(data_enc).decode('latin_1')
+        ).decode().split(':')
 
         if len(data) != 18:
             await plog('Received an invalid score submission.', Ansi.LIGHT_RED)
@@ -241,11 +285,7 @@ class Score:
 
         if s.bmap:
             # Ignore SR for now.
-            if not os.path.exists('pp/oppai'):
-                await plog('Missing pp calculator (pp/oppai)', Ansi.LIGHT_RED)
-                s.pp = 0.0
-            else:
-                s.pp = (await s.calc_diff())[0]
+            s.pp = (await s.calc_diff())[0]
 
             await s.calc_status()
             s.rank = await s.calc_lb_placement()
@@ -304,21 +344,36 @@ class Score:
             self.status = SubmissionStatus.FAILED
             return
 
-        table = 'scores_rx' if self.mods & Mods.RELAX else 'scores_vn'
+        rx = self.mods & Mods.RELAX
 
-        # Try to find a better score; if
-        # one exists, it will be status=1.
+        table = 'scores_rx' if rx else 'scores_vn'
+
+        # find any other `status = 2` scores we have
+        # on the map. If there are any, store
         res = await glob.db.fetch(
-            f'SELECT 1 FROM {table} WHERE userid = %s '
-            'AND map_md5 = %s AND game_mode = %s '
-            'AND pp > %s AND status = 2', [
+            f'SELECT id, pp FROM {table} '
+            'WHERE userid = %s AND map_md5 = %s '
+            'AND game_mode = %s AND status = 2', [
                 self.player.id, self.bmap.md5,
-                self.game_mode, self.pp
+                self.game_mode
             ]
         )
 
-        self.status = SubmissionStatus.SUBMITTED if res \
-                 else SubmissionStatus.BEST
+        if res:
+            # we have a score on the map.
+            # if our new score's pp is higher, then
+            # it is our new best score on the map.
+            if self.pp > res['pp']:
+                self.status = SubmissionStatus.BEST
+
+                # set the previous best score using the id
+                self.previous_best = await Score.from_sql(res['id'], rx)
+                self.previous_best.status = SubmissionStatus.SUBMITTED
+            else:
+                self.status = SubmissionStatus.SUBMITTED
+        else:
+            # this is our first score on the map.
+            self.status = SubmissionStatus.BEST
 
     def calc_accuracy(self) -> None:
         if self.game_mode == 0: # osu!

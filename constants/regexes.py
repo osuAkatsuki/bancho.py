@@ -11,3 +11,4 @@ now_playing = rcomp(
     r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
     r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
 )
+osu_version = rcomp(r'^b(?P<date>\d{8}(?:\.\d+))(?:beta|cuttingedge)?$')

@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Callable, Final, List
+from typing import AsyncContextManager, Optional, Callable, Final, List
 from enum import IntEnum, unique
 import os
 import time
+import copy
 import random
 import orjson
+import asyncio
 import aiofiles
 from cmyui import AsyncConnection, rstring
 from urllib.parse import unquote
@@ -101,6 +103,23 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
 
     await plog(f'{p} uploaded {filename}.')
     return filename.encode()
+
+required_params_osuGetFriends = frozenset({
+    'u', 'h'
+})
+@web_handler('osu-getfriends.php')
+async def osuGetFriends(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_osuGetFriends):
+        await plog(f'getfriends req missing params.', Ansi.LIGHT_RED)
+        return
+
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    return '\n'.join(str(i) for i in p.friends).encode()
 
 required_params_osuGetBeatmapInfo = frozenset({
     'u', 'h'
@@ -387,7 +406,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         return b'error: no'
 
     # Parse our score data into a score obj.
-    s: Score = await Score.from_submission(
+    s = await Score.from_submission(
         mp_args['score'], mp_args['iv'],
         mp_args['osuver'], mp_args['pass']
     )
@@ -420,6 +439,13 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     if res:
         await plog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
         return b'error: no'
+
+    time_elapsed = mp_args['st' if s.passed else 'ft']
+
+    if not time_elapsed.isdecimal():
+        return
+
+    s.time_elapsed = int(time_elapsed)
 
     if conn.args['i']:
         breakpoint()
@@ -454,12 +480,12 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, '
-        '%s, %s, %s'
+        '%s, %s, %s, %s'
         ')', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
             s.grade, int(s.status), s.game_mode, s.play_time,
-            s.client_flags, s.player.id, s.perfect
+            s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
 
@@ -477,28 +503,58 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             async with aiofiles.open(f'replays/{s.id}.osr', 'wb') as f:
                 await f.write(conn.files['score'])
 
-    time_elapsed = mp_args['st' if s.passed else 'ft']
+    """ Update the user's & beatmap's stats """
 
-    if not time_elapsed.isdecimal():
-        return
-
-    s.time_elapsed = int(time_elapsed) / 1000
-
-    # Get the user's stats for current mode.
+    # get the current stats, and take a
+    # shallow copy for the response charts.
     stats = s.player.stats[gm]
+    previous_stats = copy.copy(stats)
 
-    stats.playtime += s.time_elapsed
+    # update playtime & plays
+    stats.playtime += s.time_elapsed / 1000
+    stats.plays += 1
+
+    s.bmap.plays += 1
+    if s.passed:
+        s.bmap.passes += 1
+
+    # update max combo
+    if s.max_combo > stats.max_combo:
+        stats.max_combo = s.max_combo
+
+    # update total score
     stats.tscore += s.score
-    if s.bmap.status in (RankedStatus.Ranked, RankedStatus.Approved):
+
+    # if this is our (new) best play on
+    # the map, update our ranked score.
+    if s.status == SubmissionStatus.BEST \
+    and s.bmap.status in (RankedStatus.Ranked,
+                          RankedStatus.Approved):
+        # add our new ranked score.
         stats.rscore += s.score
 
+        if s.previous_best:
+            # we previously had a score, so remove
+            # it's score from our ranked score.
+            stats.rscore -= s.previous_best.score
+
+    # update user with new stats
     await glob.db.execute(
         'UPDATE stats SET rscore_{0:sql} = %s, '
-        'tscore_{0:sql} = %s, playtime_{0:sql} = %s '
+        'tscore_{0:sql} = %s, playtime_{0:sql} = %s, '
+        'plays_{0:sql} = %s, maxcombo_{0:sql} = %s '
         'WHERE id = %s'.format(gm), [
             stats.rscore, stats.tscore,
-            stats.playtime, s.player.id
+            stats.playtime, stats.plays,
+            stats.max_combo, s.player.id
         ]
+    )
+
+    # update beatmap with new stats
+    await glob.db.execute(
+        'UPDATE maps SET plays = %s, '
+        'passes = %s WHERE md5 = %s',
+        [s.bmap.plays, s.bmap.passes, s.bmap.md5]
     )
 
     if s.status == SubmissionStatus.BEST and s.rank == 1 \
@@ -515,7 +571,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         ann: List[str] = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
 
         if prev_n1: # If there was previously a score on the map, add old #1.
-            ann.append('(Prev: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+            ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
         await announce_chan.send(glob.bot, ' '.join(ann))
 
@@ -523,8 +579,74 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     s.player.recent_scores[gm] = s
     await s.player.update_stats(gm)
 
+    """ score submission charts """
+
+    if s.status == SubmissionStatus.FAILED or s.mods & Mods.RELAX:
+        # basically, the osu! client and the way bancho handles this
+        # is dumb. if you submit a failed play on bancho, it will
+        # still generate the charts and send it to the client, even
+        # when the client can't (and doesn't use them).. so instead,
+        # we'll send back an empty error, which will just tell the
+        # client that the score submission process is complete.. lol
+        # (also no point on rx since you can't see the charts atm xd)
+        ret = b'error: no'
+
+    else:
+        # this is still a big fat TODO
+        charts = []
+
+        # generate beatmap info chart (#1)
+        """
+        # beatmapId:315|beatmapSetId:141|
+        # beatmapPlaycount:983400|
+        # beatmapPasscount:595903|
+        # approvedDate:2007-11-01 06:09:15
+        """
+        charts.append(
+            f'beatmapId:{s.bmap.id}|'
+            f'beatmapSetId:{s.bmap.set_id}|'
+            f'beatmapPlaycount:{s.bmap.plays}|'
+            f'beatmapPasscount:{s.bmap.passes}|'
+            f'approvedDate:{s.bmap.last_update}'
+        )
+
+        # generate beatmap ranking chart (#2)
+        """
+        # chartId:beatmap|
+        # chartUrl:https://akatsuki.pw/b/315|
+        # chartName:Beatmap Ranking|
+        # rankBefore:0|rankAfter:12345|
+        # maxComboBefore:|maxComboAfter:100|
+        # accuracyBefore:|accuracyAfter:85.00|
+        # rankedScoreBefore:|rankedScoreAfter:12345|
+        # ppBefore:|ppAfter:12.1234|
+        # onlineScoreId:12345
+        """
+        #charts.append(
+        #    'chartId:beatmap|'
+        #    'chartUrl:https://akatsuki.pw/b/{id}|'
+        #    'chartName:Beatmap Ranking|'
+        #    'rankBefore:{'
+        #)
+        # generate overall ranking chart (#3)
+        """
+        # chartId:overall|
+        # chartUrl:https://akatsuki.pw/u/1001|
+        # chartName:Overall Ranking|
+        # rankBefore:132|rankAfter:123|
+        # rankedScoreBefore:12345|rankedScoreAfter:123456|
+        # totalScoreBefore:12345|totalScoreAfter:123456|
+        # maxComboBefore:100|maxComboAfter:100|
+        # accuracyBefore:88|accuracyAfter:86.5065|
+        # ppBefore:12.1234|ppAfter:0|
+        # (optional) achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|
+        # onlineScoreId:12345
+        """
+
+        ret = '\n'.join(charts).encode()
+
     await plog(f'{s.player} submitted a score! ({gm!r}, {s.status})', Ansi.LIGHT_GREEN)
-    return b'well done bro'
+    return ret
 
 required_params_getReplay = frozenset({
     'c', 'm', 'u', 'h'
@@ -545,6 +667,176 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
 
         async with aiofiles.open(path, 'rb') as f:
             return await f.read()
+
+required_params_osuSession = frozenset({
+    'u', 'h', 'action'
+})
+@web_handler('osu-session.php')
+async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
+    mp_args = conn.multipart_args
+
+    if not all(x in mp_args for x in required_params_osuSession):
+        await plog(f'osu-rate req missing params.', Ansi.LIGHT_RED)
+        return
+
+    if mp_args['action'] not in ('check', 'submit'):
+        return # invalid action
+
+    pname = unquote(mp_args['u'])
+    phash = mp_args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    if mp_args['action'] == 'submit':
+        # client is submitting a performance session after a score
+        # we'll save some basic information, and do some basic checks,
+        # could surely be useful for anticheat and debugging purposes.
+        data = orjson.loads(mp_args['content'])
+
+        if data['Tags']['Replay'] == 'True':
+            # the user was viewing a replay,
+            # no need to save to sql.
+            return
+
+        # so, osu! sends a 'Fullscreen' param and a 'Beatmap'
+        # param, but both of them are the fullscreen value? lol
+
+        op_sys = data['Tags']['OS']
+        fullscreen = data['Tags']['Fullscreen'] == 'True'
+
+        fps_cap = data['Tags']['FrameSync']
+        if fps_cap == 'Unlimited':
+            fps_cap = 0
+
+        compatibility = data['Tags']['Compatibility'] == 'True'
+        version = data['Tags']['Version'] # osu! version
+        start_time = data['StartTime']
+        end_time = data['EndTime']
+        frame_count = data['ProcessedFrameCount']
+        spike_frames = data['SpikeFrameCount']
+
+        aim_rate = data['AimFrameRate']
+        if aim_rate == 'Infinity':
+            aim_rate = 0
+
+        completion = data['Completion']
+        identifier = data['Identifier']
+        average_frametime = data['AverageFrameTime'] * 1000
+
+        if identifier or spike_frames:
+            breakpoint()
+
+        # chances are, if we can't find a very
+        # recent score by a user, it just hasn't
+        # submitted yet.. we'll allow 3 seconds
+
+        recent_score: Optional[Score] = None
+        retries = 0
+        ctime = time.time()
+
+        while retries < 3:
+            if recent_score := p.recent_score:
+                # only accept scores submitted
+                # within the last 5 seconds.
+
+                if ((ctime + retries) - (recent_score.play_time - 5)) > 0:
+                    break
+
+            retries += 1
+            await asyncio.sleep(1)
+        else:
+            # STILL no score found..
+            # this is definitely strange
+            breakpoint()
+            return
+
+        if recent_score.time_elapsed > (end_time - start_time):
+            breakpoint()
+
+        if version != p.osu_version:
+            breakpoint()
+
+        await glob.db.execute(
+            'INSERT INTO performance_reports VALUES '
+            '(%s, %s, %s, %s, %s, %s, %s,'
+            ' %s, %s, %s, %s, %s, %s, %s)',  [
+                recent_score.id,
+                op_sys, fullscreen, fps_cap,
+                compatibility, version,
+                start_time, end_time,
+                frame_count, spike_frames,
+                aim_rate, completion,
+                identifier, average_frametime
+            ]
+        )
+
+    else:
+        # TODO: figure out what this wants?
+        # seems like it adds the response from server
+        # to some kind of internal buffer, dunno why tho
+        return
+
+required_params_osuRate = frozenset({
+    'u', 'p', 'c'
+})
+@web_handler('osu-rate.php')
+async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_osuRate):
+        await plog(f'osu-rate req missing params.', Ansi.LIGHT_RED)
+        return
+
+    pname = unquote(conn.args['u'])
+    phash = conn.args['p']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return b'auth fail'
+
+    map_md5 = conn.args['c']
+
+    if 'v' not in conn.args:
+        # check if we have the map in our cache;
+        # if not, the map probably doesn't exist.
+        if map_md5 not in glob.cache['beatmap']:
+            return b'no exist'
+
+        cached = glob.cache['beatmap'][map_md5]['map']
+
+        # only allow rating on maps with a leaderboard.
+        if cached.status < RankedStatus.Ranked:
+            return b'not ranked'
+
+        # osu! client is checking whether we can rate the map or not.
+        alreadyvoted = await glob.db.fetch(
+            'SELECT 1 FROM ratings WHERE '
+            'map_md5 = %s AND userid = %s',
+            [map_md5, p.id]
+        )
+
+        # the client hasn't rated the map, so simply
+        # tell them that they can submit a rating.
+        if not alreadyvoted:
+            return b'ok'
+    else:
+        # the client is submitting a rating for the map.
+        if not (rating := conn.args['v']).isdecimal():
+            return
+
+        await glob.db.execute(
+            'INSERT INTO ratings '
+            'VALUES (%s, %s, %s)',
+            [p.id, map_md5, int(rating)]
+        )
+
+    ratings = [x[0] for x in await glob.db.fetchall(
+        'SELECT rating FROM ratings '
+        'WHERE map_md5 = %s',
+        [map_md5], _dict = False
+    )]
+
+    # send back the average rating
+    avg = sum(ratings) / len(ratings)
+    return f'alreadyvoted\n{avg}'.encode()
 
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',

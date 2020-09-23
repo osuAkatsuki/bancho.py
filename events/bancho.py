@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from typing import Tuple, Final, Callable
+from datetime import datetime as dt, timedelta as td
 import time
 import bcrypt
 
@@ -158,7 +159,21 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     pw_hash = s[1].encode()
 
     s = s[2].split('|')
-    build_name = s[0]
+
+    if not (r := regexes.osu_version.match(s[0])):
+        # invalid client version?
+        return await packets.userID(-2), 'no'
+
+    osu_ver = r['date']
+
+    # XXX: could perhaps have p.build as datetime(osu_ver)?
+    # either way, for now any client with the same
+    # month & year as 15 days ago should be fine?
+    ctime = dt.now() - td(10)
+
+    if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
+        # outdated osu! client
+        return await packets.userID(-2), 'no'
 
     if not s[1].replace('-', '', 1).isdecimal():
         return await packets.userID(-1), 'no'
@@ -179,7 +194,8 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     res = await glob.db.fetch(
         'SELECT id, name, priv, pw_hash, silence_end '
         'FROM users WHERE name_safe = %s',
-        [Player.ensure_safe(username)])
+        [Player.ensure_safe(username)]
+    )
 
     # Get our bcrypt cache.
     bcrypt_cache = glob.cache['bcrypt']
@@ -203,6 +219,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         p = Player(utc_offset = utc_offset,
                    pm_private = pm_private,
+                   osu_version = osu_ver,
                    **res)
     else:
         # Account does not exist, register using credentials passed.
@@ -223,7 +240,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         p = Player(id = user_id, name = username,
                    priv = Privileges.Normal,
-                   silence_end = 0)
+                   silence_end = 0, osu_version = osu_ver)
 
         await plog(f'{p} has registered!', Ansi.LIGHT_GREEN)
 
@@ -696,11 +713,14 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
         await plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
-    # Enqueue new channelinfo (playercount) to a ll players.
-    #glob.players.enqueue(await packets.channelInfo(*c.basic_info))
-
     # Enqueue channelJoin to our player.
     p.enqueue(await packets.channelJoin(c.name))
+
+# I wrote this and the server twin, ~2 weeks
+# later the osu! team removed it and wrote
+# /web/osu-getbeatmapinfo.php.. which to be
+# fair is actually a lot nicer cuz its json
+# but like cmon lol
 
 # PacketID: 68
 #@bancho_packet(Packet.c_beatmapInfoRequest)

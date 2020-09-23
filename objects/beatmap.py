@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from typing import Sequence, Optional
+from typing import Optional
 from enum import IntEnum, unique
-from dataclasses import dataclass
 from datetime import datetime
 from collections import defaultdict
 import time
@@ -125,6 +124,12 @@ class Beatmap:
         version is found in the osu!api.
         # XXX: This is set when a map's status is manually changed.
 
+    plays: :class:`int`
+        The amount of plays on the map.
+
+    passes: :class:`int`
+        The amount of passes on the map.
+
     mode: :class:`GameMode`
         The primary gamemode of the map.
 
@@ -154,6 +159,7 @@ class Beatmap:
     __slots__ = ('md5', 'id', 'set_id',
                  'artist', 'title', 'version', 'creator',
                  'status', 'last_update', 'frozen',
+                 'plays', 'passes',
                  'mode', 'bpm', 'cs', 'od', 'ar', 'hp',
                  'diff', 'pp_values')
 
@@ -170,8 +176,11 @@ class Beatmap:
         self.last_update = kwargs.pop('last_update', datetime(1970, 1, 1))
         self.status = RankedStatus(kwargs.pop('status', 0))
         self.frozen = kwargs.pop('frozen', False) == 1
-        self.mode = GameMode(kwargs.pop('mode', 0))
 
+        self.plays = kwargs.pop('plays', 0)
+        self.passes = kwargs.pop('passes', 0)
+
+        self.mode = GameMode(kwargs.pop('mode', 0))
         self.bpm = kwargs.pop('bpm', 0.0)
         self.cs = kwargs.pop('cs', 0.0)
         self.od = kwargs.pop('od', 0.0)
@@ -228,8 +237,9 @@ class Beatmap:
     async def from_bid_sql(cls, bid: int):
         if not (res := await glob.db.fetch(
             'SELECT set_id, status, md5, '
-            'artist, title, version, creator, last_update, '
-            'frozen, mode, bpm, cs, od, ar, hp, diff '
+            'artist, title, version, creator, '
+            'last_update, frozen, mode, plays, '
+            'passes, bpm, cs, od, ar, hp, diff '
             'FROM maps WHERE id = %s',
             [bid]
         )): return
@@ -282,8 +292,9 @@ class Beatmap:
     async def from_md5_sql(cls, md5: str):
         if not (res := await glob.db.fetch(
             'SELECT id, set_id, status, '
-            'artist, title, version, creator, last_update, '
-            'frozen, mode, bpm, cs, od, ar, hp, diff '
+            'artist, title, version, creator, '
+            'last_update, frozen, plays, passes, '
+            'mode, bpm, cs, od, ar, hp, diff '
             'FROM maps WHERE md5 = %s',
             [md5]
         )): return
@@ -359,17 +370,20 @@ class Beatmap:
                 # Since these are all straight off the osu!api,
                 # they will always be the most up to date.
                 await glob.db.execute(
-                    'REPLACE INTO maps (id, set_id, status, md5, '
-                    'artist, title, version, creator, last_update, '
-                    'frozen, mode, bpm, cs, od, ar, hp, diff) VALUES ('
+                    'REPLACE INTO maps (id, set_id, status, '
+                    'md5, artist, title, version, creator, '
+                    'last_update, frozen, mode, bpm, cs, '
+                    'od, ar, hp, diff) VALUES ('
                     '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
                     '%s, %s, %s, %s, %s, %s, %s, %s)', [
-                        bmap['beatmap_id'], bmap['beatmapset_id'], int(bmap['approved']),
-                        bmap['file_md5'], bmap['artist'], bmap['title'],
-                        bmap['version'], bmap['creator'], bmap['last_update'],
-                        bmap['frozen'], bmap['mode'], bmap['bpm'], bmap['diff_size'],
-                        bmap['diff_overall'], bmap['diff_approach'],
-                        bmap['diff_drain'], bmap['difficultyrating']
+                        bmap['beatmap_id'], bmap['beatmapset_id'],
+                        int(bmap['approved']), bmap['file_md5'],
+                        bmap['artist'], bmap['title'], bmap['version'],
+                        bmap['creator'], bmap['last_update'],
+                        bmap['frozen'], bmap['mode'], bmap['bpm'],
+                        bmap['diff_size'], bmap['diff_overall'],
+                        bmap['diff_approach'], bmap['diff_drain'],
+                        bmap['difficultyrating']
                     ]
                 )
 

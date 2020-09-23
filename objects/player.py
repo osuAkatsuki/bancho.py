@@ -46,7 +46,7 @@ class ModeData:
     playtime: :class:`int`
         The player's total playtime (in seconds).
 
-    maxcombo: :class:`int`
+    max_combo: :class:`int`
         The player's highest combo.
 
     rank: :class:`int`
@@ -54,7 +54,7 @@ class ModeData:
     """
     __slots__ = (
         'tscore', 'rscore', 'pp', 'acc',
-        'plays', 'playtime', 'maxcombo', 'rank'
+        'plays', 'playtime', 'max_combo', 'rank'
     )
 
     def __init__(self):
@@ -64,7 +64,7 @@ class ModeData:
         self.acc = 0.0
         self.plays = 0
         self.playtime = 0
-        self.maxcombo = 0
+        self.max_combo = 0
         self.rank = 0
 
     def update(self, **kwargs) -> None:
@@ -74,7 +74,7 @@ class ModeData:
         self.acc = kwargs.get('acc', 0.0)
         self.plays = kwargs.get('plays', 0)
         self.playtime = kwargs.get('playtime', 0)
-        self.maxcombo = kwargs.get('maxcombo', 0)
+        self.max_combo = kwargs.get('max_combo', 0)
         self.rank = kwargs.get('rank', 0)
 
 @unique
@@ -232,6 +232,9 @@ class Player:
     ping_time: :class:`int`
         The UNIX timestamp of the last time the client pinged the server.
 
+    osu_version: :class:`str`
+        The osu! version the client logged in with.
+
     pres_filter: :class:`PresenceFilter`
         The scope of users the client can currently see.
 
@@ -264,8 +267,8 @@ class Player:
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'ping_time', 'pres_filter',
-        '_queue'
+        'login_time', 'ping_time', 'osu_version',
+        'pres_filter', '_queue'
     )
 
     def __init__(self, **kwargs) -> None:
@@ -305,6 +308,8 @@ class Player:
         self.login_time = c_time
         self.ping_time = c_time
         del c_time
+
+        self.osu_version = kwargs.get('osu_version', None)
 
         self.pres_filter = PresenceFilter.Nil
 
@@ -348,7 +353,23 @@ class Player:
         return self.stats[self.status.game_mode + (4 if self.rx else 0)]
 
     def __repr__(self) -> str:
-        return f'<id: {self.id} | name: {self.name}>'
+        return f'<{self.name} ({self.id})>'
+
+    @property
+    def recent_score(self):
+        score = None
+        for s in self.recent_scores:
+            if not s:
+                continue
+
+            if not score:
+                score = s
+                continue
+
+            if s.play_time > score.play_time:
+                score = s
+
+        return score
 
     @staticmethod
     def ensure_safe(name: str) -> str:
@@ -432,7 +453,8 @@ class Player:
                 read = Privileges.Normal,
                 write = Privileges.Normal,
                 auto_join = False,
-                instance = True))
+                instance = True
+            ))
 
             m.chat = glob.channels.get(f'#multi_{m.id}')
 
@@ -538,8 +560,8 @@ class Player:
                 read = Privileges.Normal,
                 write = Privileges.Normal,
                 auto_join = False,
-                instance = True)
-            )
+                instance = True
+            ))
 
             c = glob.channels.get(chan_name)
 
@@ -675,7 +697,8 @@ class Player:
             f'WHERE pp_{gm:sql} > %s '
             'AND priv & 1', [
                 self.stats[gm].pp
-            ])
+            ]
+        )
 
         self.stats[gm].rank = res['c'] + 1
         self.enqueue(await packets.userStats(self))
@@ -689,12 +712,16 @@ class Player:
     async def stats_from_sql_full(self) -> None:
         for gm in GameMode:
             # Grab static stats from SQL.
-            if not (res := await glob.db.fetch(
+            res = await glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-                'playtime_{0:sql} playtime, maxcombo_{0:sql} maxcombo '
-                'FROM stats WHERE id = %s'.format(gm), [self.id])
-            ): raise Exception(f"Failed to fetch {self}'s {gm!r} user stats.")
+                'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
+                'FROM stats WHERE id = %s'.format(gm), [self.id]
+            )
+
+            if not res:
+                await plog(f"Failed to fetch {self}'s {gm!r} user stats.", Ansi.LIGHT_RED)
+                return
 
             # Calculate rank.
             res['rank'] = (await glob.db.fetch(
@@ -707,12 +734,16 @@ class Player:
             self.stats[gm].update(**res)
 
     async def stats_from_sql(self: int, gm: GameMode) -> None:
-        if not (res := await glob.db.fetch(
+        res = await glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-            'playtime_{0:sql} playtime, maxcombo_{0:sql} maxcombo '
-            'FROM stats WHERE id = %s'.format(gm), [self.id])
-        ): raise Exception(f"Failed to fetch {self}'s {gm!r} user stats.")
+            'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
+            'FROM stats WHERE id = %s'.format(gm), [self.id]
+        )
+
+        if not res:
+            await plog(f"Failed to fetch {self}'s {gm!r} user stats.", Ansi.LIGHT_RED)
+            return
 
         # Calculate rank.
         res['rank'] = await glob.db.fetch(
