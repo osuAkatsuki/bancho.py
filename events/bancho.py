@@ -228,12 +228,12 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                     await packets.userID(-1), 'no')
 
         # check if the anything from the hwid set exists in sql.
+        # NOTE: we don't check if osu path hash matches.
         old = await glob.db.fetch(
             'SELECT u.name, u.priv FROM user_hashes h '
-            'LEFT JOIN users u USING(id) '
-            'WHERE h.osupath = %s OR h.adapters = %s '
+            'LEFT JOIN users u USING(id) WHERE h.adapters = %s '
             'OR h.uninstall_id = %s OR h.disk_serial = %s',
-            [*client_hashes]
+            [*client_hashes[1:]]
         )
 
         if old:
