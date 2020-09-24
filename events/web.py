@@ -776,8 +776,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
             # imagine this can be useful for old client det. tho :o
             return
 
-        if recent_score.time_elapsed > (end_time - start_time):
-            breakpoint()
+        # TODO: timing checks
 
         if version != p.osu_version:
             breakpoint()
@@ -955,8 +954,8 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         params.append(mods)
     elif rank_type == RankingType.Friends:
         query.append( # kinda ugly doe
-            'AND (s.userid IN (SELECT user2 FROM friendships '
-            'WHERE user1 = {0}) OR s.id = {0})'.format(p.id)
+            'AND s.userid IN ((SELECT user2 FROM friendships '
+            'WHERE user1 = {0}), {0})'.format(p.id)
         )
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
