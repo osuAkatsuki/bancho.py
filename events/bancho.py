@@ -125,16 +125,11 @@ async def ping(p: Player, pr: PacketReader) -> None:
     p.ping_time = int(time.time())
 
 registration_msg: Final[str] = '\n'.join((
-    "Hey! Welcome to the gulag.",
+    "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
     "",
-    "Since it's your first time here, I thought i'd show you around a bit.",
     "Command help: !help",
-    "",
     "If you have any questions or find any strange behaviour,",
-    "please feel feel free to contact cmyui(#0425) directly!",
-    "",
-    "Staff online: {}.",
-    "Source code: https://github.com/cmyui/gulag/"
+    "please feel feel free to contact cmyui(#0425) directly!"
 ))
 # No specific packetID, triggered when the
 # client sends a request without an osu-token.
@@ -233,7 +228,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                     await packets.userID(-1), 'no')
 
         # check if the anything from the hwid set exists in sql.
-        old_acc = await glob.db.fetch(
+        old = await glob.db.fetch(
             'SELECT u.name, u.priv FROM user_hashes h '
             'LEFT JOIN users u USING(id) '
             'WHERE h.osupath = %s OR h.adapters = %s '
@@ -241,18 +236,18 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
             [*client_hashes]
         )
 
-        if old_acc:
+        if old:
             # they already have an account on this hwid.
-            if old_acc['priv'] & Privileges.Normal:
+            if old['priv'] & Privileges.Normal:
                 # unbanned, tell them to use that account instead.
-                msg = (f'Detected a previously created account "{old_acc["name"]}"!\n'
+                msg = (f'Detected a previously created account "{old["name"]}"!\n'
                        'Please use that account instead.')
             else:
                 # banned, tell them to appeal on their main acc.
                 msg = ('Please do not try to avoid your restrictions!\n'
-                       f'Appeal on your first account - "{old_acc["name"]}".')
+                       f'Appeal on your first account - "{old["name"]}".')
 
-            await plog(f'{old_acc["name"]} tried to make new acc ({username}).', Ansi.LIGHT_GREEN)
+            await plog(f'{old["name"]} tried to make new acc ({username}).', Ansi.LIGHT_GREEN)
             return (await packets.notification(msg) +
                     await packets.userID(-1), 'no')
 

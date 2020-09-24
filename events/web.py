@@ -971,7 +971,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         params.append(p.country[1]) # letters, not id
 
     query.append(f'ORDER BY _score DESC LIMIT 50')
-    print(' '.join(query), params)
+
     scores = await glob.db.fetchall(' '.join(query), params)
 
     # Syntax

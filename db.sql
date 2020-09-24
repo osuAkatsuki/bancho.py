@@ -1,10 +1,13 @@
 # Remove pre-existing tables.
 drop table if exists stats;
 drop table if exists users;
+drop table if exists user_hashes;
 drop table if exists scores_rx;
 drop table if exists scores_vn;
 drop table if exists maps;
 drop table if exists friendships;
+drop table if exists ratings;
+drop table if exists performance_reports;
 drop table if exists channels;
 
 create table users
