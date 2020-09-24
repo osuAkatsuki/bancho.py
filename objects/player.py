@@ -678,7 +678,7 @@ class Player:
         self.stats[gm].plays += 1
         self.stats[gm].pp = sum(round(round(row['pp']) * 0.95 ** i)
                                 for i, row in enumerate(res))
-        self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res)) / 100.0
+        self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
 
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '

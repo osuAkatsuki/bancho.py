@@ -135,8 +135,11 @@ class Score:
     client_flags: :class:`int`
         osu!'s old anticheat flags.
 
-    previous_best: Optional[:class:`Score`]
-        The previous best score before this, if applicable.
+    prev_best: Optional[:class:`Score`]
+        The previous best score before this play was submitted.
+        NOTE: just because a score has a `prev_best` attribute does
+        mean the score is our best score on the map! the `status`
+        value will always be accurate for any score.
     """
     __slots__ = (
         'id', 'bmap', 'player',
@@ -144,7 +147,7 @@ class Score:
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
         'game_mode', 'play_time', 'time_elapsed',
-        'client_flags', 'previous_best'
+        'client_flags', 'prev_best'
     )
 
     def __init__(self):
@@ -181,7 +184,7 @@ class Score:
         # osu!'s client 'anticheat'.
         self.client_flags = ClientFlags.Clean
 
-        self.previous_best = None
+        self.prev_best = None
 
     @classmethod
     async def from_sql(cls, scoreid: int, rx: bool = False):
@@ -361,14 +364,15 @@ class Score:
 
         if res:
             # we have a score on the map.
-            # if our new score's pp is higher, then
-            # it is our new best score on the map.
+            # save it as our previous best score.
+            self.prev_best = await Score.from_sql(res['id'], rx)
+
+            # if our new score is better, update
+            # both of our score's submission statuses.
+            # NOTE: this will be updated in sql later on in submission
             if self.pp > res['pp']:
                 self.status = SubmissionStatus.BEST
-
-                # set the previous best score using the id
-                self.previous_best = await Score.from_sql(res['id'], rx)
-                self.previous_best.status = SubmissionStatus.SUBMITTED
+                self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
                 self.status = SubmissionStatus.SUBMITTED
         else:

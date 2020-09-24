@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import AsyncContextManager, Optional, Callable, Final, List
+from typing import Optional, Callable, Final, List
 from enum import IntEnum, unique
 import os
 import time
@@ -367,14 +367,6 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
-@unique
-class RankingType(IntEnum):
-    Local:   Final[int] = 0
-    Top:     Final[int] = 1
-    Mods:    Final[int] = 2
-    Friends: Final[int] = 3
-    Country: Final[int] = 4
-
 UNDEF = 9999
 autorestrict_pp = (
     # Values for autorestriction. This is the simplest
@@ -425,7 +417,8 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
 
-    table = 'scores_rx' if s.mods & Mods.RELAX else 'scores_vn'
+    rx = s.mods & Mods.RELAX != 0
+    table = 'scores_rx' if rx else 'scores_vn'
 
     # Check for score duplicates
     # TODO: might need to improve?
@@ -450,7 +443,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     if conn.args['i']:
         breakpoint()
 
-    gm = GameMode(s.game_mode + (4 if s.mods & Mods.RELAX and s.game_mode != 3 else 0))
+    gm = GameMode(s.game_mode + (4 if rx and s.game_mode != 3 else 0))
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -508,7 +501,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     # get the current stats, and take a
     # shallow copy for the response charts.
     stats = s.player.stats[gm]
-    previous_stats = copy.copy(stats)
+    prev_stats = copy.copy(stats)
 
     # update playtime & plays
     stats.playtime += s.time_elapsed / 1000
@@ -533,10 +526,10 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # add our new ranked score.
         stats.rscore += s.score
 
-        if s.previous_best:
+        if s.prev_best:
             # we previously had a score, so remove
             # it's score from our ranked score.
-            stats.rscore -= s.previous_best.score
+            stats.rscore -= s.prev_best.score
 
     # update user with new stats
     await glob.db.execute(
@@ -581,7 +574,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     """ score submission charts """
 
-    if s.status == SubmissionStatus.FAILED or s.mods & Mods.RELAX:
+    if s.status == SubmissionStatus.FAILED or rx:
         # basically, the osu! client and the way bancho handles this
         # is dumb. if you submit a failed play on bancho, it will
         # still generate the charts and send it to the client, even
@@ -592,16 +585,12 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         ret = b'error: no'
 
     else:
-        # this is still a big fat TODO
+        # XXX: really not a fan of how this is done atm,
+        # but it's kinda just something that's probably
+        # going to be ugly no matter what i do lol :v
         charts = []
 
         # generate beatmap info chart (#1)
-        """
-        # beatmapId:315|beatmapSetId:141|
-        # beatmapPlaycount:983400|
-        # beatmapPasscount:595903|
-        # approvedDate:2007-11-01 06:09:15
-        """
         charts.append(
             f'beatmapId:{s.bmap.id}|'
             f'beatmapSetId:{s.bmap.set_id}|'
@@ -611,37 +600,71 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         )
 
         # generate beatmap ranking chart (#2)
-        """
-        # chartId:beatmap|
-        # chartUrl:https://akatsuki.pw/b/315|
-        # chartName:Beatmap Ranking|
-        # rankBefore:0|rankAfter:12345|
-        # maxComboBefore:|maxComboAfter:100|
-        # accuracyBefore:|accuracyAfter:85.00|
-        # rankedScoreBefore:|rankedScoreAfter:12345|
-        # ppBefore:|ppAfter:12.1234|
-        # onlineScoreId:12345
-        """
-        #charts.append(
-        #    'chartId:beatmap|'
-        #    'chartUrl:https://akatsuki.pw/b/{id}|'
-        #    'chartName:Beatmap Ranking|'
-        #    'rankBefore:{'
-        #)
+        beatmap_chart = [
+            'chartId:beatmap',
+            f'chartUrl:https://akatsuki.pw/b/{s.bmap.id}',
+            'chartName:Beatmap Ranking'
+        ]
+
+        if s.prev_best:
+            # we had a score on the map before
+            beatmap_chart.append(
+                f'rankBefore:{s.prev_best.rank}|rankAfter:{s.rank}|'
+                f'rankedScoreBefore:{s.prev_best.score}|rankedScoreAfter:{s.score}|'
+                f'totalScoreBefore:{s.prev_best.score}|totalScoreAfter:{s.score}|'
+                f'maxComboBefore:{s.prev_best.max_combo}|maxComboAfter:{s.max_combo}|'
+                f'accuracyBefore:{s.prev_best.acc:.2f}|accuracyAfter:{s.acc:.2f}|'
+                f'ppBefore:{s.prev_best.pp:.4f}|ppAfter:{s.pp:.4f}|'
+                f'onlineScoreId:{s.id}'
+            )
+
+        else:
+            # this is our first score on the map
+            beatmap_chart.append(
+                f'rankBefore:|rankAfter:{s.rank}|'
+                f'rankedScoreBefore:|rankedScoreAfter:{s.score}|' # these are
+                f'totalScoreBefore:|totalScoreAfter:{s.score}|' # prolly wrong
+                f'maxComboBefore:|maxComboAfter:{s.max_combo}|'
+                f'accuracyBefore:|accuracyAfter:{s.acc:.2f}|'
+                f'ppBefore:|ppAfter:{s.pp:.4f}|'
+                f'onlineScoreId:{s.id}'
+            )
+
+        charts.append('|'.join(beatmap_chart))
+
         # generate overall ranking chart (#3)
-        """
-        # chartId:overall|
-        # chartUrl:https://akatsuki.pw/u/1001|
-        # chartName:Overall Ranking|
-        # rankBefore:132|rankAfter:123|
-        # rankedScoreBefore:12345|rankedScoreAfter:123456|
-        # totalScoreBefore:12345|totalScoreAfter:123456|
-        # maxComboBefore:100|maxComboAfter:100|
-        # accuracyBefore:88|accuracyAfter:86.5065|
-        # ppBefore:12.1234|ppAfter:0|
-        # (optional) achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|
-        # onlineScoreId:12345
-        """
+        overall_chart = [
+            'chartId:overall',
+            f'chartUrl:https://akatsuki.pw/u/{s.player.id}',
+            'chartName:Overall Ranking'
+        ]
+
+        # TODO: achievements before onlineScoreId
+        # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
+
+        if prev_stats:
+            overall_chart.append(
+                f'rankBefore:{prev_stats.rank}|rankAfter:{stats.rank}|'
+                f'rankedScoreBefore:{prev_stats.rscore}|rankedScoreAfter:{stats.rscore}|'
+                f'totalScoreBefore:{prev_stats.tscore}|totalScoreAfter:{stats.tscore}|'
+                f'maxComboBefore:{prev_stats.max_combo}|maxComboAfter:{stats.max_combo}|'
+                f'accuracyBefore:{prev_stats.acc:.2f}|accuracyAfter:{stats.acc:.2f}|'
+                f'ppBefore:{prev_stats.pp:.4f}|ppAfter:{stats.pp:.4f}|'
+                f'onlineScoreId:{s.id}'
+            )
+
+        else:
+            overall_chart.append(
+                f'rankBefore:|rankAfter:{stats.rank}|'
+                f'rankedScoreBefore:|rankedScoreAfter:{stats.rscore}|'
+                f'totalScoreBefore:|totalScoreAfter:{stats.tscore}|'
+                f'maxComboBefore:|maxComboAfter:{stats.max_combo}|'
+                f'accuracyBefore:|accuracyAfter:{stats.acc:.2f}|'
+                f'ppBefore:|ppAfter:{stats.pp:.4f}|'
+                f'onlineScoreId:{s.id}'
+            )
+
+        charts.append('|'.join(overall_chart))
 
         ret = '\n'.join(charts).encode()
 
@@ -747,8 +770,10 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
             await asyncio.sleep(1)
         else:
             # STILL no score found..
-            # this is definitely strange
-            breakpoint()
+            # this can happen if they submit a duplicate score,
+            # perhaps i should add some kind of system to prevent
+            # this from happening or re-think this overall.. i'd
+            # imagine this can be useful for old client det. tho :o
             return
 
         if recent_score.time_elapsed > (end_time - start_time):
@@ -838,6 +863,14 @@ async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
     avg = sum(ratings) / len(ratings)
     return f'alreadyvoted\n{avg}'.encode()
 
+@unique
+class RankingType(IntEnum):
+    Local:   Final[int] = 0
+    Top:     Final[int] = 1
+    Mods:    Final[int] = 2
+    Friends: Final[int] = 3
+    Country: Final[int] = 4
+
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
@@ -855,10 +888,13 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if not conn.args['mods'].isdecimal():
+    if not conn.args['mods'].isdecimal() \
+    or not conn.args['v'].isdecimal():
         return b'-1|false'
 
     mods = int(conn.args['mods'])
+
+    rank_type = RankingType(int(conn.args['v']))
 
     res: List[bytes] = []
 
@@ -904,14 +940,31 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         return f'{int(bmap.status)}|false'.encode()
 
     # statuses: 0: failed, 1: passed but not top, 2: passed top
-    scores = await glob.db.fetchall(
+    query = [
         f'SELECT s.id, s.{scoring} AS _score, s.max_combo, '
         's.n50, s.n100, s.n300, s.nmiss, s.nkatu, s.ngeki, '
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
         f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
-        'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s '
-        f'ORDER BY _score DESC LIMIT 50', [conn.args['c'], conn.args['m']]
-    )
+        'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s'
+    ]
+
+    params = [conn.args['c'], conn.args['m']]
+
+    if rank_type == RankingType.Mods:
+        query.append('AND s.mods = %s')
+        params.append(mods)
+    elif rank_type == RankingType.Friends:
+        query.append( # kinda ugly doe
+            'AND (s.userid IN (SELECT user2 FROM friendships '
+            'WHERE user1 = {0}) OR s.id = {0})'.format(p.id)
+        )
+    elif rank_type == RankingType.Country:
+        query.append('AND u.country = %s')
+        params.append(p.country[1]) # letters, not id
+
+    query.append(f'ORDER BY _score DESC LIMIT 50')
+    print(' '.join(query), params)
+    scores = await glob.db.fetchall(' '.join(query), params)
 
     # Syntax
     # int(status)|bool(server_has_osz)|int(bid)|int(bsid)|int(len(scores))

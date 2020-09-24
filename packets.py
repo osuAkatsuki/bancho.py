@@ -594,7 +594,7 @@ async def userStats(p) -> bytes:
         (p.status.game_mode, osuTypes.u8),
         (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
-        (p.gm_stats.acc, osuTypes.f32),
+        (p.gm_stats.acc / 100.0, osuTypes.f32),
         (p.gm_stats.plays, osuTypes.i32),
         (p.gm_stats.tscore, osuTypes.i64),
         (p.gm_stats.rank, osuTypes.i32),
