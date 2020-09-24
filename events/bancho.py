@@ -188,6 +188,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     # [3]: md5(uniqueid) (osu! uninstall id)
     # [4]: md5(uniqueid2) (disk signature/serial num)
     client_hashes = s[3].split(':')[:-1]
+    client_hashes.pop(1) # no need for non-md5 adapters
 
     pm_private = s[4] == '1'
 
@@ -197,21 +198,21 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         [Player.ensure_safe(username)]
     )
 
-    # Get our bcrypt cache.
+    # get our bcrypt cache.
     bcrypt_cache = glob.cache['bcrypt']
 
     if res:
-        # Account exists.
-        # Check their account status & credentials against db.
+        # account exists.
+        # check their account status & credentials against db.
         if not res['priv'] & Privileges.Normal:
             return await packets.userID(-3), 'no'
 
-        # Password is incorrect.
+        # password is incorrect.
         if pw_hash in bcrypt_cache: # ~0.01 ms
-            # Cache hit - this saves ~200ms on subsequent logins.
+            # cache hit - this saves ~200ms on subsequent logins.
             if bcrypt_cache[pw_hash] != res['pw_hash']:
                 return await packets.userID(-1), 'no'
-        else: # Cache miss, must be first login.
+        else: # cache miss, must be first login.
             if not bcrypt.checkpw(pw_hash, res['pw_hash'].encode()):
                 return await packets.userID(-1), 'no'
 
@@ -221,12 +222,44 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
                    pm_private = pm_private,
                    osu_version = osu_ver,
                    **res)
+
     else:
-        # Account does not exist, register using credentials passed.
+        # the account does not exist,
+        # register using credentials given.
+
+        # disallow popular/offensive usernames
+        if username in glob.config.disallowed_names:
+            return (await packets.notification('Disallowed username.') +
+                    await packets.userID(-1), 'no')
+
+        # check if the anything from the hwid set exists in sql.
+        old_acc = await glob.db.fetch(
+            'SELECT u.name, u.priv FROM user_hashes h '
+            'LEFT JOIN users u USING(id) '
+            'WHERE h.osupath = %s OR h.adapters = %s '
+            'OR h.uninstall_id = %s OR h.disk_serial = %s',
+            [*client_hashes]
+        )
+
+        if old_acc:
+            # they already have an account on this hwid.
+            if old_acc['priv'] & Privileges.Normal:
+                # unbanned, tell them to use that account instead.
+                msg = (f'Detected a previously created account "{old_acc["name"]}"!\n'
+                       'Please use that account instead.')
+            else:
+                # banned, tell them to appeal on their main acc.
+                msg = ('Please do not try to avoid your restrictions!\n'
+                       f'Appeal on your first account - "{old_acc["name"]}".')
+
+            await plog(f'{old_acc["name"]} tried to make new acc ({username}).', Ansi.LIGHT_GREEN)
+            return (await packets.notification(msg) +
+                    await packets.userID(-1), 'no')
+
         pw_bcrypt = bcrypt.hashpw(pw_hash, bcrypt.gensalt()).decode()
         bcrypt_cache[pw_hash] = pw_bcrypt
 
-        # Add to `users` table.
+        # add to `users` table.
         user_id = await glob.db.execute(
             'INSERT INTO users (name, name_safe, pw_hash, email) '
             'VALUES (%s, %s, %s, %s)', [
@@ -235,8 +268,19 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
             ]
         )
 
-        # Add to `stats` table.
-        await glob.db.execute('INSERT INTO stats (id) VALUES (%s)', [user_id])
+        # insert client hashes
+        await glob.db.execute(
+            'INSERT INTO user_hashes '
+            'VALUES (%s, %s, %s, %s, %s)',
+            [user_id, *client_hashes]
+        )
+
+        # add to `stats` table.
+        await glob.db.execute(
+            'INSERT INTO stats '
+            '(id) VALUES (%s)',
+            [user_id]
+        )
 
         p = Player(id = user_id, name = username,
                    priv = Privileges.Normal,
@@ -244,7 +288,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         await plog(f'{p} has registered!', Ansi.LIGHT_GREEN)
 
-        # Enqueue registration message to the user.
+        # enqueue registration message to the user.
         _msg = registration_msg.format(glob.players.staff)
         p.enqueue(await packets.sendMessage(
             glob.bot.name, _msg, p.name, p.id
@@ -256,16 +300,16 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         await packets.banchoPrivileges(p.bancho_priv) +
         await packets.notification(f'Welcome back to the gulag!\nCurrent build: {glob.version}') +
 
-        # Tells osu! to load channels from config, I believe?
+        # tells osu! to load channels from config, I believe?
         await packets.channelInfoEnd()
     )
 
-    # Channels
+    # channels
     for c in glob.channels:
         if not p.priv & c.read:
             continue # no priv to read
 
-        # Autojoinable channels
+        # autojoinable channels
         if c.auto_join and await p.join_channel(c):
             # NOTE: p.join_channel enqueues channelJoin, but
             # if we don't send this back in this specific request,
@@ -274,17 +318,17 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
         data.extend(await packets.channelInfo(*c.basic_info))
 
-    # Fetch some of the player's
+    # fetch some of the player's
     # information from sql to be cached.
     await p.stats_from_sql_full()
     await p.friends_from_sql()
 
     if glob.config.server_build:
-        # Update their country data with
+        # update their country data with
         # the IP from the login request.
         await p.fetch_geoloc(ip)
 
-    # Update our new player's stats, and broadcast them.
+    # update our new player's stats, and broadcast them.
     user_data = (await packets.userPresence(p) +
                  await packets.userStats(p))
 
@@ -292,10 +336,10 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
 
     # o for online, or other
     for o in glob.players:
-        # Enqueue us to them
+        # enqueue us to them
         o.enqueue(user_data)
 
-        # Enqueue them to us.
+        # enqueue them to us.
         data.extend(await packets.userPresence(o) +
                     await packets.userStats(o))
 

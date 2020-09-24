@@ -299,6 +299,7 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
 
     sql_params = [offset]
 
+    # TODO: actually support the buttons lol
     if query not in ('Newest', 'Top Rated', 'Most Played'):
         # They're searching something specifically.
         sql_query.insert(2, 'WHERE title LIKE %s')
@@ -893,11 +894,19 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
     mods = int(conn.args['mods'])
 
+    # update rx value and send their stats if changed
+    # XXX: this doesn't work consistently, but i'll
+    # keep it in anyways i suppose lol.. no harm :D
+    rx = mods & Mods.RELAX > 0
+    if p.rx != rx:
+        p.rx = rx
+        glob.players.enqueue(await packets.userStats(p))
+
     rank_type = RankingType(int(conn.args['v']))
 
     res: List[bytes] = []
 
-    if mods & Mods.RELAX:
+    if rx:
         table = 'scores_rx'
         scoring = 'pp'
     else:
