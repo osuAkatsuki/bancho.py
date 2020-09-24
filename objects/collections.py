@@ -173,7 +173,7 @@ class PlayerList(Sequence):
         # Try to get from SQL.
         res = await glob.db.fetch(
             'SELECT id, priv, silence_end '
-            'FROM users WHERE name = %s',
+            'FROM users WHERE name_safe = %s',
             [name]
         )
 

@@ -32,7 +32,7 @@ async def getStats(conn: AsyncConnection) -> Optional[bytes]:
         # Get their id from username.
         pid = await glob.db.fetch(
             'SELECT id FROM users '
-            'WHERE name = %s',
+            'WHERE name_safe = %s',
             [name]
         )
 
