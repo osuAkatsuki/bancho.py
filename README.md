@@ -55,8 +55,11 @@ sudo apt install mysql-server nginx
 git clone https://github.com/cmyui/gulag.git
 cd gulag
 
-# Create empty data directories.
-mkdir screenshots replays logs mapsets avatars pp/maps
+# Init & update submodules.
+git submodule init && git submodule update
+
+# Build oppai-ng's binary.
+cd pp && ./build && cd ..
 
 # Install project requirements.
 python3.8 -m pip install -r requirements.txt
