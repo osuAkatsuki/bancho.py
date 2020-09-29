@@ -1,9 +1,4 @@
 /.vscode
 __pycache__/
 /config.py
-/logs
-/screenshots
-/replays
-/mapsets
-/pp/oppai
-/pp/maps
+/.data

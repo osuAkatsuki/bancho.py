@@ -156,7 +156,7 @@ async def handle_ss(conn: AsyncConnection) -> None:
         await conn.send(404, b'No file found!')
         return
 
-    path = f'screenshots/{conn.path[4:]}'
+    path = f'.data/ss/{conn.path[4:]}'
 
     if not os.path.exists(path):
         await conn.send(404, b'No file found!')
@@ -188,7 +188,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
     # the db to store whether a map has been disabled, i guess.
 
     if glob.config.mirror: # Use gulag as a mirror (cache maps on disk).
-        if os.path.exists(filepath := f'mapsets/{set_id}.osz'):
+        if os.path.exists(filepath := f'.data/osz/{set_id}.osz'):
             # We have the map in cache.
             async with aiofiles.open(filepath, 'rb') as f:
                 content = await f.read()

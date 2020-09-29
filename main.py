@@ -32,6 +32,17 @@ from constants import regexes
 # Set CWD to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
+# make sure gulag/.data folder exists
+if not os.path.isdir('.data'):
+    os.mkdir('.data')
+
+# make sure that all data subdirectories exist
+required_folders = frozenset({'avatars', 'logs', 'osu',
+                              'osz', 'osr', 'ss'})
+for p in required_folders:
+    if not os.path.isdir(f'.data/{p}'):
+        os.mkdir(f'.data/{p}')
+
 async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     if 'Host' not in conn.headers:
         await conn.send(400, b'Missing required headers.')
@@ -91,7 +102,7 @@ def close_server(loop):
     return predicate
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 5, 4)
+    glob.version = cmyui.Version(2, 5, 5)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

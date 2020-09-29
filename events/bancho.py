@@ -97,7 +97,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
 
         await t.send(p, msg)
 
-    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
+    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
 # PacketID: 2
 @bancho_packet(Packet.c_logout)
@@ -455,7 +455,7 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
     else: # Not Aika
         t.enqueue(await packets.sendMessage(client, msg, target, client_id))
 
-    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = 'logs/chat.log')
+    await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
 # PacketID: 29
 @bancho_packet(Packet.c_partLobby)

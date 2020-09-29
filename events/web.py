@@ -98,7 +98,7 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
 
     filename = f'{rstring(8)}.png'
 
-    async with aiofiles.open(f'screenshots/{filename}', 'wb') as f:
+    async with aiofiles.open(f'.data/ss/{filename}', 'wb') as f:
         await f.write(conn.files['ss'])
 
     await plog(f'{p} uploaded {filename}.')
@@ -494,7 +494,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             # client compressed with LZMA; this compression can
             # be improved pretty decently by serializing it
             # manually, so we'll probably do that in the future.
-            async with aiofiles.open(f'replays/{s.id}.osr', 'wb') as f:
+            async with aiofiles.open(f'.data/osr/{s.id}.osr', 'wb') as f:
                 await f.write(conn.files['score'])
 
     """ Update the user's & beatmap's stats """
@@ -685,7 +685,7 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
     phash = conn.args['h']
 
     if await glob.players.get_login(pname, phash):
-        path = f"replays/{conn.args['c']}.osr"
+        path = f".data/osr/{conn.args['c']}.osr"
         if not os.path.exists(path):
             return b''
 
@@ -1093,7 +1093,7 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
         ]
     )): return b'' # no map found
 
-    if os.path.exists(filepath := f"pp/maps/{res['id']}.osu"):
+    if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
         # Map found on disk.
 
         async with aiofiles.open(filepath, 'rb') as f:
