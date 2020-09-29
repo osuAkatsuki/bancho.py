@@ -212,10 +212,10 @@ async def handle_dl(conn: AsyncConnection) -> None:
         await conn.add_resp_header(f'Location: {bmap_url}')
         await conn.send(302, None)
 
+default_avatar = f'.data/avatars/default.jpg'
 async def handle_avatar(conn: AsyncConnection) -> None:
-    pid = conn.path[1:]
-    found = pid.isdecimal() and os.path.exists(f'avatars/{pid}')
-    path = f"avatars/{pid if found else 'default'}.jpg"
+    _path = f'.data/avatars/{conn.path[1:]}.jpg'
+    path = (os.path.exists(_path) and _path) or default_avatar
 
     async with aiofiles.open(path, 'rb') as f:
         await conn.send(200, await f.read())
