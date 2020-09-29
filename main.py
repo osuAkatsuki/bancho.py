@@ -1,3 +1,4 @@
+#!/usr/bin/python3.8
 # -*- coding: utf-8 -*-
 
 # If you're interested in development, my test server is often up
@@ -12,6 +13,7 @@ if __name__ != '__main__':
 import asyncio
 import importlib
 import aiohttp
+import signal
 import orjson # faster & more accurate than stdlib json
 import cmyui # web & db
 import time
@@ -70,11 +72,32 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
+async def _close_server() -> None:
+    # close sql pool
+    glob.db.pool.close()
+    await glob.db.pool.wait_closed()
+
+    # close http client session
+    await glob.http.close()
+
+    glob.serv.listening = False
+
+    await plog('Cleaning up for shutdown..', Ansi.LIGHT_GREEN)
+    raise KeyboardInterrupt
+
+def close_server(loop):
+    def predicate():
+        loop.create_task(_close_server())
+    return predicate
+
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 5, 3)
+    glob.version = cmyui.Version(2, 5, 4)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
-    glob.db = cmyui.AsyncSQLPool()
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGINT, close_server(loop))
+
+    glob.db = cmyui.AsyncSQLPoolWrapper()
     await glob.db.connect(**glob.config.mysql)
 
     # Aika
@@ -88,9 +111,9 @@ async def run_server(addr: cmyui.Address) -> None:
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
-    async with cmyui.AsyncTCPServer(addr) as serv:
+    async with cmyui.AsyncTCPServer(addr) as glob.serv:
         await plog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
-        async for conn in serv.listen(glob.config.max_conns):
+        async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 
 # Use uvloop if available (much faster).

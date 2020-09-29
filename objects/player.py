@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from typing import Final, Optional
+from typing import Optional
 import time
 import uuid
 
@@ -81,28 +81,28 @@ class ModeData:
 class PresenceFilter(IntEnum):
     """A class to represent the update scope the client wishes to receive."""
 
-    Nil:     Final[int] = 0
-    All:     Final[int] = 1
-    Friends: Final[int] = 2
+    Nil     = 0
+    All     = 1
+    Friends = 2
 
 @unique
 class Action(IntEnum):
     """A class to represent the client's current state."""
 
-    Idle:         Final[int] = 0
-    Afk:          Final[int] = 1
-    Playing:      Final[int] = 2
-    Editing:      Final[int] = 3
-    Modding:      Final[int] = 4
-    Multiplayer:  Final[int] = 5
-    Watching:     Final[int] = 6
-    Unknown:      Final[int] = 7
-    Testing:      Final[int] = 8
-    Submitting:   Final[int] = 9
-    Paused:       Final[int] = 10
-    Lobby:        Final[int] = 11
-    Multiplaying: Final[int] = 12
-    OsuDirect:    Final[int] = 13
+    Idle         = 0
+    Afk          = 1
+    Playing      = 2
+    Editing      = 3
+    Modding      = 4
+    Multiplayer  = 5
+    Watching     = 6
+    Unknown      = 7
+    Testing      = 8
+    Submitting   = 9
+    Paused       = 10
+    Lobby        = 11
+    Multiplaying = 12
+    OsuDirect    = 13
 
 class Status:
     """A class to represent the current status of a player.
@@ -121,7 +121,7 @@ class Status:
     mods: :class:`int`
         The mods the player currently has enabled.
 
-    game_mode: :class:`int`
+    mode: :class:`int`
         The current gamemode of the player.
 
     map_id: :class:`int`
@@ -129,7 +129,7 @@ class Status:
     """
     __slots__ = (
         'action', 'info_text', 'map_md5',
-        'mods', 'game_mode', 'map_id'
+        'mods', 'mode', 'map_id'
     )
 
     def __init__(self):
@@ -137,11 +137,11 @@ class Status:
         self.info_text = '' # string
         self.map_md5 = '' # string
         self.mods = 0 # i32
-        self.game_mode = 0 # byte
+        self.mode = 0 # byte
         self.map_id = 0 # i32
 
     def update(self, action: int, info_text: str, map_md5: str,
-               mods: int, game_mode: int, map_id: int) -> None:
+               mods: int, mode: int, map_id: int) -> None:
         # osu! sends both map id and md5, but
         # we'll only need one since we fetch a
         # beatmap obj from cache/sql anyways..
@@ -149,7 +149,7 @@ class Status:
         self.info_text = info_text
         self.map_md5 = map_md5
         self.mods = mods
-        self.game_mode = game_mode
+        self.mode = mode
         self.map_id = map_id
 
 class Player:
@@ -275,7 +275,7 @@ class Player:
         self.token: str = kwargs.get('token', str(uuid.uuid4()))
         self.id: Optional[int] = kwargs.get('id', None)
         self.name: Optional[str] = kwargs.get('name', None)
-        self.safe_name: Optional[str] = self.ensure_safe(self.name) if self.name else None
+        self.safe_name = self.make_safe(self.name) if self.name else None
         self.priv = Privileges(kwargs.get('priv', Privileges.Normal))
 
         self.rx = False # stored for ez use
@@ -304,13 +304,11 @@ class Player:
         self.silence_end: int = kwargs.get('silence_end', 0)
         self.in_lobby = False
 
-        c_time = int(time.time())
-        self.login_time = c_time
-        self.ping_time = c_time
-        del c_time
+        _ctime = int(time.time())
+        self.login_time = _ctime
+        self.ping_time = _ctime
 
         self.osu_version = kwargs.get('osu_version', None)
-
         self.pres_filter = PresenceFilter.Nil
 
         # Packet queue
@@ -347,10 +345,10 @@ class Player:
     @property
     def gm_stats(self) -> ModeData:
         # Mania is the same mode on both vn and rx.
-        if self.status.game_mode == 3:
+        if self.status.mode == 3:
             return self.stats[3]
 
-        return self.stats[self.status.game_mode + (4 if self.rx else 0)]
+        return self.stats[self.status.mode + (4 if self.rx else 0)]
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -372,7 +370,7 @@ class Player:
         return score
 
     @staticmethod
-    def ensure_safe(name: str) -> str:
+    def make_safe(name: str) -> str:
         return name.lower().replace(' ', '_')
 
     async def logout(self) -> None:
@@ -664,11 +662,10 @@ class Player:
         res = await glob.db.fetchall(
             f'SELECT s.pp, s.acc FROM {table} s '
             'LEFT JOIN maps m ON s.map_md5 = m.md5 '
-            'WHERE s.userid = %s AND s.game_mode = %s '
+            'WHERE s.userid = %s AND s.mode = %s '
             'AND s.status = 2 AND m.status IN (1, 2) '
-            'ORDER BY s.pp DESC LIMIT 100', [
-                self.id, gm % 4
-            ]
+            'ORDER BY s.pp DESC LIMIT 100',
+            [self.id, gm % 4]
         )
 
         if not res:
@@ -676,18 +673,15 @@ class Player:
 
         # Update the user's stats ingame, then update db.
         self.stats[gm].plays += 1
-        self.stats[gm].pp = sum(round(round(row['pp']) * 0.95 ** i)
-                                for i, row in enumerate(res))
         self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
+        self.stats[gm].pp = round(sum(row['pp'] * 0.95 ** i)
+                                  for i, row in enumerate(res))
 
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '
             'plays_{0:sql} = plays_{0:sql} + 1, '
-            'acc_{0:sql} = %s WHERE id = %s'.format(gm), [
-                self.stats[gm].pp,
-                self.stats[gm].acc,
-                self.id
-            ]
+            'acc_{0:sql} = %s WHERE id = %s'.format(gm),
+            [self.stats[gm].pp, self.stats[gm].acc, self.id]
         )
 
         # Calculate rank.
@@ -695,9 +689,8 @@ class Player:
             'SELECT COUNT(*) AS c FROM stats '
             'LEFT JOIN users USING(id) '
             f'WHERE pp_{gm:sql} > %s '
-            'AND priv & 1', [
-                self.stats[gm].pp
-            ]
+            'AND priv & 1',
+            [self.stats[gm].pp]
         )
 
         self.stats[gm].rank = res['c'] + 1
@@ -705,9 +698,12 @@ class Player:
         await plog(f"Updated {self}'s {gm!r} stats.")
 
     async def friends_from_sql(self) -> None:
-        self.friends = {row['user2'] async for row in glob.db.iterall(
+        _friends = {row['user2'] async for row in glob.db.iterall(
             'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
-        )} | {1, self.id} # Always have bot & self added.
+        )}
+
+        # Always have self & bot added to friends.
+        self.friends = _friends | {1, self.id}
 
     async def stats_from_sql_full(self) -> None:
         for gm in GameMode:
@@ -716,7 +712,8 @@ class Player:
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
                 'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-                'FROM stats WHERE id = %s'.format(gm), [self.id]
+                'FROM stats WHERE id = %s'.format(gm),
+                [self.id]
             )
 
             if not res:
@@ -738,7 +735,8 @@ class Player:
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
             'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-            'FROM stats WHERE id = %s'.format(gm), [self.id]
+            'FROM stats WHERE id = %s'.format(gm),
+            [self.id]
         )
 
         if not res:
@@ -750,7 +748,8 @@ class Player:
             'SELECT COUNT(*) AS c FROM stats '
             'LEFT JOIN users USING(id) '
             f'WHERE pp_{gm:sql} > %s '
-            'AND priv & 1', [res['pp']]
+            'AND priv & 1',
+            [res['pp']]
         )['c']
 
         self.stats[gm].update(**res)

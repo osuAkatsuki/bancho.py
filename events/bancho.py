@@ -190,7 +190,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     res = await glob.db.fetch(
         'SELECT id, name, priv, pw_hash, silence_end '
         'FROM users WHERE name_safe = %s',
-        [Player.ensure_safe(username)]
+        [Player.make_safe(username)]
     )
 
     # get our bcrypt cache.
@@ -258,7 +258,7 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
         user_id = await glob.db.execute(
             'INSERT INTO users (name, name_safe, pw_hash, email) '
             'VALUES (%s, %s, %s, %s)', [
-                username, Player.ensure_safe(username),
+                username, Player.make_safe(username),
                 pw_bcrypt, f'{rstring(6)}@gmail.com'
             ]
         )
@@ -592,7 +592,7 @@ async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
     # Copy basic match info into our match.
     m.bmap = new.bmap
     m.freemods = new.freemods
-    m.game_mode = new.game_mode
+    m.mode = new.mode
     m.team_type = new.team_type
     m.match_scoring = new.match_scoring
     m.name = new.name

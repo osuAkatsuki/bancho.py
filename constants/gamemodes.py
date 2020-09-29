@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final, Tuple
 from enum import IntEnum, unique
 
 __all__ = 'GameMode',
 
-gm_str: Tuple[str, ...] = (
+gm_str = (
     'vn!std',
     'vn!taiko',
     'vn!catch',
@@ -15,7 +14,7 @@ gm_str: Tuple[str, ...] = (
     'rx!catch'
 )
 
-gm_sql: Tuple[str, ...] = (
+gm_sql = (
     'vn_std',
     'vn_taiko',
     'vn_catch',
@@ -31,13 +30,13 @@ class GameMode(IntEnum):
 
     # Some inspiration taken
     # from rumoi/ruri here.
-    vn_std:   Final[int] = 0
-    vn_taiko: Final[int] = 1
-    vn_catch: Final[int] = 2
-    vn_mania: Final[int] = 3
-    rx_std:   Final[int] = 4
-    rx_taiko: Final[int] = 5
-    rx_catch: Final[int] = 6
+    vn_std   = 0
+    vn_taiko = 1
+    vn_catch = 2
+    vn_mania = 3
+    rx_std   = 4
+    rx_taiko = 5
+    rx_catch = 6
 
     def __str__(self) -> str:
         return gm_str[self.value]

@@ -449,9 +449,15 @@ class Beatmap:
         return m
 
     async def cache_pp(self) -> None:
-        async with Owoppai(self.id) as owo:
-            for idx, acc in enumerate((90, 95, 98, 99, 100)):
-                owo.set_acc(acc)
+        async with Owoppai(self.id, acc = 100) as owo:
+            # start with 100%
+            self.pp_values[-1] = owo.pp
+
+            # calc other acc values
+            for idx, acc in enumerate((90, 95, 98, 99)):
+                owo.acc = acc
+                await owo.calc()
+
                 self.pp_values[idx] = owo.pp
 
     async def save_to_sql(self) -> None:

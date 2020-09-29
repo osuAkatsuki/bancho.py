@@ -65,10 +65,10 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 _last_doc: Final[str] = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    if not (s := p.recent_scores[p.status.game_mode]):
+    if not (s := p.recent_scores[p.status.mode]):
         return 'No recent score found for current mode!'
 
-    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp) {s.game_mode}'
+    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp) {s.mode}'
 
 _mapsearch_doc: Final[str] = ('Search map titles with '
                               'user input as a wildcard.')

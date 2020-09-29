@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Final, Optional, Union, Tuple
+from typing import Optional, Union, Tuple
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
@@ -20,40 +20,40 @@ __all__ = (
 
 @unique
 class SlotStatus(IntEnum):
-    open:       Final[int] = 1
-    locked:     Final[int] = 2
-    not_ready:  Final[int] = 4
-    ready:      Final[int] = 8
-    no_map:     Final[int] = 16
-    playing:    Final[int] = 32
-    complete:   Final[int] = 64
-    has_player: Final[int] = not_ready | ready | no_map | playing | complete
-    quit:       Final[int] = 128
+    open       = 1
+    locked     = 2
+    not_ready  = 4
+    ready      = 8
+    no_map     = 16
+    playing    = 32
+    complete   = 64
+    has_player = not_ready | ready | no_map | playing | complete
+    quit       = 128
 
 @unique
 class Teams(IntEnum):
-    neutral: Final[int] = 0
-    blue:    Final[int] = 1
-    red:     Final[int] = 2
+    neutral = 0
+    blue    = 1
+    red     = 2
 
 @unique
 class MatchTypes(IntEnum):
-    standard:  Final[int] = 0
-    powerplay: Final[int] = 1 # Literally no idea what this is for
+    standard  = 0
+    powerplay = 1 # literally no idea what this is for
 
 @unique
 class MatchScoringTypes(IntEnum):
-    score:    Final[int] = 0
-    accuracy: Final[int] = 1
-    combo:    Final[int] = 2
-    scorev2:  Final[int] = 3
+    score    = 0
+    accuracy = 1
+    combo    = 2
+    scorev2  = 3
 
 @unique
 class MatchTeamTypes(IntEnum):
-    head_to_head: Final[int] = 0
-    tag_coop:     Final[int] = 1
-    team_vs:      Final[int] = 2
-    tag_team_vs:  Final[int] = 3
+    head_to_head = 0
+    tag_coop     = 1
+    team_vs      = 2
+    tag_team_vs  = 3
 
 @dataclass
 class ScoreFrame:
@@ -154,7 +154,7 @@ class Match:
     freemods: :class:`bool`
         Whether the match is in freemods mode.
 
-    game_mode: :class:`int`
+    mode: :class:`int`
         The match's currently selected gamemode.
 
     chat: :class:`Channel`
@@ -182,7 +182,7 @@ class Match:
     __slots__ = (
         'id', 'name', 'passwd', 'host',
         'bmap',
-        'mods', 'freemods', 'game_mode',
+        'mods', 'freemods', 'mode',
         'chat', 'slots',
         'type', 'team_type', 'match_scoring',
         'in_progress', 'seed'
@@ -198,7 +198,7 @@ class Match:
 
         self.mods = 0
         self.freemods = False
-        self.game_mode = 0
+        self.mode = 0
 
         self.chat: Optional[Channel] = None
         self.slots = [Slot() for _ in range(16)]
@@ -248,7 +248,7 @@ class Match:
     def copy(self, m) -> None:
         self.bmap = m.bmap
         self.freemods = m.freemods
-        self.game_mode = m.game_mode
+        self.mode = m.mode
         self.team_type = m.team_type
         self.match_scoring = m.match_scoring
         self.mods = m.mods

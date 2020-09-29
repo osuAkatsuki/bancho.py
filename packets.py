@@ -117,7 +117,7 @@ async def read_match(data: bytearray) -> Tuple[Match, int]:
 
     # Read match mode, match scoring,
     # team type, and freemods.
-    m.game_mode = data[offset]
+    m.mode = data[offset]
     offset += 1
     m.match_scoring = data[offset]
     offset += 1
@@ -386,7 +386,7 @@ async def write_match(m: Match) -> bytearray:
 
     ret.extend(m.host.id.to_bytes(4, 'little'))
     ret.extend((
-        m.game_mode,
+        m.mode,
         m.match_scoring,
         m.team_type,
         m.freemods
@@ -591,7 +591,7 @@ async def userStats(p) -> bytes:
         (p.status.info_text, osuTypes.string),
         (p.status.map_md5, osuTypes.string),
         (p.status.mods, osuTypes.i32),
-        (p.status.game_mode, osuTypes.u8),
+        (p.status.mode, osuTypes.u8),
         (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
         (p.gm_stats.acc / 100.0, osuTypes.f32),
@@ -833,7 +833,7 @@ async def userPresence(p) -> bytes:
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
         (p.country[0], osuTypes.u8),
-        (p.bancho_priv | (p.status.game_mode << 5), osuTypes.u8),
+        (p.bancho_priv | (p.status.mode << 5), osuTypes.u8),
         (p.location[0], osuTypes.f32), # long
         (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)

@@ -180,11 +180,11 @@ async def osuGetBeatmapInfo(conn: AsyncConnection) -> Optional[bytes]:
         ranks = ['N', 'N', 'N', 'N']
 
         async for score in glob.db.iterall(
-            'SELECT grade, game_mode FROM scores_rx '
+            'SELECT grade, mode FROM scores_rx '
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
             [res['md5'], p.id]
-        ): ranks[score['game_mode']] = score['grade']
+        ): ranks[score['mode']] = score['grade']
 
         ret.append('{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
             i = idx, ranks = '|'.join(ranks), **res
@@ -424,9 +424,9 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     # Check for score duplicates
     # TODO: might need to improve?
     res = await glob.db.fetch(
-        f'SELECT 1 FROM {table} WHERE game_mode = %s '
+        f'SELECT 1 FROM {table} WHERE mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
-        'AND score = %s', [s.game_mode, s.bmap.md5,
+        'AND score = %s', [s.mode, s.bmap.md5,
                            s.player.id, s.mods, s.score]
     )
 
@@ -441,10 +441,10 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     s.time_elapsed = int(time_elapsed)
 
-    if conn.args['i']:
+    if 'i' in conn.files:
         breakpoint()
 
-    gm = GameMode(s.game_mode + (4 if rx and s.game_mode != 3 else 0))
+    gm = GameMode(s.mode + (4 if rx and s.mode != 3 else 0))
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -452,7 +452,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         if s.pp > pp_cap:
             await plog(f'{s.player} restricted for submitting '
-                       f'{s.pp:.2f} score on gm {s.game_mode}.',
+                       f'{s.pp:.2f} score on gm {s.mode}.',
                        Ansi.LIGHT_RED)
 
             await s.player.restrict()
@@ -465,8 +465,8 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         await glob.db.execute(
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 AND map_md5 = %s '
-            'AND userid = %s AND game_mode = %s',
-            [s.bmap.md5, s.player.id, s.game_mode]
+            'AND userid = %s AND mode = %s',
+            [s.bmap.md5, s.player.id, s.mode]
         )
 
     s.id = await glob.db.execute(
@@ -478,7 +478,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         ')', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            s.grade, int(s.status), s.game_mode, s.play_time,
+            s.grade, int(s.status), s.mode, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
@@ -557,9 +557,9 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         prev_n1 = await glob.db.fetch(
             'SELECT u.id, name FROM users u '
             f'LEFT JOIN {table} s ON u.id = s.userid '
-            'WHERE s.map_md5 = %s AND game_mode = %s '
-            'ORDER BY pp DESC LIMIT 1, 1',
-            [s.bmap.md5, s.game_mode]
+            'WHERE s.map_md5 = %s AND s.mode = %s '
+            'AND s.status = 2 ORDER BY pp DESC LIMIT 1, 1',
+            [s.bmap.md5, s.mode]
         )
 
         ann: List[str] = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
@@ -748,23 +748,25 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
         identifier = data['Identifier']
         average_frametime = data['AverageFrameTime'] * 1000
 
-        if identifier or spike_frames:
+        if identifier:
             breakpoint()
 
         # chances are, if we can't find a very
         # recent score by a user, it just hasn't
-        # submitted yet.. we'll allow 3 seconds
+        # submitted yet.. we'll allow 5 seconds
 
-        recent_score: Optional[Score] = None
+        rscore: Optional[Score] = None
         retries = 0
         ctime = time.time()
 
-        while retries < 3:
-            if recent_score := p.recent_score:
+        cache = glob.cache['performance_reports']
+
+        while retries < 5:
+            if (rscore := p.recent_score) and rscore.id not in cache:
                 # only accept scores submitted
                 # within the last 5 seconds.
 
-                if ((ctime + retries) - (recent_score.play_time - 5)) > 0:
+                if ((ctime + retries) - (rscore.play_time - 5)) > 0:
                     break
 
             retries += 1
@@ -775,6 +777,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
             # perhaps i should add some kind of system to prevent
             # this from happening or re-think this overall.. i'd
             # imagine this can be useful for old client det. tho :o
+            await plog('Received performance report but found no score', Ansi.LIGHT_RED)
             return
 
         # TODO: timing checks
@@ -782,11 +785,15 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
         if version != p.osu_version:
             breakpoint()
 
+        # remember that we've already received a report
+        # for this score, so that we don't overwrite it.
+        glob.cache['performance_reports'].add(rscore.id)
+
         await glob.db.execute(
             'INSERT INTO performance_reports VALUES '
             '(%s, %s, %s, %s, %s, %s, %s,'
-            ' %s, %s, %s, %s, %s, %s, %s)',  [
-                recent_score.id,
+            ' %s, %s, %s, %s, %s, %s, %s)', [
+                rscore.id,
                 op_sys, fullscreen, fps_cap,
                 compatibility, version,
                 start_time, end_time,
@@ -953,7 +960,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         's.n50, s.n100, s.n300, s.nmiss, s.nkatu, s.ngeki, '
         's.perfect, s.mods, s.play_time time, u.name, u.id userid '
         f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
-        'WHERE s.map_md5 = %s AND s.status = 2 AND game_mode = %s'
+        'WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s'
     ]
 
     params = [conn.args['c'], conn.args['m']]
@@ -999,7 +1006,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         f'SELECT id, {scoring} AS _score, max_combo, '
         'n50, n100, n300, nmiss, nkatu, ngeki, '
         f'perfect, mods, play_time time FROM {table} '
-        'WHERE map_md5 = %s AND game_mode = %s '
+        'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
             conn.args['c'], conn.args['m'], p.id
@@ -1010,7 +1017,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         # Calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} '
-            'WHERE map_md5 = %s AND game_mode = %s '
+            'WHERE map_md5 = %s AND mode = %s '
             f'AND status = 2 AND {scoring} > %s', [
                 conn.args['c'], conn.args['m'],
                 p_best['_score']

@@ -214,7 +214,7 @@ class PlayerList(Sequence):
 
         res = await glob.db.fetch(
             'SELECT pw_hash FROM users WHERE name_safe = %s',
-            [Player.ensure_safe(name)]
+            [Player.make_safe(name)]
         )
 
         if not res:

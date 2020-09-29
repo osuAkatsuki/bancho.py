@@ -1,5 +1,5 @@
 
-from typing import Final, Tuple, Optional
+from typing import Tuple, Optional
 from enum import IntEnum, unique
 import time
 import os
@@ -23,16 +23,16 @@ __all__ = (
 
 @unique
 class Rank(IntEnum):
-    XH: Final[int] = 0
-    SH: Final[int] = 1
-    X:  Final[int] = 2
-    S:  Final[int] = 3
-    A:  Final[int] = 4
-    B:  Final[int] = 5
-    C:  Final[int] = 6
-    D:  Final[int] = 7
-    F:  Final[int] = 8
-    N:  Final[int] = 9
+    XH = 0
+    SH = 1
+    X  = 2
+    S  = 3
+    A  = 4
+    B  = 5
+    C  = 6
+    D  = 7
+    F  = 8
+    N  = 9
 
     def __str__(self) -> str:
         return {
@@ -123,7 +123,7 @@ class Score:
     status: :class:`SubmissionStatus`
         The submission status of the score.
 
-    game_mode: :class:`int`
+    mode: :class:`int`
         The game mode of the score.
 
     play_time: :class:`int`
@@ -146,7 +146,7 @@ class Score:
         'pp', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
-        'game_mode', 'play_time', 'time_elapsed',
+        'mode', 'play_time', 'time_elapsed',
         'client_flags', 'prev_best'
     )
 
@@ -177,7 +177,7 @@ class Score:
         self.perfect = False
         self.status = SubmissionStatus.FAILED
 
-        self.game_mode = 0
+        self.mode = 0
         self.play_time = 0
         self.time_elapsed = 0
 
@@ -193,7 +193,7 @@ class Score:
             'SELECT id, map_md5, userid, pp, score, '
             'max_combo, mods, acc, n300, n100, n50, '
             'nmiss, ngeki, nkatu, grade, perfect, '
-            'status, game_mode, play_time, '
+            'status, mode, play_time, '
             'time_elapsed, client_flags '
             f'FROM {t} WHERE id = %s',
             [scoreid], _dict = False
@@ -210,7 +210,7 @@ class Score:
 
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
-         s.perfect, s.status, s.game_mode, s.play_time,
+         s.perfect, s.status, s.mode, s.play_time,
          s.time_elapsed, s.client_flags) = res[3:]
 
         # fix some types
@@ -276,7 +276,7 @@ class Score:
         _grade = data[12] # letter grade
         s.mods = int(data[13])
         s.passed = data[14] == 'True'
-        s.game_mode = int(data[15])
+        s.mode = int(data[15])
         s.play_time = int(time.time()) # (yyMMddHHmmss)
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
@@ -311,9 +311,9 @@ class Score:
 
         res = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM {t} '
-            'WHERE map_md5 = %s AND game_mode = %s '
+            'WHERE map_md5 = %s AND mode = %s '
             'AND status = 2 AND {s} > %s'.format(t = table, s = scoring), [
-                self.bmap.md5, self.game_mode, score
+                self.bmap.md5, self.mode, score
             ]
         )
 
@@ -324,16 +324,16 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> Tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        if self.game_mode not in (0, 1):
+        if self.mode not in (0, 1):
             # Currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
         pp_params = {
-            'mods': self.mods,
+            'mods': Mods(self.mods),
             'combo': self.max_combo,
             'nmiss': self.nmiss,
-            'mode': self.game_mode,
+            'mode': self.mode,
             'acc': self.acc
         }
 
@@ -356,9 +356,9 @@ class Score:
         res = await glob.db.fetch(
             f'SELECT id, pp FROM {table} '
             'WHERE userid = %s AND map_md5 = %s '
-            'AND game_mode = %s AND status = 2', [
+            'AND mode = %s AND status = 2', [
                 self.player.id, self.bmap.md5,
-                self.game_mode
+                self.mode
             ]
         )
 
@@ -380,7 +380,7 @@ class Score:
             self.status = SubmissionStatus.BEST
 
     def calc_accuracy(self) -> None:
-        if self.game_mode == 0: # osu!
+        if self.mode == 0: # osu!
             if not (total := sum((self.n300, self.n100,
                                   self.n50, self.nmiss))):
                 self.acc = 0.0
@@ -392,7 +392,7 @@ class Score:
                 self.n300 * 300.0
             )) / (total * 300.0)
 
-        elif self.game_mode == 1: # osu!taiko
+        elif self.mode == 1: # osu!taiko
             if not (total := sum((self.n300, self.n100,
                                   self.nmiss))):
                 self.acc = 0.0
@@ -403,10 +403,10 @@ class Score:
                 self.n300 * 300.0
             )) / (total * 300.0)
 
-        elif self.game_mode == 2:
+        elif self.mode == 2:
             # osu!catch
             NotImplemented
 
-        elif self.game_mode == 3:
+        elif self.mode == 3:
             # osu!mania
             NotImplemented
