@@ -9,6 +9,7 @@ from py3rijndael import RijndaelCbc, ZeroPadding
 from pp.owoppai import Owoppai
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
+from constants.gamemodes import GameMode
 from console import plog, Ansi
 
 from objects.beatmap import Beatmap
@@ -36,15 +37,15 @@ class Rank(IntEnum):
 
     def __str__(self) -> str:
         return {
-            XH: 'SS',
-            SH: 'SS',
-            X: 'S',
-            S: 'S',
-            A: 'A',
-            B: 'B',
-            C: 'C',
-            D: 'D',
-            F: 'F'
+            self.XH: 'SS',
+            self.SH: 'SS',
+            self.X: 'S',
+            self.S: 'S',
+            self.A: 'A',
+            self.B: 'B',
+            self.C: 'C',
+            self.D: 'D',
+            self.F: 'F'
         }[self.value]
 
 @unique
@@ -54,11 +55,11 @@ class SubmissionStatus(IntEnum):
     SUBMITTED = 1
     BEST = 2
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return {
-            FAILED: 'Failed',
-            SUBMITTED: 'Submitted',
-            BEST: 'Best'
+            self.FAILED: 'Failed',
+            self.SUBMITTED: 'Submitted',
+            self.BEST: 'Best'
         }[self.value]
 
 class Score:
@@ -123,7 +124,7 @@ class Score:
     status: :class:`SubmissionStatus`
         The submission status of the score.
 
-    mode: :class:`int`
+    mode: :class:`GameMode`
         The game mode of the score.
 
     play_time: :class:`int`
@@ -177,7 +178,7 @@ class Score:
         self.perfect = False
         self.status = SubmissionStatus.FAILED
 
-        self.mode = 0
+        self.mode = GameMode.vn_std
         self.play_time = 0
         self.time_elapsed = 0
 
@@ -216,6 +217,7 @@ class Score:
         # fix some types
         s.passed = s.status != 0
         s.status = SubmissionStatus(s.status)
+        s.mode = GameMode(s.mode + (s.mods & Mods.RELAX and 4))
         s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
@@ -276,7 +278,7 @@ class Score:
         _grade = data[12] # letter grade
         s.mods = int(data[13])
         s.passed = data[14] == 'True'
-        s.mode = int(data[15])
+        s.mode = GameMode(int(data[15]) + (s.mods & Mods.RELAX and 4))
         s.play_time = int(time.time()) # (yyMMddHHmmss)
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
@@ -312,9 +314,8 @@ class Score:
         res = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM {t} '
             'WHERE map_md5 = %s AND mode = %s '
-            'AND status = 2 AND {s} > %s'.format(t = table, s = scoring), [
-                self.bmap.md5, self.mode, score
-            ]
+            'AND status = 2 AND {s} > %s'.format(t=table, s=scoring),
+            [self.bmap.md5, self.mode % 4, score]
         )
 
         return res['c'] + 1 if res else 1
@@ -356,10 +357,8 @@ class Score:
         res = await glob.db.fetch(
             f'SELECT id, pp FROM {table} '
             'WHERE userid = %s AND map_md5 = %s '
-            'AND mode = %s AND status = 2', [
-                self.player.id, self.bmap.md5,
-                self.mode
-            ]
+            'AND mode = %s AND status = 2',
+            [self.player.id, self.bmap.md5, self.mode % 4]
         )
 
         if res:
@@ -380,7 +379,9 @@ class Score:
             self.status = SubmissionStatus.BEST
 
     def calc_accuracy(self) -> None:
-        if self.mode == 0: # osu!
+        mode_vn = self.mode % 4
+
+        if mode_vn == 0: # osu!
             if not (total := sum((self.n300, self.n100,
                                   self.n50, self.nmiss))):
                 self.acc = 0.0
@@ -392,7 +393,7 @@ class Score:
                 self.n300 * 300.0
             )) / (total * 300.0)
 
-        elif self.mode == 1: # osu!taiko
+        elif mode_vn == 1: # osu!taiko
             if not (total := sum((self.n300, self.n100,
                                   self.nmiss))):
                 self.acc = 0.0
@@ -403,10 +404,10 @@ class Score:
                 self.n300 * 300.0
             )) / (total * 300.0)
 
-        elif self.mode == 2:
+        elif mode_vn == 2:
             # osu!catch
             NotImplemented
 
-        elif self.mode == 3:
+        elif mode_vn == 3:
             # osu!mania
             NotImplemented

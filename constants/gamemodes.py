@@ -38,7 +38,7 @@ class GameMode(IntEnum):
     rx_taiko = 5
     rx_catch = 6
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return gm_str[self.value]
 
     def __format__(self, fmt: str) -> str:

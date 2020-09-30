@@ -438,17 +438,33 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
                 # Save it to their player instance
                 # so we can use this elsewhere owo..
                 p.last_np = await Beatmap.from_bid(int(match['bid']))
+                if p.last_np:
+                    if match['mods']:
+                        # [1:] to remove leading whitespace
+                        mods = Mods.from_np(match['mods'][1:])
+                    else:
+                        mods = Mods.NOMOD
 
-                # Since this is a DM to the bot, we should
-                # send back a list of general PP values.
-                # TODO: !acc and !mods in commands to
-                #       modify these values :P
-                msg = 'PP Values: ' + ' | '.join(
-                    f'{acc}%: {pp:.2f}pp'
-                    for acc, pp in zip(
-                        (90, 95, 98, 99, 100),
-                        p.last_np.pp_values
-                    )) if p.last_np else 'Could not find map.'
+                    if mods not in p.last_np.pp_cache:
+                        await p.last_np.cache_pp(mods)
+
+                    # Since this is a DM to the bot, we should
+                    # send back a list of general PP values.
+                    # TODO: !acc and !mods in commands to
+                    #       modify these values :P
+                    _msg = [p.last_np.embed]
+                    if mods:
+                        _msg.append(f'{mods!r}')
+
+                    msg = f"{' '.join(_msg)}: " + ' | '.join(
+                        f'{acc}%: {pp:.2f}pp'
+                        for acc, pp in zip(
+                            (90, 95, 98, 99, 100),
+                            p.last_np.pp_cache[mods]
+                        ))
+
+                else:
+                    msg = 'Could not find map.'
 
                 p.enqueue(await packets.sendMessage(t.name, msg, client, t.id))
 

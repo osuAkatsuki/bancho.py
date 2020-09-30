@@ -426,7 +426,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     res = await glob.db.fetch(
         f'SELECT 1 FROM {table} WHERE mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
-        'AND score = %s', [s.mode, s.bmap.md5,
+        'AND score = %s', [s.mode % 4, s.bmap.md5,
                            s.player.id, s.mods, s.score]
     )
 
@@ -444,15 +444,13 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     if 'i' in conn.files:
         breakpoint()
 
-    gm = GameMode(s.mode + (4 if rx and s.mode != 3 else 0))
-
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
-        pp_cap = autorestrict_pp[gm][s.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = autorestrict_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
             await plog(f'{s.player} restricted for submitting '
-                       f'{s.pp:.2f} score on gm {s.mode}.',
+                       f'{s.pp:.2f} score on gm {s.mode!r}.',
                        Ansi.LIGHT_RED)
 
             await s.player.restrict()
@@ -466,7 +464,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 AND map_md5 = %s '
             'AND userid = %s AND mode = %s',
-            [s.bmap.md5, s.player.id, s.mode]
+            [s.bmap.md5, s.player.id, s.mode % 4]
         )
 
     s.id = await glob.db.execute(
@@ -478,7 +476,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         ')', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            s.grade, int(s.status), s.mode, s.play_time,
+            s.grade, int(s.status), s.mode % 4, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
@@ -501,7 +499,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     # get the current stats, and take a
     # shallow copy for the response charts.
-    stats = s.player.stats[gm]
+    stats = s.player.stats[s.mode]
     prev_stats = copy.copy(stats)
 
     # update playtime & plays
@@ -537,7 +535,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         'UPDATE stats SET rscore_{0:sql} = %s, '
         'tscore_{0:sql} = %s, playtime_{0:sql} = %s, '
         'plays_{0:sql} = %s, maxcombo_{0:sql} = %s '
-        'WHERE id = %s'.format(gm), [
+        'WHERE id = %s'.format(s.mode), [
             stats.rscore, stats.tscore,
             stats.playtime, stats.plays,
             stats.max_combo, s.player.id
@@ -559,7 +557,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'LEFT JOIN {table} s ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 ORDER BY pp DESC LIMIT 1, 1',
-            [s.bmap.md5, s.mode]
+            [s.bmap.md5, s.mode % 4]
         )
 
         ann: List[str] = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
@@ -570,8 +568,8 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         await announce_chan.send(glob.bot, ' '.join(ann))
 
     # Update the user.
-    s.player.recent_scores[gm] = s
-    await s.player.update_stats(gm)
+    s.player.recent_scores[s.mode] = s
+    await s.player.update_stats(s.mode)
 
     """ score submission charts """
 
@@ -669,7 +667,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         ret = '\n'.join(charts).encode()
 
-    await plog(f'{s.player} submitted a score! ({gm!r}, {s.status})', Ansi.LIGHT_GREEN)
+    await plog(f'{s.player} submitted a score! ({s.mode!r}, {s.status!r})', Ansi.LIGHT_GREEN)
     return ret
 
 required_params_getReplay = frozenset({
@@ -728,11 +726,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
 
         op_sys = data['Tags']['OS']
         fullscreen = data['Tags']['Fullscreen'] == 'True'
-
         fps_cap = data['Tags']['FrameSync']
-        if fps_cap == 'Unlimited':
-            fps_cap = 0
-
         compatibility = data['Tags']['Compatibility'] == 'True'
         version = data['Tags']['Version'] # osu! version
         start_time = data['StartTime']

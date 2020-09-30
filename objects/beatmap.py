@@ -10,6 +10,7 @@ from pp.owoppai import Owoppai
 from console import plog, Ansi
 from objects import glob
 from constants.gamemodes import GameMode
+from constants.mods import Mods
 
 __all__ = 'RankedStatus', 'Beatmap'
 
@@ -151,17 +152,16 @@ class Beatmap:
     diff: :class:`float`
         A float representing the star rating for the map's primary gamemode.
 
-    pp_values: List[:class:`float`]
-        A list of cached pp values for common accuracy values
-        following fmt: [90%, 95%, 98%, 99%, 100%].
-        # XXX: These are only cached for the map's primary mode.
+    pp_cache: Dict[:class:`Mods`, List[:class:`float`]]
+        Cached pp values to serve when a map is /np'ed.
+        PP will be cached for whichever mod combination is requested.
     """
     __slots__ = ('md5', 'id', 'set_id',
                  'artist', 'title', 'version', 'creator',
                  'status', 'last_update', 'frozen',
                  'plays', 'passes',
                  'mode', 'bpm', 'cs', 'od', 'ar', 'hp',
-                 'diff', 'pp_values')
+                 'diff', 'pp_cache')
 
     def __init__(self, **kwargs):
         self.md5 = kwargs.pop('md5', '')
@@ -188,8 +188,7 @@ class Beatmap:
         self.hp = kwargs.pop('hp', 0.0)
 
         self.diff = kwargs.pop('diff', 0.00)
-        self.pp_values = [0.0, 0.0, 0.0, 0.0, 0.0]
-        #                [90,  95,  98,  99,  100].
+        self.pp_cache = {} # {mods: (acc: pp, ...), ...}
 
     @property
     def filename(self) -> str:
@@ -218,8 +217,6 @@ class Beatmap:
 
         # Try to get from sql.
         if (m := await cls.from_bid_sql(bid)):
-            await m.cache_pp()
-
             # Add the map to our cache.
             if m.md5 not in glob.cache['beatmap']:
                 glob.cache['beatmap'][m.md5] = {
@@ -277,8 +274,6 @@ class Beatmap:
             # Try to get from the osu!api.
             if not (m := await cls.from_md5_osuapi(md5, set_id)):
                 return
-
-        await m.cache_pp()
 
         # Save our map to the cache.
         glob.cache['beatmap'][md5] = {
@@ -448,17 +443,21 @@ class Beatmap:
         await plog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
         return m
 
-    async def cache_pp(self) -> None:
-        async with Owoppai(self.id, acc = 100) as owo:
-            # start with 100%
-            self.pp_values[-1] = owo.pp
+    async def cache_pp(self, mods: Mods) -> None:
+        # cache pp values for (90, 95, 98, 99, 100) accs
+        pp_params = {'mode': self.mode % 4, 'mods': mods}
+        self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        async with Owoppai(self.id, **pp_params) as owo:
+            # start with 100% on vanilla
+            self.pp_cache[mods][-1] = owo.pp
 
             # calc other acc values
             for idx, acc in enumerate((90, 95, 98, 99)):
                 owo.acc = acc
                 await owo.calc()
 
-                self.pp_values[idx] = owo.pp
+                self.pp_cache[mods][idx] = owo.pp
 
     async def save_to_sql(self) -> None:
         if any(x is None for x in (

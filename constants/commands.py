@@ -13,6 +13,7 @@ from objects.channel import Channel
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import Match, SlotStatus
 from constants.privileges import Privileges
+from constants.mods import Mods
 
 Messageable = Union[Channel, Player]
 CommandResponse = Dict[str, str]
@@ -65,10 +66,12 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 _last_doc: Final[str] = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    if not (s := p.recent_scores[p.status.mode]):
+    mode = p.status.mode + ((p.rx and p.status.mode != 3) and 4)
+
+    if not (s := p.recent_scores[mode]):
         return 'No recent score found for current mode!'
 
-    return f'#{s.rank} @ {s.bmap.embed} ({s.pp:.2f}pp) {s.mode}'
+    return f'{s.bmap.embed} #{s.rank} ({s.mode!r} {s.pp:.2f}pp)'
 
 _mapsearch_doc: Final[str] = ('Search map titles with '
                               'user input as a wildcard.')
@@ -85,6 +88,44 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
         for row in res
     ) + f'\nMaps: {len(res)}'
+
+# TODO: refactor with acc and more stuff
+_mods_doc: Final[str] = ('Adjust the mods for a '
+                         'pp-calculation request.')
+@command(priv=Privileges.Normal, public=False, doc=_mods_doc)
+async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    if isinstance(c, Channel) or c.id != 1:
+        return 'This command can only be used in DM with Aika.'
+
+    if not p.last_np:
+        return 'Please /np a map first!'
+
+    msg = ''.join(msg).replace(' ', '')
+    if msg[0] == '+': # remove +
+        msg = msg[1:]
+
+    mods = Mods.from_str(msg)
+
+    if mods not in p.last_np.pp_cache:
+        # cach
+        await p.last_np.cache_pp(mods)
+
+    # Since this is a DM to the bot, we should
+    # send back a list of general PP values.
+    # TODO: !acc and !mods in commands to
+    #       modify these values :P
+    _msg = [p.last_np.embed]
+    if mods:
+        _msg.append(f'{mods!r}')
+
+    msg = f"{' '.join(_msg)}: " + ' | '.join(
+        f'{acc}%: {pp:.2f}pp'
+        for acc, pp in zip(
+            (90, 95, 98, 99, 100),
+            p.last_np.pp_cache[mods]
+        ))
+
+    return msg
 
 """ Nominators commands
 # The commands below allow users to

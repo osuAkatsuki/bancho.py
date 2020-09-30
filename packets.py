@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Sequence, Tuple, Final
+from typing import Any, Tuple, Final
 from enum import IntEnum, unique
 import struct
 
@@ -688,7 +688,7 @@ async def matchJoinSuccess(m: Match) -> bytes:
     )
 
 # PacketID: 37
-async def matchJoinFail(m: Match) -> bytes:
+async def matchJoinFail() -> bytes:
     return await write(Packet.s_matchJoinFail)
 
 # PacketID: 42

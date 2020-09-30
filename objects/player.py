@@ -344,11 +344,8 @@ class Player:
 
     @property
     def gm_stats(self) -> ModeData:
-        # Mania is the same mode on both vn and rx.
-        if self.status.mode == 3:
-            return self.stats[3]
-
-        return self.stats[self.status.mode + (4 if self.rx else 0)]
+        mode = self.status.mode
+        return self.stats[mode + ((self.rx and mode != 3) and 4)]
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -427,17 +424,17 @@ class Player:
     async def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:
             await plog(f'{self} tried to join multiple matches?')
-            self.enqueue(await packets.matchJoinFail(m))
+            self.enqueue(await packets.matchJoinFail())
             return False
 
         if m.chat: # Match already exists, we're simply joining.
             if passwd != m.passwd: # eff: could add to if? or self.create_m..
                 await plog(f'{self} tried to join {m} with incorrect passwd.')
-                self.enqueue(await packets.matchJoinFail(m))
+                self.enqueue(await packets.matchJoinFail())
                 return False
             if (slotID := m.get_free()) is None:
                 await plog(f'{self} tried to join a full match.')
-                self.enqueue(await packets.matchJoinFail(m))
+                self.enqueue(await packets.matchJoinFail())
                 return False
         else:
             # Match is being created
@@ -674,8 +671,8 @@ class Player:
         # Update the user's stats ingame, then update db.
         self.stats[gm].plays += 1
         self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
-        self.stats[gm].pp = round(sum(row['pp'] * 0.95 ** i)
-                                  for i, row in enumerate(res))
+        self.stats[gm].pp = round(sum(row['pp'] * 0.95 ** i
+                                  for i, row in enumerate(res)))
 
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '
@@ -695,7 +692,6 @@ class Player:
 
         self.stats[gm].rank = res['c'] + 1
         self.enqueue(await packets.userStats(self))
-        await plog(f"Updated {self}'s {gm!r} stats.")
 
     async def friends_from_sql(self) -> None:
         _friends = {row['user2'] async for row in glob.db.iterall(

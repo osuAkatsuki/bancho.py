@@ -102,7 +102,7 @@ def close_server(loop):
     return predicate
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 5, 5)
+    glob.version = cmyui.Version(2, 5, 6)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
