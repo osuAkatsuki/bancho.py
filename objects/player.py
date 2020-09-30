@@ -142,6 +142,8 @@ class Status:
 
     def update(self, action: int, info_text: str, map_md5: str,
                mods: int, mode: int, map_id: int) -> None:
+        """Fully overwrite the class with new params."""
+
         # osu! sends both map id and md5, but
         # we'll only need one since we fetch a
         # beatmap obj from cache/sql anyways..
@@ -314,23 +316,30 @@ class Player:
         # Packet queue
         self._queue = asyncio.Queue()
 
+    def __repr__(self) -> str:
+        return f'<{self.name} ({self.id})>'
+
     @property
     def url(self) -> str:
+        """The url to the player's profile."""
         return f'https://akatsuki.pw/u/{self.id}'
 
     @property
     def embed(self) -> str:
+        """An osu! chat embed to the player's profile."""
         return f'[{self.url} {self.name}]'
 
     @property
     def silenced(self) -> bool:
+        """Whether or not the player is silenced."""
         return time.time() <= self.silence_end
 
     @property
     def bancho_priv(self) -> int:
+        """The player's privileges according to the client."""
         ret = BanchoPrivileges(0)
         if self.priv & Privileges.Normal:
-            # All players have ingame "supporter".
+            # All players have in-game "supporter".
             # This enables stuff like osu!direct,
             # multiplayer in cutting edge, etc.
             ret |= (BanchoPrivileges.Player | BanchoPrivileges.Supporter)
@@ -344,14 +353,13 @@ class Player:
 
     @property
     def gm_stats(self) -> ModeData:
+        """The player's stats in their currently selected mode."""
         mode = self.status.mode
         return self.stats[mode + ((self.rx and mode != 3) and 4)]
 
-    def __repr__(self) -> str:
-        return f'<{self.name} ({self.id})>'
-
     @property
     def recent_score(self):
+        """The player's most recently submitted score."""
         score = None
         for s in self.recent_scores:
             if not s:
@@ -451,13 +459,13 @@ class Player:
                 instance = True
             ))
 
-            m.chat = glob.channels.get(f'#multi_{m.id}')
+            m.chat = glob.channels[f'#multi_{m.id}']
 
         if not await self.join_channel(m.chat):
             await plog(f'{self} failed to join {m.chat}.')
             return False
 
-        if (lobby := glob.channels.get('#lobby')) in self.channels:
+        if (lobby := glob.channels['#lobby']) in self.channels:
             await self.leave_channel(lobby)
 
         slot = m.slots[0 if slotID == -1 else slotID]
@@ -488,7 +496,7 @@ class Player:
             await plog(f'Match {self.match} finished.')
             await glob.matches.remove(self.match)
 
-            if lobby := glob.channels.get('#lobby'):
+            if lobby := glob.channels['#lobby']:
                 lobby.enqueue(await packets.disposeMatch(self.match.id))
         else: # Notify others of our deprature
             self.match.enqueue(await packets.updateMatch(self.match))
@@ -547,7 +555,7 @@ class Player:
 
     async def add_spectator(self, p) -> None:
         chan_name = f'#spec_{self.id}'
-        if not (c := glob.channels.get(chan_name)):
+        if not (c := glob.channels[chan_name]):
             # Spec channel does not exist, create it and join.
             await glob.channels.add(Channel(
                 name = chan_name,
@@ -558,7 +566,7 @@ class Player:
                 instance = True
             ))
 
-            c = glob.channels.get(chan_name)
+            c = glob.channels[chan_name]
 
         if not await p.join_channel(c):
             return await plog(f'{self} failed to join {c}?')
@@ -580,7 +588,7 @@ class Player:
         self.spectators.remove(p)
         p.spectating = None
 
-        c = glob.channels.get(f'#spec_{self.id}')
+        c = glob.channels[f'#spec_{self.id}']
         await p.leave_channel(c)
 
         if not self.spectators:
@@ -628,15 +636,18 @@ class Player:
         return self._queue.empty()
 
     def enqueue(self, b: bytes) -> None:
+        """Add data to be sent to the client."""
         self._queue.put_nowait(b)
 
     async def dequeue(self) -> Optional[bytes]:
+        """Get data from the queue to send to the client."""
         try:
             return self._queue.get_nowait()
         except:
             await plog('Empty queue?')
 
     async def fetch_geoloc(self, ip: str) -> None:
+        """Fetch a player's geolocation data based on their ip."""
         async with glob.http.get(f'http://ip-api.com/json/{ip}') as resp:
             if not resp or resp.status != 200:
                 await plog('Failed to get geoloc data: request failed.', Ansi.LIGHT_RED)
@@ -654,6 +665,7 @@ class Player:
         self.location = (res['lon'], res['lat'])
 
     async def update_stats(self, gm: GameMode = GameMode.vn_std) -> None:
+        """Update a player's stats in-game and in sql."""
         table = 'scores_rx' if gm >= 4 else 'scores_vn'
 
         res = await glob.db.fetchall(
@@ -668,7 +680,7 @@ class Player:
         if not res:
             return # ?
 
-        # Update the user's stats ingame, then update db.
+        # Update the user's stats in-game, then update db.
         self.stats[gm].plays += 1
         self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
         self.stats[gm].pp = round(sum(row['pp'] * 0.95 ** i
@@ -702,6 +714,7 @@ class Player:
         self.friends = _friends | {1, self.id}
 
     async def stats_from_sql_full(self) -> None:
+        """Fetch the player's stats for all gamemodes from sql."""
         for gm in GameMode:
             # Grab static stats from SQL.
             res = await glob.db.fetch(
@@ -726,7 +739,8 @@ class Player:
 
             self.stats[gm].update(**res)
 
-    async def stats_from_sql(self: int, gm: GameMode) -> None:
+    async def stats_from_sql(self, gm: GameMode) -> None:
+        """Fetch the player's stats for a specified gamemode."""
         res = await glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '

@@ -60,10 +60,10 @@ class Channel:
         # Use this attribute whenever you need
         # the 'real' name and not the wrapped one.
         # (not replaced for #multiplayer/#spectator)
-
         # self.name should be used whenever
         # interacting with the osu! client.
         self._name = kwargs.get('name', None)
+
         self.topic = kwargs.get('topic', None)
         self.players = []
 

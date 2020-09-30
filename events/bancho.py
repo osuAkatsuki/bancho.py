@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple, Final, Callable
+from typing import Tuple, Callable
 from datetime import datetime as dt, timedelta as td
 import time
 import bcrypt
@@ -16,7 +16,6 @@ from constants.mods import Mods
 from constants import commands
 from constants import regexes
 from objects import glob
-from objects.score import Rank
 from objects.match import SlotStatus, Teams
 from objects.player import Player, PresenceFilter, Action
 from objects.beatmap import Beatmap
@@ -62,7 +61,7 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
     elif target == '#multiplayer':
         target = f'#multi_{p.match.id if p.match is not None else 0}'
 
-    if not (t := glob.channels.get(target)):
+    if not (t := glob.channels[target]):
         await plog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
@@ -124,7 +123,7 @@ async def ping(p: Player, pr: PacketReader) -> None:
     # ping.. this handler shouldn't even exist lol
     p.ping_time = int(time.time())
 
-registration_msg: Final[str] = '\n'.join((
+registration_msg = '\n'.join((
     "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
     "",
     "Command help: !help",
@@ -188,8 +187,9 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     pm_private = s[4] == '1'
 
     res = await glob.db.fetch(
-        'SELECT id, name, priv, pw_hash, silence_end '
-        'FROM users WHERE name_safe = %s',
+        'SELECT id, name, priv, pw_hash, '
+        'silence_end FROM users '
+        'WHERE name_safe = %s',
         [Player.make_safe(username)]
     )
 
@@ -517,7 +517,6 @@ async def matchPart(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeSlot)
 async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried changing slot outside of a match?')
         return
 
     # Read new slot ID
@@ -539,7 +538,6 @@ async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchReady)
 async def matchReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried readying outside of a match? (1)')
         return
 
     m.get_slot(p).status = SlotStatus.ready
@@ -549,7 +547,6 @@ async def matchReady(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchLock)
 async def matchLock(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried locking a slot outside of a match?')
         return
 
     # Read new slot ID
@@ -572,7 +569,6 @@ async def matchLock(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeSettings)
 async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried changing multi settings outside of a match?')
         return
 
     # Read new match data
@@ -619,7 +615,6 @@ async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchStart)
 async def matchStart(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried starting match outside of a match?')
         return
 
     for s in m.slots:
@@ -633,7 +628,6 @@ async def matchStart(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchScoreUpdate)
 async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     # Read 37 bytes if using scorev2,
@@ -649,7 +643,6 @@ async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchComplete)
 async def matchComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     m.get_slot(p).status = SlotStatus.complete
@@ -673,7 +666,6 @@ async def matchComplete(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeMods)
 async def matchChangeMods(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried changing multi mods outside of a match?')
         return
 
     mods, = await pr.read(osuTypes.i32)
@@ -695,7 +687,6 @@ async def matchChangeMods(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchLoadComplete)
 async def matchLoadComplete(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} sent a scoreframe outside of a match?')
         return
 
     # Ready up our player.
@@ -718,7 +709,6 @@ async def matchNoBeatmap(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchNotReady)
 async def matchNotReady(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried unreadying outside of a match? (1)')
         return
 
     m.get_slot(p).status = SlotStatus.not_ready
@@ -730,7 +720,12 @@ async def matchFailed(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
         return
 
-    m.enqueue(await packets.matchPlayerFailed(m.get_slot_id(p)))
+    # find the player's slot, and it into a playerFailed packet
+    slot_id = m.get_slot_id(p)
+    data = await packets.matchPlayerFailed(slot_id)
+
+    # enqueue data to all players in the match
+    m.enqueue(data)
 
 # PacketID: 59
 @bancho_packet(Packet.c_matchHasBeatmap)
@@ -745,7 +740,6 @@ async def matchHasBeatmap(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchSkipRequest)
 async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried unreadying outside of a match? (1)')
         return
 
     m.get_slot(p).skipped = True
@@ -762,7 +756,7 @@ async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_channelJoin)
 async def channelJoin(p: Player, pr: PacketReader) -> None:
     chan_name, = await pr.read(osuTypes.string)
-    c = glob.channels.get(chan_name)
+    c = glob.channels[chan_name]
 
     if not c or not await p.join_channel(c):
         await plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
@@ -838,7 +832,6 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchTransferHost)
 async def matchTransferHost(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried transferring host of a match? (1)')
         return
 
     # Read new slot ID
@@ -894,7 +887,6 @@ async def friendRemove(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangeTeam)
 async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried changing team outside of a match? (1)')
         return
 
     for s in m.slots:
@@ -915,7 +907,7 @@ async def channelPart(p: Player, pr: PacketReader) -> None:
     if not chan:
         return
 
-    if not (c := glob.channels.get(chan)):
+    if not (c := glob.channels[chan]):
         await plog(f'Failed to find channel {chan} that {p} attempted to leave.')
         return
 
@@ -964,7 +956,6 @@ async def statsRequest(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchInvite)
 async def matchInvite(p: Player, pr: PacketReader) -> None:
     if not p.match:
-        await plog(f"{p} tried to invite someone to a match but isn't in one!")
         pr.ignore(4)
         return
 
@@ -981,7 +972,6 @@ async def matchInvite(p: Player, pr: PacketReader) -> None:
 @bancho_packet(Packet.c_matchChangePassword)
 async def matchChangePassword(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):
-        await plog(f'{p} tried changing match passwd outside of a match?')
         return
 
     # Read new match data

@@ -24,6 +24,7 @@ __all__ = (
 )
 
 async def handle_bancho(conn: AsyncConnection) -> None:
+    """Handle a bancho request (c.ppy.sh/*)."""
     if 'User-Agent' not in conn.headers:
         return
 
@@ -119,6 +120,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 # here at the end? Probably a better soln.
 
 async def handle_web(conn: AsyncConnection) -> None:
+    """Handle a web request (osu.ppy.sh/web/*)."""
     handler = conn.path[5:] # cut off /web/
 
     if handler in glob.web_map:
@@ -152,6 +154,7 @@ async def handle_web(conn: AsyncConnection) -> None:
         await plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)
 
 async def handle_ss(conn: AsyncConnection) -> None:
+    """Handle a screenshot request (osu.ppy.sh/ss/*)."""
     if len(conn.path) != 16:
         await conn.send(404, b'No file found!')
         return
@@ -166,6 +169,7 @@ async def handle_ss(conn: AsyncConnection) -> None:
         await conn.send(200, await f.read())
 
 async def handle_dl(conn: AsyncConnection) -> None:
+    """Handle a map download request (osu.ppy.sh/dl/*)."""
     if not all(x in conn.args for x in ('u', 'h', 'vv')):
         await conn.send(401, b'Method requires authorization.')
         return
@@ -214,6 +218,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
 
 default_avatar = f'.data/avatars/default.jpg'
 async def handle_avatar(conn: AsyncConnection) -> None:
+    """Handle an avatar request (a.ppy.sh/*)."""
     _path = f'.data/avatars/{conn.path[1:]}.jpg'
     path = (os.path.exists(_path) and _path) or default_avatar
 
@@ -221,6 +226,7 @@ async def handle_avatar(conn: AsyncConnection) -> None:
         await conn.send(200, await f.read())
 
 async def handle_api(conn: AsyncConnection) -> None:
+    """Handle an api request (osu.ppy.sh/api/*)."""
     handler = conn.path[5:] # cut off /api/
 
     if handler in glob.api_map:

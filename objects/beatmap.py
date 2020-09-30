@@ -192,26 +192,32 @@ class Beatmap:
 
     @property
     def filename(self) -> str:
+        """The name of the beatmap's .osu file."""
         return f'{self.id}.osu'
 
     @property
     def full(self) -> str:
+        """The full osu! formatted name of the beatmap."""
         return f'{self.artist} - {self.title} [{self.version}]'
 
     @property
     def url(self):
+        """The url to the beatmap's page."""
         return f'https://osu.ppy.sh/b/{self.id}'
 
     @property
     def set_url(self) -> str:
+        """The url to the beatmap set's page."""
         return f'https://osu.ppy.sh/s/{self.set_id}'
 
     @property
     def embed(self) -> str:
+        """An osu! chat embed to the beatmap's page."""
         return f'[{self.url} {self.full}]'
 
     @classmethod
     async def from_bid(cls, bid: int):
+        """Create a beatmap object from sql using a beatmapid."""
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
 
@@ -245,6 +251,7 @@ class Beatmap:
 
     @classmethod
     async def from_md5(cls, md5: str, set_id: Optional[int] = None):
+        """Create a beatmap object from sql or osu!api using it's md5."""
         # Check if the map is in the cache.
         if md5 in glob.cache['beatmap']:
             # Check if our cached result is within timeout.
@@ -444,7 +451,7 @@ class Beatmap:
         return m
 
     async def cache_pp(self, mods: Mods) -> None:
-        # cache pp values for (90, 95, 98, 99, 100) accs
+        """Cache some common acc pp values for specified mods."""
         pp_params = {'mode': self.mode % 4, 'mods': mods}
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
@@ -460,6 +467,7 @@ class Beatmap:
                 self.pp_cache[mods][idx] = owo.pp
 
     async def save_to_sql(self) -> None:
+        """Save the the object into sql."""
         if any(x is None for x in (
             self.md5, self.id, self.set_id, self.status,
             self.artist, self.title, self.version, self.creator,

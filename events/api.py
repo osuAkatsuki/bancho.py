@@ -15,8 +15,15 @@ def api_handler(uri: str) -> Callable:
         return callback
     return register_callback
 
+@api_handler('get_online')
+async def getOnline(conn: AsyncConnection) -> Optional[bytes]:
+    """Get the current amount of online players."""
+    # TODO: perhaps add peak(s)? (24h, 1w, 1m, etc.)
+    return f'{{"online":{len(glob.players)-1}}}'.encode()
+
 @api_handler('get_stats')
 async def getStats(conn: AsyncConnection) -> Optional[bytes]:
+    """Get the stats of a specified user (by id or name)."""
     if 'name' not in conn.args and 'id' not in conn.args:
         return b'Must provide either id or name!'
 

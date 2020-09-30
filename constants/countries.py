@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, Final
-
 __all__ = 'country_codes',
 
-country_codes: Final[Dict[str, int]] = { # Talk about ugly lol
+country_codes = { # Talk about ugly lol
     'XX':  0,  'OC':   1, 'EU':   2, 'AD':   3, 'AE':   4, 'AF':   5, 'AG':   6, 'AI':   7, 'AL':   8, 'AM':   9, 'AN':  10,
     'AO':  11, 'AQ':  12, 'AR':  13, 'AS':  14, 'AT':  15, 'AU':  16, 'AW':  17, 'AZ':  18, 'BA':  19, 'BB':  20, 'BD':  21,
     'BE':  22, 'BF':  23, 'BG':  24, 'BH':  25, 'BI':  26, 'BJ':  27, 'BM':  28, 'BN':  29, 'BO':  30, 'BR':  31, 'BS':  32,

@@ -1,5 +1,4 @@
 import aiofiles
-from typing import Final
 from enum import IntEnum, unique
 from cmyui import get_timestamp
 

@@ -32,8 +32,13 @@ class ChannelList(Sequence):
     def __init__(self):
         self.channels = []
 
-    def __getitem__(self, index: Slice) -> Channel:
-        return self.channels[index]
+    def __getitem__(self, index: Union[Slice, str]) -> Channel:
+        # XXX: can be either a string (to get by name),
+        # or a slice, for indexing the internal array.
+        if isinstance(index, str):
+            return self.get(index)
+        else:
+            return self.channels[index]
 
     def __len__(self) -> int:
         return len(self.channels)
@@ -42,7 +47,7 @@ class ChannelList(Sequence):
         # Allow us to either pass in the channel
         # obj, or the channel name as a string.
         if isinstance(c, str):
-            return c in (chan.name for chan in self.channels)
+            return c in [chan.name for chan in self.channels]
         else:
             return c in self.channels
 
@@ -135,7 +140,7 @@ class PlayerList(Sequence):
         # Allow us to either pass in the player
         # obj, or the player name as a string.
         if isinstance(p, str):
-            return p in (player.name for player in self.players)
+            return p in [player.name for player in self.players]
         else:
             return p in self.players
 
@@ -213,7 +218,8 @@ class PlayerList(Sequence):
             return
 
         res = await glob.db.fetch(
-            'SELECT pw_hash FROM users WHERE name_safe = %s',
+            'SELECT pw_hash FROM users '
+            'WHERE name_safe = %s',
             [Player.make_safe(name)]
         )
 

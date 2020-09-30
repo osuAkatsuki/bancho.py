@@ -169,7 +169,7 @@ create table maps
 	title varchar(128) not null,
 	version varchar(128) not null,
 	creator varchar(128) not null,
-	last_update datetime not null comment,
+	last_update datetime not null,
 	frozen tinyint(1) default 0 null,
 	plays int default 0 not null,
 	passes int default 0 not null,

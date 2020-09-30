@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Tuple, Final
+from typing import Any, Tuple
 from enum import IntEnum, unique
 import struct
 
@@ -12,7 +12,7 @@ from console import plog, Ansi
 
 # Tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
-_specifiers: Final[Tuple[str, ...]] = (
+_specifiers = (
     'b', 'B', # 8
     'h', 'H', # 16
     'i', 'I', 'f', # 32

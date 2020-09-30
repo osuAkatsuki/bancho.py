@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from typing import (Sequence, Dict, Optional,
-                    Union, Callable, Final)
+                    Union, Callable)
 import time
 import random
 from collections import defaultdict
@@ -43,14 +43,14 @@ def command(priv: Privileges, public: bool,
 # and are granted to any unrestricted players.
 """
 
-_help_doc: Final[str] = 'Show information of all documented commands.'
+_help_doc = 'Show information of all documented commands.'
 @command(priv=Privileges.Normal, public=False, doc=_help_doc)
 async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
                      for cmd in glob.commands if cmd['doc']
                      if p.priv & cmd['priv'])
 
-_roll_doc: Final[str] = ('Roll an n-sided die where n is the '
+_roll_doc = ('Roll an n-sided die where n is the '
                          'number you write (100 if empty).')
 @command(priv=Privileges.Normal, public=True, doc=_roll_doc)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -63,7 +63,7 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-_last_doc: Final[str] = 'Show information about your most recent score.'
+_last_doc = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     mode = p.status.mode + ((p.rx and p.status.mode != 3) and 4)
@@ -73,7 +73,7 @@ async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     return f'{s.bmap.embed} #{s.rank} ({s.mode!r} {s.pp:.2f}pp)'
 
-_mapsearch_doc: Final[str] = ('Search map titles with '
+_mapsearch_doc = ('Search map titles with '
                               'user input as a wildcard.')
 @command(priv=Privileges.Normal, public=False, doc=_mapsearch_doc)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -90,7 +90,7 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     ) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
-_mods_doc: Final[str] = ('Adjust the mods for a '
+_mods_doc = ('Adjust the mods for a '
                          'pp-calculation request.')
 @command(priv=Privileges.Normal, public=False, doc=_mods_doc)
 async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -137,7 +137,7 @@ status_to_id = lambda s: {
     'unrank': 0,
     'love': 5
 }[s]
-_map_doc: Final[str] = ("Changes the ranked status of "
+_map_doc = ("Changes the ranked status of "
                         "the most recently /np'ed map.")
 @command(priv=Privileges.Nominator, public=True, doc=_map_doc)
 async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -188,7 +188,7 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # and are generally for managing players.
 """
 
-_ban_doc: Final[str] = "Ban a player's account, with a reason."
+_ban_doc = "Ban a player's account, with a reason."
 @command(priv=Privileges.Admin, public=False, doc=_ban_doc)
 async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
@@ -204,7 +204,7 @@ async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     await t.restrict() # TODO: use reason as param?
     return f'{t} was banned.'
 
-_unban_doc: Final[str] = "Unban a player's account, with a reason."
+_unban_doc = "Unban a player's account, with a reason."
 @command(priv=Privileges.Admin, public=False, doc=_unban_doc)
 async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
@@ -220,7 +220,7 @@ async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     await t.unrestrict() # TODO: use reason as param?
     return f'{t} was unbanned.'
 
-_alert_doc: Final[str] = 'Send a notification to all players.'
+_alert_doc = 'Send a notification to all players.'
 @command(priv=Privileges.Admin, public=False, doc=_alert_doc)
 async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 1:
@@ -229,7 +229,7 @@ async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     glob.players.enqueue(await packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
-_alertu_doc: Final[str] = 'Send a notification to a specific player by name.'
+_alertu_doc = 'Send a notification to a specific player by name.'
 @command(trigger='!alertu', priv=Privileges.Admin, public=False, doc=_alertu_doc)
 async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
@@ -246,7 +246,16 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # simply not useful for any other roles.
 """
 
-_rtx_doc: Final[str] = 'Send an RTX packet with a message to a user.'
+_switch_doc = 'Switch servers to a specified ip address.'
+@command(priv=Privileges.Dangerous, public=False, doc=_switch_doc)
+async def switch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    if len(msg) != 1:
+        return 'Invalid syntax: !switch <ip>'
+
+    p.enqueue(await packets.switchTournamentServer(msg[0]))
+    return 'Have a nice journey..'
+
+_rtx_doc = 'Send an RTX packet with a message to a user.'
 @command(priv=Privileges.Dangerous, public=False, doc=_rtx_doc)
 async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 2:
@@ -259,7 +268,7 @@ async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return 'pong'
 
 # XXX: Not very useful, mostly just for testing/fun.
-_spack_doc: Final[str] = 'Send a specific (empty) packet by id to a player.'
+_spack_doc = 'Send a specific (empty) packet by id to a player.'
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False, doc=_spack_doc)
 async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2 or not msg[-1].isdecimal():
@@ -272,7 +281,7 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
     t.enqueue(await packets.write(packet))
     return f'Wrote {packet} to {t}.'
 
-_debug_doc: Final[str] = "Toggle the console's debug setting."
+_debug_doc = "Toggle the console's debug setting."
 @command(priv=Privileges.Dangerous, public=False, doc=_debug_doc)
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     glob.config.debug = not glob.config.debug
@@ -290,7 +299,7 @@ str_to_priv = lambda p: defaultdict(lambda: None, {
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
 })[p]
-_setpriv_doc: Final[str] = 'Set privileges for a player (by name).'
+_setpriv_doc = 'Set privileges for a player (by name).'
 @command(priv=Privileges.Dangerous, public=False, doc=_setpriv_doc)
 async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
@@ -397,7 +406,7 @@ _mp_triggers = defaultdict(lambda: None, {
         'priv': Privileges.Normal
     }
 })
-_mp_doc: Final[str] = ('A parent command to subcommands '
+_mp_doc = ('A parent command to subcommands '
                        'for multiplayer match manipulation.')
 @command(trigger='!mp', priv=Privileges.Normal, public=True, doc=_mp_doc)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:

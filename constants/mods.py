@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from typing import Union, List
 from enum import IntFlag, unique
 
 __all__ = 'Mods',

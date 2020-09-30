@@ -111,7 +111,7 @@ class Slot:
         self.loaded = False
         self.skipped = False
 
-    def empty(self) -> None:
+    def empty(self) -> bool:
         return self.player is None
 
     def copy(self, s) -> None:
@@ -212,10 +212,12 @@ class Match:
 
     @property
     def url(self) -> str:
+        """The match's invitation url."""
         return f'osump://{self.id}/{self.passwd}'
 
     @property
     def embed(self) -> str:
+        """An osu! chat embed for the match."""
         return f'[{self.url} {self.name}]'
 
     def __contains__(self, p) -> bool:
@@ -246,6 +248,8 @@ class Match:
                 return idx
 
     def copy(self, m) -> None:
+        """Fully copy the data of another match obj."""
+
         self.bmap = m.bmap
         self.freemods = m.freemods
         self.mode = m.mode
@@ -256,6 +260,8 @@ class Match:
 
     def enqueue(self, data: bytes, lobby: bool = True,
                 immune: Tuple[int, ...] = ()) -> None:
+        """Add data to be sent to all clients in the match."""
+
         if self.chat:
             self.chat.enqueue(data, immune)
         else:
@@ -263,5 +269,5 @@ class Match:
                 if p.id not in immune:
                     p.enqueue(data)
 
-        if lobby and (lchan := glob.channels.get('#lobby')):
+        if lobby and (lchan := glob.channels['#lobby']):
             lchan.enqueue(data)

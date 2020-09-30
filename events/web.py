@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Callable, Final, List
+from typing import Optional, Callable, List
 from enum import IntEnum, unique
 import os
 import time
@@ -15,7 +15,6 @@ from urllib.parse import unquote
 import packets
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
-from constants.gamemodes import GameMode
 from constants import regexes
 from objects.score import Score, SubmissionStatus
 from objects.player import Privileges
@@ -291,7 +290,7 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     query = conn.args['q'].replace('+', ' ') # TODO: allow empty
     offset = int(conn.args['p']) * 100
 
-    sql_query: List[str] = [
+    sql_query = [
         'SELECT DISTINCT set_id, artist, title,',
         'status, creator, last_update FROM maps',
         'LIMIT %s, 100'
@@ -550,7 +549,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     )
 
     if s.status == SubmissionStatus.BEST and s.rank == 1 \
-    and (announce_chan := glob.channels.get('#announce')):
+    and (announce_chan := glob.channels['#announce']):
         # Announce the user's #1 score.
         prev_n1 = await glob.db.fetch(
             'SELECT u.id, name FROM users u '
@@ -560,7 +559,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             [s.bmap.md5, s.mode % 4]
         )
 
-        ann: List[str] = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
+        ann = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
 
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
@@ -866,11 +865,11 @@ async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
 
 @unique
 class RankingType(IntEnum):
-    Local:   Final[int] = 0
-    Top:     Final[int] = 1
-    Mods:    Final[int] = 2
-    Friends: Final[int] = 3
-    Country: Final[int] = 4
+    Local   = 0
+    Top     = 1
+    Mods    = 2
+    Friends = 3
+    Country = 4
 
 required_params_getScores = frozenset({
     's', 'vv', 'v', 'c',

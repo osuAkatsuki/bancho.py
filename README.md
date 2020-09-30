@@ -4,11 +4,11 @@
 
 Looking for a well-organized, async & completely open-source osu! server implementation undergoing rapid development?
 
-Disclaimer: this is NOT a finished project; developement is underway, but the server will not be finished for a bit to come; probably about 80% of the way.
+Disclaimer: this it not yet a finished project, and while development on the actual osu! server (this) itself is probably ~90% of the way complete, we don't currently have a frontend!
 
 ## There are many other osu! server implementations, what makes this any different?
 
-Well.. Back in 2017, I decided to [start an osu! server](https://akatsuki.pw), and as you may know, it became relatively successful.
+Well.. Back in October of 2017, I decided to [start an osu! server](https://akatsuki.pw), which ended up working out pretty well..
 We've always used the [Ripple](https://github.com/osuripple) source, and it's great; however, it's quite different from my programming style.
 
 All projects will have their flaws, and while I now heavily prefer working with this server over any other, you may see things in another way.
@@ -32,6 +32,10 @@ This is simply the result of my programming values and time thrown together; I'd
    when the codebase makes that difficult, programming loses the aspect of fun and everything becomes an activity
    that requires effort - I'm trying my best to never let this code get to that state, as it's mostly what drove me to
    start this project to begin with.
+
+2. Provide an accurate representation of osu!'s protocol. Many other implementations have either features missing, or
+   are simply out of date and do not include the newer features of the osu! client. As long as gulag is being updated,
+   we'll be keeping up to date with the newest features. (moving to osuapi v2 when? :eyes:)
 
 ## Requirements
 

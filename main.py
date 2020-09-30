@@ -83,30 +83,17 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
-async def _close_server() -> None:
-    # close sql pool
-    glob.db.pool.close()
-    await glob.db.pool.wait_closed()
-
-    # close http client session
-    await glob.http.close()
-
-    glob.serv.listening = False
-
-    await plog('Cleaning up for shutdown..', Ansi.LIGHT_GREEN)
-    raise KeyboardInterrupt
-
-def close_server(loop):
-    def predicate():
-        loop.create_task(_close_server())
-    return predicate
-
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 5, 6)
+    glob.version = cmyui.Version(2, 5, 7)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGINT, close_server(loop))
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, lambda: loop.stop())
+        loop.add_signal_handler(signal.SIGTERM, lambda: loop.stop())
+    except NotImplementedError:
+        pass
 
     glob.db = cmyui.AsyncSQLPoolWrapper()
     await glob.db.connect(**glob.config.mysql)
@@ -129,10 +116,10 @@ async def run_server(addr: cmyui.Address) -> None:
 
 # Use uvloop if available (much faster).
 if spec := importlib.util.find_spec('uvloop'):
-    module = importlib.util.module_from_spec(spec)
-    sys.modules['uvloop'] = module
-    spec.loader.exec_module(module)
+    uvloop = importlib.util.module_from_spec(spec)
+    sys.modules['uvloop'] = uvloop
+    spec.loader.exec_module(uvloop)
 
-    asyncio.set_event_loop_policy(module.EventLoopPolicy())
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 asyncio.run(run_server(glob.config.server_addr))

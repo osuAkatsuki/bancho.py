@@ -2,7 +2,6 @@
 from typing import Tuple, Optional
 from enum import IntEnum, unique
 import time
-import os
 import base64
 from py3rijndael import RijndaelCbc, ZeroPadding
 
@@ -63,7 +62,7 @@ class SubmissionStatus(IntEnum):
         }[self.value]
 
 class Score:
-    """A class to represent a score.
+    """A class to represent an osu! score.
 
     Attributes
     -----------
@@ -189,14 +188,16 @@ class Score:
 
     @classmethod
     async def from_sql(cls, scoreid: int, rx: bool = False):
-        t = 'scores_rx' if rx else 'scores_vn'
+        """Create a score object from sql using it's scoreid."""
+        table = 'scores_rx' if rx else 'scores_vn'
+
         res = await glob.db.fetch(
             'SELECT id, map_md5, userid, pp, score, '
             'max_combo, mods, acc, n300, n100, n50, '
             'nmiss, ngeki, nkatu, grade, perfect, '
             'status, mode, play_time, '
             'time_elapsed, client_flags '
-            f'FROM {t} WHERE id = %s',
+            f'FROM {table} WHERE id = %s',
             [scoreid], _dict = False
         )
 
@@ -344,6 +345,7 @@ class Score:
         return ret
 
     async def calc_status(self) -> None:
+        """Calculate the submission status of a score."""
         if not self.passed:
             self.status = SubmissionStatus.FAILED
             return
@@ -379,6 +381,7 @@ class Score:
             self.status = SubmissionStatus.BEST
 
     def calc_accuracy(self) -> None:
+        """Calculate the accuracy of our score."""
         mode_vn = self.mode % 4
 
         if mode_vn == 0: # osu!

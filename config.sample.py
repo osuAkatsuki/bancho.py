@@ -61,13 +61,13 @@ external_mirror = 'https://osu.gatari.pw'
 
 """ customization """
 # the menu icon displayed on
-# the main menu of osu! ingame.
+# the main menu of osu! in-game.
 menu_icon = (
     'https://akatsuki.pw/static/logos/logo_ingame.png', # image URL
     'https://akatsuki.pw' # onclick URL
 )
 
-# ingame bot command prefix.
+# in-game bot command prefix.
 command_prefix = '!'
 
 # you can also 'hardcode' usernames here
