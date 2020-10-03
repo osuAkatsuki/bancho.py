@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import (Sequence, Dict, Optional,
+from typing import (Sequence, Optional,
                     Union, Callable)
 import time
 import random
@@ -16,7 +16,7 @@ from constants.privileges import Privileges
 from constants.mods import Mods
 
 Messageable = Union[Channel, Player]
-CommandResponse = Dict[str, str]
+CommandResponse = dict[str, str]
 
 # Not sure if this should be in glob or not,
 # trying to think of some use cases lol..
@@ -51,7 +51,7 @@ async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
                      if p.priv & cmd['priv'])
 
 _roll_doc = ('Roll an n-sided die where n is the '
-                         'number you write (100 if empty).')
+             'number you write (100 if empty).')
 @command(priv=Privileges.Normal, public=True, doc=_roll_doc)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if msg and msg[0].isdecimal():
@@ -71,10 +71,11 @@ async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not (s := p.recent_scores[mode]):
         return 'No recent score found for current mode!'
 
-    return f'{s.bmap.embed} #{s.rank} ({s.mode!r} {s.pp:.2f}pp)'
+    return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '
+            f'{s.pp:.2f}pp #{s.rank}')
 
 _mapsearch_doc = ('Search map titles with '
-                              'user input as a wildcard.')
+                  'user input as a wildcard.')
 @command(priv=Privileges.Normal, public=False, doc=_mapsearch_doc)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not (res := await glob.db.fetchall(
@@ -91,7 +92,7 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
 # TODO: refactor with acc and more stuff
 _mods_doc = ('Adjust the mods for a '
-                         'pp-calculation request.')
+             'pp-calculation request.')
 @command(priv=Privileges.Normal, public=False, doc=_mods_doc)
 async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if isinstance(c, Channel) or c.id != 1:
@@ -138,7 +139,7 @@ status_to_id = lambda s: {
     'love': 5
 }[s]
 _map_doc = ("Changes the ranked status of "
-                        "the most recently /np'ed map.")
+            "the most recently /np'ed map.")
 @command(priv=Privileges.Nominator, public=True, doc=_map_doc)
 async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 2 \
@@ -407,7 +408,7 @@ _mp_triggers = defaultdict(lambda: None, {
     }
 })
 _mp_doc = ('A parent command to subcommands '
-                       'for multiplayer match manipulation.')
+           'for multiplayer match manipulation.')
 @command(trigger='!mp', priv=Privileges.Normal, public=True, doc=_mp_doc)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # Used outside of a multiplayer match.

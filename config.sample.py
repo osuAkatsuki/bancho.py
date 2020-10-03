@@ -45,19 +45,15 @@ osu_api_key = ''
 gzip = {'web': 4, 'disk': 9}
 
 """ osu!direct """
-# TODO: add max size to cache on disk.
-# perhaps could even make a system to track
-# the most commonly downloaded maps to cache?
+# NOTE: in the future, gulag may actually have a built-in
+# mirror, but this is a plan for long in the future.
 
-# whether you'd like gulag to cache maps on disk.
-# gulag will still use an external mirror for new
-# downloads, but will keep a cache of osz files
-# for ultra speedy downloads.
-mirror = True
-
-# the url of an external mirror
-# to use for non-cached maps.
-external_mirror = 'https://osu.gatari.pw'
+# the external mirror url to use.
+mirror = 'https://storage.ripple.moe'
+# whether or not you'd like gulag to cache beatmaps retrieved
+# from the mirror on disk, for faster access in the future.
+# TODO: add max size to cache on disk?
+mirror_cache = True
 
 """ customization """
 # the menu icon displayed on

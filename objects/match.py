@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
@@ -82,22 +82,22 @@ class Slot:
 
     Attributes
     -----------
-    player: Optional[:class:`Player`]
+    player: Optional[`Player`]
         A player obj representing the player in the slot, if available.
 
-    status: :class:`SlotStatus`
+    status: `SlotStatus`
         An obj representing the slot's current status.
 
-    team: :class:`Teams`
+    team: `Teams`
         An obj representing the slot's current team.
 
-    mods: :class:`int`
+    mods: `int`
         The slot's currently selected mods.
 
-    loaded: :class:`bool`
+    loaded: `bool`
         Whether the player is loaded into the current map.
 
-    skipped: :class:`bool`
+    skipped: `bool`
         Whether the player has decided to skip the current map intro.
     """
     __slots__ = ('player', 'status', 'team',
@@ -133,49 +133,49 @@ class Match:
 
     Attributes
     -----------
-    id: :class:`int`
+    id: `int`
         The match's unique ID.
 
-    name: :class:`str`
+    name: `str`
         The match's name.
 
-    passwd: :class:`str`
+    passwd: `str`
         The match's password.
 
-    host: :class:`Player`
+    host: `Player`
         A player obj of the match's host.
 
-    bmap: Optional[:class:`Beatmap`]
+    bmap: Optional[`Beatmap`]
         A beatmap obj representing the osu map.
 
-    mods: :class:`int`
+    mods: `int`
         The match's currently selected mods.
 
-    freemods: :class:`bool`
+    freemods: `bool`
         Whether the match is in freemods mode.
 
-    mode: :class:`int`
+    mode: `int`
         The match's currently selected gamemode.
 
-    chat: :class:`Channel`
+    chat: `Channel`
         A channel obj of the match's chat.
 
-    slots: List[:class:`Slot`]
+    slots: list[`Slot`]
         A list of 16 slots representing the match's slots.
 
-    type: :class:`MatchTypes`
+    type: `MatchTypes`
         The match's currently selected match type.
 
-    team_type: :class:`MatchTeamTypes`
+    team_type: `MatchTeamTypes`
         The match's currently selected team type.
 
-    match_scoring: :class:`MatchScoringTypes`
+    match_scoring: `MatchScoringTypes`
         The match's currently selected match scoring type.
 
-    in_progress: :class:`bool`
+    in_progress: `bool`
         Whether the match is currently in progress.
 
-    seed: :class:`int`
+    seed: `int`
         The match's randomly generated seed.
         XXX: this is used for osu!mania's random mod!
     """
@@ -259,7 +259,7 @@ class Match:
         self.name = m.name
 
     def enqueue(self, data: bytes, lobby: bool = True,
-                immune: Tuple[int, ...] = ()) -> None:
+                immune: tuple[int, ...] = ()) -> None:
         """Add data to be sent to all clients in the match."""
 
         if self.chat:

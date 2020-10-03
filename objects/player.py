@@ -28,28 +28,28 @@ class ModeData:
 
     Attributes
     -----------
-    tscore: :class:`int`
+    tscore: `int`
         The player's total score.
 
-    rscore: :class:`int`
+    rscore: `int`
         The player's ranked score.
 
-    pp: :class:`float`
+    pp: `float`
         The player's total performance points.
 
-    acc: :class:`float`
+    acc: `float`
         The player's overall accuracy.
 
-    plays: :class:`int`
+    plays: `int`
         The player's number of total plays.
 
-    playtime: :class:`int`
+    playtime: `int`
         The player's total playtime (in seconds).
 
-    max_combo: :class:`int`
+    max_combo: `int`
         The player's highest combo.
 
-    rank: :class:`int`
+    rank: `int`
         The player's global rank.
     """
     __slots__ = (
@@ -109,22 +109,22 @@ class Status:
 
     Attributes
     -----------
-    action: :class:`Action`
+    action: `Action`
         The user's current set action.
 
-    info_text: :class:`str`
+    info_text: `str`
         The text representing the user's action.
 
-    map_md5: :class:`str`
+    map_md5: `str`
         The md5 of the map the player is on.
 
-    mods: :class:`int`
+    mods: `int`
         The mods the player currently has enabled.
 
-    mode: :class:`int`
+    mode: `int`
         The current gamemode of the player.
 
-    map_id: :class:`int`
+    map_id: `int`
         The id of the map the player is on.
     """
     __slots__ = (
@@ -159,107 +159,107 @@ class Player:
 
     Attributes
     -----------
-    token: :class:`str`
+    token: `str`
         The player's unique token; used to
         communicate with the osu! client.
 
-    id: :class:`int`
+    id: `int`
         The player's unique ID.
 
-    name: :class:`str`
+    name: `str`
         The player's username (unsafe).
 
-    safe_name: :class:`str`
+    safe_name: `str`
         The player's username (safe).
         XXX: Equivalent to `cls.name.lower().replace(' ', '_')`.
 
-    priv: :class:`Privileges`
+    priv: `Privileges`
         The player's privileges.
 
-    rx: :class:`bool`
+    rx: `bool`
         Whether the player is using rx (used for gamemodes).
 
-    stats: List[:class:`ModeData`]
+    stats: list[ModeData]
         A list of `ModeData` objs representing
         the player's stats for each gamemode.
 
-    status: :class:`Status`
+    status: `Status`
         A `Status` obj representing the player's current status.
 
-    friends: List[:class:`int`]
+    friends: list[`int`]
         A list of player ids representing the player's friends.
 
-    channels: List[:class:`Channel`]
+    channels: list[`Channel`]
         A list of `Channel` objs representing the channels the user is in.
 
-    spectators: List[:class:`Player`]
+    spectators: list[`Player`]
         A list of `Player` objs representing the player's spectators.
 
-    spectating: Optional[:class:`Player`]
+    spectating: Optional[`Player`]
         A `Player` obj representing the player this player is spectating.
 
-    match: Optional[:class:`Match`]
+    match: Optional[`Match`]
         A `Match` obj representing the match the player is in.
 
-    recent_scores: List[Optional[:class:`Score`]]
+    recent_scores: list[Optional[`Score`]]
         A list of recent scores, one for each gamemode.
 
-    last_np: Optional[:class:`Beatmap`]
+    last_np: Optional[`Beatmap`]
         The last map /np'ed by the user, if there was one.
 
-    location: Tuple[:class:`float`, :class:`float`]
+    location: tuple[`float`, `float`]
         A tuple containing the latitude and longitude of the player.
 
-    country: Tuple[:class:`str`, :class:`int`]
+    country: tuple[`str`, `int`]
         A tuple containing the country code in letter and number forms.
 
-    utc_offset: :class:`int`
+    utc_offset: `int`
         The player's UTC offset as an integer.
 
-    pm_private: :class:`bool`
+    pm_private: `bool`
         Whether the player is blocking pms from non-friends.
 
-    away_msg: Optional[:class:`str`]
+    away_msg: Optional[`str`]
         A string representing the player's away message.
 
-    silence_end: :class:`int`
+    silence_end: `int`
         The UNIX timestamp the player's silence will end at.
 
-    in_lobby: :class:`bool`
+    in_lobby: `bool`
         Whether the player is currently in the multiplayer lobby.
 
-    login_time: :class:`int`
+    login_time: `int`
         The UNIX timestamp of when the player logged in.
 
-    ping_time: :class:`int`
+    ping_time: `int`
         The UNIX timestamp of the last time the client pinged the server.
 
-    osu_version: :class:`str`
+    osu_version: `str`
         The osu! version the client logged in with.
 
-    pres_filter: :class:`PresenceFilter`
+    pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    _queue: :class:`SimpleQueue`
+    _queue: `SimpleQueue`
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
 
     Properties
     -----------
-    url: :class:`str`
+    url: `str`
         The user's url to their profile.
 
-    embed: :class:`str`
+    embed: `str`
         An osu! chat embed of a user's profile which displays their username.
 
-    silenced: :class:`bool`
+    silenced: `bool`
         Whether the user is currently silenced.
 
-    bancho_priv: :class:`BanchoPrivileges`
+    bancho_priv: `BanchoPrivileges`
         The user's privileges in the osu! client.
 
-    gm_stats: :class:`ModeData`
+    gm_stats: `ModeData`
         The user's stats for the current gamemode.
     """
     __slots__ = (

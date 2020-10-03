@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple, Callable
+from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
 import bcrypt
@@ -25,7 +25,7 @@ glob.bancho_map = {}
 
 def bancho_packet(ID: int) -> Callable:
     def register_callback(callback: Callable) -> Callable:
-        glob.bancho_map.update({ID: callback})
+        glob.bancho_map |= {ID: callback}
         return callback
     return register_callback
 
@@ -132,7 +132,7 @@ registration_msg = '\n'.join((
 ))
 # No specific packetID, triggered when the
 # client sends a request without an osu-token.
-async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
+async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # Login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
 
@@ -165,9 +165,9 @@ async def login(origin: bytes, ip: str) -> Tuple[bytes, str]:
     # month & year as 15 days ago should be fine?
     ctime = dt.now() - td(10)
 
-    if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
-        # outdated osu! client
-        return await packets.userID(-2), 'no'
+    #if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
+    #    # outdated osu! client
+    #    return await packets.userID(-2), 'no'
 
     if not s[1].replace('-', '', 1).isdecimal():
         return await packets.userID(-1), 'no'
@@ -624,7 +624,7 @@ async def matchStart(p: Player, pr: PacketReader) -> None:
     m.in_progress = True
     m.enqueue(await packets.matchStart(m))
 
-# PacketID: 48
+# PacketID: 47
 @bancho_packet(Packet.c_matchScoreUpdate)
 async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
     if not (m := p.match):

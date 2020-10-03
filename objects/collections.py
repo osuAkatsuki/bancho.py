@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Set, Tuple, Union, Optional
+from typing import Union, Optional
 from collections import Sequence
 
 from objects.player import Player
@@ -24,7 +24,7 @@ class ChannelList(Sequence):
 
     Attributes
     -----------
-    channels: List[:class:`Channel`]
+    channels: list[`Channel`]
         A list of channel objects representing the current chat channels.
     """
     __slots__ = ('channels',)
@@ -72,7 +72,7 @@ class MatchList(Sequence):
 
     Attributes
     -----------
-    matches: List[Optional[:class:`Match`]]
+    matches: list[Optional[`Match`]]
         A list of match objects representing the current mp matches.
         The size of this attr is constant; slots will be None if not in use.
     """
@@ -125,7 +125,7 @@ class PlayerList(Sequence):
 
     Attributes
     -----------
-    players: List[:class:`Player`]
+    players: list[`Player`]
         A list of player objects representing the online users.
     """
     __slots__ = ('players',)
@@ -148,14 +148,14 @@ class PlayerList(Sequence):
         return len(self.players)
 
     @property
-    def ids(self) -> Tuple[int, ...]:
+    def ids(self) -> tuple[int, ...]:
         return (p.id for p in self.players)
 
     @property
-    def staff(self) -> Set[Player]:
+    def staff(self) -> set[Player]:
         return {p for p in self.players if p.priv & Privileges.Staff}
 
-    def enqueue(self, data: bytes, immune: Tuple[Player, ...] = ()) -> None:
+    def enqueue(self, data: bytes, immune: tuple[Player, ...] = ()) -> None:
         for p in self.players:
             if p not in immune:
                 p.enqueue(data)

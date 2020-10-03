@@ -11,7 +11,7 @@ glob.api_map = {}
 
 def api_handler(uri: str) -> Callable:
     def register_callback(callback: Callable) -> Callable:
-        glob.api_map.update({uri: callback})
+        glob.api_map |= {uri: callback}
         return callback
     return register_callback
 

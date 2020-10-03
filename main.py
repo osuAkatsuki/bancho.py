@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3.9
 # -*- coding: utf-8 -*-
 
 # If you're interested in development, my test server is often up
@@ -84,7 +84,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 5, 7)
+    glob.version = cmyui.Version(2, 6, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -121,5 +121,8 @@ if spec := importlib.util.find_spec('uvloop'):
     spec.loader.exec_module(uvloop)
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+#import cProfile
+#cProfile.run('asyncio.run(run_server(glob.config.server_addr))', '.data/logs/profile.log')
 
 asyncio.run(run_server(glob.config.server_addr))

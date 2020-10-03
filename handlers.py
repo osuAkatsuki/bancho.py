@@ -191,14 +191,14 @@ async def handle_dl(conn: AsyncConnection) -> None:
     # which gulag will save into a file.. We'll need a var in
     # the db to store whether a map has been disabled, i guess.
 
-    if glob.config.mirror: # Use gulag as a mirror (cache maps on disk).
+    if glob.config.mirror_cache: # Cache maps from the mirror on disk.
         if os.path.exists(filepath := f'.data/osz/{set_id}.osz'):
             # We have the map in cache.
             async with aiofiles.open(filepath, 'rb') as f:
                 content = await f.read()
 
         else: # Get the map for our mirror & client.
-            bmap_url = f'{glob.config.external_mirror}/d/{set_id}'
+            bmap_url = f'{glob.config.mirror}/d/{set_id}'
             async with glob.http.get(bmap_url) as resp:
                 if not resp or resp.status != 200:
                     return
@@ -212,7 +212,7 @@ async def handle_dl(conn: AsyncConnection) -> None:
         await conn.send(200, content)
 
     else: # Don't use gulag as a mirror, just reflect another.
-        bmap_url = f'{glob.config.external_mirror}/d/{set_id}'
+        bmap_url = f'{glob.config.mirror}/d/{set_id}'
         await conn.add_resp_header(f'Location: {bmap_url}')
         await conn.send(302, None)
 

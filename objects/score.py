@@ -1,5 +1,5 @@
 
-from typing import Tuple, Optional
+from typing import Optional
 from enum import IntEnum, unique
 import time
 import base64
@@ -66,76 +66,76 @@ class Score:
 
     Attributes
     -----------
-    id: :class:`int`
+    id: `int`
         The score's unique ID.
 
-    bmap: Optional[:class:`Beatmap`]
+    bmap: Optional[`Beatmap`]
         A beatmap obj representing the osu map.
 
-    player: Optional[:class:`Player`]
+    player: Optional[`Player`]
         A player obj of the player who submitted the score.
 
-    pp: :class:`float`
+    pp: `float`
         The score's performance points.
 
-    score: :class:`int`
+    score: `int`
         The score's osu! score value.
 
-    max_combo: :class:`int`
+    max_combo: `int`
         The maximum combo reached in the score.
 
-    mods: :class:`int`
+    mods: `Mods`
         A bitwise value of the osu! mods used in the score.
 
-    acc: :class:`float`
+    acc: `float`
         The accuracy of the score.
 
-    n300: :class:`int`
+    n300: `int`
         The number of 300s in the score.
 
-    n100: :class:`int`
+    n100: `int`
         The number of 100s in the score (150s if taiko).
 
-    n50: :class:`int`
+    n50: `int`
         The number of 50s in the score.
 
-    nmiss: :class:`int`
+    nmiss: `int`
         The number of misses in the score.
 
-    ngeki: :class:`int`
+    ngeki: `int`
         The number of gekis in the score.
 
-    nkatu: :class:`int`
+    nkatu: `int`
         The number of katus in the score.
 
-    grade: :class:`str`
+    grade: `str`
         The letter grade in the score.
 
-    rank: :class:`int`
+    rank: `int`
         The leaderboard placement of the score.
 
-    passed: :class:`bool`
+    passed: `bool`
         Whether the score completed the map.
 
-    perfect: :class:`bool`
+    perfect: `bool`
         Whether the score is a full-combo.
 
-    status: :class:`SubmissionStatus`
+    status: `SubmissionStatus`
         The submission status of the score.
 
-    mode: :class:`GameMode`
+    mode: `GameMode`
         The game mode of the score.
 
-    play_time: :class:`int`
+    play_time: `int`
         A UNIX timestamp of the time of score submission.
 
-    time_elapsed: :class:`int`
+    time_elapsed: `int`
         The total elapsed time of the play (in milliseconds).
 
-    client_flags: :class:`int`
+    client_flags: `int`
         osu!'s old anticheat flags.
 
-    prev_best: Optional[:class:`Score`]
+    prev_best: Optional[`Score`]
         The previous best score before this play was submitted.
         NOTE: just because a score has a `prev_best` attribute does
         mean the score is our best score on the map! the `status`
@@ -159,7 +159,7 @@ class Score:
         self.pp = 0.0
         self.score = 0
         self.max_combo = 0
-        self.mods = 0
+        self.mods = Mods.NOMOD
 
         self.acc = 0.0
         # TODO: perhaps abstract these differently
@@ -218,6 +218,7 @@ class Score:
         # fix some types
         s.passed = s.status != 0
         s.status = SubmissionStatus(s.status)
+        s.mods = Mods(s.mods)
         s.mode = GameMode(s.mode + (s.mods & Mods.RELAX and 4))
         s.client_flags = ClientFlags(s.client_flags)
 
@@ -277,7 +278,7 @@ class Score:
 
         s.perfect = data[11] == '1'
         _grade = data[12] # letter grade
-        s.mods = int(data[13])
+        s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
         s.mode = GameMode(int(data[15]) + (s.mods & Mods.RELAX and 4))
         s.play_time = int(time.time()) # (yyMMddHHmmss)
@@ -324,15 +325,15 @@ class Score:
     # Could be staticmethod?
     # We'll see after some usage of gulag
     # whether it's beneficial or not.
-    async def calc_diff(self) -> Tuple[float, float]:
+    async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        if self.mode not in (0, 1):
+        if self.mode % 4 not in (0, 1):
             # Currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
         pp_params = {
-            'mods': Mods(self.mods),
+            'mods': self.mods,
             'combo': self.max_combo,
             'nmiss': self.nmiss,
             'mode': self.mode,

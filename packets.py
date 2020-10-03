@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Tuple
+from typing import Any
 from enum import IntEnum, unique
 import struct
 
@@ -19,7 +19,7 @@ _specifiers = (
     'q', 'Q', 'd'  # 64
 )
 
-async def read_uleb128(data: bytearray) -> Tuple[int, int]:
+async def read_uleb128(data: bytearray) -> tuple[int, int]:
     """ Read an unsigned LEB128 (used for string length) from `data`. """
     offset = val = shift = 0
 
@@ -35,7 +35,7 @@ async def read_uleb128(data: bytearray) -> Tuple[int, int]:
 
     return val, offset
 
-async def read_string(data: bytearray) -> Tuple[str, int]:
+async def read_string(data: bytearray) -> tuple[str, int]:
     """ Read a string (ULEB128 & string) from `data`. """
     offset = 1
 
@@ -47,7 +47,7 @@ async def read_string(data: bytearray) -> Tuple[str, int]:
     return data[offset:offset+length].decode(), offset + length
 
 async def read_i32_list(data: bytearray, long_len: bool = False
-                       ) -> Tuple[Tuple[int, ...], int]:
+                       ) -> tuple[tuple[int, ...], int]:
     """ Read an int32 list from `data`. """
     ret = []
     offs = 4 if long_len else 2
@@ -58,7 +58,7 @@ async def read_i32_list(data: bytearray, long_len: bool = False
 
     return ret, offs
 
-async def read_match(data: bytearray) -> Tuple[Match, int]:
+async def read_match(data: bytearray) -> tuple[Match, int]:
     """ Read an osu! match from `data`. """
     m = Match()
 
@@ -138,7 +138,7 @@ async def read_match(data: bytearray) -> Tuple[Match, int]:
     m.seed = int.from_bytes(data[offset:offset+4], 'little')
     return m, offset + 4
 
-async def read_scoreframe(data: bytearray) -> Tuple[ScoreFrame, int]:
+async def read_scoreframe(data: bytearray) -> tuple[ScoreFrame, int]:
     """ Read an osu! scoreframe from `data`. """
     offset = 29
     s = ScoreFrame(*struct.unpack('<iBHHHHHHiHH?BB?', data[:offset]))
@@ -149,7 +149,7 @@ async def read_scoreframe(data: bytearray) -> Tuple[ScoreFrame, int]:
 
     return s, offset
 
-#async def read_mapInfoRequest(data: bytearray) -> Tuple[Beatmap, int]:
+#async def read_mapInfoRequest(data: bytearray) -> tuple[Beatmap, int]:
 #    """ Read an osu! beatmapInfoRequest from `data`. """
 #    fnames = ids = []
 #
@@ -169,25 +169,25 @@ class PacketReader:
 
     Attributes
     -----------
-    _data: :class:`bytearray`
+    _data: `bytearray`
         The entire bytearray including all data.
         XXX: You should use the `data` property if you want
              data starting from the current offset.
 
-    _offset: :class:`int`
+    _offset: `int`
         The offset of the reader; bytes behind the offset
         have already been read, bytes ahead are yet to be read.
 
-    packetID: :class:`int`
+    packetID: `int`
         The packetID of the current packet being read.
         -1 if no packet has been read, or packet was corrupt.
 
-    length: :class:`int`
+    length: `int`
         The length (in bytes) of the current packet.
 
     Properties
     -----------
-    data: :class:`bytearray`
+    data: `bytearray`
         The data starting from the current offset.
     """
     __slots__ = ('_data', '_offset',
@@ -228,7 +228,7 @@ class PacketReader:
         self.packetID, self.length = struct.unpack('<HxI', self.data[:7])
         self._offset += 7 # Read our first 7 bytes for packetid & len
 
-    async def read(self, *types: Tuple[osuTypes, ...]) -> Tuple[Any, ...]:
+    async def read(self, *types: tuple[osuTypes, ...]) -> tuple[Any, ...]:
         ret = []
 
         # Iterate through all types to be read.
@@ -318,7 +318,7 @@ async def write_string(s: str) -> bytearray:
 
     return ret
 
-async def write_i32_list(l: Tuple[int, ...]) -> bytearray:
+async def write_i32_list(l: tuple[int, ...]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
     ret = bytearray(struct.pack('<h', len(l)))
 
@@ -407,7 +407,7 @@ async def write_scoreframe(s: ScoreFrame) -> bytearray:
         s.perfect, s.current_hp, s.tag_byte, s.score_v2
     ))
 
-async def write(packid: int, *args: Tuple[Any, ...]) -> bytes:
+async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('Hx', packid))
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Callable, List
+from typing import Optional, Callable
 from enum import IntEnum, unique
 import os
 import time
@@ -34,7 +34,7 @@ glob.web_map = {}
 
 def web_handler(uri: str) -> Callable:
     def register_callback(callback: Callable) -> Callable:
-        glob.web_map.update({uri: callback})
+        glob.web_map |= {uri: callback}
         return callback
     return register_callback
 
@@ -251,24 +251,6 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         pass
     """
 
-@unique
-class DirectDisplaySetting(IntEnum):
-    Ranked = 0
-    Pending = 2
-    Qualified = 3
-    All = 4
-    Graveyard = 5
-    RankedPlayed = 7
-    Loved = 8
-
-ranked_from_direct = {
-    DirectDisplaySetting.Ranked: RankedStatus.Ranked,
-    DirectDisplaySetting.Pending: RankedStatus.Pending,
-    DirectDisplaySetting.Qualified: RankedStatus.Qualified,
-    DirectDisplaySetting.Graveyard: RankedStatus.Pending,
-    DirectDisplaySetting.RankedPlayed: RankedStatus.Ranked, # TODO
-    DirectDisplaySetting.Loved: RankedStatus.Loved
-}
 required_params_osuSearch = frozenset({
     'u', 'h', 'r', 'q', 'm', 'p'
 })
@@ -287,6 +269,49 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return
 
+    url = f'{glob.config.mirror}/api/search'
+    params = {
+        'amount': 100,
+        'offset': conn.args['p'],
+        'query': conn.args['q']
+    }
+
+    if conn.args['m'] != '-1':
+        params |= {'mode': conn.args['m']}
+
+    if conn.args['r'] != '4': # 4 = all
+        # convert to osu!api status
+        status = RankedStatus.from_osudirect(int(conn.args['r']))
+        params |= {'status': status.osu_api}
+
+    async with glob.http.get(url, params = params) as resp:
+        if not resp or resp.status != 200:
+            return b'Failed to retrieve data from mirror!'
+
+        result = await resp.json()
+
+    lresult = len(result) # send over 100 if we receive
+                          # 100 matches, so the client
+                          # knows there are more to get
+    ret = [f"{'101' if lresult == 100 else lresult}"]
+    diff_rating = lambda map: map['DifficultyRating']
+
+    for bmap in result:
+        diffs = ','.join(
+            '[{DifficultyRating:.2f}⭐] {DiffName} '
+            '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
+            for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        )
+
+        ret.append(
+            '{SetID}.osz|{Artist}|{Title}|{Creator}|'
+            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
+            '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
+        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+
+    return '\n'.join(ret).encode()
+
+    """ XXX: some work on gulag's possible future mirror
     query = conn.args['q'].replace('+', ' ') # TODO: allow empty
     offset = int(conn.args['p']) * 100
 
@@ -337,6 +362,7 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
         ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
     return '\n'.join(ret).encode()
+    """
 
 # TODO: required params
 @web_handler('osu-search-set.php')
@@ -426,7 +452,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         f'SELECT 1 FROM {table} WHERE mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
         'AND score = %s', [s.mode % 4, s.bmap.md5,
-                           s.player.id, s.mods, s.score]
+                           s.player.id, int(s.mods), s.score]
     )
 
     if res:
@@ -473,7 +499,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s'
         ')', [
-            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
+            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, int(s.mods),
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
             s.grade, int(s.status), s.mode % 4, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
@@ -559,7 +585,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             [s.bmap.md5, s.mode % 4]
         )
 
-        ann = [f'{s.player.embed} achieved #1 on {s.bmap.embed}.']
+        ann = [f'[{s.mode!r}] {s.player.embed} achieved #1 on {s.bmap.embed}.']
 
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
@@ -904,7 +930,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
     rank_type = RankingType(int(conn.args['v']))
 
-    res: List[bytes] = []
+    res: list[bytes] = []
 
     if rx:
         table = 'scores_rx'

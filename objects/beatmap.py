@@ -32,16 +32,16 @@ class RankedStatus(IntEnum):
     Qualified = 4
     Loved = 5
 
-    @classmethod
-    def osu_api(cls):
+    @property
+    def osu_api(self):
         # XXX: only the ones that exist are mapped.
         return {
-            cls.Pending: 0,
-            cls.Ranked: 1,
-            cls.Approved: 2,
-            cls.Qualified: 3,
-            cls.Loved: 4
-        }
+            self.Pending: 0,
+            self.Ranked: 1,
+            self.Approved: 2,
+            self.Qualified: 3,
+            self.Loved: 4
+        }[self.value]
 
     @classmethod
     def from_osuapi(cls, osuapi_status: int):
@@ -55,6 +55,20 @@ class RankedStatus(IntEnum):
                  3: cls.Qualified,
                  4: cls.Loved
             })[osuapi_status]
+        )
+
+    @classmethod
+    def from_osudirect(cls, osudirect_status: int):
+        return cls(
+            defaultdict(lambda: cls.UpdateAvailable, {
+                0: cls.Ranked,
+                2: cls.Pending,
+                3: cls.Qualified,
+                #4: all ranked statuses lol
+                5: cls.Pending, # graveyard
+                7: cls.Ranked, # played before
+                8: cls.Loved
+            })[osudirect_status]
         )
 
     @classmethod
@@ -92,67 +106,67 @@ class Beatmap:
 
     Attributes
     -----------
-    md5: :class:`str`
+    md5: `str`
         The MD5 hash of the map's .osu file.
 
-    id: :class:`int`
+    id: `int`
         The unique id of the beatmap.
 
-    set_id: :class:`int`
+    set_id: `int`
         The unique id of the beatmap set.
 
-    artist: :class:`str`
+    artist: `str`
         The song's artist.
 
-    title: :class:`str`
+    title: `str`
         The song's title.
 
-    version: :class:`str`
+    version: `str`
         The difficulty name of the beatmap.
 
-    creator: :class:`str`
+    creator: `str`
         The beatmap's creator.
 
-    last_update: :class:`datetime`
+    last_update: `datetime`
         The datetime of the beatmap's last update.
         Used for making sure we always have the newest version.
 
-    status: :class:`RankedStatus`
+    status: `RankedStatus`
         The ranked status of the beatmap.
 
-    frozen: :class:`bool`
+    frozen: `bool`
         Whether the beatmap's status is to be kept when a newer
         version is found in the osu!api.
         # XXX: This is set when a map's status is manually changed.
 
-    plays: :class:`int`
+    plays: `int`
         The amount of plays on the map.
 
-    passes: :class:`int`
+    passes: `int`
         The amount of passes on the map.
 
-    mode: :class:`GameMode`
+    mode: `GameMode`
         The primary gamemode of the map.
 
-    bpm: :class:`float`
+    bpm: `float`
         The BPM of the map.
 
-    cs: :class:`float`
+    cs: `float`
         The circle size of the beatmap.
 
-    od: :class:`float`
+    od: `float`
         The overall difficulty of the beatmap.
 
-    ar: :class:`float`
+    ar: `float`
         The approach rate of the beatmap.
 
-    hp: :class:`float`
+    hp: `float`
         The health drain of the beatmap.
 
-    diff: :class:`float`
+    diff: `float`
         A float representing the star rating for the map's primary gamemode.
 
-    pp_cache: Dict[:class:`Mods`, List[:class:`float`]]
+    pp_cache: dict[`Mods`, list[`float`]]
         Cached pp values to serve when a map is /np'ed.
         PP will be cached for whichever mod combination is requested.
     """

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from typing import Tuple
 from constants.privileges import Privileges
 from objects import glob
 import packets
@@ -12,43 +11,43 @@ class Channel:
 
     Attributes
     -----------
-    _name: :class:`str`
+    _name: `str`
         A name string of the channel.
         The cls.`name` property wraps handling for '#multiplayer' and
         '#spectator' when communicating with the osu! client; only use
         this attr when you need the channel's true name; otherwise you
         should use the `name` property described below.
 
-    topic: :class:`str`
+    topic: `str`
         The topic string of the channel.
 
-    players: List[:class:`Player`]
+    players: list[`Player`]
         A list of player objects representing the players in the channel.
         XXX: While channels store a list of player objs, players also
              store a list of channel objs for channels they're in.
 
-    read: :class:`Privileges`
+    read: `Privileges`
         The privileges required to read messages in the channel.
 
-    write: :class:`Privileges`
+    write: `Privileges`
         The privileges required to write messages in the channel.
 
-    auto_join: :class:`bool`
+    auto_join: `bool`
         A bool representing whether the channel should automatically
         be joined on connection to the server.
 
-    instance: :class:`bool`
+    instance: `bool`
         A bool representing whether the channel is an instance.
         Instanced channels are deleted when all players have left;
         this is useful for things like multiplayer, spectator, etc.
 
     Properties
     -----------
-    name: :class:`str`
+    name: `str`
         A name string of the channel with #spec_x and #multi_x
         replaced with the more readable '#spectator' and '#multiplayer'.
 
-    basic_info: Tuple[Union[:class:`str`, :class:`str`, :class:`int`]]
+    basic_info: tuple[Union[`str`, `str`, `int`]]
         A tuple containing the channel's name
         (clean output), topic, and playercount.
     """
@@ -82,7 +81,7 @@ class Channel:
         return self._name
 
     @property
-    def basic_info(self) -> Tuple[str, str, int]:
+    def basic_info(self) -> tuple[str, str, int]:
         return (self.name, self.topic, len(self.players))
 
     def __repr__(self) -> str:
@@ -121,7 +120,7 @@ class Channel:
         else:
             self.players.remove(p)
 
-    def enqueue(self, data: bytes, immune: Tuple[int, ...] = ()) -> None:
+    def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
         # Enqueue bytes to all players in a channel.
         # Usually just used for messages.. perhaps more?
         for p in self.players:
