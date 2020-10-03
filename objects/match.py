@@ -6,6 +6,8 @@ from enum import IntEnum, unique
 from objects import glob
 from objects.channel import Channel
 from objects.beatmap import Beatmap
+from constants.mods import Mods
+from constants.gamemodes import GameMode
 
 __all__ = (
     'SlotStatus',
@@ -27,8 +29,9 @@ class SlotStatus(IntEnum):
     no_map     = 16
     playing    = 32
     complete   = 64
-    has_player = not_ready | ready | no_map | playing | complete
     quit       = 128
+
+    has_player = not_ready | ready | no_map | playing | complete
 
 @unique
 class Teams(IntEnum):
@@ -124,7 +127,7 @@ class Slot:
         self.player = None
         self.status = SlotStatus.open
         self.team = Teams.neutral
-        self.mods = 0
+        self.mods = Mods.NOMOD
         self.loaded = False
         self.skipped = False
 
@@ -196,9 +199,9 @@ class Match:
 
         self.bmap: Optional[Beatmap] = None
 
-        self.mods = 0
+        self.mods = Mods.NOMOD
+        self.mode = GameMode.vn_std
         self.freemods = False
-        self.mode = 0
 
         self.chat: Optional[Channel] = None
         self.slots = [Slot() for _ in range(16)]

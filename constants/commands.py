@@ -331,8 +331,8 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     lines = '\n '.join(' '.join(msg).split('\\n'))
     try: # pinnacle of the gulag
         exec(f"async def __ex():\n {lines}")
-        await locals()['__ex']()
-        return 'Success.'
+        ret = await locals()['__ex']()
+        return ret if ret else 'Success'
     except Exception as e:
         return str(e)
 

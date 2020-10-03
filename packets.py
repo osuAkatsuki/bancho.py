@@ -6,8 +6,12 @@ import struct
 
 from objects import glob
 from objects.beatmap import Beatmap
-from objects.match import Match, ScoreFrame, SlotStatus
+from objects.match import (Match, ScoreFrame, SlotStatus,
+                           MatchTypes, MatchTeamTypes,
+                           MatchScoringTypes)
 from constants.types import osuTypes
+from constants.gamemodes import GameMode
+from constants.mods import Mods
 from console import plog, Ansi
 
 # Tuple of some of struct's format specifiers
@@ -65,9 +69,13 @@ async def read_match(data: bytearray) -> tuple[Match, int]:
     # Ignore match id (i32) & inprogress (i8).
     offset = 3
 
-    # Read type & match mods.
-    m.type, m.mods = struct.unpack('<bI', data[offset:offset+5])
-    offset += 5
+    # Read match type (no idea what this is tbh).
+    m.type = MatchTypes(data[offset])
+    offset += 1
+
+    # Read match mods.
+    m.mods = Mods.from_bytes(data[offset:offset+4], 'little')
+    offset += 4
 
     # Read match name & password.
     m.name, offs = await read_string(data[offset:])
@@ -117,20 +125,20 @@ async def read_match(data: bytearray) -> tuple[Match, int]:
 
     # Read match mode, match scoring,
     # team type, and freemods.
-    m.mode = data[offset]
+    m.mode = GameMode(data[offset])
     offset += 1
-    m.match_scoring = data[offset]
+    m.match_scoring = MatchScoringTypes(data[offset])
     offset += 1
-    m.team_type = data[offset]
+    m.team_type = MatchTeamTypes(data[offset])
     offset += 1
-    m.freemods = data[offset]
+    m.freemods = data[offset] == 1
     offset += 1
 
     # If we're in freemods mode,
     # read individual slot mods.
     if m.freemods:
         for s in m.slots:
-            s.mods = int.from_bytes(data[offset:offset+4], 'little')
+            s.mods = Mods.from_bytes(data[offset:offset+4], 'little')
             offset += 4
 
     # Read the seed from multi.
