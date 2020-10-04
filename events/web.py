@@ -913,11 +913,15 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if not conn.args['mods'].isdecimal() \
-    or not conn.args['v'].isdecimal():
+    # make sure all int args are integral
+    if not all(conn.args[k].isdecimal() for k in ('mods', 'v', 'i')):
         return b'-1|false'
 
+    map_md5 = conn.args['c']
+
     mods = int(conn.args['mods'])
+    map_set_id = int(conn.args['i'])
+    rank_type = RankingType(int(conn.args['v']))
 
     # update rx value and send their stats if changed
     # XXX: this doesn't work consistently, but i'll
@@ -927,10 +931,6 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         p.rx = rx
         glob.players.enqueue(await packets.userStats(p))
 
-    rank_type = RankingType(int(conn.args['v']))
-
-    res: list[bytes] = []
-
     if rx:
         table = 'scores_rx'
         scoring = 'pp'
@@ -938,7 +938,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         table = 'scores_vn'
         scoring = 'score'
 
-    if not (bmap := await Beatmap.from_md5(conn.args['c'], set_id=int(conn.args['i']))):
+    if not (bmap := await Beatmap.from_md5(map_md5, map_set_id)):
         # Couldn't find in db or at osu! api by md5.
         # Check if we have the map in our db (by filename).
 
@@ -948,8 +948,8 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
             return
 
         set_exists = await glob.db.fetch(
-            'SELECT 1 FROM maps WHERE '
-            'artist = %s AND title = %s '
+            'SELECT 1 FROM maps '
+            'WHERE artist = %s AND title = %s '
             'AND creator = %s AND version = %s', [
                 re['artist'], re['title'],
                 re['creator'], re['version']
@@ -963,7 +963,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
             # Map is unsubmitted.
             # Add this map to the unsubmitted cache, so
             # that we don't have to make this request again.
-            glob.cache['unsubmitted'].add(conn.args['c'])
+            glob.cache['unsubmitted'].add(map_md5)
 
         return f'{1 if set_exists else -1}|false'.encode()
 
@@ -981,7 +981,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         'WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s'
     ]
 
-    params = [conn.args['c'], conn.args['m']]
+    params = [map_md5, conn.args['m']]
 
     if rank_type == RankingType.Mods:
         query.append('AND s.mods = %s')
@@ -1000,21 +1000,23 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     scores = await glob.db.fetchall(' '.join(query), params)
 
     # Syntax
-    # int(status)|bool(server_has_osz)|int(bid)|int(bsid)|int(len(scores))
-    # int(online_offset)
-    # str(map_name)
-    # round(float(map_rating), 1)
-    # score_id|username|score|combo|n50|n100|n300|nmiss|nkatu|ngeki|bool(perfect)|mods|userid|int(rank)|int(time)|int(server_has_replay)
+    # status|server_has_osz|bid|bsid|len_scores
+    # online_offset
+    # map_name
+    # map_rating:1f
+    # score_id|username|score|combo|n50|n100|n300|nmiss|nkatu|ngeki|perfect|mods|userid|rank|time|server_has_replay
+
+    res: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
-    res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores) if scores else 0}'.encode())
+    res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores) if scores else 0}')
 
     # offset, name, rating
-    res.append(f'0\n{bmap.full}\n10.0'.encode())
+    res.append(f'0\n{bmap.full}\n10.0')
 
     if not scores:
         # Simply return an empty set.
-        return b'\n'.join(res + [b'', b''])
+        return '\n'.join(res + ['', '']).encode()
 
     score_fmt = ('{id}|{name}|{score}|{max_combo}|'
                  '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
@@ -1027,7 +1029,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
-            conn.args['c'], conn.args['m'], p.id
+            map_md5, conn.args['m'], p.id
         ]
     )
 
@@ -1037,7 +1039,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
             f'SELECT COUNT(*) AS count FROM {table} '
             'WHERE map_md5 = %s AND mode = %s '
             f'AND status = 2 AND {scoring} > %s', [
-                conn.args['c'], conn.args['m'],
+                map_md5, conn.args['m'],
                 p_best['_score']
             ]
         ))['count']
@@ -1048,29 +1050,113 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
                 name = p.name, userid = p.id,
                 score = int(p_best['_score']),
                 has_replay = '1', rank = p_best_rank
-            ).encode()
+            )
         )
     else:
-        res.append(b'')
+        res.append('')
 
     res.extend(
         score_fmt.format(
             **s, score = int(s['_score']),
             has_replay = '1', rank = idx + 1
-        ).encode() for idx, s in enumerate(scores)
+        ) for idx, s in enumerate(scores)
     )
 
-    return b'\n'.join(res)
+    return '\n'.join(res).encode()
 
-_valid_actions = frozenset({'check', 'path', 'error'})
-_valid_streams = frozenset({'cuttingedge', 'stable40',
-                            'beta40', 'stable'})
-@web_handler('check-updates.php')
-async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
-    if (action := conn.args['action']) not in _valid_actions:
+@web_handler('osu-comment.php', required_mpargs=('u', 'p', 'b', 's', 'm', 'r', 'a'))
+async def osuComment(conn: AsyncConnection) -> Optional[bytes]:
+    mp_args = conn.multipart_args
+
+    pname = unquote(mp_args['u'])
+    phash = mp_args['p']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    action = mp_args['a']
+
+    if action == 'get':
+        # client is requesting all comments
+        comments = glob.db.iterall(
+            "SELECT c.time, c.target, c.colour, "
+            "c.comment, u.priv FROM comments c "
+            "LEFT JOIN users u ON u.id = c.userid "
+            "WHERE (c.target = 'replay' AND c.id = %s) "
+            "OR (c.target = 'song' AND c.id = %s) "
+            "OR (c.target = 'map' AND c.id = %s) ",
+            [mp_args['r'], mp_args['s'], mp_args['b']]
+        )
+
+        ret: list[str] = []
+
+        async for com in comments:
+            # TODO: maybe support player/creator colours?
+            # pretty expensive for very low gain, but completion :D
+            if com['priv'] & Privileges.Nominator:
+                fmt = 'bat'
+            elif com['priv'] & Privileges.Donator:
+                fmt = 'supporter'
+            else:
+                fmt = ''
+
+            if com['colour']:
+                fmt += f'|{com["colour"]}'
+
+            ret.append('{time}\t{target}\t'
+                       '{fmt}\t{comment}'.format(fmt=fmt, **com))
+
+        return '\n'.join(ret).encode()
+
+    elif action == 'post':
+        # client is submitting a new comment
+
+        # get the comment's target scope
+        target = mp_args['target']
+        if target not in ('song', 'map', 'replay'):
+            return b'Invalid target.'
+
+        # get the corresponding id from the request
+        com_id = mp_args[{'song': 's', 'map': 'b',
+                          'replay': 'r'}[target]]
+
+        if not com_id.isdecimal():
+            return b'Invalid corresponding id.'
+
+        # get some extra params
+        sttime = mp_args['starttime']
+        comment = mp_args['comment']
+
+        if p.priv & Privileges.Donator:
+            # only supporters can use colours.
+            # XXX: colour may still be none,
+            # since mp_args is a defaultdict.
+            colour = mp_args['f']
+        else:
+            colour = None
+
+        # insert into sql
+        await glob.db.execute(
+            'INSERT INTO comments '
+            'VALUES (%s, %s, %s, %s, %s, %s)',
+            [com_id, target, p.id,
+             sttime, comment, colour]
+        )
+
+        return b''
+
+    else: # invalid action
         return b'Invalid action.'
 
-    if (stream := conn.args['stream']) not in _valid_streams:
+@web_handler('check-updates.php', required_args=('action', 'stream'))
+async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
+    action = conn.args['action']
+    stream = conn.args['stream']
+
+    if action not in ('check', 'path', 'error'):
+        return b'Invalid action.'
+
+    if stream not in ('cuttingedge', 'stable40', 'beta40', 'stable'):
         return b'Invalid stream.'
 
     if action == 'error':

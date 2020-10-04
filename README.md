@@ -39,6 +39,7 @@ This is simply the result of my programming values and time thrown together; I'd
 
 ## Requirements
 
+- Python 3.9 & pip
 - MySQL & Nginx (both installed in setup below)
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
 - An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full feature-set.
@@ -66,7 +67,7 @@ git submodule init && git submodule update
 cd pp && ./build && cd ..
 
 # Install project requirements.
-python3.8 -m pip install -r requirements.txt
+python3.9 -m pip install -r requirements.txt
 
 # Import the database structure.
 # NOTE: create an empty database before doing this.
@@ -85,5 +86,5 @@ mv config.sample.py config.py
 nano config.py
 
 # Start the server.
-python3.8 main.py
+python3.9 main.py
 ```

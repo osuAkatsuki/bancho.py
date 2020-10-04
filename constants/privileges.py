@@ -31,6 +31,7 @@ class Privileges(IntFlag):
     Admin       = 1 << 13 # Able to manage users (level 2).
     Dangerous   = 1 << 14 # Able to manage full server state.
 
+    Donator = Supporter | Premium
     Staff = Mod | Admin | Dangerous
 
 @unique

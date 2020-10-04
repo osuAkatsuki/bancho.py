@@ -35,7 +35,7 @@ async def plog(msg, col: Ansi = None,
                fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,
     # or also just printing with colour without having
-    # to do inline color codes / ansi objects.
+    # to do inline colour codes / ansi objects.
 
     if st_fmt:
         print(st_fmt, end = '')
@@ -43,7 +43,7 @@ async def plog(msg, col: Ansi = None,
     print('{gray!r}[{ts}] {col!r}{msg}{reset!r}'.format(
         gray = Ansi.GRAY,
         ts = get_timestamp(full = False),
-        col = col if col else Ansi.RESET,
+        col = col or Ansi.RESET,
         msg = msg,
         reset = Ansi.RESET
     ))

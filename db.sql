@@ -9,6 +9,7 @@ drop table if exists friendships;
 drop table if exists ratings;
 drop table if exists performance_reports;
 drop table if exists favourites;
+drop table if exists comments;
 drop table if exists channels;
 
 create table users
@@ -249,6 +250,17 @@ create table favourites
 	userid int not null,
 	setid int not null,
 	primary key (userid, setid)
+);
+
+create table comments
+(
+	id int not null comment 'replay, map, or set id',
+	target varchar(6) not null comment '''replay'', ''map'' or ''song''',
+	userid int not null,
+	time int not null,
+	comment varchar(80) not null,
+	colour char(6) null comment 'rgb hex string',
+	primary key (id, target, userid)
 );
 
 # Insert vital stuff, such as bot user & basic channels.

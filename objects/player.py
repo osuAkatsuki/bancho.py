@@ -6,8 +6,9 @@ import time
 import uuid
 
 from constants.privileges import Privileges, BanchoPrivileges
-from constants.gamemodes import GameMode
 from constants.countries import country_codes
+from constants.gamemodes import GameMode
+from constants.mods import Mods
 from console import plog, Ansi
 
 from objects.channel import Channel
@@ -133,12 +134,12 @@ class Status:
     )
 
     def __init__(self):
-        self.action = Action(0) # byte
-        self.info_text = '' # string
-        self.map_md5 = '' # string
-        self.mods = 0 # i32
-        self.mode = 0 # byte
-        self.map_id = 0 # i32
+        self.action = Action.Idle
+        self.info_text = ''
+        self.map_md5 = ''
+        self.mods = Mods.NOMOD
+        self.mode = GameMode.vn_std
+        self.map_id = 0
 
     def update(self, action: int, info_text: str, map_md5: str,
                mods: int, mode: int, map_id: int) -> None:
@@ -150,8 +151,8 @@ class Status:
         self.action = Action(action)
         self.info_text = info_text
         self.map_md5 = map_md5
-        self.mods = mods
-        self.mode = mode
+        self.mods = Mods(mods)
+        self.mode = GameMode(mode)
         self.map_id = map_id
 
 class Player:
