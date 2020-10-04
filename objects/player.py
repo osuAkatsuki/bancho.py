@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from typing import Optional, Coroutine
+from typing import Any, Optional, Coroutine
 import time
 import uuid
 import random
@@ -248,7 +248,7 @@ class Player:
     # XXX: below is mostly custom gulag,
            or internal player class stuff.
 
-    menu_options: `dict[int, str]`
+    menu_options: `dict[int, dict[str, Any]]`
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
@@ -327,7 +327,8 @@ class Player:
 
         # XXX: below is mostly gulag-specific & internal stuff
 
-        self.menu_options = {} # {-randint(0, int32max): callback, ...}
+        # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
+        self.menu_options: dict[int, dict[str, Any]] = {}
 
         # Packet queue
         self._queue = asyncio.Queue()

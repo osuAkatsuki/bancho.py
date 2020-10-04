@@ -8,7 +8,7 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.match import (Match, ScoreFrame, SlotStatus,
                            MatchTypes, MatchTeamTypes,
-                           MatchScoringTypes)
+                           MatchScoringTypes, Teams)
 from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -84,9 +84,9 @@ async def read_match(data: bytearray) -> tuple[Match, int]:
     offset += offs
 
     # Ignore map's name.
+    if data[offset] == 0x0b:
+        offset += sum(await read_uleb128(data[offset + 1:]))
     offset += 1
-    if data[offset - 1] == 0x0b:
-        offset += sum(await read_uleb128(data[offset:]))
 
     # Read beatmap information (id & md5).
     map_id = int.from_bytes(data[offset:offset+4], 'little')
@@ -110,7 +110,7 @@ async def read_match(data: bytearray) -> tuple[Match, int]:
 
     # Read slot teams.
     for s in m.slots:
-        s.team = data[offset]
+        s.team = Teams(data[offset])
         offset += 1
 
     for s in m.slots:

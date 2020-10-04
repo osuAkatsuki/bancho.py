@@ -16,7 +16,7 @@ from constants.mods import Mods
 from constants import commands
 from constants import regexes
 from objects import glob
-from objects.match import SlotStatus, Teams
+from objects.match import MatchTeamTypes, SlotStatus, Teams
 from objects.player import Player, PresenceFilter, Action
 from objects.beatmap import Beatmap
 from constants.privileges import Privileges
@@ -506,7 +506,7 @@ async def matchCreate(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_joinMatch)
 async def matchJoin(p: Player, pr: BanchoPacketReader) -> None:
     m_id, passwd = await pr.read(osuTypes.i32, osuTypes.string)
-    if 64 > m_id >= 0:
+    if 64 > m_id > 0:
         # make sure it's
         # a valid match id.
         return
@@ -574,6 +574,9 @@ async def matchLock(p: Player, pr: BanchoPacketReader) -> None:
 
     m.enqueue(await packets.updateMatch(m))
 
+_head_vs_head = (MatchTeamTypes.head_to_head,
+                 MatchTeamTypes.tag_coop)
+
 # packet id: 41
 @bancho_packet(BanchoPacket.c_matchChangeSettings)
 async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
@@ -614,7 +617,20 @@ async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
     m.bmap = new.bmap
     m.freemods = new.freemods
     m.mode = new.mode
-    m.team_type = new.team_type
+
+    if m.team_type != new.team_type:
+        # team type is changing, find the new appropriate default team.
+        new_t = (Teams.red, Teams.neutral)[new.team_type in _head_vs_head]
+
+        # change each active slots team to
+        # fit the correspoding team type.
+        for s in m.slots:
+            if s.player:
+                s.team = new_t
+
+        # change the matches'.
+        m.team_type = new.team_type
+
     m.match_scoring = new.match_scoring
     m.name = new.name
 
