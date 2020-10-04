@@ -172,23 +172,24 @@ async def read_scoreframe(data: bytearray) -> tuple[ScoreFrame, int]:
 #    ids, offs = await read_i32_list(data[offset:], long_len=True)
 #    return BeatmapInfoRequest(fnames, ids), offset + offs
 
-class PacketReader:
-    """A class dedicated to reading osu! packets.
+class BanchoPacketReader:
+    """A class dedicated to reading osu! bancho packets.
 
     Attributes
     -----------
     _data: `bytearray`
-        The entire bytearray including all data.
-        XXX: You should use the `data` property if you want
-             data starting from the current offset.
+        Internal buffer of the reader.
+        XXX: Use the `data` property to have data
+             starting from the current internal offset.
 
     _offset: `int`
-        The offset of the reader; bytes behind the offset
-        have already been read, bytes ahead are yet to be read.
+        The offset of the reader; bytes behind the offset have
+        already been read, bytes ahead are yet to be read.
 
     packetID: `int`
-        The packetID of the current packet being read.
-        -1 if no packet has been read, or packet was corrupt.
+        The current packet id being processed by the reader.
+        XXX: will be -1 if either no packets have been read,
+             or if the current packet was corrupt.
 
     length: `int`
         The length (in bytes) of the current packet.
@@ -209,7 +210,7 @@ class PacketReader:
         self.length = 0
 
     def __repr__(self) -> str:
-        return f'<id: {self.packetID} | length: {self.length}>'
+        return f'<Bancho Packet #{self.packetID} | Length: {self.length}>'
 
     @property
     def data(self) -> bytearray:
@@ -225,11 +226,13 @@ class PacketReader:
         self._offset += self.length
 
     async def read_packet_header(self) -> None:
-        if len(self.data) < 7:
+        ldata = len(self.data)
+
+        if ldata < 7:
             # Packet not even minimal legnth.
             # End the connection immediately.
             self.packetID = -1
-            self._offset += len(self.data)
+            self._offset += ldata
             await plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
             return
 
@@ -417,7 +420,7 @@ async def write_scoreframe(s: ScoreFrame) -> bytearray:
 
 async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
     """ Write `args` into bytes. """
-    ret = bytearray(struct.pack('Hx', packid))
+    ret = bytearray(struct.pack('<Hx', packid))
 
     for p, p_type in args:
         if p_type == osuTypes.raw:
@@ -444,7 +447,7 @@ async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
     return ret
 
 @unique
-class Packet(IntEnum):
+class BanchoPacket(IntEnum):
     # Both server & client packetIDs
     # Packets commented out are unused.
     c_changeAction = 0
@@ -558,42 +561,42 @@ class Packet(IntEnum):
     c_tournamentLeaveMatchChannel = 109
 
 #
-# Packets
+# packets
 #
 
-# PacketID: 5
+# packet id: 5
 async def userID(id: int) -> bytes:
-    # ID Responses:
-    # -1: Authentication Failed
-    # -2: Old Client
-    # -3: Banned
-    # -4: Banned
-    # -5: Error occurred
-    # -6: Needs supporter
-    # -7: Password reset
-    # -8: Requires verification
-    # ??: Valid ID
+    # id responses:
+    # -1: authentication failed
+    # -2: old client
+    # -3: banned
+    # -4: banned
+    # -5: error occurred
+    # -6: needs supporter
+    # -7: password reset
+    # -8: requires verification
+    # ??: valid id
     return await write(
-        Packet.s_userID,
+        BanchoPacket.s_userID,
         (id, osuTypes.i32)
     )
 
-# PacketID: 7
+# packet id: 7
 async def sendMessage(client: str, msg: str, target: str,
                       client_id: int) -> bytes:
     return await write(
-        Packet.s_sendMessage,
+        BanchoPacket.s_sendMessage,
         ((client, msg, target, client_id), osuTypes.message)
     )
 
-# PacketID: 8
+# packet id: 8
 async def pong() -> bytes:
-    return await write(Packet.s_Pong)
+    return await write(BanchoPacket.s_Pong)
 
-# PacketID: 11
+# packet id: 11
 async def userStats(p) -> bytes:
     return await write(
-        Packet.s_userStats,
+        BanchoPacket.s_userStats,
         (p.id, osuTypes.i32),
         (p.status.action, osuTypes.u8),
         (p.status.info_text, osuTypes.string),
@@ -607,7 +610,7 @@ async def userStats(p) -> bytes:
         (p.gm_stats.tscore, osuTypes.i64),
         (p.gm_stats.rank, osuTypes.i32),
         (p.gm_stats.pp, osuTypes.i16)
-    ) if p.id != 1 else (
+    ) if p.id != 1 else ( # default for bot
         b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
         b'\x00\x08\x0b\x0eout new code..\x00\x00'
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -616,227 +619,228 @@ async def userStats(p) -> bytes:
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
     )
 
-# PacketID: 12
+# packet id: 12
 async def logout(userID: int) -> bytes:
     return await write(
-        Packet.s_userLogout,
+        BanchoPacket.s_userLogout,
         (userID, osuTypes.i32),
         (0, osuTypes.u8)
     )
 
-# PacketID: 13
+# packet id: 13
 async def spectatorJoined(id: int) -> bytes:
     return await write(
-        Packet.s_spectatorJoined,
+        BanchoPacket.s_spectatorJoined,
         (id, osuTypes.i32)
     )
 
-# PacketID: 14
+# packet id: 14
 async def spectatorLeft(id: int) -> bytes:
     return await write(
-        Packet.s_spectatorLeft,
+        BanchoPacket.s_spectatorLeft,
         (id, osuTypes.i32)
     )
 
-# PacketID: 15
+# packet id: 15
 async def spectateFrames(data: bytearray) -> bytes:
     return ( # a little hacky, but quick.
-        Packet.s_spectateFrames.to_bytes(3, 'little', signed=True) +
-        len(data).to_bytes(4, 'little') + data
+        BanchoPacket.s_spectateFrames.to_bytes(
+            3, 'little', signed = True
+        ) + len(data).to_bytes(4, 'little') + data
     )
 
-# PacketID: 19
+# packet id: 19
 async def versionUpdate() -> bytes:
-    return await write(Packet.s_versionUpdate)
+    return await write(BanchoPacket.s_versionUpdate)
 
-# PacketID: 22
+# packet id: 22
 async def spectatorCantSpectate(id: int) -> bytes:
     return await write(
-        Packet.s_spectatorCantSpectate,
+        BanchoPacket.s_spectatorCantSpectate,
         (id, osuTypes.i32)
     )
 
-# PacketID: 23
+# packet id: 23
 async def getAttention() -> bytes:
-    return await write(Packet.s_getAttention)
+    return await write(BanchoPacket.s_getAttention)
 
-# PacketID: 24
+# packet id: 24
 async def notification(msg: str) -> bytes:
     return await write(
-        Packet.s_notification,
+        BanchoPacket.s_notification,
         (msg, osuTypes.string)
     )
 
-# PacketID: 26
+# packet id: 26
 async def updateMatch(m: Match) -> bytes:
     return await write(
-        Packet.s_updateMatch,
+        BanchoPacket.s_updateMatch,
         (m, osuTypes.match)
     )
 
-# PacketID: 27
+# packet id: 27
 async def newMatch(m: Match) -> bytes:
     return await write(
-        Packet.s_newMatch,
+        BanchoPacket.s_newMatch,
         (m, osuTypes.match)
     )
 
-# PacketID: 28
+# packet id: 28
 async def disposeMatch(id: int) -> bytes:
     return await write(
-        Packet.s_disposeMatch,
+        BanchoPacket.s_disposeMatch,
         (id, osuTypes.i32)
     )
 
-# PacketID: 36
+# packet id: 36
 async def matchJoinSuccess(m: Match) -> bytes:
     return await write(
-        Packet.s_matchJoinSuccess,
+        BanchoPacket.s_matchJoinSuccess,
         (m, osuTypes.match)
     )
 
-# PacketID: 37
+# packet id: 37
 async def matchJoinFail() -> bytes:
-    return await write(Packet.s_matchJoinFail)
+    return await write(BanchoPacket.s_matchJoinFail)
 
-# PacketID: 42
+# packet id: 42
 async def fellowSpectatorJoined(id: int) -> bytes:
     return await write(
-        Packet.s_fellowSpectatorJoined,
+        BanchoPacket.s_fellowSpectatorJoined,
         (id, osuTypes.i32)
     )
 
-# PacketID: 43
+# packet id: 43
 async def fellowSpectatorLeft(id: int) -> bytes:
     return await write(
-        Packet.s_fellowSpectatorLeft,
+        BanchoPacket.s_fellowSpectatorLeft,
         (id, osuTypes.i32)
     )
 
-# PacketID: 46
+# packet id: 46
 async def matchStart(m: Match) -> bytes:
     return await write(
-        Packet.s_matchStart,
+        BanchoPacket.s_matchStart,
         (m, osuTypes.match)
     )
 
-# PacketID: 48
+# packet id: 48
 async def matchScoreUpdate(frame: ScoreFrame) -> bytes:
     return await write(
-        Packet.s_matchScoreUpdate,
+        BanchoPacket.s_matchScoreUpdate,
         (frame, osuTypes.scoreframe)
     )
 
-# PacketID: 50
+# packet id: 50
 async def matchTransferHost() -> bytes:
-    return await write(Packet.s_matchTransferHost)
+    return await write(BanchoPacket.s_matchTransferHost)
 
-# PacketID: 53
+# packet id: 53
 async def matchAllPlayerLoaded() -> bytes:
-    return await write(Packet.s_matchAllPlayersLoaded)
+    return await write(BanchoPacket.s_matchAllPlayersLoaded)
 
-# PacketID: 57
+# packet id: 57
 async def matchPlayerFailed(slot_id: int) -> bytes:
     return await write(
-        Packet.s_matchPlayerFailed,
+        BanchoPacket.s_matchPlayerFailed,
         (slot_id, osuTypes.i32)
     )
 
-# PacketID: 58
+# packet id: 58
 async def matchComplete() -> bytes:
-    return await write(Packet.s_matchComplete)
+    return await write(BanchoPacket.s_matchComplete)
 
-# PacketID: 61
+# packet id: 61
 async def matchSkip() -> bytes:
-    return await write(Packet.s_matchSkip)
+    return await write(BanchoPacket.s_matchSkip)
 
-# PacketID: 64
+# packet id: 64
 async def channelJoin(name: str) -> bytes:
     return await write(
-        Packet.s_channelJoinSuccess,
+        BanchoPacket.s_channelJoinSuccess,
         (name, osuTypes.string)
     )
 
-# PacketID: 65
+# packet id: 65
 async def channelInfo(name: str, topic: str,
                       p_count: int) -> bytes:
     return await write(
-        Packet.s_channelInfo,
+        BanchoPacket.s_channelInfo,
         ((name, topic, p_count), osuTypes.channel)
     )
 
-# PacketID: 66
+# packet id: 66
 async def channelKick(name: str) -> bytes:
     return await write(
-        Packet.s_channelKicked,
+        BanchoPacket.s_channelKicked,
         (name, osuTypes.string)
     )
 
-# PacketID: 67
+# packet id: 67
 async def channelAutoJoin(name: str, topic: str,
                           p_count: int) -> bytes:
     return await write(
-        Packet.s_channelAutoJoin,
+        BanchoPacket.s_channelAutoJoin,
         ((name, topic, p_count), osuTypes.channel)
     )
 
-# PacketID: 69
+# packet id: 69
 #async def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
 #    return await write(
-#        Packet.s_beatmapInfoReply,
+#        BanchoPacket.s_beatmapInfoReply,
 #        (maps, osuTypes.mapInfoReply)
 #    )
 
-# PacketID: 71
+# packet id: 71
 async def banchoPrivileges(priv: int) -> bytes:
     return await write(
-        Packet.s_supporterGMT,
+        BanchoPacket.s_supporterGMT,
         (priv, osuTypes.i32)
     )
 
-# PacketID: 72
+# packet id: 72
 async def friendsList(*friends) -> bytes:
     return await write(
-        Packet.s_friendsList,
+        BanchoPacket.s_friendsList,
         (friends, osuTypes.i32_list)
     )
 
-# PacketID: 75
+# packet id: 75
 async def protocolVersion(ver: int) -> bytes:
     return await write(
-        Packet.s_protocolVersion,
+        BanchoPacket.s_protocolVersion,
         (ver, osuTypes.i32)
     )
 
-# PacketID: 76
+# packet id: 76
 async def mainMenuIcon() -> bytes:
     return await write(
-        Packet.s_mainMenuIcon,
+        BanchoPacket.s_mainMenuIcon,
         ('|'.join(glob.config.menu_icon), osuTypes.string)
     )
 
-# PacketID: 80
+# packet id: 80
 async def monitor() -> bytes:
-    # This is an older (now removed) 'anticheat' feature of the osu!
-    # client; basically, it would do some checks (most likely for aqn)
-    # screenshot your desktop (and send it to osu! sevrers), then trigger
+    # this is an older (now removed) 'anticheat' feature of the osu!
+    # client; basically, it would do some checks (most likely for aqn),
+    # screenshot your desktop (and send it to osu! servers), then trigger
     # the processlist to be sent to bancho as well (also now unused).
 
-    # This doesn't work on newer clients, and I had no plans
+    # this doesn't work on newer clients, and i had no plans
     # of trying to put it to use - just coded for completion.
-    return await write(Packet.s_monitor)
+    return await write(BanchoPacket.s_monitor)
 
-# PacketID: 81
+# packet id: 81
 async def matchPlayerSkipped(pid: int) -> bytes:
     return await write(
-        Packet.s_matchPlayerSkipped,
+        BanchoPacket.s_matchPlayerSkipped,
         (pid, osuTypes.i32)
     )
 
-# PacketID: 83
+# packet id: 83
 async def userPresence(p) -> bytes:
     return await write(
-        Packet.s_userPresence,
+        BanchoPacket.s_userPresence,
         (p.id, osuTypes.i32),
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
@@ -845,94 +849,94 @@ async def userPresence(p) -> bytes:
         (p.location[0], osuTypes.f32), # long
         (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
-    ) if p.id != 1 else (
+    ) if p.id != 1 else ( # default for bot
         b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00'
         b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00'
         b'\x000B\x00\x00\x00\x00'
     )
 
-# PacketID: 86
+# packet id: 86
 async def restartServer(ms: int) -> bytes:
     return await write(
-        Packet.s_restart,
+        BanchoPacket.s_restart,
         (ms, osuTypes.i32)
     )
 
-# PacketID: 89
+# packet id: 89
 async def channelInfoEnd() -> bytes:
-    return await write(Packet.s_channelInfoEnd)
+    return await write(BanchoPacket.s_channelInfoEnd)
 
-# PacketID: 91
+# packet id: 91
 async def matchChangePassword(new: str) -> bytes:
     return await write(
-        Packet.s_matchChangePassword,
+        BanchoPacket.s_matchChangePassword,
         (new, osuTypes.string)
     )
 
-# PacketID: 92
+# packet id: 92
 async def silenceEnd(delta: int) -> bytes:
     return await write(
-        Packet.s_silenceEnd,
+        BanchoPacket.s_silenceEnd,
         (delta, osuTypes.i32)
     )
 
-# PacketID: 94
+# packet id: 94
 async def userSilenced(pid: int) -> bytes:
     return await write(
-        Packet.s_userSilenced,
+        BanchoPacket.s_userSilenced,
         (pid, osuTypes.i32)
     )
 
-# PacketID: 100
+# packet id: 100
 async def userPMBlocked(target: str) -> bytes:
     return await write(
-        Packet.s_userPMBlocked,
+        BanchoPacket.s_userPMBlocked,
         (('', '', target, 0), osuTypes.message)
     )
 
-# PacketID: 101
+# packet id: 101
 async def targetSilenced(target: str) -> bytes:
     return await write(
-        Packet.s_targetIsSilenced,
+        BanchoPacket.s_targetIsSilenced,
         (('', '', target, 0), osuTypes.message)
     )
 
-# PacketID: 102
+# packet id: 102
 async def versionUpdateForced() -> bytes:
-    return await write(Packet.s_versionUpdateForced)
+    return await write(BanchoPacket.s_versionUpdateForced)
 
-# PacketID: 103
+# packet id: 103
 async def switchServer(t: int) -> bytes: # (idletime < t || match != null)
     return await write(
-        Packet.s_switchServer,
+        BanchoPacket.s_switchServer,
         (t, osuTypes.i32)
     )
 
-# PacketID: 104
+# packet id: 104
 async def accountRestricted() -> bytes:
-    return await write(Packet.s_accountRestricted)
+    return await write(BanchoPacket.s_accountRestricted)
 
-# PacketID: 105
+# packet id: 105
 async def RTX(msg: str) -> bytes:
     # Bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:
     # - Black screenk, freeze game, beeps loudly.
     # within the next 3-8 seconds at random.
     return await write(
-        Packet.s_RTX,
+        BanchoPacket.s_RTX,
         (msg, osuTypes.string)
     )
 
-# PacketID: 106
+# packet id: 106
 async def matchAbort() -> bytes:
-    return await write(Packet.s_matchAbort)
+    return await write(BanchoPacket.s_matchAbort)
 
-# PacketID: 107
+# packet id: 107
 async def switchTournamentServer(ip: str) -> bytes:
     # The client only reads the string if it's
     # not on the client's normal endpoints,
     # but we can send it either way xd.
     return await write(
-        Packet.s_switchTournamentServer,
+        BanchoPacket.s_switchTournamentServer,
         (ip, osuTypes.string)
     )

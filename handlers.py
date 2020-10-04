@@ -62,7 +62,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         )
 
     else: # Player found, process normal packet.
-        pr = packets.PacketReader(conn.body)
+        pr = packets.BanchoPacketReader(conn.body)
 
         # keep track of the packetIDs we've already handled, the osu
         # client will stack many packets of the same type into one
@@ -86,7 +86,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 
             if pr.packetID in glob.bancho_map:
                 # Server is able to handle the packet.
-                await plog(f'Handling {pr!r}', Ansi.LIGHT_MAGENTA)
+                await plog(repr(pr), Ansi.LIGHT_MAGENTA)
                 await glob.bancho_map[pr.packetID](p, pr)
             else: # Packet reading behaviour not yet defined.
                 await plog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
@@ -124,7 +124,7 @@ async def handle_web(conn: AsyncConnection) -> None:
     handler = conn.path[5:] # cut off /web/
 
     if handler in glob.web_map:
-        await plog(f'Handling {conn.path}', Ansi.LIGHT_MAGENTA)
+        await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
         if resp := await glob.web_map[handler](conn):
             # We have data to send back to the client.
@@ -230,7 +230,7 @@ async def handle_api(conn: AsyncConnection) -> None:
     handler = conn.path[5:] # cut off /api/
 
     if handler in glob.api_map:
-        await plog(f'Handling {conn.path}', Ansi.LIGHT_MAGENTA)
+        await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
         if resp := await glob.api_map[handler](conn):
             # We have data to send back to the client.

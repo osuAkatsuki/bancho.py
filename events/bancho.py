@@ -8,7 +8,7 @@ import bcrypt
 from cmyui import rstring
 
 import packets
-from packets import Packet, PacketReader # convenience
+from packets import BanchoPacket, BanchoPacketReader # convenience
 
 from console import *
 from constants.types import osuTypes
@@ -29,9 +29,9 @@ def bancho_packet(ID: int) -> Callable:
         return callback
     return register_callback
 
-# PacketID: 0
-@bancho_packet(Packet.c_changeAction)
-async def readStatus(p: Player, pr: PacketReader) -> None:
+# packet id: 0
+@bancho_packet(BanchoPacket.c_changeAction)
+async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
     data = await pr.read(
         osuTypes.u8, # actionType
         osuTypes.string, # infotext
@@ -45,9 +45,9 @@ async def readStatus(p: Player, pr: PacketReader) -> None:
     p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
-# PacketID: 1
-@bancho_packet(Packet.c_sendPublicMessage)
-async def sendMessage(p: Player, pr: PacketReader) -> None:
+# packet id: 1
+@bancho_packet(BanchoPacket.c_sendPublicMessage)
+async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
         await plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
@@ -98,9 +98,9 @@ async def sendMessage(p: Player, pr: PacketReader) -> None:
 
     await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
-# PacketID: 2
-@bancho_packet(Packet.c_logout)
-async def logout(p: Player, pr: PacketReader) -> None:
+# packet id: 2
+@bancho_packet(BanchoPacket.c_logout)
+async def logout(p: Player, pr: BanchoPacketReader) -> None:
     pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
 
     if (time.time() - p.login_time) < 2:
@@ -111,14 +111,14 @@ async def logout(p: Player, pr: PacketReader) -> None:
     await p.logout()
     await plog(f'{p} logged out.', Ansi.LIGHT_YELLOW)
 
-# PacketID: 3
-@bancho_packet(Packet.c_requestStatusUpdate)
-async def statsUpdateRequest(p: Player, pr: PacketReader) -> None:
+# packet id: 3
+@bancho_packet(BanchoPacket.c_requestStatusUpdate)
+async def statsUpdateRequest(p: Player, pr: BanchoPacketReader) -> None:
     p.enqueue(await packets.userStats(p))
 
-# PacketID: 4
-@bancho_packet(Packet.c_ping)
-async def ping(p: Player, pr: PacketReader) -> None:
+# packet id: 4
+@bancho_packet(BanchoPacket.c_ping)
+async def ping(p: Player, pr: BanchoPacketReader) -> None:
     # TODO: this should be last packet time, not just
     # ping.. this handler shouldn't even exist lol
     p.ping_time = int(time.time())
@@ -346,9 +346,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     await plog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
     return bytes(data), p.token
 
-# PacketID: 16
-@bancho_packet(Packet.c_startSpectating)
-async def startSpectating(p: Player, pr: PacketReader) -> None:
+# packet id: 16
+@bancho_packet(BanchoPacket.c_startSpectating)
+async def startSpectating(p: Player, pr: BanchoPacketReader) -> None:
     target_id, = await pr.read(osuTypes.i32)
 
     if not (host := await glob.players.get_by_id(target_id)):
@@ -360,10 +360,10 @@ async def startSpectating(p: Player, pr: PacketReader) -> None:
 
     await host.add_spectator(p)
 
-# PacketID: 17
-@bancho_packet(Packet.c_stopSpectating)
-async def stopSpectating(p: Player, pr: PacketReader) -> None:
-    host: Player = p.spectating
+# packet id: 17
+@bancho_packet(BanchoPacket.c_stopSpectating)
+async def stopSpectating(p: Player, pr: BanchoPacketReader) -> None:
+    host = p.spectating
 
     if not host:
         await plog(f"{p} tried to stop spectating when they're not..?", Ansi.LIGHT_RED)
@@ -371,32 +371,39 @@ async def stopSpectating(p: Player, pr: PacketReader) -> None:
 
     await host.remove_spectator(p)
 
-# PacketID: 18
-@bancho_packet(Packet.c_spectateFrames)
-async def spectateFrames(p: Player, pr: PacketReader) -> None:
+# packet id: 18
+@bancho_packet(BanchoPacket.c_spectateFrames)
+async def spectateFrames(p: Player, pr: BanchoPacketReader) -> None:
+    # this runs very frequently during spectation,
+    # so it's written to run pretty quick.
+
+    # read the entire data of the packet, and ignore it internally
     data = await packets.spectateFrames(pr.data[:pr.length])
     pr.ignore_packet()
+
+    # enqueue the data
+    # to all spectators.
     for t in p.spectators:
         t.enqueue(data)
 
-# PacketID: 21
-@bancho_packet(Packet.c_cantSpectate)
-async def cantSpectate(p: Player, pr: PacketReader) -> None:
+# packet id: 21
+@bancho_packet(BanchoPacket.c_cantSpectate)
+async def cantSpectate(p: Player, pr: BanchoPacketReader) -> None:
     if not p.spectating:
         await plog(f"{p} sent can't spectate while not spectating?", Ansi.LIGHT_RED)
         return
 
     data = await packets.spectatorCantSpectate(p.id)
 
-    host: Player = p.spectating
+    host = p.spectating
     host.enqueue(data)
 
     for t in host.spectators:
         t.enqueue(data)
 
-# PacketID: 25
-@bancho_packet(Packet.c_sendPrivateMessage)
-async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
+# packet id: 25
+@bancho_packet(BanchoPacket.c_sendPrivateMessage)
+async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
         await plog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
@@ -473,33 +480,35 @@ async def sendPrivateMessage(p: Player, pr: PacketReader) -> None:
 
     await plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
-# PacketID: 29
-@bancho_packet(Packet.c_partLobby)
-async def lobbyPart(p: Player, pr: PacketReader) -> None:
+# packet id: 29
+@bancho_packet(BanchoPacket.c_partLobby)
+async def lobbyPart(p: Player, pr: BanchoPacketReader) -> None:
     p.in_lobby = False
 
-# PacketID: 30
-@bancho_packet(Packet.c_joinLobby)
-async def lobbyJoin(p: Player, pr: PacketReader) -> None:
+# packet id: 30
+@bancho_packet(BanchoPacket.c_joinLobby)
+async def lobbyJoin(p: Player, pr: BanchoPacketReader) -> None:
     p.in_lobby = True
 
     for m in filter(lambda m: m is not None, glob.matches):
         p.enqueue(await packets.newMatch(m))
 
-# PacketID: 31
-@bancho_packet(Packet.c_createMatch)
-async def matchCreate(p: Player, pr: PacketReader) -> None:
+# packet id: 31
+@bancho_packet(BanchoPacket.c_createMatch)
+async def matchCreate(p: Player, pr: BanchoPacketReader) -> None:
     m, = await pr.read(osuTypes.match)
 
     m.host = p
     await p.join_match(m, m.passwd)
     await plog(f'{p} created a new multiplayer match.')
 
-# PacketID: 32
-@bancho_packet(Packet.c_joinMatch)
-async def matchJoin(p: Player, pr: PacketReader) -> None:
+# packet id: 32
+@bancho_packet(BanchoPacket.c_joinMatch)
+async def matchJoin(p: Player, pr: BanchoPacketReader) -> None:
     m_id, passwd = await pr.read(osuTypes.i32, osuTypes.string)
-    if m_id not in range(64):
+    if 64 > m_id >= 0:
+        # make sure it's
+        # a valid match id.
         return
 
     if not (m := glob.matches.get_by_id(m_id)):
@@ -508,14 +517,14 @@ async def matchJoin(p: Player, pr: PacketReader) -> None:
 
     await p.join_match(m, passwd)
 
-# PacketID: 33
-@bancho_packet(Packet.c_partMatch)
-async def matchPart(p: Player, pr: PacketReader) -> None:
+# packet id: 33
+@bancho_packet(BanchoPacket.c_partMatch)
+async def matchPart(p: Player, pr: BanchoPacketReader) -> None:
     await p.leave_match()
 
-# PacketID: 38
-@bancho_packet(Packet.c_matchChangeSlot)
-async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
+# packet id: 38
+@bancho_packet(BanchoPacket.c_matchChangeSlot)
+async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -534,18 +543,18 @@ async def matchChangeSlot(p: Player, pr: PacketReader) -> None:
     s.reset()
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 39
-@bancho_packet(Packet.c_matchReady)
-async def matchReady(p: Player, pr: PacketReader) -> None:
+# packet id: 39
+@bancho_packet(BanchoPacket.c_matchReady)
+async def matchReady(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
     m.get_slot(p).status = SlotStatus.ready
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 40
-@bancho_packet(Packet.c_matchLock)
-async def matchLock(p: Player, pr: PacketReader) -> None:
+# packet id: 40
+@bancho_packet(BanchoPacket.c_matchLock)
+async def matchLock(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -565,9 +574,9 @@ async def matchLock(p: Player, pr: PacketReader) -> None:
 
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 41
-@bancho_packet(Packet.c_matchChangeSettings)
-async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
+# packet id: 41
+@bancho_packet(BanchoPacket.c_matchChangeSettings)
+async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -611,9 +620,9 @@ async def matchChangeSettings(p: Player, pr: PacketReader) -> None:
 
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 44
-@bancho_packet(Packet.c_matchStart)
-async def matchStart(p: Player, pr: PacketReader) -> None:
+# packet id: 44
+@bancho_packet(BanchoPacket.c_matchStart)
+async def matchStart(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -624,9 +633,12 @@ async def matchStart(p: Player, pr: PacketReader) -> None:
     m.in_progress = True
     m.enqueue(await packets.matchStart(m))
 
-# PacketID: 47
-@bancho_packet(Packet.c_matchScoreUpdate)
-async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
+# packet id: 47
+@bancho_packet(BanchoPacket.c_matchScoreUpdate)
+async def matchScoreUpdate(p: Player, pr: BanchoPacketReader) -> None:
+    # this runs very frequently in matches,
+    # so it's written to run pretty quick.
+
     if not (m := p.match):
         return
 
@@ -639,9 +651,9 @@ async def matchScoreUpdate(p: Player, pr: PacketReader) -> None:
     m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + data, lobby = False)
     pr.ignore(size)
 
-# PacketID: 49
-@bancho_packet(Packet.c_matchComplete)
-async def matchComplete(p: Player, pr: PacketReader) -> None:
+# packet id: 49
+@bancho_packet(BanchoPacket.c_matchComplete)
+async def matchComplete(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -662,9 +674,9 @@ async def matchComplete(p: Player, pr: PacketReader) -> None:
             if s.status == SlotStatus.complete:
                 s.status = SlotStatus.not_ready
 
-# PacketID: 51
-@bancho_packet(Packet.c_matchChangeMods)
-async def matchChangeMods(p: Player, pr: PacketReader) -> None:
+# packet id: 51
+@bancho_packet(BanchoPacket.c_matchChangeMods)
+async def matchChangeMods(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -683,9 +695,9 @@ async def matchChangeMods(p: Player, pr: PacketReader) -> None:
 
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 52
-@bancho_packet(Packet.c_matchLoadComplete)
-async def matchLoadComplete(p: Player, pr: PacketReader) -> None:
+# packet id: 52
+@bancho_packet(BanchoPacket.c_matchLoadComplete)
+async def matchLoadComplete(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -696,27 +708,27 @@ async def matchLoadComplete(p: Player, pr: PacketReader) -> None:
     if not any(s.status & SlotStatus.playing and not s.loaded for s in m.slots):
         m.enqueue(await packets.matchAllPlayerLoaded(), lobby = False)
 
-# PacketID: 54
-@bancho_packet(Packet.c_matchNoBeatmap)
-async def matchNoBeatmap(p: Player, pr: PacketReader) -> None:
+# packet id: 54
+@bancho_packet(BanchoPacket.c_matchNoBeatmap)
+async def matchNoBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
     m.get_slot(p).status = SlotStatus.no_map
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 55
-@bancho_packet(Packet.c_matchNotReady)
-async def matchNotReady(p: Player, pr: PacketReader) -> None:
+# packet id: 55
+@bancho_packet(BanchoPacket.c_matchNotReady)
+async def matchNotReady(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
     m.get_slot(p).status = SlotStatus.not_ready
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
-# PacketID: 56
-@bancho_packet(Packet.c_matchFailed)
-async def matchFailed(p: Player, pr: PacketReader) -> None:
+# packet id: 56
+@bancho_packet(BanchoPacket.c_matchFailed)
+async def matchFailed(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -727,18 +739,18 @@ async def matchFailed(p: Player, pr: PacketReader) -> None:
     # enqueue data to all players in the match
     m.enqueue(data)
 
-# PacketID: 59
-@bancho_packet(Packet.c_matchHasBeatmap)
-async def matchHasBeatmap(p: Player, pr: PacketReader) -> None:
+# packet id: 59
+@bancho_packet(BanchoPacket.c_matchHasBeatmap)
+async def matchHasBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
     m.get_slot(p).status = SlotStatus.not_ready
     m.enqueue(await packets.updateMatch(m))
 
-# PacketID: 60
-@bancho_packet(Packet.c_matchSkipRequest)
-async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
+# packet id: 60
+@bancho_packet(BanchoPacket.c_matchSkipRequest)
+async def matchSkipRequest(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -752,9 +764,9 @@ async def matchSkipRequest(p: Player, pr: PacketReader) -> None:
     # All users have skipped, enqueue a skip.
     m.enqueue(await packets.matchSkip(), lobby = False)
 
-# PacketID: 63
-@bancho_packet(Packet.c_channelJoin)
-async def channelJoin(p: Player, pr: PacketReader) -> None:
+# packet id: 63
+@bancho_packet(BanchoPacket.c_channelJoin)
+async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
     chan_name, = await pr.read(osuTypes.string)
     c = glob.channels[chan_name]
 
@@ -771,8 +783,8 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
 # fair is actually a lot nicer cuz its json
 # but like cmon lol
 
-# PacketID: 68
-#@bancho_packet(Packet.c_beatmapInfoRequest)
+# packet id: 68
+#@bancho_packet(BanchoPacket.c_beatmapInfoRequest)
 #async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
 #    req: BeatmapInfoRequest
 #    req, = await pr.read(osuTypes.mapInfoRequest)
@@ -828,9 +840,9 @@ async def channelJoin(p: Player, pr: PacketReader) -> None:
 #
 #    p.enqueue(await packets.beatmapInfoReply(info_list))
 
-# PacketID: 70
-@bancho_packet(Packet.c_matchTransferHost)
-async def matchTransferHost(p: Player, pr: PacketReader) -> None:
+# packet id: 70
+@bancho_packet(BanchoPacket.c_matchTransferHost)
+async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -847,9 +859,9 @@ async def matchTransferHost(p: Player, pr: PacketReader) -> None:
     m.host.enqueue(await packets.matchTransferHost())
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
-# PacketID: 73
-@bancho_packet(Packet.c_friendAdd)
-async def friendAdd(p: Player, pr: PacketReader) -> None:
+# packet id: 73
+@bancho_packet(BanchoPacket.c_friendAdd)
+async def friendAdd(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
@@ -865,9 +877,9 @@ async def friendAdd(p: Player, pr: PacketReader) -> None:
 
     await p.add_friend(t)
 
-# PacketID: 74
-@bancho_packet(Packet.c_friendRemove)
-async def friendRemove(p: Player, pr: PacketReader) -> None:
+# packet id: 74
+@bancho_packet(BanchoPacket.c_friendRemove)
+async def friendRemove(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
@@ -883,9 +895,9 @@ async def friendRemove(p: Player, pr: PacketReader) -> None:
 
     await p.remove_friend(t)
 
-# PacketID: 77
-@bancho_packet(Packet.c_matchChangeTeam)
-async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
+# packet id: 77
+@bancho_packet(BanchoPacket.c_matchChangeTeam)
+async def matchChangeTeam(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -899,9 +911,9 @@ async def matchChangeTeam(p: Player, pr: PacketReader) -> None:
 
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
-# PacketID: 78
-@bancho_packet(Packet.c_channelPart)
-async def channelPart(p: Player, pr: PacketReader) -> None:
+# packet id: 78
+@bancho_packet(BanchoPacket.c_channelPart)
+async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
     chan, = await pr.read(osuTypes.string)
 
     if not chan:
@@ -921,9 +933,9 @@ async def channelPart(p: Player, pr: PacketReader) -> None:
     # Enqueue new channelinfo (playercount) to all players.
     glob.players.enqueue(await packets.channelInfo(*c.basic_info))
 
-# PacketID: 79
-@bancho_packet(Packet.c_ReceiveUpdates)
-async def receiveUpdates(p: Player, pr: PacketReader) -> None:
+# packet id: 79
+@bancho_packet(BanchoPacket.c_ReceiveUpdates)
+async def receiveUpdates(p: Player, pr: BanchoPacketReader) -> None:
     val, = await pr.read(osuTypes.i32)
 
     if val not in range(3):
@@ -932,16 +944,16 @@ async def receiveUpdates(p: Player, pr: PacketReader) -> None:
 
     p.pres_filter = PresenceFilter(val)
 
-# PacketID: 82
-@bancho_packet(Packet.c_setAwayMessage)
-async def setAwayMessage(p: Player, pr: PacketReader) -> None:
+# packet id: 82
+@bancho_packet(BanchoPacket.c_setAwayMessage)
+async def setAwayMessage(p: Player, pr: BanchoPacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
     p.away_msg, = await pr.read(osuTypes.string)
     pr.ignore(4)
 
-# PacketID: 85
-@bancho_packet(Packet.c_userStatsRequest)
-async def statsRequest(p: Player, pr: PacketReader) -> None:
+# packet id: 85
+@bancho_packet(BanchoPacket.c_userStatsRequest)
+async def statsRequest(p: Player, pr: BanchoPacketReader) -> None:
     if len(pr.data) < 6:
         return
 
@@ -952,9 +964,9 @@ async def statsRequest(p: Player, pr: PacketReader) -> None:
         if t := await glob.players.get_by_id(online):
             p.enqueue(await packets.userStats(t))
 
-# PacketID: 87
-@bancho_packet(Packet.c_matchInvite)
-async def matchInvite(p: Player, pr: PacketReader) -> None:
+# packet id: 87
+@bancho_packet(BanchoPacket.c_matchInvite)
+async def matchInvite(p: Player, pr: BanchoPacketReader) -> None:
     if not p.match:
         pr.ignore(4)
         return
@@ -968,9 +980,9 @@ async def matchInvite(p: Player, pr: PacketReader) -> None:
     t.enqueue(await packets.sendMessage(p.name, inv, t.name, p.id))
     await plog(f'{p} invited {t} to their match.')
 
-# PacketID: 90
-@bancho_packet(Packet.c_matchChangePassword)
-async def matchChangePassword(p: Player, pr: PacketReader) -> None:
+# packet id: 90
+@bancho_packet(BanchoPacket.c_matchChangePassword)
+async def matchChangePassword(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
@@ -980,14 +992,14 @@ async def matchChangePassword(p: Player, pr: PacketReader) -> None:
     m.passwd = new.passwd
     m.enqueue(await packets.updateMatch(m), lobby=False)
 
-# PacketID: 97
-@bancho_packet(Packet.c_userPresenceRequest)
-async def userPresenceRequest(p: Player, pr: PacketReader) -> None:
+# packet id: 97
+@bancho_packet(BanchoPacket.c_userPresenceRequest)
+async def userPresenceRequest(p: Player, pr: BanchoPacketReader) -> None:
     for pid in await pr.read(osuTypes.i32_list):
         if t := await glob.players.get_by_id(pid):
             p.enqueue(await packets.userPresence(t))
 
-# PacketID: 99
-@bancho_packet(Packet.c_userToggleBlockNonFriendPM)
-async def toggleBlockingDMs(p: Player, pr: PacketReader) -> None:
+# packet id: 99
+@bancho_packet(BanchoPacket.c_userToggleBlockNonFriendPM)
+async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
     p.pm_private = (await pr.read(osuTypes.i32))[0] == 1

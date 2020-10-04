@@ -91,7 +91,42 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #        await plog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
 #        return
 #
-#    return b'6\nDN'
+#    #s - setid
+#    #b - beatmapids ',' delim
+#    #z - hash
+#    #vv - ver
+#
+#    pname = unquote(conn.args['u'])
+#    phash = conn.args['h']
+#
+#    if not (p := await glob.players.get_login(pname, phash)):
+#        return
+#
+#    _ids = conn.args['b'].split(',')
+#
+#    if not conn.args['s'].isdecimal() \
+#    or not all(x.isdecimal() for x in _ids):
+#        return b'6\nInvalid submission.'
+#
+#    map_ids = [int(x) for x in _ids]
+#    set_id = int(conn.args['s'])
+#
+#    md5_exists = await glob.db.fetch(
+#        'SELECT 1 FROM maps '
+#        'WHERE md5 = %s',
+#        [conn.args['z']]
+#    ) is not None
+#
+#    if set_id != -1 or any(map_ids) or md5_exists:
+#        # TODO: check if they are the creator
+#
+#        return b''
+#
+#    # get basic info for their new map
+#
+#    # 1: ownership | 3: alreadyranked
+#
+#    ...
 
 @web_handler('osu-screenshot.php', required_args=('u', 'p', 'v'))
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
@@ -393,16 +428,47 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     """
 
 # TODO: required params
-@web_handler('osu-search-set.php')
+@web_handler('osu-search-set.php', required_args=('u', 'h'))
 async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
     if 's' in conn.args:
-        k, v = ('set_id', conn.args['s'])
+        # gulag chat menu: if the argument is negative,
+        # check if it's in the players menu options.
+        if conn.args['s'][0] == '-':
+            opt_id = int(conn.args['s'])
+
+            if opt_id not in p.menu_options:
+                return b'' # negative set id, non-menu
+
+            opt = p.menu_options[opt_id]
+
+            if time.time() > opt['timeout']:
+                # the option has expired.
+                del p.menu_options[opt_id]
+                return b''
+
+            # we have a menu option. activate it.
+            await opt['callback']()
+
+            if not opt['reusable']:
+                # remove the option from the player
+                del p.menu_options[opt_id]
+
+            return b''
+        else:
+            # this is just a normal request
+            k, v = ('set_id', conn.args['s'])
     elif 'b' in conn.args:
         k, v = ('id', conn.args['b'])
     else:
-        return b''
+        return b'' # invalid args
 
     # Get all set data.
     bmapset = await glob.db.fetch(
@@ -1018,10 +1084,6 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         # Simply return an empty set.
         return '\n'.join(res + ['', '']).encode()
 
-    score_fmt = ('{id}|{name}|{score}|{max_combo}|'
-                 '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
-                 '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}')
-
     p_best = await glob.db.fetch(
         f'SELECT id, {scoring} AS _score, max_combo, '
         'n50, n100, n300, nmiss, nkatu, ngeki, '
@@ -1032,6 +1094,10 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
             map_md5, conn.args['m'], p.id
         ]
     )
+
+    score_fmt = ('{id}|{name}|{score}|{max_combo}|'
+                 '{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|'
+                 '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}')
 
     if p_best:
         # Calculate the rank of the score.

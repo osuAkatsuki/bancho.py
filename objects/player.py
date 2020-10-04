@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from typing import Optional
+from typing import Optional, Coroutine
 import time
 import uuid
+import random
 
 from constants.privileges import Privileges, BanchoPrivileges
 from constants.countries import country_codes
@@ -25,7 +26,8 @@ __all__ = (
 )
 
 class ModeData:
-    """A class to represent a player's stats in a single gamemode.
+    """\
+    A class to represent a player's stats in a single gamemode.
 
     Attributes
     -----------
@@ -106,7 +108,8 @@ class Action(IntEnum):
     OsuDirect    = 13
 
 class Status:
-    """A class to represent the current status of a player.
+    """\
+    A class to represent the current status of a player.
 
     Attributes
     -----------
@@ -156,7 +159,8 @@ class Status:
         self.map_id = map_id
 
 class Player:
-    """A class to represent a player.
+    """\
+    A class to represent a player.
 
     Attributes
     -----------
@@ -241,6 +245,13 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
+    # XXX: below is mostly custom gulag,
+           or internal player class stuff.
+
+    menu_options: `dict[int, str]`
+        The current osu! chat menu options available to the player.
+        XXX: These may eventually have a timeout.
+
     _queue: `SimpleQueue`
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
@@ -271,7 +282,7 @@ class Player:
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
         'login_time', 'ping_time', 'osu_version',
-        'pres_filter', '_queue'
+        'pres_filter', 'menu_options', '_queue'
     )
 
     def __init__(self, **kwargs) -> None:
@@ -313,6 +324,10 @@ class Player:
 
         self.osu_version = kwargs.get('osu_version', None)
         self.pres_filter = PresenceFilter.Nil
+
+        # XXX: below is mostly gulag-specific & internal stuff
+
+        self.menu_options = {} # {-randint(0, int32max): callback, ...}
 
         # Packet queue
         self._queue = asyncio.Queue()
@@ -739,6 +754,26 @@ class Player:
             ))['c'] + 1
 
             self.stats[gm].update(**res)
+
+    async def add_to_menu(self, coroutine: Coroutine,
+                          timeout: int = -1, reusable: bool = False
+                         ) -> None:
+        """Add a valid callback to the user's osu! chat options."""
+        i32_max = 0x7fffffff
+
+        genrand = lambda: -random.randint(0, i32_max)
+        while (randnum := genrand()) in self.menu_options:
+            ...
+
+        self.menu_options |= {
+            randnum: {
+                'callback': coroutine,
+                'reusable': reusable,
+                'timeout': timeout if timeout != -1 else i32_max
+            }
+        }
+
+        return randnum
 
     async def stats_from_sql(self, gm: GameMode) -> None:
         """Fetch the player's stats for a specified gamemode."""

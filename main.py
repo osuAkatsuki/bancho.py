@@ -81,10 +81,10 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
            else f'{time_taken / 1000:.2f}ms')
 
-    await plog(f'Handled in {time_str}.', Ansi.LIGHT_CYAN)
+    await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 6, 2)
+    glob.version = cmyui.Version(2, 6, 3)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

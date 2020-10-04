@@ -278,7 +278,7 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
     if not (t := await glob.players.get_by_name(' '.join(msg[:-1]))):
         return 'Could not find a user by that name.'
 
-    packet = packets.Packet(int(msg[-1]))
+    packet = packets.BanchoPacket(int(msg[-1]))
     t.enqueue(await packets.write(packet))
     return f'Wrote {packet} to {t}.'
 
@@ -320,6 +320,15 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     t.priv = Privileges(newpriv)
     return 'Success.'
+
+# temp command
+@command(priv=Privileges.Dangerous, public=False)
+async def menu(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    async def callback():
+        p.enqueue(await packets.notification('yay!'))
+
+    opt_id = await p.add_to_menu(callback)
+    return f'[osu://dl/{opt_id} option]'
 
 # XXX: This actually comes in handy sometimes, I initially
 # wrote it completely as a joke, but I might keep it in for

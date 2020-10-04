@@ -81,7 +81,8 @@ class ScoreFrame:
     bonus_portion: Optional[int] = None
 
 class Slot:
-    """A class to represent a single slot in an osu! multiplayer match.
+    """\
+    A class to represent a single slot in an osu! multiplayer match.
 
     Attributes
     -----------
@@ -132,7 +133,8 @@ class Slot:
         self.skipped = False
 
 class Match:
-    """A class to represent an osu! multiplayer match.
+    """\
+    A class to represent an osu! multiplayer match.
 
     Attributes
     -----------
