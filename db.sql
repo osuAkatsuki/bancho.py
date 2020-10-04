@@ -8,6 +8,7 @@ drop table if exists maps;
 drop table if exists friendships;
 drop table if exists ratings;
 drop table if exists performance_reports;
+drop table if exists favourites;
 drop table if exists channels;
 
 create table users
@@ -241,6 +242,13 @@ create table performance_reports
 	completion tinyint(1) not null,
 	identifier varchar(128) null comment 'really don''t know much about this yet',
 	average_frametime int not null
+);
+
+create table favourites
+(
+	userid int not null,
+	setid int not null,
+	primary key (userid, setid)
 );
 
 # Insert vital stuff, such as bot user & basic channels.

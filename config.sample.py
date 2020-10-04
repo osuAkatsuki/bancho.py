@@ -49,7 +49,7 @@ gzip = {'web': 4, 'disk': 9}
 # mirror, but this is a plan for long in the future.
 
 # the external mirror url to use.
-mirror = 'https://storage.ripple.moe'
+mirror = 'https://kacktaube.me'
 # whether or not you'd like gulag to cache beatmaps retrieved
 # from the mirror on disk, for faster access in the future.
 # TODO: add max size to cache on disk?

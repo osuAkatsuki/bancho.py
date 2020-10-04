@@ -32,11 +32,28 @@ from console import plog, Ansi
 
 glob.web_map = {}
 
-def web_handler(uri: str) -> Callable:
-    def register_callback(callback: Callable) -> Callable:
-        glob.web_map |= {uri: callback}
-        return callback
-    return register_callback
+# TODO: clean this up.. this is definitely
+# unreadable and also confusing as hell to read lol
+def web_handler(uri: str, required_args: tuple[str] = (),
+                required_mpargs: tuple[str] = ()) -> Callable:
+    def register_cb(cb: Callable) -> Callable:
+        async def _handler(conn: AsyncConnection):
+            # make sure we have all required args
+            if not all(x in conn.args for x in required_args):
+                await plog(f'{uri} request missing args.', Ansi.LIGHT_RED)
+                return b''
+
+            # make sure we have all required multipart args
+            if not all(x in conn.multipart_args for x in required_mpargs):
+                await plog(f'{uri} request missing mpargs.', Ansi.LIGHT_RED)
+                return b''
+
+            return await cb(conn)
+
+        glob.web_map |= {uri: _handler}
+        return cb
+
+    return register_cb
 
 @web_handler('bancho_connect.php')
 async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
@@ -76,15 +93,8 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #
 #    return b'6\nDN'
 
-required_params_screemshot = frozenset({
-    'u', 'p', 'v'
-})
-@web_handler('osu-screenshot.php')
+@web_handler('osu-screenshot.php', required_args=('u', 'p', 'v'))
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.multipart_args for x in required_params_screemshot):
-        await plog(f'screenshot req missing params.', Ansi.LIGHT_RED)
-        return
-
     if 'ss' not in conn.files:
         await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)
         return
@@ -103,15 +113,8 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
     await plog(f'{p} uploaded {filename}.')
     return filename.encode()
 
-required_params_osuGetFriends = frozenset({
-    'u', 'h'
-})
-@web_handler('osu-getfriends.php')
+@web_handler('osu-getfriends.php', required_args=('u', 'h'))
 async def osuGetFriends(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_osuGetFriends):
-        await plog(f'getfriends req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['u'])
     phash = conn.args['h']
 
@@ -120,15 +123,8 @@ async def osuGetFriends(conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(str(i) for i in p.friends).encode()
 
-required_params_osuGetBeatmapInfo = frozenset({
-    'u', 'h'
-})
-@web_handler('osu-getbeatmapinfo.php')
+@web_handler('osu-getbeatmapinfo.php', required_args=('u', 'h'))
 async def osuGetBeatmapInfo(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_osuGetBeatmapInfo):
-        await plog(f'getmapinfo req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['u'])
     phash = conn.args['h']
 
@@ -194,24 +190,60 @@ async def osuGetBeatmapInfo(conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
-required_params_lastFM = frozenset({
-    'b', 'action', 'us', 'ha'
-})
-@web_handler('lastfm.php')
-async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_lastFM):
-        await plog(f'lastfm req missing params.', Ansi.LIGHT_RED)
-        return
+@web_handler('osu-getfavourites.php', required_args=('u', 'h'))
+async def osuGetFavourites(conn: AsyncConnection) -> Optional[bytes]:
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
 
+    if not (p := await glob.players.get_login(pname, phash)):
+        return b''
+
+    return '\n'.join(await glob.db.fetchall(
+        'SELECT setid FROM favourites '
+        'WHERE userid = %s',
+        [p.id]
+    )).encode()
+
+@web_handler('osu-addfavourite.php', required_args=('u', 'h', 'a'))
+async def osuAddFavourite(conn: AsyncConnection) -> Optional[bytes]:
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return b'Please login to add favourites!'
+
+    # make sure set id is valid
+    if not conn.args['a'].isdecimal():
+        return b'Invalid beatmap set id.'
+
+    # check if they already have this favourited.
+    if await glob.db.fetch(
+        'SELECT 1 FROM favourites '
+        'WHERE userid = %s AND setid = %s',
+        [p.id, conn.args['a']]
+    ): return b"You've already favourited this beatmap!"
+
+    # add favourite
+    await glob.db.execute(
+        'INSERT INTO favourites '
+        'VALUES (%s, %s)',
+        [p.id, conn.args['a']]
+    )
+
+    return b''
+
+@web_handler('lastfm.php', required_args=('b', 'action', 'us', 'ha'))
+async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
     pname = unquote(conn.args['us'])
     phash = conn.args['ha']
 
     if not (p := await glob.players.get_login(pname, phash)):
-        return
+        return # not logged in
 
     if conn.args['b'][0] != 'a':
-        # not anticheat related
-        return
+        # not anticheat related, tell the
+        # client not to send any more for now.
+        return b'-3'
 
     flags = ClientFlags(int(conn.args['b'][1:]))
 
@@ -220,7 +252,7 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         # be a separate client, buuuut prooobably not lol.
 
         await p.restrict()
-        return
+        return b'-3'
 
     if flags & ClientFlags.RegistryEdits:
         # Player has registry edits left from
@@ -231,7 +263,7 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         if random.randrange(32) == 0:
             # Random chance (1/32) for a restriction.
             await p.restrict()
-            return
+            return b'-3'
 
         p.enqueue(await packets.notification('\n'.join([
             "Hey!",
@@ -239,7 +271,9 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
             "This tool leaves a change in your registry that the osu! client can detect.",
             "Please re-install relife and disable the program to avoid possible restriction."
         ])))
-        return
+
+        await p.logout()
+        return b'-3'
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
     if flags & (ClientFlags.libeay32Library | ClientFlags.aqnMenuSample):
@@ -251,15 +285,9 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         pass
     """
 
-required_params_osuSearch = frozenset({
-    'u', 'h', 'r', 'q', 'm', 'p'
-})
-@web_handler('osu-search.php')
+req_args_osuSearch = ('u', 'h', 'r', 'q', 'm', 'p')
+@web_handler('osu-search.php', required_args=req_args_osuSearch)
 async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_osuSearch):
-        await plog(f'osu-search req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['u'])
     phash = conn.args['h']
 
@@ -269,7 +297,7 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return
 
-    url = f'{glob.config.mirror}/api/search'
+    url = f'{glob.config.mirror}/api/cheesegull/search'
     params = {
         'amount': 100,
         'offset': conn.args['p'],
@@ -411,17 +439,13 @@ autorestrict_pp = (
 )
 del UNDEF
 
-required_params_submitModular = frozenset({
+req_args_submitModular = (
     'x', 'ft', 'score', 'fs', 'bmk', 'iv',
     'c1', 'st', 'pass', 'osuver', 's'
-})
-@web_handler('osu-submit-modular-selector.php')
+)
+@web_handler('osu-submit-modular-selector.php', required_mpargs=req_args_submitModular)
 async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
-
-    if not all(x in mp_args for x in required_params_submitModular):
-        await plog(f'submit-modular-selector req missing params.', Ansi.LIGHT_RED)
-        return b'error: no'
 
     # Parse our score data into a score obj.
     s = await Score.from_submission(
@@ -695,15 +719,8 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     await plog(f'{s.player} submitted a score! ({s.mode!r}, {s.status!r})', Ansi.LIGHT_GREEN)
     return ret
 
-required_params_getReplay = frozenset({
-    'c', 'm', 'u', 'h'
-})
-@web_handler('osu-getreplay.php')
+@web_handler('osu-getreplay.php', required_args=('c', 'm', 'u', 'h'))
 async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_getReplay):
-        await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['u'])
     phash = conn.args['h']
 
@@ -715,16 +732,9 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
         async with aiofiles.open(path, 'rb') as f:
             return await f.read()
 
-required_params_osuSession = frozenset({
-    'u', 'h', 'action'
-})
-@web_handler('osu-session.php')
+@web_handler('osu-session.php', required_mpargs=('u', 'h', 'action'))
 async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
-
-    if not all(x in mp_args for x in required_params_osuSession):
-        await plog(f'osu-rate req missing params.', Ansi.LIGHT_RED)
-        return
 
     if mp_args['action'] not in ('check', 'submit'):
         return # invalid action
@@ -828,15 +838,8 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
         # to some kind of internal buffer, dunno why tho
         return
 
-required_params_osuRate = frozenset({
-    'u', 'p', 'c'
-})
-@web_handler('osu-rate.php')
+@web_handler('osu-rate.php', required_args=('u', 'p', 'c'))
 async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_osuRate):
-        await plog(f'osu-rate req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['u'])
     phash = conn.args['p']
 
@@ -897,17 +900,13 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
-required_params_getScores = frozenset({
+req_args_getScores = (
     's', 'vv', 'v', 'c',
     'f', 'm', 'i', 'mods',
     'h', 'a', 'us', 'ha'
-})
-@web_handler('osu-osz2-getscores.php')
+)
+@web_handler('osu-osz2-getscores.php', required_args=req_args_getScores)
 async def getScores(conn: AsyncConnection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_getScores):
-        await plog(f'get-scores req missing params.', Ansi.LIGHT_RED)
-        return
-
     pname = unquote(conn.args['us'])
     phash = conn.args['ha']
 
