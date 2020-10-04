@@ -128,7 +128,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #
 #    ...
 
-@web_handler('osu-screenshot.php', required_args=('u', 'p', 'v'))
+@web_handler('osu-screenshot.php', required_mpargs=('u', 'p', 'v'))
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
     if 'ss' not in conn.files:
         await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)

@@ -756,26 +756,6 @@ class Player:
 
             self.stats[gm].update(**res)
 
-    async def add_to_menu(self, coroutine: Coroutine,
-                          timeout: int = -1, reusable: bool = False
-                         ) -> None:
-        """Add a valid callback to the user's osu! chat options."""
-        i32_max = 0x7fffffff
-
-        genrand = lambda: -random.randint(0, i32_max)
-        while (randnum := genrand()) in self.menu_options:
-            ...
-
-        self.menu_options |= {
-            randnum: {
-                'callback': coroutine,
-                'reusable': reusable,
-                'timeout': timeout if timeout != -1 else i32_max
-            }
-        }
-
-        return randnum
-
     async def stats_from_sql(self, gm: GameMode) -> None:
         """Fetch the player's stats for a specified gamemode."""
         res = await glob.db.fetch(
@@ -800,3 +780,23 @@ class Player:
         )['c']
 
         self.stats[gm].update(**res)
+
+    async def add_to_menu(self, coroutine: Coroutine,
+                          timeout: int = -1, reusable: bool = False
+                         ) -> None:
+        """Add a valid callback to the user's osu! chat options."""
+        i32_max = 0x7fffffff
+
+        genrand = lambda: -random.randint(0, i32_max)
+        while (randnum := genrand()) in self.menu_options:
+            ...
+
+        self.menu_options |= {
+            randnum: {
+                'callback': coroutine,
+                'reusable': reusable,
+                'timeout': timeout if timeout != -1 else i32_max
+            }
+        }
+
+        return randnum
