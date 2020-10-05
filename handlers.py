@@ -23,13 +23,20 @@ __all__ = (
     'handle_avatar'
 )
 
+# a list of packetids that gulag
+# will refuse to reply to more
+# than once per connection.
+deny_doublereply = frozenset({
+    85
+})
+
 async def handle_bancho(conn: AsyncConnection) -> None:
     """Handle a bancho request (c.ppy.sh/*)."""
     if 'User-Agent' not in conn.headers:
         return
 
     if conn.headers['User-Agent'] != 'osu!':
-        # Most likely a request from a browser.
+        # most likely a request from a browser.
         await conn.send(200, b'<!DOCTYPE html>' + '<br>'.join((
             f'Running gulag v{glob.version}',
             f'Players online: {len(glob.players) - 1}',
@@ -46,7 +53,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     resp = bytearray()
 
     if 'osu-token' not in conn.headers:
-        # Login is a bit of a special case,
+        # login is a bit of a special case,
         # so we'll handle it separately.
         login_data = await bancho.login(conn.body,
                                         conn.headers['X-Real-IP'])
@@ -61,28 +68,36 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             await packets.restartServer(0) # send 0ms since the server is already up!
         )
 
-    else: # Player found, process normal packet.
+    else: # player found, process normal packet.
         pr = packets.BanchoPacketReader(conn.body)
 
-        # keep track of the packetIDs we've already handled, the osu
-        # client will stack many packets of the same type into one
-        # connection (200iq design), theres no point double replying.
-        packets_handled = []
+        # gulag refuses to reply to a group of packets
+        # more than once per connection. the list is
+        # defined above! var: `deny_doublereply`.
+        # this list will simply keep track of which
+        # of these packet's we've replied to during
+        # this connection to allow this functonality.
+        blocked_packets = []
 
-        # Bancho connections can send multiple packets at a time.
-        # Iter through packets received and them handle indivudally.
+        # bancho connections can send multiple packets at a time.
+        # iter through packets received and them handle indivudally.
         while not pr.empty():
             await pr.read_packet_header()
             if pr.packetID == -1:
                 continue # skip, data empty?
 
-            if pr.packetID in packets_handled:
-                # we've already handled a packet of
-                # this type during this connection.
-                pr.ignore_packet()
-                continue
+            if pr.packetID in deny_doublereply:
+                # this is a connection we should
+                # only allow once per connection.
 
-            packets_handled.append(pr.packetID)
+                if pr.packetID in blocked_packets:
+                    # this packet has already been
+                    # replied to in this connection.
+                    pr.ignore_packet()
+                    continue
+
+                # log that the packet was handled.
+                blocked_packets.append(pr.packetID)
 
             if pr.packetID in glob.bancho_map:
                 # Server is able to handle the packet.
@@ -101,56 +116,59 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     if glob.config.debug:
         await plog(resp, Ansi.LIGHT_GREEN)
 
-    # Compress with gzip if enabled.
+    # compress with gzip if enabled.
     if glob.config.gzip['web'] > 0:
         resp = gzip.compress(resp, glob.config.gzip['web'])
         await conn.add_resp_header('Content-Encoding: gzip')
 
-    # Add headers and such
+    # add headers and such
     await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
     #await conn.add_resp_header('Connection: keep-alive')
 
-    # Even if the packet is empty, we have to
+    # even if the packet is empty, we have to
     # send back an empty response so the client
     # knows it was successfully delivered.
     await conn.send(200, resp)
 
 # XXX: perhaps (web) handlers should return
 # a bytearray which could be cast to bytes
-# here at the end? Probably a better soln.
+# here at the end? probably a better soln.
 
 async def handle_web(conn: AsyncConnection) -> None:
     """Handle a web request (osu.ppy.sh/web/*)."""
     handler = conn.path[5:] # cut off /web/
 
     if handler in glob.web_map:
+        # we have a handler for this connection.
         await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
+        # call our handler with the connection obj.
         if resp := await glob.web_map[handler](conn):
-            # We have data to send back to the client.
+            # there's data to send back, compress & log.
             if glob.config.debug:
                 await plog(resp, Ansi.LIGHT_GREEN)
 
-            # Compress with gzip if enabled.
+            # gzip if enabled.
             if glob.config.gzip['web'] > 0:
                 resp = gzip.compress(resp, glob.config.gzip['web'])
                 await conn.add_resp_header('Content-Encoding: gzip')
 
-            # Add headers and such
-            await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
-            #await conn.add_resp_header('Connection: keep-alive')
+        # attach headers & send response.
+        await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+        #await conn.add_resp_header('Connection: keep-alive')
 
-            await conn.send(200, resp)
+        await conn.send(200, resp if resp else b'')
 
     elif handler.startswith('maps/'):
-        await plog(f'Handling map update.', Ansi.LIGHT_MAGENTA)
+        # this connection is a map update request.
+        await plog(f'Beatmap update request.', Ansi.LIGHT_MAGENTA)
 
-        # Special case for updating maps.
         if resp := await web.updateBeatmap(conn):
-            # Map found, send back the data.
+            # map found, send back the data.
             await conn.send(200, resp)
 
-    else: # Handler not found
+    else:
+        # we don't have a handler for this connection.
         await plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)
 
 async def handle_ss(conn: AsyncConnection) -> None:
@@ -188,16 +206,16 @@ async def handle_dl(conn: AsyncConnection) -> None:
 
     # TODO: at the moment, if a map's dl is disabled on osu it
     # will send back 'This download has been disabled by peppy',
-    # which gulag will save into a file.. We'll need a var in
+    # which gulag will save into a file.. we'll need a var in
     # the db to store whether a map has been disabled, i guess.
 
-    if glob.config.mirror_cache: # Cache maps from the mirror on disk.
+    if glob.config.mirror_cache: # cache maps from the mirror on disk.
         if os.path.exists(filepath := f'.data/osz/{set_id}.osz'):
-            # We have the map in cache.
+            # we have the map in cache.
             async with aiofiles.open(filepath, 'rb') as f:
                 content = await f.read()
 
-        else: # Get the map for our mirror & client.
+        else: # get the map for our mirror & client.
             bmap_url = f'{glob.config.mirror}/d/{set_id}'
             async with glob.http.get(bmap_url) as resp:
                 if not resp or resp.status != 200:
@@ -205,13 +223,13 @@ async def handle_dl(conn: AsyncConnection) -> None:
 
                 content = await resp.read()
 
-            # Save to disk.
+            # save to disk.
             async with aiofiles.open(filepath, 'wb') as f:
                 await f.write(content)
 
         await conn.send(200, content)
 
-    else: # Don't use gulag as a mirror, just reflect another.
+    else: # don't use gulag as a mirror, just reflect another.
         bmap_url = f'{glob.config.mirror}/d/{set_id}'
         await conn.add_resp_header(f'Location: {bmap_url}')
         await conn.send(302, None)
@@ -233,11 +251,11 @@ async def handle_api(conn: AsyncConnection) -> None:
         await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
         if resp := await glob.api_map[handler](conn):
-            # We have data to send back to the client.
+            # we have data to send back to the client.
             if glob.config.debug:
                 await plog(resp, Ansi.LIGHT_GREEN)
 
             await conn.send(200, resp)
 
-    else: # Handler not found.
+    else: # handler not found.
         await plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)

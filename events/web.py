@@ -41,12 +41,12 @@ def web_handler(uri: str, required_args: tuple[str] = (),
             # make sure we have all required args
             if not all(x in conn.args for x in required_args):
                 await plog(f'{uri} request missing args.', Ansi.LIGHT_RED)
-                return b''
+                return
 
             # make sure we have all required multipart args
             if not all(x in conn.multipart_args for x in required_mpargs):
                 await plog(f'{uri} request missing mpargs.', Ansi.LIGHT_RED)
-                return b''
+                return
 
             return await cb(conn)
 
@@ -64,7 +64,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
         return b'allez-vous owo'
 
     # TODO: perhaps handle this..?
-    return
+    NotImplemented
 
 """ TODO: beatmap submission system """
 #required_params_bmsubmit_upload = frozenset({
@@ -106,7 +106,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #
 #    if not conn.args['s'].isdecimal() \
 #    or not all(x.isdecimal() for x in _ids):
-#        return b'6\nInvalid submission.'
+#        return b'-1\nInvalid submission.'
 #
 #    map_ids = [int(x) for x in _ids]
 #    set_id = int(conn.args['s'])
@@ -119,8 +119,13 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #
 #    if set_id != -1 or any(map_ids) or md5_exists:
 #        # TODO: check if they are the creator
+#        res = await glob.db.fetch(
+#            'SELECT creator FROM maps '
+#            'WHERE server = \'gulag\' '
+#            'AND '
+#        )
 #
-#        return b''
+#        return b'1' # ownership error
 #
 #    # get basic info for their new map
 #
@@ -231,7 +236,7 @@ async def osuGetFavourites(conn: AsyncConnection) -> Optional[bytes]:
     phash = conn.args['h']
 
     if not (p := await glob.players.get_login(pname, phash)):
-        return b''
+        return
 
     return '\n'.join(await glob.db.fetchall(
         'SELECT setid FROM favourites '
@@ -264,8 +269,6 @@ async def osuAddFavourite(conn: AsyncConnection) -> Optional[bytes]:
         'VALUES (%s, %s)',
         [p.id, conn.args['a']]
     )
-
-    return b''
 
 @web_handler('lastfm.php', required_args=('b', 'action', 'us', 'ha'))
 async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
@@ -332,7 +335,7 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return
 
-    url = f'{glob.config.mirror}/api/cheesegull/search'
+    url = f'{glob.config.mirror}/api/search'
     params = {
         'amount': 100,
         'offset': conn.args['p'],
@@ -427,7 +430,6 @@ async def osuSearchHandler(conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(ret).encode()
     """
 
-# TODO: required params
 @web_handler('osu-search-set.php', required_args=('u', 'h'))
 async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
     pname = unquote(conn.args['u'])
@@ -445,14 +447,14 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
             opt_id = int(conn.args['s'])
 
             if opt_id not in p.menu_options:
-                return b'' # negative set id, non-menu
+                return # negative set id, non-menu
 
             opt = p.menu_options[opt_id]
 
             if time.time() > opt['timeout']:
                 # the option has expired.
                 del p.menu_options[opt_id]
-                return b''
+                return
 
             # we have a menu option. activate it.
             await opt['callback']()
@@ -461,14 +463,14 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
                 # remove the option from the player
                 del p.menu_options[opt_id]
 
-            return b''
+            return
         else:
             # this is just a normal request
             k, v = ('set_id', conn.args['s'])
     elif 'b' in conn.args:
         k, v = ('id', conn.args['b'])
     else:
-        return b'' # invalid args
+        return # invalid args
 
     # Get all set data.
     bmapset = await glob.db.fetch(
@@ -479,7 +481,7 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
 
     if not bmapset:
         # TODO: get from osu!
-        return b''
+        return
 
     # TODO: rating
     return ('{set_id}.osz|{artist}|{title}|{creator}|'
@@ -489,17 +491,17 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
 
 UNDEF = 9999
 autorestrict_pp = (
-    # Values for autorestriction. This is the simplest
+    # values for autorestriction. this is the simplest
     # form of "anticheat", simply ban a user if they are not
     # whitelisted, and submit a score of too high caliber.
     # Values below are in form (non_fl, fl), as fl has custom
     # vals as it finds quite a few additional cheaters on the side.
-    (700, 600),     # vn!std
+    (700,   600),   # vn!std
     (UNDEF, UNDEF), # vn!taiko
     (UNDEF, UNDEF), # vn!catch
     (UNDEF, UNDEF), # vn!mania
 
-    (1500, 1000),   # rx!std
+    (1200,  800),   # rx!std
     (UNDEF, UNDEF), # rx!taiko
     (UNDEF, UNDEF)  # rx!catch
 )
@@ -541,8 +543,10 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     res = await glob.db.fetch(
         f'SELECT 1 FROM {table} WHERE mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
-        'AND score = %s', [s.mode % 4, s.bmap.md5,
-                           s.player.id, int(s.mods), s.score]
+        'AND score = %s', [
+            s.mode % 4, s.bmap.md5,
+            s.player.id, int(s.mods), s.score
+        ]
     )
 
     if res:
@@ -587,8 +591,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, '
-        '%s, %s, %s, %s'
-        ')', [
+        '%s, %s, %s, %s)', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, int(s.mods),
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
             s.grade, int(s.status), s.mode % 4, s.play_time,
@@ -793,7 +796,7 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
     if await glob.players.get_login(pname, phash):
         path = f".data/osr/{conn.args['c']}.osr"
         if not os.path.exists(path):
-            return b''
+            return
 
         async with aiofiles.open(path, 'rb') as f:
             return await f.read()
@@ -966,12 +969,9 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
-req_args_getScores = (
-    's', 'vv', 'v', 'c',
-    'f', 'm', 'i', 'mods',
-    'h', 'a', 'us', 'ha'
-)
-@web_handler('osu-osz2-getscores.php', required_args=req_args_getScores)
+@web_handler('osu-osz2-getscores.php', required_args=('s', 'vv', 'v', 'c',
+                                                      'f', 'm', 'i', 'mods',
+                                                      'h', 'a', 'us', 'ha'))
 async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     pname = unquote(conn.args['us'])
     phash = conn.args['ha']
@@ -1075,7 +1075,8 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     res: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
-    res.append(f'{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(scores) if scores else 0}')
+    res.append(f'{int(bmap.status)}|false|{bmap.id}|'
+               f'{bmap.set_id}|{len(scores) if scores else 0}')
 
     # offset, name, rating
     res.append(f'0\n{bmap.full}\n10.0')
@@ -1130,7 +1131,8 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(res).encode()
 
-@web_handler('osu-comment.php', required_mpargs=('u', 'p', 'b', 's', 'm', 'r', 'a'))
+@web_handler('osu-comment.php', required_mpargs=('u', 'p', 'b', 's',
+                                                 'm', 'r', 'a'))
 async def osuComment(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
@@ -1209,7 +1211,7 @@ async def osuComment(conn: AsyncConnection) -> Optional[bytes]:
              sttime, comment, colour]
         )
 
-        return b''
+        return # empty resp is fine
 
     else: # invalid action
         return b'Invalid action.'
@@ -1227,7 +1229,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 
     if action == 'error':
         # client is just reporting an error updating
-        return b''
+        return
 
     cache = glob.cache['update'][stream]
     current_time = int(time.time())
@@ -1252,7 +1254,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
         await plog(f'Requested invalid map update {conn.path}.', Ansi.LIGHT_RED)
-        return b''
+        return
 
     if not (res := await glob.db.fetch(
         'SELECT id, md5 FROM maps WHERE '
@@ -1261,7 +1263,7 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
             re['artist'], re['title'],
             re['creator'], re['version']
         ]
-    )): return b'' # no map found
+    )): return # no map found
 
     if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
         # Map found on disk.

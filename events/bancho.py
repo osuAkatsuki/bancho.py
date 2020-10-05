@@ -85,7 +85,7 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
             staff = glob.players.staff
             await t.send_selective(p, msg, staff - {p})
             if 'resp' in cmd:
-                await t.send_selective(glob.bot, cmd['resp'], {p} | staff)
+                await t.send_selective(glob.bot, cmd['resp'], staff | {p})
 
     else: # No command was triggered.
         if _match := regexes.now_playing.match(msg):
