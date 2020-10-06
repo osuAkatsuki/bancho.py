@@ -456,6 +456,7 @@ class Player:
                 await plog(f'{self} tried to join a full match.')
                 self.enqueue(await packets.matchJoinFail())
                 return False
+
         else:
             # Match is being created
             slotID = 0
@@ -492,7 +493,8 @@ class Player:
 
     async def leave_match(self) -> None:
         if not self.match:
-            await plog(f'{self} tried leaving a match but is not in one?')
+            if glob.config.debug:
+                await plog(f"{self} tried leaving a match they're not in?")
             return
 
         for s in self.match.slots:
@@ -518,7 +520,9 @@ class Player:
     async def join_channel(self, c: Channel) -> bool:
         if self in c:
             # User already in the channel.
-            await plog(f'{self} tried to double join {c}.')
+            if glob.config.debug:
+                await plog(f'{self} was double-added to {c}.')
+
             return False
 
         if not self.priv & c.read:
@@ -542,7 +546,9 @@ class Player:
         for p in targets:
             p.enqueue(await packets.channelInfo(*c.basic_info))
 
-        await plog(f'{self} joined {c}.')
+        if glob.config.debug:
+            await plog(f'{self} joined {c}.')
+
         return True
 
     async def leave_channel(self, c: Channel) -> None:
@@ -563,7 +569,8 @@ class Player:
         for p in targets:
             p.enqueue(await packets.channelInfo(*c.basic_info))
 
-        await plog(f'{self} left {c}.')
+        if glob.config.debug:
+            await plog(f'{self} left {c}.')
 
     async def add_spectator(self, p) -> None:
         chan_name = f'#spec_{self.id}'

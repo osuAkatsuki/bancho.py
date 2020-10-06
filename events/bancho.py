@@ -122,6 +122,13 @@ async def ping(p: Player, pr: BanchoPacketReader) -> None:
     # ping.. this handler shouldn't even exist lol
     p.ping_time = int(time.time())
 
+    # osu! seems to error when i send nothing back,
+    # so perhaps the official bancho implementation
+    # expects something like a stats update.. i'm
+    # just gonna ping it back, as i don't really
+    # want to something more expensive so often lol
+    p.enqueue(b'\x04\x00\x00\x00\x00\x00\x00')
+
 registration_msg = '\n'.join((
     "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
     "",
@@ -340,7 +347,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 await packets.silenceEnd(max(p.silence_end - time.time(), 0)))
 
     await glob.players.add(p)
-    await plog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
+    await plog(f'{p} logged in.', Ansi.LIGHT_CYAN)
     return bytes(data), p.token
 
 # packet id: 16

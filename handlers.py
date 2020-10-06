@@ -4,7 +4,6 @@ import os
 import gzip
 
 from cmyui import AsyncConnection
-from urllib.parse import unquote
 
 from objects import glob
 
@@ -67,7 +66,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         await conn.add_resp_header(f'cho-token: {login_data[1]}')
 
     elif not (p := glob.players.get(conn.headers['osu-token'])):
-        await plog('Token not found, forcing relog.')
+        #await plog('Token not found, forcing relog.')
         resp.extend(
             await packets.notification('Server is restarting.') +
             await packets.restartServer(0) # send 0ms since the server is already up!
@@ -106,7 +105,9 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 
             if pr.current_packet in glob.bancho_map:
                 # Server is able to handle the packet.
-                await plog(repr(pr.current_packet), Ansi.LIGHT_MAGENTA)
+                if glob.config.debug:
+                    await plog(repr(pr.current_packet), Ansi.LIGHT_MAGENTA)
+
                 await glob.bancho_map[pr.current_packet](p, pr)
             else: # Packet reading behaviour not yet defined.
                 await plog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
@@ -145,13 +146,14 @@ async def handle_web(conn: AsyncConnection) -> None:
 
     if handler in glob.web_map:
         # we have a handler for this connection.
-        await plog(conn.path, Ansi.LIGHT_MAGENTA)
+        if glob.config.debug:
+            await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
         # call our handler with the connection obj.
         if resp := await glob.web_map[handler](conn):
             # there's data to send back, compress & log.
             if glob.config.debug:
-                await plog(resp, Ansi.LIGHT_GREEN)
+                await plog(f'Response: {resp}', Ansi.LIGHT_GREEN)
 
             # gzip if enabled.
             if glob.config.gzip['web'] > 0:
@@ -166,7 +168,8 @@ async def handle_web(conn: AsyncConnection) -> None:
 
     elif handler.startswith('maps/'):
         # this connection is a map update request.
-        await plog(f'Beatmap update request.', Ansi.LIGHT_MAGENTA)
+        if glob.config.debug:
+            await plog(f'Beatmap update request.', Ansi.LIGHT_MAGENTA)
 
         if resp := await web.updateBeatmap(conn):
             # map found, send back the data.
@@ -216,7 +219,8 @@ async def handle_api(conn: AsyncConnection) -> None:
     handler = conn.path[5:] # cut off /api/
 
     if handler in glob.api_map:
-        await plog(conn.path, Ansi.LIGHT_MAGENTA)
+        if glob.config.debug:
+            await plog(conn.path, Ansi.LIGHT_MAGENTA)
 
         if resp := await glob.api_map[handler](conn):
             # we have data to send back to the client.

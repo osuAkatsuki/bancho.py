@@ -84,11 +84,12 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         await plog(f'Unhandled {conn.path}.', Ansi.LIGHT_RED)
         await conn.send(400, b'Request handler not implemented.')
 
-    time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
-    time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
-           else f'{time_taken / 1000:.2f}ms')
+    if glob.config.debug:
+        time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
+        time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
+               else f'{time_taken / 1000:.2f}ms')
 
-    await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
+        await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
     glob.version = cmyui.Version(2, 6, 3)
