@@ -13,6 +13,7 @@ from console import *
 # NOTE: these also load the handler
 # maps for each of the event categories.
 from events import web, api, bancho
+from packets import BanchoPacket
 
 __all__ = (
     'handle_bancho',
@@ -27,7 +28,7 @@ __all__ = (
 # will refuse to reply to more
 # than once per connection.
 deny_doublereply = frozenset({
-    85
+    BanchoPacket.c_userStatsRequest
 })
 
 async def handle_bancho(conn: AsyncConnection) -> None:
@@ -83,26 +84,26 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         # iter through packets received and them handle indivudally.
         while not pr.empty():
             await pr.read_packet_header()
-            if pr.packetID == -1:
-                continue # skip, data empty?
+            if not pr.current_packet:
+                continue # skip, packet empty or corrupt?
 
-            if pr.packetID in deny_doublereply:
+            if pr.current_packet in deny_doublereply:
                 # this is a connection we should
                 # only allow once per connection.
 
-                if pr.packetID in blocked_packets:
+                if pr.current_packet in blocked_packets:
                     # this packet has already been
                     # replied to in this connection.
                     pr.ignore_packet()
                     continue
 
                 # log that the packet was handled.
-                blocked_packets.append(pr.packetID)
+                blocked_packets.append(pr.current_packet)
 
-            if pr.packetID in glob.bancho_map:
+            if pr.current_packet in glob.bancho_map:
                 # Server is able to handle the packet.
-                await plog(repr(pr), Ansi.LIGHT_MAGENTA)
-                await glob.bancho_map[pr.packetID](p, pr)
+                await plog(repr(pr.current_packet), Ansi.LIGHT_MAGENTA)
+                await glob.bancho_map[pr.current_packet](p, pr)
             else: # Packet reading behaviour not yet defined.
                 await plog(f'Unhandled: {pr!r}', Ansi.LIGHT_YELLOW)
                 pr.ignore_packet()
