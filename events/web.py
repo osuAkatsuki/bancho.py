@@ -508,12 +508,12 @@ autorestrict_pp = (
 )
 del UNDEF
 
-req_args_submitModular = (
+req_args_osuSubmitModularSelector = (
     'x', 'ft', 'score', 'fs', 'bmk', 'iv',
     'c1', 'st', 'pass', 'osuver', 's'
 )
-@web_handler('osu-submit-modular-selector.php', required_mpargs=req_args_submitModular)
-async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
+@web_handler('osu-submit-modular-selector.php', required_mpargs=req_args_osuSubmitModularSelector)
+async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     # Parse our score data into a score obj.
@@ -1280,3 +1280,30 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
             await f.write(content)
 
     return content
+
+# some depreacted handlers - no longer used in regular connections.
+# XXX: perhaps these could be turned into decorators to allow
+# for better specialization of params? perhaps prettier too :P
+async def deprecated_handler(conn: AsyncConnection) -> Optional[bytes]:
+    args = conn.args or conn.multipart_args # cant support both :/.. could union
+    pname = phash = None
+
+    for p in ('u', 'us'):
+        if pname := args[p]:
+            break
+    else:
+        return
+
+    for p in ('h', 'ha', 'p'):
+        if phash := args[p]:
+            break
+    else:
+        return
+
+    if not (p := await glob.players.get_login(unquote(pname), phash)):
+        return
+
+    await plog(f'{p} used deprecated handler {conn.path!r}.', Ansi.LIGHT_RED)
+
+# won't work for submit modular cuz it's special case lol
+#osuSubmitModular = web_handler('osu-submit-modular.php')(deprecated_handler)

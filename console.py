@@ -31,6 +31,7 @@ class Ansi(IntEnum):
     def __repr__(self) -> str:
         return f'\x1b[{self.value}m'
 
+# yea that's right, even the log is a coroutine lol
 async def plog(msg, col: Ansi = None,
                fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,

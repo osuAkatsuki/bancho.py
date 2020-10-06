@@ -444,8 +444,7 @@ async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
 
 @unique
 class BanchoPacket(IntEnum):
-    # Both server & client packetIDs
-    # Packets commented out are unused.
+    # both server & client packets.
     c_changeAction = 0
     c_sendPublicMessage = 1
     c_logout = 2
@@ -465,7 +464,7 @@ class BanchoPacket(IntEnum):
     c_stopSpectating = 17
     c_spectateFrames = 18
     s_versionUpdate = 19
-    #c_errorReport = 20
+    c_errorReport = 20 # unused
     c_cantSpectate = 21
     s_spectatorCantSpectate = 22
     s_getAttention = 23
@@ -479,8 +478,8 @@ class BanchoPacket(IntEnum):
     c_createMatch = 31
     c_joinMatch = 32
     c_partMatch = 33
-    #c_lobbyJoinMatch = 34
-    #c_lobbyPartMatch = 35
+    c_lobbyJoinMatch = 34 # unused
+    c_lobbyPartMatch = 35 # unused
     s_matchJoinSuccess = 36
     s_matchJoinFail = 37
     c_matchChangeSlot = 38
@@ -507,14 +506,14 @@ class BanchoPacket(IntEnum):
     c_matchHasBeatmap = 59
     c_matchSkipRequest = 60
     s_matchSkip = 61
-    #s_unauthorized = 62
+    s_unauthorized = 62 # unused
     c_channelJoin = 63
     s_channelJoinSuccess = 64
     s_channelInfo = 65
     s_channelKicked = 66
     s_channelAutoJoin = 67
-    #c_beatmapInfoRequest = 68
-    #s_beatmapInfoReply = 69
+    c_beatmapInfoRequest = 68 # unused
+    s_beatmapInfoReply = 69 # unused
     c_matchTransferHost = 70
     s_supporterGMT = 71
     s_friendsList = 72
@@ -525,7 +524,7 @@ class BanchoPacket(IntEnum):
     c_matchChangeTeam = 77
     c_channelPart = 78
     c_ReceiveUpdates = 79
-    #s_monitor = 80
+    s_monitor = 80 # unused
     s_matchPlayerSkipped = 81
     c_setAwayMessage = 82
     s_userPresence = 83

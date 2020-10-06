@@ -47,8 +47,8 @@ class RankedStatus(IntEnum):
     def from_osuapi(cls, osuapi_status: int):
         return cls(
             defaultdict(lambda: cls.UpdateAvailable, {
-                -2: cls.Pending, # Graveyard
-                -1: cls.Pending, # WIP
+                -2: cls.Pending, # graveyard
+                -1: cls.Pending, # wip
                  0: cls.Pending,
                  1: cls.Ranked,
                  2: cls.Approved,
@@ -390,8 +390,8 @@ class Beatmap:
                     'md5, artist, title, version, creator, '
                     'last_update, frozen, mode, bpm, cs, '
                     'od, ar, hp, diff) VALUES ('
-                    '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
-                    '%s, %s, %s, %s, %s, %s, %s, %s)', [
+                    '%s, %s, %s, %s, %s, %s, %s, %s, '
+                    '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
                         bmap['beatmap_id'], bmap['beatmapset_id'],
                         int(bmap['approved']), bmap['file_md5'],
                         bmap['artist'], bmap['title'], bmap['version'],

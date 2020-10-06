@@ -1016,3 +1016,14 @@ async def userPresenceRequest(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_userToggleBlockNonFriendPM)
 async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
     p.pm_private = (await pr.read(osuTypes.i32))[0] == 1
+
+# some depreacted packets - no longer used in regular connections.
+# XXX: perhaps these could be turned into decorators to allow
+# for better specialization of params? perhaps prettier too :P
+async def deprecated_packet(p: Player, pr: BanchoPacketReader) -> None:
+    await plog(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LIGHT_RED)
+
+errorReport = bancho_packet(BanchoPacket.c_errorReport)(deprecated_packet)
+lobbyJoinMatch = bancho_packet(BanchoPacket.c_lobbyJoinMatch)(deprecated_packet)
+lobbyPartMatch = bancho_packet(BanchoPacket.c_lobbyPartMatch)(deprecated_packet)
+beatmapInfoRequest = bancho_packet(BanchoPacket.c_beatmapInfoRequest)(deprecated_packet)
