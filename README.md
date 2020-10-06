@@ -4,7 +4,7 @@
 
 Looking for a well-organized, async & completely open-source osu! server implementation undergoing rapid development?
 
-Disclaimer: this it not yet a finished project, and while development on the actual osu! server (this) itself is probably ~90% of the way complete, we don't currently have a frontend!
+Disclaimer: while this project itself is actually in a usable state, we do not currently have a frontend to go along with it :P
 
 ## There are many other osu! server implementations, what makes this any different?
 
@@ -18,6 +18,7 @@ This is simply the result of my programming values and time thrown together; I'd
 
 - Asynchronous server design, allowing for high efficiency along with many cool features unavailable on many other implementations.
 - Nearly full completion of multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
+- Fully functional relax & autopilot play with pp modified to suit each mode properly, allowing for gameplay in each right out of the box.
 - A strong focus on keeping an accurate cache for many things (maps [with pp values], osu! updates, many more to come..) allowing for quick responses.
 - Undergoing active development; an osu! server has always been a large goal of mine, so motivation is very high.
 - Clean and concise code, easy to make small modifications & add to the codebase; designed around this idea.
