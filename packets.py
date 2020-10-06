@@ -601,7 +601,7 @@ async def userStats(p) -> bytes:
         (p.status.info_text, osuTypes.string),
         (p.status.map_md5, osuTypes.string),
         (p.status.mods, osuTypes.i32),
-        (p.status.mode, osuTypes.u8),
+        (p.status.mode.as_vanilla, osuTypes.u8),
         (p.status.map_id, osuTypes.i32),
         (p.gm_stats.rscore, osuTypes.i64),
         (p.gm_stats.acc / 100.0, osuTypes.f32),
@@ -844,7 +844,7 @@ async def userPresence(p) -> bytes:
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
         (p.country[0], osuTypes.u8),
-        (p.bancho_priv | (p.status.mode << 5), osuTypes.u8),
+        (p.bancho_priv | (p.status.mode.as_vanilla << 5), osuTypes.u8),
         (p.location[0], osuTypes.f32), # long
         (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
