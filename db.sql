@@ -3,6 +3,7 @@ drop table if exists stats;
 drop table if exists users;
 drop table if exists user_hashes;
 drop table if exists scores_rx;
+drop table if exists scores_ap;
 drop table if exists scores_vn;
 drop table if exists maps;
 drop table if exists friendships;
@@ -60,6 +61,7 @@ create table stats
 	tscore_rx_std int default 0 not null,
 	tscore_rx_taiko int default 0 not null,
 	tscore_rx_catch int default 0 not null,
+	tscore_ap_std int default 0 not null,
 	rscore_vn_std int default 0 not null,
 	rscore_vn_taiko int default 0 not null,
 	rscore_vn_catch int default 0 not null,
@@ -67,6 +69,7 @@ create table stats
 	rscore_rx_std int default 0 not null,
 	rscore_rx_taiko int default 0 not null,
 	rscore_rx_catch int default 0 not null,
+	rscore_ap_std int default 0 not null,
 	pp_vn_std smallint(6) default 0 not null,
 	pp_vn_taiko smallint(6) default 0 not null,
 	pp_vn_catch smallint(6) default 0 not null,
@@ -74,6 +77,7 @@ create table stats
 	pp_rx_std smallint(6) default 0 not null,
 	pp_rx_taiko smallint(6) default 0 not null,
 	pp_rx_catch smallint(6) default 0 not null,
+	pp_ap_std int default 0 not null,
 	plays_vn_std int default 0 not null,
 	plays_vn_taiko int default 0 not null,
 	plays_vn_catch int default 0 not null,
@@ -81,6 +85,7 @@ create table stats
 	plays_rx_std int default 0 not null,
 	plays_rx_taiko int default 0 not null,
 	plays_rx_catch int default 0 not null,
+	plays_ap_std int default 0 not null,
 	playtime_vn_std int default 0 not null,
 	playtime_vn_taiko int default 0 not null,
 	playtime_vn_catch int default 0 not null,
@@ -88,6 +93,7 @@ create table stats
 	playtime_rx_std int default 0 not null,
 	playtime_rx_taiko int default 0 not null,
 	playtime_rx_catch int default 0 not null,
+	playtime_ap_std int default 0 not null,
 	acc_vn_std float(6,3) default 0.000 not null,
 	acc_vn_taiko float(6,3) default 0.000 not null,
 	acc_vn_catch float(6,3) default 0.000 not null,
@@ -95,6 +101,7 @@ create table stats
 	acc_rx_std float(6,3) default 0.000 not null,
 	acc_rx_taiko float(6,3) default 0.000 not null,
 	acc_rx_catch float(6,3) default 0.000 not null,
+	acc_ap_std int default 0 not null,
 	maxcombo_vn_std int default 0 not null,
 	maxcombo_vn_taiko int default 0 not null,
 	maxcombo_vn_catch int default 0 not null,
@@ -102,12 +109,39 @@ create table stats
 	maxcombo_rx_std int default 0 not null,
 	maxcombo_rx_taiko int default 0 not null,
 	maxcombo_rx_catch int default 0 not null,
+	maxcombo_ap_std int default 0 not null,
 	constraint stats_users_id_fk
 		foreign key (id) references users (id)
 			on update cascade on delete cascade
 );
 
 create table scores_rx
+(
+	id int auto_increment
+		primary key,
+	map_md5 char(32) not null,
+	score int not null,
+	pp float(7,3) not null,
+	acc float(6,3) not null,
+	max_combo int not null,
+	mods int not null,
+	n300 int not null,
+	n100 int not null,
+	n50 int not null,
+	nmiss int not null,
+	ngeki int not null,
+	nkatu int not null,
+	grade varchar(2) default 'N' not null,
+	status tinyint not null,
+	mode tinyint not null,
+	play_time int not null,
+	time_elapsed int not null,
+	client_flags int not null,
+	userid int not null,
+	perfect tinyint(1) not null
+);
+
+create table scores_ap
 (
 	id int auto_increment
 		primary key,

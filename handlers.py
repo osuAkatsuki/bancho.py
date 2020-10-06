@@ -44,10 +44,13 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             '<a href="https://github.com/cmyui/gulag">Source code</a>',
             '',
             '<b>Bancho Handlers</b>',
-            '<br>'.join(f'{int(k)}: {str(k)[9:]}' for k in glob.bancho_map),
+            '<br>'.join(f'{h.name} ({h.value})' for h in glob.bancho_map),
             '',
             '<b>/web/ Handlers</b>',
-            '<br>'.join(glob.web_map)
+            '<br>'.join(glob.web_map),
+            '',
+            '<b>/api/ Handlers</b>',
+            '<br>'.join(glob.api_map)
         )).encode())
         return
 
@@ -56,8 +59,9 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     if 'osu-token' not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        login_data = await bancho.login(conn.body,
-                                        conn.headers['X-Real-IP'])
+        login_data = await bancho.login(
+            conn.body, conn.headers['X-Real-IP']
+        )
 
         resp.extend(login_data[0])
         await conn.add_resp_header(f'cho-token: {login_data[1]}')
@@ -78,7 +82,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         # this list will simply keep track of which
         # of these packet's we've replied to during
         # this connection to allow this functonality.
-        blocked_packets = []
+        blocked_packets: list[BanchoPacket] = []
 
         # bancho connections can send multiple packets at a time.
         # iter through packets received and them handle indivudally.
@@ -188,52 +192,15 @@ async def handle_ss(conn: AsyncConnection) -> None:
         await conn.send(200, await f.read())
 
 async def handle_dl(conn: AsyncConnection) -> None:
-    """Handle a map download request (osu.ppy.sh/dl/*)."""
-    if not all(x in conn.args for x in ('u', 'h', 'vv')):
-        await conn.send(401, b'Method requires authorization.')
+    """Handle a map download request (osu.ppy.sh/d/*)."""
+    if not (set_id := conn.path[3:]).isdecimal():
+        # requested set id is not a number.
         return
 
-    if not conn.path[3:].isdecimal():
-        # Requested set id is not a number.
-        return
-
-    pname = unquote(conn.args['u'])
-    phash = conn.args['h']
-
-    if not (p := await glob.players.get_login(pname, phash)):
-        return
-
-    set_id = int(conn.path[3:])
-
-    # TODO: at the moment, if a map's dl is disabled on osu it
-    # will send back 'This download has been disabled by peppy',
-    # which gulag will save into a file.. we'll need a var in
-    # the db to store whether a map has been disabled, i guess.
-
-    if glob.config.mirror_cache: # cache maps from the mirror on disk.
-        if os.path.exists(filepath := f'.data/osz/{set_id}.osz'):
-            # we have the map in cache.
-            async with aiofiles.open(filepath, 'rb') as f:
-                content = await f.read()
-
-        else: # get the map for our mirror & client.
-            bmap_url = f'{glob.config.mirror}/d/{set_id}'
-            async with glob.http.get(bmap_url) as resp:
-                if not resp or resp.status != 200:
-                    return
-
-                content = await resp.read()
-
-            # save to disk.
-            async with aiofiles.open(filepath, 'wb') as f:
-                await f.write(content)
-
-        await conn.send(200, content)
-
-    else: # don't use gulag as a mirror, just reflect another.
-        bmap_url = f'{glob.config.mirror}/d/{set_id}'
-        await conn.add_resp_header(f'Location: {bmap_url}')
-        await conn.send(302, None)
+    # redirect to our mirror
+    mirror_url = f'{glob.config.mirror}/d/{set_id}'
+    await conn.add_resp_header(f'Location: {mirror_url}')
+    await conn.send(302, None)
 
 default_avatar = f'.data/avatars/default.jpg'
 async def handle_avatar(conn: AsyncConnection) -> None:

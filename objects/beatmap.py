@@ -466,7 +466,7 @@ class Beatmap:
 
     async def cache_pp(self, mods: Mods) -> None:
         """Cache some common acc pp values for specified mods."""
-        pp_params = {'mode': self.mode % 4, 'mods': mods}
+        pp_params = {'mode': self.mode.as_vanilla, 'mods': mods}
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         async with Owoppai(self.id, **pp_params) as owo:

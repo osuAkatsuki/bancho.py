@@ -122,10 +122,10 @@ class Status:
     map_md5: `str`
         The md5 of the map the player is on.
 
-    mods: `int`
+    mods: `Mods`
         The mods the player currently has enabled.
 
-    mode: `int`
+    mode: `GameMode`
         The current gamemode of the player.
 
     map_id: `int`
@@ -155,7 +155,7 @@ class Status:
         self.info_text = info_text
         self.map_md5 = map_md5
         self.mods = Mods(mods)
-        self.mode = GameMode(mode)
+        self.mode = GameMode.from_params(mode, self.mods)
         self.map_id = map_id
 
 class Player:
@@ -180,9 +180,6 @@ class Player:
 
     priv: `Privileges`
         The player's privileges.
-
-    rx: `bool`
-        Whether the player is using rx (used for gamemodes).
 
     stats: list[ModeData]
         A list of `ModeData` objs representing
@@ -276,8 +273,8 @@ class Player:
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'priv',
-        'rx', 'stats', 'status',
-        'friends', 'channels', 'spectators', 'spectating', 'match',
+        'stats', 'status', 'friends', 'channels',
+        'spectators', 'spectating', 'match',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
@@ -292,8 +289,7 @@ class Player:
         self.safe_name = self.make_safe(self.name) if self.name else None
         self.priv = Privileges(kwargs.get('priv', Privileges.Normal))
 
-        self.rx = False # stored for ez use
-        self.stats = [ModeData() for _ in range(7)]
+        self.stats = {mode: ModeData() for mode in GameMode}
         self.status = Status()
 
         self.friends = set() # userids, not player objects
@@ -303,7 +299,7 @@ class Player:
         self.match: Optional[Match] = None
 
         # Store most recent score for each gamemode.
-        self.recent_scores = [None for _ in range(7)]
+        self.recent_scores = {mode: None for mode in GameMode}
 
         # Store the last beatmap /np'ed by the user.
         self.last_np: Optional[Beatmap] = None
@@ -371,14 +367,13 @@ class Player:
     @property
     def gm_stats(self) -> ModeData:
         """The player's stats in their currently selected mode."""
-        mode = self.status.mode
-        return self.stats[mode + ((self.rx and mode != 3) and 4)]
+        return self.stats[self.status.mode]
 
     @property
     def recent_score(self):
         """The player's most recently submitted score."""
         score = None
-        for s in self.recent_scores:
+        for s in self.recent_scores.values():
             if not s:
                 continue
 
@@ -681,9 +676,9 @@ class Player:
         self.country = (country_codes[country], country)
         self.location = (res['lon'], res['lat'])
 
-    async def update_stats(self, gm: GameMode = GameMode.vn_std) -> None:
+    async def update_stats(self, mode: GameMode = GameMode.vn_std) -> None:
         """Update a player's stats in-game and in sql."""
-        table = 'scores_rx' if gm >= 4 else 'scores_vn'
+        table = mode.sql_table
 
         res = await glob.db.fetchall(
             f'SELECT s.pp, s.acc FROM {table} s '
@@ -691,35 +686,35 @@ class Player:
             'WHERE s.userid = %s AND s.mode = %s '
             'AND s.status = 2 AND m.status IN (1, 2) '
             'ORDER BY s.pp DESC LIMIT 100',
-            [self.id, gm % 4]
+            [self.id, mode.as_vanilla]
         )
 
         if not res:
             return # ?
 
         # Update the user's stats in-game, then update db.
-        self.stats[gm].plays += 1
-        self.stats[gm].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
-        self.stats[gm].pp = round(sum(row['pp'] * 0.95 ** i
+        self.stats[mode].plays += 1
+        self.stats[mode].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
+        self.stats[mode].pp = round(sum(row['pp'] * 0.95 ** i
                                   for i, row in enumerate(res)))
 
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '
             'plays_{0:sql} = plays_{0:sql} + 1, '
-            'acc_{0:sql} = %s WHERE id = %s'.format(gm),
-            [self.stats[gm].pp, self.stats[gm].acc, self.id]
+            'acc_{0:sql} = %s WHERE id = %s'.format(mode),
+            [self.stats[mode].pp, self.stats[mode].acc, self.id]
         )
 
         # Calculate rank.
         res = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM stats '
             'LEFT JOIN users USING(id) '
-            f'WHERE pp_{gm:sql} > %s '
+            f'WHERE pp_{mode:sql} > %s '
             'AND priv & 1',
-            [self.stats[gm].pp]
+            [self.stats[mode].pp]
         )
 
-        self.stats[gm].rank = res['c'] + 1
+        self.stats[mode].rank = res['c'] + 1
         self.enqueue(await packets.userStats(self))
 
     async def friends_from_sql(self) -> None:
@@ -732,54 +727,54 @@ class Player:
 
     async def stats_from_sql_full(self) -> None:
         """Fetch the player's stats for all gamemodes from sql."""
-        for gm in GameMode:
+        for mode in GameMode:
             # Grab static stats from SQL.
             res = await glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
                 'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-                'FROM stats WHERE id = %s'.format(gm),
+                'FROM stats WHERE id = %s'.format(mode),
                 [self.id]
             )
 
             if not res:
-                await plog(f"Failed to fetch {self}'s {gm!r} user stats.", Ansi.LIGHT_RED)
+                await plog(f"Failed to fetch {self}'s {mode!r} user stats.", Ansi.LIGHT_RED)
                 return
 
             # Calculate rank.
             res['rank'] = (await glob.db.fetch(
                 'SELECT COUNT(*) AS c FROM stats '
                 'LEFT JOIN users USING(id) '
-                f'WHERE pp_{gm:sql} > %s '
+                f'WHERE pp_{mode:sql} > %s '
                 'AND priv & 1', [res['pp']]
             ))['c'] + 1
 
-            self.stats[gm].update(**res)
+            self.stats[mode].update(**res)
 
-    async def stats_from_sql(self, gm: GameMode) -> None:
+    async def stats_from_sql(self, mode: GameMode) -> None:
         """Fetch the player's stats for a specified gamemode."""
         res = await glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
             'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-            'FROM stats WHERE id = %s'.format(gm),
+            'FROM stats WHERE id = %s'.format(mode),
             [self.id]
         )
 
         if not res:
-            await plog(f"Failed to fetch {self}'s {gm!r} user stats.", Ansi.LIGHT_RED)
+            await plog(f"Failed to fetch {self}'s {mode!r} user stats.", Ansi.LIGHT_RED)
             return
 
         # Calculate rank.
         res['rank'] = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM stats '
             'LEFT JOIN users USING(id) '
-            f'WHERE pp_{gm:sql} > %s '
+            f'WHERE pp_{mode:sql} > %s '
             'AND priv & 1',
             [res['pp']]
         )['c']
 
-        self.stats[gm].update(**res)
+        self.stats[mode].update(**res)
 
     async def add_to_menu(self, coroutine: Coroutine,
                           timeout: int = -1, reusable: bool = False

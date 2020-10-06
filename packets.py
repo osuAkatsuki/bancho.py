@@ -23,7 +23,7 @@ _specifiers = (
     'q', 'Q', 'd'  # 64
 )
 
-async def read_uleb128(data: bytearray) -> tuple[int, int]:
+async def read_uleb128(data: memoryview) -> tuple[int, int]:
     """ Read an unsigned LEB128 (used for string length) from `data`. """
     offset = val = shift = 0
 
@@ -39,7 +39,7 @@ async def read_uleb128(data: bytearray) -> tuple[int, int]:
 
     return val, offset
 
-async def read_string(data: bytearray) -> tuple[str, int]:
+async def read_string(data: memoryview) -> tuple[str, int]:
     """ Read a string (ULEB128 & string) from `data`. """
     offset = 1
 
@@ -48,9 +48,10 @@ async def read_string(data: bytearray) -> tuple[str, int]:
 
     length, offs = await read_uleb128(data[offset:])
     offset += offs
-    return data[offset:offset+length].decode(), offset + length
 
-async def read_i32_list(data: bytearray, long_len: bool = False
+    return data[offset:offset+length].tobytes().decode(), offset + length
+
+async def read_i32_list(data: memoryview, long_len: bool = False
                        ) -> tuple[tuple[int, ...], int]:
     """ Read an int32 list from `data`. """
     ret = []
@@ -62,7 +63,7 @@ async def read_i32_list(data: bytearray, long_len: bool = False
 
     return ret, offs
 
-async def read_match(data: bytearray) -> tuple[Match, int]:
+async def read_match(data: memoryview) -> tuple[Match, int]:
     """ Read an osu! match from `data`. """
     m = Match()
 
@@ -146,7 +147,7 @@ async def read_match(data: bytearray) -> tuple[Match, int]:
     m.seed = int.from_bytes(data[offset:offset+4], 'little')
     return m, offset + 4
 
-async def read_scoreframe(data: bytearray) -> tuple[ScoreFrame, int]:
+async def read_scoreframe(data: memoryview) -> tuple[ScoreFrame, int]:
     """ Read an osu! scoreframe from `data`. """
     offset = 29
     s = ScoreFrame(*struct.unpack('<iBHHHHHHiHH?BB?', data[:offset]))
@@ -157,7 +158,7 @@ async def read_scoreframe(data: bytearray) -> tuple[ScoreFrame, int]:
 
     return s, offset
 
-#async def read_mapInfoRequest(data: bytearray) -> tuple[Beatmap, int]:
+#async def read_mapInfoRequest(data: memoryview) -> tuple[Beatmap, int]:
 #    """ Read an osu! beatmapInfoRequest from `data`. """
 #    fnames = ids = []
 #
@@ -177,7 +178,7 @@ class BanchoPacketReader:
 
     Attributes
     -----------
-    _data: `bytearray`
+    _data: `memoryview`
         Internal buffer of the reader.
         XXX: Use the `data` property to have data
              starting from the current internal offset.
@@ -203,14 +204,14 @@ class BanchoPacketReader:
                  'current_packet', 'length')
 
     def __init__(self, data): # take request body in bytes form as param
-        self._data = bytearray(data)
+        self._data = memoryview(data)
         self._offset = 0
 
         self.current_packet = None
         self.length = 0
 
     @property
-    def data(self) -> bytearray:
+    def data(self) -> memoryview:
         return self._data[self._offset:]
 
     def empty(self) -> bool:
@@ -395,12 +396,8 @@ async def write_match(m: Match) -> bytearray:
             ret.extend(s.player.id.to_bytes(4, 'little'))
 
     ret.extend(m.host.id.to_bytes(4, 'little'))
-    ret.extend((
-        m.mode,
-        m.match_scoring,
-        m.team_type,
-        m.freemods
-    ))
+    ret.extend((m.mode, m.match_scoring,
+                m.team_type, m.freemods))
 
     if m.freemods:
         for s in m.slots:

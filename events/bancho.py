@@ -42,7 +42,6 @@ async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
     )
 
     p.status.update(*data)
-    p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
 # packet id: 1

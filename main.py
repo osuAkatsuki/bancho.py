@@ -37,8 +37,8 @@ if not os.path.isdir('.data'):
     os.mkdir('.data')
 
 # make sure that all data subdirectories exist
-required_folders = frozenset({'avatars', 'logs', 'osu',
-                              'osz', 'osr', 'ss'})
+required_folders = frozenset({'avatars', 'logs',
+                              'osu', 'osr', 'ss'})
 for p in required_folders:
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
