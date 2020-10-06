@@ -186,9 +186,9 @@ class BanchoPacketReader:
         The offset of the reader; bytes behind the offset have
         already been read, bytes ahead are yet to be read.
 
-    packetID: `int`
-        The current packet id being processed by the reader.
-        XXX: will be -1 if either no packets have been read,
+    current_packet: Optional[`BanchoPacket`]
+        The current packet being processed by the reader.
+        XXX: will be None if either no packets have been read,
              or if the current packet was corrupt.
 
     length: `int`
@@ -200,17 +200,14 @@ class BanchoPacketReader:
         The data starting from the current offset.
     """
     __slots__ = ('_data', '_offset',
-                 'packetID', 'length')
+                 'current_packet', 'length')
 
     def __init__(self, data): # take request body in bytes form as param
         self._data = bytearray(data)
         self._offset = 0
 
-        self.packetID = -1
+        self.current_packet = None
         self.length = 0
-
-    def __repr__(self) -> str:
-        return f'<Bancho Packet #{self.packetID} | Length: {self.length}>'
 
     @property
     def data(self) -> bytearray:
@@ -231,13 +228,15 @@ class BanchoPacketReader:
         if ldata < 7:
             # Packet not even minimal legnth.
             # End the connection immediately.
-            self.packetID = -1
+            self.current_packet = None
             self._offset += ldata
             await plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
             return
 
-        self.packetID, self.length = struct.unpack('<HxI', self.data[:7])
-        self._offset += 7 # Read our first 7 bytes for packetid & len
+        packet_id, self.length = struct.unpack('<HxI', self.data[:7])
+        self.current_packet = BanchoPacket(packet_id)
+
+        self._offset += 7 # read first 7 bytes for packetid & length
 
     async def read(self, *types: tuple[osuTypes, ...]) -> tuple[Any, ...]:
         ret = []
@@ -559,6 +558,9 @@ class BanchoPacket(IntEnum):
     s_switchTournamentServer = 107
     c_tournamentJoinMatchChannel = 108
     c_tournamentLeaveMatchChannel = 109
+
+    def __repr__(self) -> str:
+        return f'<Bancho: {self.name} ({self.value})>'
 
 #
 # packets

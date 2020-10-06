@@ -277,17 +277,15 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             [user_id]
         )
 
-        p = Player(id = user_id, name = username,
-                   priv = Privileges.Normal,
-                   silence_end = 0, osu_version = osu_ver)
+        p = Player(id = user_id, name = username, silence_end = 0,
+                   priv = Privileges.Normal, osu_version = osu_ver)
 
         await plog(f'{p} has registered!', Ansi.LIGHT_GREEN)
 
         # enqueue registration message to the user.
         _msg = registration_msg.format(glob.players.staff)
-        p.enqueue(await packets.sendMessage(
-            glob.bot.name, _msg, p.name, p.id
-        ))
+        p.enqueue(await packets.sendMessage(glob.bot.name, _msg,
+                                            p.name, p.id))
 
     data = bytearray(
         await packets.userID(p.id) +
