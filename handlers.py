@@ -84,7 +84,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         # iter through packets received and them handle indivudally.
         while not pr.empty():
             await pr.read_packet_header()
-            if not pr.current_packet:
+            if pr.current_packet is None:
                 continue # skip, packet empty or corrupt?
 
             if pr.current_packet in deny_doublereply:
