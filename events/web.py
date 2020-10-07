@@ -504,7 +504,9 @@ autorestrict_pp = (
 
     (1200,  800),   # rx!std
     (UNDEF, UNDEF), # rx!taiko
-    (UNDEF, UNDEF)  # rx!catch
+    (UNDEF, UNDEF), # rx!catch
+
+    (UNDEF, UNDEF)  # ap!std
 )
 del UNDEF
 
@@ -687,12 +689,14 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             [s.bmap.md5, s.mode.as_vanilla]
         )
 
-        ann = [f'[{s.mode!r}] {s.player.embed} achieved #1 on {s.bmap.embed}.']
+        performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
+
+        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed} {s.mods!r} with {s.acc:.2f}% for {performance}.']
 
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
-        await announce_chan.send(glob.bot, ' '.join(ann))
+        await announce_chan.send(s.player, ' '.join(ann), to_client=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
@@ -716,7 +720,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # going to be ugly no matter what i do lol :v
         charts = []
 
-        # generate beatmap info chart (#1)
+        # append beatmap info chart (#1)
         charts.append(
             f'beatmapId:{s.bmap.id}|'
             f'beatmapSetId:{s.bmap.set_id}|'
@@ -725,16 +729,13 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'approvedDate:{s.bmap.last_update}'
         )
 
-        # generate beatmap ranking chart (#2)
-        beatmap_chart = [
+        # append beatmap ranking chart (#2)
+        charts.append('|'.join((
             'chartId:beatmap',
             f'chartUrl:https://akatsuki.pw/b/{s.bmap.id}',
-            'chartName:Beatmap Ranking'
-        ]
+            'chartName:Beatmap Ranking',
 
-        if s.prev_best:
-            # we had a score on the map before
-            beatmap_chart.append(
+            ( # we had a score on the map prior to this
                 f'rankBefore:{s.prev_best.rank}|rankAfter:{s.rank}|'
                 f'rankedScoreBefore:{s.prev_best.score}|rankedScoreAfter:{s.score}|'
                 f'totalScoreBefore:{s.prev_best.score}|totalScoreAfter:{s.score}|'
@@ -742,11 +743,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
                 f'accuracyBefore:{s.prev_best.acc:.2f}|accuracyAfter:{s.acc:.2f}|'
                 f'ppBefore:{s.prev_best.pp:.4f}|ppAfter:{s.pp:.4f}|'
                 f'onlineScoreId:{s.id}'
-            )
-
-        else:
-            # this is our first score on the map
-            beatmap_chart.append(
+            ) if s.prev_best else ( # we don't, this is our first
                 f'rankBefore:|rankAfter:{s.rank}|'
                 f'rankedScoreBefore:|rankedScoreAfter:{s.score}|' # these are
                 f'totalScoreBefore:|totalScoreAfter:{s.score}|' # prolly wrong
@@ -755,49 +752,43 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
                 f'ppBefore:|ppAfter:{s.pp:.4f}|'
                 f'onlineScoreId:{s.id}'
             )
+        )))#'|'.join(beatmap_chart))
 
-        charts.append('|'.join(beatmap_chart))
-
-        # generate overall ranking chart (#3)
-        overall_chart = [
+        # append overall ranking chart (#3)
+        charts.append('|'.join((
             'chartId:overall',
             f'chartUrl:https://akatsuki.pw/u/{s.player.id}',
-            'chartName:Overall Ranking'
-        ]
+            'chartName:Overall Ranking',
 
-        # TODO: achievements before onlineScoreId
-        # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
-
-        if prev_stats:
-            overall_chart.append(
+            # TODO: achievements
+            ( # we have a score on the account prior to this
                 f'rankBefore:{prev_stats.rank}|rankAfter:{stats.rank}|'
                 f'rankedScoreBefore:{prev_stats.rscore}|rankedScoreAfter:{stats.rscore}|'
                 f'totalScoreBefore:{prev_stats.tscore}|totalScoreAfter:{stats.tscore}|'
                 f'maxComboBefore:{prev_stats.max_combo}|maxComboAfter:{stats.max_combo}|'
                 f'accuracyBefore:{prev_stats.acc:.2f}|accuracyAfter:{stats.acc:.2f}|'
                 f'ppBefore:{prev_stats.pp:.4f}|ppAfter:{stats.pp:.4f}|'
+                # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
                 f'onlineScoreId:{s.id}'
-            )
-
-        else:
-            overall_chart.append(
+            ) if prev_stats else ( # this is the account's first score
                 f'rankBefore:|rankAfter:{stats.rank}|'
                 f'rankedScoreBefore:|rankedScoreAfter:{stats.rscore}|'
                 f'totalScoreBefore:|totalScoreAfter:{stats.tscore}|'
                 f'maxComboBefore:|maxComboAfter:{stats.max_combo}|'
                 f'accuracyBefore:|accuracyAfter:{stats.acc:.2f}|'
                 f'ppBefore:|ppAfter:{stats.pp:.4f}|'
+                # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
                 f'onlineScoreId:{s.id}'
             )
 
-        charts.append('|'.join(overall_chart))
+        )))
 
         ret = '\n'.join(charts).encode()
 
     await plog(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LIGHT_GREEN)
     return ret
 
-@web_handler('osu-getreplay.php', required_args=('c', 'm', 'u', 'h'))
+@web_handler('osu-getreplay.php', required_args=('u', 'h', 'm', 'c'))
 async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
     pname = unquote(conn.args['u'])
     phash = conn.args['h']

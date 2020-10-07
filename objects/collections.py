@@ -30,7 +30,7 @@ class ChannelList(Sequence):
     __slots__ = ('channels',)
 
     def __init__(self):
-        self.channels = []
+        self.channels: list[Channel] = []
 
     def __getitem__(self, index: Union[Slice, str]) -> Channel:
         # XXX: can be either a string (to get by name),

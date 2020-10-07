@@ -2,9 +2,9 @@
 
 # A dev-friendly osu! server written in modern python
 
-Looking for a well-organized, async & completely open-source osu! server implementation undergoing rapid development?
+Looking for a well-organized, async & completely open-source osu! server implementation with unique features rapidly undergoing development?
 
-Disclaimer: while this project itself is actually in a usable state, we do not currently have a frontend to go along with it :P
+Disclaimer: while this project itself is actually in a usable state and genuinely already has many unique features.. we still don't have a frontend :P
 
 ## There are many other osu! server implementations, what makes this any different?
 

@@ -90,13 +90,14 @@ class Channel:
     def __contains__(self, p) -> bool:
         return p in self.players
 
-    async def send(self, client, msg: str) -> None:
+    async def send(self, client, msg: str, to_client: bool = False) -> None:
         self.enqueue(await packets.sendMessage(
             client = client.name,
             msg = msg,
             target = self.name,
             client_id = client.id
-        ), immune = {client.id})
+        ), immune = () if to_client else (client.id,))
+
 
     async def send_selective(self, client, msg: str, targets) -> None:
         # Accept a set of players to enqueue the data to.
