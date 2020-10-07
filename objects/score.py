@@ -242,7 +242,7 @@ class Score:
         ).decode().split(':')
 
         if len(data) != 18:
-            await plog('Received an invalid score submission.', Ansi.LIGHT_RED)
+            plog('Received an invalid score submission.', Ansi.LRED)
             return
 
         s = cls()
@@ -270,7 +270,7 @@ class Score:
 
         # Ensure all ints are safe to cast.
         if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
-            await plog('Invalid parameter passed into submit-modular.', Ansi.LIGHT_RED)
+            plog('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
 
         (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,

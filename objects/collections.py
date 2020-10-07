@@ -58,19 +58,19 @@ class ChannelList(Sequence):
 
     async def add(self, c: Channel) -> None:
         if c in self.channels:
-            await plog(f'{c} double-added to channels list?')
+            plog(f'{c} double-added to channels list?')
             return
 
         self.channels.append(c)
 
         if glob.config.debug:
-            await plog(f'{c} added to channels list.')
+            plog(f'{c} added to channels list.')
 
     async def remove(self, c: Channel) -> None:
         self.channels.remove(c)
 
         if glob.config.debug:
-            await plog(f'{c} removed from channels list.')
+            plog(f'{c} removed from channels list.')
 
 class MatchList(Sequence):
     """A class to represent all multiplayer matches on the gulag.
@@ -108,7 +108,7 @@ class MatchList(Sequence):
 
     async def add(self, m: Match) -> None:
         if m in self.matches:
-            await plog(f'{m} double-added to matches list?')
+            plog(f'{m} double-added to matches list?')
             return
 
         if (free := self.get_free()) is not None:
@@ -118,9 +118,9 @@ class MatchList(Sequence):
             self.matches[free] = m
 
             if glob.config.debug:
-                await plog(f'{m} added to matches list.')
+                plog(f'{m} added to matches list.')
         else:
-            await plog(f'Match list is full! Could not add {m}.')
+            plog(f'Match list is full! Could not add {m}.')
 
     async def remove(self, m: Match) -> None:
         for idx, i in enumerate(self.matches):
@@ -129,7 +129,7 @@ class MatchList(Sequence):
                 break
 
         if glob.config.debug:
-            await plog(f'{m} removed from matches list.')
+            plog(f'{m} removed from matches list.')
 
 class PlayerList(Sequence):
     """A class to represent all players online on the gulag.
@@ -247,16 +247,16 @@ class PlayerList(Sequence):
     async def add(self, p: Player) -> None:
         if p in self.players:
             if glob.config.debug:
-                await plog(f'{p} double-added to players list?')
+                plog(f'{p} double-added to players list?')
             return
 
         self.players.append(p)
 
         if glob.config.debug:
-            await plog(f'{p} added to players list.')
+            plog(f'{p} added to players list.')
 
     async def remove(self, p: Player) -> None:
         self.players.remove(p)
 
         if glob.config.debug:
-            await plog(f'{p} removed from players list.')
+            plog(f'{p} removed from players list.')

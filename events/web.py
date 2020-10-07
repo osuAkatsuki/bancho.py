@@ -41,12 +41,12 @@ def web_handler(uri: str, required_args: tuple[str] = (),
         async def _handler(conn: AsyncConnection):
             # make sure we have all required args
             if not all(x in conn.args for x in required_args):
-                await plog(f'{uri} request missing args.', Ansi.LIGHT_RED)
+                plog(f'{uri} request missing args.', Ansi.LRED)
                 return
 
             # make sure we have all required multipart args
             if not all(x in conn.multipart_args for x in required_mpargs):
-                await plog(f'{uri} request missing mpargs.', Ansi.LIGHT_RED)
+                plog(f'{uri} request missing mpargs.', Ansi.LRED)
                 return
 
             return await cb(conn)
@@ -74,11 +74,11 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #@web_handler('osu-osz2-bmsubmit-upload.php')
 #async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
 #    if not all(x in conn.args for x in required_params_bmsubmit_upload):
-#        await plog(f'bmsubmit-upload req missing params.', Ansi.LIGHT_RED)
+#        plog(f'bmsubmit-upload req missing params.', Ansi.LRED)
 #        return
 #
 #    if not 'osz2' in conn.files:
-#        await plog(f'bmsubmit-upload sent without an osz2.', Ansi.LIGHT_RED)
+#        plog(f'bmsubmit-upload sent without an osz2.', Ansi.LRED)
 #        return
 #
 #    ...
@@ -89,7 +89,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 #@web_handler('osu-osz2-bmsubmit-getid.php')
 #async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
 #    if not all(x in conn.args for x in required_params_bmsubmit_getid):
-#        await plog(f'bmsubmit-getid req missing params.', Ansi.LIGHT_RED)
+#        plog(f'bmsubmit-getid req missing params.', Ansi.LRED)
 #        return
 #
 #    #s - setid
@@ -137,7 +137,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 @web_handler('osu-screenshot.php', required_mpargs=('u', 'p', 'v'))
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
     if 'ss' not in conn.files:
-        await plog(f'screenshot req missing file.', Ansi.LIGHT_RED)
+        plog(f'screenshot req missing file.', Ansi.LRED)
         return
 
     pname = unquote(conn.multipart_args['u'])
@@ -151,7 +151,7 @@ async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
     async with aiofiles.open(f'.data/ss/{filename}', 'wb') as f:
         await f.write(conn.files['ss'])
 
-    await plog(f'{p} uploaded {filename}.')
+    plog(f'{p} uploaded {filename}.')
     return filename.encode()
 
 @web_handler('osu-getfriends.php', required_args=('u', 'h'))
@@ -525,7 +525,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     )
 
     if not s:
-        await plog('Failed to parse a score - invalid format.', Ansi.LIGHT_RED)
+        plog('Failed to parse a score - invalid format.', Ansi.LRED)
         return b'error: no'
     elif not s.player:
         # Player is not online, return nothing so that their
@@ -559,7 +559,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     )
 
     if res:
-        await plog(f'{s.player} submitted a duplicate score.', Ansi.LIGHT_YELLOW)
+        plog(f'{s.player} submitted a duplicate score.', Ansi.LYELLOW)
         return b'error: no'
 
     time_elapsed = mp_args['st' if s.passed else 'ft']
@@ -577,9 +577,9 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         pp_cap = autorestrict_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            await plog(f'{s.player} restricted for submitting '
+            plog(f'{s.player} restricted for submitting '
                        f'{s.pp:.2f} score on gm {s.mode!r}.',
-                       Ansi.LIGHT_RED)
+                       Ansi.LRED)
 
             await s.player.restrict()
             return b'error: ban'
@@ -612,7 +612,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
         if 'score' not in conn.files or conn.files['score'] == b'\r\n':
-            await plog(f'{s.player} submitted a score without a replay!', Ansi.LIGHT_RED)
+            plog(f'{s.player} submitted a score without a replay!', Ansi.LRED)
             await s.player.restrict()
         else:
             # TODO: the replay is currently sent from the osu!
@@ -785,7 +785,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         ret = '\n'.join(charts).encode()
 
-    await plog(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LIGHT_GREEN)
+    plog(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
 
 @web_handler('osu-getreplay.php', required_args=('u', 'h', 'm', 'c'))
@@ -875,7 +875,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
             # perhaps i should add some kind of system to prevent
             # this from happening or re-think this overall.. i'd
             # imagine this can be useful for old client det. tho :o
-            await plog('Received performance report but found no score', Ansi.LIGHT_RED)
+            plog('Received performance report but found no score', Ansi.LRED)
             return
 
         # TODO: timing checks
@@ -1007,7 +1007,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
         filename = conn.args['f'].replace('+', ' ')
         if not (re := regexes.mapfile.match(unquote(filename))):
-            await plog(f'Requested invalid file - {filename}.', Ansi.LIGHT_RED)
+            plog(f'Requested invalid file - {filename}.', Ansi.LRED)
             return
 
         set_exists = await glob.db.fetch(
@@ -1250,7 +1250,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 
 async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
-        await plog(f'Requested invalid map update {conn.path}.', Ansi.LIGHT_RED)
+        plog(f'Requested invalid map update {conn.path}.', Ansi.LRED)
         return
 
     if not (res := await glob.db.fetch(
@@ -1271,7 +1271,7 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
         # We don't have map, get from osu!
         async with glob.http.get(f"https://old.ppy.sh/osu/{res['id']}") as resp:
             if not resp or resp.status != 200:
-                await plog(f'Could not find map {filepath}!', Ansi.LIGHT_RED)
+                plog(f'Could not find map {filepath}!', Ansi.LRED)
                 return
 
             content = await resp.read()
@@ -1303,7 +1303,7 @@ async def deprecated_handler(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(unquote(pname), phash)):
         return
 
-    await plog(f'{p} used deprecated handler {conn.path!r}.', Ansi.LIGHT_RED)
+    plog(f'{p} used deprecated handler {conn.path!r}.', Ansi.LRED)
 
 # won't work for submit modular cuz it's special case lol
 #osuSubmitModular = web_handler('osu-submit-modular.php')(deprecated_handler)

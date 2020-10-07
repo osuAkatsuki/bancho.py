@@ -289,7 +289,7 @@ class Beatmap:
             # If the user has no API key, we cannot make
             # any further attempts to serve them the map.
             if not glob.config.osu_api_key:
-                await plog('Fetching beatmap requires osu!api key.', Ansi.LIGHT_RED)
+                plog('Fetching beatmap requires osu!api key.', Ansi.LRED)
                 return
 
             # Try to get from the osu!api.
@@ -403,7 +403,7 @@ class Beatmap:
                     ]
                 )
 
-            await plog(f'Retrieved full set {set_id} from the osu!api.', Ansi.LIGHT_GREEN)
+            plog(f'Retrieved full set {set_id} from the osu!api.', Ansi.LGREEN)
             return await cls.from_md5_sql(md5)
 
         params = {'k': glob.config.osu_api_key, 'h': md5}
@@ -461,7 +461,7 @@ class Beatmap:
             # New map, just save to DB.
             await m.save_to_sql()
 
-        await plog(f'Retrieved {m.full} from the osu!api.', Ansi.LIGHT_GREEN)
+        plog(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
         return m
 
     async def cache_pp(self, mods: Mods) -> None:
@@ -488,7 +488,7 @@ class Beatmap:
             self.last_update, self.frozen, self.mode, self.bpm,
             self.cs, self.od, self.ar, self.hp, self.diff
         )):
-            await plog('Tried to save invalid beatmap to SQL!', Ansi.LIGHT_RED)
+            plog('Tried to save invalid beatmap to SQL!', Ansi.LRED)
             return
 
         await glob.db.execute(

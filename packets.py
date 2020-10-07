@@ -231,7 +231,7 @@ class BanchoPacketReader:
             # End the connection immediately.
             self.current_packet = None
             self._offset += ldata
-            await plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LIGHT_RED)
+            plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
             return
 
         packet_id, self.length = struct.unpack('<HxI', self.data[:7])

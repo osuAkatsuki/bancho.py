@@ -88,7 +88,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         await handler(conn)
     else:
         # We have no such handler.
-        await plog(f'Unhandled {conn.path}.', Ansi.LIGHT_RED)
+        plog(f'Unhandled {conn.path}.', Ansi.LRED)
         await conn.send(400, b'Request handler not implemented.')
 
     if glob.config.debug:
@@ -96,7 +96,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
                else f'{time_taken / 1000:.2f}ms')
 
-        await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
+        plog(f'Request handled in {time_str}.', Ansi.LCYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
     glob.version = cmyui.Version(2, 7, 0)
@@ -125,7 +125,7 @@ async def run_server(addr: cmyui.Address) -> None:
         await glob.channels.add(Channel(**chan))
 
     async with cmyui.AsyncTCPServer(addr) as glob.serv:
-        await plog(f'Gulag v{glob.version} online!', Ansi.LIGHT_GREEN)
+        plog(f'Gulag v{glob.version} online!', Ansi.LGREEN)
         async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 

@@ -1,4 +1,3 @@
-import aiofiles
 from enum import IntEnum, unique
 from typing import Union, overload
 from cmyui import get_timestamp
@@ -19,13 +18,13 @@ class Ansi(IntEnum):
 
     # Light colours
     GRAY          = 90
-    LIGHT_RED     = 91
-    LIGHT_GREEN   = 92
-    LIGHT_YELLOW  = 93
-    LIGHT_BLUE    = 94
-    LIGHT_MAGENTA = 95
-    LIGHT_CYAN    = 96
-    LIGHT_WHITE   = 97
+    LRED     = 91
+    LGREEN   = 92
+    LYELLOW  = 93
+    LBLUE    = 94
+    LMAGENTA = 95
+    LCYAN    = 96
+    LWHITE   = 97
 
     RESET = 0
 
@@ -56,9 +55,8 @@ class AnsiRGB:
     def __repr__(self) -> str:
         return f'\x1b[38;2;{self.r};{self.g};{self.b}m'
 
-# yea that's right, even the log is a coroutine lol
-async def plog(msg, col: Union[Ansi, AnsiRGB] = None,
-               fd: str = None, st_fmt = '') -> None:
+def plog(msg, col: Union[Ansi, AnsiRGB] = None,
+         fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,
     # or also just printing with colour without having
     # to do inline colour codes / ansi objects.
@@ -77,5 +75,8 @@ async def plog(msg, col: Union[Ansi, AnsiRGB] = None,
     if not fd:
         return
 
-    async with aiofiles.open(fd, 'a+') as f:
-        await f.write(f'[{get_timestamp(True)}] {msg}\n')
+    # i think making the log a coroutine is going a
+    # bit far; i'll take a possible performance hit
+    # when we're debugging for much cleaner code :P
+    with open(fd, 'a+') as f:
+        f.write(f'[{get_timestamp(True)}] {msg}\n')
