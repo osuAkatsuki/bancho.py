@@ -536,6 +536,13 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
 
+    # attempt to update their stats if their
+    # gm/gm-affecting-mods change at all.
+    if s.mode != s.player.status.mode:
+        s.player.status.mods = s.mods
+        s.player.status.mode = s.mode
+        glob.players.enqueue(await packets.userStats(s.player))
+
     table = s.mode.sql_table
 
     # Check for score duplicates
@@ -617,7 +624,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     # get the current stats, and take a
     # shallow copy for the response charts.
-    stats = s.player.stats[s.mode]
+    stats = s.player.gm_stats
     prev_stats = copy.copy(stats)
 
     # update playtime & plays
@@ -641,12 +648,14 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     and s.bmap.status in (RankedStatus.Ranked,
                           RankedStatus.Approved):
         # add our new ranked score.
-        stats.rscore += s.score
+        additive = s.score
 
         if s.prev_best:
             # we previously had a score, so remove
             # it's score from our ranked score.
-            stats.rscore -= s.prev_best.score
+            additive -= s.prev_best.score
+
+        stats.rscore += additive
 
     # update user with new stats
     await glob.db.execute(
