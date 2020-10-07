@@ -30,7 +30,6 @@ from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
-from constants import regexes
 
 # Set CWD to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -53,28 +52,36 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
     st = time.time_ns()
     handler = None
+    domain = conn.headers['Host']
 
     # Match the host & uri to the correct handlers.
-    if regexes.bancho_domain.match(conn.headers['Host']):
-        if conn.path == '/':
-            handler = handle_bancho
+    if domain.endswith('.ppy.sh'):
+        # osu! handlers
 
-    elif conn.headers['Host'] == 'osu.ppy.sh':
-        if conn.path.startswith('/web/'):
-            handler = handle_web
-        elif conn.path.startswith('/ss/'):
-            handler = handle_ss # screenshots
-        elif conn.path.startswith('/d/'):
-            handler = handle_dl # osu!direct
-        elif conn.path.startswith('/api/'):
-            handler = handle_api # gulag!api
+        subdomain = domain.removesuffix('.ppy.sh')
 
-    elif conn.headers['Host'] == 'a.ppy.sh':
-        handler = handle_avatar # avatars
-
+        if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
+            handler = handle_bancho # bancho packets
+        elif subdomain == 'osu':
+            if conn.path.startswith('/web'):
+                handler = handle_web # /web handlers
+            elif conn.path.startswith('/ss/'):
+                handler = handle_ss # screenshots
+            elif conn.path.startswith('/d/'):
+                handler = handle_dl # osu!direct
+        elif subdomain == 'a':
+            handler = handle_avatar
     else:
-        # nginx is passing us something non osu! related.
-        NotImplemented
+        # non osu!-related handler
+        if domain.endswith(glob.config.domain):
+            if conn.path.startswith('/api'):
+                handler = handle_api # gulag!api
+            else:
+                # frontend handler?
+                ...
+        else:
+            # nginx sending something that we're not handling?
+            ...
 
     if handler:
         # We have a handler for this request.

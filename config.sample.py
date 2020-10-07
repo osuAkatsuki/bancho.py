@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
 """ server settings """
+# the domain you'd like gulag to be hosted on.
+# XXX: don't include the 'http(s)' prefix, it will be
+#      handled automatically situationally by gulag.
+domain = 'cmyui.codes' # https://cmyui.codes
+
 # the address which the server runs on.
 # the server supports both inet4 and unix sockets.
 # for inet sockets, set to (addr: str, port: int),
@@ -62,8 +67,8 @@ command_prefix = '!'
 # you can also 'hardcode' usernames here
 # to be blocked regardless of their rank.
 # TODO: retrieve the names of the top ~100
-# (configurable) players on bancho, and
-# auto-add them to this set on startup.
+#       (configurable) players on bancho, and
+#       auto-add them to this set on startup?
 disallowed_names = {
     'cookiezi', 'rrtyui',
     'hvick225', 'qsc20010'
