@@ -1,9 +1,12 @@
 #!/usr/bin/python3.9
 # -*- coding: utf-8 -*-
 
-# If you're interested in development, my test server is often up
-# at 51.161.34.235 - registration is done on login, so login with
-# whatever username you'd like; the cert is Akatsuki's.
+# if you're interested in development, my test server is
+# usually up at 51.161.34.235. just switch the ip of any
+# switcher to the one above, toggle it off and on again, and
+# you should be connected. registration is done on login,
+# so login with whatever credentials you'd like permanently.
+# certificate: https://akatsuki.pw/static/ca.crt
 
 __all__ = ()
 
@@ -37,8 +40,8 @@ if not os.path.isdir('.data'):
     os.mkdir('.data')
 
 # make sure that all data subdirectories exist
-required_folders = frozenset({'avatars', 'logs', 'osu',
-                              'osz', 'osr', 'ss'})
+required_folders = frozenset({'avatars', 'logs',
+                              'osu', 'osr', 'ss'})
 for p in required_folders:
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
@@ -69,6 +72,10 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     elif conn.headers['Host'] == 'a.ppy.sh':
         handler = handle_avatar # avatars
 
+    else:
+        # nginx is passing us something non osu! related.
+        NotImplemented
+
     if handler:
         # We have a handler for this request.
         await handler(conn)
@@ -77,14 +84,15 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         await plog(f'Unhandled {conn.path}.', Ansi.LIGHT_RED)
         await conn.send(400, b'Request handler not implemented.')
 
-    time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
-    time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
-           else f'{time_taken / 1000:.2f}ms')
+    if glob.config.debug:
+        time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
+        time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
+               else f'{time_taken / 1000:.2f}ms')
 
-    await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
+        await plog(f'Request handled in {time_str}.', Ansi.LIGHT_CYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 6, 3)
+    glob.version = cmyui.Version(2, 7, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -114,15 +122,12 @@ async def run_server(addr: cmyui.Address) -> None:
         async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 
-# Use uvloop if available (much faster).
+# Use uvloop if available (faster event loop).
 if spec := importlib.util.find_spec('uvloop'):
     uvloop = importlib.util.module_from_spec(spec)
     sys.modules['uvloop'] = uvloop
     spec.loader.exec_module(uvloop)
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
-#import cProfile
-#cProfile.run('asyncio.run(run_server(glob.config.server_addr))', '.data/logs/profile.log')
 
 asyncio.run(run_server(glob.config.server_addr))

@@ -42,7 +42,6 @@ async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
     )
 
     p.status.update(*data)
-    p.rx = p.status.mods & Mods.RELAX > 0
     glob.players.enqueue(await packets.userStats(p))
 
 # packet id: 1
@@ -122,6 +121,13 @@ async def ping(p: Player, pr: BanchoPacketReader) -> None:
     # TODO: this should be last packet time, not just
     # ping.. this handler shouldn't even exist lol
     p.ping_time = int(time.time())
+
+    # osu! seems to error when i send nothing back,
+    # so perhaps the official bancho implementation
+    # expects something like a stats update.. i'm
+    # just gonna ping it back, as i don't really
+    # want to something more expensive so often lol
+    p.enqueue(b'\x04\x00\x00\x00\x00\x00\x00')
 
 registration_msg = '\n'.join((
     "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
@@ -341,7 +347,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 await packets.silenceEnd(max(p.silence_end - time.time(), 0)))
 
     await glob.players.add(p)
-    await plog(f'{p} logged in.', Ansi.LIGHT_YELLOW)
+    await plog(f'{p} logged in.', Ansi.LIGHT_CYAN)
     return bytes(data), p.token
 
 # packet id: 16
@@ -1017,3 +1023,14 @@ async def userPresenceRequest(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_userToggleBlockNonFriendPM)
 async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
     p.pm_private = (await pr.read(osuTypes.i32))[0] == 1
+
+# some depreacted packets - no longer used in regular connections.
+# XXX: perhaps these could be turned into decorators to allow
+# for better specialization of params? perhaps prettier too :P
+async def deprecated_packet(p: Player, pr: BanchoPacketReader) -> None:
+    await plog(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LIGHT_RED)
+
+errorReport = bancho_packet(BanchoPacket.c_errorReport)(deprecated_packet)
+lobbyJoinMatch = bancho_packet(BanchoPacket.c_lobbyJoinMatch)(deprecated_packet)
+lobbyPartMatch = bancho_packet(BanchoPacket.c_lobbyPartMatch)(deprecated_packet)
+beatmapInfoRequest = bancho_packet(BanchoPacket.c_beatmapInfoRequest)(deprecated_packet)

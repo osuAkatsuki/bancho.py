@@ -187,17 +187,17 @@ class Score:
         self.prev_best = None
 
     @classmethod
-    async def from_sql(cls, scoreid: int, rx: bool = False):
+    async def from_sql(cls, scoreid: int, sql_table: str):
         """Create a score object from sql using it's scoreid."""
-        table = 'scores_rx' if rx else 'scores_vn'
-
+        # XXX: perhaps in the future this should take a gamemode rather
+        # than just the sql table? just faster on the current setup :P
         res = await glob.db.fetch(
             'SELECT id, map_md5, userid, pp, score, '
             'max_combo, mods, acc, n300, n100, n50, '
             'nmiss, ngeki, nkatu, grade, perfect, '
             'status, mode, play_time, '
             'time_elapsed, client_flags '
-            f'FROM {table} WHERE id = %s',
+            f'FROM {sql_table} WHERE id = %s',
             [scoreid], _dict = False
         )
 
@@ -212,14 +212,14 @@ class Score:
 
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
-         s.perfect, s.status, s.mode, s.play_time,
+         s.perfect, s.status, mode_vn, s.play_time,
          s.time_elapsed, s.client_flags) = res[3:]
 
         # fix some types
         s.passed = s.status != 0
         s.status = SubmissionStatus(s.status)
         s.mods = Mods(s.mods)
-        s.mode = GameMode(s.mode + (s.mods & Mods.RELAX and 4))
+        s.mode = GameMode.from_params(mode_vn, s.mods)
         s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
@@ -280,7 +280,7 @@ class Score:
         _grade = data[12] # letter grade
         s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
-        s.mode = GameMode(int(data[15]) + (s.mods & Mods.RELAX and 4))
+        s.mode = GameMode.from_params(int(data[15]), s.mods)
         s.play_time = int(time.time()) # (yyMMddHHmmss)
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
@@ -304,20 +304,20 @@ class Score:
         return s
 
     async def calc_lb_placement(self) -> int:
-        if self.mods & Mods.RELAX:
-            table = 'scores_rx'
+        table = self.mode.sql_table
+
+        if self.mode <= GameMode.rx_std:
             scoring = 'pp'
-            score = self.score
-        else:
-            table = 'scores_vn'
-            scoring = 'score'
             score = self.pp
+        else:
+            scoring = 'score'
+            score = self.score
 
         res = await glob.db.fetch(
             'SELECT COUNT(*) AS c FROM {t} '
             'WHERE map_md5 = %s AND mode = %s '
             'AND status = 2 AND {s} > %s'.format(t=table, s=scoring),
-            [self.bmap.md5, self.mode % 4, score]
+            [self.bmap.md5, self.mode.as_vanilla, score]
         )
 
         return res['c'] + 1 if res else 1
@@ -327,7 +327,9 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        if self.mode % 4 not in (0, 1):
+        mode_vn = self.mode.as_vanilla
+
+        if mode_vn not in (0, 1):
             # Currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
@@ -336,7 +338,7 @@ class Score:
             'mods': self.mods,
             'combo': self.max_combo,
             'nmiss': self.nmiss,
-            'mode': self.mode,
+            'mode': mode_vn,
             'acc': self.acc
         }
 
@@ -351,9 +353,7 @@ class Score:
             self.status = SubmissionStatus.FAILED
             return
 
-        rx = self.mods & Mods.RELAX
-
-        table = 'scores_rx' if rx else 'scores_vn'
+        table = self.mode.sql_table
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
@@ -361,13 +361,13 @@ class Score:
             f'SELECT id, pp FROM {table} '
             'WHERE userid = %s AND map_md5 = %s '
             'AND mode = %s AND status = 2',
-            [self.player.id, self.bmap.md5, self.mode % 4]
+            [self.player.id, self.bmap.md5, self.mode.as_vanilla]
         )
 
         if res:
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res['id'], rx)
+            self.prev_best = await Score.from_sql(res['id'], table)
 
             # if our new score is better, update
             # both of our score's submission statuses.
@@ -383,7 +383,7 @@ class Score:
 
     def calc_accuracy(self) -> None:
         """Calculate the accuracy of our score."""
-        mode_vn = self.mode % 4
+        mode_vn = self.mode.as_vanilla
 
         if mode_vn == 0: # osu!
             if not (total := sum((self.n300, self.n100,

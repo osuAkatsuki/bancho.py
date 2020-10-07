@@ -45,15 +45,8 @@ osu_api_key = ''
 gzip = {'web': 4, 'disk': 9}
 
 """ osu!direct """
-# NOTE: in the future, gulag may actually have a built-in
-# mirror, but this is a plan for long in the future.
-
 # the external mirror url to use.
 mirror = 'https://kacktaube.me'
-# whether or not you'd like gulag to cache beatmaps retrieved
-# from the mirror on disk, for faster access in the future.
-# TODO: add max size to cache on disk?
-mirror_cache = True
 
 """ customization """
 # the menu icon displayed on

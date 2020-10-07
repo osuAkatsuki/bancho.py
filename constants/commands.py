@@ -66,9 +66,7 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 _last_doc = 'Show information about your most recent score.'
 @command(priv=Privileges.Normal, public=True, doc=_last_doc)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    mode = p.status.mode + ((p.rx and p.status.mode != 3) and 4)
-
-    if not (s := p.recent_scores[mode]):
+    if not (s := p.recent_scores[p.status.mode]):
         return 'No recent score found for current mode!'
 
     return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '

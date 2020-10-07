@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from constants.gamemodes import GameMode
 from typing import Optional, Callable
 from enum import IntEnum, unique
 import os
@@ -507,12 +508,12 @@ autorestrict_pp = (
 )
 del UNDEF
 
-req_args_submitModular = (
+req_args_osuSubmitModularSelector = (
     'x', 'ft', 'score', 'fs', 'bmk', 'iv',
     'c1', 'st', 'pass', 'osuver', 's'
 )
-@web_handler('osu-submit-modular-selector.php', required_mpargs=req_args_submitModular)
-async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
+@web_handler('osu-submit-modular-selector.php', required_mpargs=req_args_osuSubmitModularSelector)
+async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     # Parse our score data into a score obj.
@@ -535,8 +536,14 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
 
-    rx = s.mods & Mods.RELAX != 0
-    table = 'scores_rx' if rx else 'scores_vn'
+    # attempt to update their stats if their
+    # gm/gm-affecting-mods change at all.
+    if s.mode != s.player.status.mode:
+        s.player.status.mods = s.mods
+        s.player.status.mode = s.mode
+        glob.players.enqueue(await packets.userStats(s.player))
+
+    table = s.mode.sql_table
 
     # Check for score duplicates
     # TODO: might need to improve?
@@ -544,7 +551,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         f'SELECT 1 FROM {table} WHERE mode = %s '
         'AND map_md5 = %s AND userid = %s AND mods = %s '
         'AND score = %s', [
-            s.mode % 4, s.bmap.md5,
+            s.mode.as_vanilla, s.bmap.md5,
             s.player.id, int(s.mods), s.score
         ]
     )
@@ -583,7 +590,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'UPDATE {table} SET status = 1 '
             'WHERE status = 2 AND map_md5 = %s '
             'AND userid = %s AND mode = %s',
-            [s.bmap.md5, s.player.id, s.mode % 4]
+            [s.bmap.md5, s.player.id, s.mode.as_vanilla]
         )
 
     s.id = await glob.db.execute(
@@ -594,7 +601,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         '%s, %s, %s, %s)', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, int(s.mods),
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            s.grade, int(s.status), s.mode % 4, s.play_time,
+            s.grade, int(s.status), s.mode.as_vanilla, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
@@ -617,7 +624,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     # get the current stats, and take a
     # shallow copy for the response charts.
-    stats = s.player.stats[s.mode]
+    stats = s.player.gm_stats
     prev_stats = copy.copy(stats)
 
     # update playtime & plays
@@ -641,12 +648,14 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     and s.bmap.status in (RankedStatus.Ranked,
                           RankedStatus.Approved):
         # add our new ranked score.
-        stats.rscore += s.score
+        additive = s.score
 
         if s.prev_best:
             # we previously had a score, so remove
             # it's score from our ranked score.
-            stats.rscore -= s.prev_best.score
+            additive -= s.prev_best.score
+
+        stats.rscore += additive
 
     # update user with new stats
     await glob.db.execute(
@@ -675,7 +684,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'LEFT JOIN {table} s ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 ORDER BY pp DESC LIMIT 1, 1',
-            [s.bmap.md5, s.mode % 4]
+            [s.bmap.md5, s.mode.as_vanilla]
         )
 
         ann = [f'[{s.mode!r}] {s.player.embed} achieved #1 on {s.bmap.embed}.']
@@ -691,14 +700,14 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     """ score submission charts """
 
-    if s.status == SubmissionStatus.FAILED or rx:
+    if s.status == SubmissionStatus.FAILED or s.mode >= GameMode.rx_std:
         # basically, the osu! client and the way bancho handles this
         # is dumb. if you submit a failed play on bancho, it will
         # still generate the charts and send it to the client, even
         # when the client can't (and doesn't use them).. so instead,
         # we'll send back an empty error, which will just tell the
         # client that the score submission process is complete.. lol
-        # (also no point on rx since you can't see the charts atm xd)
+        # (also no point on rx/ap since you can't see the charts atm xd)
         ret = b'error: no'
 
     else:
@@ -785,7 +794,7 @@ async def submitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         ret = '\n'.join(charts).encode()
 
-    await plog(f'{s.player} submitted a score! ({s.mode!r}, {s.status!r})', Ansi.LIGHT_GREEN)
+    await plog(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LIGHT_GREEN)
     return ret
 
 @web_handler('osu-getreplay.php', required_args=('c', 'm', 'u', 'h'))
@@ -980,29 +989,26 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         return
 
     # make sure all int args are integral
-    if not all(conn.args[k].isdecimal() for k in ('mods', 'v', 'i')):
+    if not all(conn.args[k].isdecimal() for k in ('mods', 'v', 'm', 'i')):
         return b'-1|false'
 
     map_md5 = conn.args['c']
 
     mods = int(conn.args['mods'])
+    mode = GameMode.from_params(int(conn.args['m']), mods)
+
     map_set_id = int(conn.args['i'])
     rank_type = RankingType(int(conn.args['v']))
 
-    # update rx value and send their stats if changed
-    # XXX: this doesn't work consistently, but i'll
-    # keep it in anyways i suppose lol.. no harm :D
-    rx = mods & Mods.RELAX > 0
-    if p.rx != rx:
-        p.rx = rx
+    # attempt to update their stats if their
+    # gm/gm-affecting-mods change at all.
+    if mode != p.status.mode:
+        p.status.mods = mods
+        p.status.mode = mode
         glob.players.enqueue(await packets.userStats(p))
 
-    if rx:
-        table = 'scores_rx'
-        scoring = 'pp'
-    else:
-        table = 'scores_vn'
-        scoring = 'score'
+    table = mode.sql_table
+    scoring = 'pp' if mode >= GameMode.rx_std else 'score'
 
     if not (bmap := await Beatmap.from_md5(map_md5, map_set_id)):
         # Couldn't find in db or at osu! api by md5.
@@ -1283,3 +1289,30 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
             await f.write(content)
 
     return content
+
+# some depreacted handlers - no longer used in regular connections.
+# XXX: perhaps these could be turned into decorators to allow
+# for better specialization of params? perhaps prettier too :P
+async def deprecated_handler(conn: AsyncConnection) -> Optional[bytes]:
+    args = conn.args or conn.multipart_args # cant support both :/.. could union
+    pname = phash = None
+
+    for p in ('u', 'us'):
+        if pname := args[p]:
+            break
+    else:
+        return
+
+    for p in ('h', 'ha', 'p'):
+        if phash := args[p]:
+            break
+    else:
+        return
+
+    if not (p := await glob.players.get_login(unquote(pname), phash)):
+        return
+
+    await plog(f'{p} used deprecated handler {conn.path!r}.', Ansi.LIGHT_RED)
+
+# won't work for submit modular cuz it's special case lol
+#osuSubmitModular = web_handler('osu-submit-modular.php')(deprecated_handler)

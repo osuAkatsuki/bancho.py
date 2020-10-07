@@ -1,8 +1,9 @@
 import aiofiles
 from enum import IntEnum, unique
+from typing import Union, overload
 from cmyui import get_timestamp
 
-__all__ = 'Ansi', 'plog'
+__all__ = 'Ansi', 'AnsiRGB', 'plog'
 
 @unique
 class Ansi(IntEnum):
@@ -31,7 +32,32 @@ class Ansi(IntEnum):
     def __repr__(self) -> str:
         return f'\x1b[{self.value}m'
 
-async def plog(msg, col: Ansi = None,
+class AnsiRGB:
+    @overload
+    def __init__(self, rgb: int) -> None: ...
+    @overload
+    def __init__(self, r: int, g: int, b: int) -> None: ...
+
+    def __init__(self, *args) -> None:
+        largs = len(args)
+
+        if largs == 3:
+            # r, g, b passed.
+            self.r, self.g, self.b = args
+        elif largs == 1:
+            # passed as single argument
+            rgb = args[0]
+            self.b = rgb & 0xff
+            self.g = (rgb >> 8) & 0xff
+            self.r = (rgb >> 16) & 0xff
+        else:
+            raise Exception('Incorrect params for AnsiRGB.')
+
+    def __repr__(self) -> str:
+        return f'\x1b[38;2;{self.r};{self.g};{self.b}m'
+
+# yea that's right, even the log is a coroutine lol
+async def plog(msg, col: Union[Ansi, AnsiRGB] = None,
                fd: str = None, st_fmt = '') -> None:
     # This can be used both for logging purposes,
     # or also just printing with colour without having
