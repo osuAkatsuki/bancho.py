@@ -41,7 +41,7 @@ This is simply the result of my programming values and time thrown together; I'd
 ## Requirements
 
 - Python 3.9 & pip
-- MySQL & Nginx (both installed in setup below)
+- MySQL & Nginx & build-essential (all installed in setup below)
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
 - An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full feature-set.
 
@@ -55,7 +55,7 @@ NOTE: I will not be able to help you out with creating a certificate to connect 
 
 ```sh
 # Install our database & reverse proxy, if not already installed.
-sudo apt install mysql-server nginx
+sudo apt install mysql-server nginx build-essential
 
 # Clone gulag from github.
 git clone https://github.com/cmyui/gulag.git
