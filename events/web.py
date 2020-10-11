@@ -578,8 +578,8 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         if s.pp > pp_cap:
             plog(f'{s.player} restricted for submitting '
-                       f'{s.pp:.2f} score on gm {s.mode!r}.',
-                       Ansi.LRED)
+                 f'{s.pp:.2f} score on gm {s.mode!r}.',
+                 Ansi.LRED)
 
             await s.player.restrict()
             return b'error: ban'
@@ -1212,6 +1212,19 @@ async def osuComment(conn: AsyncConnection) -> Optional[bytes]:
 
     else: # invalid action
         return b'Invalid action.'
+
+@web_handler('osu-markasread.php', required_args=('u', 'h', 'channel'))
+async def osuMarkAsRead(conn: AsyncConnection) -> Optional[bytes]:
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    if not conn.args['channel']:
+        return b'' # no channel specified
+
+    ...
 
 @web_handler('check-updates.php', required_args=('action', 'stream'))
 async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:

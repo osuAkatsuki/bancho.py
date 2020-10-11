@@ -52,7 +52,7 @@ Setup is relatively simple, the commands below should basically be copy-pastable
 If you have any difficulties setting up gulag, feel free to join the Discord server at the top of the README, we now have a bit of a community!
 
 NOTE: I will not be able to help you out with creating a certificate to connect on the latest osu! versions.
-
+Oh, and also, if I remember correctly nginx has some issues on Ubuntu 20.04, so I don't recommend trying lol..
 ```sh
 # Install our database & reverse proxy, if not already installed.
 sudo apt install mysql-server nginx

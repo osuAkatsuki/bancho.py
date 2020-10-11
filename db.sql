@@ -266,7 +266,7 @@ create table performance_reports
 		primary key,
 	os varchar(64) not null,
 	fullscreen tinyint(1) not null,
-	fps_cap int null,
+	fps_cap varchar(16) not null,
 	compatibility tinyint(1) not null,
 	version varchar(16) not null,
 	start_time int not null,
