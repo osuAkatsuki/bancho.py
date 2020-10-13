@@ -2,7 +2,7 @@
 from typing import Optional
 from enum import IntEnum, unique
 import time
-import base64
+from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
 
 from pp.owoppai import Owoppai
@@ -228,18 +228,17 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data_enc: str, iv: str,
+    async def from_submission(cls, data_b64: str, iv_b64: str,
                               osu_ver: str, phash: str) -> None:
         """Create a score object from an osu! submission string."""
-        cbc = RijndaelCbc(
-            f'osu!-scoreburgr---------{osu_ver}',
-            iv = base64.b64decode(iv).decode('latin_1'),
-            padding = ZeroPadding(32), block_size =  32
-        )
+        iv = b64decode(iv_b64).decode('latin_1')
+        data_aes = b64decode(data_b64).decode('latin_1')
 
-        data = cbc.decrypt(
-            base64.b64decode(data_enc).decode('latin_1')
-        ).decode().split(':')
+        aes_key = f'osu!-scoreburgr---------{osu_ver}'
+        cbc = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
+
+        # score data is delimited by colons (:).
+        data = cbc.decrypt(data_aes).decode().split(':')
 
         if len(data) != 18:
             plog('Received an invalid score submission.', Ansi.LRED)

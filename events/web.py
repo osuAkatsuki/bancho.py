@@ -801,6 +801,7 @@ async def getReplay(conn: AsyncConnection) -> Optional[bytes]:
         async with aiofiles.open(path, 'rb') as f:
             return await f.read()
 
+""" XXX: going to be slightly more annoying than expected to set this up :P
 @web_handler('osu-session.php', required_mpargs=('u', 'h', 'action'))
 async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
     mp_args = conn.multipart_args
@@ -906,6 +907,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
         # seems like it adds the response from server
         # to some kind of internal buffer, dunno why tho
         return
+"""
 
 @web_handler('osu-rate.php', required_args=('u', 'p', 'c'))
 async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
@@ -1002,8 +1004,8 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     scoring = 'pp' if mode >= GameMode.rx_std else 'score'
 
     if not (bmap := await Beatmap.from_md5(map_md5, map_set_id)):
-        # Couldn't find in db or at osu! api by md5.
-        # Check if we have the map in our db (by filename).
+        # couldn't find in db or at osu! api by md5.
+        # check if we have the map in our db (by filename).
 
         filename = conn.args['f'].replace('+', ' ')
         if not (re := regexes.mapfile.match(unquote(filename))):
@@ -1020,18 +1022,18 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
         )
 
         if set_exists:
-            # Map can be updated.
+            # map can be updated.
             return b'1|false'
         else:
-            # Map is unsubmitted.
-            # Add this map to the unsubmitted cache, so
+            # map is unsubmitted.
+            # add this map to the unsubmitted cache, so
             # that we don't have to make this request again.
             glob.cache['unsubmitted'].add(map_md5)
 
         return f'{1 if set_exists else -1}|false'.encode()
 
     if bmap.status < RankedStatus.Ranked:
-        # Only show leaderboards for ranked,
+        # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
         return f'{int(bmap.status)}|false'.encode()
 
@@ -1062,13 +1064,6 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
     scores = await glob.db.fetchall(' '.join(query), params)
 
-    # Syntax
-    # status|server_has_osz|bid|bsid|len_scores
-    # online_offset
-    # map_name
-    # map_rating:1f
-    # score_id|username|score|combo|n50|n100|n300|nmiss|nkatu|ngeki|perfect|mods|userid|rank|time|server_has_replay
-
     res: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
@@ -1079,7 +1074,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     res.append(f'0\n{bmap.full}\n10.0')
 
     if not scores:
-        # Simply return an empty set.
+        # simply return an empty set.
         return '\n'.join(res + ['', '']).encode()
 
     p_best = await glob.db.fetch(
@@ -1098,7 +1093,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
                  '{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}')
 
     if p_best:
-        # Calculate the rank of the score.
+        # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} '
             'WHERE map_md5 = %s AND mode = %s '
@@ -1269,7 +1264,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 
         result = await resp.read()
 
-    # Update the cached result.
+    # update the cached result.
     cache[action] = result
     cache['timeout'] = (glob.config.updates_cache_timeout +
                         current_time)
@@ -1291,13 +1286,15 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
     )): return # no map found
 
     if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
-        # Map found on disk.
+        # map found on disk.
 
         async with aiofiles.open(filepath, 'rb') as f:
             content = await f.read()
     else:
-        # We don't have map, get from osu!
-        async with glob.http.get(f"https://old.ppy.sh/osu/{res['id']}") as resp:
+        # we don't have map, get from osu!
+        url = f"https://old.ppy.sh/osu/{res['id']}"
+
+        async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
                 plog(f'Could not find map {filepath}!', Ansi.LRED)
                 return

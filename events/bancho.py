@@ -5,8 +5,6 @@ from datetime import datetime as dt, timedelta as td
 import time
 import bcrypt
 
-from cmyui import rstring
-
 import packets
 from packets import BanchoPacket, BanchoPacketReader # convenience
 
@@ -307,7 +305,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         await packets.userID(p.id) +
         await packets.protocolVersion(19) +
         await packets.banchoPrivileges(p.bancho_priv) +
-        await packets.notification(f'Welcome back to the gulag!\nCurrent build: {glob.version}') +
+        await packets.notification('Welcome back to the gulag!\n'
+                                   f'Current build: {glob.version}') +
 
         # tells osu! to load channels from config, I believe?
         await packets.channelInfoEnd()

@@ -667,7 +667,9 @@ class Player:
 
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""
-        async with glob.http.get(f'http://ip-api.com/json/{ip}') as resp:
+        url = f'http://ip-api.com/json/{ip}'
+
+        async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
                 plog('Failed to get geoloc data: request failed.', Ansi.LRED)
                 return
@@ -680,6 +682,8 @@ class Player:
 
         country = res['countryCode']
 
+        # store their country as a 2-letter code, and as a number.
+        # the players location is stored for the ingame world map.
         self.country = (country_codes[country], country)
         self.location = (res['lon'], res['lat'])
 
