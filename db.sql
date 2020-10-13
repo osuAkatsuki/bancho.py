@@ -45,11 +45,11 @@ create table user_hashes
 			on update cascade on delete cascade
 );
 
-# With this I decided to make a naming scheme rather
-# than something nescessarily 'readable' or pretty, I
+# with this i decided to make a naming scheme rather
+# than something nescessarily 'readable' or pretty, i
 # think in practice this will be much easier to use
 # and memorize quickly compared to other schemes.
-# Syntax is simply: stat_rxmode_osumode
+# the syntax is simply: stat_rxmode_osumode
 create table stats
 (
 	id int auto_increment
@@ -308,7 +308,7 @@ create table mail
 	`read` tinyint(1) default 0 not null
 );
 
-# Insert vital stuff, such as bot user & basic channels.
+# insert vital stuff, such as bot user & basic channels.
 
 insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',

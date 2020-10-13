@@ -251,12 +251,12 @@ class Score:
 
         pname = data[1].rstrip() # why does osu! make me rstrip lol
 
-        # Get the map & player for the score.
+        # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
         s.player = await glob.players.get_login(pname, phash)
 
         if not s.player:
-            # Return the obj with an empty player to
+            # return the obj with an empty player to
             # determine whether the score faield to
             # be parsed vs. the user could not be found
             # logged in (we want to not send a reply to
@@ -265,9 +265,9 @@ class Score:
             return s
 
         # XXX: unused idx 2: online score checksum
-        # Perhaps will use to improve security at some point?
+        # perhaps will use to improve security at some point?
 
-        # Ensure all ints are safe to cast.
+        # ensure all ints are safe to cast.
         if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
             plog('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
@@ -285,12 +285,12 @@ class Score:
 
         s.grade = _grade if s.passed else 'F'
 
-        # All data read from submission.
-        # Now we can calculate things based on our data.
+        # all data read from submission.
+        # now we can calculate things based on our data.
         s.calc_accuracy()
 
         if s.bmap:
-            # Ignore SR for now.
+            # ignore sr for now.
             s.pp = (await s.calc_diff())[0]
 
             await s.calc_status()
@@ -321,15 +321,15 @@ class Score:
 
         return res['c'] + 1 if res else 1
 
-    # Could be staticmethod?
-    # We'll see after some usage of gulag
+    # could be staticmethod?
+    # we'll see after some usage of gulag
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
         if mode_vn not in (0, 1):
-            # Currently only std and taiko are supported,
+            # currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 

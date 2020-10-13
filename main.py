@@ -31,7 +31,7 @@ from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
-# Set CWD to /gulag.
+# set cwd to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 # make sure gulag/.data folder exists
@@ -54,7 +54,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     handler = None
     domain = conn.headers['Host']
 
-    # Match the host & uri to the correct handlers.
+    # match the host & uri to the correct handlers.
     if domain.endswith('.ppy.sh'):
         # osu! handlers
 
@@ -84,10 +84,10 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
             ...
 
     if handler:
-        # We have a handler for this request.
+        # we have a handler for this request.
         await handler(conn)
     else:
-        # We have no such handler.
+        # we have no such handler.
         plog(f'Unhandled {conn.path}.', Ansi.LRED)
         await conn.send(400, b'Request handler not implemented.')
 
@@ -113,14 +113,14 @@ async def run_server(addr: cmyui.Address) -> None:
     glob.db = cmyui.AsyncSQLPoolWrapper()
     await glob.db.connect(**glob.config.mysql)
 
-    # Aika
+    # create our bot & append it to the global player list.
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
     glob.bot.ping_time = 0x7fffffff
 
     await glob.bot.stats_from_sql_full() # no need to get friends
     await glob.players.add(glob.bot)
 
-    # Add all channels from db.
+    # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
@@ -129,7 +129,7 @@ async def run_server(addr: cmyui.Address) -> None:
         async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 
-# Use uvloop if available (faster event loop).
+# use uvloop if available (faster event loop).
 if spec := importlib.util.find_spec('uvloop'):
     uvloop = importlib.util.module_from_spec(spec)
     sys.modules['uvloop'] = uvloop

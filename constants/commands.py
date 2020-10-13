@@ -18,9 +18,8 @@ from constants.mods import Mods
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
 
-# Not sure if this should be in glob or not,
+# not sure if this should be in glob or not,
 # trying to think of some use cases lol..
-# Could be interesting?
 glob.commands = []
 
 def command(priv: Privileges, public: bool,
@@ -55,7 +54,7 @@ _roll_doc = ('Roll an n-sided die where n is the '
 @command(priv=Privileges.Normal, public=True, doc=_roll_doc)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if msg and msg[0].isdecimal():
-        # Cap roll to 32767 to prevent spam.
+        # cap roll to 32767 to prevent spam.
         max_roll = min(int(msg[0]), 32767)
     else:
         max_roll = 100
@@ -109,8 +108,8 @@ async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         # cach
         await p.last_np.cache_pp(mods)
 
-    # Since this is a DM to the bot, we should
-    # send back a list of general PP values.
+    # since this is a DM to the bot, we should
+    # send back a list of general pp values.
     # TODO: !acc and !mods in commands to
     #       modify these values :P
     _msg = [p.last_np.embed]
@@ -155,7 +154,8 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    if msg[1] == 'set': # update whole set
+    if msg[1] == 'set':
+        # update whole set
         await glob.db.execute(
             'UPDATE maps SET status = %s '
             'WHERE set_id = %s',
@@ -167,7 +167,8 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             if cached['map'].set_id == p.last_np.set_id:
                 cached['map'].status = RankedStatus(new_status)
 
-    else: # update only map
+    else:
+        # update only map
         await glob.db.execute(
             'UPDATE maps SET status = %s '
             'WHERE id = %s',
@@ -193,7 +194,7 @@ async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !ban <name> <reason>'
 
-    # Find any user matching (including offline).
+    # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
@@ -209,7 +210,7 @@ async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !ban <name> <reason>'
 
-    # Find any user matching (including offline).
+    # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
@@ -266,7 +267,7 @@ async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     t.enqueue(await packets.RTX(msg[1]))
     return 'pong'
 
-# XXX: Not very useful, mostly just for testing/fun.
+# XXX: not very useful, mostly just for testing/fun.
 _spack_doc = 'Send a specific (empty) packet by id to a player.'
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False, doc=_spack_doc)
 async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -304,7 +305,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !setpriv <name> <role1 | role2 | ...>'
 
-    # A mess that gets each unique privilege out of msg.
+    # a mess that gets each unique privilege out of msg.
     # TODO: rewrite to be at least a bit more readable..
     priv = [str_to_priv(i) for i in set(''.join(msg[1:]).replace(' ', '').lower().split('|'))]
     if any(x is None for x in priv):
@@ -328,10 +329,10 @@ async def menu(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osu://dl/{opt_id} option]'
 
-# XXX: This actually comes in handy sometimes, I initially
-# wrote it completely as a joke, but I might keep it in for
+# XXX: this actually comes in handy sometimes, i initially
+# wrote it completely as a joke, but i might keep it in for
 # devs.. Comes in handy when debugging to be able to run something
-# like `!ev print(await glob.players.get_by_name('cmyui').status.action)`
+# like `!ev return await glob.players.get_by_name('cmyui').status.action`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
 async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -356,7 +357,7 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # multiplayer match management.
 """
 
-# Start a match.
+# start a match.
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     for s in m.slots:
         if s.status & SlotStatus.has_player \
@@ -367,7 +368,7 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(await packets.matchStart(m))
     return 'Good luck!'
 
-# Abort a match in progress.
+# abort a match in progress.
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not m.in_progress:
         return 'Abort what?'
@@ -381,7 +382,7 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(await packets.matchAbort())
     return 'Match aborted.'
 
-# Force a user into a multiplayer match by username.
+# force a player into a multiplayer match by name.
 async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !mp force <name>'
@@ -392,7 +393,7 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     await t.join_match(m)
     return 'Welcome.'
 
-# Set the current beatmap (by id).
+# set the current beatmap (by id).
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
@@ -426,48 +427,47 @@ _mp_doc = ('A parent command to subcommands '
            'for multiplayer match manipulation.')
 @command(trigger='!mp', priv=Privileges.Normal, public=True, doc=_mp_doc)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    # Used outside of a multiplayer match.
+    # used outside of a multiplayer match.
     if not (c._name.startswith('#multi_') and (m := p.match)):
         return
 
-    # No subcommand specified, send back a list.
+    # no subcommand specified, send back a list.
     if not msg:
         # TODO: maybe filter to only the commands they can actually use?
         return f"Available subcommands: {', '.join(_mp_triggers.keys())}."
 
-    # No valid subcommands triggered.
+    # no valid subcommands triggered.
     if not (trigger := _mp_triggers[msg[0]]):
         return 'Invalid subcommand.'
 
-    # Missing privileges to use mp commands.
+    # missing privileges to use mp commands.
     if not (p == m.host or p.priv & Privileges.Tournament):
         return
 
-    # Missing privileges to run this specific mp command.
+    # missing privileges to run this specific mp command.
     if not p.priv & trigger['priv']:
         return
 
-    # Forward the params to the specific command.
-    # XXX: Here, rather than sending the channel
+    # forward the params to the specific command.
+    # XXX: here, rather than sending the channel
     # as the 2nd arg, we'll send the match obj.
-    # This is used much more frequently, and we've
+    # this is used much more frequently, and we've
     # already asserted than p.match.chat == c anyways.
     return await trigger['callback'](p, m, msg[1:])
 
 async def process_commands(p: Player, t: Messageable,
                            msg: str) -> Optional[CommandResponse]:
-    # Basic commands setup for now.
-    # Response is either a CommandResponse if we hit a command,
+    # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
     st = time.time_ns()
     trigger, *args = msg.strip().split(' ')
 
     for cmd in glob.commands:
         if trigger == cmd['trigger'] and p.priv & cmd['priv']:
-            # Command found & we have privileges - run it.
+            # command found & we have privileges - run it.
             if (res := await cmd['callback'](p, t, args)):
-                # Returned a message for us to send back.
-                # Print elapsed time in milliseconds.
+                # returned a message for us to send back.
+                # print elapsed time in milliseconds.
                 time_taken = (time.time_ns() - st) / 1000000
 
                 return {

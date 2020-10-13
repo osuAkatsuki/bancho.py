@@ -72,7 +72,8 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             await packets.restartServer(0) # send 0ms since the server is already up!
         )
 
-    else: # player found, process normal packet.
+    else:
+        # player found, process normal packet.
         pr = packets.BanchoPacketReader(conn.body)
 
         # gulag refuses to reply to a group of packets
@@ -109,12 +110,14 @@ async def handle_bancho(conn: AsyncConnection) -> None:
                     plog(repr(pr.current_packet), Ansi.LMAGENTA)
 
                 await glob.bancho_map[pr.current_packet](p, pr)
-            else: # Packet reading behaviour not yet defined.
+
+            else:
+                # packet reading behaviour not yet defined.
                 plog(f'Unhandled: {pr!r}', Ansi.LYELLOW)
                 pr.ignore_packet()
 
         while not p.queue_empty():
-            # Read all queued packets into stream
+            # read all queued packets into stream
             resp.extend(await p.dequeue())
 
     resp = bytes(resp)
@@ -229,5 +232,6 @@ async def handle_api(conn: AsyncConnection) -> None:
 
             await conn.send(200, resp)
 
-    else: # handler not found.
+    else:
+        # handler not found.
         plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)

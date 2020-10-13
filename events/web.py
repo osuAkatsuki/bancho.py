@@ -23,7 +23,7 @@ from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
 from console import plog, Ansi
 
-# For /web/ requests, we send the
+# for /web/ requests, we send the
 # data directly back in the event.
 
 # TODO:
@@ -60,79 +60,80 @@ def web_handler(uri: str, required_args: tuple[str] = (),
 async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
     if 'v' in conn.args:
         # TODO: implement verification..?
-        # Long term. For now, just send an empty reply
+        # long term. For now, just send an empty reply
         # so their client immediately attempts login.
         return b'allez-vous owo'
 
     # TODO: perhaps handle this..?
     NotImplemented
 
-""" TODO: beatmap submission system """
-#required_params_bmsubmit_upload = frozenset({
-#    'u', 'h', 't', 'vv', 'z', 's'
-#})
-#@web_handler('osu-osz2-bmsubmit-upload.php')
-#async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
-#    if not all(x in conn.args for x in required_params_bmsubmit_upload):
-#        plog(f'bmsubmit-upload req missing params.', Ansi.LRED)
-#        return
-#
-#    if not 'osz2' in conn.files:
-#        plog(f'bmsubmit-upload sent without an osz2.', Ansi.LRED)
-#        return
-#
-#    ...
-#
-#required_params_bmsubmit_getid = frozenset({
-#    'h', 's', 'b', 'z', 'vv'
-#})
-#@web_handler('osu-osz2-bmsubmit-getid.php')
-#async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
-#    if not all(x in conn.args for x in required_params_bmsubmit_getid):
-#        plog(f'bmsubmit-getid req missing params.', Ansi.LRED)
-#        return
-#
-#    #s - setid
-#    #b - beatmapids ',' delim
-#    #z - hash
-#    #vv - ver
-#
-#    pname = unquote(conn.args['u'])
-#    phash = conn.args['h']
-#
-#    if not (p := await glob.players.get_login(pname, phash)):
-#        return
-#
-#    _ids = conn.args['b'].split(',')
-#
-#    if not conn.args['s'].isdecimal() \
-#    or not all(x.isdecimal() for x in _ids):
-#        return b'-1\nInvalid submission.'
-#
-#    map_ids = [int(x) for x in _ids]
-#    set_id = int(conn.args['s'])
-#
-#    md5_exists = await glob.db.fetch(
-#        'SELECT 1 FROM maps '
-#        'WHERE md5 = %s',
-#        [conn.args['z']]
-#    ) is not None
-#
-#    if set_id != -1 or any(map_ids) or md5_exists:
-#        # TODO: check if they are the creator
-#        res = await glob.db.fetch(
-#            'SELECT creator FROM maps '
-#            'WHERE server = \'gulag\' '
-#            'AND '
-#        )
-#
-#        return b'1' # ownership error
-#
-#    # get basic info for their new map
-#
-#    # 1: ownership | 3: alreadyranked
-#
-#    ...
+""" TODO: beatmap submission system
+required_params_bmsubmit_upload = frozenset({
+    'u', 'h', 't', 'vv', 'z', 's'
+})
+@web_handler('osu-osz2-bmsubmit-upload.php')
+async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_bmsubmit_upload):
+        plog(f'bmsubmit-upload req missing params.', Ansi.LRED)
+        return
+
+    if not 'osz2' in conn.files:
+        plog(f'bmsubmit-upload sent without an osz2.', Ansi.LRED)
+        return
+
+    ...
+
+required_params_bmsubmit_getid = frozenset({
+    'h', 's', 'b', 'z', 'vv'
+})
+@web_handler('osu-osz2-bmsubmit-getid.php')
+async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
+    if not all(x in conn.args for x in required_params_bmsubmit_getid):
+        plog(f'bmsubmit-getid req missing params.', Ansi.LRED)
+        return
+
+    #s - setid
+    #b - beatmapids ',' delim
+    #z - hash
+    #vv - ver
+
+    pname = unquote(conn.args['u'])
+    phash = conn.args['h']
+
+    if not (p := await glob.players.get_login(pname, phash)):
+        return
+
+    _ids = conn.args['b'].split(',')
+
+    if not conn.args['s'].isdecimal() \
+    or not all(x.isdecimal() for x in _ids):
+        return b'-1\nInvalid submission.'
+
+    map_ids = [int(x) for x in _ids]
+    set_id = int(conn.args['s'])
+
+    md5_exists = await glob.db.fetch(
+        'SELECT 1 FROM maps '
+        'WHERE md5 = %s',
+        [conn.args['z']]
+    ) is not None
+
+    if set_id != -1 or any(map_ids) or md5_exists:
+        # TODO: check if they are the creator
+        res = await glob.db.fetch(
+            'SELECT creator FROM maps '
+            'WHERE server = \'gulag\' '
+            'AND '
+        )
+
+        return b'1' # ownership error
+
+    # get basic info for their new map
+
+    # 1: ownership | 3: alreadyranked
+
+    ...
+"""
 
 @web_handler('osu-screenshot.php', required_mpargs=('u', 'p', 'v'))
 async def osuScreenshot(conn: AsyncConnection) -> Optional[bytes]:
@@ -1205,7 +1206,8 @@ async def osuComment(conn: AsyncConnection) -> Optional[bytes]:
 
         return # empty resp is fine
 
-    else: # invalid action
+    else:
+        # invalid action
         return b'Invalid action.'
 
 @web_handler('osu-markasread.php', required_args=('u', 'h', 'channel'))

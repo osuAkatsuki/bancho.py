@@ -36,7 +36,7 @@ async def getStats(conn: AsyncConnection) -> Optional[bytes]:
         if len(name := unquote(conn.args['name'])) > 16:
             return b'Invalid player name.'
 
-        # Get their id from username.
+        # get their id from username.
         pid = await glob.db.fetch(
             'SELECT id FROM users '
             'WHERE name_safe = %s',

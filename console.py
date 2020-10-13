@@ -6,7 +6,7 @@ __all__ = 'Ansi', 'AnsiRGB', 'plog'
 
 @unique
 class Ansi(IntEnum):
-    # Default colours
+    # default colours
     BLACK   = 30
     RED     = 31
     GREEN   = 32
@@ -16,7 +16,7 @@ class Ansi(IntEnum):
     CYAN    = 36
     WHITE   = 37
 
-    # Light colours
+    # light colours
     GRAY          = 90
     LRED     = 91
     LGREEN   = 92
@@ -57,7 +57,7 @@ class AnsiRGB:
 
 def plog(msg, col: Union[Ansi, AnsiRGB] = None,
          fd: str = None, st_fmt = '') -> None:
-    # This can be used both for logging purposes,
+    # this can be used both for logging purposes,
     # or also just printing with colour without having
     # to do inline colour codes / ansi objects.
 

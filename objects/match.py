@@ -235,19 +235,19 @@ class Match:
         return f'<{self.name} ({self.id})>'
 
     def get_slot(self, p) -> Optional[Slot]:
-        # Get the slot containing a given player.
+        # get the slot containing a given player.
         for s in self.slots:
             if p == s.player:
                 return s
 
     def get_slot_id(self, p) -> Optional[int]:
-        # Get the slot index containing a given player.
+        # get the slot index containing a given player.
         for idx, s in enumerate(self.slots):
             if p == s.player:
                 return idx
 
     def get_free(self) -> Optional[Slot]:
-        # Get the first free slot index.
+        # get the first free slot index.
         for idx, s in enumerate(self.slots):
             if s.status == SlotStatus.open:
                 return idx

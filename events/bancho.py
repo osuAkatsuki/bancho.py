@@ -66,7 +66,7 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to write to {target} without privileges.')
         return
 
-    # Limit message length to 2048 characters
+    # limit message length to 2048 characters
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
 
     cmd = msg.startswith(glob.config.command_prefix) \
@@ -91,8 +91,8 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         # even though this is a public channel,
         # we'll update the player's last np stored.
         if _match := regexes.now_playing.match(msg):
-            # User is /np'ing a map.
-            # Save it to their player instance
+            # the player is /np'ing a map.
+            # save it to their player instance
             # so we can use this elsewhere owo..
             p.last_np = await Beatmap.from_bid(int(_match['bid']))
 
@@ -139,21 +139,22 @@ registration_msg = '\n'.join((
     "If you have any questions or find any strange behaviour,",
     "please feel feel free to contact cmyui(#0425) directly!"
 ))
-# No specific packetID, triggered when the
+# no specific packet id, triggered when the
 # client sends a request without an osu-token.
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
-    # Login is a bit special, we return the response bytes
+    # login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
 
     s = origin.decode().split('\n')
 
     if p := await glob.players.get_by_name(username := s[0]):
         if (time.time() - p.ping_time) > 10:
-            # If the current player obj online hasn't
+            # if the current player obj online hasn't
             # pinged the server in > 10 seconds, log
             # them out and login the new user.
             await p.logout()
-        else: # User is currently online, send back failure.
+        else:
+            # the user is currently online, send back failure.
             return (await packets.notification('User already logged in.') +
                     await packets.userID(-1), 'no')
 
@@ -174,9 +175,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # month & year as 15 days ago should be fine?
     ctime = dt.now() - td(10)
 
-    #if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
-    #    # outdated osu! client
-    #    return await packets.userID(-2), 'no'
+    if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
+        # outdated osu! client
+        return await packets.userID(-2), 'no'
 
     if not s[1].replace('-', '', 1).isdecimal():
         return await packets.userID(-1), 'no'
@@ -206,7 +207,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     bcrypt_cache = glob.cache['bcrypt']
 
     if res:
-        # account exists.
+        # their account exists in sql.
         # check their account status & credentials against db.
         if not res['priv'] & Privileges.Normal:
             return await packets.userID(-3), 'no'
@@ -216,7 +217,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # cache hit - this saves ~200ms on subsequent logins.
             if bcrypt_cache[pw_hash] != res['pw_hash']:
                 return await packets.userID(-1), 'no'
-        else: # cache miss, must be first login.
+
+        else:
+            # cache miss, this must be their first login.
             if not bcrypt.checkpw(pw_hash, res['pw_hash'].encode()):
                 return await packets.userID(-1), 'no'
 
@@ -458,23 +461,26 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     client, client_id = p.name, p.id # XXX not really needed?
 
     if t.status.action == Action.Afk and t.away_msg:
-        # Send away message if target is afk and has one set.
+        # send away message if target is afk and has one set.
         p.enqueue(await packets.sendMessage(client, t.away_msg, target, client_id))
 
     if t.id == 1:
-        # Target is Aika, check if message is a command.
+        # target is the bot, check if message is a command.
         cmd = msg.startswith(glob.config.command_prefix) \
           and await commands.process_commands(p, t, msg)
 
         if cmd and 'resp' in cmd:
-            # Command triggered and there is a response to send.
+            # command triggered and there is a response to send.
             p.enqueue(await packets.sendMessage(t.name, cmd['resp'], client, t.id))
-        else: # No command triggered.
+
+        else:
+            # no commands triggered.
             if match := regexes.now_playing.match(msg):
-                # User is /np'ing a map.
-                # Save it to their player instance
+                # user is /np'ing a map.
+                # save it to their player instance
                 # so we can use this elsewhere owo..
                 p.last_np = await Beatmap.from_bid(int(match['bid']))
+
                 if p.last_np:
                     if match['mods']:
                         # [1:] to remove leading whitespace
@@ -485,7 +491,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
                     if mods not in p.last_np.pp_cache:
                         await p.last_np.cache_pp(mods)
 
-                    # Since this is a DM to the bot, we should
+                    # since this is a DM to the bot, we should
                     # send back a list of general PP values.
                     # TODO: !acc and !mods in commands to
                     #       modify these values :P
@@ -505,7 +511,8 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
 
                 p.enqueue(await packets.sendMessage(t.name, msg, client, t.id))
 
-    else: # Not Aika
+    else:
+        # target is not aika, send the message normally
         t.enqueue(await packets.sendMessage(client, msg, target, client_id))
 
         # insert mail into db,
@@ -566,7 +573,7 @@ async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read new slot ID
+    # read new slot ID
     slot_id, = await pr.read(osuTypes.i32)
     if slot_id not in range(16):
         return
@@ -575,7 +582,7 @@ async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to switch to slot {slot_id} which has a player.')
         return
 
-    # Swap with current slot.
+    # swap with current slot.
     s = m.get_slot(p)
     m.slots[slot_id].copy(s)
     s.reset()
@@ -596,7 +603,7 @@ async def matchLock(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read new slot ID
+    # read new slot ID
     slot_id, = await pr.read(osuTypes.i32)
     if slot_id not in range(16):
         return
@@ -621,37 +628,37 @@ async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read new match data
+    # read new match data
     new, = await pr.read(osuTypes.match)
 
     if new.freemods != m.freemods:
-        # Freemods status has been changed.
+        # freemods status has been changed.
         if new.freemods:
-            # Switching to freemods.
-            # Central mods -> all players mods.
+            # switching to freemods.
+            # central mods -> all players mods.
             for s in m.slots:
                 if s.status & SlotStatus.has_player:
                     s.mods = m.mods & ~Mods.SPEED_CHANGING
 
             m.mods = m.mods & Mods.SPEED_CHANGING
         else:
-            # Switching to centralized mods.
-            # Host mods -> Central mods.
+            # switching to centralized mods.
+            # host mods -> central mods.
             for s in m.slots:
                 if s.player and s.player.id == m.host.id:
                     m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
                     break
 
     if not new.bmap:
-        # Map being changed, unready players.
+        # map being changed, unready players.
         for s in m.slots:
             if s.status & SlotStatus.ready:
                 s.status = SlotStatus.not_ready
     elif not m.bmap:
-        # New map has been chosen, send to match chat.
+        # new map has been chosen, send to match chat.
         await m.chat.send(glob.bot, f'Map selected: {new.bmap.embed}.')
 
-    # Copy basic match info into our match.
+    # copy basic match info into our match.
     m.bmap = new.bmap
     m.freemods = new.freemods
     m.mode = new.mode
@@ -696,8 +703,7 @@ async def matchScoreUpdate(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read 37 bytes if using scorev2,
-    # otherwise only read 29 bytes.
+    # if scorev2 is enabled, read an extra 8 bytes.
     size = 37 if pr.data[28] else 29
     data = bytearray(pr.data[:size]) # hmmmm
     data[4] = m.get_slot_id(p)
@@ -724,7 +730,7 @@ async def matchComplete(p: Player, pr: BanchoPacketReader) -> None:
         m.in_progress = False
         m.enqueue(await packets.matchComplete())
 
-        for s in m.slots: # Reset match statuses
+        for s in m.slots: # reset match statuses
             if s.status == SlotStatus.complete:
                 s.status = SlotStatus.not_ready
 
@@ -738,13 +744,13 @@ async def matchChangeMods(p: Player, pr: BanchoPacketReader) -> None:
 
     if m.freemods:
         if p.id == m.host.id:
-            # Allow host to change speed-changing mods.
+            # allow host to change speed-changing mods.
             m.mods = mods & Mods.SPEED_CHANGING
 
-        # Set slot mods
+        # set slot mods
         m.get_slot(p).mods = mods & ~Mods.SPEED_CHANGING
     else:
-        # Not freemods, set match mods.
+        # not freemods, set match mods.
         m.mods = mods
 
     m.enqueue(await packets.updateMatch(m))
@@ -755,10 +761,10 @@ async def matchLoadComplete(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Ready up our player.
+    # ready up our player.
     m.get_slot(p).loaded = True
 
-    # Check if all players are ready.
+    # check if all players are ready.
     if not any(s.status & SlotStatus.playing and not s.loaded for s in m.slots):
         m.enqueue(await packets.matchAllPlayerLoaded(), lobby = False)
 
@@ -815,7 +821,7 @@ async def matchSkipRequest(p: Player, pr: BanchoPacketReader) -> None:
         if s.status & SlotStatus.playing and not s.skipped:
             return
 
-    # All users have skipped, enqueue a skip.
+    # all users have skipped, enqueue a skip.
     m.enqueue(await packets.matchSkip(), lobby = False)
 
 # packet id: 63
@@ -828,10 +834,10 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
-    # Enqueue channelJoin to our player.
+    # enqueue channelJoin to our player.
     p.enqueue(await packets.channelJoin(c.name))
 
-# I wrote this and the server twin, ~2 weeks
+# i wrote this and the server twin, ~2 weeks
 # later the osu! team removed it and wrote
 # /web/osu-getbeatmapinfo.php.. which to be
 # fair is actually a lot nicer cuz its json
@@ -845,7 +851,7 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
 #
 #    info_list = []
 #
-#    # Filenames
+#    # filenames
 #    for fname in req.filenames:
 #        # Attempt to regex pattern match the filename.
 #        # If there is no match, simply ignore this map.
@@ -888,7 +894,7 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
 #            res['md5']
 #        ))
 #
-#    # Ids
+#    # ids
 #    for m in req.ids:
 #        breakpoint()
 #
@@ -900,7 +906,7 @@ async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read new slot ID
+    # read new slot ID
     slot_id, = await pr.read(osuTypes.i32)
     if slot_id not in range(16):
         return
@@ -923,10 +929,10 @@ async def friendAdd(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if t.id in (1, p.id):
-        # Trying to add the bot, or themselves.
-        # These are already appended to the friends list
+        # trying to add the bot, or themselves.
+        # these are already appended to the friends list
         # on login, so disallow the user from *actually*
-        # editing these in the DB.
+        # editing these in sql.
         return
 
     await p.add_friend(t)
@@ -941,10 +947,10 @@ async def friendRemove(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if t.id in (1, p.id):
-        # Trying to remove the bot, or themselves.
-        # These are already appended to the friends list
+        # trying to remove the bot, or themselves.
+        # these are already appended to the friends list
         # on login, so disallow the user from *actually*
-        # editing these in the DB.
+        # editing these in sql.
         return
 
     await p.remove_friend(t)
@@ -978,13 +984,13 @@ async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if p not in c:
-        # User not in channel.
+        # user not in channel.
         return
 
-    # Leave the channel server-side.
+    # leave the channel server-side.
     await p.leave_channel(c)
 
-    # Enqueue new channelinfo (playercount) to all players.
+    # enqueue new channelinfo (playercount) to all players.
     glob.players.enqueue(await packets.channelInfo(*c.basic_info))
 
 # packet id: 79
@@ -1040,7 +1046,7 @@ async def matchChangePassword(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
 
-    # Read new match data
+    # read new match data
     new, = await pr.read(osuTypes.match)
 
     m.passwd = new.passwd

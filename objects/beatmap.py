@@ -360,7 +360,7 @@ class Beatmap:
 
                     if bmap['last_update'] > current_data[map_id]['last_update']:
                         # the map we're receiving is indeed newer, check if the
-                        # map's status is frozen in the db - if so, update the
+                        # map's status is frozen in sql - if so, update the
                         # api's value before inserting it into the database.
                         api_status = RankedStatus.from_osuapi(int(bmap['approved']))
 
