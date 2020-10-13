@@ -177,8 +177,10 @@ class PlayerList(Sequence):
                 return p
 
     async def get_by_name(self, name: str, sql: bool = False) -> Player:
+        name_safe = Player.make_safe(name)
+
         for p in self.players:
-            if p.name == name:
+            if p.safe_name == name_safe:
                 return p
 
         if not sql:
@@ -190,7 +192,7 @@ class PlayerList(Sequence):
         res = await glob.db.fetch(
             'SELECT id, priv, silence_end '
             'FROM users WHERE name_safe = %s',
-            [name]
+            [name_safe]
         )
 
         return Player(**res, name=name) if res else None

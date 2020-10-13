@@ -19,11 +19,11 @@ create table users
 		primary key,
 	name varchar(32) not null,
 	name_safe varchar(32) not null,
-	priv int default 1 null,
-	pw_hash char(60) null,
+	priv int default 1 not null,
+	pw_hash char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
-	email varchar(254) not null,
+	email varchar(254) null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_safe_uindex
@@ -77,7 +77,7 @@ create table stats
 	pp_rx_std smallint(6) default 0 not null,
 	pp_rx_taiko smallint(6) default 0 not null,
 	pp_rx_catch smallint(6) default 0 not null,
-	pp_ap_std int default 0 not null,
+	pp_ap_std smallint(6) default 0 not null,
 	plays_vn_std int default 0 not null,
 	plays_vn_taiko int default 0 not null,
 	plays_vn_catch int default 0 not null,
@@ -101,7 +101,7 @@ create table stats
 	acc_rx_std float(6,3) default 0.000 not null,
 	acc_rx_taiko float(6,3) default 0.000 not null,
 	acc_rx_catch float(6,3) default 0.000 not null,
-	acc_ap_std int default 0 not null,
+	acc_ap_std float(6,3) default 0 not null,
 	maxcombo_vn_std int default 0 not null,
 	maxcombo_vn_taiko int default 0 not null,
 	maxcombo_vn_catch int default 0 not null,
@@ -206,7 +206,7 @@ create table maps
 	version varchar(128) not null,
 	creator varchar(128) not null,
 	last_update datetime not null,
-	frozen tinyint(1) default 0 null,
+	frozen tinyint(1) default 0 not null,
 	plays int default 0 not null,
 	passes int default 0 not null,
 	mode tinyint(1) default 0 not null,
@@ -237,7 +237,7 @@ create table channels
 	topic varchar(256) not null,
 	read_priv int default 1 not null,
 	write_priv int default 2 not null,
-	auto_join tinyint(1) default 0 null,
+	auto_join tinyint(1) default 0 not null,
 	constraint channels_name_uindex
 		unique (name)
 );
@@ -295,6 +295,17 @@ create table comments
 	comment varchar(80) not null,
 	colour char(6) null comment 'rgb hex string',
 	primary key (id, target, userid)
+);
+
+create table mail
+(
+	id int auto_increment
+		primary key,
+	from_id int not null,
+	to_id int not null,
+	msg varchar(2048) not null,
+	time int null,
+	`read` tinyint(1) default 0 not null
 );
 
 # Insert vital stuff, such as bot user & basic channels.

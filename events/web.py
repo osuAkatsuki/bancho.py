@@ -1221,10 +1221,25 @@ async def osuMarkAsRead(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if not conn.args['channel']:
+    if not (t_name := conn.args['channel']):
         return b'' # no channel specified
 
-    ...
+    if t_name.startswith('#'):
+        # not sure if this happens?
+        breakpoint()
+
+    if not (t := await glob.players.get_by_name(t_name, sql=True)):
+        return
+
+    plog(f'marking {t} -> {p} as read')
+
+    # mark any unread mail from this user as read.
+    await glob.db.execute(
+        'UPDATE `mail` SET `read` = 1 '
+        'WHERE `to_id` = %s AND `from_id` = %s '
+        'AND `read` = 0',
+        [p.id, t.id]
+    )
 
 @web_handler('check-updates.php', required_args=('action', 'stream'))
 async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:

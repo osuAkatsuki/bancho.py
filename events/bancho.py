@@ -51,8 +51,8 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
 
-    # client_id only proto >= 14
-    client, msg, target, client_id = await pr.read(osuTypes.message)
+    # we don't need client & client_id
+    _, msg, target, _ = await pr.read(osuTypes.message)
 
     # no nice wrapper to do it in reverse :P
     if target == '#spectator':
@@ -70,12 +70,12 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
 
     # Limit message length to 2048 characters
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
-    client, client_id = p.name, p.id
 
     cmd = msg.startswith(glob.config.command_prefix) \
       and await commands.process_commands(p, t, msg)
 
-    if cmd: # A command was triggered.
+    if cmd:
+        # a command was triggered.
         if cmd['public']:
             await t.send(p, msg)
             if 'resp' in cmd:
@@ -86,7 +86,12 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
             if 'resp' in cmd:
                 await t.send_selective(glob.bot, cmd['resp'], staff | {p})
 
-    else: # No command was triggered.
+    else:
+        # no commands were triggered
+
+        # check if the user is /np'ing a map.
+        # even though this is a public channel,
+        # we'll update the player's last np stored.
         if _match := regexes.now_playing.match(msg):
             # User is /np'ing a map.
             # Save it to their player instance
@@ -247,7 +252,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             if old['priv'] & Privileges.Normal:
                 # unbanned, tell them to use that account instead.
                 msg = (f'Detected a previously created account "{old["name"]}"!\n'
-                       'Please use that account instead.')
+                       'Please use that account instead.\n\n'
+                       'If you believe this is an error, please contact staff.')
             else:
                 # banned, tell them to appeal on their main acc.
                 msg = ('Please do not try to avoid your restrictions!\n'
@@ -260,13 +266,14 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         pw_bcrypt = bcrypt.hashpw(pw_hash, bcrypt.gensalt()).decode()
         bcrypt_cache[pw_hash] = pw_bcrypt
 
+        safe_name = Player.make_safe(username)
+
         # add to `users` table.
         user_id = await glob.db.execute(
-            'INSERT INTO users (name, name_safe, pw_hash, email) '
-            'VALUES (%s, %s, %s, %s)', [
-                username, Player.make_safe(username),
-                pw_bcrypt, f'{rstring(6)}@gmail.com'
-            ]
+            'INSERT INTO users '
+            '(name, name_safe, pw_hash) '
+            'VALUES (%s, %s, %s, %s)',
+            [username, safe_name, pw_bcrypt]
         )
 
         # insert client hashes
@@ -292,6 +299,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         _msg = registration_msg.format(glob.players.staff)
         p.enqueue(await packets.sendMessage(glob.bot.name, _msg,
                                             p.name, p.id))
+
+    # `p` will always be valid now, but has not
+    # yet been added to the global player list.
 
     data = bytearray(
         await packets.userID(p.id) +
@@ -346,7 +356,24 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 await packets.friendsList(*p.friends) +
                 await packets.silenceEnd(max(p.silence_end - time.time(), 0)))
 
+    # thank u osu for doing this by username rather than id
+    query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
+             '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
+             '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
+             'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
+
+    # the player may have been sent mail while offline,
+    # enqueue any messages from their respective authors.
+    async for msg in glob.db.iterall(query, p.id):
+        data.extend(await packets.sendMessage(
+            # TODO: probably format time into msg
+            msg['from'], msg['msg'], msg['to'], msg['from_id']
+        ))
+
+    # add `p` to the global player list,
+    # making them officially logged in.
     await glob.players.add(p)
+
     plog(f'{p} logged in.', Ansi.LCYAN)
     return bytes(data), p.token
 
@@ -429,7 +456,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
-    client, client_id = p.name, p.id
+    client, client_id = p.name, p.id # XXX not really needed?
 
     if t.status.action == Action.Afk and t.away_msg:
         # Send away message if target is afk and has one set.
@@ -438,7 +465,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     if t.id == 1:
         # Target is Aika, check if message is a command.
         cmd = msg.startswith(glob.config.command_prefix) \
-            and await commands.process_commands(p, t, msg)
+          and await commands.process_commands(p, t, msg)
 
         if cmd and 'resp' in cmd:
             # Command triggered and there is a response to send.
@@ -482,6 +509,14 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     else: # Not Aika
         t.enqueue(await packets.sendMessage(client, msg, target, client_id))
 
+        # insert mail into db,
+        # marked as unread.
+        await glob.db.execute(
+            'INSERT INTO `mail` (`from_id`, `to_id`, `msg`, `time`) '
+            'VALUES (%s, %s, %s, CURRENT_TIMESTAMP())',
+            [p.id, t.id, msg]
+        )
+
     plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
 # packet id: 29
@@ -494,7 +529,7 @@ async def lobbyPart(p: Player, pr: BanchoPacketReader) -> None:
 async def lobbyJoin(p: Player, pr: BanchoPacketReader) -> None:
     p.in_lobby = True
 
-    for m in filter(lambda m: m is not None, glob.matches):
+    for m in (_m for _m in glob.matches if _m):
         p.enqueue(await packets.newMatch(m))
 
 # packet id: 31
@@ -665,7 +700,7 @@ async def matchScoreUpdate(p: Player, pr: BanchoPacketReader) -> None:
     # Read 37 bytes if using scorev2,
     # otherwise only read 29 bytes.
     size = 37 if pr.data[28] else 29
-    data = pr.data[:size]
+    data = bytearray(pr.data[:size]) # hmmmm
     data[4] = m.get_slot_id(p)
 
     m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + data, lobby = False)

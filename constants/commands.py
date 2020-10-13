@@ -335,13 +335,21 @@ async def menu(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
 async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    lines = '\n '.join(' '.join(msg).split('\\n'))
-    try: # pinnacle of the gulag
-        exec(f"async def __ex():\n {lines}")
-        ret = await locals()['__ex']()
-        return ret if ret else 'Success'
+    # create the new coroutine definition as a string
+    # with the lines from our message (split by '\n').
+    lines = ' '.join(msg).split(r'\n')
+    definition = '\n '.join(['async def __ex():'] + lines)
+
+    try:
+        # define, and run the coroutine
+        exec(definition)
+        ret = await locals()['__ex']() # type: ignore
     except Exception as e:
+        # code was invalid, return
+        # the error in the osu! chat.
         return str(e)
+
+    return ret if ret else 'Success'
 
 """ Multiplayer commands
 # The commands below are specifically for
