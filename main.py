@@ -72,12 +72,14 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
             elif cmd == 'GET':
                 # GET handlers
-                if path.startswith('/web/'):
-                    handler = handle_web # /web handlers
-                elif path.startswith('/ss/'):
+                if path.startswith('/ss/'):
                     handler = handle_ss # screenshots
                 elif path.startswith('/d/'):
                     handler = handle_dl # osu!direct
+
+            # get or post
+            if path.startswith('/web/'):
+                handler = handle_web
 
         elif subdomain == 'a':
             handler = handle_avatar
