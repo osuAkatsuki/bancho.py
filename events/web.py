@@ -8,8 +8,8 @@ import time
 import copy
 import random
 import orjson
-import asyncio
 import aiofiles
+
 from cmyui import AsyncConnection, rstring
 from urllib.parse import unquote
 
@@ -62,7 +62,12 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
         # TODO: implement verification..?
         # long term. For now, just send an empty reply
         # so their client immediately attempts login.
-        return b'allez-vous owo'
+
+        # XXX: returning an endpoint here will set
+        # the clients endpoints for bancho connections.
+        # this is a little hack gulag will use to not
+        # require c[4-6e]?.ppy.sh to exist :D
+        return b'https://osu.ppy.sh'
 
     # TODO: perhaps handle this..?
     NotImplemented

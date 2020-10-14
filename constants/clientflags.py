@@ -10,21 +10,42 @@ class ClientFlags(IntFlag):
     # broken and are even known to false positive quite often.
     # they can be helpful; just take them with a grain of salt.
 
-    # osu! anticheat <2016 (unsure of date?)
+    # osu! anticheat <= 2016 (unsure of age)
     Clean                       = 0 # no flags sent
-    SpeedHackDetected           = 1 << 1 # basic timewarp detection, can false positive but decent
-    IncorrectModValue           = 1 << 2 # this sends almost all the time
+
+    # flags for timing errors or desync.
+    SpeedHackDetected           = 1 << 1
+
+    # flags when two internal values mismatch.
+    # XXX: this false flags a lot so most code
+    # written around the community just ignores
+    # this bit; i'll investigate a bit i guess.
+    IncorrectModValue           = 1 << 2
+
     MultipleOsuClients          = 1 << 3
     ChecksumFailure             = 1 << 4
     FlashlightChecksumIncorrect = 1 << 5
-    OsuExecutableChecksum       = 1 << 6 # server-side
-    MissingProcessesInList      = 1 << 7 # server-side. also unused as of 2018
-    FlashLightImageHack         = 1 << 8 # basic enlighten detection
+
+    # these are only used on the osu!bancho official server.
+    OsuExecutableChecksum       = 1 << 6
+    MissingProcessesInList      = 1 << 7 # also deprecated as of 2018
+
+    # flags for either:
+    # 1. pixels that should be outside the visible radius
+    # (and thus black) being brighter than they should be.
+    # 2. from an internal alpha value being incorrect.
+    FlashLightImageHack         = 1 << 8
+
     SpinnerHack                 = 1 << 9
     TransparentWindow           = 1 << 10
-    FastPress                   = 1 << 11 # flags for consistent low press intervals,
-                                          # decent but not fully conclusive
-    RawMouseDiscrepancy         = 1 << 12 # can detect autobotted scores
+
+    # (mania) flags for consistently low press intervals.
+    FastPress                   = 1 << 11
+
+    # from my experience, pretty decent
+    # for detecting autobotted scores.
+    RawMouseDiscrepancy         = 1 << 12
+
     RawKeyboardDiscrepancy      = 1 << 13
 
     # osu! anticheat 2019

@@ -50,31 +50,42 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
     st = time.time_ns()
     handler = None
+
+    cmd, path = conn.cmd, conn.path
     domain = conn.headers['Host']
 
     # match the host & uri to the correct handlers.
+
     if domain.endswith('.ppy.sh'):
         # osu! handlers
-
         subdomain = domain.removesuffix('.ppy.sh')
 
-        if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
-            handler = handle_bancho # bancho packets
-        elif subdomain == 'osu':
-            if conn.path.startswith('/web'):
-                handler = handle_web # /web handlers
-            elif conn.path.startswith('/ss/'):
-                handler = handle_ss # screenshots
-            elif conn.path.startswith('/d/'):
-                handler = handle_dl # osu!direct
-            elif conn.path.startswith('/users'):
-                handler = handle_registration
+        if subdomain == 'osu':
+            # connection to `osu.ppy.sh/*`
+
+            if cmd == 'POST':
+                # POST handlers
+                if path == '/':
+                    handler = handle_bancho
+                elif path == '/users':
+                    handler = handle_registration
+
+            elif cmd == 'GET':
+                # GET handlers
+                if path.startswith('/web/'):
+                    handler = handle_web # /web handlers
+                elif path.startswith('/ss/'):
+                    handler = handle_ss # screenshots
+                elif path.startswith('/d/'):
+                    handler = handle_dl # osu!direct
+
         elif subdomain == 'a':
             handler = handle_avatar
+
     else:
         # non osu!-related handler
         if domain.endswith(glob.config.domain):
-            if conn.path.startswith('/api'):
+            if path.startswith('/api'):
                 handler = handle_api # gulag!api
             else:
                 # frontend handler?
@@ -99,7 +110,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         plog(f'Request handled in {time_str}.', Ansi.LCYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 7, 0)
+    glob.version = cmyui.Version(2, 7, 4)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -117,7 +128,6 @@ async def run_server(addr: cmyui.Address) -> None:
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
     glob.bot.ping_time = 0x7fffffff
 
-    await glob.bot.stats_from_sql_full() # no need to get friends
     await glob.players.add(glob.bot)
 
     # add all channels from db.

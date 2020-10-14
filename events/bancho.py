@@ -156,10 +156,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             await p.logout()
         else:
             # the user is currently online, send back failure.
-            return (
-                await packets.userID(-1) +
-                await packets.notification('User already logged in.')
-            ), 'no'
+            data = await packets.userID(-1) + \
+                   await packets.notification('User already logged in.')
+
+            return data, 'no'
 
     del p
 
@@ -313,7 +313,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             f'Current build: {glob.version}'
         ) +
 
-        # tells osu! to load channels from config, I believe?
+        # tells osu! to load channels from config, i believe?
         await packets.channelInfoEnd()
     )
 

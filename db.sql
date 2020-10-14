@@ -192,7 +192,6 @@ create table scores_vn
 	perfect tinyint(1) not null
 );
 
-# TODO: find the real max lengths for strings
 create table maps
 (
 	server enum('osu!', 'gulag') default 'osu!' not null,
@@ -203,7 +202,7 @@ create table maps
 	artist varchar(128) not null,
 	title varchar(128) not null,
 	version varchar(128) not null,
-	creator varchar(128) not null,
+	creator varchar(19) not null comment 'not 100% certain on len',
 	last_update datetime not null,
 	frozen tinyint(1) default 0 not null,
 	plays int default 0 not null,
