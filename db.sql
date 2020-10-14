@@ -1,7 +1,7 @@
 # Remove pre-existing tables.
 drop table if exists stats;
 drop table if exists users;
-drop table if exists user_hashes;
+drop table if exists client_hashes;
 drop table if exists scores_rx;
 drop table if exists scores_ap;
 drop table if exists scores_vn;
@@ -19,11 +19,11 @@ create table users
 		primary key,
 	name varchar(32) not null,
 	name_safe varchar(32) not null,
+	email varchar(254) not null,
 	priv int default 1 not null,
 	pw_hash char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
-	email varchar(254) null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_safe_uindex
@@ -32,17 +32,16 @@ create table users
 		unique (name)
 );
 
-create table user_hashes
+create table client_hashes
 (
-	id int auto_increment
-		primary key,
+	userid int not null,
 	osupath char(32) not null,
 	adapters char(32) not null,
 	uninstall_id char(32) not null,
 	disk_serial char(32) not null,
-	constraint user_hashes_users_id_fk
-		foreign key (id) references users (id)
-			on update cascade on delete cascade
+	latest_time datetime not null,
+	occurrences int default 0 not null,
+	primary key (userid, osupath, adapters, uninstall_id, disk_serial)
 );
 
 # with this i decided to make a naming scheme rather
@@ -101,7 +100,7 @@ create table stats
 	acc_rx_std float(6,3) default 0.000 not null,
 	acc_rx_taiko float(6,3) default 0.000 not null,
 	acc_rx_catch float(6,3) default 0.000 not null,
-	acc_ap_std float(6,3) default 0 not null,
+	acc_ap_std float(6,3) default 0.000 not null,
 	maxcombo_vn_std int default 0 not null,
 	maxcombo_vn_taiko int default 0 not null,
 	maxcombo_vn_catch int default 0 not null,
@@ -196,8 +195,8 @@ create table scores_vn
 # TODO: find the real max lengths for strings
 create table maps
 (
-	id int not null
-	    primary key,
+	server enum('osu!', 'gulag') default 'osu!' not null,
+	id int not null,
 	set_id int not null,
 	status int not null,
 	md5 char(32) not null,
@@ -216,6 +215,7 @@ create table maps
 	od float(4,2) default 0.00 not null,
 	hp float(4,2) default 0.00 not null,
 	diff float(6,3) default 0.000 not null,
+	primary key (server, id),
 	constraint maps_id_uindex
 		unique (id),
 	constraint maps_md5_uindex
@@ -224,8 +224,8 @@ create table maps
 
 create table friendships
 (
-  	user1 int(11) not null,
-	user2 int(11) not null,
+	user1 int not null,
+	user2 int not null,
 	primary key (user1, user2)
 );
 

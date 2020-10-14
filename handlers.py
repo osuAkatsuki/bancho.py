@@ -1,12 +1,15 @@
 import packets
 import aiofiles
+import orjson
 import os
 import gzip
+import hashlib, bcrypt
+from collections import defaultdict
 
 from cmyui import AsyncConnection
 
 from objects import glob
-
+from constants import regexes
 from console import *
 
 # NOTE: these also load the handler
@@ -20,7 +23,8 @@ __all__ = (
     'handle_ss',
     'handle_dl',
     'handle_api',
-    'handle_avatar'
+    'handle_avatar',
+    'handle_registration'
 )
 
 # a list of packetids that gulag
@@ -58,12 +62,12 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     if 'osu-token' not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        login_data = await bancho.login(
+        login_resp, cho_token = await bancho.login(
             conn.body, conn.headers['X-Real-IP']
         )
 
-        resp.extend(login_data[0])
-        await conn.add_resp_header(f'cho-token: {login_data[1]}')
+        resp.extend(login_resp)
+        await conn.add_resp_header(f'cho-token: {cho_token}')
 
     elif not (p := glob.players.get(conn.headers['osu-token'])):
         #plog('Token not found, forcing relog.')
@@ -216,6 +220,94 @@ async def handle_avatar(conn: AsyncConnection) -> None:
 
     async with aiofiles.open(path, 'rb') as f:
         await conn.send(200, await f.read())
+
+async def handle_registration(conn: AsyncConnection) -> None:
+    mp_args = conn.multipart_args
+
+    name = mp_args['user[username]']
+    email = mp_args['user[user_email]']
+    pw_txt = mp_args['user[password]']
+
+    if not all((name, email, pw_txt)) or 'check' not in mp_args:
+        return # missing required params.
+
+    # ensure all args passed
+    # are safe for registration.
+    errors = defaultdict(list)
+
+    # Usernames must:
+    # - be within 2-15 characters in length
+    # - not contain both ' ' and '_', one is fine
+    # - not be in the config's `disallowed_names` list
+    # - not already be taken by another player
+    if not regexes.username.match(name):
+        errors['username'].append('Must be 2-15 characters in length.')
+
+    if '_' in name and ' ' in name:
+        errors['username'].append('May contain "_" and " ", but not both.')
+
+    if name in glob.config.disallowed_names:
+        errors['username'].append('Disallowed username; pick another.')
+
+    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', name):
+        errors['username'].append('Username already taken by another player.')
+
+    # Emails must:
+    # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
+    # - not already be taken by another player
+    if not regexes.email.match(email):
+        errors['user_email'].append('Invalid email syntax.')
+
+    if await glob.db.fetch('SELECT 1 FROM users WHERE email = %s', email):
+        errors['user_email'].append('Email already taken by another player.')
+
+    # Passwords must:
+    # - be within 8-32 characters in length
+    # - have more than 3 unique characters
+    # - not be in the config's `disallowed_passwords` list
+    if 8 > len(pw_txt) < 32:
+        errors['password'].append('Must be 8-32 characters in length.')
+
+    if len(set(pw_txt)) <= 3:
+        errors['password'].append('Must have more than 3 unique characters.')
+
+    if pw_txt.lower() in glob.config.disallowed_passwords:
+        errors['password'].append('That password was deemed too simple.')
+
+    if errors:
+        # we have errors to send back.
+        errors_full = {'form_error': {'user': errors}}
+        return await conn.send(400, orjson.dumps(errors_full))
+
+    if mp_args['check'] == '0':
+        # the client isn't just checking values,
+        # they want to register the account now.
+
+        # make the md5 & bcrypt the md5 for sql.
+        pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
+        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt()).decode()
+        glob.cache['bcrypt'][pw_md5] = pw_bcrypt # cache result for login
+
+        safe_name = name.lower().replace(' ', '_')
+
+        # add to `users` table.
+        user_id = await glob.db.execute(
+            'INSERT INTO users '
+            '(name, name_safe, email, pw_hash) '
+            'VALUES (%s, %s, %s, %s)',
+            [name, safe_name, email, pw_bcrypt]
+        )
+
+        # add to `stats` table.
+        await glob.db.execute(
+            'INSERT INTO stats '
+            '(id) VALUES (%s)',
+            [user_id]
+        )
+
+        plog(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
+
+    await conn.send(200, b'ok') # success
 
 async def handle_api(conn: AsyncConnection) -> None:
     """Handle an api request (osu.ppy.sh/api/*)."""

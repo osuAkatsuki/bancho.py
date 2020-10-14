@@ -34,14 +34,12 @@ from constants.privileges import Privileges
 # set cwd to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-# make sure gulag/.data folder exists
+# make sure gulag/.data directory exists
 if not os.path.isdir('.data'):
     os.mkdir('.data')
 
-# make sure that all data subdirectories exist
-required_folders = frozenset({'avatars', 'logs',
-                              'osu', 'osr', 'ss'})
-for p in required_folders:
+# make sure that all gulag/.data subdirectories exist
+for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
 
@@ -69,6 +67,8 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
                 handler = handle_ss # screenshots
             elif conn.path.startswith('/d/'):
                 handler = handle_dl # osu!direct
+            elif conn.path.startswith('/users'):
+                handler = handle_registration
         elif subdomain == 'a':
             handler = handle_avatar
     else:

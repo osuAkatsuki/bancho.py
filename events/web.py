@@ -882,7 +882,7 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
 
         # TODO: timing checks
 
-        if version != p.osu_version:
+        if version != p.osu_ver:
             breakpoint()
 
         # remember that we've already received a report

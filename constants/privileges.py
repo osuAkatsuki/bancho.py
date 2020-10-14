@@ -6,16 +6,17 @@ __all__ = ('Privileges', 'BanchoPrivileges')
 
 @unique
 class Privileges(IntFlag):
-    """A class to represent user privileges server-side.
+    """\
+    A class to represent user privileges server-side.
     Gaps inbetween groups are left for future changes.
     """
 
-    # a normal vanilla user, access intended for all users.
-    # XXX: if a user does not have this bit, they are banned.
-    Normal      = 1 << 0
+    # privileges intended for all normal players.
+    Normal      = 1 << 0 # is an unbanned player.
+    Verified    = 1 << 1 # has logged in to the server in-game.
 
     # has bypass to low-ceiling anticheat measures (trusted).
-    Whitelisted = 1 << 1
+    Whitelisted = 1 << 2
 
     # donation tiers, receives some extra benefits.
     Supporter   = 1 << 4

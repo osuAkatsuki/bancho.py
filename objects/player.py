@@ -236,7 +236,7 @@ class Player:
     ping_time: `int`
         The UNIX timestamp of the last time the client pinged the server.
 
-    osu_version: `str`
+    osu_ver: `str`
         The osu! version the client logged in with.
 
     pres_filter: `PresenceFilter`
@@ -265,6 +265,9 @@ class Player:
     silenced: `bool`
         Whether the user is currently silenced.
 
+    remaining_silence: `int`
+        The remaining amount of seconds the user is silenced for.
+
     bancho_priv: `BanchoPrivileges`
         The user's privileges in the osu! client.
 
@@ -278,7 +281,7 @@ class Player:
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'ping_time', 'osu_version',
+        'login_time', 'ping_time', 'osu_ver',
         'pres_filter', 'menu_options', '_queue'
     )
 
@@ -318,7 +321,7 @@ class Player:
         self.login_time = _ctime
         self.ping_time = _ctime
 
-        self.osu_version = kwargs.get('osu_version', None)
+        self.osu_ver = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
@@ -343,9 +346,14 @@ class Player:
         return f'[{self.url} {self.name}]'
 
     @property
+    def remaining_silence(self) -> int:
+        """The remaining time of the players silence."""
+        return max(0, int(self.silence_end - time.time()))
+
+    @property
     def silenced(self) -> bool:
         """Whether or not the player is silenced."""
-        return time.time() <= self.silence_end
+        return self.remaining_silence != 0
 
     @property
     def bancho_priv(self) -> int:

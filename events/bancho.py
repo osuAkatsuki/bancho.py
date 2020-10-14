@@ -4,9 +4,10 @@ from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
 import bcrypt
+from cmyui.version import Version
 
 import packets
-from packets import BanchoPacket, BanchoPacketReader # convenience
+from packets import BanchoPacket, BanchoPacketReader, notification # convenience
 
 from console import *
 from constants.types import osuTypes
@@ -98,7 +99,7 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
 
         await t.send(p, msg)
 
-    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
+    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 # packet id: 2
 @bancho_packet(BanchoPacket.c_logout)
@@ -155,8 +156,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             await p.logout()
         else:
             # the user is currently online, send back failure.
-            return (await packets.notification('User already logged in.') +
-                    await packets.userID(-1), 'no')
+            return (
+                await packets.userID(-1) +
+                await packets.notification('User already logged in.')
+            ), 'no'
 
     del p
 
@@ -164,7 +167,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     s = s[2].split('|')
 
-    if not (r := regexes.osu_version.match(s[0])):
+    if not (r := regexes.osu_ver.match(s[0])):
         # invalid client version?
         return await packets.userID(-2), 'no'
 
@@ -196,120 +199,119 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     pm_private = s[4] == '1'
 
-    res = await glob.db.fetch(
+    p_row = await glob.db.fetch(
         'SELECT id, name, priv, pw_hash, '
         'silence_end FROM users '
         'WHERE name_safe = %s',
         [Player.make_safe(username)]
     )
 
+    if not p_row:
+        # no account by this name exists.
+        return await packets.userID(-1), 'no'
+
     # get our bcrypt cache.
     bcrypt_cache = glob.cache['bcrypt']
 
-    if res:
-        # their account exists in sql.
-        # check their account status & credentials against db.
-        if not res['priv'] & Privileges.Normal:
-            return await packets.userID(-3), 'no'
+    # their account exists in sql.
+    # check their account status & credentials against db.
 
-        # password is incorrect.
-        if pw_hash in bcrypt_cache: # ~0.01 ms
-            # cache hit - this saves ~200ms on subsequent logins.
-            if bcrypt_cache[pw_hash] != res['pw_hash']:
-                return await packets.userID(-1), 'no'
-
-        else:
-            # cache miss, this must be their first login.
-            if not bcrypt.checkpw(pw_hash, res['pw_hash'].encode()):
-                return await packets.userID(-1), 'no'
-
-            bcrypt_cache[pw_hash] = res['pw_hash']
-
-        p = Player(utc_offset = utc_offset,
-                   pm_private = pm_private,
-                   osu_version = osu_ver,
-                   **res)
+    if pw_hash in bcrypt_cache: # ~0.01 ms
+        # cache hit - this saves ~200ms on subsequent logins.
+        if bcrypt_cache[pw_hash] != p_row['pw_hash']:
+            # password wrong
+            return await packets.userID(-1), 'no'
 
     else:
-        # the account does not exist,
-        # register using credentials given.
+        # cache miss, this must be their first login.
+        if not bcrypt.checkpw(pw_hash, p_row['pw_hash'].encode()):
+            return await packets.userID(-1), 'no'
 
-        # disallow popular/offensive usernames
-        if username in glob.config.disallowed_names:
-            return (await packets.notification('Disallowed username.') +
-                    await packets.userID(-1), 'no')
+        bcrypt_cache[pw_hash] = p_row['pw_hash']
 
-        # check if the anything from the hwid set exists in sql.
-        # NOTE: we don't check if osu path hash matches.
-        old = await glob.db.fetch(
-            'SELECT u.name, u.priv FROM user_hashes h '
-            'LEFT JOIN users u USING(id) WHERE h.adapters = %s '
-            'OR h.uninstall_id = %s OR h.disk_serial = %s',
-            [*client_hashes[1:]]
-        )
+    if not p_row['priv'] & Privileges.Normal:
+        return await packets.userID(-3), 'no'
 
-        if old:
-            # they already have an account on this hwid.
-            if old['priv'] & Privileges.Normal:
-                # unbanned, tell them to use that account instead.
-                msg = (f'Detected a previously created account "{old["name"]}"!\n'
-                       'Please use that account instead.\n\n'
-                       'If you believe this is an error, please contact staff.')
-            else:
-                # banned, tell them to appeal on their main acc.
-                msg = ('Please do not try to avoid your restrictions!\n'
-                       f'Appeal on your first account - "{old["name"]}".')
+    """ handle client hashes """
 
-            plog(f'{old["name"]} tried to make new acc ({username}).', Ansi.LGREEN)
-            return (await packets.notification(msg) +
-                    await packets.userID(-1), 'no')
+    # insert new set/occurrence
+    await glob.db.execute(
+        'INSERT INTO client_hashes '
+        'VALUES (%s, %s, %s, %s, %s, NOW(), 0) '
+        'ON DUPLICATE KEY UPDATE '
+        'occurrences = occurrences + 1, '
+        'latest_time = NOW() ',
+        [p_row['id'], *client_hashes]
+    )
 
-        pw_bcrypt = bcrypt.hashpw(pw_hash, bcrypt.gensalt()).decode()
-        bcrypt_cache[pw_hash] = pw_bcrypt
+    # TODO: runningunderwine support
 
-        safe_name = Player.make_safe(username)
+    # find any other users from any of the same hwid values.
+    hwid_matches = await glob.db.fetchall(
+        'SELECT u.`name`, u.`priv`, h.`occurrences` '
+        'FROM `client_hashes` h '
+        'LEFT JOIN `users` u ON h.`userid` = u.`id` '
+        'WHERE h.`userid` != %s AND (h.`adapters` = %s '
+        'OR h.`uninstall_id` = %s OR h.`disk_serial` = %s)',
+        [p_row['id'], *client_hashes[1:]]
+    )
 
-        # add to `users` table.
-        user_id = await glob.db.execute(
-            'INSERT INTO users '
-            '(name, name_safe, pw_hash) '
-            'VALUES (%s, %s, %s, %s)',
-            [username, safe_name, pw_bcrypt]
-        )
+    if hwid_matches:
+        # we have other accounts with matching hashes
 
-        # insert client hashes
+        # NOTE: this is an area i've seen a lot of implementations rush
+        # through and poorly design; this section is CRITICAL for both
+        # keeping multiaccounting down, but perhaps more importantly in
+        # scenarios where multiple users are forced to use a single pc
+        # (lan meetups, at a friends place, shared computer, etc.), and
+        # honestly these scenarios are usually the ones where new players
+        # would get invited to your server! think about this shit! first
+        # impressions are important and you don't want a ban and support
+        # ticket to be this users first experience.
+
+        # anyways yeah needless to say i'm gonna think about this one
+
+        if not p_row['priv'] & Privileges.Verified:
+            # this player is not verified yet, this is their first
+            # time connecting in-game and submitting their hwid set.
+            # we will not allow any banned matches; if there are any,
+            # then ask the user to contact staff and resolve manually.
+            if not all(x['priv'] & Privileges.Normal for x in hwid_matches):
+                return (await packets.notification('Please contact staff directly '
+                                                   'to create an account.') +
+                        await packets.userID(-1)), 'no'
+
+        else:
+            # player is verified
+            # TODO: add discord webhooks to cmyui_pkg, it would be a
+            # perfect addition here.. will have to think about how
+            # to organize it in config tho :o
+            pass
+
+    if not p_row['priv'] & Privileges.Verified:
+        # verify the account if it's made it this far
+        p_row['priv'] |= int(Privileges.Verified)
         await glob.db.execute(
-            'INSERT INTO user_hashes '
-            'VALUES (%s, %s, %s, %s, %s)',
-            [user_id, *client_hashes]
+            'UPDATE users SET priv = priv | %s WHERE id = %s',
+            [p_row['priv'], p_row['id']]
         )
 
-        # add to `stats` table.
-        await glob.db.execute(
-            'INSERT INTO stats '
-            '(id) VALUES (%s)',
-            [user_id]
-        )
+    p_row |= {
+        'utc_offset': utc_offset,
+        'pm_private': pm_private,
+        'osu_ver': osu_ver
+    }
 
-        p = Player(id = user_id, name = username, silence_end = 0,
-                   priv = Privileges.Normal, osu_version = osu_ver)
-
-        plog(f'{p} has registered!', Ansi.LGREEN)
-
-        # enqueue registration message to the user.
-        _msg = registration_msg.format(glob.players.staff)
-        p.enqueue(await packets.sendMessage(glob.bot.name, _msg,
-                                            p.name, p.id))
-
-    # `p` will always be valid now, but has not
-    # yet been added to the global player list.
+    p = Player(**p_row)
 
     data = bytearray(
         await packets.userID(p.id) +
         await packets.protocolVersion(19) +
         await packets.banchoPrivileges(p.bancho_priv) +
-        await packets.notification('Welcome back to the gulag!\n'
-                                   f'Current build: {glob.version}') +
+        await packets.notification(
+            'Welcome back to the gulag!\n'
+            f'Current build: {glob.version}'
+        ) +
 
         # tells osu! to load channels from config, I believe?
         await packets.channelInfoEnd()
@@ -340,8 +342,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         await p.fetch_geoloc(ip)
 
     # update our new player's stats, and broadcast them.
-    user_data = (await packets.userPresence(p) +
-                 await packets.userStats(p))
+    user_data = (
+        await packets.userPresence(p) +
+        await packets.userStats(p)
+    )
 
     data.extend(user_data)
 
@@ -351,12 +355,16 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         o.enqueue(user_data)
 
         # enqueue them to us.
-        data.extend(await packets.userPresence(o) +
-                    await packets.userStats(o))
+        data.extend(
+            await packets.userPresence(o) +
+            await packets.userStats(o)
+        )
 
-    data.extend(await packets.mainMenuIcon() +
-                await packets.friendsList(*p.friends) +
-                await packets.silenceEnd(max(p.silence_end - time.time(), 0)))
+    data.extend(
+        await packets.mainMenuIcon() +
+        await packets.friendsList(*p.friends) +
+        await packets.silenceEnd(p.remaining_silence)
+    )
 
     # thank u osu for doing this by username rather than id
     query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
@@ -367,9 +375,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # the player may have been sent mail while offline,
     # enqueue any messages from their respective authors.
     async for msg in glob.db.iterall(query, p.id):
+        msg_time = dt.fromtimestamp(msg['time'])
+        msg_ts = f'[{time:%Y-%m-%d %H:%M:%S}] {msg_time}'
+
         data.extend(await packets.sendMessage(
-            # TODO: probably format time into msg
-            msg['from'], msg['msg'], msg['to'], msg['from_id']
+            msg['from'], msg_ts,
+            msg['to'], msg['from_id']
         ))
 
     # add `p` to the global player list,
