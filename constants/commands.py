@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from pp.owoppai import Owoppai
 from typing import (Sequence, Optional,
                     Union, Callable)
 import time
+import cmyui
 import random
 from collections import defaultdict
 
@@ -38,7 +40,7 @@ def command(priv: Privileges, public: bool,
 
 """ User commands
 # The commands below are not considered dangerous,
-# and are granted to any unrestricted players.
+# and are granted to any unbanned players.
 """
 
 @command(priv=Privileges.Normal, public=False)
@@ -85,41 +87,54 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     ) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
-@command(priv=Privileges.Normal, public=False)
-async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    """Adjust the mods for a pp-calculation request."""
+@command(priv=Privileges.Normal, public=False, trigger='!with')
+async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Specify custom accuracy & mod combinations with `/np`."""
     if isinstance(c, Channel) or c.id != 1:
         return 'This command can only be used in DM with Aika.'
 
     if not p.last_np:
         return 'Please /np a map first!'
 
-    msg = ''.join(msg).replace(' ', '')
-    if msg[0] == '+': # remove +
-        msg = msg[1:]
+    # +?<mods> <acc>%?
+    if 1 < len(msg) > 2:
+        return 'Invalid syntax: !with <mods/acc> ...'
 
-    mods = Mods.from_str(msg)
+    mods = acc = None
 
-    if mods not in p.last_np.pp_cache:
-        # cach
-        await p.last_np.cache_pp(mods)
+    for param in (p.strip('+%') for p in msg):
+        if cmyui._isdecimal(param, _float=True):
+            acc = float(param)
+        elif ~len(param) & 1: # len(param) % 2 == 0
+            mods = Mods.from_str(param)
+        else:
+            return 'Invalid syntax: !with <mods/acc> ...'
 
-    # since this is a DM to the bot, we should
-    # send back a list of general pp values.
-    # TODO: !acc and !mods in commands to
-    #       modify these values :P
     _msg = [p.last_np.embed]
-    if mods:
-        _msg.append(f'{mods!r}')
+    if not mods:
+        mods = Mods.NOMOD
 
-    msg = f"{' '.join(_msg)}: " + ' | '.join(
-        f'{acc}%: {pp:.2f}pp'
-        for acc, pp in zip(
+    _msg.append(repr(mods))
+
+    if acc:
+        # they're requesting pp for specified acc value.
+        async with Owoppai(p.last_np.id, acc=acc, mods=mods) as owo:
+            await owo.calc()
+            pp_values = [(owo.acc, owo.pp)]
+    else:
+        # they're requesting pp for general accuracy values.
+        if mods not in p.last_np.pp_cache:
+            # cache
+            await p.last_np.cache_pp(mods)
+
+        pp_values = zip(
             (90, 95, 98, 99, 100),
             p.last_np.pp_cache[mods]
-        ))
+        )
 
-    return msg
+    pp_msg = ' | '.join(f'{acc:.2f}%: {pp:.2f}pp'
+                        for acc, pp in pp_values)
+    return f"{' '.join(_msg)}: {pp_msg}"
 
 """ Nominators commands
 # The commands below allow users to
@@ -187,7 +202,7 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Ban a player's account, with a reason."""
     if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+        return 'Invalid syntax: !ban <name> (reason)'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
@@ -196,14 +211,16 @@ async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    await t.restrict() # TODO: use reason as param?
+    reason = ' '.join(msg[1:])
+
+    await t.ban(p, reason)
     return f'{t} was banned.'
 
 @command(priv=Privileges.Admin, public=False)
 async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Unban a player's account, with a reason."""
-    if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+    if (len_msg := len(msg)) < 2:
+        return 'Invalid syntax: !ban <name> (reason)'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
@@ -212,7 +229,9 @@ async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    await t.unrestrict() # TODO: use reason as param?
+    reason = ' '.join(msg[2:]) if len_msg > 2 else None
+
+    await t.unban(p, reason)
     return f'{t} was unbanned.'
 
 @command(priv=Privileges.Admin, public=False)

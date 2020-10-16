@@ -3,11 +3,11 @@
 from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
+import cmyui
 import bcrypt
-from cmyui.version import Version
 
 import packets
-from packets import BanchoPacket, BanchoPacketReader, notification # convenience
+from packets import BanchoPacket, BanchoPacketReader # convenience
 
 from console import *
 from constants.types import osuTypes
@@ -50,16 +50,30 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
 
-    # we don't need client & client_id
+    # we don't need client & client_id from osu!
     _, msg, target, _ = await pr.read(osuTypes.message)
 
-    # no nice wrapper to do it in reverse :P
     if target == '#spectator':
-        target = f'#spec_{p.spectating.id if p.spectating else p.id}'
-    elif target == '#multiplayer':
-        target = f'#multi_{p.match.id if p.match is not None else 0}'
+        if p.spectating:
+            # we are spectating someone
+            spec_id = p.spectating.id
+        elif p.spectators:
+            # we are being spectated
+            spec_id = p.id
+        else:
+            return
 
-    if not (t := glob.channels[target]):
+        t = glob.channels[f'spec_{spec_id}']
+    elif target == '#multiplayer':
+        if not p.match:
+            # they're not in a match?
+            return
+
+        t = glob.channels[f'#multi_{p.match.id}']
+    else:
+        t = glob.channels[target]
+
+    if not t:
         plog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
@@ -104,7 +118,7 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
 # packet id: 2
 @bancho_packet(BanchoPacket.c_logout)
 async def logout(p: Player, pr: BanchoPacketReader) -> None:
-    pr.ignore(4) # osu client sends \x00\x00\x00\x00 every time lol
+    pr.ignore(4) # osu sends i32(0) every time..
 
     if (time.time() - p.login_time) < 2:
         # osu! has a weird tendency to log out immediately when
@@ -145,8 +159,8 @@ registration_msg = '\n'.join((
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
-
-    s = origin.decode().split('\n')
+    if len(s := origin.decode().split('\n')[:-1]) != 3:
+        return
 
     if p := await glob.players.get_by_name(username := s[0]):
         if (time.time() - p.ping_time) > 10:
@@ -165,24 +179,25 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     pw_hash = s[1].encode()
 
-    s = s[2].split('|')
+    if len(s := s[2].split('|')) != 5:
+        return
 
     if not (r := regexes.osu_ver.match(s[0])):
         # invalid client version?
         return await packets.userID(-2), 'no'
 
-    osu_ver = r['date']
+    # parse their osu version into a datetime object.
+    # this will be saved to `p.osu_ver` if login succeeds.
+    osu_ver = dt.strptime(r['ver'], '%Y%m%d')
 
-    # XXX: could perhaps have p.build as datetime(osu_ver)?
-    # either way, for now any client with the same
-    # month & year as 15 days ago should be fine?
-    ctime = dt.now() - td(10)
+    if osu_ver < dt.now() - td(60):
+        # the osu! client is older than 2 months old,
+        # disallow login and force an update re-check.
+        return (await packets.versionUpdateForced() +
+                await packets.userID(-2)), 'no'
 
-    if osu_ver[:6] != f'{ctime.year:04d}{ctime.month:02d}':
-        # outdated osu! client
-        return await packets.userID(-2), 'no'
-
-    if not s[1].replace('-', '', 1).isdecimal():
+    if not cmyui._isdecimal(s[1], _negative=True):
+        # utc-offset isn't a number (negative inclusive).
         return await packets.userID(-1), 'no'
 
     utc_offset = int(s[1])
@@ -200,9 +215,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     pm_private = s[4] == '1'
 
     p_row = await glob.db.fetch(
-        'SELECT id, name, priv, pw_hash, '
-        'silence_end FROM users '
-        'WHERE name_safe = %s',
+        'SELECT id, name, priv, pw_hash, silence_end '
+        'FROM users WHERE name_safe = %s',
         [Player.make_safe(username)]
     )
 
@@ -263,11 +277,11 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         # through and poorly design; this section is CRITICAL for both
         # keeping multiaccounting down, but perhaps more importantly in
         # scenarios where multiple users are forced to use a single pc
-        # (lan meetups, at a friends place, shared computer, etc.), and
-        # honestly these scenarios are usually the ones where new players
-        # would get invited to your server! think about this shit! first
-        # impressions are important and you don't want a ban and support
-        # ticket to be this users first experience.
+        # (lan meetups, at a friends place, shared computer, etc.).
+        # these scenarios are usually the ones where new players will
+        # get invited to your server.. first impressions are important
+        # and you don't want a ban and support ticket to be this users
+        # first experience. :P
 
         # anyways yeah needless to say i'm gonna think about this one
 
@@ -308,10 +322,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         await packets.userID(p.id) +
         await packets.protocolVersion(19) +
         await packets.banchoPrivileges(p.bancho_priv) +
-        await packets.notification(
-            'Welcome back to the gulag!\n'
-            f'Current build: {glob.version}'
-        ) +
+        await packets.notification('Welcome back to the gulag!\n'
+                                   f'Current build: {glob.version}') +
 
         # tells osu! to load channels from config, i believe?
         await packets.channelInfoEnd()
@@ -376,7 +388,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # enqueue any messages from their respective authors.
     async for msg in glob.db.iterall(query, p.id):
         msg_time = dt.fromtimestamp(msg['time'])
-        msg_ts = f'[{time:%Y-%m-%d %H:%M:%S}] {msg_time}'
+        msg_ts = f'[{msg_time:%Y-%m-%d %H:%M:%S}] {msg["msg"]}'
 
         data.extend(await packets.sendMessage(
             msg['from'], msg_ts,
@@ -399,7 +411,7 @@ async def startSpectating(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
-    if (c_host := p.spectating):
+    if c_host := p.spectating:
         await c_host.remove_spectator(p)
 
     await host.add_spectator(p)
@@ -452,7 +464,8 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
-    client, msg, target, client_id = await pr.read(osuTypes.message)
+    # we don't need client & client_id from osu!
+    _, msg, target, _ = await pr.read(osuTypes.message)
 
     if not (t := await glob.players.get_by_name(target)):
         plog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
@@ -469,7 +482,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
-    client, client_id = p.name, p.id # XXX not really needed?
+    client, client_id = p.name, p.id
 
     if t.status.action == Action.Afk and t.away_msg:
         # send away message if target is afk and has one set.
@@ -530,7 +543,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
         # marked as unread.
         await glob.db.execute(
             'INSERT INTO `mail` (`from_id`, `to_id`, `msg`, `time`) '
-            'VALUES (%s, %s, %s, CURRENT_TIMESTAMP())',
+            'VALUES (%s, %s, %s, UNIX_TIMESTAMP())',
             [p.id, t.id, msg]
         )
 
@@ -1047,8 +1060,7 @@ async def matchInvite(p: Player, pr: BanchoPacketReader) -> None:
         plog(f'{t} tried to invite a user who is not online! ({user_id})')
         return
 
-    inv = f'Come join my game: {p.match.embed}.'
-    t.enqueue(await packets.sendMessage(p.name, inv, t.name, p.id))
+    t.enqueue(await packets.matchInvite(p, t.name))
     plog(f'{p} invited {t} to their match.')
 
 # packet id: 90
@@ -1070,6 +1082,19 @@ async def userPresenceRequest(p: Player, pr: BanchoPacketReader) -> None:
         if t := await glob.players.get_by_id(pid):
             p.enqueue(await packets.userPresence(t))
 
+# packet id: 98
+@bancho_packet(BanchoPacket.c_userPresenceRequestAll)
+async def userPresenceRequestAll(p: Player, pr: BanchoPacketReader) -> None:
+    # XXX: this only sends when the client can see > 256 players,
+    # so this probably won't have much use for private servers.
+
+    # NOTE: i'm not exactly sure how bancho implements this and whether
+    # i'm supposed to filter the users presences to send back with the
+    # player's presence filter; i can add it in the future perhaps.
+    for t in glob.players:
+        if p != t:
+            p.enqueue(await packets.userPresence(t))
+
 # packet id: 99
 @bancho_packet(BanchoPacket.c_userToggleBlockNonFriendPM)
 async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
@@ -1082,6 +1107,4 @@ async def deprecated_packet(p: Player, pr: BanchoPacketReader) -> None:
     plog(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LRED)
 
 errorReport = bancho_packet(BanchoPacket.c_errorReport)(deprecated_packet)
-lobbyJoinMatch = bancho_packet(BanchoPacket.c_lobbyJoinMatch)(deprecated_packet)
-lobbyPartMatch = bancho_packet(BanchoPacket.c_lobbyPartMatch)(deprecated_packet)
 beatmapInfoRequest = bancho_packet(BanchoPacket.c_beatmapInfoRequest)(deprecated_packet)

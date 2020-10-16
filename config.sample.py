@@ -61,6 +61,11 @@ menu_icon = (
     'https://akatsuki.pw' # onclick URL
 )
 
+# seasonal backgrounds to be displayed
+seasonal_bgs = (
+    'https://akatsuki.pw/static/flower.png',
+)
+
 # in-game bot command prefix.
 command_prefix = '!'
 

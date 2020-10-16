@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+from datetime import datetime
 from typing import Any, Optional, Coroutine
 import time
 import uuid
@@ -236,7 +237,7 @@ class Player:
     ping_time: `int`
         The UNIX timestamp of the last time the client pinged the server.
 
-    osu_ver: `str`
+    osu_ver: `datetime`
         The osu! version the client logged in with.
 
     pres_filter: `PresenceFilter`
@@ -321,7 +322,7 @@ class Player:
         self.login_time = _ctime
         self.ping_time = _ctime
 
-        self.osu_ver = kwargs.get('osu_ver', None)
+        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
@@ -419,11 +420,20 @@ class Player:
         await glob.players.remove(self)
         glob.players.enqueue(await packets.logout(self.id))
 
-    async def restrict(self) -> None: # TODO: reason
+    # NOTE: bans *require* a reason, while unbans leave it optional.
+
+    async def ban(self, admin, reason: str) -> None:
         self.priv &= ~Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
             [int(self.priv), self.id]
+        )
+
+        log_msg = f'{admin} banned for "{reason}".'
+        await glob.db.execute(
+            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'VALUES (%s, %s, %s, NOW())',
+            [admin.id, self.id, log_msg]
         )
 
         if self in glob.players:
@@ -438,16 +448,24 @@ class Player:
                 'using the appeal form on the website.'
             ))
 
-        plog(f'Restricted {self}.', Ansi.CYAN)
+        plog(f'Banned {self}.', Ansi.CYAN)
 
-    async def unrestrict(self) -> None:
+    async def unban(self, admin, reason: Optional[str] = None) -> None:
         self.priv &= Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
             [int(self.priv), self.id]
         )
 
-        plog(f'Unrestricted {self}.', Ansi.CYAN)
+        if reason:
+            log_msg = f'{admin} unbanned for "{reason}".'
+            await glob.db.execute(
+                'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+                'VALUES (%s, %s, %s, NOW())',
+                [admin.id, self.id, log_msg]
+            )
+
+        plog(f'Unbanned {self}.', Ansi.CYAN)
 
     async def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:

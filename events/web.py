@@ -3,6 +3,8 @@
 from constants.gamemodes import GameMode
 from typing import Optional, Callable
 from enum import IntEnum, unique
+from functools import partial
+import cmyui
 import os
 import time
 import copy
@@ -63,11 +65,9 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
         # long term. For now, just send an empty reply
         # so their client immediately attempts login.
 
-        # XXX: returning an endpoint here will set
-        # the clients endpoints for bancho connections.
-        # this is a little hack gulag will use to not
-        # require c[4-6e]?.ppy.sh to exist :D
-        return b'https://osu.ppy.sh'
+        # NOTE: you can actually return an endpoint here
+        # for the client to use as a bancho endpoint.
+        return b'allez-vous owo'
 
     # TODO: perhaps handle this..?
     NotImplemented
@@ -245,11 +245,13 @@ async def osuGetFavourites(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    return '\n'.join(await glob.db.fetchall(
+    favourites = await glob.db.fetchall(
         'SELECT setid FROM favourites '
         'WHERE userid = %s',
         [p.id]
-    )).encode()
+    )
+
+    return '\n'.join(favourites).encode()
 
 @web_handler('osu-addfavourite.php', required_args=('u', 'h', 'a'))
 async def osuAddFavourite(conn: AsyncConnection) -> Optional[bytes]:
@@ -296,7 +298,7 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
-        await p.restrict()
+        await p.ban(glob.bot, f'hq!osu running ({flags})')
         return b'-3'
 
     if flags & ClientFlags.RegistryEdits:
@@ -306,15 +308,15 @@ async def lastFM(conn: AsyncConnection) -> Optional[bytes]:
         # using it now, but they have in the past.
 
         if random.randrange(32) == 0:
-            # Random chance (1/32) for a restriction.
-            await p.restrict()
+            # Random chance (1/32) for a ban.
+            await p.ban(glob.bot, f'hq!osu relife 1/32')
             return b'-3'
 
         p.enqueue(await packets.notification('\n'.join([
             "Hey!",
             "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
             "This tool leaves a change in your registry that the osu! client can detect.",
-            "Please re-install relife and disable the program to avoid possible restriction."
+            "Please re-install relife and disable the program to avoid possible ban."
         ])))
 
         await p.logout()
@@ -497,9 +499,9 @@ async def osuSearchSetHandler(conn: AsyncConnection) -> Optional[bytes]:
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 UNDEF = 9999
-autorestrict_pp = (
-    # values for autorestriction. this is the simplest
-    # form of "anticheat", simply ban a user if they are not
+autoban_pp = (
+    # high ceiling values for autoban as a very simple form
+    #  of "anticheat", simply ban a user if they are not
     # whitelisted, and submit a score of too high caliber.
     # Values below are in form (non_fl, fl), as fl has custom
     # vals as it finds quite a few additional cheaters on the side.
@@ -580,14 +582,14 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
-        pp_cap = autorestrict_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            plog(f'{s.player} restricted for submitting '
+            plog(f'{s.player} banned for submitting '
                  f'{s.pp:.2f} score on gm {s.mode!r}.',
                  Ansi.LRED)
 
-            await s.player.restrict()
+            await s.player.ban(glob.bot, f'[{s.mode!r}] autoban @ {s.pp:.2f}')
             return b'error: ban'
 
     if s.status == SubmissionStatus.BEST:
@@ -619,7 +621,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # If not, they may be using a score submitter.
         if 'score' not in conn.files or conn.files['score'] == b'\r\n':
             plog(f'{s.player} submitted a score without a replay!', Ansi.LRED)
-            await s.player.restrict()
+            await s.player.ban(glob.bot, f'submitted score with no replay')
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can
@@ -887,8 +889,8 @@ async def osuSession(conn: AsyncConnection) -> Optional[bytes]:
 
         # TODO: timing checks
 
-        if version != p.osu_ver:
-            breakpoint()
+        #if version != p.osu_ver:
+        #    breakpoint()
 
         # remember that we've already received a report
         # for this score, so that we don't overwrite it.
@@ -987,8 +989,10 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
+    isdecimal_n = partial(cmyui._isdecimal, _negative=True)
+
     # make sure all int args are integral
-    if not all(conn.args[k].isdecimal() for k in ('mods', 'v', 'm', 'i')):
+    if not all(isdecimal_n(conn.args[k]) for k in ('mods', 'v', 'm', 'i')):
         return b'-1|false'
 
     map_md5 = conn.args['c']
@@ -1236,6 +1240,14 @@ async def osuMarkAsRead(conn: AsyncConnection) -> Optional[bytes]:
         'AND `read` = 0',
         [p.id, t.id]
     )
+
+@web_handler('osu-getseasonal.php')
+async def osuSeasonal(conn: AsyncConnection) -> Optional[bytes]:
+    return orjson.dumps(glob.config.seasonal_bgs)
+
+@web_handler('osu-error.php')
+async def osuError(conn: AsyncConnection) -> Optional[bytes]:
+    ...
 
 @web_handler('check-updates.php', required_args=('action', 'stream'))
 async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:

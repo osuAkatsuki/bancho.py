@@ -1,7 +1,7 @@
 
 from typing import Optional
 from enum import IntEnum, unique
-import time
+from datetime import datetime
 from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
 
@@ -126,8 +126,8 @@ class Score:
     mode: `GameMode`
         The game mode of the score.
 
-    play_time: `int`
-        A UNIX timestamp of the time of score submission.
+    play_time: `datetime`
+        A datetime obj of the time of score submission.
 
     time_elapsed: `int`
         The total elapsed time of the play (in milliseconds).
@@ -151,40 +151,40 @@ class Score:
     )
 
     def __init__(self):
-        self.id = 0
+        self.id: Optional[int] = None
 
         self.bmap: Optional[Beatmap] = None
         self.player: Optional[Player] = None
 
-        self.pp = 0.0
-        self.score = 0
-        self.max_combo = 0
-        self.mods = Mods.NOMOD
+        self.pp: Optional[float] = None
+        self.score: Optional[int] = None
+        self.max_combo: Optional[int] = None
+        self.mods: Optional[Mods] = None
 
-        self.acc = 0.0
+        self.acc: Optional[float] = None
         # TODO: perhaps abstract these differently
         # since they're mode dependant? feels weird..
-        self.n300 = 0
-        self.n100 = 0 # n150 for taiko
-        self.n50 = 0
-        self.nmiss = 0
-        self.ngeki = 0
-        self.nkatu = 0
-        self.grade = Rank.F
+        self.n300: Optional[int] = None
+        self.n100: Optional[int] = None # n150 for taiko
+        self.n50: Optional[int] = None
+        self.nmiss: Optional[int] = None
+        self.ngeki: Optional[int] = None
+        self.nkatu: Optional[int] = None
+        self.grade: Optional[Rank] = None
 
-        self.rank = 0
-        self.passed = False
-        self.perfect = False
-        self.status = SubmissionStatus.FAILED
+        self.rank: Optional[int] = None
+        self.passed: Optional[bool] = None
+        self.perfect: Optional[bool] = None
+        self.status: Optional[SubmissionStatus] = None
 
-        self.mode = GameMode.vn_std
-        self.play_time = 0
-        self.time_elapsed = 0
+        self.mode: Optional[GameMode] = None
+        self.play_time: Optional[datetime] = None
+        self.time_elapsed: Optional[datetime] = None
 
         # osu!'s client 'anticheat'.
-        self.client_flags = ClientFlags.Clean
+        self.client_flags: Optional[ClientFlags] = None
 
-        self.prev_best = None
+        self.prev_best: Optional[Score] = None
 
     @classmethod
     async def from_sql(cls, scoreid: int, sql_table: str):
@@ -280,7 +280,7 @@ class Score:
         s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
         s.mode = GameMode.from_params(int(data[15]), s.mods)
-        s.play_time = int(time.time()) # (yyMMddHHmmss)
+        s.play_time = datetime.now()
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
         s.grade = _grade if s.passed else 'F'
