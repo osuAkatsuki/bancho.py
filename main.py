@@ -51,7 +51,6 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
     st = time.time_ns()
     handler = None
 
-    cmd, path = conn.cmd, conn.path
     domain = conn.headers['Host']
 
     # match the host & uri to the correct handlers.
@@ -60,34 +59,26 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         # osu! handlers
         subdomain = domain.removesuffix('.ppy.sh')
 
-        if subdomain == 'osu':
+        if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
+            # connection to `c[e4-6]?.ppy.sh/*`
+            handler = handle_bancho
+        elif subdomain == 'osu':
             # connection to `osu.ppy.sh/*`
-
-            if cmd == 'POST':
-                # POST handlers
-                if path == '/':
-                    handler = handle_bancho
-                elif path == '/users':
-                    handler = handle_registration
-
-            elif cmd == 'GET':
-                # GET handlers
-                if path.startswith('/ss/'):
-                    handler = handle_ss # screenshots
-                elif path.startswith('/d/'):
-                    handler = handle_dl # osu!direct
-
-            # get or post
-            if path.startswith('/web/'):
+            if conn.path.startswith('/web/'):
                 handler = handle_web
-
+            elif conn.path.startswith('/ss/'):
+                handler = handle_ss
+            elif conn.path.startswith('/d/'):
+                handler = handle_dl
+            elif conn.path == '/users':
+                handler = handle_registration
         elif subdomain == 'a':
             handler = handle_avatar
 
     else:
         # non osu!-related handler
         if domain.endswith(glob.config.domain):
-            if path.startswith('/api'):
+            if conn.path.startswith('/api/'):
                 handler = handle_api # gulag!api
             else:
                 # frontend handler?
@@ -112,7 +103,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         plog(f'Request handled in {time_str}.', Ansi.LCYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 7, 4)
+    glob.version = cmyui.Version(2, 7, 5)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

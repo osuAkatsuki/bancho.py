@@ -483,8 +483,8 @@ class BanchoPacket(IntEnum):
     c_createMatch = 31
     c_joinMatch = 32
     c_partMatch = 33
-    c_lobbyJoinMatch = 34 # unused
-    c_lobbyPartMatch = 35 # unused
+    s_toggleBlockNonFriendPM = 34
+    #c_lobbyPartMatch = 35 # id probably used for something else now
     s_matchJoinSuccess = 36
     s_matchJoinFail = 37
     c_matchChangeSlot = 38
@@ -596,6 +596,13 @@ async def sendMessage(client: str, msg: str, target: str,
 async def pong() -> bytes:
     return await write(BanchoPacket.s_Pong)
 
+# packet id: 9
+async def changeUsername(old: str, new: str) -> bytes:
+    return await write(
+        BanchoPacket.s_handleIrcChangeUsername,
+        (f'{old}>>>>{new}', osuTypes.string)
+    )
+
 # packet id: 11
 async def userStats(p) -> bytes:
     return await write(
@@ -694,6 +701,10 @@ async def disposeMatch(id: int) -> bytes:
         BanchoPacket.s_disposeMatch,
         (id, osuTypes.i32)
     )
+
+# packet id: 34
+async def toggleBlockNonFriendPM() -> bytes:
+    return await write(BanchoPacket.s_toggleBlockNonFriendPM)
 
 # packet id: 36
 async def matchJoinSuccess(m: Match) -> bytes:
@@ -865,6 +876,14 @@ async def restartServer(ms: int) -> bytes:
         (ms, osuTypes.i32)
     )
 
+# packet id: 88
+async def matchInvite(p, t_name: str) -> bytes:
+    msg = f'Come join my game: {p.match.embed}.'
+    return await write(
+        BanchoPacket.s_invite,
+        ((p.name, msg, t_name, p.id), osuTypes.message)
+    )
+
 # packet id: 89
 async def channelInfoEnd() -> bytes:
     return await write(BanchoPacket.s_channelInfoEnd)
@@ -888,6 +907,22 @@ async def userSilenced(pid: int) -> bytes:
     return await write(
         BanchoPacket.s_userSilenced,
         (pid, osuTypes.i32)
+    )
+
+""" not sure why 95 & 96 exist? unused in gulag """
+
+# packet id: 95
+async def userPresenceSingle(pid):
+    return await write(
+        BanchoPacket.s_userPresenceSingle,
+        (pid, osuTypes.i32)
+    )
+
+# packet id: 96
+async def userPresenceBundle(pid_list):
+    return await write(
+        BanchoPacket.s_userPresenceBundle,
+        (pid_list, osuTypes.i32_list)
     )
 
 # packet id: 100
