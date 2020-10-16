@@ -51,7 +51,7 @@ gzip = {'web': 4, 'disk': 9}
 
 """ osu!direct """
 # the external mirror url to use.
-mirror = 'https://kacktaube.me'
+mirror = 'https://storage.ripple.moe'
 
 """ customization """
 # the menu icon displayed on

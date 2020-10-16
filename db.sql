@@ -24,6 +24,7 @@ create table users
 	pw_hash char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
+	creation_time datetime not null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_safe_uindex
@@ -133,7 +134,7 @@ create table scores_rx
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
@@ -159,7 +160,7 @@ create table scores_ap
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
@@ -185,7 +186,7 @@ create table scores_vn
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
@@ -309,9 +310,9 @@ create table mail
 
 # insert vital stuff, such as bot user & basic channels.
 
-insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
+insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
-        '_______________________my_cool_bcrypt_______________________');
+        '_______________________my_cool_bcrypt_______________________', NOW());
 
 insert into stats (id) values (1);
 

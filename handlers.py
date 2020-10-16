@@ -293,8 +293,8 @@ async def handle_registration(conn: AsyncConnection) -> None:
         # add to `users` table.
         user_id = await glob.db.execute(
             'INSERT INTO users '
-            '(name, name_safe, email, pw_hash) '
-            'VALUES (%s, %s, %s, %s)',
+            '(name, name_safe, email, pw_hash, creation_time) '
+            'VALUES (%s, %s, %s, %s, NOW())',
             [name, safe_name, email, pw_bcrypt]
         )
 
