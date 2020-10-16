@@ -44,7 +44,7 @@ class ChannelList(Sequence):
         return len(self.channels)
 
     def __contains__(self, c: Union[Channel, str]) -> bool:
-        # Allow us to either pass in the channel
+        # allow us to either pass in the channel
         # obj, or the channel name as a string.
         if isinstance(c, str):
             return c in [chan.name for chan in self.channels]
@@ -84,7 +84,7 @@ class MatchList(Sequence):
     __slots__ = ('matches',)
 
     def __init__(self):
-        self.matches = [None for _ in range(32)] # Max matches.
+        self.matches = [None for _ in range(32)] # max matches.
 
     def __getitem__(self, index: Slice) -> Optional[Match]:
         return self.matches[index]
@@ -96,7 +96,7 @@ class MatchList(Sequence):
         return m in self.matches
 
     def get_free(self) -> Optional[Match]:
-        # Return first free match.
+        # return first free match.
         for idx, m in enumerate(self.matches):
             if not m:
                 return idx
@@ -148,7 +148,7 @@ class PlayerList(Sequence):
         return self.players[index]
 
     def __contains__(self, p: Union[Player, str]) -> bool:
-        # Allow us to either pass in the player
+        # allow us to either pass in the player
         # obj, or the player name as a string.
         if isinstance(p, str):
             return p in [player.name for player in self.players]
@@ -177,20 +177,22 @@ class PlayerList(Sequence):
                 return p
 
     async def get_by_name(self, name: str, sql: bool = False) -> Player:
+        name_safe = Player.make_safe(name)
+
         for p in self.players:
-            if p.name == name:
+            if p.safe_name == name_safe:
                 return p
 
         if not sql:
-            # Don't fetch from SQL
+            # don't fetch from sql
             # if not specified.
             return
 
-        # Try to get from SQL.
+        # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, priv, silence_end '
             'FROM users WHERE name_safe = %s',
-            [name]
+            [name_safe]
         )
 
         return Player(**res, name=name) if res else None
@@ -201,11 +203,11 @@ class PlayerList(Sequence):
                 return p
 
         if not sql:
-            # Don't fetch from SQL
+            # don't fetch from sql
             # if not specified.
             return
 
-        # Try to get from SQL.
+        # try to get from sql.
         res = await glob.db.fetch(
             'SELECT name, priv, silence_end '
             'FROM users WHERE id = %s',
@@ -215,17 +217,17 @@ class PlayerList(Sequence):
         return Player(**res, id = pid) if res else None
 
     async def get_login(self, name: str, phash: str) -> Optional[Player]:
-        # Only used cached results - the user should have
+        # only used cached results - the user should have
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
 
-        # Let them pass as a string for ease of access
+        # let them pass as a string for ease of access
         phash = phash.encode()
 
         bcrypt_cache = glob.cache['bcrypt']
 
         if phash not in bcrypt_cache:
-            # User has not logged in through bancho.
+            # player has not logged in through bancho.
             return
 
         res = await glob.db.fetch(
@@ -235,11 +237,11 @@ class PlayerList(Sequence):
         )
 
         if not res:
-            # Could not find user in the DB.
+            # could not find the player in sql.
             return
 
         if bcrypt_cache[phash] != res['pw_hash']:
-            # Password bcrypts do not match.
+            # password bcrypts do not match.
             return
 
         return await self.get_by_name(name)
@@ -247,16 +249,16 @@ class PlayerList(Sequence):
     async def add(self, p: Player) -> None:
         if p in self.players:
             if glob.config.debug:
-                plog(f'{p} double-added to players list?')
+                plog(f'{p} double-added to global player list?')
             return
 
         self.players.append(p)
 
         if glob.config.debug:
-            plog(f'{p} added to players list.')
+            plog(f'{p} added to global player list.')
 
     async def remove(self, p: Player) -> None:
         self.players.remove(p)
 
         if glob.config.debug:
-            plog(f'{p} removed from players list.')
+            plog(f'{p} removed from global player list.')

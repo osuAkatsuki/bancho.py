@@ -1,7 +1,7 @@
 # Remove pre-existing tables.
 drop table if exists stats;
 drop table if exists users;
-drop table if exists user_hashes;
+drop table if exists client_hashes;
 drop table if exists scores_rx;
 drop table if exists scores_ap;
 drop table if exists scores_vn;
@@ -19,11 +19,12 @@ create table users
 		primary key,
 	name varchar(32) not null,
 	name_safe varchar(32) not null,
-	priv int default 1 null,
-	pw_hash char(60) null,
+	email varchar(254) not null,
+	priv int default 1 not null,
+	pw_hash char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
-	email varchar(254) not null,
+	creation_time datetime not null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_safe_uindex
@@ -32,24 +33,23 @@ create table users
 		unique (name)
 );
 
-create table user_hashes
+create table client_hashes
 (
-	id int auto_increment
-		primary key,
+	userid int not null,
 	osupath char(32) not null,
 	adapters char(32) not null,
 	uninstall_id char(32) not null,
 	disk_serial char(32) not null,
-	constraint user_hashes_users_id_fk
-		foreign key (id) references users (id)
-			on update cascade on delete cascade
+	latest_time datetime not null,
+	occurrences int default 0 not null,
+	primary key (userid, osupath, adapters, uninstall_id, disk_serial)
 );
 
-# With this I decided to make a naming scheme rather
-# than something nescessarily 'readable' or pretty, I
+# with this i decided to make a naming scheme rather
+# than something nescessarily 'readable' or pretty, i
 # think in practice this will be much easier to use
 # and memorize quickly compared to other schemes.
-# Syntax is simply: stat_rxmode_osumode
+# the syntax is simply: stat_rxmode_osumode
 create table stats
 (
 	id int auto_increment
@@ -77,7 +77,7 @@ create table stats
 	pp_rx_std smallint(6) default 0 not null,
 	pp_rx_taiko smallint(6) default 0 not null,
 	pp_rx_catch smallint(6) default 0 not null,
-	pp_ap_std int default 0 not null,
+	pp_ap_std smallint(6) default 0 not null,
 	plays_vn_std int default 0 not null,
 	plays_vn_taiko int default 0 not null,
 	plays_vn_catch int default 0 not null,
@@ -101,7 +101,7 @@ create table stats
 	acc_rx_std float(6,3) default 0.000 not null,
 	acc_rx_taiko float(6,3) default 0.000 not null,
 	acc_rx_catch float(6,3) default 0.000 not null,
-	acc_ap_std int default 0 not null,
+	acc_ap_std float(6,3) default 0.000 not null,
 	maxcombo_vn_std int default 0 not null,
 	maxcombo_vn_taiko int default 0 not null,
 	maxcombo_vn_catch int default 0 not null,
@@ -134,7 +134,7 @@ create table scores_rx
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
@@ -160,7 +160,7 @@ create table scores_ap
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
@@ -186,27 +186,26 @@ create table scores_vn
 	grade varchar(2) default 'N' not null,
 	status tinyint not null,
 	mode tinyint not null,
-	play_time int not null,
+	play_time datetime not null,
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
 	perfect tinyint(1) not null
 );
 
-# TODO: find the real max lengths for strings
 create table maps
 (
-	id int not null
-	    primary key,
+	server enum('osu!', 'gulag') default 'osu!' not null,
+	id int not null,
 	set_id int not null,
 	status int not null,
 	md5 char(32) not null,
 	artist varchar(128) not null,
 	title varchar(128) not null,
 	version varchar(128) not null,
-	creator varchar(128) not null,
+	creator varchar(19) not null comment 'not 100% certain on len',
 	last_update datetime not null,
-	frozen tinyint(1) default 0 null,
+	frozen tinyint(1) default 0 not null,
 	plays int default 0 not null,
 	passes int default 0 not null,
 	mode tinyint(1) default 0 not null,
@@ -216,6 +215,7 @@ create table maps
 	od float(4,2) default 0.00 not null,
 	hp float(4,2) default 0.00 not null,
 	diff float(6,3) default 0.000 not null,
+	primary key (server, id),
 	constraint maps_id_uindex
 		unique (id),
 	constraint maps_md5_uindex
@@ -224,8 +224,8 @@ create table maps
 
 create table friendships
 (
-  	user1 int(11) not null,
-	user2 int(11) not null,
+	user1 int not null,
+	user2 int not null,
 	primary key (user1, user2)
 );
 
@@ -237,7 +237,7 @@ create table channels
 	topic varchar(256) not null,
 	read_priv int default 1 not null,
 	write_priv int default 2 not null,
-	auto_join tinyint(1) default 0 null,
+	auto_join tinyint(1) default 0 not null,
 	constraint channels_name_uindex
 		unique (name)
 );
@@ -297,11 +297,22 @@ create table comments
 	primary key (id, target, userid)
 );
 
-# Insert vital stuff, such as bot user & basic channels.
+create table mail
+(
+	id int auto_increment
+		primary key,
+	from_id int not null,
+	to_id int not null,
+	msg varchar(2048) not null,
+	time int null,
+	`read` tinyint(1) default 0 not null
+);
 
-insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash)
+# insert vital stuff, such as bot user & basic channels.
+
+insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
-        '_______________________my_cool_bcrypt_______________________');
+        '_______________________my_cool_bcrypt_______________________', NOW());
 
 insert into stats (id) values (1);
 

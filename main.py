@@ -31,17 +31,15 @@ from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
-# Set CWD to /gulag.
+# set cwd to /gulag.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-# make sure gulag/.data folder exists
+# make sure gulag/.data directory exists
 if not os.path.isdir('.data'):
     os.mkdir('.data')
 
-# make sure that all data subdirectories exist
-required_folders = frozenset({'avatars', 'logs',
-                              'osu', 'osr', 'ss'})
-for p in required_folders:
+# make sure that all gulag/.data subdirectories exist
+for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
 
@@ -52,29 +50,35 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
 
     st = time.time_ns()
     handler = None
+
     domain = conn.headers['Host']
 
-    # Match the host & uri to the correct handlers.
+    # match the host & uri to the correct handlers.
+
     if domain.endswith('.ppy.sh'):
         # osu! handlers
-
         subdomain = domain.removesuffix('.ppy.sh')
 
         if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
-            handler = handle_bancho # bancho packets
+            # connection to `c[e4-6]?.ppy.sh/*`
+            handler = handle_bancho
         elif subdomain == 'osu':
-            if conn.path.startswith('/web'):
-                handler = handle_web # /web handlers
+            # connection to `osu.ppy.sh/*`
+            if conn.path.startswith('/web/'):
+                handler = handle_web
             elif conn.path.startswith('/ss/'):
-                handler = handle_ss # screenshots
+                handler = handle_ss
             elif conn.path.startswith('/d/'):
-                handler = handle_dl # osu!direct
+                handler = handle_dl
+            elif conn.path == '/users':
+                handler = handle_registration
         elif subdomain == 'a':
             handler = handle_avatar
+
     else:
         # non osu!-related handler
         if domain.endswith(glob.config.domain):
-            if conn.path.startswith('/api'):
+            if conn.path.startswith('/api/'):
                 handler = handle_api # gulag!api
             else:
                 # frontend handler?
@@ -84,10 +88,10 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
             ...
 
     if handler:
-        # We have a handler for this request.
+        # we have a handler for this request.
         await handler(conn)
     else:
-        # We have no such handler.
+        # we have no such handler.
         plog(f'Unhandled {conn.path}.', Ansi.LRED)
         await conn.send(400, b'Request handler not implemented.')
 
@@ -99,7 +103,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         plog(f'Request handled in {time_str}.', Ansi.LCYAN)
 
 async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 7, 0)
+    glob.version = cmyui.Version(2, 7, 5)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -113,14 +117,13 @@ async def run_server(addr: cmyui.Address) -> None:
     glob.db = cmyui.AsyncSQLPoolWrapper()
     await glob.db.connect(**glob.config.mysql)
 
-    # Aika
+    # create our bot & append it to the global player list.
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
     glob.bot.ping_time = 0x7fffffff
 
-    await glob.bot.stats_from_sql_full() # no need to get friends
     await glob.players.add(glob.bot)
 
-    # Add all channels from db.
+    # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
@@ -129,7 +132,7 @@ async def run_server(addr: cmyui.Address) -> None:
         async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 
-# Use uvloop if available (faster event loop).
+# use uvloop if available (faster event loop).
 if spec := importlib.util.find_spec('uvloop'):
     uvloop = importlib.util.module_from_spec(spec)
     sys.modules['uvloop'] = uvloop

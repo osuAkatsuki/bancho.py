@@ -14,7 +14,7 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 from console import plog, Ansi
 
-# Tuple of some of struct's format specifiers
+# tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
 _specifiers = (
     'b', 'B', # 8
@@ -67,64 +67,64 @@ async def read_match(data: memoryview) -> tuple[Match, int]:
     """ Read an osu! match from `data`. """
     m = Match()
 
-    # Ignore match id (i32) & inprogress (i8).
+    # ignore match id (i32) & inprogress (i8).
     offset = 3
 
-    # Read match type (no idea what this is tbh).
+    # read match type (no idea what this is tbh).
     m.type = MatchTypes(data[offset])
     offset += 1
 
-    # Read match mods.
+    # read match mods.
     m.mods = Mods.from_bytes(data[offset:offset+4], 'little')
     offset += 4
 
-    # Read match name & password.
+    # read match name & password.
     m.name, offs = await read_string(data[offset:])
     offset += offs
     m.passwd, offs = await read_string(data[offset:])
     offset += offs
 
-    # Ignore map's name.
+    # ignore map's name.
     if data[offset] == 0x0b:
         offset += sum(await read_uleb128(data[offset + 1:]))
     offset += 1
 
-    # Read beatmap information (id & md5).
+    # read beatmap information (id & md5).
     map_id = int.from_bytes(data[offset:offset+4], 'little')
     offset += 4
 
     map_md5, offs = await read_string(data[offset:])
     offset += offs
 
-    # Get beatmap object for map selected.
+    # get beatmap object for map selected.
     m.bmap = await Beatmap.from_md5(map_md5)
     if not m.bmap and map_id != (1 << 32) - 1:
-        # If they pick an unsubmitted map,
-        # just give them Vivid [Insane] lol.
+        # if they pick an unsubmitted map,
+        # just give them vivid [insane] lol.
         vivid_md5 = '1cf5b2c2edfafd055536d2cefcb89c0e'
         m.bmap = await Beatmap.from_md5(vivid_md5)
 
-    # Read slot statuses.
+    # read slot statuses.
     for s in m.slots:
         s.status = data[offset]
         offset += 1
 
-    # Read slot teams.
+    # read slot teams.
     for s in m.slots:
         s.team = Teams(data[offset])
         offset += 1
 
     for s in m.slots:
         if s.status & SlotStatus.has_player:
-            # Dont think we need this?
+            # i don't think we need this?
             offset += 4
 
-    # Read match host.
+    # read match host.
     user_id = int.from_bytes(data[offset:offset+4], 'little')
     m.host = await glob.players.get_by_id(user_id)
     offset += 4
 
-    # Read match mode, match scoring,
+    # read match mode, match scoring,
     # team type, and freemods.
     m.mode = GameMode(data[offset])
     offset += 1
@@ -135,15 +135,15 @@ async def read_match(data: memoryview) -> tuple[Match, int]:
     m.freemods = data[offset] == 1
     offset += 1
 
-    # If we're in freemods mode,
+    # if we're in freemods mode,
     # read individual slot mods.
     if m.freemods:
         for s in m.slots:
             s.mods = Mods.from_bytes(data[offset:offset+4], 'little')
             offset += 4
 
-    # Read the seed from multi.
-    # XXX: Used for mania random mod.
+    # read the seed from multi.
+    # XXX: used for mania random mod.
     m.seed = int.from_bytes(data[offset:offset+4], 'little')
     return m, offset + 4
 
@@ -158,20 +158,22 @@ async def read_scoreframe(data: memoryview) -> tuple[ScoreFrame, int]:
 
     return s, offset
 
-#async def read_mapInfoRequest(data: memoryview) -> tuple[Beatmap, int]:
-#    """ Read an osu! beatmapInfoRequest from `data`. """
-#    fnames = ids = []
+# XXX: deprecated
+# async def read_mapInfoRequest(data: memoryview) -> tuple[Beatmap, int]:
+#     """ Read an osu! beatmapInfoRequest from `data`. """
+#     fnames = ids = []
 #
-#    # Read filenames
-#    offset = 4
-#    for _ in range(int.from_bytes(data[:offset], 'little')): # filenames
-#        fname, offs = await read_string(data[offset:])
-#        offset += offs
-#        fnames.append(fname)
+#     # read filenames
+#     offset = 4
+#     for _ in range(int.from_bytes(data[:offset], 'little')): # filenames
+#         fname, offs = await read_string(data[offset:])
+#         offset += offs
+#         fnames.append(fname)
 #
-#    # Read ids
-#    ids, offs = await read_i32_list(data[offset:], long_len=True)
-#    return BeatmapInfoRequest(fnames, ids), offset + offs
+#     # read ids
+#     ids, offs = await read_i32_list(data[offset:], long_len=True)
+#     return BeatmapInfoRequest(fnames, ids), offset + offs
+
 
 class BanchoPacketReader:
     """A class dedicated to reading osu! bancho packets.
@@ -227,8 +229,8 @@ class BanchoPacketReader:
         ldata = len(self.data)
 
         if ldata < 7:
-            # Packet not even minimal legnth.
-            # End the connection immediately.
+            # packet not even minimal legnth.
+            # end the connection immediately.
             self.current_packet = None
             self._offset += ldata
             plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
@@ -242,23 +244,23 @@ class BanchoPacketReader:
     async def read(self, *types: tuple[osuTypes, ...]) -> tuple[Any, ...]:
         ret = []
 
-        # Iterate through all types to be read.
+        # iterate through all types to be read.
         for t in types:
             if t == osuTypes.string:
-                # Read a string
+                # read a string
                 data, offs = await read_string(self.data)
                 self._offset += offs
                 if data is not None:
                     ret.append(data)
             elif t in (osuTypes.i32_list, osuTypes.i32_list4l):
-                # Read an i32 list
+                # read an i32 list
                 _longlen = t == osuTypes.i32_list4l
                 data, offs = await read_i32_list(self.data, _longlen)
                 self._offset += offs
                 if data is not None:
                     ret.extend(data)
             elif t == osuTypes.channel:
-                # Read an osu! channel
+                # read an osu! channel
                 for _ in range(2):
                     data, offs = await read_string(self.data)
                     self._offset += offs
@@ -267,7 +269,7 @@ class BanchoPacketReader:
                 ret.append(int.from_bytes(self.data[:2], 'little'))
                 self._offset += 2
             elif t == osuTypes.message:
-                # Read an osu! message
+                # read an osu! message
                 for _ in range(3):
                     data, offs = await read_string(self.data)
                     self._offset += offs
@@ -276,21 +278,21 @@ class BanchoPacketReader:
                 ret.append(int.from_bytes(self.data[:4], 'little'))
                 self._offset += 4
             elif t == osuTypes.match:
-                # Read an osu! match
+                # read an osu! match
                 data, offs = await read_match(self.data)
                 self._offset += offs
                 ret.append(data)
             elif t == osuTypes.scoreframe:
-                # Read an osu! scoreframe
+                # read an osu! scoreframe
                 data, offs = await read_scoreframe(self.data)
                 self._offset += offs
             #elif t == osuTypes.mapInfoRequest:
-            #    # Read an osu! beatmapInfoRequest.
+            #    # read an osu! beatmapInfoRequest.
             #    data, offs = await read_mapInfoRequest(self.data)
             #    self._offset += offs
             #    ret.append(data)
             else:
-                # Read a normal datatype
+                # read a normal datatype
                 fmt = _specifiers[t]
                 size = struct.calcsize(fmt)
                 ret.extend(struct.unpack(fmt, self.data[:size]))
@@ -318,11 +320,12 @@ async def write_uleb128(num: int) -> bytearray:
 async def write_string(s: str) -> bytearray:
     """ Write `s` into bytes (ULEB128 & string). """
     if (length := len(s)) == 0:
+        # string is empty.
         return bytearray(b'\x00')
 
     ret = bytearray()
 
-    # String has content.
+    # string has content.
     ret.append(11)
     ret.extend(await write_uleb128(length) +
                s.encode())
@@ -357,19 +360,20 @@ async def write_channel(name: str, topic: str,
         count.to_bytes(2, 'little')
     )
 
-#async def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
-#    """ Write `maps` into bytes (osu! map info). """
-#    ret = bytearray(len(maps).to_bytes(4, 'little'))
+# XXX: deprecated
+# async def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
+#     """ Write `maps` into bytes (osu! map info). """
+#     ret = bytearray(len(maps).to_bytes(4, 'little'))
 #
-#    # Write files
-#    for m in maps:
-#        ret.extend(struct.pack('<hiiiBbbbb',
-#            m.id, m.map_id, m.set_id, m.thread_id, m.status,
-#            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
-#        ))
-#        ret.extend(await write_string(m.map_md5))
+#     # Write files
+#     for m in maps:
+#         ret.extend(struct.pack('<hiiiBbbbb',
+#             m.id, m.map_id, m.set_id, m.thread_id, m.status,
+#             m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
+#         ))
+#         ret.extend(await write_string(m.map_md5))
 #
-#    return ret
+#     return ret
 
 async def write_match(m: Match) -> bytearray:
     """ Write `m` into bytes (osu! match). """
@@ -435,10 +439,11 @@ async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
             ret.extend(await write_scoreframe(p))
         #elif p_type == osuTypes.mapInfoReply:
         #    ret.extend(await write_mapInfoReply(p))
-        else: # use struct
+        else:
+            # not a custom type, use struct to pack the data.
             ret.extend(struct.pack(f'<{_specifiers[p_type]}', p))
 
-    # Add size
+    # add size
     ret[3:3] = struct.pack('<I', len(ret) - 3)
     return ret
 
@@ -478,8 +483,8 @@ class BanchoPacket(IntEnum):
     c_createMatch = 31
     c_joinMatch = 32
     c_partMatch = 33
-    c_lobbyJoinMatch = 34 # unused
-    c_lobbyPartMatch = 35 # unused
+    s_toggleBlockNonFriendPM = 34
+    #c_lobbyPartMatch = 35 # id probably used for something else now
     s_matchJoinSuccess = 36
     s_matchJoinFail = 37
     c_matchChangeSlot = 38
@@ -591,6 +596,13 @@ async def sendMessage(client: str, msg: str, target: str,
 async def pong() -> bytes:
     return await write(BanchoPacket.s_Pong)
 
+# packet id: 9
+async def changeUsername(old: str, new: str) -> bytes:
+    return await write(
+        BanchoPacket.s_handleIrcChangeUsername,
+        (f'{old}>>>>{new}', osuTypes.string)
+    )
+
 # packet id: 11
 async def userStats(p) -> bytes:
     return await write(
@@ -689,6 +701,10 @@ async def disposeMatch(id: int) -> bytes:
         BanchoPacket.s_disposeMatch,
         (id, osuTypes.i32)
     )
+
+# packet id: 34
+async def toggleBlockNonFriendPM() -> bytes:
+    return await write(BanchoPacket.s_toggleBlockNonFriendPM)
 
 # packet id: 36
 async def matchJoinSuccess(m: Match) -> bytes:
@@ -860,6 +876,14 @@ async def restartServer(ms: int) -> bytes:
         (ms, osuTypes.i32)
     )
 
+# packet id: 88
+async def matchInvite(p, t_name: str) -> bytes:
+    msg = f'Come join my game: {p.match.embed}.'
+    return await write(
+        BanchoPacket.s_invite,
+        ((p.name, msg, t_name, p.id), osuTypes.message)
+    )
+
 # packet id: 89
 async def channelInfoEnd() -> bytes:
     return await write(BanchoPacket.s_channelInfoEnd)
@@ -883,6 +907,22 @@ async def userSilenced(pid: int) -> bytes:
     return await write(
         BanchoPacket.s_userSilenced,
         (pid, osuTypes.i32)
+    )
+
+""" not sure why 95 & 96 exist? unused in gulag """
+
+# packet id: 95
+async def userPresenceSingle(pid):
+    return await write(
+        BanchoPacket.s_userPresenceSingle,
+        (pid, osuTypes.i32)
+    )
+
+# packet id: 96
+async def userPresenceBundle(pid_list):
+    return await write(
+        BanchoPacket.s_userPresenceBundle,
+        (pid_list, osuTypes.i32_list)
     )
 
 # packet id: 100
@@ -916,9 +956,9 @@ async def accountRestricted() -> bytes:
 
 # packet id: 105
 async def RTX(msg: str) -> bytes:
-    # Bit of a weird one, sends a request to the client
+    # bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:
-    # - Black screenk, freeze game, beeps loudly.
+    # - black screen, freezes game, beeps loudly.
     # within the next 3-8 seconds at random.
     return await write(
         BanchoPacket.s_RTX,
@@ -931,7 +971,7 @@ async def matchAbort() -> bytes:
 
 # packet id: 107
 async def switchTournamentServer(ip: str) -> bytes:
-    # The client only reads the string if it's
+    # the client only reads the string if it's
     # not on the client's normal endpoints,
     # but we can send it either way xd.
     return await write(

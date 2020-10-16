@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from pp.owoppai import Owoppai
 from typing import (Sequence, Optional,
                     Union, Callable)
 import time
+import cmyui
 import random
 from collections import defaultdict
 
@@ -18,21 +20,19 @@ from constants.mods import Mods
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
 
-# Not sure if this should be in glob or not,
+# not sure if this should be in glob or not,
 # trying to think of some use cases lol..
-# Could be interesting?
 glob.commands = []
 
 def command(priv: Privileges, public: bool,
-            trigger: Optional[str] = None,
-            doc: Optional[str] = None) -> Callable:
+            trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
         glob.commands.append({
             'trigger': trigger if trigger else f'!{callback.__name__}',
             'callback': callback,
             'priv': priv,
             'public': public,
-            'doc': doc
+            'doc': callback.__doc__
         })
 
         return callback
@@ -40,22 +40,21 @@ def command(priv: Privileges, public: bool,
 
 """ User commands
 # The commands below are not considered dangerous,
-# and are granted to any unrestricted players.
+# and are granted to any unbanned players.
 """
 
-_help_doc = 'Show information of all documented commands.'
-@command(priv=Privileges.Normal, public=False, doc=_help_doc)
+@command(priv=Privileges.Normal, public=False)
 async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Show information of all documented commands."""
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
                      for cmd in glob.commands if cmd['doc']
                      if p.priv & cmd['priv'])
 
-_roll_doc = ('Roll an n-sided die where n is the '
-             'number you write (100 if empty).')
-@command(priv=Privileges.Normal, public=True, doc=_roll_doc)
+@command(priv=Privileges.Normal, public=True)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Roll an n-sided die where n is the number you write (100 if empty)."""
     if msg and msg[0].isdecimal():
-        # Cap roll to 32767 to prevent spam.
+        # cap roll to 32767 to prevent spam.
         max_roll = min(int(msg[0]), 32767)
     else:
         max_roll = 100
@@ -63,19 +62,18 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-_last_doc = 'Show information about your most recent score.'
-@command(priv=Privileges.Normal, public=True, doc=_last_doc)
+@command(priv=Privileges.Normal, public=True)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Show information about your most recent score."""
     if not (s := p.recent_scores[p.status.mode]):
         return 'No recent score found for current mode!'
 
     return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '
             f'{s.pp:.2f}pp #{s.rank}')
 
-_mapsearch_doc = ('Search map titles with '
-                  'user input as a wildcard.')
-@command(priv=Privileges.Normal, public=False, doc=_mapsearch_doc)
+@command(priv=Privileges.Normal, public=False)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Search map titles with user input as a wildcard."""
     if not (res := await glob.db.fetchall(
         'SELECT id, set_id, artist, title, version '
         'FROM maps WHERE title LIKE %s '
@@ -89,42 +87,54 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     ) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
-_mods_doc = ('Adjust the mods for a '
-             'pp-calculation request.')
-@command(priv=Privileges.Normal, public=False, doc=_mods_doc)
-async def mods(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+@command(priv=Privileges.Normal, public=False, trigger='!with')
+async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Specify custom accuracy & mod combinations with `/np`."""
     if isinstance(c, Channel) or c.id != 1:
         return 'This command can only be used in DM with Aika.'
 
     if not p.last_np:
         return 'Please /np a map first!'
 
-    msg = ''.join(msg).replace(' ', '')
-    if msg[0] == '+': # remove +
-        msg = msg[1:]
+    # +?<mods> <acc>%?
+    if 1 < len(msg) > 2:
+        return 'Invalid syntax: !with <mods/acc> ...'
 
-    mods = Mods.from_str(msg)
+    mods = acc = None
 
-    if mods not in p.last_np.pp_cache:
-        # cach
-        await p.last_np.cache_pp(mods)
+    for param in (p.strip('+%') for p in msg):
+        if cmyui._isdecimal(param, _float=True):
+            acc = float(param)
+        elif ~len(param) & 1: # len(param) % 2 == 0
+            mods = Mods.from_str(param)
+        else:
+            return 'Invalid syntax: !with <mods/acc> ...'
 
-    # Since this is a DM to the bot, we should
-    # send back a list of general PP values.
-    # TODO: !acc and !mods in commands to
-    #       modify these values :P
     _msg = [p.last_np.embed]
-    if mods:
-        _msg.append(f'{mods!r}')
+    if not mods:
+        mods = Mods.NOMOD
 
-    msg = f"{' '.join(_msg)}: " + ' | '.join(
-        f'{acc}%: {pp:.2f}pp'
-        for acc, pp in zip(
+    _msg.append(repr(mods))
+
+    if acc:
+        # they're requesting pp for specified acc value.
+        async with Owoppai(p.last_np.id, acc=acc, mods=mods) as owo:
+            await owo.calc()
+            pp_values = [(owo.acc, owo.pp)]
+    else:
+        # they're requesting pp for general accuracy values.
+        if mods not in p.last_np.pp_cache:
+            # cache
+            await p.last_np.cache_pp(mods)
+
+        pp_values = zip(
             (90, 95, 98, 99, 100),
             p.last_np.pp_cache[mods]
-        ))
+        )
 
-    return msg
+    pp_msg = ' | '.join(f'{acc:.2f}%: {pp:.2f}pp'
+                        for acc, pp in pp_values)
+    return f"{' '.join(_msg)}: {pp_msg}"
 
 """ Nominators commands
 # The commands below allow users to
@@ -136,10 +146,9 @@ status_to_id = lambda s: {
     'unrank': 0,
     'love': 5
 }[s]
-_map_doc = ("Changes the ranked status of "
-            "the most recently /np'ed map.")
-@command(priv=Privileges.Nominator, public=True, doc=_map_doc)
+@command(priv=Privileges.Nominator, public=True)
 async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Changes the ranked status of the most recently /np'ed map."""
     if len(msg) != 2 \
     or msg[0] not in ('rank', 'unrank', 'love') \
     or msg[1] not in ('set', 'map'):
@@ -155,7 +164,8 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    if msg[1] == 'set': # update whole set
+    if msg[1] == 'set':
+        # update whole set
         await glob.db.execute(
             'UPDATE maps SET status = %s '
             'WHERE set_id = %s',
@@ -167,7 +177,8 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             if cached['map'].set_id == p.last_np.set_id:
                 cached['map'].status = RankedStatus(new_status)
 
-    else: # update only map
+    else:
+        # update only map
         await glob.db.execute(
             'UPDATE maps SET status = %s '
             'WHERE id = %s',
@@ -187,50 +198,54 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # and are generally for managing players.
 """
 
-_ban_doc = "Ban a player's account, with a reason."
-@command(priv=Privileges.Admin, public=False, doc=_ban_doc)
+@command(priv=Privileges.Admin, public=False)
 async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Ban a player's account, with a reason."""
     if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+        return 'Invalid syntax: !ban <name> (reason)'
 
-    # Find any user matching (including offline).
+    # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    await t.restrict() # TODO: use reason as param?
+    reason = ' '.join(msg[1:])
+
+    await t.ban(p, reason)
     return f'{t} was banned.'
 
-_unban_doc = "Unban a player's account, with a reason."
-@command(priv=Privileges.Admin, public=False, doc=_unban_doc)
+@command(priv=Privileges.Admin, public=False)
 async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+    """Unban a player's account, with a reason."""
+    if (len_msg := len(msg)) < 2:
+        return 'Invalid syntax: !ban <name> (reason)'
 
-    # Find any user matching (including offline).
+    # find any user matching (including offline).
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    await t.unrestrict() # TODO: use reason as param?
+    reason = ' '.join(msg[2:]) if len_msg > 2 else None
+
+    await t.unban(p, reason)
     return f'{t} was unbanned.'
 
-_alert_doc = 'Send a notification to all players.'
-@command(priv=Privileges.Admin, public=False, doc=_alert_doc)
+@command(priv=Privileges.Admin, public=False)
 async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Send a notification to all players."""
     if len(msg) < 1:
         return 'Invalid syntax: !alert <msg>'
 
     glob.players.enqueue(await packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
-_alertu_doc = 'Send a notification to a specific player by name.'
-@command(trigger='!alertu', priv=Privileges.Admin, public=False, doc=_alertu_doc)
+@command(trigger='!alertu', priv=Privileges.Admin, public=False)
 async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Send a notification to a specific player by name."""
     if len(msg) < 2:
         return 'Invalid syntax: !alertu <name> <msg>'
 
@@ -245,18 +260,18 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # simply not useful for any other roles.
 """
 
-_switch_doc = 'Switch servers to a specified ip address.'
-@command(priv=Privileges.Dangerous, public=False, doc=_switch_doc)
+@command(priv=Privileges.Dangerous, public=False)
 async def switch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Switch servers to a specified ip address."""
     if len(msg) != 1:
         return 'Invalid syntax: !switch <ip>'
 
     p.enqueue(await packets.switchTournamentServer(msg[0]))
     return 'Have a nice journey..'
 
-_rtx_doc = 'Send an RTX packet with a message to a user.'
-@command(priv=Privileges.Dangerous, public=False, doc=_rtx_doc)
+@command(priv=Privileges.Dangerous, public=False)
 async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Send an RTX packet with a message to a user."""
     if len(msg) != 2:
         return 'Invalid syntax: !rtx <name> <msg>'
 
@@ -266,10 +281,10 @@ async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     t.enqueue(await packets.RTX(msg[1]))
     return 'pong'
 
-# XXX: Not very useful, mostly just for testing/fun.
-_spack_doc = 'Send a specific (empty) packet by id to a player.'
-@command(trigger='!spack', priv=Privileges.Dangerous, public=False, doc=_spack_doc)
+# XXX: not very useful, mostly just for testing/fun.
+@command(trigger='!spack', priv=Privileges.Dangerous, public=False)
 async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Send a specific (empty) packet by id to a player."""
     if len(msg) < 2 or not msg[-1].isdecimal():
         return 'Invalid syntax: !spack <name> <packetid>'
 
@@ -280,9 +295,9 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
     t.enqueue(await packets.write(packet))
     return f'Wrote {packet} to {t}.'
 
-_debug_doc = "Toggle the console's debug setting."
-@command(priv=Privileges.Dangerous, public=False, doc=_debug_doc)
+@command(priv=Privileges.Dangerous, public=False)
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Toggle the console's debug setting."""
     glob.config.debug = not glob.config.debug
 
     return f"Toggled {'on' if glob.config.debug else 'off'}."
@@ -298,13 +313,13 @@ str_to_priv = lambda p: defaultdict(lambda: None, {
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
 })[p]
-_setpriv_doc = 'Set privileges for a player (by name).'
-@command(priv=Privileges.Dangerous, public=False, doc=_setpriv_doc)
+@command(priv=Privileges.Dangerous, public=False)
 async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Set privileges for a player (by name)."""
     if len(msg) < 2:
         return 'Invalid syntax: !setpriv <name> <role1 | role2 | ...>'
 
-    # A mess that gets each unique privilege out of msg.
+    # a mess that gets each unique privilege out of msg.
     # TODO: rewrite to be at least a bit more readable..
     priv = [str_to_priv(i) for i in set(''.join(msg[1:]).replace(' ', '').lower().split('|'))]
     if any(x is None for x in priv):
@@ -328,27 +343,35 @@ async def menu(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osu://dl/{opt_id} option]'
 
-# XXX: This actually comes in handy sometimes, I initially
-# wrote it completely as a joke, but I might keep it in for
+# XXX: this actually comes in handy sometimes, i initially
+# wrote it completely as a joke, but i might keep it in for
 # devs.. Comes in handy when debugging to be able to run something
-# like `!ev print(await glob.players.get_by_name('cmyui').status.action)`
+# like `!ev return await glob.players.get_by_name('cmyui').status.action`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
 async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    lines = '\n '.join(' '.join(msg).split('\\n'))
-    try: # pinnacle of the gulag
-        exec(f"async def __ex():\n {lines}")
-        ret = await locals()['__ex']()
-        return ret if ret else 'Success'
+    # create the new coroutine definition as a string
+    # with the lines from our message (split by '\n').
+    lines = ' '.join(msg).split(r'\n')
+    definition = '\n '.join(['async def __ex():'] + lines)
+
+    try:
+        # define, and run the coroutine
+        exec(definition)
+        ret = await locals()['__ex']() # type: ignore
     except Exception as e:
+        # code was invalid, return
+        # the error in the osu! chat.
         return str(e)
+
+    return ret if ret else 'Success'
 
 """ Multiplayer commands
 # The commands below are specifically for
 # multiplayer match management.
 """
 
-# Start a match.
+# start a match.
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     for s in m.slots:
         if s.status & SlotStatus.has_player \
@@ -359,7 +382,7 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(await packets.matchStart(m))
     return 'Good luck!'
 
-# Abort a match in progress.
+# abort a match in progress.
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not m.in_progress:
         return 'Abort what?'
@@ -373,7 +396,7 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(await packets.matchAbort())
     return 'Match aborted.'
 
-# Force a user into a multiplayer match by username.
+# force a player into a multiplayer match by name.
 async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !mp force <name>'
@@ -384,7 +407,7 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     await t.join_match(m)
     return 'Welcome.'
 
-# Set the current beatmap (by id).
+# set the current beatmap (by id).
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
@@ -414,52 +437,51 @@ _mp_triggers = defaultdict(lambda: None, {
         'priv': Privileges.Normal
     }
 })
-_mp_doc = ('A parent command to subcommands '
-           'for multiplayer match manipulation.')
-@command(trigger='!mp', priv=Privileges.Normal, public=True, doc=_mp_doc)
+
+@command(trigger='!mp', priv=Privileges.Normal, public=True)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    # Used outside of a multiplayer match.
+    """A parent command to subcommands for multiplayer match manipulation."""
+    # used outside of a multiplayer match.
     if not (c._name.startswith('#multi_') and (m := p.match)):
         return
 
-    # No subcommand specified, send back a list.
+    # no subcommand specified, send back a list.
     if not msg:
         # TODO: maybe filter to only the commands they can actually use?
         return f"Available subcommands: {', '.join(_mp_triggers.keys())}."
 
-    # No valid subcommands triggered.
+    # no valid subcommands triggered.
     if not (trigger := _mp_triggers[msg[0]]):
         return 'Invalid subcommand.'
 
-    # Missing privileges to use mp commands.
+    # missing privileges to use mp commands.
     if not (p == m.host or p.priv & Privileges.Tournament):
         return
 
-    # Missing privileges to run this specific mp command.
+    # missing privileges to run this specific mp command.
     if not p.priv & trigger['priv']:
         return
 
-    # Forward the params to the specific command.
-    # XXX: Here, rather than sending the channel
+    # forward the params to the specific command.
+    # XXX: here, rather than sending the channel
     # as the 2nd arg, we'll send the match obj.
-    # This is used much more frequently, and we've
+    # this is used much more frequently, and we've
     # already asserted than p.match.chat == c anyways.
     return await trigger['callback'](p, m, msg[1:])
 
 async def process_commands(p: Player, t: Messageable,
                            msg: str) -> Optional[CommandResponse]:
-    # Basic commands setup for now.
-    # Response is either a CommandResponse if we hit a command,
+    # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
     st = time.time_ns()
     trigger, *args = msg.strip().split(' ')
 
     for cmd in glob.commands:
         if trigger == cmd['trigger'] and p.priv & cmd['priv']:
-            # Command found & we have privileges - run it.
+            # command found & we have privileges - run it.
             if (res := await cmd['callback'](p, t, args)):
-                # Returned a message for us to send back.
-                # Print elapsed time in milliseconds.
+                # returned a message for us to send back.
+                # print elapsed time in milliseconds.
                 time_taken = (time.time_ns() - st) / 1000000
 
                 return {

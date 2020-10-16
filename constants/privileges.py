@@ -6,30 +6,31 @@ __all__ = ('Privileges', 'BanchoPrivileges')
 
 @unique
 class Privileges(IntFlag):
-    """A class to represent user privileges server-side.
+    """\
+    A class to represent user privileges server-side.
     Gaps inbetween groups are left for future changes.
     """
 
-    # A normal vanilla user, access intended for all users.
-    # XXX: If a user does not have this bit, they are banned.
-    Normal      = 1 << 0
+    # privileges intended for all normal players.
+    Normal      = 1 << 0 # is an unbanned player.
+    Verified    = 1 << 1 # has logged in to the server in-game.
 
-    # Has bypass to low-ceiling anticheat measures (trusted).
-    Whitelisted = 1 << 1
+    # has bypass to low-ceiling anticheat measures (trusted).
+    Whitelisted = 1 << 2
 
-    # Donation tiers, receives some extra benefits.
+    # donation tiers, receives some extra benefits.
     Supporter   = 1 << 4
     Premium     = 1 << 5
 
-    # Notable users, receives some extra benefits.
+    # notable users, receives some extra benefits.
     Alumni      = 1 << 7
 
-    # Staff permissions, able to manage server state.
-    Tournament  = 1 << 10 # Able to manage match state without host.
-    Nominator   = 1 << 11 # Able to manage maps ranked status.
-    Mod         = 1 << 12 # Able to manage users (level 1).
-    Admin       = 1 << 13 # Able to manage users (level 2).
-    Dangerous   = 1 << 14 # Able to manage full server state.
+    # staff permissions, able to manage server state.
+    Tournament  = 1 << 10 # able to manage match state without host.
+    Nominator   = 1 << 11 # able to manage maps ranked status.
+    Mod         = 1 << 12 # able to manage users (level 1).
+    Admin       = 1 << 13 # able to manage users (level 2).
+    Dangerous   = 1 << 14 # able to manage full server state.
 
     Donator = Supporter | Premium
     Staff = Mod | Admin | Dangerous
@@ -41,4 +42,4 @@ class BanchoPrivileges(IntFlag):
     Supporter  = 1 << 2
     Owner      = 1 << 3
     Developer  = 1 << 4
-    Tournament = 1 << 5 # NOTE: Not used in comms w/ osu!
+    Tournament = 1 << 5 # NOTE: not used in communications with osu! client

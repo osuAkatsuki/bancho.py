@@ -51,7 +51,7 @@ gzip = {'web': 4, 'disk': 9}
 
 """ osu!direct """
 # the external mirror url to use.
-mirror = 'https://kacktaube.me'
+mirror = 'https://storage.ripple.moe'
 
 """ customization """
 # the menu icon displayed on
@@ -61,17 +61,25 @@ menu_icon = (
     'https://akatsuki.pw' # onclick URL
 )
 
+# seasonal backgrounds to be displayed
+seasonal_bgs = (
+    'https://akatsuki.pw/static/flower.png',
+)
+
 # in-game bot command prefix.
 command_prefix = '!'
 
-# you can also 'hardcode' usernames here
-# to be blocked regardless of their rank.
-# TODO: retrieve the names of the top ~100
-#       (configurable) players on bancho, and
-#       auto-add them to this set on startup?
+# you can hardcode usernames & passwords here to be blocked
+# from usage at registration and other vectors to chage them.
+# TODO: retrieve the names of the top ~100 (configurable)
+# players on bancho, and auto-add them to this set on startup?
 disallowed_names = {
     'cookiezi', 'rrtyui',
     'hvick225', 'qsc20010'
+}
+
+disallowed_passwords = {
+    'password', 'minilamp'
 }
 
 """ caching settings """

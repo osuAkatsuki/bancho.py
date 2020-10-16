@@ -56,7 +56,7 @@ class Channel:
                  'auto_join', 'instance')
 
     def __init__(self, *args, **kwargs) -> None:
-        # Use this attribute whenever you need
+        # use this attribute whenever you need
         # the 'real' name and not the wrapped one.
         # (not replaced for #multiplayer/#spectator)
         # self.name should be used whenever
@@ -100,7 +100,7 @@ class Channel:
 
 
     async def send_selective(self, client, msg: str, targets) -> None:
-        # Accept a set of players to enqueue the data to.
+        """Accept a set of players to enqueue the data to."""
         for p in targets:
             p.enqueue(await packets.sendMessage(
                 client = client.name,
@@ -114,7 +114,7 @@ class Channel:
 
     async def remove(self, p) -> None:
         if len(self.players) == 1 and self.instance:
-            # If it's an instance channel and this
+            # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.
             await glob.channels.remove(self)
@@ -122,8 +122,7 @@ class Channel:
             self.players.remove(p)
 
     def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
-        # Enqueue bytes to all players in a channel.
-        # Usually just used for messages.. perhaps more?
+        """Enqueue bytes to all players in a channel."""
         for p in self.players:
             if p.id in immune:
                 continue

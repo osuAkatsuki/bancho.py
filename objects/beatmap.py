@@ -14,7 +14,7 @@ from constants.mods import Mods
 
 __all__ = 'RankedStatus', 'Beatmap'
 
-# For some ungodly reason, different values are used to
+# for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
 # This drives me and probably everyone else pretty insane,
 # but we have nothing to do but deal with it B).
@@ -235,9 +235,9 @@ class Beatmap:
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
 
-        # Try to get from sql.
+        # try to get from sql.
         if (m := await cls.from_bid_sql(bid)):
-            # Add the map to our cache.
+            # add the map to our cache.
             if m.md5 not in glob.cache['beatmap']:
                 glob.cache['beatmap'][m.md5] = {
                     'timeout': time.time() + glob.config.map_cache_timeout,
@@ -266,37 +266,37 @@ class Beatmap:
     @classmethod
     async def from_md5(cls, md5: str, set_id: Optional[int] = None):
         """Create a beatmap object from sql or osu!api using it's md5."""
-        # Check if the map is in the cache.
+        # check if the map is in the cache.
         if md5 in glob.cache['beatmap']:
-            # Check if our cached result is within timeout.
+            # check if our cached result is within timeout.
             cached = glob.cache['beatmap'][md5]
 
             if (time.time() - cached['timeout']) <= 0:
-                # Cache is within timeout.
+                # cache is within timeout.
                 return cached['map']
 
-            # Cache is outdated and should be deleted.
+            # cache is outdated and should be deleted.
             del glob.cache['beatmap'][md5]
 
-        # Check if the map is in the unsubmitted cache.
+        # check if the map is in the unsubmitted cache.
         if md5 in glob.cache['unsubmitted']:
             return
 
-        # Try to get from sql.
+        # try to get from sql.
         if not (m := await cls.from_md5_sql(md5)):
             # Map not found in sql.
 
-            # If the user has no API key, we cannot make
+            # if the user has no api key, we cannot make
             # any further attempts to serve them the map.
             if not glob.config.osu_api_key:
                 plog('Fetching beatmap requires osu!api key.', Ansi.LRED)
                 return
 
-            # Try to get from the osu!api.
+            # try to get from the osu!api.
             if not (m := await cls.from_md5_osuapi(md5, set_id)):
                 return
 
-        # Save our map to the cache.
+        # save our map to the cache.
         glob.cache['beatmap'][md5] = {
             'timeout': (glob.config.map_cache_timeout +
                         time.time()),
@@ -320,16 +320,19 @@ class Beatmap:
     @classmethod
     async def from_md5_osuapi(cls, md5: str,
                               set_id: Optional[int] = None):
-        if set_id: # Cache the whole set's data.
+        if set_id:
+            # cache the whole set's data.
+            url = 'https://old.ppy.sh/api/get_beatmaps'
             params = {'k': glob.config.osu_api_key, 's': set_id}
-            async with glob.http.get(f'https://old.ppy.sh/api/get_beatmaps', params=params) as resp:
+
+            async with glob.http.get(url, params=params) as resp:
                 if not resp or resp.status != 200 or await resp.read() == b'[]':
                     return # osu!api request failed.
 
                 apidata = await resp.json()
 
             if not apidata:
-                # Map doesn't exist by set id.
+                # map doesn't exist by set id.
                 return
 
             res = await glob.db.fetchall(
@@ -338,52 +341,52 @@ class Beatmap:
                 [set_id], _dict=True
             )
 
-            # Get a tuple of the ones we
+            # get a tuple of the ones we
             # currently have in our database.
             current_data = {r['id']: {k: r[k] for k in set(r) - {'id'}}
                             for r in res}
 
             for bmap in apidata:
-                # Check if we have the map in our database already.
+                # check if we have the map in our database already.
                 if (map_id := int(bmap['beatmap_id'])) in current_data:
-                    # If we do have the map, check if the osu!api
+                    # if we do have the map, check if the osu!api
                     # is sending us a newer version of the map.
 
-                    # Convert the map's last_update time to datetime.
+                    # convert the map's last_update time to datetime.
                     date_format = '%Y-%m-%d %H:%M:%S'
                     bmap['last_update'] = datetime.strptime(
                         bmap['last_update'], date_format
                     )
 
                     if bmap['last_update'] > current_data[map_id]['last_update']:
-                        # The map we're receiving is indeed newer, check if the
-                        # map's status is frozen in the db - if so, update the
+                        # the map we're receiving is indeed newer, check if the
+                        # map's status is frozen in sql - if so, update the
                         # api's value before inserting it into the database.
                         api_status = RankedStatus.from_osuapi(int(bmap['approved']))
 
                         if current_data[map_id]['frozen'] \
                         and api_status != current_data[map_id]['status']:
-                            # Keep the ranked status of maps through updates,
+                            # keep the ranked status of maps through updates,
                             # if we've specified to (by 'freezing' it).
                             bmap['approved'] = current_data[map_id]['status']
                             bmap['frozen'] = 1
                         else:
-                            # Map is not frozen, update
+                            # map is not frozen, update
                             # it's status from the osu!api.
                             bmap['approved'] = api_status
                             bmap['frozen'] = 0
                     else:
-                        # Map is not newer than our current
+                        # map is not newer than our current
                         # version, simply skip this map.
                         continue
                 else:
-                    # Map not found in our database.
-                    # Copy the status from the osu!api,
+                    # map not found in our database.
+                    # copy the status from the osu!api,
                     # and do not freeze it's ranked status.
                     bmap['approved'] = RankedStatus.from_osuapi(int(bmap['approved']))
                     bmap['frozen'] = 0
 
-                # Since these are all straight off the osu!api,
+                # since these are all straight off the osu!api,
                 # they will always be the most up to date.
                 await glob.db.execute(
                     'REPLACE INTO maps (id, set_id, status, '
@@ -406,8 +409,10 @@ class Beatmap:
             plog(f'Retrieved full set {set_id} from the osu!api.', Ansi.LGREEN)
             return await cls.from_md5_sql(md5)
 
+        url = 'https://old.ppy.sh/api/get_beatmaps'
         params = {'k': glob.config.osu_api_key, 'h': md5}
-        async with glob.http.get(f'https://old.ppy.sh/api/get_beatmaps', params=params) as resp:
+
+        async with glob.http.get(url, params=params) as resp:
             if not resp or resp.status != 200 or await resp.read() == b'[]':
                 return # osu!api request failed.
 
@@ -446,19 +451,19 @@ class Beatmap:
         )
 
         if res:
-            # If a map with this ID exists, check if the api
+            # if a map with this id exists, check if the api
             # data if newer than the data we have server-side;
             # the map may have been updated by its creator.
             if m.last_update > res['last_update']:
                 if res['frozen'] and m.status != res['status']:
-                    # Keep the ranked status of maps through updates,
+                    # keep the ranked status of maps through updates,
                     # if we've specified to (by 'freezing' it).
                     m.status = res['status']
                     m.frozen = res['frozen']
 
                 await m.save_to_sql()
         else:
-            # New map, just save to DB.
+            # new map, just save to sql.
             await m.save_to_sql()
 
         plog(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)

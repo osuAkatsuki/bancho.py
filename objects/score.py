@@ -1,8 +1,8 @@
 
 from typing import Optional
 from enum import IntEnum, unique
-import time
-import base64
+from datetime import datetime
+from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
 
 from pp.owoppai import Owoppai
@@ -126,8 +126,8 @@ class Score:
     mode: `GameMode`
         The game mode of the score.
 
-    play_time: `int`
-        A UNIX timestamp of the time of score submission.
+    play_time: `datetime`
+        A datetime obj of the time of score submission.
 
     time_elapsed: `int`
         The total elapsed time of the play (in milliseconds).
@@ -151,40 +151,40 @@ class Score:
     )
 
     def __init__(self):
-        self.id = 0
+        self.id: Optional[int] = None
 
         self.bmap: Optional[Beatmap] = None
         self.player: Optional[Player] = None
 
-        self.pp = 0.0
-        self.score = 0
-        self.max_combo = 0
-        self.mods = Mods.NOMOD
+        self.pp: Optional[float] = None
+        self.score: Optional[int] = None
+        self.max_combo: Optional[int] = None
+        self.mods: Optional[Mods] = None
 
-        self.acc = 0.0
+        self.acc: Optional[float] = None
         # TODO: perhaps abstract these differently
         # since they're mode dependant? feels weird..
-        self.n300 = 0
-        self.n100 = 0 # n150 for taiko
-        self.n50 = 0
-        self.nmiss = 0
-        self.ngeki = 0
-        self.nkatu = 0
-        self.grade = Rank.F
+        self.n300: Optional[int] = None
+        self.n100: Optional[int] = None # n150 for taiko
+        self.n50: Optional[int] = None
+        self.nmiss: Optional[int] = None
+        self.ngeki: Optional[int] = None
+        self.nkatu: Optional[int] = None
+        self.grade: Optional[Rank] = None
 
-        self.rank = 0
-        self.passed = False
-        self.perfect = False
-        self.status = SubmissionStatus.FAILED
+        self.rank: Optional[int] = None
+        self.passed: Optional[bool] = None
+        self.perfect: Optional[bool] = None
+        self.status: Optional[SubmissionStatus] = None
 
-        self.mode = GameMode.vn_std
-        self.play_time = 0
-        self.time_elapsed = 0
+        self.mode: Optional[GameMode] = None
+        self.play_time: Optional[datetime] = None
+        self.time_elapsed: Optional[datetime] = None
 
         # osu!'s client 'anticheat'.
-        self.client_flags = ClientFlags.Clean
+        self.client_flags: Optional[ClientFlags] = None
 
-        self.prev_best = None
+        self.prev_best: Optional[Score] = None
 
     @classmethod
     async def from_sql(cls, scoreid: int, sql_table: str):
@@ -228,18 +228,17 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data_enc: str, iv: str,
+    async def from_submission(cls, data_b64: str, iv_b64: str,
                               osu_ver: str, phash: str) -> None:
         """Create a score object from an osu! submission string."""
-        cbc = RijndaelCbc(
-            f'osu!-scoreburgr---------{osu_ver}',
-            iv = base64.b64decode(iv).decode('latin_1'),
-            padding = ZeroPadding(32), block_size =  32
-        )
+        iv = b64decode(iv_b64).decode('latin_1')
+        data_aes = b64decode(data_b64).decode('latin_1')
 
-        data = cbc.decrypt(
-            base64.b64decode(data_enc).decode('latin_1')
-        ).decode().split(':')
+        aes_key = f'osu!-scoreburgr---------{osu_ver}'
+        cbc = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
+
+        # score data is delimited by colons (:).
+        data = cbc.decrypt(data_aes).decode().split(':')
 
         if len(data) != 18:
             plog('Received an invalid score submission.', Ansi.LRED)
@@ -252,12 +251,12 @@ class Score:
 
         pname = data[1].rstrip() # why does osu! make me rstrip lol
 
-        # Get the map & player for the score.
+        # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
         s.player = await glob.players.get_login(pname, phash)
 
         if not s.player:
-            # Return the obj with an empty player to
+            # return the obj with an empty player to
             # determine whether the score faield to
             # be parsed vs. the user could not be found
             # logged in (we want to not send a reply to
@@ -266,9 +265,9 @@ class Score:
             return s
 
         # XXX: unused idx 2: online score checksum
-        # Perhaps will use to improve security at some point?
+        # perhaps will use to improve security at some point?
 
-        # Ensure all ints are safe to cast.
+        # ensure all ints are safe to cast.
         if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
             plog('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
@@ -281,17 +280,17 @@ class Score:
         s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
         s.mode = GameMode.from_params(int(data[15]), s.mods)
-        s.play_time = int(time.time()) # (yyMMddHHmmss)
+        s.play_time = datetime.now()
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
         s.grade = _grade if s.passed else 'F'
 
-        # All data read from submission.
-        # Now we can calculate things based on our data.
+        # all data read from submission.
+        # now we can calculate things based on our data.
         s.calc_accuracy()
 
         if s.bmap:
-            # Ignore SR for now.
+            # ignore sr for now.
             s.pp = (await s.calc_diff())[0]
 
             await s.calc_status()
@@ -322,15 +321,15 @@ class Score:
 
         return res['c'] + 1 if res else 1
 
-    # Could be staticmethod?
-    # We'll see after some usage of gulag
+    # could be staticmethod?
+    # we'll see after some usage of gulag
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
         if mode_vn not in (0, 1):
-            # Currently only std and taiko are supported,
+            # currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
