@@ -180,7 +180,7 @@ class BanchoPacketReader:
 
     Attributes
     -----------
-    _data: `memoryview`
+    _buf: `memoryview`
         Internal buffer of the reader.
         XXX: Use the `data` property to have data
              starting from the current internal offset.
@@ -202,11 +202,11 @@ class BanchoPacketReader:
     data: `bytearray`
         The data starting from the current offset.
     """
-    __slots__ = ('_data', '_offset',
+    __slots__ = ('_buf', '_offset',
                  'current_packet', 'length')
 
-    def __init__(self, data): # take request body in bytes form as param
-        self._data = memoryview(data)
+    def __init__(self, data: bytes): # `data` is the request body
+        self._buf = memoryview(data)
         self._offset = 0
 
         self.current_packet = None
@@ -214,10 +214,10 @@ class BanchoPacketReader:
 
     @property
     def data(self) -> memoryview:
-        return self._data[self._offset:]
+        return self._buf[self._offset:]
 
     def empty(self) -> bool:
-        return self._offset >= len(self._data)
+        return self._offset >= len(self._buf)
 
     def ignore(self, count: int) -> None:
         self._offset += count
@@ -319,18 +319,14 @@ async def write_uleb128(num: int) -> bytearray:
 
 async def write_string(s: str) -> bytearray:
     """ Write `s` into bytes (ULEB128 & string). """
-    if (length := len(s)) == 0:
-        # string is empty.
-        return bytearray(b'\x00')
+    if (length := len(s)) > 0:
+        # non-empty string
+        data = b'\x0b' + await write_uleb128(length) + s.encode()
+    else:
+        # empty string
+        data = b'\x00'
 
-    ret = bytearray()
-
-    # string has content.
-    ret.append(11)
-    ret.extend(await write_uleb128(length) +
-               s.encode())
-
-    return ret
+    return bytearray(data)
 
 async def write_i32_list(l: tuple[int, ...]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
@@ -834,6 +830,7 @@ async def mainMenuIcon() -> bytes:
     )
 
 # packet id: 80
+# NOTE: deprecated
 async def monitor() -> bytes:
     # this is an older (now removed) 'anticheat' feature of the osu!
     # client; basically, it would do some checks (most likely for aqn),
@@ -912,14 +909,14 @@ async def userSilenced(pid: int) -> bytes:
 """ not sure why 95 & 96 exist? unused in gulag """
 
 # packet id: 95
-async def userPresenceSingle(pid):
+async def userPresenceSingle(pid: int) -> bytes:
     return await write(
         BanchoPacket.s_userPresenceSingle,
         (pid, osuTypes.i32)
     )
 
 # packet id: 96
-async def userPresenceBundle(pid_list):
+async def userPresenceBundle(pid_list: list[int]) -> bytes:
     return await write(
         BanchoPacket.s_userPresenceBundle,
         (pid_list, osuTypes.i32_list)
@@ -955,6 +952,7 @@ async def accountRestricted() -> bytes:
     return await write(BanchoPacket.s_accountRestricted)
 
 # packet id: 105
+# NOTE: deprecated
 async def RTX(msg: str) -> bytes:
     # bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:

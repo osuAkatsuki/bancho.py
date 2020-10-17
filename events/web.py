@@ -1227,7 +1227,7 @@ async def osuMarkAsRead(conn: AsyncConnection) -> Optional[bytes]:
     if not (p := await glob.players.get_login(pname, phash)):
         return
 
-    if not (t_name := conn.args['channel']):
+    if not (t_name := unquote(conn.args['channel'])):
         return b'' # no channel specified
 
     if not (t := await glob.players.get_by_name(t_name, sql=True)):

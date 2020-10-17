@@ -127,7 +127,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     resp = bytes(resp)
 
     if glob.config.debug:
-        plog(resp, Ansi.LGREEN)
+        plog(f'Response: {resp}', Ansi.LGREEN)
 
     # compress with gzip if enabled.
     if glob.config.gzip['web'] > 0:

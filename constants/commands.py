@@ -45,7 +45,7 @@ def command(priv: Privileges, public: bool,
 
 @command(priv=Privileges.Normal, public=False)
 async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    """Show information of all documented commands."""
+    """Show information of all documented commands `p` can use."""
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
                      for cmd in glob.commands if cmd['doc']
                      if p.priv & cmd['priv'])
@@ -269,17 +269,18 @@ async def switch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     p.enqueue(await packets.switchTournamentServer(msg[0]))
     return 'Have a nice journey..'
 
-@command(priv=Privileges.Dangerous, public=False)
-async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    """Send an RTX packet with a message to a user."""
-    if len(msg) != 2:
-        return 'Invalid syntax: !rtx <name> <msg>'
-
-    if not (t := await glob.players.get_by_name(msg[0])):
-        return 'Could not find a user by that name.'
-
-    t.enqueue(await packets.RTX(msg[1]))
-    return 'pong'
+# rest in peace rtx - oct 2020 :candle:
+#@command(priv=Privileges.Dangerous, public=False)
+#async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+#    """Send an RTX packet with a message to a user."""
+#    if len(msg) != 2:
+#        return 'Invalid syntax: !rtx <name> <msg>'
+#
+#    if not (t := await glob.players.get_by_name(msg[0])):
+#        return 'Could not find a user by that name.'
+#
+#    t.enqueue(await packets.RTX(msg[1]))
+#    return 'pong'
 
 # XXX: not very useful, mostly just for testing/fun.
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False)
@@ -293,7 +294,7 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
 
     packet = packets.BanchoPacket(int(msg[-1]))
     t.enqueue(await packets.write(packet))
-    return f'Wrote {packet} to {t}.'
+    return f'Wrote {packet!r} to {t}.'
 
 @command(priv=Privileges.Dangerous, public=False)
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
