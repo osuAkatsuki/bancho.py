@@ -41,7 +41,7 @@ This is simply the result of my programming values and time thrown together; I'd
 ## Requirements
 
 - Python 3.9 & pip
-- MySQL & Nginx & build-essential (all installed in setup below)
+- MySQL & Nginx & openssl & build-essential (all installed in setup below)
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
 - An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full feature-set.
 
@@ -73,11 +73,11 @@ python3.9 -m pip install -r requirements.txt
 # Import the database structure.
 # NOTE: create an empty database before doing this.
 # This will also insert basic osu! channels & the bot.
-mysql -u your_sql_username -p your_db_name < db.sql
+mysql -u your_sql_username -p your_db_name < external/db.sql
 
 # Add gulag's nginx config to your nginx/sites-enabled.
 # NOTE: default unix socket location is `/tmp/gulag.sock`.
-sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
+sudo ln external/nginx.conf /etc/nginx/sites-enabled/gulag.conf
 
 # Reload nginx to put the reverse proxy online.
 sudo nginx -s reload
