@@ -17,7 +17,7 @@ class Ansi(IntEnum):
     WHITE   = 37
 
     # light colours
-    GRAY          = 90
+    GRAY     = 90
     LRED     = 91
     LGREEN   = 92
     LYELLOW  = 93
