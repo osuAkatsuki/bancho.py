@@ -6,6 +6,7 @@ import packets
 
 __all__ = 'Channel',
 
+
 class Channel:
     """A class to represent a chat channel.
 
@@ -92,21 +93,20 @@ class Channel:
 
     async def send(self, client, msg: str, to_client: bool = False) -> None:
         self.enqueue(await packets.sendMessage(
-            client = client.name,
-            msg = msg,
-            target = self.name,
-            client_id = client.id
-        ), immune = () if to_client else (client.id,))
-
+            client=client.name,
+            msg=msg,
+            target=self.name,
+            client_id=client.id
+        ), immune=() if to_client else (client.id,))
 
     async def send_selective(self, client, msg: str, targets) -> None:
         """Accept a set of players to enqueue the data to."""
         for p in targets:
             p.enqueue(await packets.sendMessage(
-                client = client.name,
-                msg = msg,
-                target = self.name,
-                client_id = client.id
+                client=client.name,
+                msg=msg,
+                target=self.name,
+                client_id=client.id
             ))
 
     def append(self, p) -> None:

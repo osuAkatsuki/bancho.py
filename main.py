@@ -17,7 +17,7 @@ import asyncio
 import importlib
 import aiohttp
 import signal
-import orjson # faster & more accurate than stdlib json
+import orjson  # faster & more accurate than stdlib json
 import time
 import sys
 import os
@@ -43,6 +43,7 @@ if not os.path.isdir('.data'):
 for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
+
 
 async def handle_conn(conn: AsyncConnection) -> None:
     if 'Host' not in conn.headers:
@@ -80,7 +81,7 @@ async def handle_conn(conn: AsyncConnection) -> None:
         # non osu!-related handler
         if domain.endswith(glob.config.domain):
             if conn.path.startswith('/api/'):
-                handler = handle_api # gulag!api
+                handler = handle_api  # gulag!api
             else:
                 # frontend handler?
                 ...
@@ -97,13 +98,15 @@ async def handle_conn(conn: AsyncConnection) -> None:
         await conn.send(400, b'Request handler not implemented.')
 
     if glob.config.debug:
-        time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
+        time_taken = (time.time_ns() - st) / 1000  # nanos -> micros
         time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
-               else f'{time_taken / 1000:.2f}ms')
+                    else f'{time_taken / 1000:.2f}ms')
 
         log(f'Request handled in {time_str}.', Ansi.LCYAN)
 
 PING_TIMEOUT = 300000 // 10
+
+
 async def disconnect_inactive() -> None:
     while True:
         ctime = time.time()
@@ -115,6 +118,7 @@ async def disconnect_inactive() -> None:
         # run the loop every 30
         # seconds indefinitely
         await asyncio.sleep(30)
+
 
 async def run_server(addr: Address) -> None:
     glob.version = Version(2, 7, 7)
@@ -132,7 +136,7 @@ async def run_server(addr: Address) -> None:
     await glob.db.connect(**glob.config.mysql)
 
     # create our bot & append it to the global player list.
-    glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
+    glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
     glob.bot.last_receive_time = 0x7fffffff
 
     glob.players.add(glob.bot)

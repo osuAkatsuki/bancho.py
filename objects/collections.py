@@ -19,6 +19,7 @@ __all__ = (
 
 Slice = Union[int, slice]
 
+
 class ChannelList(Sequence):
     """A class to represent all chat channels on the gulag.
 
@@ -72,6 +73,7 @@ class ChannelList(Sequence):
         if glob.config.debug:
             log(f'{c} removed from channels list.')
 
+
 class MatchList(Sequence):
     """A class to represent all multiplayer matches on the gulag.
 
@@ -84,7 +86,7 @@ class MatchList(Sequence):
     __slots__ = ('matches',)
 
     def __init__(self):
-        self.matches = [None for _ in range(32)] # max matches.
+        self.matches = [None for _ in range(32)]  # max matches.
 
     def __getitem__(self, index: Slice) -> Optional[Match]:
         return self.matches[index]
@@ -130,6 +132,7 @@ class MatchList(Sequence):
 
         if glob.config.debug:
             log(f'{m} removed from matches list.')
+
 
 class PlayerList(Sequence):
     """A class to represent all players online on the gulag.
@@ -214,7 +217,7 @@ class PlayerList(Sequence):
             [pid]
         )
 
-        return Player(**res, id = pid) if res else None
+        return Player(**res, id=pid) if res else None
 
     async def get_login(self, name: str, phash: str) -> Optional[Player]:
         # only used cached results - the user should have

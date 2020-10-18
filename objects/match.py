@@ -20,43 +20,49 @@ __all__ = (
     'Match'
 )
 
+
 @unique
 class SlotStatus(IntEnum):
-    open       = 1
-    locked     = 2
-    not_ready  = 4
-    ready      = 8
-    no_map     = 16
-    playing    = 32
-    complete   = 64
-    quit       = 128
+    open = 1
+    locked = 2
+    not_ready = 4
+    ready = 8
+    no_map = 16
+    playing = 32
+    complete = 64
+    quit = 128
 
     has_player = not_ready | ready | no_map | playing | complete
+
 
 @unique
 class Teams(IntEnum):
     neutral = 0
-    blue    = 1
-    red     = 2
+    blue = 1
+    red = 2
+
 
 @unique
 class MatchTypes(IntEnum):
-    standard  = 0
-    powerplay = 1 # literally no idea what this is for
+    standard = 0
+    powerplay = 1  # literally no idea what this is for
+
 
 @unique
 class MatchScoringTypes(IntEnum):
-    score    = 0
+    score = 0
     accuracy = 1
-    combo    = 2
-    scorev2  = 3
+    combo = 2
+    scorev2 = 3
+
 
 @unique
 class MatchTeamTypes(IntEnum):
     head_to_head = 0
-    tag_coop     = 1
-    team_vs      = 2
-    tag_team_vs  = 3
+    tag_coop = 1
+    team_vs = 2
+    tag_team_vs = 3
+
 
 @dataclass
 class ScoreFrame:
@@ -79,6 +85,7 @@ class ScoreFrame:
     score_v2: Optional[bool] = None
     combo_portion: Optional[int] = None
     bonus_portion: Optional[int] = None
+
 
 class Slot:
     """\
@@ -131,6 +138,7 @@ class Slot:
         self.mods = Mods.NOMOD
         self.loaded = False
         self.skipped = False
+
 
 class Match:
     """\
@@ -196,7 +204,7 @@ class Match:
     def __init__(self) -> None:
         self.id = 0
         self.name = ''
-        self.passwd = '' # TODO: filter from lobby
+        self.passwd = ''  # TODO: filter from lobby
         self.host = None
 
         self.bmap: Optional[Beatmap] = None

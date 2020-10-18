@@ -28,6 +28,7 @@ __all__ = (
     'Player'
 )
 
+
 class ModeData:
     """\
     A class to represent a player's stats in a single gamemode.
@@ -83,32 +84,35 @@ class ModeData:
         self.max_combo = kwargs.get('max_combo', 0)
         self.rank = kwargs.get('rank', 0)
 
+
 @unique
 class PresenceFilter(IntEnum):
     """A class to represent the update scope the client wishes to receive."""
 
-    Nil     = 0
-    All     = 1
+    Nil = 0
+    All = 1
     Friends = 2
+
 
 @unique
 class Action(IntEnum):
     """A class to represent the client's current state."""
 
-    Idle         = 0
-    Afk          = 1
-    Playing      = 2
-    Editing      = 3
-    Modding      = 4
-    Multiplayer  = 5
-    Watching     = 6
-    Unknown      = 7
-    Testing      = 8
-    Submitting   = 9
-    Paused       = 10
-    Lobby        = 11
+    Idle = 0
+    Afk = 1
+    Playing = 2
+    Editing = 3
+    Modding = 4
+    Multiplayer = 5
+    Watching = 6
+    Unknown = 7
+    Testing = 8
+    Submitting = 9
+    Paused = 10
+    Lobby = 11
     Multiplaying = 12
-    OsuDirect    = 13
+    OsuDirect = 13
+
 
 class Status:
     """\
@@ -160,6 +164,7 @@ class Status:
         self.mods = Mods(mods)
         self.mode = GameMode.from_params(mode, self.mods)
         self.map_id = map_id
+
 
 class Player:
     """\
@@ -298,7 +303,7 @@ class Player:
         self.stats = {mode: ModeData() for mode in GameMode}
         self.status = Status()
 
-        self.friends = set() # userids, not player objects
+        self.friends = set()  # userids, not player objects
         self.channels = []
         self.spectators = []
         self.spectating: Optional[Player] = None
@@ -310,8 +315,8 @@ class Player:
         # store the last beatmap /np'ed by the user.
         self.last_np: Optional[Beatmap] = None
 
-        self.country = (0, 'XX') # (code , letters)
-        self.location = (0.0, 0.0) # (lat, long)
+        self.country = (0, 'XX')  # (code , letters)
+        self.location = (0.0, 0.0)  # (lat, long)
 
         self.utc_offset: int = kwargs.get('utc_offset', 0)
         self.pm_private: bool = kwargs.get('pm_private', False)
@@ -475,8 +480,8 @@ class Player:
             self.enqueue(await packets.matchJoinFail())
             return False
 
-        if m.chat: # match already exists, we're simply joining.
-            if passwd != m.passwd: # eff: could add to if? or self.create_m..
+        if m.chat:  # match already exists, we're simply joining.
+            if passwd != m.passwd:  # eff: could add to if? or self.create_m..
                 log(f'{self} tried to join {m} with incorrect passwd.')
                 self.enqueue(await packets.matchJoinFail())
                 return False
@@ -488,16 +493,16 @@ class Player:
         else:
             # match is being created
             slotID = 0
-            await glob.matches.add(m) # add to global matchlist
-                                      # this will generate an id.
+            await glob.matches.add(m)  # add to global matchlist
+            # this will generate an id.
 
             await glob.channels.add(Channel(
-                name = f'#multi_{m.id}',
-                topic = f"MID {m.id}'s multiplayer channel.",
-                read = Privileges.Normal,
-                write = Privileges.Normal,
-                auto_join = False,
-                instance = True
+                name=f'#multi_{m.id}',
+                topic=f"MID {m.id}'s multiplayer channel.",
+                read=Privileges.Normal,
+                write=Privileges.Normal,
+                auto_join=False,
+                instance=True
             ))
 
             m.chat = glob.channels[f'#multi_{m.id}']
@@ -563,8 +568,8 @@ class Player:
         if c._name == '#lobby' and not self.in_lobby:
             return False
 
-        c.append(self) # Add to channels
-        self.channels.append(c) # Add to player
+        c.append(self)  # Add to channels
+        self.channels.append(c)  # Add to player
 
         self.enqueue(await packets.channelJoin(c.name))
 
@@ -586,8 +591,8 @@ class Player:
             log(f'{self} tried to leave {c} but is not in it.')
             return
 
-        await c.remove(self) # remove from channels
-        self.channels.remove(c) # remove from player
+        await c.remove(self)  # remove from channels
+        self.channels.remove(c)  # remove from player
 
         self.enqueue(await packets.channelKick(c.name))
 
@@ -607,12 +612,12 @@ class Player:
         if not (c := glob.channels[chan_name]):
             # spec channel does not exist, create it and join.
             await glob.channels.add(Channel(
-                name = chan_name,
-                topic = f"{self.name}'s spectator channel.'",
-                read = Privileges.Normal,
-                write = Privileges.Normal,
-                auto_join = False,
-                instance = True
+                name=chan_name,
+                topic=f"{self.name}'s spectator channel.'",
+                read=Privileges.Normal,
+                write=Privileges.Normal,
+                auto_join=False,
+                instance=True
             ))
 
             c = glob.channels[chan_name]
@@ -620,7 +625,7 @@ class Player:
         if not await p.join_channel(c):
             return log(f'{self} failed to join {c}?')
 
-        #p.enqueue(await packets.channelJoin(c.name))
+        # p.enqueue(await packets.channelJoin(c.name))
         p_joined = await packets.fellowSpectatorJoined(p.id)
 
         for s in self.spectators:
@@ -645,7 +650,8 @@ class Player:
             await self.leave_channel(c)
         else:
             fellow = await packets.fellowSpectatorLeft(p.id)
-            c_info = await packets.channelInfo(*c.basic_info) # new playercount
+            # new playercount
+            c_info = await packets.channelInfo(*c.basic_info)
 
             self.enqueue(c_info)
 
@@ -731,13 +737,14 @@ class Player:
         )
 
         if not res:
-            return # ?
+            return  # ?
 
         # update the user's stats in-game, then update db.
         self.stats[mode].plays += 1
-        self.stats[mode].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
+        self.stats[mode].acc = sum([row['acc']
+                                    for row in res][:50]) / min(50, len(res))
         self.stats[mode].pp = round(sum(row['pp'] * 0.95 ** i
-                                  for i, row in enumerate(res)))
+                                        for i, row in enumerate(res)))
 
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '
@@ -819,7 +826,7 @@ class Player:
 
     async def add_to_menu(self, coroutine: Coroutine,
                           timeout: int = -1, reusable: bool = False
-                         ) -> None:
+                          ) -> None:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in in32 space as the key.
         rand = partial(random.randint, -0x80000000, 0)
