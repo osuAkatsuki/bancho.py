@@ -2,13 +2,13 @@
 
 from typing import Union, Optional
 from collections import Sequence
+from cmyui import log
 
 from objects.player import Player
 from objects.channel import Channel
 from objects.match import Match
 from constants.privileges import Privileges
 from objects import glob
-from console import plog
 
 __all__ = (
     'Slice',
@@ -58,19 +58,19 @@ class ChannelList(Sequence):
 
     async def add(self, c: Channel) -> None:
         if c in self.channels:
-            plog(f'{c} double-added to channels list?')
+            log(f'{c} double-added to channels list?')
             return
 
         self.channels.append(c)
 
         if glob.config.debug:
-            plog(f'{c} added to channels list.')
+            log(f'{c} added to channels list.')
 
     async def remove(self, c: Channel) -> None:
         self.channels.remove(c)
 
         if glob.config.debug:
-            plog(f'{c} removed from channels list.')
+            log(f'{c} removed from channels list.')
 
 class MatchList(Sequence):
     """A class to represent all multiplayer matches on the gulag.
@@ -108,7 +108,7 @@ class MatchList(Sequence):
 
     async def add(self, m: Match) -> None:
         if m in self.matches:
-            plog(f'{m} double-added to matches list?')
+            log(f'{m} double-added to matches list?')
             return
 
         if (free := self.get_free()) is not None:
@@ -118,9 +118,9 @@ class MatchList(Sequence):
             self.matches[free] = m
 
             if glob.config.debug:
-                plog(f'{m} added to matches list.')
+                log(f'{m} added to matches list.')
         else:
-            plog(f'Match list is full! Could not add {m}.')
+            log(f'Match list is full! Could not add {m}.')
 
     async def remove(self, m: Match) -> None:
         for idx, i in enumerate(self.matches):
@@ -129,7 +129,7 @@ class MatchList(Sequence):
                 break
 
         if glob.config.debug:
-            plog(f'{m} removed from matches list.')
+            log(f'{m} removed from matches list.')
 
 class PlayerList(Sequence):
     """A class to represent all players online on the gulag.
@@ -246,19 +246,19 @@ class PlayerList(Sequence):
 
         return await self.get_by_name(name)
 
-    async def add(self, p: Player) -> None:
+    def add(self, p: Player) -> None:
         if p in self.players:
             if glob.config.debug:
-                plog(f'{p} double-added to global player list?')
+                log(f'{p} double-added to global player list?')
             return
 
         self.players.append(p)
 
         if glob.config.debug:
-            plog(f'{p} added to global player list.')
+            log(f'{p} added to global player list.')
 
-    async def remove(self, p: Player) -> None:
+    def remove(self, p: Player) -> None:
         self.players.remove(p)
 
         if glob.config.debug:
-            plog(f'{p} removed from global player list.')
+            log(f'{p} removed from global player list.')

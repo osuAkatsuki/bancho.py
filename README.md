@@ -87,5 +87,5 @@ mv config.sample.py config.py
 nano config.py
 
 # Start the server.
-python3.9 main.py
+./main.py
 ```

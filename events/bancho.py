@@ -3,13 +3,12 @@
 from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
-import cmyui
+from cmyui import log, Ansi, _isdecimal
 import bcrypt
 
 import packets
-from packets import BanchoPacket, BanchoPacketReader # convenience
+from packets import ClientPacket, BanchoPacketReader # convenience
 
-from console import *
 from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
@@ -22,14 +21,14 @@ from constants.privileges import Privileges
 
 glob.bancho_map = {}
 
-def bancho_packet(ID: int) -> Callable:
+def bancho_packet(packet: ClientPacket) -> Callable:
     def register_callback(callback: Callable) -> Callable:
-        glob.bancho_map |= {ID: callback}
+        glob.bancho_map |= {packet: callback}
         return callback
     return register_callback
 
 # packet id: 0
-@bancho_packet(BanchoPacket.c_changeAction)
+@bancho_packet(ClientPacket.CHANGE_ACTION)
 async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
     data = await pr.read(
         osuTypes.u8, # actionType
@@ -44,10 +43,10 @@ async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
     glob.players.enqueue(await packets.userStats(p))
 
 # packet id: 1
-@bancho_packet(BanchoPacket.c_sendPublicMessage)
+@bancho_packet(ClientPacket.SEND_PUBLIC_MESSAGE)
 async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
-        plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
+        log(f'{p} sent a message while silenced.', Ansi.YELLOW)
         return
 
     # we don't need client & client_id from osu!
@@ -74,11 +73,11 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         t = glob.channels[target]
 
     if not t:
-        plog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
+        log(f'{p} wrote to non-existent {target}.', Ansi.YELLOW)
         return
 
     if not p.priv & t.write:
-        plog(f'{p} tried to write to {target} without privileges.')
+        log(f'{p} wrote to {target} with insufficient privileges.')
         return
 
     # limit message length to 2048 characters
@@ -113,10 +112,10 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
 
         await t.send(p, msg)
 
-    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
+    log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 # packet id: 2
-@bancho_packet(BanchoPacket.c_logout)
+@bancho_packet(ClientPacket.LOGOUT)
 async def logout(p: Player, pr: BanchoPacketReader) -> None:
     pr.ignore(4) # osu sends i32(0) every time..
 
@@ -126,26 +125,12 @@ async def logout(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     await p.logout()
-    plog(f'{p} logged out.', Ansi.LYELLOW)
+    log(f'{p} logged out.', Ansi.LYELLOW)
 
 # packet id: 3
-@bancho_packet(BanchoPacket.c_requestStatusUpdate)
+@bancho_packet(ClientPacket.REQUEST_STATUS_UPDATE)
 async def statsUpdateRequest(p: Player, pr: BanchoPacketReader) -> None:
     p.enqueue(await packets.userStats(p))
-
-# packet id: 4
-@bancho_packet(BanchoPacket.c_ping)
-async def ping(p: Player, pr: BanchoPacketReader) -> None:
-    # TODO: this should be last packet time, not just
-    # ping.. this handler shouldn't even exist lol
-    p.ping_time = int(time.time())
-
-    # osu! seems to error when i send nothing back,
-    # so perhaps the official bancho implementation
-    # expects something like a stats update.. i'm
-    # just gonna ping it back, as i don't really
-    # want to something more expensive so often lol
-    p.enqueue(b'\x04\x00\x00\x00\x00\x00\x00')
 
 registration_msg = '\n'.join((
     "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
@@ -163,7 +148,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return
 
     if p := await glob.players.get_by_name(username := s[0]):
-        if (time.time() - p.ping_time) > 10:
+        if (time.time() - p.last_receive_time) > 10:
             # if the current player obj online hasn't
             # pinged the server in > 10 seconds, log
             # them out and login the new user.
@@ -196,7 +181,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return (await packets.versionUpdateForced() +
                 await packets.userID(-2)), 'no'
 
-    if not cmyui._isdecimal(s[1], _negative=True):
+    if not _isdecimal(s[1], _negative=True):
         # utc-offset isn't a number (negative inclusive).
         return await packets.userID(-1), 'no'
 
@@ -237,7 +222,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             return await packets.userID(-1), 'no'
 
     else:
-        # cache miss, this must be their first login.
+        # cache miss, their first login since the server started.
         if not bcrypt.checkpw(pw_hash, p_row['pw_hash'].encode()):
             return await packets.userID(-1), 'no'
 
@@ -305,6 +290,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     if not p_row['priv'] & Privileges.Verified:
         # verify the account if it's made it this far
         p_row['priv'] |= int(Privileges.Verified)
+
         await glob.db.execute(
             'UPDATE users SET priv = priv | %s WHERE id = %s',
             [p_row['priv'], p_row['id']]
@@ -397,18 +383,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # add `p` to the global player list,
     # making them officially logged in.
-    await glob.players.add(p)
+    glob.players.add(p)
 
-    plog(f'{p} logged in.', Ansi.LCYAN)
+    log(f'{p} logged in.', Ansi.LCYAN)
     return bytes(data), p.token
 
 # packet id: 16
-@bancho_packet(BanchoPacket.c_startSpectating)
+@bancho_packet(ClientPacket.START_SPECTATING)
 async def startSpectating(p: Player, pr: BanchoPacketReader) -> None:
     target_id, = await pr.read(osuTypes.i32)
 
     if not (host := await glob.players.get_by_id(target_id)):
-        plog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
+        log(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
     if c_host := p.spectating:
@@ -417,18 +403,18 @@ async def startSpectating(p: Player, pr: BanchoPacketReader) -> None:
     await host.add_spectator(p)
 
 # packet id: 17
-@bancho_packet(BanchoPacket.c_stopSpectating)
+@bancho_packet(ClientPacket.STOP_SPECTATING)
 async def stopSpectating(p: Player, pr: BanchoPacketReader) -> None:
     host = p.spectating
 
     if not host:
-        plog(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
+        log(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
         return
 
     await host.remove_spectator(p)
 
 # packet id: 18
-@bancho_packet(BanchoPacket.c_spectateFrames)
+@bancho_packet(ClientPacket.SPECTATE_FRAMES)
 async def spectateFrames(p: Player, pr: BanchoPacketReader) -> None:
     # this runs very frequently during spectation,
     # so it's written to run pretty quick.
@@ -443,10 +429,10 @@ async def spectateFrames(p: Player, pr: BanchoPacketReader) -> None:
         t.enqueue(data)
 
 # packet id: 21
-@bancho_packet(BanchoPacket.c_cantSpectate)
+@bancho_packet(ClientPacket.CANT_SPECTATE)
 async def cantSpectate(p: Player, pr: BanchoPacketReader) -> None:
     if not p.spectating:
-        plog(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
+        log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
         return
 
     data = await packets.spectatorCantSpectate(p.id)
@@ -458,27 +444,27 @@ async def cantSpectate(p: Player, pr: BanchoPacketReader) -> None:
         t.enqueue(data)
 
 # packet id: 25
-@bancho_packet(BanchoPacket.c_sendPrivateMessage)
+@bancho_packet(ClientPacket.SEND_PRIVATE_MESSAGE)
 async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
-        plog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
+        log(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
     # we don't need client & client_id from osu!
     _, msg, target, _ = await pr.read(osuTypes.message)
 
     if not (t := await glob.players.get_by_name(target)):
-        plog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        log(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
         return
 
     if t.pm_private and p.id not in t.friends:
         p.enqueue(await packets.userPMBlocked(target))
-        plog(f'{p} tried to message {t}, but they are blocking dms.')
+        log(f'{p} tried to message {t}, but they are blocking dms.')
         return
 
     if t.silenced:
         p.enqueue(await packets.targetSilenced(target))
-        plog(f'{p} tried to message {t}, but they are silenced.')
+        log(f'{p} tried to message {t}, but they are silenced.')
         return
 
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
@@ -547,15 +533,15 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
             [p.id, t.id, msg]
         )
 
-    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
+    log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 # packet id: 29
-@bancho_packet(BanchoPacket.c_partLobby)
+@bancho_packet(ClientPacket.PART_LOBBY)
 async def lobbyPart(p: Player, pr: BanchoPacketReader) -> None:
     p.in_lobby = False
 
 # packet id: 30
-@bancho_packet(BanchoPacket.c_joinLobby)
+@bancho_packet(ClientPacket.JOIN_LOBBY)
 async def lobbyJoin(p: Player, pr: BanchoPacketReader) -> None:
     p.in_lobby = True
 
@@ -563,16 +549,16 @@ async def lobbyJoin(p: Player, pr: BanchoPacketReader) -> None:
         p.enqueue(await packets.newMatch(m))
 
 # packet id: 31
-@bancho_packet(BanchoPacket.c_createMatch)
+@bancho_packet(ClientPacket.CREATE_MATCH)
 async def matchCreate(p: Player, pr: BanchoPacketReader) -> None:
     m, = await pr.read(osuTypes.match)
 
     m.host = p
     await p.join_match(m, m.passwd)
-    plog(f'{p} created a new multiplayer match.')
+    log(f'{p} created a new multiplayer match.')
 
 # packet id: 32
-@bancho_packet(BanchoPacket.c_joinMatch)
+@bancho_packet(ClientPacket.JOIN_MATCH)
 async def matchJoin(p: Player, pr: BanchoPacketReader) -> None:
     m_id, passwd = await pr.read(osuTypes.i32, osuTypes.string)
     if 64 > m_id > 0:
@@ -581,18 +567,18 @@ async def matchJoin(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (m := glob.matches.get_by_id(m_id)):
-        plog(f'{p} tried to join a non-existant mp lobby?')
+        log(f'{p} tried to join a non-existant mp lobby?')
         return
 
     await p.join_match(m, passwd)
 
 # packet id: 33
-@bancho_packet(BanchoPacket.c_partMatch)
+@bancho_packet(ClientPacket.PART_MATCH)
 async def matchPart(p: Player, pr: BanchoPacketReader) -> None:
     await p.leave_match()
 
 # packet id: 38
-@bancho_packet(BanchoPacket.c_matchChangeSlot)
+@bancho_packet(ClientPacket.MATCH_CHANGE_SLOT)
 async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -603,7 +589,7 @@ async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if m.slots[slot_id].status & SlotStatus.has_player:
-        plog(f'{p} tried to switch to slot {slot_id} which has a player.')
+        log(f'{p} tried to switch to slot {slot_id} which has a player.')
         return
 
     # swap with current slot.
@@ -613,7 +599,7 @@ async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 39
-@bancho_packet(BanchoPacket.c_matchReady)
+@bancho_packet(ClientPacket.MATCH_READY)
 async def matchReady(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -622,7 +608,7 @@ async def matchReady(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 40
-@bancho_packet(BanchoPacket.c_matchLock)
+@bancho_packet(ClientPacket.MATCH_LOCK)
 async def matchLock(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -647,7 +633,7 @@ _head_vs_head = (MatchTeamTypes.head_to_head,
                  MatchTeamTypes.tag_coop)
 
 # packet id: 41
-@bancho_packet(BanchoPacket.c_matchChangeSettings)
+@bancho_packet(ClientPacket.MATCH_CHANGE_SETTINGS)
 async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -706,7 +692,7 @@ async def matchChangeSettings(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 44
-@bancho_packet(BanchoPacket.c_matchStart)
+@bancho_packet(ClientPacket.MATCH_START)
 async def matchStart(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -719,7 +705,7 @@ async def matchStart(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.matchStart(m))
 
 # packet id: 47
-@bancho_packet(BanchoPacket.c_matchScoreUpdate)
+@bancho_packet(ClientPacket.MATCH_SCORE_UPDATE)
 async def matchScoreUpdate(p: Player, pr: BanchoPacketReader) -> None:
     # this runs very frequently in matches,
     # so it's written to run pretty quick.
@@ -736,7 +722,7 @@ async def matchScoreUpdate(p: Player, pr: BanchoPacketReader) -> None:
     pr.ignore(size)
 
 # packet id: 49
-@bancho_packet(BanchoPacket.c_matchComplete)
+@bancho_packet(ClientPacket.MATCH_COMPLETE)
 async def matchComplete(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -759,7 +745,7 @@ async def matchComplete(p: Player, pr: BanchoPacketReader) -> None:
                 s.status = SlotStatus.not_ready
 
 # packet id: 51
-@bancho_packet(BanchoPacket.c_matchChangeMods)
+@bancho_packet(ClientPacket.MATCH_CHANGE_MODS)
 async def matchChangeMods(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -780,7 +766,7 @@ async def matchChangeMods(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 52
-@bancho_packet(BanchoPacket.c_matchLoadComplete)
+@bancho_packet(ClientPacket.MATCH_LOAD_COMPLETE)
 async def matchLoadComplete(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -793,7 +779,7 @@ async def matchLoadComplete(p: Player, pr: BanchoPacketReader) -> None:
         m.enqueue(await packets.matchAllPlayerLoaded(), lobby = False)
 
 # packet id: 54
-@bancho_packet(BanchoPacket.c_matchNoBeatmap)
+@bancho_packet(ClientPacket.MATCH_NO_BEATMAP)
 async def matchNoBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -802,7 +788,7 @@ async def matchNoBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 55
-@bancho_packet(BanchoPacket.c_matchNotReady)
+@bancho_packet(ClientPacket.MATCH_NOT_READY)
 async def matchNotReady(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -811,7 +797,7 @@ async def matchNotReady(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
 # packet id: 56
-@bancho_packet(BanchoPacket.c_matchFailed)
+@bancho_packet(ClientPacket.MATCH_FAILED)
 async def matchFailed(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -824,7 +810,7 @@ async def matchFailed(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(data)
 
 # packet id: 59
-@bancho_packet(BanchoPacket.c_matchHasBeatmap)
+@bancho_packet(ClientPacket.MATCH_HAS_BEATMAP)
 async def matchHasBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -833,7 +819,7 @@ async def matchHasBeatmap(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m))
 
 # packet id: 60
-@bancho_packet(BanchoPacket.c_matchSkipRequest)
+@bancho_packet(ClientPacket.MATCH_SKIP_REQUEST)
 async def matchSkipRequest(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -849,13 +835,13 @@ async def matchSkipRequest(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.matchSkip(), lobby = False)
 
 # packet id: 63
-@bancho_packet(BanchoPacket.c_channelJoin)
+@bancho_packet(ClientPacket.CHANNEL_JOIN)
 async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
     chan_name, = await pr.read(osuTypes.string)
     c = glob.channels[chan_name]
 
     if not c or not await p.join_channel(c):
-        plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
+        log(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
     # enqueue channelJoin to our player.
@@ -868,7 +854,7 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
 # but like cmon lol
 
 # packet id: 68
-#@bancho_packet(BanchoPacket.c_beatmapInfoRequest)
+#@bancho_packet(ClientPacket.BEATMAP_INFO_REQUEST)
 #async def beatmapInfoRequest(p: Player, pr: PacketReader) -> None:
 #    req: BeatmapInfoRequest
 #    req, = await pr.read(osuTypes.mapInfoRequest)
@@ -925,7 +911,7 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
 #    p.enqueue(await packets.beatmapInfoReply(info_list))
 
 # packet id: 70
-@bancho_packet(BanchoPacket.c_matchTransferHost)
+@bancho_packet(ClientPacket.MATCH_TRANSFER_HOST)
 async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -936,7 +922,7 @@ async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (t := m[slot_id].player):
-        plog(f'{p} tried to transfer host to an empty slot?')
+        log(f'{p} tried to transfer host to an empty slot?')
         return
 
     m.host = t
@@ -944,12 +930,12 @@ async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
 # packet id: 73
-@bancho_packet(BanchoPacket.c_friendAdd)
+@bancho_packet(ClientPacket.FRIEND_ADD)
 async def friendAdd(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to add a user who is not online! ({user_id})')
+        log(f'{t} tried to add a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -962,12 +948,12 @@ async def friendAdd(p: Player, pr: BanchoPacketReader) -> None:
     await p.add_friend(t)
 
 # packet id: 74
-@bancho_packet(BanchoPacket.c_friendRemove)
+@bancho_packet(ClientPacket.FRIEND_REMOVE)
 async def friendRemove(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to remove a user who is not online! ({user_id})')
+        log(f'{t} tried to remove a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -980,7 +966,7 @@ async def friendRemove(p: Player, pr: BanchoPacketReader) -> None:
     await p.remove_friend(t)
 
 # packet id: 77
-@bancho_packet(BanchoPacket.c_matchChangeTeam)
+@bancho_packet(ClientPacket.MATCH_CHANGE_TEAM)
 async def matchChangeTeam(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -990,13 +976,13 @@ async def matchChangeTeam(p: Player, pr: BanchoPacketReader) -> None:
             s.team = Teams.blue if s.team != Teams.blue else Teams.red
             break
     else:
-        plog(f'{p} tried changing team outside of a match? (2)')
+        log(f'{p} tried changing team outside of a match? (2)')
         return
 
     m.enqueue(await packets.updateMatch(m), lobby = False)
 
 # packet id: 78
-@bancho_packet(BanchoPacket.c_channelPart)
+@bancho_packet(ClientPacket.CHANNEL_PART)
 async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
     chan, = await pr.read(osuTypes.string)
 
@@ -1004,7 +990,7 @@ async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (c := glob.channels[chan]):
-        plog(f'Failed to find channel {chan} that {p} attempted to leave.')
+        log(f'Failed to find channel {chan} that {p} attempted to leave.')
         return
 
     if p not in c:
@@ -1018,25 +1004,25 @@ async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
     glob.players.enqueue(await packets.channelInfo(*c.basic_info))
 
 # packet id: 79
-@bancho_packet(BanchoPacket.c_ReceiveUpdates)
+@bancho_packet(ClientPacket.RECEIVE_UPDATES)
 async def receiveUpdates(p: Player, pr: BanchoPacketReader) -> None:
     val, = await pr.read(osuTypes.i32)
 
     if val not in range(3):
-        plog(f'{p} tried to set his presence filter to {val}?')
+        log(f'{p} tried to set his presence filter to {val}?')
         return
 
     p.pres_filter = PresenceFilter(val)
 
 # packet id: 82
-@bancho_packet(BanchoPacket.c_setAwayMessage)
+@bancho_packet(ClientPacket.SET_AWAY_MESSAGE)
 async def setAwayMessage(p: Player, pr: BanchoPacketReader) -> None:
     pr.ignore(3) # why does first string send \x0b\x00?
     p.away_msg, = await pr.read(osuTypes.string)
     pr.ignore(4)
 
 # packet id: 85
-@bancho_packet(BanchoPacket.c_userStatsRequest)
+@bancho_packet(ClientPacket.USER_STATS_REQUEST)
 async def statsRequest(p: Player, pr: BanchoPacketReader) -> None:
     if len(pr.data) < 6:
         return
@@ -1049,7 +1035,7 @@ async def statsRequest(p: Player, pr: BanchoPacketReader) -> None:
             p.enqueue(await packets.userStats(t))
 
 # packet id: 87
-@bancho_packet(BanchoPacket.c_matchInvite)
+@bancho_packet(ClientPacket.MATCH_INVITE)
 async def matchInvite(p: Player, pr: BanchoPacketReader) -> None:
     if not p.match:
         pr.ignore(4)
@@ -1057,14 +1043,14 @@ async def matchInvite(p: Player, pr: BanchoPacketReader) -> None:
 
     user_id, = await pr.read(osuTypes.i32)
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to invite a user who is not online! ({user_id})')
+        log(f'{t} tried to invite a user who is not online! ({user_id})')
         return
 
     t.enqueue(await packets.matchInvite(p, t.name))
-    plog(f'{p} invited {t} to their match.')
+    log(f'{p} invited {t} to their match.')
 
 # packet id: 90
-@bancho_packet(BanchoPacket.c_matchChangePassword)
+@bancho_packet(ClientPacket.MATCH_CHANGE_PASSWORD)
 async def matchChangePassword(p: Player, pr: BanchoPacketReader) -> None:
     if not (m := p.match):
         return
@@ -1076,14 +1062,14 @@ async def matchChangePassword(p: Player, pr: BanchoPacketReader) -> None:
     m.enqueue(await packets.updateMatch(m), lobby=False)
 
 # packet id: 97
-@bancho_packet(BanchoPacket.c_userPresenceRequest)
+@bancho_packet(ClientPacket.USER_PRESENCE_REQUEST)
 async def userPresenceRequest(p: Player, pr: BanchoPacketReader) -> None:
     for pid in await pr.read(osuTypes.i32_list):
         if t := await glob.players.get_by_id(pid):
             p.enqueue(await packets.userPresence(t))
 
 # packet id: 98
-@bancho_packet(BanchoPacket.c_userPresenceRequestAll)
+@bancho_packet(ClientPacket.USER_PRESENCE_REQUEST_ALL)
 async def userPresenceRequestAll(p: Player, pr: BanchoPacketReader) -> None:
     # XXX: this only sends when the client can see > 256 players,
     # so this probably won't have much use for private servers.
@@ -1096,7 +1082,7 @@ async def userPresenceRequestAll(p: Player, pr: BanchoPacketReader) -> None:
             p.enqueue(await packets.userPresence(t))
 
 # packet id: 99
-@bancho_packet(BanchoPacket.c_userToggleBlockNonFriendPM)
+@bancho_packet(ClientPacket.TOGGLE_BLOCK_NON_FRIEND_DMS)
 async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
     p.pm_private = (await pr.read(osuTypes.i32))[0] == 1
 
@@ -1104,7 +1090,7 @@ async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
 # XXX: perhaps these could be turned into decorators to allow
 # for better specialization of params? perhaps prettier too :P
 async def deprecated_packet(p: Player, pr: BanchoPacketReader) -> None:
-    plog(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LRED)
+    log(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LRED)
 
-errorReport = bancho_packet(BanchoPacket.c_errorReport)(deprecated_packet)
-beatmapInfoRequest = bancho_packet(BanchoPacket.c_beatmapInfoRequest)(deprecated_packet)
+errorReport = bancho_packet(ClientPacket.ERROR_REPORT)(deprecated_packet)
+beatmapInfoRequest = bancho_packet(ClientPacket.BEATMAP_INFO_REQUEST)(deprecated_packet)

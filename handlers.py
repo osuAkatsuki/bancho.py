@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+import time
 import packets
 import aiofiles
 import orjson
@@ -6,16 +9,15 @@ import gzip
 import hashlib, bcrypt
 from collections import defaultdict
 
-from cmyui import AsyncConnection
+from cmyui import AsyncConnection, log, Ansi
 
 from objects import glob
 from constants import regexes
-from console import *
 
 # NOTE: these also load the handler
 # maps for each of the event categories.
 from events import web, api, bancho
-from packets import BanchoPacket
+from packets import ClientPacket
 
 __all__ = (
     'handle_bancho',
@@ -31,17 +33,17 @@ __all__ = (
 # will refuse to reply to more
 # than once per connection.
 deny_doublereply = frozenset({
-    BanchoPacket.c_userStatsRequest
+    ClientPacket.USER_STATS_REQUEST
 })
 
 async def handle_bancho(conn: AsyncConnection) -> None:
-    """Handle a bancho request (c.ppy.sh/*)."""
+    """Handle a bancho request (POST c.ppy.sh/)."""
     if 'User-Agent' not in conn.headers:
         return
 
     if conn.headers['User-Agent'] != 'osu!':
         # most likely a request from a browser.
-        await conn.send(200, b'<!DOCTYPE html>' + '<br>'.join((
+        resp = '<br>'.join((
             f'Running gulag v{glob.version}',
             f'Players online: {len(glob.players) - 1}',
             '<a href="https://github.com/cmyui/gulag">Source code</a>',
@@ -54,80 +56,91 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             '',
             '<b>/api/ Handlers</b>',
             '<br>'.join(glob.api_map)
-        )).encode())
+        ))
+
+        await conn.send(200, f'<!DOCTYPE html>{resp}'.encode())
         return
 
-    resp = bytearray()
+    # check for 'osu-token' in the headers.
+    # if it's not there, this is a login request.
 
     if 'osu-token' not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        login_resp, cho_token = await bancho.login(
+        resp, token = await bancho.login(
             conn.body, conn.headers['X-Real-IP']
         )
 
-        resp.extend(login_resp)
-        await conn.add_resp_header(f'cho-token: {cho_token}')
+        await conn.add_resp_header(f'cho-token: {token}')
+        await conn.send(200, resp)
+        return
 
-    elif not (p := glob.players.get(conn.headers['osu-token'])):
-        #plog('Token not found, forcing relog.')
-        resp.extend(
-            await packets.notification('Server is restarting.') +
-            await packets.restartServer(0) # send 0ms since the server is already up!
-        )
+    # get the player from the specified osu token.
+    p = glob.players.get(conn.headers['osu-token'])
 
-    else:
-        # player found, process normal packet.
-        pr = packets.BanchoPacketReader(conn.body)
+    if not p:
+        # token was not found; changes are, we just restarted
+        # the server. just tell their client to re-connect.
+        resp = await packets.notification('Server is restarting') + \
+               await packets.restartServer(0) # send 0ms since server is up
 
-        # gulag refuses to reply to a group of packets
-        # more than once per connection. the list is
-        # defined above! var: `deny_doublereply`.
-        # this list will simply keep track of which
-        # of these packet's we've replied to during
-        # this connection to allow this functonality.
-        blocked_packets: list[BanchoPacket] = []
+        await conn.send(200, resp)
+        return
 
-        # bancho connections can send multiple packets at a time.
-        # iter through packets received and them handle indivudally.
-        while not pr.empty():
-            await pr.read_packet_header()
-            if pr.current_packet is None:
-                continue # skip, packet empty or corrupt?
+    # player found, process normal packet.
+    pr = packets.BanchoPacketReader(conn.body)
 
-            if pr.current_packet in deny_doublereply:
-                # this is a connection we should
-                # only allow once per connection.
+    # gulag refuses to reply to a group of packets more than once per
+    # connection. the list is defined above! var: `deny_doublereply`.
+    # this list will simply keep track of which of these packets we've
+    # replied to during this connection to allow this functonality.
+    blocked_packets: list[ClientPacket] = []
 
-                if pr.current_packet in blocked_packets:
-                    # this packet has already been
-                    # replied to in this connection.
-                    pr.ignore_packet()
-                    continue
+    # bancho connections can send multiple packets at a time.
+    # iter through packets received and them handle indivudally.
+    while not pr.empty():
+        await pr.read_packet_header()
+        if pr.current_packet is None:
+            continue # skip, packet empty or corrupt?
 
-                # log that the packet was handled.
-                blocked_packets.append(pr.current_packet)
+        if pr.current_packet == ClientPacket.PING:
+            continue
 
-            if pr.current_packet in glob.bancho_map:
-                # Server is able to handle the packet.
-                if glob.config.debug:
-                    plog(repr(pr.current_packet), Ansi.LMAGENTA)
+        if pr.current_packet in deny_doublereply:
+            # this is a connection we should
+            # only allow once per connection.
 
-                await glob.bancho_map[pr.current_packet](p, pr)
-
-            else:
-                # packet reading behaviour not yet defined.
-                plog(f'Unhandled: {pr!r}', Ansi.LYELLOW)
+            if pr.current_packet in blocked_packets:
+                # this packet has already been
+                # replied to in this connection.
                 pr.ignore_packet()
+                continue
 
-        while not p.queue_empty():
-            # read all queued packets into stream
-            resp.extend(await p.dequeue())
+            # log that the packet was handled.
+            blocked_packets.append(pr.current_packet)
+
+        if pr.current_packet in glob.bancho_map:
+            # Server is able to handle the packet.
+            if glob.config.debug:
+                log(repr(pr.current_packet), Ansi.LMAGENTA)
+
+            await glob.bancho_map[pr.current_packet](p, pr)
+
+        else:
+            # packet reading behaviour not yet defined.
+            log(f'Unhandled: {pr!r}', Ansi.LYELLOW)
+            pr.ignore_packet()
+
+    p.last_receive_time = int(time.time())
+
+    # TODO: this could probably be done better?
+    resp = bytearray()
+
+    while not p.queue_empty():
+        # read all queued packets into stream
+        resp.extend(p.dequeue())
 
     resp = bytes(resp)
-
-    if glob.config.debug:
-        plog(resp, Ansi.LGREEN)
 
     # compress with gzip if enabled.
     if glob.config.gzip['web'] > 0:
@@ -136,7 +149,6 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 
     # add headers and such
     await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
-    #await conn.add_resp_header('Connection: keep-alive')
 
     # even if the packet is empty, we have to
     # send back an empty response so the client
@@ -154,13 +166,12 @@ async def handle_web(conn: AsyncConnection) -> None:
     if handler in glob.web_map:
         # we have a handler for this connection.
         if glob.config.debug:
-            plog(conn.path, Ansi.LMAGENTA)
+            log(conn.path, Ansi.LMAGENTA)
 
         # call our handler with the connection obj.
         if resp := await glob.web_map[handler](conn):
-            # there's data to send back, compress & log.
-            if glob.config.debug:
-                plog(f'Response: {resp}', Ansi.LGREEN)
+            # we have data to send back.
+            # compress if enabled for web.
 
             # gzip if enabled.
             if glob.config.gzip['web'] > 0:
@@ -169,14 +180,13 @@ async def handle_web(conn: AsyncConnection) -> None:
 
         # attach headers & send response.
         await conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
-        #await conn.add_resp_header('Connection: keep-alive')
 
-        await conn.send(200, resp if resp else b'')
+        await conn.send(200, resp or b'')
 
     elif handler.startswith('maps/'):
         # this connection is a map update request.
         if glob.config.debug:
-            plog(f'Beatmap update request.', Ansi.LMAGENTA)
+            log(f'Beatmap update request.', Ansi.LMAGENTA)
 
         if resp := await web.updateBeatmap(conn):
             # map found, send back the data.
@@ -184,7 +194,7 @@ async def handle_web(conn: AsyncConnection) -> None:
 
     else:
         # we don't have a handler for this connection.
-        plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)
+        log(f'Unhandled: {conn.path}.', Ansi.YELLOW)
 
 async def handle_ss(conn: AsyncConnection) -> None:
     """Handle a screenshot request (osu.ppy.sh/ss/*)."""
@@ -305,7 +315,7 @@ async def handle_registration(conn: AsyncConnection) -> None:
             [user_id]
         )
 
-        plog(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
+        log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     await conn.send(200, b'ok') # success
 
@@ -315,15 +325,15 @@ async def handle_api(conn: AsyncConnection) -> None:
 
     if handler in glob.api_map:
         if glob.config.debug:
-            plog(conn.path, Ansi.LMAGENTA)
+            log(conn.path, Ansi.LMAGENTA)
 
         if resp := await glob.api_map[handler](conn):
             # we have data to send back to the client.
             if glob.config.debug:
-                plog(resp, Ansi.LGREEN)
+                log(resp, Ansi.LGREEN)
 
             await conn.send(200, resp)
 
     else:
         # handler not found.
-        plog(f'Unhandled: {conn.path}.', Ansi.YELLOW)
+        log(f'Unhandled: {conn.path}.', Ansi.YELLOW)

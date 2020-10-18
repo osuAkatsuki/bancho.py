@@ -4,12 +4,12 @@ from enum import IntEnum, unique
 from datetime import datetime
 from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
+from cmyui import log, Ansi
 
 from pp.owoppai import Owoppai
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
-from console import plog, Ansi
 
 from objects.beatmap import Beatmap
 from objects.player import Player
@@ -241,7 +241,7 @@ class Score:
         data = cbc.decrypt(data_aes).decode().split(':')
 
         if len(data) != 18:
-            plog('Received an invalid score submission.', Ansi.LRED)
+            log('Received an invalid score submission.', Ansi.LRED)
             return
 
         s = cls()
@@ -269,7 +269,7 @@ class Score:
 
         # ensure all ints are safe to cast.
         if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
-            plog('Invalid parameter passed into submit-modular.', Ansi.LRED)
+            log('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
 
         (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,

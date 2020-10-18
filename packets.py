@@ -2,6 +2,7 @@
 
 from typing import Any
 from enum import IntEnum, unique
+from cmyui import log, Ansi
 import struct
 
 from objects import glob
@@ -12,7 +13,6 @@ from objects.match import (Match, ScoreFrame, SlotStatus,
 from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-from console import plog, Ansi
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -180,7 +180,7 @@ class BanchoPacketReader:
 
     Attributes
     -----------
-    _data: `memoryview`
+    _buf: `memoryview`
         Internal buffer of the reader.
         XXX: Use the `data` property to have data
              starting from the current internal offset.
@@ -202,11 +202,11 @@ class BanchoPacketReader:
     data: `bytearray`
         The data starting from the current offset.
     """
-    __slots__ = ('_data', '_offset',
+    __slots__ = ('_buf', '_offset',
                  'current_packet', 'length')
 
-    def __init__(self, data): # take request body in bytes form as param
-        self._data = memoryview(data)
+    def __init__(self, data: bytes): # `data` is the request body
+        self._buf = memoryview(data)
         self._offset = 0
 
         self.current_packet = None
@@ -214,10 +214,10 @@ class BanchoPacketReader:
 
     @property
     def data(self) -> memoryview:
-        return self._data[self._offset:]
+        return self._buf[self._offset:]
 
     def empty(self) -> bool:
-        return self._offset >= len(self._data)
+        return self._offset >= len(self._buf)
 
     def ignore(self, count: int) -> None:
         self._offset += count
@@ -233,11 +233,11 @@ class BanchoPacketReader:
             # end the connection immediately.
             self.current_packet = None
             self._offset += ldata
-            plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
+            log(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
             return
 
         packet_id, self.length = struct.unpack('<HxI', self.data[:7])
-        self.current_packet = BanchoPacket(packet_id)
+        self.current_packet = ClientPacket(packet_id)
 
         self._offset += 7 # read first 7 bytes for packetid & length
 
@@ -319,25 +319,21 @@ async def write_uleb128(num: int) -> bytearray:
 
 async def write_string(s: str) -> bytearray:
     """ Write `s` into bytes (ULEB128 & string). """
-    if (length := len(s)) == 0:
-        # string is empty.
-        return bytearray(b'\x00')
+    if (length := len(s)) > 0:
+        # non-empty string
+        data = b'\x0b' + await write_uleb128(length) + s.encode()
+    else:
+        # empty string
+        data = b'\x00'
 
-    ret = bytearray()
-
-    # string has content.
-    ret.append(11)
-    ret.extend(await write_uleb128(length) +
-               s.encode())
-
-    return ret
+    return bytearray(data)
 
 async def write_i32_list(l: tuple[int, ...]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
-    ret = bytearray(struct.pack('<h', len(l)))
+    ret = bytearray(len(l).to_bytes(2, 'little'))
 
     for i in l:
-        ret.extend(struct.pack('<i', i))
+        ret.extend(i.to_bytes(4, 'little'))
 
     return ret
 
@@ -448,120 +444,124 @@ async def write(packid: int, *args: tuple[Any, ...]) -> bytes:
     return ret
 
 @unique
-class BanchoPacket(IntEnum):
-    # both server & client packets.
-    c_changeAction = 0
-    c_sendPublicMessage = 1
-    c_logout = 2
-    c_requestStatusUpdate = 3
-    c_ping = 4
-    s_userID = 5
-    s_sendMessage = 7
-    s_Pong = 8
-    s_handleIrcChangeUsername = 9
-    s_handleIrcQuit = 10
-    s_userStats = 11
-    s_userLogout = 12
-    s_spectatorJoined = 13
-    s_spectatorLeft = 14
-    s_spectateFrames = 15
-    c_startSpectating = 16
-    c_stopSpectating = 17
-    c_spectateFrames = 18
-    s_versionUpdate = 19
-    c_errorReport = 20 # unused
-    c_cantSpectate = 21
-    s_spectatorCantSpectate = 22
-    s_getAttention = 23
-    s_notification = 24
-    c_sendPrivateMessage = 25
-    s_updateMatch = 26
-    s_newMatch = 27
-    s_disposeMatch = 28
-    c_partLobby = 29
-    c_joinLobby = 30
-    c_createMatch = 31
-    c_joinMatch = 32
-    c_partMatch = 33
-    s_toggleBlockNonFriendPM = 34
-    #c_lobbyPartMatch = 35 # id probably used for something else now
-    s_matchJoinSuccess = 36
-    s_matchJoinFail = 37
-    c_matchChangeSlot = 38
-    c_matchReady = 39
-    c_matchLock = 40
-    c_matchChangeSettings = 41
-    s_fellowSpectatorJoined = 42
-    s_fellowSpectatorLeft = 43
-    c_matchStart = 44
-    s_allPlayerLoaded = 45
-    s_matchStart = 46
-    c_matchScoreUpdate = 47
-    s_matchScoreUpdate = 48
-    c_matchComplete = 49
-    s_matchTransferHost = 50
-    c_matchChangeMods = 51
-    c_matchLoadComplete = 52
-    s_matchAllPlayersLoaded = 53
-    c_matchNoBeatmap = 54
-    c_matchNotReady = 55
-    c_matchFailed = 56
-    s_matchPlayerFailed = 57
-    s_matchComplete = 58
-    c_matchHasBeatmap = 59
-    c_matchSkipRequest = 60
-    s_matchSkip = 61
-    s_unauthorized = 62 # unused
-    c_channelJoin = 63
-    s_channelJoinSuccess = 64
-    s_channelInfo = 65
-    s_channelKicked = 66
-    s_channelAutoJoin = 67
-    c_beatmapInfoRequest = 68 # unused
-    s_beatmapInfoReply = 69 # unused
-    c_matchTransferHost = 70
-    s_supporterGMT = 71
-    s_friendsList = 72
-    c_friendAdd = 73
-    c_friendRemove = 74
-    s_protocolVersion = 75
-    s_mainMenuIcon = 76
-    c_matchChangeTeam = 77
-    c_channelPart = 78
-    c_ReceiveUpdates = 79
-    s_monitor = 80 # unused
-    s_matchPlayerSkipped = 81
-    c_setAwayMessage = 82
-    s_userPresence = 83
-    c_ircOnly = 84
-    c_userStatsRequest = 85
-    s_restart = 86
-    c_matchInvite = 87
-    s_invite = 88
-    s_channelInfoEnd = 89
-    c_matchChangePassword = 90
-    s_matchChangePassword = 91
-    s_silenceEnd = 92
-    c_tournamentMatchInfoRequest = 93
-    s_userSilenced = 94
-    s_userPresenceSingle = 95
-    s_userPresenceBundle = 96
-    c_userPresenceRequest = 97
-    c_userPresenceRequestAll = 98
-    c_userToggleBlockNonFriendPM = 99
-    s_userPMBlocked = 100
-    s_targetIsSilenced = 101
-    s_versionUpdateForced = 102
-    s_switchServer = 103
-    s_accountRestricted = 104
-    s_RTX = 105
-    s_matchAbort = 106 # osu labels this as a client packet LOL
-    s_switchTournamentServer = 107
-    c_tournamentJoinMatchChannel = 108
-    c_tournamentLeaveMatchChannel = 109
+class ClientPacket(IntEnum):
+    CHANGE_ACTION = 0
+    SEND_PUBLIC_MESSAGE = 1
+    LOGOUT = 2
+    REQUEST_STATUS_UPDATE = 3
+    PING = 4
+    START_SPECTATING = 16
+    STOP_SPECTATING = 17
+    SPECTATE_FRAMES = 18
+    ERROR_REPORT = 20
+    CANT_SPECTATE = 21
+    SEND_PRIVATE_MESSAGE = 25
+    PART_LOBBY = 29
+    JOIN_LOBBY = 30
+    CREATE_MATCH = 31
+    JOIN_MATCH = 32
+    PART_MATCH = 33
+    MATCH_CHANGE_SLOT = 38
+    MATCH_READY = 39
+    MATCH_LOCK = 40
+    MATCH_CHANGE_SETTINGS = 41
+    MATCH_START = 44
+    MATCH_SCORE_UPDATE = 47
+    MATCH_COMPLETE = 49
+    MATCH_CHANGE_MODS = 51
+    MATCH_LOAD_COMPLETE = 52
+    MATCH_NO_BEATMAP = 54
+    MATCH_NOT_READY = 55
+    MATCH_FAILED = 56
+    MATCH_HAS_BEATMAP = 59
+    MATCH_SKIP_REQUEST = 60
+    CHANNEL_JOIN = 63
+    BEATMAP_INFO_REQUEST = 68
+    MATCH_TRANSFER_HOST = 70
+    FRIEND_ADD = 73
+    FRIEND_REMOVE = 74
+    MATCH_CHANGE_TEAM = 77
+    CHANNEL_PART = 78
+    RECEIVE_UPDATES = 79
+    SET_AWAY_MESSAGE = 82
+    IRC_ONLY = 84
+    USER_STATS_REQUEST = 85
+    MATCH_INVITE = 87
+    MATCH_CHANGE_PASSWORD = 90
+    TOURNAMENT_MATCH_INFO_REQUEST = 93
+    USER_PRESENCE_REQUEST = 97
+    USER_PRESENCE_REQUEST_ALL = 98
+    TOGGLE_BLOCK_NON_FRIEND_DMS = 99
+    TOURNAMENT_JOIN_MATCH_CHANNEL = 108
+    TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
     def __repr__(self) -> str:
-        return f'<Bancho: {self.name} ({self.value})>'
+        return f'<osu! Packet: {self.name} ({self.value})>'
+
+@unique
+class ServerPacket(IntEnum):
+    USER_ID = 5
+    SEND_MESSAGE = 7
+    PONG = 8
+    HANDLE_IRC_CHANGE_USERNAME = 9
+    HANDLE_IRC_QUIT = 10
+    USER_STATS = 11
+    USER_LOGOUT = 12
+    SPECTATOR_JOINED = 13
+    SPECTATOR_LEFT = 14
+    SPECTATE_FRAMES = 15
+    VERSION_UPDATE = 19
+    SPECTATOR_CANT_SPECTATE = 22
+    GET_ATTENTION = 23
+    NOTIFICATION = 24
+    UPDATE_MATCH = 26
+    NEW_MATCH = 27
+    DISPOSE_MATCH = 28
+    TOGGLE_BLOCK_NON_FRIEND_DMS = 34
+    MATCH_JOIN_SUCCESS = 36
+    MATCH_JOIN_FAIL = 37
+    FELLOW_SPECTATOR_JOINED = 42
+    FELLOW_SPECTATOR_LEFT = 43
+    ALL_PLAYERS_LOADED = 45
+    MATCH_START = 46
+    MATCH_SCORE_UPDATE = 48
+    MATCH_TRANSFER_HOST = 50
+    MATCH_ALL_PLAYERS_LOADED = 53
+    MATCH_PLAYER_FAILED = 57
+    MATCH_COMPLETE = 58
+    MATCH_SKIP = 61
+    UNAUTHORIZED = 62 # unused
+    CHANNEL_JOIN_SUCCESS = 64
+    CHANNEL_INFO = 65
+    CHANNEL_KICK = 66
+    CHANNEL_AUTO_JOIN = 67
+    BEATMAP_INFO_REPLY = 69
+    PRIVILEGES = 71
+    FRIENDS_LIST = 72
+    PROTOCOL_VERSION = 75
+    MAIN_MENU_ICON = 76
+    MONITOR = 80 # unused
+    MATCH_PLAYER_SKIPPED = 81
+    USER_PRESENCE = 83
+    RESTART = 86
+    MATCH_INVITE = 88
+    CHANNEL_INFO_END = 89
+    MATCH_CHANGE_PASSWORD = 91
+    SILENCE_END = 92
+    USER_SILENCED = 94
+    USER_PRESENCE_SINGLE = 95
+    USER_PRESENCE_BUNDLE = 96
+    USER_DM_BLOCKED = 100
+    TARGET_IS_SILENCED = 101
+    VERSION_UPDATE_FORCED = 102
+    SWITCH_SERVER = 103
+    ACCOUNT_RESTRICTED = 104
+    RTX = 105 # unused
+    MATCH_ABORT = 106
+    SWITCH_TOURNAMENT_SERVER = 107
+
+    def __repr__(self) -> str:
+        return f'<Bancho Packet: {self.name} ({self.value})>'
 
 #
 # packets
@@ -580,7 +580,7 @@ async def userID(id: int) -> bytes:
     # -8: requires verification
     # ??: valid id
     return await write(
-        BanchoPacket.s_userID,
+        ServerPacket.USER_ID,
         (id, osuTypes.i32)
     )
 
@@ -588,25 +588,25 @@ async def userID(id: int) -> bytes:
 async def sendMessage(client: str, msg: str, target: str,
                       client_id: int) -> bytes:
     return await write(
-        BanchoPacket.s_sendMessage,
+        ServerPacket.SEND_MESSAGE,
         ((client, msg, target, client_id), osuTypes.message)
     )
 
 # packet id: 8
 async def pong() -> bytes:
-    return await write(BanchoPacket.s_Pong)
+    return await write(ServerPacket.PONG)
 
 # packet id: 9
 async def changeUsername(old: str, new: str) -> bytes:
     return await write(
-        BanchoPacket.s_handleIrcChangeUsername,
+        ServerPacket.HANDLE_IRC_CHANGE_USERNAME,
         (f'{old}>>>>{new}', osuTypes.string)
     )
 
 # packet id: 11
 async def userStats(p) -> bytes:
     return await write(
-        BanchoPacket.s_userStats,
+        ServerPacket.USER_STATS,
         (p.id, osuTypes.i32),
         (p.status.action, osuTypes.u8),
         (p.status.info_text, osuTypes.string),
@@ -632,7 +632,7 @@ async def userStats(p) -> bytes:
 # packet id: 12
 async def logout(userID: int) -> bytes:
     return await write(
-        BanchoPacket.s_userLogout,
+        ServerPacket.LOGOUT,
         (userID, osuTypes.i32),
         (0, osuTypes.u8)
     )
@@ -640,138 +640,138 @@ async def logout(userID: int) -> bytes:
 # packet id: 13
 async def spectatorJoined(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_spectatorJoined,
+        ServerPacket.SPECTATOR_JOINED,
         (id, osuTypes.i32)
     )
 
 # packet id: 14
 async def spectatorLeft(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_spectatorLeft,
+        ServerPacket.SPECTATOR_LEFT,
         (id, osuTypes.i32)
     )
 
 # packet id: 15
 async def spectateFrames(data: bytearray) -> bytes:
     return ( # a little hacky, but quick.
-        BanchoPacket.s_spectateFrames.to_bytes(
+        ServerPacket.SPECTATE_FRAMES.to_bytes(
             3, 'little', signed = True
         ) + len(data).to_bytes(4, 'little') + data
     )
 
 # packet id: 19
 async def versionUpdate() -> bytes:
-    return await write(BanchoPacket.s_versionUpdate)
+    return await write(ServerPacket.VERSION_UPDATE)
 
 # packet id: 22
 async def spectatorCantSpectate(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_spectatorCantSpectate,
+        ServerPacket.SPECTATOR_CANT_SPECTATE,
         (id, osuTypes.i32)
     )
 
 # packet id: 23
 async def getAttention() -> bytes:
-    return await write(BanchoPacket.s_getAttention)
+    return await write(ServerPacket.GET_ATTENTION)
 
 # packet id: 24
 async def notification(msg: str) -> bytes:
     return await write(
-        BanchoPacket.s_notification,
+        ServerPacket.NOTIFICATION,
         (msg, osuTypes.string)
     )
 
 # packet id: 26
 async def updateMatch(m: Match) -> bytes:
     return await write(
-        BanchoPacket.s_updateMatch,
+        ServerPacket.UPDATE_MATCH,
         (m, osuTypes.match)
     )
 
 # packet id: 27
 async def newMatch(m: Match) -> bytes:
     return await write(
-        BanchoPacket.s_newMatch,
+        ServerPacket.NEW_MATCH,
         (m, osuTypes.match)
     )
 
 # packet id: 28
 async def disposeMatch(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_disposeMatch,
+        ServerPacket.DISPOSE_MATCH,
         (id, osuTypes.i32)
     )
 
 # packet id: 34
 async def toggleBlockNonFriendPM() -> bytes:
-    return await write(BanchoPacket.s_toggleBlockNonFriendPM)
+    return await write(ServerPacket.TOGGLE_BLOCK_NON_FRIEND_DMS)
 
 # packet id: 36
 async def matchJoinSuccess(m: Match) -> bytes:
     return await write(
-        BanchoPacket.s_matchJoinSuccess,
+        ServerPacket.MATCH_JOIN_SUCCESS,
         (m, osuTypes.match)
     )
 
 # packet id: 37
 async def matchJoinFail() -> bytes:
-    return await write(BanchoPacket.s_matchJoinFail)
+    return await write(ServerPacket.MATCH_JOIN_FAIL)
 
 # packet id: 42
 async def fellowSpectatorJoined(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_fellowSpectatorJoined,
+        ServerPacket.FELLOW_SPECTATOR_JOINED,
         (id, osuTypes.i32)
     )
 
 # packet id: 43
 async def fellowSpectatorLeft(id: int) -> bytes:
     return await write(
-        BanchoPacket.s_fellowSpectatorLeft,
+        ServerPacket.FELLOW_SPECTATOR_LEFT,
         (id, osuTypes.i32)
     )
 
 # packet id: 46
 async def matchStart(m: Match) -> bytes:
     return await write(
-        BanchoPacket.s_matchStart,
+        ServerPacket.MATCH_START,
         (m, osuTypes.match)
     )
 
 # packet id: 48
 async def matchScoreUpdate(frame: ScoreFrame) -> bytes:
     return await write(
-        BanchoPacket.s_matchScoreUpdate,
+        ServerPacket.MATCH_SCORE_UPDATE,
         (frame, osuTypes.scoreframe)
     )
 
 # packet id: 50
 async def matchTransferHost() -> bytes:
-    return await write(BanchoPacket.s_matchTransferHost)
+    return await write(ServerPacket.MATCH_TRANSFER_HOST)
 
 # packet id: 53
 async def matchAllPlayerLoaded() -> bytes:
-    return await write(BanchoPacket.s_matchAllPlayersLoaded)
+    return await write(ServerPacket.MATCH_ALL_PLAYERS_LOADED)
 
 # packet id: 57
 async def matchPlayerFailed(slot_id: int) -> bytes:
     return await write(
-        BanchoPacket.s_matchPlayerFailed,
+        ServerPacket.MATCH_PLAYER_FAILED,
         (slot_id, osuTypes.i32)
     )
 
 # packet id: 58
 async def matchComplete() -> bytes:
-    return await write(BanchoPacket.s_matchComplete)
+    return await write(ServerPacket.MATCH_COMPLETE)
 
 # packet id: 61
 async def matchSkip() -> bytes:
-    return await write(BanchoPacket.s_matchSkip)
+    return await write(ServerPacket.MATCH_SKIP)
 
 # packet id: 64
 async def channelJoin(name: str) -> bytes:
     return await write(
-        BanchoPacket.s_channelJoinSuccess,
+        ServerPacket.CHANNEL_JOIN_SUCCESS,
         (name, osuTypes.string)
     )
 
@@ -779,14 +779,14 @@ async def channelJoin(name: str) -> bytes:
 async def channelInfo(name: str, topic: str,
                       p_count: int) -> bytes:
     return await write(
-        BanchoPacket.s_channelInfo,
+        ServerPacket.CHANNEL_INFO,
         ((name, topic, p_count), osuTypes.channel)
     )
 
 # packet id: 66
 async def channelKick(name: str) -> bytes:
     return await write(
-        BanchoPacket.s_channelKicked,
+        ServerPacket.CHANNEL_KICK,
         (name, osuTypes.string)
     )
 
@@ -794,46 +794,47 @@ async def channelKick(name: str) -> bytes:
 async def channelAutoJoin(name: str, topic: str,
                           p_count: int) -> bytes:
     return await write(
-        BanchoPacket.s_channelAutoJoin,
+        ServerPacket.CHANNEL_AUTO_JOIN,
         ((name, topic, p_count), osuTypes.channel)
     )
 
 # packet id: 69
 #async def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
 #    return await write(
-#        BanchoPacket.s_beatmapInfoReply,
+#        ServerPacket.BEATMAP_INFO_REPLY,
 #        (maps, osuTypes.mapInfoReply)
 #    )
 
 # packet id: 71
 async def banchoPrivileges(priv: int) -> bytes:
     return await write(
-        BanchoPacket.s_supporterGMT,
+        ServerPacket.PRIVILEGES,
         (priv, osuTypes.i32)
     )
 
 # packet id: 72
 async def friendsList(*friends) -> bytes:
     return await write(
-        BanchoPacket.s_friendsList,
+        ServerPacket.FRIENDS_LIST,
         (friends, osuTypes.i32_list)
     )
 
 # packet id: 75
 async def protocolVersion(ver: int) -> bytes:
     return await write(
-        BanchoPacket.s_protocolVersion,
+        ServerPacket.PROTOCOL_VERSION,
         (ver, osuTypes.i32)
     )
 
 # packet id: 76
 async def mainMenuIcon() -> bytes:
     return await write(
-        BanchoPacket.s_mainMenuIcon,
+        ServerPacket.MAIN_MENU_ICON,
         ('|'.join(glob.config.menu_icon), osuTypes.string)
     )
 
 # packet id: 80
+# NOTE: deprecated
 async def monitor() -> bytes:
     # this is an older (now removed) 'anticheat' feature of the osu!
     # client; basically, it would do some checks (most likely for aqn),
@@ -842,19 +843,19 @@ async def monitor() -> bytes:
 
     # this doesn't work on newer clients, and i had no plans
     # of trying to put it to use - just coded for completion.
-    return await write(BanchoPacket.s_monitor)
+    return await write(ServerPacket.MONITOR)
 
 # packet id: 81
 async def matchPlayerSkipped(pid: int) -> bytes:
     return await write(
-        BanchoPacket.s_matchPlayerSkipped,
+        ServerPacket.MATCH_PLAYER_SKIPPED,
         (pid, osuTypes.i32)
     )
 
 # packet id: 83
 async def userPresence(p) -> bytes:
     return await write(
-        BanchoPacket.s_userPresence,
+        ServerPacket.USER_PRESENCE,
         (p.id, osuTypes.i32),
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
@@ -872,7 +873,7 @@ async def userPresence(p) -> bytes:
 # packet id: 86
 async def restartServer(ms: int) -> bytes:
     return await write(
-        BanchoPacket.s_restart,
+        ServerPacket.RESTART,
         (ms, osuTypes.i32)
     )
 
@@ -880,94 +881,95 @@ async def restartServer(ms: int) -> bytes:
 async def matchInvite(p, t_name: str) -> bytes:
     msg = f'Come join my game: {p.match.embed}.'
     return await write(
-        BanchoPacket.s_invite,
+        ServerPacket.MATCH_INVITE,
         ((p.name, msg, t_name, p.id), osuTypes.message)
     )
 
 # packet id: 89
 async def channelInfoEnd() -> bytes:
-    return await write(BanchoPacket.s_channelInfoEnd)
+    return await write(ServerPacket.CHANNEL_INFO_END)
 
 # packet id: 91
 async def matchChangePassword(new: str) -> bytes:
     return await write(
-        BanchoPacket.s_matchChangePassword,
+        ServerPacket.MATCH_CHANGE_PASSWORD,
         (new, osuTypes.string)
     )
 
 # packet id: 92
 async def silenceEnd(delta: int) -> bytes:
     return await write(
-        BanchoPacket.s_silenceEnd,
+        ServerPacket.SILENCE_END,
         (delta, osuTypes.i32)
     )
 
 # packet id: 94
 async def userSilenced(pid: int) -> bytes:
     return await write(
-        BanchoPacket.s_userSilenced,
+        ServerPacket.USER_SILENCED,
         (pid, osuTypes.i32)
     )
 
 """ not sure why 95 & 96 exist? unused in gulag """
 
 # packet id: 95
-async def userPresenceSingle(pid):
+async def userPresenceSingle(pid: int) -> bytes:
     return await write(
-        BanchoPacket.s_userPresenceSingle,
+        ServerPacket.USER_PRESENCE_SINGLE,
         (pid, osuTypes.i32)
     )
 
 # packet id: 96
-async def userPresenceBundle(pid_list):
+async def userPresenceBundle(pid_list: list[int]) -> bytes:
     return await write(
-        BanchoPacket.s_userPresenceBundle,
+        ServerPacket.USER_PRESENCE_BUNDLE,
         (pid_list, osuTypes.i32_list)
     )
 
 # packet id: 100
-async def userPMBlocked(target: str) -> bytes:
+async def userDMBlocked(target: str) -> bytes:
     return await write(
-        BanchoPacket.s_userPMBlocked,
+        ServerPacket.USER_DM_BLOCKED,
         (('', '', target, 0), osuTypes.message)
     )
 
 # packet id: 101
 async def targetSilenced(target: str) -> bytes:
     return await write(
-        BanchoPacket.s_targetIsSilenced,
+        ServerPacket.TARGET_IS_SILENCED,
         (('', '', target, 0), osuTypes.message)
     )
 
 # packet id: 102
 async def versionUpdateForced() -> bytes:
-    return await write(BanchoPacket.s_versionUpdateForced)
+    return await write(ServerPacket.VERSION_UPDATE_FORCED)
 
 # packet id: 103
 async def switchServer(t: int) -> bytes: # (idletime < t || match != null)
     return await write(
-        BanchoPacket.s_switchServer,
+        ServerPacket.SWITCH_SERVER,
         (t, osuTypes.i32)
     )
 
 # packet id: 104
 async def accountRestricted() -> bytes:
-    return await write(BanchoPacket.s_accountRestricted)
+    return await write(ServerPacket.ACCOUNT_RESTRICTED)
 
 # packet id: 105
+# NOTE: deprecated
 async def RTX(msg: str) -> bytes:
     # bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:
     # - black screen, freezes game, beeps loudly.
     # within the next 3-8 seconds at random.
     return await write(
-        BanchoPacket.s_RTX,
+        ServerPacket.RTX,
         (msg, osuTypes.string)
     )
 
 # packet id: 106
 async def matchAbort() -> bytes:
-    return await write(BanchoPacket.s_matchAbort)
+    return await write(ServerPacket.MATCH_ABORT)
 
 # packet id: 107
 async def switchTournamentServer(ip: str) -> bytes:
@@ -975,6 +977,6 @@ async def switchTournamentServer(ip: str) -> bytes:
     # not on the client's normal endpoints,
     # but we can send it either way xd.
     return await write(
-        BanchoPacket.s_switchTournamentServer,
+        ServerPacket.SWITCH_TOURNAMENT_SERVER,
         (ip, osuTypes.string)
     )
