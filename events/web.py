@@ -1031,9 +1031,10 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     # statuses: 0: failed, 1: passed but not top, 2: passed top
     query = [
-        f'SELECT s.id, s.{scoring} AS _score, s.max_combo, '
-        's.n50, s.n100, s.n300, s.nmiss, s.nkatu, s.ngeki, '
-        's.perfect, s.mods, s.play_time time, u.name, u.id userid '
+        f'SELECT s.id, s.{scoring} AS _score, '
+        's.max_combo, s.n50, s.n100, s.n300, '
+        's.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, '
+        'UNIX_TIMESTAMP(s.play_time) time, u.name, u.id userid '
         f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
         'WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s'
     ]
@@ -1070,9 +1071,11 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         return '\n'.join(res + ['', '']).encode()
 
     p_best = await glob.db.fetch(
-        f'SELECT id, {scoring} AS _score, max_combo, '
-        'n50, n100, n300, nmiss, nkatu, ngeki, '
-        f'perfect, mods, play_time time FROM {table} '
+        f'SELECT id, {scoring} AS _score, '
+        'max_combo, n50, n100, n300, '
+        'nmiss, nkatu, ngeki, perfect, mods, '
+        'UNIX_TIMESTAMP(play_time) time '
+        f'FROM {table} '
         'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
