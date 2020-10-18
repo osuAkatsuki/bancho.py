@@ -4,7 +4,7 @@ from typing import Optional
 from aiohttp.client import ClientSession
 from objects.collections import PlayerList, ChannelList, MatchList
 from cmyui import AsyncSQLPoolWrapper, Version, AsyncTCPServer
-import config # imported for indirect use
+import config  # imported for indirect use
 
 __all__ = ('players', 'channels',
            'matches', 'db', 'cache')
@@ -33,10 +33,10 @@ cache = {
     # certainty nothing can be abused, it doesn't feel great. maaybe
     # it could have a setting on whether to enable, but i don't know
     # if that should be the server owners decision, either.
-    'bcrypt': {}, # {md5: bcrypt, ...}
+    'bcrypt': {},  # {md5: bcrypt, ...}
     # we'll cache results for osu! client update requests since they
     # are relatively frequently and won't change very frequently.
-    'update': { # default timeout is 1h, set on request.
+    'update': {  # default timeout is 1h, set on request.
         'cuttingedge': {'check': None, 'path': None, 'timeout': 0},
         'stable40': {'check': None, 'path': None, 'timeout': 0},
         'beta40': {'check': None, 'path': None, 'timeout': 0},
@@ -44,10 +44,10 @@ cache = {
     },
     # cache all beatmap data calculated while online. this way,
     # the most requested maps will inevitably always end up cached.
-    'beatmap': {}, # {md5: {timeout, map}, ...}
+    'beatmap': {},  # {md5: {timeout, map}, ...}
     # cache all beatmaps which we failed to get from the osuapi,
     # so that we do not have to perform this request multiple times.
-    'unsubmitted': set(), # {md5, ...}
+    'unsubmitted': set(),  # {md5, ...}
     # when a score is submitted, the osu! client will submit a
     # performance report of the user's pc along with some technical
     # details about the score. the performance report is submitted
@@ -59,5 +59,5 @@ cache = {
     # check if it's id is in the cache; if so, then we haven't
     # recevied our score yet, so we'll give it some time, this
     # way our report always gets submitted.
-    'performance_reports': set() # {scoreid, ...}
+    'performance_reports': set()  # {scoreid, ...}
 }

@@ -6,7 +6,8 @@ import aiofiles
 import orjson
 import os
 import gzip
-import hashlib, bcrypt
+import hashlib
+import bcrypt
 from collections import defaultdict
 
 from cmyui import AsyncConnection, log, Ansi
@@ -35,6 +36,7 @@ __all__ = (
 deny_doublereply = frozenset({
     ClientPacket.USER_STATS_REQUEST
 })
+
 
 async def handle_bancho(conn: AsyncConnection) -> None:
     """Handle a bancho request (POST c.ppy.sh/)."""
@@ -82,7 +84,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         # token was not found; changes are, we just restarted
         # the server. just tell their client to re-connect.
         resp = await packets.notification('Server is restarting') + \
-               await packets.restartServer(0) # send 0ms since server is up
+            await packets.restartServer(0)  # send 0ms since server is up
 
         await conn.send(200, resp)
         return
@@ -101,7 +103,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     while not pr.empty():
         await pr.read_packet_header()
         if pr.current_packet is None:
-            continue # skip, packet empty or corrupt?
+            continue  # skip, packet empty or corrupt?
 
         if pr.current_packet == ClientPacket.PING:
             continue
@@ -159,9 +161,10 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 # a bytearray which could be cast to bytes
 # here at the end? probably a better soln.
 
+
 async def handle_web(conn: AsyncConnection) -> None:
     """Handle a web request (osu.ppy.sh/web/*)."""
-    handler = conn.path[5:] # cut off /web/
+    handler = conn.path[5:]  # cut off /web/
 
     if handler in glob.web_map:
         # we have a handler for this connection.
@@ -196,6 +199,7 @@ async def handle_web(conn: AsyncConnection) -> None:
         # we don't have a handler for this connection.
         log(f'Unhandled: {conn.path}.', Ansi.YELLOW)
 
+
 async def handle_ss(conn: AsyncConnection) -> None:
     """Handle a screenshot request (osu.ppy.sh/ss/*)."""
     if len(conn.path) != 16:
@@ -211,6 +215,7 @@ async def handle_ss(conn: AsyncConnection) -> None:
     async with aiofiles.open(path, 'rb') as f:
         await conn.send(200, await f.read())
 
+
 async def handle_dl(conn: AsyncConnection) -> None:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     if not (set_id := conn.path[3:]).isdecimal():
@@ -223,6 +228,8 @@ async def handle_dl(conn: AsyncConnection) -> None:
     await conn.send(302, None)
 
 default_avatar = f'.data/avatars/default.jpg'
+
+
 async def handle_avatar(conn: AsyncConnection) -> None:
     """Handle an avatar request (a.ppy.sh/*)."""
     _path = f'.data/avatars/{conn.path[1:]}.jpg'
@@ -230,6 +237,7 @@ async def handle_avatar(conn: AsyncConnection) -> None:
 
     async with aiofiles.open(path, 'rb') as f:
         await conn.send(200, await f.read())
+
 
 async def handle_registration(conn: AsyncConnection) -> None:
     mp_args = conn.multipart_args
@@ -239,7 +247,7 @@ async def handle_registration(conn: AsyncConnection) -> None:
     pw_txt = mp_args['user[password]']
 
     if not all((name, email, pw_txt)) or 'check' not in mp_args:
-        return # missing required params.
+        return  # missing required params.
 
     # ensure all args passed
     # are safe for registration.
@@ -296,7 +304,7 @@ async def handle_registration(conn: AsyncConnection) -> None:
         # make the md5 & bcrypt the md5 for sql.
         pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
         pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt()).decode()
-        glob.cache['bcrypt'][pw_md5] = pw_bcrypt # cache result for login
+        glob.cache['bcrypt'][pw_md5] = pw_bcrypt  # cache result for login
 
         safe_name = name.lower().replace(' ', '_')
 
@@ -317,11 +325,12 @@ async def handle_registration(conn: AsyncConnection) -> None:
 
         log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
-    await conn.send(200, b'ok') # success
+    await conn.send(200, b'ok')  # success
+
 
 async def handle_api(conn: AsyncConnection) -> None:
     """Handle an api request (osu.ppy.sh/api/*)."""
-    handler = conn.path[5:] # cut off /api/
+    handler = conn.path[5:]  # cut off /api/
 
     if handler in glob.api_map:
         if glob.config.debug:

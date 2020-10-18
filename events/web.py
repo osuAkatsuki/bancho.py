@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from objects.player import Player
 from constants.gamemodes import GameMode
 from typing import Optional, Callable
 from enum import IntEnum, unique
@@ -33,6 +34,7 @@ from objects import glob
 
 glob.web_map = {}
 
+
 def web_handler(uri: str) -> Callable:
     """Register a handler in `glob.web_map`."""
     def register_cb(cb: Callable) -> Callable:
@@ -40,6 +42,7 @@ def web_handler(uri: str) -> Callable:
         return cb
 
     return register_cb
+
 
 def _required_args(args: set[str], argset: str) -> Callable:
     def wrapper(f: Callable) -> Callable:
@@ -57,9 +60,11 @@ def _required_args(args: set[str], argset: str) -> Callable:
         return handler
     return wrapper
 
+
 required_args = partial(_required_args, argset='args')
 required_mpargs = partial(_required_args, argset='multipart_args')
 required_files = partial(_required_args, argset='files')
+
 
 def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
     def wrapper(f: Callable) -> Callable:
@@ -87,6 +92,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 
         return handler
     return wrapper
+
 
 @web_handler('bancho_connect.php')
 async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
@@ -170,7 +176,6 @@ async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
     ...
 """
 
-from objects.player import Player
 
 @web_handler('osu-screenshot.php')
 @required_mpargs({'u', 'p', 'v'})
@@ -188,11 +193,13 @@ async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     log(f'{p} uploaded {filename}.')
     return filename.encode()
 
+
 @web_handler('osu-getfriends.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetFriends(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(str(i) for i in p.friends).encode()
+
 
 @web_handler('osu-getbeatmapinfo.php')
 @required_args({'u', 'h'})
@@ -201,7 +208,7 @@ async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]
     data = orjson.loads(conn.body)
     ret = []
 
-    to_osuapi_status = lambda s: {
+    def to_osuapi_status(s): return {
         0: 0,
         2: 1,
         3: 2,
@@ -246,16 +253,18 @@ async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
             [res['md5'], p.id]
-        ): ranks[score['mode']] = score['grade']
+        ):
+            ranks[score['mode']] = score['grade']
 
         ret.append('{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
-            i = idx, ranks = '|'.join(ranks), **res
+            i=idx, ranks='|'.join(ranks), **res
         ))
 
     for bid in data['Ids']:
         breakpoint()
 
     return '\n'.join(ret).encode()
+
 
 @web_handler('osu-getfavourites.php')
 @required_args({'u', 'h'})
@@ -268,6 +277,7 @@ async def osuGetFavourites(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     )
 
     return '\n'.join(favourites).encode()
+
 
 @web_handler('osu-addfavourite.php')
 @required_args({'u', 'h', 'a'})
@@ -282,7 +292,8 @@ async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         'SELECT 1 FROM favourites '
         'WHERE userid = %s AND setid = %s',
         [p.id, conn.args['a']]
-    ): return b"You've already favourited this beatmap!"
+    ):
+        return b"You've already favourited this beatmap!"
 
     # add favourite
     await glob.db.execute(
@@ -290,6 +301,7 @@ async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         'VALUES (%s, %s)',
         [p.id, conn.args['a']]
     )
+
 
 @web_handler('lastfm.php')
 @required_args({'b', 'action', 'us', 'ha'})
@@ -340,6 +352,7 @@ async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         pass
     """
 
+
 @web_handler('osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login('u', 'h')
@@ -357,35 +370,35 @@ async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     if conn.args['m'] != '-1':
         params |= {'mode': conn.args['m']}
 
-    if conn.args['r'] != '4': # 4 = all
+    if conn.args['r'] != '4':  # 4 = all
         # convert to osu!api status
         status = RankedStatus.from_osudirect(int(conn.args['r']))
         params |= {'status': status.osu_api}
 
-    async with glob.http.get(url, params = params) as resp:
+    async with glob.http.get(url, params=params) as resp:
         if not resp or resp.status != 200:
             return b'Failed to retrieve data from mirror!'
 
         result = await resp.json()
 
-    lresult = len(result) # send over 100 if we receive
-                          # 100 matches, so the client
-                          # knows there are more to get
+    lresult = len(result)  # send over 100 if we receive
+    # 100 matches, so the client
+    # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
-    diff_rating = lambda map: map['DifficultyRating']
+    def diff_rating(map): return map['DifficultyRating']
 
     for bmap in result:
         diffs = ','.join(
             '[{DifficultyRating:.2f}⭐] {DiffName} '
             '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
-            for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+            for row in sorted(bmap['ChildrenBeatmaps'], key=diff_rating)
         )
 
         ret.append(
             '{SetID}.osz|{Artist}|{Title}|{Creator}|'
-            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
+            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|'  # TODO: rating
             '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
-        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+        )  # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
     return '\n'.join(ret).encode()
 
@@ -442,6 +455,7 @@ async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(ret).encode()
     """
 
+
 @web_handler('osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
@@ -455,7 +469,7 @@ async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[byte
             opt_id = int(conn.args['s'])
 
             if opt_id not in p.menu_options:
-                return # negative set id, non-menu
+                return  # negative set id, non-menu
 
             opt = p.menu_options[opt_id]
 
@@ -478,7 +492,7 @@ async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[byte
     elif 'b' in conn.args:
         k, v = ('id', conn.args['b'])
     else:
-        return # invalid args
+        return  # invalid args
 
     # Get all set data.
     bmapset = await glob.db.fetch(
@@ -505,17 +519,18 @@ autoban_pp = (
     # Values below are in form (non_fl, fl), as fl has custom
     # vals as it finds quite a few additional cheaters on the side.
     (700,   600),   # vn!std
-    (UNDEF, UNDEF), # vn!taiko
-    (UNDEF, UNDEF), # vn!catch
-    (UNDEF, UNDEF), # vn!mania
+    (UNDEF, UNDEF),  # vn!taiko
+    (UNDEF, UNDEF),  # vn!catch
+    (UNDEF, UNDEF),  # vn!mania
 
     (1200,  800),   # rx!std
-    (UNDEF, UNDEF), # rx!taiko
-    (UNDEF, UNDEF), # rx!catch
+    (UNDEF, UNDEF),  # rx!taiko
+    (UNDEF, UNDEF),  # rx!catch
 
     (UNDEF, UNDEF)  # ap!std
 )
 del UNDEF
+
 
 @web_handler('osu-submit-modular-selector.php')
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
@@ -541,7 +556,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         return b'error: no'
     elif s.bmap.status == RankedStatus.Pending:
         # XXX: Perhaps will accept in the future,
-        return b'error: no' # not now though.
+        return b'error: no'  # not now though.
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -583,8 +598,8 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         if s.pp > pp_cap:
             log(f'{s.player} banned for submitting '
-                 f'{s.pp:.2f} score on gm {s.mode!r}.',
-                 Ansi.LRED)
+                f'{s.pp:.2f} score on gm {s.mode!r}.',
+                Ansi.LRED)
 
             await s.player.ban(glob.bot, f'[{s.mode!r}] autoban @ {s.pp:.2f}')
             return b'error: ban'
@@ -652,8 +667,8 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     # if this is our (new) best play on
     # the map, update our ranked score.
     if s.status == SubmissionStatus.BEST \
-    and s.bmap.status in (RankedStatus.Ranked,
-                          RankedStatus.Approved):
+        and s.bmap.status in (RankedStatus.Ranked,
+                              RankedStatus.Approved):
         # add our new ranked score.
         additive = s.score
 
@@ -684,7 +699,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     )
 
     if s.status == SubmissionStatus.BEST and s.rank == 1 \
-    and (announce_chan := glob.channels['#announce']):
+            and (announce_chan := glob.channels['#announce']):
         # Announce the user's #1 score.
         prev_n1 = await glob.db.fetch(
             'SELECT u.id, name FROM users u '
@@ -696,10 +711,12 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
         performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
 
-        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed} {s.mods!r} with {s.acc:.2f}% for {performance}.']
+        ann = [
+            f'\x01ACTION achieved #1 on {s.bmap.embed} {s.mods!r} with {s.acc:.2f}% for {performance}.']
 
-        if prev_n1: # If there was previously a score on the map, add old #1.
-            ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+        if prev_n1:  # If there was previously a score on the map, add old #1.
+            ann.append(
+                '(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
         await announce_chan.send(s.player, ' '.join(ann), to_client=True)
 
@@ -740,7 +757,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'chartUrl:https://akatsuki.pw/b/{s.bmap.id}',
             'chartName:Beatmap Ranking',
 
-            ( # we had a score on the map prior to this
+            (  # we had a score on the map prior to this
                 f'rankBefore:{s.prev_best.rank}|rankAfter:{s.rank}|'
                 f'rankedScoreBefore:{s.prev_best.score}|rankedScoreAfter:{s.score}|'
                 f'totalScoreBefore:{s.prev_best.score}|totalScoreAfter:{s.score}|'
@@ -748,16 +765,16 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
                 f'accuracyBefore:{s.prev_best.acc:.2f}|accuracyAfter:{s.acc:.2f}|'
                 f'ppBefore:{s.prev_best.pp:.4f}|ppAfter:{s.pp:.4f}|'
                 f'onlineScoreId:{s.id}'
-            ) if s.prev_best else ( # we don't, this is our first
+            ) if s.prev_best else (  # we don't, this is our first
                 f'rankBefore:|rankAfter:{s.rank}|'
-                f'rankedScoreBefore:|rankedScoreAfter:{s.score}|' # these are
-                f'totalScoreBefore:|totalScoreAfter:{s.score}|' # prolly wrong
+                f'rankedScoreBefore:|rankedScoreAfter:{s.score}|'  # these are
+                f'totalScoreBefore:|totalScoreAfter:{s.score}|'  # prolly wrong
                 f'maxComboBefore:|maxComboAfter:{s.max_combo}|'
                 f'accuracyBefore:|accuracyAfter:{s.acc:.2f}|'
                 f'ppBefore:|ppAfter:{s.pp:.4f}|'
                 f'onlineScoreId:{s.id}'
             )
-        )))#'|'.join(beatmap_chart))
+        )))  # '|'.join(beatmap_chart))
 
         # append overall ranking chart (#3)
         charts.append('|'.join((
@@ -766,7 +783,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             'chartName:Overall Ranking',
 
             # TODO: achievements
-            ( # we have a score on the account prior to this
+            (  # we have a score on the account prior to this
                 f'rankBefore:{prev_stats.rank}|rankAfter:{stats.rank}|'
                 f'rankedScoreBefore:{prev_stats.rscore}|rankedScoreAfter:{stats.rscore}|'
                 f'totalScoreBefore:{prev_stats.tscore}|totalScoreAfter:{stats.tscore}|'
@@ -775,7 +792,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
                 f'ppBefore:{prev_stats.pp:.4f}|ppAfter:{stats.pp:.4f}|'
                 # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
                 f'onlineScoreId:{s.id}'
-            ) if prev_stats else ( # this is the account's first score
+            ) if prev_stats else (  # this is the account's first score
                 f'rankBefore:|rankAfter:{stats.rank}|'
                 f'rankedScoreBefore:|rankedScoreAfter:{stats.rscore}|'
                 f'totalScoreBefore:|totalScoreAfter:{stats.tscore}|'
@@ -792,6 +809,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
 
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
+
 
 @web_handler('osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
@@ -908,6 +926,7 @@ async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         return
 """
 
+
 @web_handler('osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login('u', 'p', b'auth fail')
@@ -951,20 +970,22 @@ async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
     ratings = [x[0] for x in await glob.db.fetchall(
         'SELECT rating FROM ratings '
         'WHERE map_md5 = %s',
-        [map_md5], _dict = False
+        [map_md5], _dict=False
     )]
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
     return f'alreadyvoted\n{avg}'.encode()
 
+
 @unique
 class RankingType(IntEnum):
-    Local   = 0
-    Top     = 1
-    Mods    = 2
+    Local = 0
+    Top = 1
+    Mods = 2
     Friends = 3
     Country = 4
+
 
 @web_handler('osu-osz2-getscores.php')
 @required_args({'s', 'vv', 'v', 'c', 'f', 'm',
@@ -1045,13 +1066,13 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         query.append('AND s.mods = %s')
         params.append(mods)
     elif rank_type == RankingType.Friends:
-        query.append( # kinda ugly doe
+        query.append(  # kinda ugly doe
             'AND s.userid IN ((SELECT user2 FROM friendships '
             'WHERE user1 = {0}), {0})'.format(p.id)
         )
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
-        params.append(p.country[1]) # letters, not id
+        params.append(p.country[1])  # letters, not id
 
     query.append(f'ORDER BY _score DESC LIMIT 50')
 
@@ -1101,9 +1122,9 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         res.append(
             score_fmt.format(
                 **p_best,
-                name = p.name, userid = p.id,
-                score = int(p_best['_score']),
-                has_replay = '1', rank = p_best_rank
+                name=p.name, userid=p.id,
+                score=int(p_best['_score']),
+                has_replay='1', rank=p_best_rank
             )
         )
     else:
@@ -1111,12 +1132,13 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     res.extend(
         score_fmt.format(
-            **s, score = int(s['_score']),
-            has_replay = '1', rank = idx + 1
+            **s, score=int(s['_score']),
+            has_replay='1', rank=idx + 1
         ) for idx, s in enumerate(scores)
     )
 
     return '\n'.join(res).encode()
+
 
 @web_handler('osu-comment.php')
 @required_mpargs({'u', 'p', 'b', 's',
@@ -1194,18 +1216,19 @@ async def osuComment(p: Player, conn: AsyncConnection) -> Optional[bytes]:
              sttime, comment, colour]
         )
 
-        return # empty resp is fine
+        return  # empty resp is fine
 
     else:
         # invalid action
         return b'Invalid action.'
+
 
 @web_handler('osu-markasread.php')
 @required_args({'u', 'h', 'channel'})
 @get_login('u', 'h')
 async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
-        return b'' # no channel specified
+        return b''  # no channel specified
 
     if not (t := await glob.players.get_by_name(t_name, sql=True)):
         return
@@ -1218,13 +1241,16 @@ async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         [p.id, t.id]
     )
 
+
 @web_handler('osu-getseasonal.php')
 async def osuSeasonal(conn: AsyncConnection) -> Optional[bytes]:
     return orjson.dumps(glob.config.seasonal_bgs)
 
+
 @web_handler('osu-error.php')
 async def osuError(conn: AsyncConnection) -> Optional[bytes]:
     ...
+
 
 @web_handler('check-updates.php')
 @required_args({'action', 'stream'})
@@ -1249,7 +1275,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
         return cache[action]
 
     url = 'https://old.ppy.sh/web/check-updates.php'
-    async with glob.http.get(url, params = conn.args) as resp:
+    async with glob.http.get(url, params=conn.args) as resp:
         if not resp or resp.status != 200:
             return b'Failed to retrieve data from osu!'
 
@@ -1261,6 +1287,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
                         current_time)
 
     return result
+
 
 async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
@@ -1274,7 +1301,8 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
             re['artist'], re['title'],
             re['creator'], re['version']
         ]
-    )): return # no map found
+    )):
+        return  # no map found
 
     if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
         # map found on disk.
@@ -1300,8 +1328,10 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
 # some depreacted handlers - no longer used in regular connections.
 # XXX: perhaps these could be turned into decorators to allow
 # for better specialization of params? perhaps prettier too :P
+
+
 async def deprecated_handler(conn: AsyncConnection) -> Optional[bytes]:
-    args = conn.args or conn.multipart_args # cant support both :/.. could union
+    args = conn.args or conn.multipart_args  # cant support both :/.. could union
     pname = phash = None
 
     for p in ('u', 'us'):

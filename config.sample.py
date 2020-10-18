@@ -4,7 +4,7 @@
 # the domain you'd like gulag to be hosted on.
 # XXX: don't include the 'http(s)' prefix, it will be
 #      handled automatically situationally by gulag.
-domain = 'cmyui.codes' # https://cmyui.codes
+domain = 'cmyui.codes'  # https://cmyui.codes
 
 # the address which the server runs on.
 # the server supports both inet4 and unix sockets.
@@ -57,8 +57,8 @@ mirror = 'https://storage.ripple.moe'
 # the menu icon displayed on
 # the main menu of osu! in-game.
 menu_icon = (
-    'https://akatsuki.pw/static/logos/logo_ingame.png', # image URL
-    'https://akatsuki.pw' # onclick URL
+    'https://akatsuki.pw/static/logos/logo_ingame.png',  # image URL
+    'https://akatsuki.pw'  # onclick URL
 )
 
 # seasonal backgrounds to be displayed

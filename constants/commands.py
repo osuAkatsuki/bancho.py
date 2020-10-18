@@ -23,6 +23,7 @@ CommandResponse = dict[str, str]
 # trying to think of some use cases lol..
 glob.commands = []
 
+
 def command(priv: Privileges, public: bool,
             trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
@@ -37,10 +38,12 @@ def command(priv: Privileges, public: bool,
         return callback
     return register_callback
 
+
 """ User commands
 # The commands below are not considered dangerous,
 # and are granted to any unbanned players.
 """
+
 
 @command(priv=Privileges.Normal, public=False)
 async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -48,6 +51,7 @@ async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
                      for cmd in glob.commands if cmd['doc']
                      if p.priv & cmd['priv'])
+
 
 @command(priv=Privileges.Normal, public=True)
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -61,6 +65,7 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
+
 @command(priv=Privileges.Normal, public=True)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
@@ -69,6 +74,7 @@ async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '
             f'{s.pp:.2f}pp #{s.rank}')
+
 
 @command(priv=Privileges.Normal, public=False)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -80,15 +86,19 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         'SELECT id, set_id, artist, title, version '
         'FROM maps WHERE title LIKE %s '
         'LIMIT 50', [f'%{" ".join(msg)}%']
-    )): return 'No matches found :('
+    )):
+        return 'No matches found :('
 
     return '\n'.join(
         '[https://osu.gatari.pw/d/{set_id} DL] '
-        '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
+        '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(
+            **row)
         for row in res
     ) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
+
+
 @command(trigger='!with', priv=Privileges.Normal, public=False)
 async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
@@ -107,7 +117,7 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     for param in (p.strip('+%') for p in msg):
         if cmyui._isdecimal(param, _float=True):
             acc = float(param)
-        elif ~len(param) & 1: # len(param) % 2 == 0
+        elif ~len(param) & 1:  # len(param) % 2 == 0
             mods = Mods.from_str(param)
         else:
             return 'Invalid syntax: !with <mods/acc> ...'
@@ -143,16 +153,19 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # manage  the server's state of beatmaps.
 """
 
-status_to_id = lambda s: {
+
+def status_to_id(s): return {
     'rank': 2,
     'unrank': 0,
     'love': 5
 }[s]
+
+
 @command(priv=Privileges.Nominator, public=True)
 async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Changes the ranked status of the most recently /np'ed map."""
     if len(msg) != 2 or msg[0] not in ('rank', 'unrank', 'love') \
-                     or msg[1] not in ('set', 'map'):
+            or msg[1] not in ('set', 'map'):
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if not p.last_np:
@@ -199,6 +212,7 @@ async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # and are generally for managing players.
 """
 
+
 @command(priv=Privileges.Admin, public=False)
 async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Ban a player's account, with a reason."""
@@ -216,6 +230,7 @@ async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     await t.ban(p, reason)
     return f'{t} was banned.'
+
 
 @command(priv=Privileges.Admin, public=False)
 async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -235,6 +250,7 @@ async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     await t.unban(p, reason)
     return f'{t} was unbanned.'
 
+
 @command(priv=Privileges.Admin, public=False)
 async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Send a notification to all players."""
@@ -243,6 +259,7 @@ async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     glob.players.enqueue(await packets.notification(' '.join(msg)))
     return 'Alert sent.'
+
 
 @command(trigger='!alertu', priv=Privileges.Admin, public=False)
 async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -261,6 +278,7 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # simply not useful for any other roles.
 """
 
+
 @command(trigger='!switchserv', priv=Privileges.Dangerous, public=False)
 async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Switch servers to a specified ip address."""
@@ -271,8 +289,8 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return 'Have a nice journey..'
 
 # rest in peace rtx - oct 2020 :candle:
-#@command(priv=Privileges.Dangerous, public=False)
-#async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+# @command(priv=Privileges.Dangerous, public=False)
+# async def rtx(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 #    """Send an RTX packet with a message to a user."""
 #    if len(msg) != 2:
 #        return 'Invalid syntax: !rtx <name> <msg>'
@@ -284,6 +302,8 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 #    return 'pong'
 
 # XXX: not very useful, mostly just for testing/fun.
+
+
 @command(trigger='!spack', priv=Privileges.Dangerous, public=False)
 async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Send a specific (empty) packet by id to a player."""
@@ -297,13 +317,15 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
     t.enqueue(await packets.write(packet))
     return f'Wrote {packet!r} to {t}.'
 
+
 @command(priv=Privileges.Dangerous, public=False)
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Toggle the console's debug setting."""
     glob.config.debug = not glob.config.debug
     return f"Toggled {'on' if glob.config.debug else 'off'}."
 
-str_to_priv = lambda p: defaultdict(lambda: None, {
+
+def str_to_priv(p): return defaultdict(lambda: None, {
     'normal': Privileges.Normal,
     'whitelisted': Privileges.Whitelisted,
     'supporter': Privileges.Supporter,
@@ -314,6 +336,8 @@ str_to_priv = lambda p: defaultdict(lambda: None, {
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
 })[p]
+
+
 @command(priv=Privileges.Dangerous, public=False)
 async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Set privileges for a player (by name)."""
@@ -322,7 +346,8 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     # a mess that gets each unique privilege out of msg.
     # TODO: rewrite to be at least a bit more readable..
-    priv = [str_to_priv(i) for i in set(''.join(msg[1:]).replace(' ', '').lower().split('|'))]
+    priv = [str_to_priv(i) for i in set(
+        ''.join(msg[1:]).replace(' ', '').lower().split('|'))]
     if any(x is None for x in priv):
         return 'Invalid privileges.'
 
@@ -330,12 +355,14 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         return 'Could not find user.'
 
     await glob.db.execute('UPDATE users SET priv = %s WHERE id = %s',
-                    [newpriv := sum(priv), t.id])
+                          [newpriv := sum(priv), t.id])
 
     t.priv = Privileges(newpriv)
     return 'Success.'
 
 # temp command, to illustrate how menu options will work
+
+
 @command(trigger='men', priv=Privileges.Dangerous, public=False)
 async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     async def callback():
@@ -351,6 +378,8 @@ async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # devs.. Comes in handy when debugging to be able to run something
 # like `!ev return await glob.players.get_by_name('cmyui').status.action`
 # or for anything while debugging on-the-fly..
+
+
 @command(priv=Privileges.Dangerous, public=False)
 async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # create the new coroutine definition as a string
@@ -361,7 +390,7 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     try:
         # define, and run the coroutine
         exec(definition)
-        ret = await locals()['__ex']() # type: ignore
+        ret = await locals()['__ex']()  # type: ignore
     except Exception as e:
         # code was invalid, return
         # the error in the osu! chat.
@@ -375,10 +404,12 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 """
 
 # start a match.
+
+
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     for s in m.slots:
         if s.status & SlotStatus.has_player \
-        and not s.status & SlotStatus.no_map:
+                and not s.status & SlotStatus.no_map:
             s.status = SlotStatus.playing
 
     m.in_progress = True
@@ -386,6 +417,8 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     return 'Good luck!'
 
 # abort a match in progress.
+
+
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not m.in_progress:
         return 'Abort what?'
@@ -400,6 +433,8 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     return 'Match aborted.'
 
 # force a player into a multiplayer match by name.
+
+
 async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !mp force <name>'
@@ -411,6 +446,8 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     return 'Welcome.'
 
 # set the current beatmap (by id).
+
+
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) < 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
@@ -440,6 +477,7 @@ _mp_triggers = defaultdict(lambda: None, {
         'priv': Privileges.Normal
     }
 })
+
 
 @command(trigger='!mp', priv=Privileges.Normal, public=True)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -471,6 +509,7 @@ async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # this is used much more frequently, and we've
     # already asserted than p.match.chat == c anyways.
     return await trigger['callback'](p, m, msg[1:])
+
 
 async def process_commands(p: Player, t: Messageable,
                            msg: str) -> Optional[CommandResponse]:
