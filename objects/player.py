@@ -236,8 +236,8 @@ class Player:
     login_time: `int`
         The UNIX timestamp of when the player logged in.
 
-    ping_time: `int`
-        The UNIX timestamp of the last time the client pinged the server.
+    last_receive_time: `int`
+        The UNIX timestamp of the last time the client connected.
 
     osu_ver: `datetime`
         The osu! version the client logged in with.
@@ -284,7 +284,7 @@ class Player:
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'ping_time', 'osu_ver',
+        'login_time', 'last_receive_time', 'osu_ver',
         'pres_filter', 'menu_options', '_queue'
     )
 
@@ -322,7 +322,7 @@ class Player:
 
         _ctime = int(time.time())
         self.login_time = _ctime
-        self.ping_time = _ctime
+        self.last_receive_time = _ctime
 
         self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
@@ -419,7 +419,7 @@ class Player:
 
         # remove from playerlist and
         # enqueue logout to all users.
-        await glob.players.remove(self)
+        glob.players.remove(self)
         glob.players.enqueue(await packets.logout(self.id))
 
     # NOTE: bans *require* a reason, while unbans leave it optional.

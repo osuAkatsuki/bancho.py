@@ -246,7 +246,7 @@ class PlayerList(Sequence):
 
         return await self.get_by_name(name)
 
-    async def add(self, p: Player) -> None:
+    def add(self, p: Player) -> None:
         if p in self.players:
             if glob.config.debug:
                 log(f'{p} double-added to global player list?')
@@ -257,7 +257,7 @@ class PlayerList(Sequence):
         if glob.config.debug:
             log(f'{p} added to global player list.')
 
-    async def remove(self, p: Player) -> None:
+    def remove(self, p: Player) -> None:
         self.players.remove(p)
 
         if glob.config.debug:

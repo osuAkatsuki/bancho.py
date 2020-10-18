@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+import time
 import packets
 import aiofiles
 import orjson
@@ -14,7 +17,7 @@ from constants import regexes
 # NOTE: these also load the handler
 # maps for each of the event categories.
 from events import web, api, bancho
-from packets import BanchoPacket
+from packets import ClientPacket
 
 __all__ = (
     'handle_bancho',
@@ -30,7 +33,7 @@ __all__ = (
 # will refuse to reply to more
 # than once per connection.
 deny_doublereply = frozenset({
-    BanchoPacket.c_userStatsRequest
+    ClientPacket.USER_STATS_REQUEST
 })
 
 async def handle_bancho(conn: AsyncConnection) -> None:
@@ -91,7 +94,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     # connection. the list is defined above! var: `deny_doublereply`.
     # this list will simply keep track of which of these packets we've
     # replied to during this connection to allow this functonality.
-    blocked_packets: list[BanchoPacket] = []
+    blocked_packets: list[ClientPacket] = []
 
     # bancho connections can send multiple packets at a time.
     # iter through packets received and them handle indivudally.
@@ -99,6 +102,9 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         await pr.read_packet_header()
         if pr.current_packet is None:
             continue # skip, packet empty or corrupt?
+
+        if pr.current_packet == ClientPacket.PING:
+            continue
 
         if pr.current_packet in deny_doublereply:
             # this is a connection we should
@@ -124,6 +130,8 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             # packet reading behaviour not yet defined.
             log(f'Unhandled: {pr!r}', Ansi.LYELLOW)
             pr.ignore_packet()
+
+    p.last_receive_time = int(time.time())
 
     # TODO: this could probably be done better?
     resp = bytearray()

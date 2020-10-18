@@ -103,8 +103,21 @@ async def handle_conn(conn: AsyncConnection) -> None:
 
         log(f'Request handled in {time_str}.', Ansi.LCYAN)
 
+PING_TIMEOUT = 300000 // 10
+async def disconnect_inactive() -> None:
+    while True:
+        ctime = time.time()
+
+        for p in glob.players:
+            if ctime - p.last_receive_time > PING_TIMEOUT:
+                await p.logout()
+
+        # run the loop every 30
+        # seconds indefinitely
+        await asyncio.sleep(30)
+
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 7, 6)
+    glob.version = Version(2, 7, 7)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -120,18 +133,22 @@ async def run_server(addr: Address) -> None:
 
     # create our bot & append it to the global player list.
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
-    glob.bot.ping_time = 0x7fffffff
+    glob.bot.last_receive_time = 0x7fffffff
 
-    await glob.players.add(glob.bot)
+    glob.players.add(glob.bot)
 
     # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
+    # run background process to
+    # disconnect inactive clients.
+    loop.create_task(disconnect_inactive())
+
     async with AsyncTCPServer(addr) as glob.serv:
         log(f'Gulag v{glob.version} online!', Ansi.LGREEN)
         async for conn in glob.serv.listen(glob.config.max_conns):
-            asyncio.create_task(handle_conn(conn))
+            loop.create_task(handle_conn(conn))
 
 # use uvloop if available (faster event loop).
 if spec := importlib.util.find_spec('uvloop'):
