@@ -42,8 +42,8 @@ def command(priv: Privileges, public: bool,
 # and are granted to any unbanned players.
 """
 
-@command(priv=Privileges.Normal, public=False)
-async def help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+@command(trigger='!help', priv=Privileges.Normal, public=False)
+async def _help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information of all documented commands `p` can use."""
     return '\n'.join('{trigger}: {doc}'.format(**cmd)
                      for cmd in glob.commands if cmd['doc']
@@ -148,8 +148,8 @@ status_to_id = lambda s: {
     'unrank': 0,
     'love': 5
 }[s]
-@command(priv=Privileges.Nominator, public=True)
-async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+@command(trigger='!map', priv=Privileges.Nominator, public=True)
+async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Changes the ranked status of the most recently /np'ed map."""
     if len(msg) != 2 or msg[0] not in ('rank', 'unrank', 'love') \
                      or msg[1] not in ('set', 'map'):

@@ -123,8 +123,8 @@ async def run_server(addr: Address) -> None:
     loop = asyncio.get_event_loop()
 
     try:
-        loop.add_signal_handler(signal.SIGINT, lambda: loop.stop())
-        loop.add_signal_handler(signal.SIGTERM, lambda: loop.stop())
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
+        loop.add_signal_handler(signal.SIGTERM, loop.stop)
     except NotImplementedError:
         pass
 
