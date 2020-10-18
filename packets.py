@@ -632,7 +632,7 @@ async def userStats(p) -> bytes:
 # packet id: 12
 async def logout(userID: int) -> bytes:
     return await write(
-        ServerPacket.LOGOUT,
+        ServerPacket.USER_LOGOUT,
         (userID, osuTypes.i32),
         (0, osuTypes.u8)
     )
