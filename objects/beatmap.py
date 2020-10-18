@@ -4,10 +4,10 @@ from typing import Optional
 from enum import IntEnum, unique
 from datetime import datetime
 from collections import defaultdict
+from cmyui import log, Ansi
 import time
 
 from pp.owoppai import Owoppai
-from console import plog, Ansi
 from objects import glob
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -289,7 +289,7 @@ class Beatmap:
             # if the user has no api key, we cannot make
             # any further attempts to serve them the map.
             if not glob.config.osu_api_key:
-                plog('Fetching beatmap requires osu!api key.', Ansi.LRED)
+                log('Fetching beatmap requires osu!api key.', Ansi.LRED)
                 return
 
             # try to get from the osu!api.
@@ -406,7 +406,7 @@ class Beatmap:
                     ]
                 )
 
-            plog(f'Retrieved full set {set_id} from the osu!api.', Ansi.LGREEN)
+            log(f'Retrieved full set {set_id} from the osu!api.', Ansi.LGREEN)
             return await cls.from_md5_sql(md5)
 
         url = 'https://old.ppy.sh/api/get_beatmaps'
@@ -466,7 +466,7 @@ class Beatmap:
             # new map, just save to sql.
             await m.save_to_sql()
 
-        plog(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
+        log(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
         return m
 
     async def cache_pp(self, mods: Mods) -> None:
@@ -493,7 +493,7 @@ class Beatmap:
             self.last_update, self.frozen, self.mode, self.bpm,
             self.cs, self.od, self.ar, self.hp, self.diff
         )):
-            plog('Tried to save invalid beatmap to SQL!', Ansi.LRED)
+            log('Tried to save invalid beatmap to SQL!', Ansi.LRED)
             return
 
         await glob.db.execute(

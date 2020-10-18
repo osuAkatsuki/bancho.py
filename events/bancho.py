@@ -3,13 +3,12 @@
 from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
-import cmyui
+from cmyui import log, Ansi, _isdecimal
 import bcrypt
 
 import packets
 from packets import BanchoPacket, BanchoPacketReader # convenience
 
-from console import *
 from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
@@ -22,9 +21,9 @@ from constants.privileges import Privileges
 
 glob.bancho_map = {}
 
-def bancho_packet(ID: int) -> Callable:
+def bancho_packet(packet_id: int) -> Callable:
     def register_callback(callback: Callable) -> Callable:
-        glob.bancho_map |= {ID: callback}
+        glob.bancho_map |= {packet_id: callback}
         return callback
     return register_callback
 
@@ -47,7 +46,7 @@ async def readStatus(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_sendPublicMessage)
 async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
-        plog(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
+        log(f'{p} tried to send a message while silenced.', Ansi.YELLOW)
         return
 
     # we don't need client & client_id from osu!
@@ -74,11 +73,11 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
         t = glob.channels[target]
 
     if not t:
-        plog(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
+        log(f'{p} tried to write to non-existant {target}.', Ansi.YELLOW)
         return
 
     if not p.priv & t.write:
-        plog(f'{p} tried to write to {target} without privileges.')
+        log(f'{p} tried to write to {target} without privileges.')
         return
 
     # limit message length to 2048 characters
@@ -113,7 +112,7 @@ async def sendMessage(p: Player, pr: BanchoPacketReader) -> None:
 
         await t.send(p, msg)
 
-    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
+    log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 # packet id: 2
 @bancho_packet(BanchoPacket.c_logout)
@@ -126,7 +125,7 @@ async def logout(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     await p.logout()
-    plog(f'{p} logged out.', Ansi.LYELLOW)
+    log(f'{p} logged out.', Ansi.LYELLOW)
 
 # packet id: 3
 @bancho_packet(BanchoPacket.c_requestStatusUpdate)
@@ -196,7 +195,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return (await packets.versionUpdateForced() +
                 await packets.userID(-2)), 'no'
 
-    if not cmyui._isdecimal(s[1], _negative=True):
+    if not _isdecimal(s[1], _negative=True):
         # utc-offset isn't a number (negative inclusive).
         return await packets.userID(-1), 'no'
 
@@ -399,7 +398,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # making them officially logged in.
     await glob.players.add(p)
 
-    plog(f'{p} logged in.', Ansi.LCYAN)
+    log(f'{p} logged in.', Ansi.LCYAN)
     return bytes(data), p.token
 
 # packet id: 16
@@ -408,7 +407,7 @@ async def startSpectating(p: Player, pr: BanchoPacketReader) -> None:
     target_id, = await pr.read(osuTypes.i32)
 
     if not (host := await glob.players.get_by_id(target_id)):
-        plog(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
+        log(f'{p} tried to spectate nonexistant id {target_id}.', Ansi.YELLOW)
         return
 
     if c_host := p.spectating:
@@ -422,7 +421,7 @@ async def stopSpectating(p: Player, pr: BanchoPacketReader) -> None:
     host = p.spectating
 
     if not host:
-        plog(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
+        log(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
         return
 
     await host.remove_spectator(p)
@@ -446,7 +445,7 @@ async def spectateFrames(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_cantSpectate)
 async def cantSpectate(p: Player, pr: BanchoPacketReader) -> None:
     if not p.spectating:
-        plog(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
+        log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
         return
 
     data = await packets.spectatorCantSpectate(p.id)
@@ -461,24 +460,24 @@ async def cantSpectate(p: Player, pr: BanchoPacketReader) -> None:
 @bancho_packet(BanchoPacket.c_sendPrivateMessage)
 async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
     if p.silenced:
-        plog(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
+        log(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
         return
 
     # we don't need client & client_id from osu!
     _, msg, target, _ = await pr.read(osuTypes.message)
 
     if not (t := await glob.players.get_by_name(target)):
-        plog(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        log(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
         return
 
     if t.pm_private and p.id not in t.friends:
         p.enqueue(await packets.userPMBlocked(target))
-        plog(f'{p} tried to message {t}, but they are blocking dms.')
+        log(f'{p} tried to message {t}, but they are blocking dms.')
         return
 
     if t.silenced:
         p.enqueue(await packets.targetSilenced(target))
-        plog(f'{p} tried to message {t}, but they are silenced.')
+        log(f'{p} tried to message {t}, but they are silenced.')
         return
 
     msg = f'{msg[:2045]}...' if msg[2048:] else msg
@@ -547,7 +546,7 @@ async def sendPrivateMessage(p: Player, pr: BanchoPacketReader) -> None:
             [p.id, t.id, msg]
         )
 
-    plog(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
+    log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd = '.data/logs/chat.log')
 
 # packet id: 29
 @bancho_packet(BanchoPacket.c_partLobby)
@@ -569,7 +568,7 @@ async def matchCreate(p: Player, pr: BanchoPacketReader) -> None:
 
     m.host = p
     await p.join_match(m, m.passwd)
-    plog(f'{p} created a new multiplayer match.')
+    log(f'{p} created a new multiplayer match.')
 
 # packet id: 32
 @bancho_packet(BanchoPacket.c_joinMatch)
@@ -581,7 +580,7 @@ async def matchJoin(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (m := glob.matches.get_by_id(m_id)):
-        plog(f'{p} tried to join a non-existant mp lobby?')
+        log(f'{p} tried to join a non-existant mp lobby?')
         return
 
     await p.join_match(m, passwd)
@@ -603,7 +602,7 @@ async def matchChangeSlot(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if m.slots[slot_id].status & SlotStatus.has_player:
-        plog(f'{p} tried to switch to slot {slot_id} which has a player.')
+        log(f'{p} tried to switch to slot {slot_id} which has a player.')
         return
 
     # swap with current slot.
@@ -855,7 +854,7 @@ async def channelJoin(p: Player, pr: BanchoPacketReader) -> None:
     c = glob.channels[chan_name]
 
     if not c or not await p.join_channel(c):
-        plog(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
+        log(f'{p} failed to join {chan_name}.', Ansi.YELLOW)
         return
 
     # enqueue channelJoin to our player.
@@ -936,7 +935,7 @@ async def matchTransferHost(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (t := m[slot_id].player):
-        plog(f'{p} tried to transfer host to an empty slot?')
+        log(f'{p} tried to transfer host to an empty slot?')
         return
 
     m.host = t
@@ -949,7 +948,7 @@ async def friendAdd(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to add a user who is not online! ({user_id})')
+        log(f'{t} tried to add a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -967,7 +966,7 @@ async def friendRemove(p: Player, pr: BanchoPacketReader) -> None:
     user_id, = await pr.read(osuTypes.i32)
 
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to remove a user who is not online! ({user_id})')
+        log(f'{t} tried to remove a user who is not online! ({user_id})')
         return
 
     if t.id in (1, p.id):
@@ -990,7 +989,7 @@ async def matchChangeTeam(p: Player, pr: BanchoPacketReader) -> None:
             s.team = Teams.blue if s.team != Teams.blue else Teams.red
             break
     else:
-        plog(f'{p} tried changing team outside of a match? (2)')
+        log(f'{p} tried changing team outside of a match? (2)')
         return
 
     m.enqueue(await packets.updateMatch(m), lobby = False)
@@ -1004,7 +1003,7 @@ async def channelPart(p: Player, pr: BanchoPacketReader) -> None:
         return
 
     if not (c := glob.channels[chan]):
-        plog(f'Failed to find channel {chan} that {p} attempted to leave.')
+        log(f'Failed to find channel {chan} that {p} attempted to leave.')
         return
 
     if p not in c:
@@ -1023,7 +1022,7 @@ async def receiveUpdates(p: Player, pr: BanchoPacketReader) -> None:
     val, = await pr.read(osuTypes.i32)
 
     if val not in range(3):
-        plog(f'{p} tried to set his presence filter to {val}?')
+        log(f'{p} tried to set his presence filter to {val}?')
         return
 
     p.pres_filter = PresenceFilter(val)
@@ -1057,11 +1056,11 @@ async def matchInvite(p: Player, pr: BanchoPacketReader) -> None:
 
     user_id, = await pr.read(osuTypes.i32)
     if not (t := await glob.players.get_by_id(user_id)):
-        plog(f'{t} tried to invite a user who is not online! ({user_id})')
+        log(f'{t} tried to invite a user who is not online! ({user_id})')
         return
 
     t.enqueue(await packets.matchInvite(p, t.name))
-    plog(f'{p} invited {t} to their match.')
+    log(f'{p} invited {t} to their match.')
 
 # packet id: 90
 @bancho_packet(BanchoPacket.c_matchChangePassword)
@@ -1104,7 +1103,7 @@ async def toggleBlockingDMs(p: Player, pr: BanchoPacketReader) -> None:
 # XXX: perhaps these could be turned into decorators to allow
 # for better specialization of params? perhaps prettier too :P
 async def deprecated_packet(p: Player, pr: BanchoPacketReader) -> None:
-    plog(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LRED)
+    log(f'{p} sent deprecated packet {pr.current_packet!r}.', Ansi.LRED)
 
 errorReport = bancho_packet(BanchoPacket.c_errorReport)(deprecated_packet)
 beatmapInfoRequest = bancho_packet(BanchoPacket.c_beatmapInfoRequest)(deprecated_packet)

@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from pp.owoppai import Owoppai
-from typing import (Sequence, Optional,
-                    Union, Callable)
+from typing import Sequence, Optional, Union, Callable
 import time
 import cmyui
 import random
@@ -28,7 +27,7 @@ def command(priv: Privileges, public: bool,
             trigger: Optional[str] = None) -> Callable:
     def register_callback(callback: Callable):
         glob.commands.append({
-            'trigger': trigger if trigger else f'!{callback.__name__}',
+            'trigger': trigger or f'!{callback.__name__}',
             'callback': callback,
             'priv': priv,
             'public': public,
@@ -74,6 +73,9 @@ async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 @command(priv=Privileges.Normal, public=False)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Search map titles with user input as a wildcard."""
+    if not msg:
+        return 'Invalid syntax: !mapsearch <title>'
+
     if not (res := await glob.db.fetchall(
         'SELECT id, set_id, artist, title, version '
         'FROM maps WHERE title LIKE %s '
@@ -87,7 +89,7 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     ) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
-@command(priv=Privileges.Normal, public=False, trigger='!with')
+@command(trigger='!with', priv=Privileges.Normal, public=False)
 async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
     if isinstance(c, Channel) or c.id != 1:
@@ -149,9 +151,8 @@ status_to_id = lambda s: {
 @command(priv=Privileges.Nominator, public=True)
 async def map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Changes the ranked status of the most recently /np'ed map."""
-    if len(msg) != 2 \
-    or msg[0] not in ('rank', 'unrank', 'love') \
-    or msg[1] not in ('set', 'map'):
+    if len(msg) != 2 or msg[0] not in ('rank', 'unrank', 'love') \
+                     or msg[1] not in ('set', 'map'):
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if not p.last_np:
@@ -260,11 +261,11 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # simply not useful for any other roles.
 """
 
-@command(priv=Privileges.Dangerous, public=False)
-async def switch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+@command(trigger='!switchserv', priv=Privileges.Dangerous, public=False)
+async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Switch servers to a specified ip address."""
     if len(msg) != 1:
-        return 'Invalid syntax: !switch <ip>'
+        return 'Invalid syntax: !switch <endpoint>'
 
     p.enqueue(await packets.switchTournamentServer(msg[0]))
     return 'Have a nice journey..'
@@ -300,7 +301,6 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Toggle the console's debug setting."""
     glob.config.debug = not glob.config.debug
-
     return f"Toggled {'on' if glob.config.debug else 'off'}."
 
 str_to_priv = lambda p: defaultdict(lambda: None, {
@@ -335,12 +335,14 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     t.priv = Privileges(newpriv)
     return 'Success.'
 
-# temp command
-@command(priv=Privileges.Dangerous, public=False)
-async def menu(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+# temp command, to illustrate how menu options will work
+@command(trigger='men', priv=Privileges.Dangerous, public=False)
+async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     async def callback():
-        p.enqueue(await packets.notification('yay!'))
+        # this is called when the menu item is clicked
+        p.enqueue(await packets.notification('clicked!'))
 
+    # add the option to their menu opts & send them a button
     opt_id = await p.add_to_menu(callback)
     return f'[osu://dl/{opt_id} option]'
 

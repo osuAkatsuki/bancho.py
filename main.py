@@ -18,12 +18,13 @@ import importlib
 import aiohttp
 import signal
 import orjson # faster & more accurate than stdlib json
-import cmyui # web & db
 import time
 import sys
 import os
+from cmyui import (Version, Address, Ansi, log,
+                   AsyncConnection, AsyncTCPServer,
+                   AsyncSQLPoolWrapper)
 
-from console import *
 from handlers import *
 
 from objects import glob
@@ -43,7 +44,7 @@ for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
     if not os.path.isdir(f'.data/{p}'):
         os.mkdir(f'.data/{p}')
 
-async def handle_conn(conn: cmyui.AsyncConnection) -> None:
+async def handle_conn(conn: AsyncConnection) -> None:
     if 'Host' not in conn.headers:
         await conn.send(400, b'Missing required headers.')
         return
@@ -92,7 +93,7 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         await handler(conn)
     else:
         # we have no such handler.
-        plog(f'Unhandled {conn.path}.', Ansi.LRED)
+        log(f'Unhandled {conn.path}.', Ansi.LRED)
         await conn.send(400, b'Request handler not implemented.')
 
     if glob.config.debug:
@@ -100,10 +101,10 @@ async def handle_conn(conn: cmyui.AsyncConnection) -> None:
         time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
                else f'{time_taken / 1000:.2f}ms')
 
-        plog(f'Request handled in {time_str}.', Ansi.LCYAN)
+        log(f'Request handled in {time_str}.', Ansi.LCYAN)
 
-async def run_server(addr: cmyui.Address) -> None:
-    glob.version = cmyui.Version(2, 7, 5)
+async def run_server(addr: Address) -> None:
+    glob.version = Version(2, 7, 6)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -114,7 +115,7 @@ async def run_server(addr: cmyui.Address) -> None:
     except NotImplementedError:
         pass
 
-    glob.db = cmyui.AsyncSQLPoolWrapper()
+    glob.db = AsyncSQLPoolWrapper()
     await glob.db.connect(**glob.config.mysql)
 
     # create our bot & append it to the global player list.
@@ -127,8 +128,8 @@ async def run_server(addr: cmyui.Address) -> None:
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
-    async with cmyui.AsyncTCPServer(addr) as glob.serv:
-        plog(f'Gulag v{glob.version} online!', Ansi.LGREEN)
+    async with AsyncTCPServer(addr) as glob.serv:
+        log(f'Gulag v{glob.version} online!', Ansi.LGREEN)
         async for conn in glob.serv.listen(glob.config.max_conns):
             asyncio.create_task(handle_conn(conn))
 

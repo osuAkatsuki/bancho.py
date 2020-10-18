@@ -2,6 +2,7 @@
 
 from typing import Any
 from enum import IntEnum, unique
+from cmyui import log, Ansi
 import struct
 
 from objects import glob
@@ -12,7 +13,6 @@ from objects.match import (Match, ScoreFrame, SlotStatus,
 from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-from console import plog, Ansi
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -233,7 +233,7 @@ class BanchoPacketReader:
             # end the connection immediately.
             self.current_packet = None
             self._offset += ldata
-            plog(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
+            log(f'[ERR] Data misread! (len: {len(self.data)})', Ansi.LRED)
             return
 
         packet_id, self.length = struct.unpack('<HxI', self.data[:7])

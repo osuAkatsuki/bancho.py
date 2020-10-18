@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+from asyncio.queues import QueueEmpty
 from datetime import datetime
+from functools import partial
 from typing import Any, Optional, Coroutine
+from cmyui import log, Ansi
 import time
 import uuid
 import random
@@ -11,7 +14,6 @@ from constants.privileges import Privileges, BanchoPrivileges
 from constants.countries import country_codes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-from console import plog, Ansi
 
 from objects.channel import Channel
 from objects.match import Match, SlotStatus
@@ -448,7 +450,7 @@ class Player:
                 'using the appeal form on the website.'
             ))
 
-        plog(f'Banned {self}.', Ansi.CYAN)
+        log(f'Banned {self}.', Ansi.CYAN)
 
     async def unban(self, admin, reason: Optional[str] = None) -> None:
         self.priv &= Privileges.Normal
@@ -465,21 +467,21 @@ class Player:
                 [admin.id, self.id, log_msg]
             )
 
-        plog(f'Unbanned {self}.', Ansi.CYAN)
+        log(f'Unbanned {self}.', Ansi.CYAN)
 
     async def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:
-            plog(f'{self} tried to join multiple matches?')
+            log(f'{self} tried to join multiple matches?')
             self.enqueue(await packets.matchJoinFail())
             return False
 
         if m.chat: # match already exists, we're simply joining.
             if passwd != m.passwd: # eff: could add to if? or self.create_m..
-                plog(f'{self} tried to join {m} with incorrect passwd.')
+                log(f'{self} tried to join {m} with incorrect passwd.')
                 self.enqueue(await packets.matchJoinFail())
                 return False
             if (slotID := m.get_free()) is None:
-                plog(f'{self} tried to join a full match.')
+                log(f'{self} tried to join a full match.')
                 self.enqueue(await packets.matchJoinFail())
                 return False
 
@@ -501,7 +503,7 @@ class Player:
             m.chat = glob.channels[f'#multi_{m.id}']
 
         if not await self.join_channel(m.chat):
-            plog(f'{self} failed to join {m.chat}.')
+            log(f'{self} failed to join {m.chat}.')
             return False
 
         if (lobby := glob.channels['#lobby']) in self.channels:
@@ -520,7 +522,7 @@ class Player:
     async def leave_match(self) -> None:
         if not self.match:
             if glob.config.debug:
-                plog(f"{self} tried leaving a match they're not in?")
+                log(f"{self} tried leaving a match they're not in?")
             return
 
         for s in self.match.slots:
@@ -533,7 +535,7 @@ class Player:
         if all(s.empty() for s in self.match.slots):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
-            plog(f'Match {self.match} finished.')
+            log(f'Match {self.match} finished.')
             await glob.matches.remove(self.match)
 
             if lobby := glob.channels['#lobby']:
@@ -549,12 +551,12 @@ class Player:
         if self in c:
             # user already in the channel.
             if glob.config.debug:
-                plog(f'{self} was double-added to {c}.')
+                log(f'{self} was double-added to {c}.')
 
             return False
 
         if not self.priv & c.read:
-            plog(f'{self} tried to join {c} but lacks privs.')
+            log(f'{self} tried to join {c} but lacks privs.')
             return False
 
         # lobby can only be interacted with while in mp lobby.
@@ -575,13 +577,13 @@ class Player:
             p.enqueue(await packets.channelInfo(*c.basic_info))
 
         if glob.config.debug:
-            plog(f'{self} joined {c}.')
+            log(f'{self} joined {c}.')
 
         return True
 
     async def leave_channel(self, c: Channel) -> None:
         if self not in c:
-            plog(f'{self} tried to leave {c} but is not in it.')
+            log(f'{self} tried to leave {c} but is not in it.')
             return
 
         await c.remove(self) # remove from channels
@@ -598,7 +600,7 @@ class Player:
             p.enqueue(await packets.channelInfo(*c.basic_info))
 
         if glob.config.debug:
-            plog(f'{self} left {c}.')
+            log(f'{self} left {c}.')
 
     async def add_spectator(self, p) -> None:
         chan_name = f'#spec_{self.id}'
@@ -616,7 +618,7 @@ class Player:
             c = glob.channels[chan_name]
 
         if not await p.join_channel(c):
-            return plog(f'{self} failed to join {c}?')
+            return log(f'{self} failed to join {c}?')
 
         #p.enqueue(await packets.channelJoin(c.name))
         p_joined = await packets.fellowSpectatorJoined(p.id)
@@ -629,7 +631,7 @@ class Player:
         p.spectating = self
 
         self.enqueue(await packets.spectatorJoined(p.id))
-        plog(f'{p} is now spectating {self}.')
+        log(f'{p} is now spectating {self}.')
 
     async def remove_spectator(self, p) -> None:
         self.spectators.remove(p)
@@ -651,11 +653,11 @@ class Player:
                 s.enqueue(fellow + c_info)
 
         self.enqueue(await packets.spectatorLeft(p.id))
-        plog(f'{p} is no longer spectating {self}.')
+        log(f'{p} is no longer spectating {self}.')
 
     async def add_friend(self, p) -> None:
         if p.id in self.friends:
-            plog(f'{self} tried to add {p}, who is already their friend!')
+            log(f'{self} tried to add {p}, who is already their friend!')
             return
 
         self.friends.add(p.id)
@@ -664,11 +666,11 @@ class Player:
             'VALUES (%s, %s)',
             [self.id, p.id])
 
-        plog(f'{self} added {p} to their friends.')
+        log(f'{self} added {p} to their friends.')
 
     async def remove_friend(self, p) -> None:
         if not p.id in self.friends:
-            plog(f'{self} tried to remove {p}, who is not their friend!')
+            log(f'{self} tried to remove {p}, who is not their friend!')
             return
 
         self.friends.remove(p.id)
@@ -677,7 +679,7 @@ class Player:
             'WHERE user1 = %s AND user2 = %s',
             [self.id, p.id])
 
-        plog(f'{self} removed {p} from their friends.')
+        log(f'{self} removed {p} from their friends.')
 
     def queue_empty(self) -> bool:
         return self._queue.empty()
@@ -686,12 +688,12 @@ class Player:
         """Add data to be sent to the client."""
         self._queue.put_nowait(b)
 
-    async def dequeue(self) -> Optional[bytes]:
+    def dequeue(self) -> Optional[bytes]:
         """Get data from the queue to send to the client."""
         try:
             return self._queue.get_nowait()
-        except:
-            plog('Empty queue?')
+        except QueueEmpty:
+            log('Empty queue?')
 
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""
@@ -699,13 +701,13 @@ class Player:
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
-                plog('Failed to get geoloc data: request failed.', Ansi.LRED)
+                log('Failed to get geoloc data: request failed.', Ansi.LRED)
                 return
 
             res = await resp.json()
 
         if 'status' not in res or res['status'] != 'success':
-            plog(f"Failed to get geoloc data: {res['message']}.", Ansi.LRED)
+            log(f"Failed to get geoloc data: {res['message']}.", Ansi.LRED)
             return
 
         country = res['countryCode']
@@ -777,7 +779,7 @@ class Player:
             )
 
             if not res:
-                plog(f"Failed to fetch {self}'s {mode!r} user stats.", Ansi.LRED)
+                log(f"Failed to fetch {self}'s {mode!r} stats.", Ansi.LRED)
                 return
 
             # calculate rank.
@@ -801,7 +803,7 @@ class Player:
         )
 
         if not res:
-            plog(f"Failed to fetch {self}'s {mode!r} user stats.", Ansi.LRED)
+            log(f"Failed to fetch {self}'s {mode!r} stats.", Ansi.LRED)
             return
 
         # calculate rank.
@@ -819,18 +821,19 @@ class Player:
                           timeout: int = -1, reusable: bool = False
                          ) -> None:
         """Add a valid callback to the user's osu! chat options."""
-        i32_max = 0x7fffffff
-
-        genrand = lambda: -random.randint(0, i32_max)
-        while (randnum := genrand()) in self.menu_options:
+        # generate random negative number in in32 space as the key.
+        rand = partial(random.randint, -0x80000000, 0)
+        while (randnum := rand()) in self.menu_options:
             ...
 
+        # append the callback to their menu options w/ args.
         self.menu_options |= {
             randnum: {
                 'callback': coroutine,
                 'reusable': reusable,
-                'timeout': timeout if timeout != -1 else i32_max
+                'timeout': timeout if timeout != -1 else 0x7fffffff
             }
         }
 
+        # return the key.
         return randnum
