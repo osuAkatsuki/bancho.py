@@ -236,7 +236,7 @@ class Player:
     login_time: `int`
         The UNIX timestamp of when the player logged in.
 
-    last_receive_time: `int`
+    last_recv_time: `int`
         The UNIX timestamp of the last time the client connected.
 
     osu_ver: `datetime`
@@ -284,7 +284,7 @@ class Player:
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'last_receive_time', 'osu_ver',
+        'login_time', 'last_recv_time', 'osu_ver',
         'pres_filter', 'menu_options', '_queue'
     )
 
@@ -322,7 +322,7 @@ class Player:
 
         _ctime = int(time.time())
         self.login_time = _ctime
-        self.last_receive_time = _ctime
+        self.last_recv_time = _ctime
 
         self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
@@ -420,7 +420,7 @@ class Player:
         # remove from playerlist and
         # enqueue logout to all users.
         glob.players.remove(self)
-        glob.players.enqueue(await packets.logout(self.id))
+        glob.players.enqueue(packets.logout(self.id))
 
     # NOTE: bans *require* a reason, while unbans leave it optional.
 
@@ -442,8 +442,8 @@ class Player:
             # if user is online, notify and log them out.
             # XXX: if you want to lock the player's
             # client, you can send -3 rather than -1.
-            self.enqueue(await packets.userID(-1))
-            self.enqueue(await packets.notification(
+            self.enqueue(packets.userID(-1))
+            self.enqueue(packets.notification(
                 'Your account has been banned.\n\n'
                 'If you believe this was a mistake or '
                 'have waited >= 2 months, you can appeal '
@@ -472,17 +472,17 @@ class Player:
     async def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:
             log(f'{self} tried to join multiple matches?')
-            self.enqueue(await packets.matchJoinFail())
+            self.enqueue(packets.matchJoinFail())
             return False
 
         if m.chat: # match already exists, we're simply joining.
             if passwd != m.passwd: # eff: could add to if? or self.create_m..
                 log(f'{self} tried to join {m} with incorrect passwd.')
-                self.enqueue(await packets.matchJoinFail())
+                self.enqueue(packets.matchJoinFail())
                 return False
             if (slotID := m.get_free()) is None:
                 log(f'{self} tried to join a full match.')
-                self.enqueue(await packets.matchJoinFail())
+                self.enqueue(packets.matchJoinFail())
                 return False
 
         else:
@@ -514,8 +514,8 @@ class Player:
         slot.status = SlotStatus.not_ready
         slot.player = self
         self.match = m
-        self.enqueue(await packets.matchJoinSuccess(m))
-        m.enqueue(await packets.updateMatch(m))
+        self.enqueue(packets.matchJoinSuccess(m))
+        m.enqueue(packets.updateMatch(m))
 
         return True
 
@@ -539,11 +539,11 @@ class Player:
             await glob.matches.remove(self.match)
 
             if lobby := glob.channels['#lobby']:
-                lobby.enqueue(await packets.disposeMatch(self.match.id))
+                lobby.enqueue(packets.disposeMatch(self.match.id))
 
         else:
             # notify others of our deprature
-            self.match.enqueue(await packets.updateMatch(self.match))
+            self.match.enqueue(packets.updateMatch(self.match))
 
         self.match = None
 
@@ -566,7 +566,7 @@ class Player:
         c.append(self) # Add to channels
         self.channels.append(c) # Add to player
 
-        self.enqueue(await packets.channelJoin(c.name))
+        self.enqueue(packets.channelJoin(c.name))
 
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
@@ -574,7 +574,7 @@ class Player:
         targets = c.players if c.instance else glob.players
 
         for p in targets:
-            p.enqueue(await packets.channelInfo(*c.basic_info))
+            p.enqueue(packets.channelInfo(*c.basic_info))
 
         if glob.config.debug:
             log(f'{self} joined {c}.')
@@ -589,7 +589,7 @@ class Player:
         await c.remove(self) # remove from channels
         self.channels.remove(c) # remove from player
 
-        self.enqueue(await packets.channelKick(c.name))
+        self.enqueue(packets.channelKick(c.name))
 
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
@@ -597,7 +597,7 @@ class Player:
         targets = c.players if c.instance else glob.players
 
         for p in targets:
-            p.enqueue(await packets.channelInfo(*c.basic_info))
+            p.enqueue(packets.channelInfo(*c.basic_info))
 
         if glob.config.debug:
             log(f'{self} left {c}.')
@@ -620,17 +620,17 @@ class Player:
         if not await p.join_channel(c):
             return log(f'{self} failed to join {c}?')
 
-        #p.enqueue(await packets.channelJoin(c.name))
-        p_joined = await packets.fellowSpectatorJoined(p.id)
+        #p.enqueue(packets.channelJoin(c.name))
+        p_joined = packets.fellowSpectatorJoined(p.id)
 
         for s in self.spectators:
             s.enqueue(p_joined)
-            p.enqueue(await packets.fellowSpectatorJoined(s.id))
+            p.enqueue(packets.fellowSpectatorJoined(s.id))
 
         self.spectators.append(p)
         p.spectating = self
 
-        self.enqueue(await packets.spectatorJoined(p.id))
+        self.enqueue(packets.spectatorJoined(p.id))
         log(f'{p} is now spectating {self}.')
 
     async def remove_spectator(self, p) -> None:
@@ -644,15 +644,15 @@ class Player:
             # remove host from channel, deleting it.
             await self.leave_channel(c)
         else:
-            fellow = await packets.fellowSpectatorLeft(p.id)
-            c_info = await packets.channelInfo(*c.basic_info) # new playercount
+            fellow = packets.fellowSpectatorLeft(p.id)
+            c_info = packets.channelInfo(*c.basic_info) # new playercount
 
             self.enqueue(c_info)
 
             for s in self.spectators:
                 s.enqueue(fellow + c_info)
 
-        self.enqueue(await packets.spectatorLeft(p.id))
+        self.enqueue(packets.spectatorLeft(p.id))
         log(f'{p} is no longer spectating {self}.')
 
     async def add_friend(self, p) -> None:
@@ -756,7 +756,7 @@ class Player:
         )
 
         self.stats[mode].rank = res['c'] + 1
-        self.enqueue(await packets.userStats(self))
+        self.enqueue(packets.userStats(self))
 
     async def friends_from_sql(self) -> None:
         _friends = {row['user2'] async for row in glob.db.iterall(

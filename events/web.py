@@ -320,7 +320,7 @@ async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
             await p.ban(glob.bot, f'hq!osu relife 1/32')
             return b'-3'
 
-        p.enqueue(await packets.notification('\n'.join([
+        p.enqueue(packets.notification('\n'.join([
             "Hey!",
             "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
             "This tool leaves a change in your registry that the osu! client can detect.",
@@ -548,7 +548,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     if s.mode != s.player.status.mode:
         s.player.status.mods = s.mods
         s.player.status.mode = s.mode
-        glob.players.enqueue(await packets.userStats(s.player))
+        glob.players.enqueue(packets.userStats(s.player))
 
     table = s.mode.sql_table
 
@@ -990,7 +990,7 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     if mode != p.status.mode:
         p.status.mods = mods
         p.status.mode = mode
-        glob.players.enqueue(await packets.userStats(p))
+        glob.players.enqueue(packets.userStats(p))
 
     table = mode.sql_table
     scoring = 'pp' if mode >= GameMode.rx_std else 'score'

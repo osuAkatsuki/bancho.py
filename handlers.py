@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from struct import pack
 import time
 import packets
 import aiofiles
@@ -17,7 +18,7 @@ from constants import regexes
 # NOTE: these also load the handler
 # maps for each of the event categories.
 from events import web, api, bancho
-from packets import ClientPacket
+from packets import BanchoPacketReader, ClientPacketType
 
 __all__ = (
     'handle_bancho',
@@ -33,7 +34,7 @@ __all__ = (
 # will refuse to reply to more
 # than once per connection.
 deny_doublereply = frozenset({
-    ClientPacket.USER_STATS_REQUEST
+    ClientPacketType.USER_STATS_REQUEST
 })
 
 async def handle_bancho(conn: AsyncConnection) -> None:
@@ -81,21 +82,36 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     if not p:
         # token was not found; changes are, we just restarted
         # the server. just tell their client to re-connect.
-        resp = await packets.notification('Server is restarting') + \
-               await packets.restartServer(0) # send 0ms since server is up
+        resp = packets.notification('Server is restarting') + \
+               packets.restartServer(0) # send 0ms since server is up
 
         await conn.send(200, resp)
         return
 
-    # player found, process normal packet.
-    pr = packets.BanchoPacketReader(conn.body)
-
+    """
     # gulag refuses to reply to a group of packets more than once per
     # connection. the list is defined above! var: `deny_doublereply`.
     # this list will simply keep track of which of these packets we've
     # replied to during this connection to allow this functonality.
-    blocked_packets: list[ClientPacket] = []
+    blocked_packets: list[ClientPacketType] = []
+    """
 
+    # bancho connections can be comprised of multiple packets;
+    # our reader is designed to iterate through them individually,
+    # allowing logic to be implemented around the actual handler.
+    packet_reader = BanchoPacketReader(conn.body)
+
+    # NOTE: this will internally discard any
+    # packets whose logic has not been defined.
+    async for packet in packet_reader:
+        # call our packet's handler
+        await packet.handle(p)
+
+        if glob.config.debug:
+            log(repr(packet.type), Ansi.LMAGENTA)
+
+
+    """
     # bancho connections can send multiple packets at a time.
     # iter through packets received and them handle indivudally.
     while not pr.empty():
@@ -103,7 +119,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         if pr.current_packet is None:
             continue # skip, packet empty or corrupt?
 
-        if pr.current_packet == ClientPacket.PING:
+        if pr.current_packet == ClientPacketType.PING:
             continue
 
         if pr.current_packet in deny_doublereply:
@@ -130,8 +146,9 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             # packet reading behaviour not yet defined.
             log(f'Unhandled: {pr!r}', Ansi.LYELLOW)
             pr.ignore_packet()
+    """
 
-    p.last_receive_time = int(time.time())
+    p.last_recv_time = int(time.time())
 
     # TODO: this could probably be done better?
     resp = bytearray()

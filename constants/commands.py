@@ -241,7 +241,7 @@ async def alert(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !alert <msg>'
 
-    glob.players.enqueue(await packets.notification(' '.join(msg)))
+    glob.players.enqueue(packets.notification(' '.join(msg)))
     return 'Alert sent.'
 
 @command(trigger='!alertu', priv=Privileges.Admin, public=False)
@@ -253,7 +253,7 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_by_name(msg[0])):
         return 'Could not find a user by that name.'
 
-    t.enqueue(await packets.notification(' '.join(msg[1:])))
+    t.enqueue(packets.notification(' '.join(msg[1:])))
     return 'Alert sent.'
 
 """ Developer commands
@@ -267,7 +267,7 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !switch <endpoint>'
 
-    p.enqueue(await packets.switchTournamentServer(msg[0]))
+    p.enqueue(packets.switchTournamentServer(msg[0]))
     return 'Have a nice journey..'
 
 # rest in peace rtx - oct 2020 :candle:
@@ -280,7 +280,7 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 #    if not (t := await glob.players.get_by_name(msg[0])):
 #        return 'Could not find a user by that name.'
 #
-#    t.enqueue(await packets.RTX(msg[1]))
+#    t.enqueue(packets.RTX(msg[1]))
 #    return 'pong'
 
 # XXX: not very useful, mostly just for testing/fun.
@@ -294,7 +294,7 @@ async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> st
         return 'Could not find a user by that name.'
 
     packet = packets.BanchoPacket(int(msg[-1]))
-    t.enqueue(await packets.write(packet))
+    t.enqueue(packets.write(packet))
     return f'Wrote {packet!r} to {t}.'
 
 @command(priv=Privileges.Dangerous, public=False)
@@ -340,7 +340,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     async def callback():
         # this is called when the menu item is clicked
-        p.enqueue(await packets.notification('clicked!'))
+        p.enqueue(packets.notification('clicked!'))
 
     # add the option to their menu opts & send them a button
     opt_id = await p.add_to_menu(callback)
@@ -382,7 +382,7 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
             s.status = SlotStatus.playing
 
     m.in_progress = True
-    m.enqueue(await packets.matchStart(m))
+    m.enqueue(packets.matchStart(m))
     return 'Good luck!'
 
 # abort a match in progress.
@@ -395,8 +395,8 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
             s.status = SlotStatus.not_ready
 
     m.in_progress = False
-    m.enqueue(await packets.updateMatch(m))
-    m.enqueue(await packets.matchAbort())
+    m.enqueue(packets.updateMatch(m))
+    m.enqueue(packets.matchAbort())
     return 'Match aborted.'
 
 # force a player into a multiplayer match by name.
@@ -419,7 +419,7 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
         return 'Beatmap not found.'
 
     m.bmap = bmap
-    m.enqueue(await packets.updateMatch(m))
+    m.enqueue(packets.updateMatch(m))
     return f'Map selected: {bmap.embed}.'
 
 _mp_triggers = defaultdict(lambda: None, {

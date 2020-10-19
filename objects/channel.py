@@ -91,7 +91,7 @@ class Channel:
         return p in self.players
 
     async def send(self, client, msg: str, to_client: bool = False) -> None:
-        self.enqueue(await packets.sendMessage(
+        self.enqueue(packets.sendMessage(
             client = client.name,
             msg = msg,
             target = self.name,
@@ -102,7 +102,7 @@ class Channel:
     async def send_selective(self, client, msg: str, targets) -> None:
         """Accept a set of players to enqueue the data to."""
         for p in targets:
-            p.enqueue(await packets.sendMessage(
+            p.enqueue(packets.sendMessage(
                 client = client.name,
                 msg = msg,
                 target = self.name,

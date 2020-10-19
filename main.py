@@ -109,7 +109,7 @@ async def disconnect_inactive() -> None:
         ctime = time.time()
 
         for p in glob.players:
-            if ctime - p.last_receive_time > PING_TIMEOUT:
+            if ctime - p.last_recv_time > PING_TIMEOUT:
                 await p.logout()
 
         # run the loop every 30
@@ -117,7 +117,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 7, 7)
+    glob.version = Version(2, 8, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -133,7 +133,7 @@ async def run_server(addr: Address) -> None:
 
     # create our bot & append it to the global player list.
     glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
-    glob.bot.last_receive_time = 0x7fffffff
+    glob.bot.last_recv_time = 0x7fffffff
 
     glob.players.add(glob.bot)
 

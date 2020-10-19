@@ -72,17 +72,17 @@ class Mods(IntFlag):
             Mods.KEY6: 'K6',
             Mods.KEY7: 'K7',
             Mods.KEY8: 'K8',
-            Mods.FADEIN: 'FI', # TODO: fix these
-            Mods.RANDOM: '??', # unsure
-            Mods.CINEMA: '??', # unsure
+            Mods.FADEIN: 'FI',
+            Mods.RANDOM: 'RN',
+            Mods.CINEMA: 'CN',
             Mods.TARGET: 'TP',
             Mods.KEY9: 'K9',
-            Mods.KEYCOOP: '??', # unsure
+            Mods.KEYCOOP: 'CO',
             Mods.KEY1: 'K1',
             Mods.KEY3: 'K3',
             Mods.KEY2: 'K2',
             Mods.SCOREV2: 'V2',
-            Mods.MIRROR: '??' # unsure
+            Mods.MIRROR: 'MI'
         }
 
         mod_str = []
