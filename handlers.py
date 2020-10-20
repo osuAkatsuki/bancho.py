@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from struct import pack
 import time
 import packets
 import aiofiles
@@ -14,11 +13,11 @@ from cmyui import AsyncConnection, log, Ansi
 
 from objects import glob
 from constants import regexes
+from packets import BanchoPacketReader
 
 # NOTE: these also load the handler
 # maps for each of the event categories.
 from events import web, api, bancho
-from packets import BanchoPacketReader, ClientPacketType
 
 __all__ = (
     'handle_bancho',
@@ -29,13 +28,6 @@ __all__ = (
     'handle_avatar',
     'handle_registration'
 )
-
-# a list of packetids that gulag
-# will refuse to reply to more
-# than once per connection.
-deny_doublereply = frozenset({
-    ClientPacketType.USER_STATS_REQUEST
-})
 
 async def handle_bancho(conn: AsyncConnection) -> None:
     """Handle a bancho request (POST c.ppy.sh/)."""
@@ -88,65 +80,20 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         await conn.send(200, resp)
         return
 
-    """
-    # gulag refuses to reply to a group of packets more than once per
-    # connection. the list is defined above! var: `deny_doublereply`.
-    # this list will simply keep track of which of these packets we've
-    # replied to during this connection to allow this functonality.
-    blocked_packets: list[ClientPacketType] = []
-    """
-
     # bancho connections can be comprised of multiple packets;
     # our reader is designed to iterate through them individually,
     # allowing logic to be implemented around the actual handler.
-    packet_reader = BanchoPacketReader(conn.body)
 
     # NOTE: this will internally discard any
     # packets whose logic has not been defined.
-    async for packet in packet_reader:
-        # call our packet's handler
+    async for packet in BanchoPacketReader(conn.body):
+        # TODO: wait_for system here with
+        # a packet and a callable check.
+
         await packet.handle(p)
 
         if glob.config.debug:
             log(repr(packet.type), Ansi.LMAGENTA)
-
-
-    """
-    # bancho connections can send multiple packets at a time.
-    # iter through packets received and them handle indivudally.
-    while not pr.empty():
-        await pr.read_packet_header()
-        if pr.current_packet is None:
-            continue # skip, packet empty or corrupt?
-
-        if pr.current_packet == ClientPacketType.PING:
-            continue
-
-        if pr.current_packet in deny_doublereply:
-            # this is a connection we should
-            # only allow once per connection.
-
-            if pr.current_packet in blocked_packets:
-                # this packet has already been
-                # replied to in this connection.
-                pr.ignore_packet()
-                continue
-
-            # log that the packet was handled.
-            blocked_packets.append(pr.current_packet)
-
-        if pr.current_packet in glob.bancho_map:
-            # Server is able to handle the packet.
-            if glob.config.debug:
-                log(repr(pr.current_packet), Ansi.LMAGENTA)
-
-            await glob.bancho_map[pr.current_packet](p, pr)
-
-        else:
-            # packet reading behaviour not yet defined.
-            log(f'Unhandled: {pr!r}', Ansi.LYELLOW)
-            pr.ignore_packet()
-    """
 
     p.last_recv_time = int(time.time())
 

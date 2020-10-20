@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
@@ -8,6 +8,9 @@ from objects.channel import Channel
 from objects.beatmap import Beatmap
 from constants.mods import Mods
 from constants.gamemodes import GameMode
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 __all__ = (
     'SlotStatus',
@@ -225,7 +228,7 @@ class Match:
         """An osu! chat embed for the match."""
         return f'[{self.url} {self.name}]'
 
-    def __contains__(self, p) -> bool:
+    def __contains__(self, p: 'Player') -> bool:
         return p in {s.player for s in self.slots}
 
     def __getitem__(self, key: Union[int, slice]) -> Slot:
@@ -234,13 +237,13 @@ class Match:
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
 
-    def get_slot(self, p) -> Optional[Slot]:
+    def get_slot(self, p: 'Player') -> Optional[Slot]:
         # get the slot containing a given player.
         for s in self.slots:
             if p == s.player:
                 return s
 
-    def get_slot_id(self, p) -> Optional[int]:
+    def get_slot_id(self, p: 'Player') -> Optional[int]:
         # get the slot index containing a given player.
         for idx, s in enumerate(self.slots):
             if p == s.player:
@@ -252,7 +255,7 @@ class Match:
             if s.status == SlotStatus.open:
                 return idx
 
-    def copy(self, m) -> None:
+    def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
 
         self.bmap = m.bmap

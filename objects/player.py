@@ -206,12 +206,6 @@ class Player:
     match: Optional[`Match`]
         A `Match` obj representing the match the player is in.
 
-    recent_scores: list[Optional[`Score`]]
-        A list of recent scores, one for each gamemode.
-
-    last_np: Optional[`Beatmap`]
-        The last map /np'ed by the user, if there was one.
-
     location: tuple[`float`, `float`]
         A tuple containing the latitude and longitude of the player.
 
@@ -244,6 +238,12 @@ class Player:
 
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
+
+    recent_scores: list[Optional[`Score`]]
+        A list of recent scores, one for each gamemode.
+
+    last_np: Optional[`Beatmap`]
+        The last map /np'ed by the user, if there was one.
 
     # XXX: below is mostly custom gulag,
            or internal player class stuff.
@@ -288,46 +288,49 @@ class Player:
         'pres_filter', 'menu_options', '_queue'
     )
 
-    def __init__(self, **kwargs) -> None:
-        self.token: str = kwargs.get('token', str(uuid.uuid4()))
-        self.id: Optional[int] = kwargs.get('id', None)
-        self.name: Optional[str] = kwargs.get('name', None)
-        self.safe_name = self.make_safe(self.name) if self.name else None
-        self.priv = Privileges(kwargs.get('priv', Privileges.Normal))
+    def __init__(self, id: int, name: str, priv: Privileges,
+                 utc_offset: int = 0, pm_private: bool = False,
+                 silence_end: int = 0, osu_ver: datetime = None) -> None:
+        self.id = id
+        self.name = name
+        self.priv = priv
+
+        self.token = self.generate_token()
+        self.safe_name = self.make_safe(self.name)
 
         self.stats = {mode: ModeData() for mode in GameMode}
         self.status = Status()
 
-        self.friends = set() # userids, not player objects
-        self.channels = []
-        self.spectators = []
+        self.friends: set[int] = set() # userids, not player objects
+        self.channels: list[Channel] = []
+        self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
         self.match: Optional[Match] = None
-
-        # store most recent score for each gamemode.
-        self.recent_scores = {mode: None for mode in GameMode}
-
-        # store the last beatmap /np'ed by the user.
-        self.last_np: Optional[Beatmap] = None
 
         self.country = (0, 'XX') # (code , letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset: int = kwargs.get('utc_offset', 0)
-        self.pm_private: bool = kwargs.get('pm_private', False)
+        self.utc_offset = utc_offset
+        self.pm_private = pm_private
 
         self.away_msg: Optional[str] = None
-        self.silence_end: int = kwargs.get('silence_end', 0)
+        self.silence_end = silence_end
         self.in_lobby = False
 
         _ctime = int(time.time())
         self.login_time = _ctime
         self.last_recv_time = _ctime
 
-        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
+        self.osu_ver = osu_ver
         self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
+
+        # store most recent score for each gamemode.
+        self.recent_scores = {mode: None for mode in GameMode}
+
+        # store the last beatmap /np'ed by the user.
+        self.last_np: Optional[Beatmap] = None
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
         self.menu_options: dict[int, dict[str, Any]] = {}
@@ -398,6 +401,10 @@ class Player:
         return score
 
     @staticmethod
+    def generate_token() -> str:
+        return str(uuid.uuid4())
+
+    @staticmethod
     def make_safe(name: str) -> str:
         return name.lower().replace(' ', '_')
 
@@ -424,7 +431,7 @@ class Player:
 
     # NOTE: bans *require* a reason, while unbans leave it optional.
 
-    async def ban(self, admin, reason: str) -> None:
+    async def ban(self, admin: 'Player', reason: str) -> None:
         self.priv &= ~Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
@@ -452,7 +459,7 @@ class Player:
 
         log(f'Banned {self}.', Ansi.CYAN)
 
-    async def unban(self, admin, reason: Optional[str] = None) -> None:
+    async def unban(self, admin: 'Player', reason: str = '') -> None:
         self.priv &= Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
@@ -488,18 +495,24 @@ class Player:
         else:
             # match is being created
             slotID = 0
-            await glob.matches.add(m) # add to global matchlist
-                                      # this will generate an id.
 
-            await glob.channels.add(Channel(
+            # add to our global match list;
+            # this will generate a match id.
+            await glob.matches.add(m)
+
+            # create the channel and add it
+            # to the global channel list as
+            # an instanced channel.
+            match_chan = Channel(
                 name = f'#multi_{m.id}',
                 topic = f"MID {m.id}'s multiplayer channel.",
                 read = Privileges.Normal,
                 write = Privileges.Normal,
                 auto_join = False,
                 instance = True
-            ))
+            )
 
+            await glob.channels.add(match_chan)
             m.chat = glob.channels[f'#multi_{m.id}']
 
         if not await self.join_channel(m.chat):
@@ -602,21 +615,25 @@ class Player:
         if glob.config.debug:
             log(f'{self} left {c}.')
 
-    async def add_spectator(self, p) -> None:
+    async def add_spectator(self, p: 'Player') -> None:
         chan_name = f'#spec_{self.id}'
+
         if not (c := glob.channels[chan_name]):
-            # spec channel does not exist, create it and join.
-            await glob.channels.add(Channel(
+            # spectator chan doesn't exist, create it.
+            spec_chan = Channel(
                 name = chan_name,
                 topic = f"{self.name}'s spectator channel.'",
                 read = Privileges.Normal,
                 write = Privileges.Normal,
                 auto_join = False,
                 instance = True
-            ))
+            )
+
+            await glob.channels.add(spec_chan)
 
             c = glob.channels[chan_name]
 
+        # attempt to join their spectator channel.
         if not await p.join_channel(c):
             return log(f'{self} failed to join {c}?')
 
@@ -633,7 +650,7 @@ class Player:
         self.enqueue(packets.spectatorJoined(p.id))
         log(f'{p} is now spectating {self}.')
 
-    async def remove_spectator(self, p) -> None:
+    async def remove_spectator(self, p: 'Player') -> None:
         self.spectators.remove(p)
         p.spectating = None
 
@@ -655,7 +672,7 @@ class Player:
         self.enqueue(packets.spectatorLeft(p.id))
         log(f'{p} is no longer spectating {self}.')
 
-    async def add_friend(self, p) -> None:
+    async def add_friend(self, p: 'Player') -> None:
         if p.id in self.friends:
             log(f'{self} tried to add {p}, who is already their friend!')
             return
@@ -668,7 +685,7 @@ class Player:
 
         log(f'{self} added {p} to their friends.')
 
-    async def remove_friend(self, p) -> None:
+    async def remove_friend(self, p: 'Player') -> None:
         if not p.id in self.friends:
             log(f'{self} tried to remove {p}, who is not their friend!')
             return

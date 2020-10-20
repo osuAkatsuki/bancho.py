@@ -95,16 +95,11 @@ class MatchList(Sequence):
     def __contains__(self, m: Match) -> bool:
         return m in self.matches
 
-    def get_free(self) -> Optional[Match]:
-        # return first free match.
+    def get_free(self) -> Optional[int]:
+        # return first free match slot.
         for idx, m in enumerate(self.matches):
             if not m:
                 return idx
-
-    def get_by_id(self, mid: int) -> Optional[Match]:
-        for m in self.matches:
-            if m and m.id == mid:
-                return m
 
     async def add(self, m: Match) -> None:
         if m in self.matches:
@@ -197,7 +192,7 @@ class PlayerList(Sequence):
 
         return Player(**res, name=name) if res else None
 
-    async def get_by_id(self, pid: int, sql: bool = False) -> Player:
+    async def get_by_id(self, pid: int, sql: bool = False) -> Optional[Player]:
         for p in self.players:
             if p.id == pid:
                 return p

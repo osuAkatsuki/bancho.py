@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional
-from aiohttp.client import ClientSession
+from typing import Optional, TYPE_CHECKING
 from objects.collections import PlayerList, ChannelList, MatchList
-from cmyui import AsyncSQLPoolWrapper, Version, AsyncTCPServer
+
 import config # imported for indirect use
+
+if TYPE_CHECKING:
+    from aiohttp.client import ClientSession
+    from cmyui import AsyncSQLPoolWrapper, Version, AsyncTCPServer
+    from objects.player import Player
 
 __all__ = ('players', 'channels',
            'matches', 'db', 'cache')
@@ -12,10 +16,11 @@ __all__ = ('players', 'channels',
 players = PlayerList()
 channels = ChannelList()
 matches = MatchList()
-db: Optional[AsyncSQLPoolWrapper] = None
-http: Optional[ClientSession] = None
-version: Optional[Version] = None
-serv: Optional[AsyncTCPServer] = None
+db: Optional['AsyncSQLPoolWrapper'] = None
+http: Optional['ClientSession'] = None
+version: Optional['Version'] = None
+serv: Optional['AsyncTCPServer'] = None
+bot: Optional['Player'] = None
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or

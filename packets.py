@@ -9,6 +9,7 @@ import struct
 
 from objects import glob
 from objects.beatmap import Beatmap
+from objects.player import Player
 from objects.match import (Match, ScoreFrame, SlotStatus,
                            MatchTypes, MatchTeamTypes,
                            MatchScoringTypes, Teams)
@@ -160,6 +161,8 @@ class ClientPacket:
         for x in ('type', 'args', 'length'):
             if x in cls.args:
                 del cls.args[x]
+
+    async def handle(self, p: Player) -> None: ...
 
 # TODO: should probably be.. not here :P
 from collections import namedtuple
@@ -361,10 +364,8 @@ class BanchoPacketReader:
     read_i32_list_i32l = partialmethod(_read_i32_list, len_size=4)
 
     """ advanced types """
-    # TODO: chan/msg could prolly have
-    # classes of their own like match?
 
-    async def read_message(self) -> Message:
+    async def read_message(self) -> Message: # namedtuple
         """Read an osu! message from the internal buffer."""
         return Message(
             client = await self.read_string(),
@@ -373,7 +374,7 @@ class BanchoPacketReader:
             client_id = await self.read_i32()
         )
 
-    async def read_channel(self) -> Channel:
+    async def read_channel(self) -> Channel: # namedtuple
         """Read an osu! channel from the internal buffer."""
         return Channel(
             name = await self.read_string(),
@@ -635,7 +636,7 @@ def changeUsername(old: str, new: str) -> bytes:
     )
 
 # packet id: 11
-def userStats(p) -> bytes:
+def userStats(p: Player) -> bytes:
     return write(
         ServerPacketType.USER_STATS,
         (p.id, osuTypes.i32),
@@ -910,7 +911,7 @@ def matchPlayerSkipped(pid: int) -> bytes:
     )
 
 # packet id: 83
-def userPresence(p) -> bytes:
+def userPresence(p: Player) -> bytes:
     return write(
         ServerPacketType.USER_PRESENCE,
         (p.id, osuTypes.i32),
@@ -937,7 +938,7 @@ def restartServer(ms: int) -> bytes:
 
 # packet id: 88
 @lru_cache(maxsize=4)
-def matchInvite(p, t_name: str) -> bytes:
+def matchInvite(p: Player, t_name: str) -> bytes:
     msg = f'Come join my game: {p.match.embed}.'
     return write(
         ServerPacketType.MATCH_INVITE,

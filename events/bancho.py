@@ -41,7 +41,7 @@ class ChangeAction(ClientPacket, type=ClientPacketType.CHANGE_ACTION):
     mode: osuTypes.u8
     map_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         # update the user's status.
         p.status.update(
             self.action, self.info_text,
@@ -56,7 +56,7 @@ class ChangeAction(ClientPacket, type=ClientPacketType.CHANGE_ACTION):
 class SendMessage(ClientPacket, type=ClientPacketType.SEND_PUBLIC_MESSAGE):
     msg: osuTypes.message
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if p.silenced:
             log(f'{p} sent a message while silenced.', Ansi.YELLOW)
             return
@@ -130,7 +130,7 @@ class SendMessage(ClientPacket, type=ClientPacketType.SEND_PUBLIC_MESSAGE):
 class Logout(ClientPacket, type=ClientPacketType.LOGOUT):
     _: osuTypes.i32 # pretty awesome design on osu!'s end :P
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if (time.time() - p.login_time) < 2:
             # osu! has a weird tendency to log out immediately when
             # it logs in, then reconnects? not sure why..?
@@ -141,7 +141,7 @@ class Logout(ClientPacket, type=ClientPacketType.LOGOUT):
 
 @register_packet
 class StatsUpdateRequest(ClientPacket, type=ClientPacketType.REQUEST_STATUS_UPDATE):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
 registration_msg = '\n'.join((
@@ -404,7 +404,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 class StartSpectating(ClientPacket, type=ClientPacketType.START_SPECTATING):
     target_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (host := await glob.players.get_by_id(self.target_id)):
             log(f'{p} tried to spectate nonexistant id {self.target_id}.', Ansi.YELLOW)
             return
@@ -416,7 +416,7 @@ class StartSpectating(ClientPacket, type=ClientPacketType.START_SPECTATING):
 
 @register_packet
 class StopSpectating(ClientPacket, type=ClientPacketType.STOP_SPECTATING):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         host = p.spectating
 
         if not host:
@@ -429,7 +429,7 @@ class StopSpectating(ClientPacket, type=ClientPacketType.STOP_SPECTATING):
 class SpectateFrames(ClientPacket, type=ClientPacketType.SPECTATE_FRAMES):
     play_data: osuTypes.raw
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         # this runs very frequently during spectation,
         # so it's written to run pretty quick.
 
@@ -443,7 +443,7 @@ class SpectateFrames(ClientPacket, type=ClientPacketType.SPECTATE_FRAMES):
 
 @register_packet
 class CantSpectate(ClientPacket, type=ClientPacketType.CANT_SPECTATE):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not p.spectating:
             log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
             return
@@ -460,7 +460,7 @@ class CantSpectate(ClientPacket, type=ClientPacketType.CANT_SPECTATE):
 class SendPrivateMessage(ClientPacket, type=ClientPacketType.SEND_PRIVATE_MESSAGE):
     msg = osuTypes.message
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if p.silenced:
             log(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
             return
@@ -552,12 +552,12 @@ class SendPrivateMessage(ClientPacket, type=ClientPacketType.SEND_PRIVATE_MESSAG
 
 @register_packet
 class LobbyPart(ClientPacket, type=ClientPacketType.PART_LOBBY):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         p.in_lobby = False
 
 @register_packet
 class LobbyJoin(ClientPacket, type=ClientPacketType.JOIN_LOBBY):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
         for m in (_m for _m in glob.matches if _m):
@@ -567,7 +567,7 @@ class LobbyJoin(ClientPacket, type=ClientPacketType.JOIN_LOBBY):
 class MatchCreate(ClientPacket, type=ClientPacketType.CREATE_MATCH):
     match: osuTypes.match
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         self.match.host = p
         await p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
@@ -577,13 +577,13 @@ class MatchJoin(ClientPacket, type=ClientPacketType.JOIN_MATCH):
     match_id: osuTypes.i32
     match_passwd: osuTypes.string
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if 64 > self.match_id > 0:
             # make sure it's
             # a valid match id.
             return
 
-        if not (m := glob.matches.get_by_id(self.match_id)):
+        if not (m := glob.matches[self.match_id]):
             log(f'{p} tried to join a non-existant mp lobby?')
             return
 
@@ -591,14 +591,14 @@ class MatchJoin(ClientPacket, type=ClientPacketType.JOIN_MATCH):
 
 @register_packet
 class MatchPart(ClientPacket, type=ClientPacketType.PART_MATCH):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         await p.leave_match()
 
 @register_packet
 class MatchChangeSlot(ClientPacket, type=ClientPacketType.MATCH_CHANGE_SLOT):
     slot_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -618,7 +618,7 @@ class MatchChangeSlot(ClientPacket, type=ClientPacketType.MATCH_CHANGE_SLOT):
 
 @register_packet
 class MatchReady(ClientPacket, type=ClientPacketType.MATCH_READY):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -629,7 +629,7 @@ class MatchReady(ClientPacket, type=ClientPacketType.MATCH_READY):
 class MatchLock(ClientPacket, type=ClientPacketType.MATCH_LOCK):
     slot_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -652,7 +652,7 @@ class MatchLock(ClientPacket, type=ClientPacketType.MATCH_LOCK):
 class MatchChangeSettings(ClientPacket, type=ClientPacketType.MATCH_CHANGE_SETTINGS):
     new: osuTypes.match
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -713,7 +713,7 @@ class MatchChangeSettings(ClientPacket, type=ClientPacketType.MATCH_CHANGE_SETTI
 
 @register_packet
 class MatchStart(ClientPacket, type=ClientPacketType.MATCH_START):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -728,7 +728,7 @@ class MatchStart(ClientPacket, type=ClientPacketType.MATCH_START):
 class MatchScoreUpdate(ClientPacket, type=ClientPacketType.MATCH_SCORE_UPDATE):
     play_data: osuTypes.raw
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         # this runs very frequently in matches,
         # so it's written to run pretty quick.
 
@@ -738,13 +738,13 @@ class MatchScoreUpdate(ClientPacket, type=ClientPacketType.MATCH_SCORE_UPDATE):
         # if scorev2 is enabled, read an extra 8 bytes.
         size = 37 if self.play_data[28] else 29 # no idea if required
         data = bytearray(self.play_data)
-        self.play_data[4] = m.get_slot_id(p)
+        data[4] = m.get_slot_id(p)
 
         m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + data, lobby = False)
 
 @register_packet
 class MatchComplete(ClientPacket, type=ClientPacketType.MATCH_COMPLETE):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -769,7 +769,7 @@ class MatchComplete(ClientPacket, type=ClientPacketType.MATCH_COMPLETE):
 class MatchChangeMods(ClientPacket, type=ClientPacketType.MATCH_CHANGE_MODS):
     mods: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -788,7 +788,7 @@ class MatchChangeMods(ClientPacket, type=ClientPacketType.MATCH_CHANGE_MODS):
 
 @register_packet
 class MatchLoadComplete(ClientPacket, type=ClientPacketType.MATCH_LOAD_COMPLETE):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -801,7 +801,7 @@ class MatchLoadComplete(ClientPacket, type=ClientPacketType.MATCH_LOAD_COMPLETE)
 
 @register_packet
 class MatchNoBeatmap(ClientPacket, type=ClientPacketType.MATCH_NO_BEATMAP):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -810,7 +810,7 @@ class MatchNoBeatmap(ClientPacket, type=ClientPacketType.MATCH_NO_BEATMAP):
 
 @register_packet
 class MatchNotReady(ClientPacket, type=ClientPacketType.MATCH_NOT_READY):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -819,7 +819,7 @@ class MatchNotReady(ClientPacket, type=ClientPacketType.MATCH_NOT_READY):
 
 @register_packet
 class MatchFailed(ClientPacket, type=ClientPacketType.MATCH_FAILED):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -832,7 +832,7 @@ class MatchFailed(ClientPacket, type=ClientPacketType.MATCH_FAILED):
 
 @register_packet
 class MatchHasBeatmap(ClientPacket, type=ClientPacketType.MATCH_HAS_BEATMAP):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -845,7 +845,7 @@ class MatchHasBeatmap(ClientPacket, type=ClientPacketType.MATCH_HAS_BEATMAP):
 
 @register_packet
 class MatchSkipRequest(ClientPacket, type=ClientPacketType.MATCH_SKIP_REQUEST):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -863,7 +863,7 @@ class MatchSkipRequest(ClientPacket, type=ClientPacketType.MATCH_SKIP_REQUEST):
 class ChannelJoin(ClientPacket, type=ClientPacketType.CHANNEL_JOIN):
     name: osuTypes.string
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         c = glob.channels[self.name]
 
         if not c or not await p.join_channel(c):
@@ -877,7 +877,7 @@ class ChannelJoin(ClientPacket, type=ClientPacketType.CHANNEL_JOIN):
 class MatchTransferHost(ClientPacket, type=ClientPacketType.MATCH_TRANSFER_HOST):
     slot_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -897,7 +897,7 @@ class MatchTransferHost(ClientPacket, type=ClientPacketType.MATCH_TRANSFER_HOST)
 class FriendAdd(ClientPacket, type=ClientPacketType.FRIEND_ADD):
     user_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (t := await glob.players.get_by_id(self.user_id)):
             log(f'{p} tried to add a user who is not online! ({self.user_id})')
             return
@@ -915,7 +915,7 @@ class FriendAdd(ClientPacket, type=ClientPacketType.FRIEND_ADD):
 class FriendRemove(ClientPacket, type=ClientPacketType.FRIEND_REMOVE):
     user_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (t := await glob.players.get_by_id(self.user_id)):
             log(f'{p} tried to remove a user who is not online! ({self.user_id})')
             return
@@ -931,7 +931,7 @@ class FriendRemove(ClientPacket, type=ClientPacketType.FRIEND_REMOVE):
 
 @register_packet
 class MatchChangeTeam(ClientPacket, type=ClientPacketType.MATCH_CHANGE_TEAM):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -949,7 +949,7 @@ class MatchChangeTeam(ClientPacket, type=ClientPacketType.MATCH_CHANGE_TEAM):
 class ChannelPart(ClientPacket, type=ClientPacketType.CHANNEL_PART):
     name: osuTypes.string
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         c = glob.channels[self.name]
 
         if not c:
@@ -969,7 +969,7 @@ class ChannelPart(ClientPacket, type=ClientPacketType.CHANNEL_PART):
 class ReceiveUpdates(ClientPacket, type=ClientPacketType.RECEIVE_UPDATES):
     value: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if self.value not in range(3):
             log(f'{p} tried to set his presence filter to {self.value}?')
             return
@@ -980,14 +980,14 @@ class ReceiveUpdates(ClientPacket, type=ClientPacketType.RECEIVE_UPDATES):
 class SetAwayMessage(ClientPacket, type=ClientPacketType.SET_AWAY_MESSAGE):
     msg: osuTypes.message
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         p.away_msg = self.msg.msg
 
 @register_packet
 class StatsRequest(ClientPacket, type=ClientPacketType.USER_STATS_REQUEST):
     user_ids: osuTypes.i32_list
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         is_online = lambda o: o in glob.players.ids and o != p.id
 
         for online in filter(is_online, self.user_ids):
@@ -998,7 +998,7 @@ class StatsRequest(ClientPacket, type=ClientPacketType.USER_STATS_REQUEST):
 class MatchInvite(ClientPacket, type=ClientPacketType.MATCH_INVITE):
     user_id: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not p.match:
             return
 
@@ -1013,7 +1013,7 @@ class MatchInvite(ClientPacket, type=ClientPacketType.MATCH_INVITE):
 class MatchChangePassword(ClientPacket, type=ClientPacketType.MATCH_CHANGE_PASSWORD):
     passwd: osuTypes.string
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
@@ -1024,14 +1024,14 @@ class MatchChangePassword(ClientPacket, type=ClientPacketType.MATCH_CHANGE_PASSW
 class UserPresenceRequest(ClientPacket, type=ClientPacketType.USER_PRESENCE_REQUEST):
     user_ids: osuTypes.i32_list
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         for pid in self.user_ids:
             if t := await glob.players.get_by_id(pid):
                 p.enqueue(packets.userPresence(t))
 
 @register_packet
 class UserPresenceRequestAll(ClientPacket, type=ClientPacketType.USER_PRESENCE_REQUEST_ALL):
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         # XXX: this only sends when the client can see > 256 players,
         # so this probably won't have much use for private servers.
 
@@ -1046,5 +1046,5 @@ class UserPresenceRequestAll(ClientPacket, type=ClientPacketType.USER_PRESENCE_R
 class ToggleBlockingDMs(ClientPacket, type=ClientPacketType.TOGGLE_BLOCK_NON_FRIEND_DMS):
     value: osuTypes.i32
 
-    async def handle(self, p: Player):
+    async def handle(self, p: Player) -> None:
         p.pm_private = self.value == 1

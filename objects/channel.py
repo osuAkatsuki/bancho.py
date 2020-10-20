@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
+from typing import Optional, TYPE_CHECKING
 from constants.privileges import Privileges
 from objects import glob
 import packets
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 __all__ = 'Channel',
 
@@ -55,21 +59,20 @@ class Channel:
                  'read', 'write',
                  'auto_join', 'instance')
 
-    def __init__(self, *args, **kwargs) -> None:
-        # use this attribute whenever you need
-        # the 'real' name and not the wrapped one.
-        # (not replaced for #multiplayer/#spectator)
-        # self.name should be used whenever
-        # interacting with the osu! client.
-        self._name = kwargs.get('name', None)
+    #def __init__(self, **kwargs) -> None:
+    def __init__(self, name: str, topic: str,
+                 read: Privileges = Privileges.Normal,
+                 write: Privileges = Privileges.Normal,
+                 auto_join: bool = True,
+                 instance: bool = False) -> None:
+        self._name = name # 'real' name ('#{multi/spec}_{id}')
+        self.topic = topic
+        self.read = read
+        self.write = write
+        self.auto_join = auto_join
+        self.instance = instance
 
-        self.topic = kwargs.get('topic', None)
-        self.players = []
-
-        self.read = kwargs.get('read', Privileges.Normal)
-        self.write = kwargs.get('write', Privileges.Normal)
-        self.auto_join = kwargs.get('auto_join', True)
-        self.instance = kwargs.get('instance', False)
+        self.players: list['Player'] = []
 
     @property
     def name(self) -> str:
@@ -87,19 +90,23 @@ class Channel:
     def __repr__(self) -> str:
         return f'<{self._name}>'
 
-    def __contains__(self, p) -> bool:
+    def __contains__(self, p: 'Player') -> bool:
         return p in self.players
 
-    async def send(self, client, msg: str, to_client: bool = False) -> None:
-        self.enqueue(packets.sendMessage(
-            client = client.name,
-            msg = msg,
-            target = self.name,
-            client_id = client.id
-        ), immune = () if to_client else (client.id,))
+    async def send(self, client: 'Player', msg: str,
+                   to_client: bool = False) -> None:
+        self.enqueue(
+            packets.sendMessage(
+                client = client.name,
+                msg = msg,
+                target = self.name,
+                client_id = client.id
+            ),
+            immune = () if to_client else (client.id,)
+        )
 
-
-    async def send_selective(self, client, msg: str, targets) -> None:
+    async def send_selective(self, client: 'Player', msg: str,
+                             targets: list['Player']) -> None:
         """Accept a set of players to enqueue the data to."""
         for p in targets:
             p.enqueue(packets.sendMessage(
@@ -109,10 +116,10 @@ class Channel:
                 client_id = client.id
             ))
 
-    def append(self, p) -> None:
+    def append(self, p: 'Player') -> None:
         self.players.append(p)
 
-    async def remove(self, p) -> None:
+    async def remove(self, p: 'Player') -> None:
         if len(self.players) == 1 and self.instance:
             # if it's an instance channel and this
             # is the last member leaving, just remove

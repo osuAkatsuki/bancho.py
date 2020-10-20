@@ -117,7 +117,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 0)
+    glob.version = Version(2, 8, 1)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -132,7 +132,7 @@ async def run_server(addr: Address) -> None:
     await glob.db.connect(**glob.config.mysql)
 
     # create our bot & append it to the global player list.
-    glob.bot = Player(id = 1, name = 'Aika', priv = Privileges.Normal)
+    glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
     glob.bot.last_recv_time = 0x7fffffff
 
     glob.players.add(glob.bot)
