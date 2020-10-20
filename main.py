@@ -138,7 +138,7 @@ async def run_server(addr: Address) -> None:
     glob.players.add(glob.bot)
 
     # add all channels from db.
-    async for chan in glob.db.iterall('SELECT * FROM channels'):
+    async for chan in glob.db.iterall('SELECT name, topic, read_priv \'read\', write_priv AS \'write\', auto_join FROM channels'):
         await glob.channels.add(Channel(**chan))
 
     # run background process to
