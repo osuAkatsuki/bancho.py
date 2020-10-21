@@ -53,8 +53,7 @@ async def _help(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Roll an n-sided die where n is the number you write (100 if empty)."""
     if msg and msg[0].isdecimal():
-        # cap roll to 32767 to prevent spam.
-        max_roll = min(int(msg[0]), 32767)
+        max_roll = min(int(msg[0]), 0x7fff)
     else:
         max_roll = 100
 
@@ -64,8 +63,8 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 @command(priv=Privileges.Normal, public=True)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
-    if not (s := p.recent_scores[p.status.mode]):
-        return 'No recent score found for current mode!'
+    if not (s := p.recent_score):
+        return 'No scores found :o'
 
     return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '
             f'{s.pp:.2f}pp #{s.rank}')
@@ -82,9 +81,11 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         'LIMIT 50', [f'%{" ".join(msg)}%']
     )): return 'No matches found :('
 
+    mirror = glob.config.mirror
+
     return '\n'.join(
-        '[https://osu.gatari.pw/d/{set_id} DL] '
-        '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]]'.format(**row)
+        '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '
+        '([{mirror}/d/{set_id} download])'.format(**row, mirror=mirror)
         for row in res
     ) + f'\nMaps: {len(res)}'
 

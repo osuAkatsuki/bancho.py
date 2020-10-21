@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from constants.privileges import Privileges
 from objects import glob
 import packets
@@ -59,12 +59,12 @@ class Channel:
                  'read', 'write',
                  'auto_join', 'instance')
 
-    #def __init__(self, **kwargs) -> None:
     def __init__(self, name: str, topic: str,
                  read: Privileges = Privileges.Normal,
                  write: Privileges = Privileges.Normal,
                  auto_join: bool = True,
-                 instance: bool = False) -> None:
+                 instance: bool = False,
+                 *args, **kwargs) -> None:
         self._name = name # 'real' name ('#{multi/spec}_{id}')
         self.topic = topic
         self.read = read
