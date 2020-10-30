@@ -306,6 +306,7 @@ async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
 str_to_priv = lambda p: defaultdict(lambda: None, {
     'normal': Privileges.Normal,
+    'verified': Privileges.Verfied,
     'whitelisted': Privileges.Whitelisted,
     'supporter': Privileges.Supporter,
     'premium': Privileges.Premium,

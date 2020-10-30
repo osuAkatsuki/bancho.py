@@ -839,7 +839,7 @@ class Player:
                           timeout: int = -1, reusable: bool = False
                          ) -> None:
         """Add a valid callback to the user's osu! chat options."""
-        # generate random negative number in in32 space as the key.
+        # generate random negative number in int32 space as the key.
         rand = partial(random.randint, -0x80000000, 0)
         while (randnum := rand()) in self.menu_options:
             ...

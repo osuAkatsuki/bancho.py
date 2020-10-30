@@ -10,9 +10,6 @@
 
 __all__ = ()
 
-if __name__ != '__main__':
-    raise Exception('main.py is meant to be run directly!')
-
 import asyncio
 import importlib
 import aiohttp
@@ -31,18 +28,6 @@ from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
-
-# set cwd to /gulag.
-os.chdir(os.path.dirname(os.path.realpath(__file__)))
-
-# make sure gulag/.data directory exists
-if not os.path.isdir('.data'):
-    os.mkdir('.data')
-
-# make sure that all gulag/.data subdirectories exist
-for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
-    if not os.path.isdir(f'.data/{p}'):
-        os.mkdir(f'.data/{p}')
 
 async def handle_conn(conn: AsyncConnection) -> None:
     if 'Host' not in conn.headers:
@@ -71,6 +56,8 @@ async def handle_conn(conn: AsyncConnection) -> None:
                 handler = handle_ss
             elif conn.path.startswith('/d/'):
                 handler = handle_dl
+            elif conn.path.startswith('/api/'):
+                handler = handle_api
             elif conn.path == '/users':
                 handler = handle_registration
         elif subdomain == 'a':
@@ -150,12 +137,25 @@ async def run_server(addr: Address) -> None:
         async for conn in glob.serv.listen(glob.config.max_conns):
             loop.create_task(handle_conn(conn))
 
-# use uvloop if available (faster event loop).
-if spec := importlib.util.find_spec('uvloop'):
-    uvloop = importlib.util.module_from_spec(spec)
-    sys.modules['uvloop'] = uvloop
-    spec.loader.exec_module(uvloop)
+if __name__ == '__main__':
+    # set cwd to /gulag.
+    os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    # make sure gulag/.data directory exists.
+    if not os.path.isdir('.data'):
+        os.mkdir('.data')
 
-asyncio.run(run_server(glob.config.server_addr))
+    # make sure that all gulag/.data subdirectories exist.
+    for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
+        if not os.path.isdir(f'.data/{p}'):
+            os.mkdir(f'.data/{p}')
+
+    # use uvloop if available (faster event loop).
+    if spec := importlib.util.find_spec('uvloop'):
+        uvloop = importlib.util.module_from_spec(spec)
+        sys.modules['uvloop'] = uvloop
+        spec.loader.exec_module(uvloop)
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+    asyncio.run(run_server(glob.config.server_addr))

@@ -33,7 +33,7 @@ from objects import glob
 
 glob.web_map = {}
 
-def web_handler(uri: str) -> Callable:
+def register(uri: str) -> Callable:
     """Register a handler in `glob.web_map`."""
     def register_cb(cb: Callable) -> Callable:
         glob.web_map |= {uri: cb}
@@ -88,7 +88,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         return handler
     return wrapper
 
-@web_handler('bancho_connect.php')
+@register('bancho_connect.php')
 async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
     if 'v' in conn.args:
         # TODO: implement verification..?
@@ -106,7 +106,7 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 required_params_bmsubmit_upload = frozenset({
     'u', 'h', 't', 'vv', 'z', 's'
 })
-@web_handler('osu-osz2-bmsubmit-upload.php')
+@register('osu-osz2-bmsubmit-upload.php')
 async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
     if not all(x in conn.args for x in required_params_bmsubmit_upload):
         log(f'bmsubmit-upload req missing params.', Ansi.LRED)
@@ -121,7 +121,7 @@ async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
 required_params_bmsubmit_getid = frozenset({
     'h', 's', 'b', 'z', 'vv'
 })
-@web_handler('osu-osz2-bmsubmit-getid.php')
+@register('osu-osz2-bmsubmit-getid.php')
 async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
     if not all(x in conn.args for x in required_params_bmsubmit_getid):
         log(f'bmsubmit-getid req missing params.', Ansi.LRED)
@@ -172,7 +172,7 @@ async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
 
 from objects.player import Player
 
-@web_handler('osu-screenshot.php')
+@register('osu-screenshot.php')
 @required_mpargs({'u', 'p', 'v'})
 @get_login('u', 'p')
 async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -188,13 +188,13 @@ async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     log(f'{p} uploaded {filename}.')
     return filename.encode()
 
-@web_handler('osu-getfriends.php')
+@register('osu-getfriends.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetFriends(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(str(i) for i in p.friends).encode()
 
-@web_handler('osu-getbeatmapinfo.php')
+@register('osu-getbeatmapinfo.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -257,7 +257,7 @@ async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]
 
     return '\n'.join(ret).encode()
 
-@web_handler('osu-getfavourites.php')
+@register('osu-getfavourites.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetFavourites(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -269,7 +269,7 @@ async def osuGetFavourites(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(favourites).encode()
 
-@web_handler('osu-addfavourite.php')
+@register('osu-addfavourite.php')
 @required_args({'u', 'h', 'a'})
 @get_login('u', 'h', b'Please login to add favourites!')
 async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -291,7 +291,7 @@ async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         [p.id, conn.args['a']]
     )
 
-@web_handler('lastfm.php')
+@register('lastfm.php')
 @required_args({'b', 'action', 'us', 'ha'})
 @get_login('us', 'ha')
 async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -340,7 +340,7 @@ async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         pass
     """
 
-@web_handler('osu-search.php')
+@register('osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login('u', 'h')
 async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -442,7 +442,7 @@ async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(ret).encode()
     """
 
-@web_handler('osu-search-set.php')
+@register('osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -517,7 +517,7 @@ autoban_pp = (
 )
 del UNDEF
 
-@web_handler('osu-submit-modular-selector.php')
+@register('osu-submit-modular-selector.php')
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
 async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
@@ -793,7 +793,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
 
-@web_handler('osu-getreplay.php')
+@register('osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
 async def getReplay(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -805,7 +805,7 @@ async def getReplay(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         return await f.read()
 
 """ XXX: going to be slightly more annoying than expected to set this up :P
-@web_handler('osu-session.php')
+@register('osu-session.php')
 @required_mpargs({'u', 'h', 'action'})
 @get_login('u', 'h')
 async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -908,7 +908,7 @@ async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         return
 """
 
-@web_handler('osu-rate.php')
+@register('osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login('u', 'p', b'auth fail')
 async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
@@ -966,7 +966,7 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
-@web_handler('osu-osz2-getscores.php')
+@register('osu-osz2-getscores.php')
 @required_args({'s', 'vv', 'v', 'c', 'f', 'm',
                 'i', 'mods', 'h', 'a', 'us', 'ha'})
 @get_login('us', 'ha')
@@ -1118,7 +1118,7 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(res).encode()
 
-@web_handler('osu-comment.php')
+@register('osu-comment.php')
 @required_mpargs({'u', 'p', 'b', 's',
                   'm', 'r', 'a'})
 @get_login('u', 'p')
@@ -1200,7 +1200,7 @@ async def osuComment(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         # invalid action
         return b'Invalid action.'
 
-@web_handler('osu-markasread.php')
+@register('osu-markasread.php')
 @required_args({'u', 'h', 'channel'})
 @get_login('u', 'h')
 async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
@@ -1218,15 +1218,15 @@ async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         [p.id, t.id]
     )
 
-@web_handler('osu-getseasonal.php')
+@register('osu-getseasonal.php')
 async def osuSeasonal(conn: AsyncConnection) -> Optional[bytes]:
     return orjson.dumps(glob.config.seasonal_bgs)
 
-@web_handler('osu-error.php')
+@register('osu-error.php')
 async def osuError(conn: AsyncConnection) -> Optional[bytes]:
     ...
 
-@web_handler('check-updates.php')
+@register('check-updates.php')
 @required_args({'action', 'stream'})
 async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
     action = conn.args['action']
