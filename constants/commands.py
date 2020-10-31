@@ -15,6 +15,7 @@ from objects.beatmap import Beatmap, RankedStatus
 from objects.match import Match, SlotStatus
 from constants.privileges import Privileges
 from constants.mods import Mods
+from constants import regexes
 
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
@@ -195,6 +196,55 @@ async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     return 'Map updated!'
 
+""" Mod commands
+# The commands below are somewhat dangerous,
+# and are generally for managing players.
+"""
+
+@command(priv=Privileges.Mod, public=False)
+async def silence(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Silence `p` with a specified duration & reason."""
+    if len(msg) < 3:
+        return 'Invalid syntax: !silence <name> <duration> <reason>'
+
+    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+        return f'"{msg[0]}" not found.'
+
+    if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
+        return 'Only developers can manage staff members.'
+
+    if not (rgx := regexes.silence_duration.match(msg[1])):
+        return 'Invalid syntax: !silence <name> <duration> <reason>'
+
+    multiplier = {
+        's': 1, 'm': 60, 'h': 3600,
+        'd': 86400, 'w': 604800
+    }[rgx['scale']]
+
+    duration = int(rgx['duration']) * multiplier
+    reason = ' '.join(msg[2:])
+
+    await t.silence(p, duration, reason)
+    return f'{t} was silenced.'
+
+@command(priv=Privileges.Mod, public=False)
+async def unsilence(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Unsilence `p`."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !unsilence <name>'
+
+    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+        return f'"{msg[0]}" not found.'
+
+    if not t.silenced:
+        return f'{t} is not silenced.'
+
+    if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
+        return 'Only developers can manage staff members.'
+
+    await t.unsilence(p)
+    return f'{t} was unsilenced.'
+
 """ Admin commands
 # The commands below are relatively dangerous,
 # and are generally for managing players.
@@ -338,7 +388,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return 'Success.'
 
 # temp command, to illustrate how menu options will work
-@command(trigger='men', priv=Privileges.Dangerous, public=False)
+@command(trigger='!men', priv=Privileges.Dangerous, public=False)
 async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     async def callback():
         # this is called when the menu item is clicked
@@ -376,8 +426,8 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # multiplayer match management.
 """
 
-# start a match.
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Start a multiplayer match."""
     for s in m.slots:
         if s.status & SlotStatus.has_player \
         and not s.status & SlotStatus.no_map:
@@ -387,8 +437,8 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.matchStart(m))
     return 'Good luck!'
 
-# abort a match in progress.
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Abort an in-progress multiplayer match."""
     if not m.in_progress:
         return 'Abort what?'
 
@@ -401,8 +451,8 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.matchAbort())
     return 'Match aborted.'
 
-# force a player into a multiplayer match by name.
 async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Force a player into a multiplayer match by name."""
     if len(msg) < 1:
         return 'Invalid syntax: !mp force <name>'
 
@@ -412,8 +462,8 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     await t.join_match(m)
     return 'Welcome.'
 
-# set the current beatmap (by id).
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Set a multiplayer matches current map by id."""
     if len(msg) < 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
 
@@ -424,22 +474,45 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.updateMatch(m))
     return f'Map selected: {bmap.embed}.'
 
+async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Set a multiplayer matches current host by id."""
+    if len(msg) < 1:
+        return 'Invalid syntax: !mp host <name>'
+
+    if not (t := await glob.players.get_by_name(' '.join(msg))):
+        return 'Could not find a user by that name.'
+
+    if m.host == t:
+        return "They're already host, silly!"
+
+    if t not in m:
+        return 'Found no such player in the match.'
+
+    m.host = t
+    m.host.enqueue(packets.matchTransferHost())
+    m.enqueue(packets.updateMatch(m), lobby=False)
+    return 'Match host updated.'
+
 _mp_triggers = defaultdict(lambda: None, {
-    'force': {
-        'callback': mp_force,
-        'priv': Privileges.Admin
+    'start': {
+        'callback': mp_start,
+        'priv': Privileges.Normal
     },
     'abort': {
         'callback': mp_abort,
         'priv': Privileges.Normal
     },
-    'start': {
-        'callback': mp_start,
+    'host': {
+        'callback': mp_host,
         'priv': Privileges.Normal
     },
     'map': {
         'callback': mp_map,
         'priv': Privileges.Normal
+    },
+    'force': {
+        'callback': mp_force,
+        'priv': Privileges.Admin
     }
 })
 

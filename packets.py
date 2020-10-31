@@ -27,132 +27,126 @@ _specifiers = (
 )
 
 @unique
-class ClientPacketType(IntEnum):
-    CHANGE_ACTION = 0
-    SEND_PUBLIC_MESSAGE = 1
-    LOGOUT = 2
-    REQUEST_STATUS_UPDATE = 3
-    PING = 4
-    START_SPECTATING = 16
-    STOP_SPECTATING = 17
-    SPECTATE_FRAMES = 18
-    ERROR_REPORT = 20
-    CANT_SPECTATE = 21
-    SEND_PRIVATE_MESSAGE = 25
-    PART_LOBBY = 29
-    JOIN_LOBBY = 30
-    CREATE_MATCH = 31
-    JOIN_MATCH = 32
-    PART_MATCH = 33
-    MATCH_CHANGE_SLOT = 38
-    MATCH_READY = 39
-    MATCH_LOCK = 40
-    MATCH_CHANGE_SETTINGS = 41
-    MATCH_START = 44
-    MATCH_SCORE_UPDATE = 47
-    MATCH_COMPLETE = 49
-    MATCH_CHANGE_MODS = 51
-    MATCH_LOAD_COMPLETE = 52
-    MATCH_NO_BEATMAP = 54
-    MATCH_NOT_READY = 55
-    MATCH_FAILED = 56
-    MATCH_HAS_BEATMAP = 59
-    MATCH_SKIP_REQUEST = 60
-    CHANNEL_JOIN = 63
-    BEATMAP_INFO_REQUEST = 68
-    MATCH_TRANSFER_HOST = 70
-    FRIEND_ADD = 73
-    FRIEND_REMOVE = 74
-    MATCH_CHANGE_TEAM = 77
-    CHANNEL_PART = 78
-    RECEIVE_UPDATES = 79
-    SET_AWAY_MESSAGE = 82
-    IRC_ONLY = 84
-    USER_STATS_REQUEST = 85
-    MATCH_INVITE = 87
-    MATCH_CHANGE_PASSWORD = 90
-    TOURNAMENT_MATCH_INFO_REQUEST = 93
-    USER_PRESENCE_REQUEST = 97
-    USER_PRESENCE_REQUEST_ALL = 98
-    TOGGLE_BLOCK_NON_FRIEND_DMS = 99
-    TOURNAMENT_JOIN_MATCH_CHANNEL = 108
-    TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
-
-    def __repr__(self) -> str:
-        return f'<osu! Packet: {self.name} ({self.value})>'
-
-@unique
-class ServerPacketType(IntEnum):
-    USER_ID = 5
-    SEND_MESSAGE = 7
-    PONG = 8
-    HANDLE_IRC_CHANGE_USERNAME = 9
-    HANDLE_IRC_QUIT = 10
-    USER_STATS = 11
-    USER_LOGOUT = 12
-    SPECTATOR_JOINED = 13
-    SPECTATOR_LEFT = 14
-    SPECTATE_FRAMES = 15
-    VERSION_UPDATE = 19
-    SPECTATOR_CANT_SPECTATE = 22
-    GET_ATTENTION = 23
-    NOTIFICATION = 24
-    UPDATE_MATCH = 26
-    NEW_MATCH = 27
-    DISPOSE_MATCH = 28
-    TOGGLE_BLOCK_NON_FRIEND_DMS = 34
-    MATCH_JOIN_SUCCESS = 36
-    MATCH_JOIN_FAIL = 37
-    FELLOW_SPECTATOR_JOINED = 42
-    FELLOW_SPECTATOR_LEFT = 43
-    ALL_PLAYERS_LOADED = 45
-    MATCH_START = 46
-    MATCH_SCORE_UPDATE = 48
-    MATCH_TRANSFER_HOST = 50
-    MATCH_ALL_PLAYERS_LOADED = 53
-    MATCH_PLAYER_FAILED = 57
-    MATCH_COMPLETE = 58
-    MATCH_SKIP = 61
-    UNAUTHORIZED = 62 # unused
-    CHANNEL_JOIN_SUCCESS = 64
-    CHANNEL_INFO = 65
-    CHANNEL_KICK = 66
-    CHANNEL_AUTO_JOIN = 67
-    BEATMAP_INFO_REPLY = 69
-    PRIVILEGES = 71
-    FRIENDS_LIST = 72
-    PROTOCOL_VERSION = 75
-    MAIN_MENU_ICON = 76
-    MONITOR = 80 # unused
-    MATCH_PLAYER_SKIPPED = 81
-    USER_PRESENCE = 83
-    RESTART = 86
-    MATCH_INVITE = 88
-    CHANNEL_INFO_END = 89
-    MATCH_CHANGE_PASSWORD = 91
-    SILENCE_END = 92
-    USER_SILENCED = 94
-    USER_PRESENCE_SINGLE = 95
-    USER_PRESENCE_BUNDLE = 96
-    USER_DM_BLOCKED = 100
-    TARGET_IS_SILENCED = 101
-    VERSION_UPDATE_FORCED = 102
-    SWITCH_SERVER = 103
-    ACCOUNT_RESTRICTED = 104
-    RTX = 105 # unused
-    MATCH_ABORT = 106
-    SWITCH_TOURNAMENT_SERVER = 107
+class Packets(IntEnum):
+    OSU_CHANGE_ACTION = 0
+    OSU_SEND_PUBLIC_MESSAGE = 1
+    OSU_LOGOUT = 2
+    OSU_REQUEST_STATUS_UPDATE = 3
+    OSU_PING = 4
+    CHO_USER_ID = 5
+    CHO_SEND_MESSAGE = 7
+    CHO_PONG = 8
+    CHO_HANDLE_IRC_CHANGE_USERNAME = 9
+    CHO_HANDLE_IRC_QUIT = 10
+    CHO_USER_STATS = 11
+    CHO_USER_LOGOUT = 12
+    CHO_SPECTATOR_JOINED = 13
+    CHO_SPECTATOR_LEFT = 14
+    CHO_SPECTATE_FRAMES = 15
+    OSU_START_SPECTATING = 16
+    OSU_STOP_SPECTATING = 17
+    OSU_SPECTATE_FRAMES = 18
+    CHO_VERSION_UPDATE = 19
+    OSU_ERROR_REPORT = 20
+    OSU_CANT_SPECTATE = 21
+    CHO_SPECTATOR_CANT_SPECTATE = 22
+    CHO_GET_ATTENTION = 23
+    CHO_NOTIFICATION = 24
+    OSU_SEND_PRIVATE_MESSAGE = 25
+    CHO_UPDATE_MATCH = 26
+    CHO_NEW_MATCH = 27
+    CHO_DISPOSE_MATCH = 28
+    OSU_PART_LOBBY = 29
+    OSU_JOIN_LOBBY = 30
+    OSU_CREATE_MATCH = 31
+    OSU_JOIN_MATCH = 32
+    OSU_PART_MATCH = 33
+    CHO_TOGGLE_BLOCK_NON_FRIEND_DMS = 34
+    CHO_MATCH_JOIN_SUCCESS = 36
+    CHO_MATCH_JOIN_FAIL = 37
+    OSU_MATCH_CHANGE_SLOT = 38
+    OSU_MATCH_READY = 39
+    OSU_MATCH_LOCK = 40
+    OSU_MATCH_CHANGE_SETTINGS = 41
+    CHO_FELLOW_SPECTATOR_JOINED = 42
+    CHO_FELLOW_SPECTATOR_LEFT = 43
+    OSU_MATCH_START = 44
+    CHO_ALL_PLAYERS_LOADED = 45
+    CHO_MATCH_START = 46
+    OSU_MATCH_SCORE_UPDATE = 47
+    CHO_MATCH_SCORE_UPDATE = 48
+    OSU_MATCH_COMPLETE = 49
+    CHO_MATCH_TRANSFER_HOST = 50
+    OSU_MATCH_CHANGE_MODS = 51
+    OSU_MATCH_LOAD_COMPLETE = 52
+    CHO_MATCH_ALL_PLAYERS_LOADED = 53
+    OSU_MATCH_NO_BEATMAP = 54
+    OSU_MATCH_NOT_READY = 55
+    OSU_MATCH_FAILED = 56
+    CHO_MATCH_PLAYER_FAILED = 57
+    CHO_MATCH_COMPLETE = 58
+    OSU_MATCH_HAS_BEATMAP = 59
+    OSU_MATCH_SKIP_REQUEST = 60
+    CHO_MATCH_SKIP = 61
+    CHO_UNAUTHORIZED = 62 # unused
+    OSU_CHANNEL_JOIN = 63
+    CHO_CHANNEL_JOIN_SUCCESS = 64
+    CHO_CHANNEL_INFO = 65
+    CHO_CHANNEL_KICK = 66
+    CHO_CHANNEL_AUTO_JOIN = 67
+    OSU_BEATMAP_INFO_REQUEST = 68
+    CHO_BEATMAP_INFO_REPLY = 69
+    OSU_MATCH_TRANSFER_HOST = 70
+    CHO_PRIVILEGES = 71
+    CHO_FRIENDS_LIST = 72
+    OSU_FRIEND_ADD = 73
+    OSU_FRIEND_REMOVE = 74
+    CHO_PROTOCOL_VERSION = 75
+    CHO_MAIN_MENU_ICON = 76
+    OSU_MATCH_CHANGE_TEAM = 77
+    OSU_CHANNEL_PART = 78
+    OSU_RECEIVE_UPDATES = 79
+    CHO_MONITOR = 80 # unused
+    CHO_MATCH_PLAYER_SKIPPED = 81
+    OSU_SET_AWAY_MESSAGE = 82
+    CHO_USER_PRESENCE = 83
+    OSU_IRC_ONLY = 84
+    OSU_USER_STATS_REQUEST = 85
+    CHO_RESTART = 86
+    OSU_MATCH_INVITE = 87
+    CHO_MATCH_INVITE = 88
+    CHO_CHANNEL_INFO_END = 89
+    OSU_MATCH_CHANGE_PASSWORD = 90
+    CHO_MATCH_CHANGE_PASSWORD = 91
+    CHO_SILENCE_END = 92
+    OSU_TOURNAMENT_MATCH_INFO_REQUEST = 93
+    CHO_USER_SILENCED = 94
+    CHO_USER_PRESENCE_SINGLE = 95
+    CHO_USER_PRESENCE_BUNDLE = 96
+    OSU_USER_PRESENCE_REQUEST = 97
+    OSU_USER_PRESENCE_REQUEST_ALL = 98
+    OSU_TOGGLE_BLOCK_NON_FRIEND_DMS = 99
+    CHO_USER_DM_BLOCKED = 100
+    CHO_TARGET_IS_SILENCED = 101
+    CHO_VERSION_UPDATE_FORCED = 102
+    CHO_SWITCH_SERVER = 103
+    CHO_ACCOUNT_RESTRICTED = 104
+    CHO_RTX = 105 # unused
+    CHO_MATCH_ABORT = 106
+    CHO_SWITCH_TOURNAMENT_SERVER = 107
+    OSU_TOURNAMENT_JOIN_MATCH_CHANNEL = 108
+    OSU_TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
     def __repr__(self) -> str:
         return f'<Bancho Packet: {self.name} ({self.value})>'
 
-class ClientPacket:
-    """Abstract base class for incoming bancho packets."""
-    type: Optional[ClientPacketType] = None
+class BanchoPacket:
+    """Abstract base class for bancho packets."""
+    type: Optional[Packets] = None
     args: Optional[tuple[osuTypes]] = None
     length: Optional[int] = None
 
-    def __init_subclass__(cls, type: ClientPacketType, **kwargs) -> None:
+    def __init_subclass__(cls, type: Packets, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
 
         cls.type = type
@@ -178,7 +172,7 @@ class BanchoPacketReader:
     _buf: `memoryview`
         Internal buffer view of the reader.
 
-    _current: Optional[`ClientPacket`]
+    _current: Optional[`BanchoPacket`]
         The current packet being read by the reader, if any.
 
     Intended Usage:
@@ -192,7 +186,7 @@ class BanchoPacketReader:
 
     def __init__(self, data: bytes) -> None:
         self._buf = memoryview(data)
-        self._current: Optional[ClientPacket] = None
+        self._current: Optional[BanchoPacket] = None
 
     def __aiter__(self):
         return self
@@ -203,7 +197,7 @@ class BanchoPacketReader:
         while True:
             p_type, p_len = await self.read_header()
 
-            if p_type == ClientPacketType.PING:
+            if p_type == Packets.OSU_PING:
                 # the client is simply informing us that it's
                 # still active; we don't have to handle anything.
                 continue
@@ -289,7 +283,7 @@ class BanchoPacketReader:
         # read type & length from the body
         data = struct.unpack('<HxI', self._buf[:7])
         self._buf = self._buf[7:]
-        return ClientPacketType(data[0]), data[1]
+        return Packets(data[0]), data[1]
 
     async def ignore_packet(self) -> None:
         """Skip the current packet in the buffer."""
@@ -611,7 +605,7 @@ def userID(id: int) -> bytes:
     # -8: requires verification
     # ??: valid id
     return write(
-        ServerPacketType.USER_ID,
+        Packets.CHO_USER_ID,
         (id, osuTypes.i32)
     )
 
@@ -619,26 +613,26 @@ def userID(id: int) -> bytes:
 def sendMessage(client: str, msg: str, target: str,
                 client_id: int) -> bytes:
     return write(
-        ServerPacketType.SEND_MESSAGE,
+        Packets.CHO_SEND_MESSAGE,
         ((client, msg, target, client_id), osuTypes.message)
     )
 
 # packet id: 8
 @cache
 def pong() -> bytes:
-    return write(ServerPacketType.PONG)
+    return write(Packets.CHO_PONG)
 
 # packet id: 9
 def changeUsername(old: str, new: str) -> bytes:
     return write(
-        ServerPacketType.HANDLE_IRC_CHANGE_USERNAME,
+        Packets.CHO_HANDLE_IRC_CHANGE_USERNAME,
         (f'{old}>>>>{new}', osuTypes.string)
     )
 
 # packet id: 11
 def userStats(p: Player) -> bytes:
     return write(
-        ServerPacketType.USER_STATS,
+        Packets.CHO_USER_STATS,
         (p.id, osuTypes.i32),
         (p.status.action, osuTypes.u8),
         (p.status.info_text, osuTypes.string),
@@ -665,7 +659,7 @@ def userStats(p: Player) -> bytes:
 @cache
 def logout(userID: int) -> bytes:
     return write(
-        ServerPacketType.USER_LOGOUT,
+        Packets.CHO_USER_LOGOUT,
         (userID, osuTypes.i32),
         (0, osuTypes.u8)
     )
@@ -674,7 +668,7 @@ def logout(userID: int) -> bytes:
 @cache
 def spectatorJoined(id: int) -> bytes:
     return write(
-        ServerPacketType.SPECTATOR_JOINED,
+        Packets.CHO_SPECTATOR_JOINED,
         (id, osuTypes.i32)
     )
 
@@ -682,14 +676,14 @@ def spectatorJoined(id: int) -> bytes:
 @cache
 def spectatorLeft(id: int) -> bytes:
     return write(
-        ServerPacketType.SPECTATOR_LEFT,
+        Packets.CHO_SPECTATOR_LEFT,
         (id, osuTypes.i32)
     )
 
 # packet id: 15
 def spectateFrames(data: bytearray) -> bytes:
     return ( # a little hacky, but quick.
-        ServerPacketType.SPECTATE_FRAMES.to_bytes(
+        Packets.CHO_SPECTATE_FRAMES.to_bytes(
             3, 'little', signed = True
         ) + len(data).to_bytes(4, 'little') + data
     )
@@ -697,40 +691,40 @@ def spectateFrames(data: bytearray) -> bytes:
 # packet id: 19
 @cache
 def versionUpdate() -> bytes:
-    return write(ServerPacketType.VERSION_UPDATE)
+    return write(Packets.CHO_VERSION_UPDATE)
 
 # packet id: 22
 @cache
 def spectatorCantSpectate(id: int) -> bytes:
     return write(
-        ServerPacketType.SPECTATOR_CANT_SPECTATE,
+        Packets.CHO_SPECTATOR_CANT_SPECTATE,
         (id, osuTypes.i32)
     )
 
 # packet id: 23
 @cache
 def getAttention() -> bytes:
-    return write(ServerPacketType.GET_ATTENTION)
+    return write(Packets.CHO_GET_ATTENTION)
 
 # packet id: 24
 @lru_cache(maxsize=4)
 def notification(msg: str) -> bytes:
     return write(
-        ServerPacketType.NOTIFICATION,
+        Packets.CHO_NOTIFICATION,
         (msg, osuTypes.string)
     )
 
 # packet id: 26
 def updateMatch(m: Match) -> bytes:
     return write(
-        ServerPacketType.UPDATE_MATCH,
+        Packets.CHO_UPDATE_MATCH,
         (m, osuTypes.match)
     )
 
 # packet id: 27
 def newMatch(m: Match) -> bytes:
     return write(
-        ServerPacketType.NEW_MATCH,
+        Packets.CHO_NEW_MATCH,
         (m, osuTypes.match)
     )
 
@@ -738,32 +732,32 @@ def newMatch(m: Match) -> bytes:
 @cache
 def disposeMatch(id: int) -> bytes:
     return write(
-        ServerPacketType.DISPOSE_MATCH,
+        Packets.CHO_DISPOSE_MATCH,
         (id, osuTypes.i32)
     )
 
 # packet id: 34
 @cache
 def toggleBlockNonFriendPM() -> bytes:
-    return write(ServerPacketType.TOGGLE_BLOCK_NON_FRIEND_DMS)
+    return write(Packets.CHO_TOGGLE_BLOCK_NON_FRIEND_DMS)
 
 # packet id: 36
 def matchJoinSuccess(m: Match) -> bytes:
     return write(
-        ServerPacketType.MATCH_JOIN_SUCCESS,
+        Packets.CHO_MATCH_JOIN_SUCCESS,
         (m, osuTypes.match)
     )
 
 # packet id: 37
 @cache
 def matchJoinFail() -> bytes:
-    return write(ServerPacketType.MATCH_JOIN_FAIL)
+    return write(Packets.CHO_MATCH_JOIN_FAIL)
 
 # packet id: 42
 @cache
 def fellowSpectatorJoined(id: int) -> bytes:
     return write(
-        ServerPacketType.FELLOW_SPECTATOR_JOINED,
+        Packets.CHO_FELLOW_SPECTATOR_JOINED,
         (id, osuTypes.i32)
     )
 
@@ -771,57 +765,57 @@ def fellowSpectatorJoined(id: int) -> bytes:
 @cache
 def fellowSpectatorLeft(id: int) -> bytes:
     return write(
-        ServerPacketType.FELLOW_SPECTATOR_LEFT,
+        Packets.CHO_FELLOW_SPECTATOR_LEFT,
         (id, osuTypes.i32)
     )
 
 # packet id: 46
 def matchStart(m: Match) -> bytes:
     return write(
-        ServerPacketType.MATCH_START,
+        Packets.CHO_MATCH_START,
         (m, osuTypes.match)
     )
 
 # packet id: 48
 def matchScoreUpdate(frame: ScoreFrame) -> bytes:
     return write(
-        ServerPacketType.MATCH_SCORE_UPDATE,
+        Packets.CHO_MATCH_SCORE_UPDATE,
         (frame, osuTypes.scoreframe)
     )
 
 # packet id: 50
 @cache
 def matchTransferHost() -> bytes:
-    return write(ServerPacketType.MATCH_TRANSFER_HOST)
+    return write(Packets.CHO_MATCH_TRANSFER_HOST)
 
 # packet id: 53
 @cache
 def matchAllPlayerLoaded() -> bytes:
-    return write(ServerPacketType.MATCH_ALL_PLAYERS_LOADED)
+    return write(Packets.CHO_MATCH_ALL_PLAYERS_LOADED)
 
 # packet id: 57
 @cache
 def matchPlayerFailed(slot_id: int) -> bytes:
     return write(
-        ServerPacketType.MATCH_PLAYER_FAILED,
+        Packets.CHO_MATCH_PLAYER_FAILED,
         (slot_id, osuTypes.i32)
     )
 
 # packet id: 58
 @cache
 def matchComplete() -> bytes:
-    return write(ServerPacketType.MATCH_COMPLETE)
+    return write(Packets.CHO_MATCH_COMPLETE)
 
 # packet id: 61
 @cache
 def matchSkip() -> bytes:
-    return write(ServerPacketType.MATCH_SKIP)
+    return write(Packets.CHO_MATCH_SKIP)
 
 # packet id: 64
 @lru_cache(maxsize=8)
 def channelJoin(name: str) -> bytes:
     return write(
-        ServerPacketType.CHANNEL_JOIN_SUCCESS,
+        Packets.CHO_CHANNEL_JOIN_SUCCESS,
         (name, osuTypes.string)
     )
 
@@ -830,7 +824,7 @@ def channelJoin(name: str) -> bytes:
 def channelInfo(name: str, topic: str,
                 p_count: int) -> bytes:
     return write(
-        ServerPacketType.CHANNEL_INFO,
+        Packets.CHO_CHANNEL_INFO,
         ((name, topic, p_count), osuTypes.channel)
     )
 
@@ -838,7 +832,7 @@ def channelInfo(name: str, topic: str,
 @lru_cache(maxsize=8)
 def channelKick(name: str) -> bytes:
     return write(
-        ServerPacketType.CHANNEL_KICK,
+        Packets.CHO_CHANNEL_KICK,
         (name, osuTypes.string)
     )
 
@@ -847,14 +841,14 @@ def channelKick(name: str) -> bytes:
 def channelAutoJoin(name: str, topic: str,
                     p_count: int) -> bytes:
     return write(
-        ServerPacketType.CHANNEL_AUTO_JOIN,
+        Packets.CHO_CHANNEL_AUTO_JOIN,
         ((name, topic, p_count), osuTypes.channel)
     )
 
 # packet id: 69
 #def beatmapInfoReply(maps: Sequence[BeatmapInfo]) -> bytes:
 #    return write(
-#        ServerPacketType.BEATMAP_INFO_REPLY,
+#        Packets.CHO_BEATMAP_INFO_REPLY,
 #        (maps, osuTypes.mapInfoReply)
 #    )
 
@@ -862,14 +856,14 @@ def channelAutoJoin(name: str, topic: str,
 @cache
 def banchoPrivileges(priv: int) -> bytes:
     return write(
-        ServerPacketType.PRIVILEGES,
+        Packets.CHO_PRIVILEGES,
         (priv, osuTypes.i32)
     )
 
 # packet id: 72
 def friendsList(*friends) -> bytes:
     return write(
-        ServerPacketType.FRIENDS_LIST,
+        Packets.CHO_FRIENDS_LIST,
         (friends, osuTypes.i32_list)
     )
 
@@ -877,7 +871,7 @@ def friendsList(*friends) -> bytes:
 @cache
 def protocolVersion(ver: int) -> bytes:
     return write(
-        ServerPacketType.PROTOCOL_VERSION,
+        Packets.CHO_PROTOCOL_VERSION,
         (ver, osuTypes.i32)
     )
 
@@ -885,7 +879,7 @@ def protocolVersion(ver: int) -> bytes:
 @cache
 def mainMenuIcon() -> bytes:
     return write(
-        ServerPacketType.MAIN_MENU_ICON,
+        Packets.CHO_MAIN_MENU_ICON,
         ('|'.join(glob.config.menu_icon), osuTypes.string)
     )
 
@@ -900,20 +894,20 @@ def monitor() -> bytes:
 
     # this doesn't work on newer clients, and i had no plans
     # of trying to put it to use - just coded for completion.
-    return write(ServerPacketType.MONITOR)
+    return write(Packets.CHO_MONITOR)
 
 # packet id: 81
 @cache
 def matchPlayerSkipped(pid: int) -> bytes:
     return write(
-        ServerPacketType.MATCH_PLAYER_SKIPPED,
+        Packets.CHO_MATCH_PLAYER_SKIPPED,
         (pid, osuTypes.i32)
     )
 
 # packet id: 83
 def userPresence(p: Player) -> bytes:
     return write(
-        ServerPacketType.USER_PRESENCE,
+        Packets.CHO_USER_PRESENCE,
         (p.id, osuTypes.i32),
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
@@ -932,7 +926,7 @@ def userPresence(p: Player) -> bytes:
 @cache
 def restartServer(ms: int) -> bytes:
     return write(
-        ServerPacketType.RESTART,
+        Packets.CHO_RESTART,
         (ms, osuTypes.i32)
     )
 
@@ -941,26 +935,26 @@ def restartServer(ms: int) -> bytes:
 def matchInvite(p: Player, t_name: str) -> bytes:
     msg = f'Come join my game: {p.match.embed}.'
     return write(
-        ServerPacketType.MATCH_INVITE,
+        Packets.CHO_MATCH_INVITE,
         ((p.name, msg, t_name, p.id), osuTypes.message)
     )
 
 # packet id: 89
 @cache
 def channelInfoEnd() -> bytes:
-    return write(ServerPacketType.CHANNEL_INFO_END)
+    return write(Packets.CHO_CHANNEL_INFO_END)
 
 # packet id: 91
 def matchChangePassword(new: str) -> bytes:
     return write(
-        ServerPacketType.MATCH_CHANGE_PASSWORD,
+        Packets.CHO_MATCH_CHANGE_PASSWORD,
         (new, osuTypes.string)
     )
 
 # packet id: 92
 def silenceEnd(delta: int) -> bytes:
     return write(
-        ServerPacketType.SILENCE_END,
+        Packets.CHO_SILENCE_END,
         (delta, osuTypes.i32)
     )
 
@@ -968,7 +962,7 @@ def silenceEnd(delta: int) -> bytes:
 @cache
 def userSilenced(pid: int) -> bytes:
     return write(
-        ServerPacketType.USER_SILENCED,
+        Packets.CHO_USER_SILENCED,
         (pid, osuTypes.i32)
     )
 
@@ -978,47 +972,47 @@ def userSilenced(pid: int) -> bytes:
 @cache
 def userPresenceSingle(pid: int) -> bytes:
     return write(
-        ServerPacketType.USER_PRESENCE_SINGLE,
+        Packets.CHO_USER_PRESENCE_SINGLE,
         (pid, osuTypes.i32)
     )
 
 # packet id: 96
 def userPresenceBundle(pid_list: list[int]) -> bytes:
     return write(
-        ServerPacketType.USER_PRESENCE_BUNDLE,
+        Packets.CHO_USER_PRESENCE_BUNDLE,
         (pid_list, osuTypes.i32_list)
     )
 
 # packet id: 100
 def userDMBlocked(target: str) -> bytes:
     return write(
-        ServerPacketType.USER_DM_BLOCKED,
+        Packets.CHO_USER_DM_BLOCKED,
         (('', '', target, 0), osuTypes.message)
     )
 
 # packet id: 101
 def targetSilenced(target: str) -> bytes:
     return write(
-        ServerPacketType.TARGET_IS_SILENCED,
+        Packets.CHO_TARGET_IS_SILENCED,
         (('', '', target, 0), osuTypes.message)
     )
 
 # packet id: 102
 @cache
 def versionUpdateForced() -> bytes:
-    return write(ServerPacketType.VERSION_UPDATE_FORCED)
+    return write(Packets.CHO_VERSION_UPDATE_FORCED)
 
 # packet id: 103
 def switchServer(t: int) -> bytes: # (idletime < t || match != null)
     return write(
-        ServerPacketType.SWITCH_SERVER,
+        Packets.CHO_SWITCH_SERVER,
         (t, osuTypes.i32)
     )
 
 # packet id: 104
 @cache
 def accountRestricted() -> bytes:
-    return write(ServerPacketType.ACCOUNT_RESTRICTED)
+    return write(Packets.CHO_ACCOUNT_RESTRICTED)
 
 # packet id: 105
 # NOTE: deprecated
@@ -1028,14 +1022,14 @@ def RTX(msg: str) -> bytes:
     # - black screen, freezes game, beeps loudly.
     # within the next 3-8 seconds at random.
     return write(
-        ServerPacketType.RTX,
+        Packets.CHO_RTX,
         (msg, osuTypes.string)
     )
 
 # packet id: 106
 @cache
 def matchAbort() -> bytes:
-    return write(ServerPacketType.MATCH_ABORT)
+    return write(Packets.CHO_MATCH_ABORT)
 
 # packet id: 107
 def switchTournamentServer(ip: str) -> bytes:
@@ -1043,6 +1037,6 @@ def switchTournamentServer(ip: str) -> bytes:
     # not on the client's normal endpoints,
     # but we can send it either way xd.
     return write(
-        ServerPacketType.SWITCH_TOURNAMENT_SERVER,
+        Packets.CHO_SWITCH_TOURNAMENT_SERVER,
         (ip, osuTypes.string)
     )

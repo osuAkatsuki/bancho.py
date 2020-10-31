@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from asyncio.queues import QueueEmpty
 from datetime import datetime
 from functools import partial
 from typing import Any, Optional, Coroutine
 from cmyui import log, Ansi
+import queue
 import time
 import uuid
 import random
@@ -252,7 +252,7 @@ class Player:
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
-    _queue: `SimpleQueue`
+    _queue: `queue.SimpleQueue`
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
@@ -337,7 +337,7 @@ class Player:
         self.menu_options: dict[int, dict[str, Any]] = {}
 
         # packet queue
-        self._queue = asyncio.Queue()
+        self._queue = queue.SimpleQueue()
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -460,22 +460,67 @@ class Player:
 
         log(f'Banned {self}.', Ansi.CYAN)
 
-    async def unban(self, admin: 'Player', reason: str = '') -> None:
+    async def unban(self, admin: 'Player', reason: str) -> None:
         self.priv &= Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
             [int(self.priv), self.id]
         )
 
-        if reason:
-            log_msg = f'{admin} unbanned for "{reason}".'
-            await glob.db.execute(
-                'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
-                'VALUES (%s, %s, %s, NOW())',
-                [admin.id, self.id, log_msg]
-            )
+        log_msg = f'{admin} unbanned for "{reason}".'
+        await glob.db.execute(
+            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'VALUES (%s, %s, %s, NOW())',
+            [admin.id, self.id, log_msg]
+        )
 
         log(f'Unbanned {self}.', Ansi.CYAN)
+
+    async def silence(self, admin: 'Player', duration: int,
+                      reason: str) -> None:
+        """Silence `self` for `duration` seconds, and log to sql."""
+        self.silence_end = int(time.time() + duration)
+
+        await glob.db.execute(
+            'UPDATE users SET silence_end = %s WHERE id = %s',
+            [self.silence_end, self.id]
+        )
+
+        log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
+        await glob.db.execute(
+            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'VALUES (%s, %s, %s, NOW())',
+            [admin.id, self.id, log_msg]
+        )
+
+        # inform the user's client
+        self.enqueue(packets.silenceEnd(duration))
+
+        # wipe their messages from any channels.
+        glob.players.enqueue(packets.userSilenced(self.id))
+
+        log(f'Silenced {self}.', Ansi.CYAN)
+
+    async def unsilence(self, admin: 'Player') -> None:
+        """Unsilence `self`, and log to sql."""
+        self.silence_end = int(time.time())
+
+        await glob.db.execute(
+            'UPDATE users SET silence_end = %s WHERE id = %s',
+            [self.silence_end, self.id]
+        )
+
+        log_msg = f'{admin} unsilenced.'
+        await glob.db.execute(
+            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'VALUES (%s, %s, %s, NOW())',
+            [admin.id, self.id, log_msg]
+        )
+
+        # inform the user's client
+        self.enqueue(packets.silenceEnd(0))
+
+        log(f'Unsilenced {self}.', Ansi.CYAN)
 
     async def join_match(self, m: Match, passwd: str) -> bool:
         if self.match:
@@ -710,8 +755,8 @@ class Player:
         """Get data from the queue to send to the client."""
         try:
             return self._queue.get_nowait()
-        except QueueEmpty:
-            log('Empty queue?')
+        except queue.Empty:
+            pass
 
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""

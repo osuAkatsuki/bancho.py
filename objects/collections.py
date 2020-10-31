@@ -209,7 +209,7 @@ class PlayerList(Sequence):
             [pid]
         )
 
-        return Player(**res, id = pid) if res else None
+        return Player(**res, id=pid) if res else None
 
     async def get_login(self, name: str, phash: str) -> Optional[Player]:
         # only used cached results - the user should have

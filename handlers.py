@@ -69,9 +69,9 @@ async def handle_bancho(conn: AsyncConnection) -> None:
         return
 
     # get the player from the specified osu token.
-    p = glob.players.get(conn.headers['osu-token'])
+    player = glob.players.get(conn.headers['osu-token'])
 
-    if not p:
+    if not player:
         # token was not found; changes are, we just restarted
         # the server. just tell their client to re-connect.
         resp = packets.notification('Server is restarting') + \
@@ -84,25 +84,22 @@ async def handle_bancho(conn: AsyncConnection) -> None:
     # our reader is designed to iterate through them individually,
     # allowing logic to be implemented around the actual handler.
 
-    # NOTE: this will internally discard any
+    # NOTE: the reader will internally discard any
     # packets whose logic has not been defined.
     async for packet in BanchoPacketReader(conn.body):
-        # TODO: wait_for system here with
-        # a packet and a callable check.
-
-        await packet.handle(p)
+        await packet.handle(player)
 
         if glob.config.debug:
             log(repr(packet.type), Ansi.LMAGENTA)
 
-    p.last_recv_time = int(time.time())
+    player.last_recv_time = int(time.time())
 
     # TODO: this could probably be done better?
     resp = bytearray()
 
-    while not p.queue_empty():
+    while not player.queue_empty():
         # read all queued packets into stream
-        resp.extend(p.dequeue())
+        resp += player.dequeue()
 
     resp = bytes(resp)
 

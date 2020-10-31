@@ -455,7 +455,7 @@ async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[byte
             opt_id = int(conn.args['s'])
 
             if opt_id not in p.menu_options:
-                return # negative set id, non-menu
+                return b'no voila'
 
             opt = p.menu_options[opt_id]
 
@@ -471,7 +471,10 @@ async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[byte
                 # remove the option from the player
                 del p.menu_options[opt_id]
 
-            return
+            # send back some random syntactically valid
+            # beatmap info so that the client doesn't open
+            # a webpage when clicking an unknown url.
+            return b'voila'
         else:
             # this is just a normal request
             k, v = ('set_id', conn.args['s'])
@@ -757,7 +760,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
                 f'ppBefore:|ppAfter:{s.pp:.4f}|'
                 f'onlineScoreId:{s.id}'
             )
-        )))#'|'.join(beatmap_chart))
+        )))
 
         # append overall ranking chart (#3)
         charts.append('|'.join((
@@ -911,7 +914,7 @@ async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 @register('osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login('u', 'p', b'auth fail')
-async def osuRate(conn: AsyncConnection) -> Optional[bytes]:
+async def osuRate(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     map_md5 = conn.args['c']
 
     if 'v' not in conn.args:

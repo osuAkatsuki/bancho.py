@@ -82,7 +82,7 @@ class Mods(IntFlag):
             Mods.KEY3: 'K3',
             Mods.KEY2: 'K2',
             Mods.SCOREV2: 'V2',
-            Mods.MIRROR: 'MI'
+            Mods.MIRROR: 'MR'
         }
 
         mod_str = []

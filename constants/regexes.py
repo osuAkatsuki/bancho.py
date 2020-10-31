@@ -13,3 +13,7 @@ now_playing = rcomp(
     r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
     r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
 )
+silence_duration = rcomp(
+    r'^(?P<duration>\d{1,6})'
+    r'(?P<scale>s|m|h|d|w)$'
+)
