@@ -308,6 +308,16 @@ create table mail
 	`read` tinyint(1) default 0 not null
 );
 
+create table logs
+(
+	id int auto_increment
+		primary key,
+	`from` int not null comment 'both from and to are playerids',
+	`to` int not null,
+	msg varchar(2048) not null,
+	time datetime not null on update CURRENT_TIMESTAMP
+);
+
 # insert vital stuff, such as bot user & basic channels.
 
 insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time)

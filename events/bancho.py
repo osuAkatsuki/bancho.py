@@ -400,9 +400,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         server_stats = await p.add_to_menu(get_server_stats, reusable=True)
 
         admin_panel = (
-            ''
             f'[osu://dl/{server_stats} server_stats]',
-            ...
         )
 
         p.enqueue(packets.sendMessage(
@@ -596,7 +594,7 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
     match_passwd: osuTypes.string
 
     async def handle(self, p: Player) -> None:
-        if self.match_id not in range(64):
+        if not 0 <= self.match_id < 64:
             # make sure it's
             # a valid match id.
             return
@@ -621,7 +619,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
             return
 
         # read new slot ID
-        if self.slot_id not in range(16):
+        if not 0 <= self.slot_id < 16:
             return
 
         if m.slots[self.slot_id].status & SlotStatus.has_player:
@@ -656,7 +654,7 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
             return
 
         # read new slot ID
-        if self.slot_id not in range(16):
+        if not 0 <= self.slot_id < 16:
             return
 
         slot = m.slots[self.slot_id]
@@ -885,7 +883,7 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
             return
 
         # read new slot ID
-        if self.slot_id not in range(16):
+        if not 0 <= self.slot_id < 16:
             return
 
         if not (t := m[self.slot_id].player):
@@ -973,7 +971,7 @@ class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):
     value: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
-        if self.value not in range(3):
+        if not 0 <= self.value < 3:
             log(f'{p} tried to set his presence filter to {self.value}?')
             return
 

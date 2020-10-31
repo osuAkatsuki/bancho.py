@@ -494,8 +494,8 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
         if msg[0].isdecimal():
             # !mp start <seconds>
             duration = int(msg[0])
-            if duration not in range(5 * 60):
-                return 'Max timer is 300 sec (5 mins).'
+            if not 0 < duration <= 300:
+                return 'Timer range is 1-300 seconds.'
 
             async def delayed_start(wait: int):
                 await asyncio.sleep(wait)
