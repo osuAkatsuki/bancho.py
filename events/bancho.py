@@ -603,7 +603,11 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
             return
 
         if m.slots[self.slot_id].status & SlotStatus.has_player:
-            log(f'{p} tried to switch to slot {self.slot_id} which has a player.')
+            log(f'{p} tried to move into a slot with another player.')
+            return
+
+        if m.slots[self.slot_id].status & SlotStatus.locked:
+            log(f'{p} tried to move to into locked slot.')
             return
 
         # swap with current slot.
@@ -771,7 +775,7 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
 
         if m.freemods:
             if p.id == m.host.id:
-                # allow host to change speed-changing mods.
+                # allow host to set speed-changing mods.
                 m.mods = self.mods & Mods.SPEED_CHANGING
 
             # set slot mods
@@ -1000,13 +1004,13 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
 
 @register
 class MatchChangePassword(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_PASSWORD):
-    passwd: osuTypes.string
+    match: osuTypes.match
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
 
-        m.passwd = self.passwd
+        m.passwd = self.match.passwd
         m.enqueue(packets.updateMatch(m), lobby=False)
 
 @register

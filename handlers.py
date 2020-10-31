@@ -236,7 +236,7 @@ async def handle_registration(conn: AsyncConnection) -> None:
     # - be within 8-32 characters in length
     # - have more than 3 unique characters
     # - not be in the config's `disallowed_passwords` list
-    if 8 > len(pw_txt) < 32:
+    if len(pw_txt) not in range(8, 32):
         errors['password'].append('Must be 8-32 characters in length.')
 
     if len(set(pw_txt)) <= 3:

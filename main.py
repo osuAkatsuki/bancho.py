@@ -18,7 +18,7 @@ import orjson # faster & more accurate than stdlib json
 import time
 import sys
 import os
-from cmyui import (Version, Address, Ansi, log,
+from cmyui import (Version, Address, Ansi, AnsiRGB, log,
                    AsyncConnection, AsyncTCPServer,
                    AsyncSQLPoolWrapper)
 
@@ -103,7 +103,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 3)
+    glob.version = Version(2, 8, 4)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -132,7 +132,7 @@ async def run_server(addr: Address) -> None:
     loop.create_task(disconnect_inactive())
 
     async with AsyncTCPServer(addr) as glob.serv:
-        log(f'Gulag v{glob.version} online!', Ansi.LGREEN)
+        log(f'Gulag v{glob.version} online!', AnsiRGB(0x00ff7f))
         async for conn in glob.serv.listen(glob.config.max_conns):
             loop.create_task(handle_conn(conn))
 

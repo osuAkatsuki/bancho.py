@@ -425,9 +425,31 @@ async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # The commands below are specifically for
 # multiplayer match management.
 """
+glob.mp_commands = {}
 
+def mp_command(trigger: str, priv: Privileges) -> Callable:
+    def wrapper(f: Callable) -> Callable:
+        glob.mp_commands |= {
+            trigger: {
+                'callback': f,
+                'priv': priv
+            }
+        }
+        return f
+    return wrapper
+
+@mp_command(trigger='start', priv=Privileges.Normal)
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Start a multiplayer match."""
+    force = len(msg) == 1 and msg[0] == 'force'
+
+    if not force:
+        for s in m.slots:
+            if s.status & SlotStatus.has_player \
+            and s.status & SlotStatus.not_ready:
+                return ('Not all players are ready '
+                        '(use `!mp start force` to override).')
+
     for s in m.slots:
         if s.status & SlotStatus.has_player \
         and not s.status & SlotStatus.no_map:
@@ -437,6 +459,7 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.matchStart(m))
     return 'Good luck!'
 
+@mp_command(trigger='abort', priv=Privileges.Normal)
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Abort an in-progress multiplayer match."""
     if not m.in_progress:
@@ -451,9 +474,10 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.matchAbort())
     return 'Match aborted.'
 
+@mp_command(trigger='force', priv=Privileges.Admin)
 async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
-    """Force a player into a multiplayer match by name."""
-    if len(msg) < 1:
+    """Force `p` into `m` by name."""
+    if len(msg) != 1:
         return 'Invalid syntax: !mp force <name>'
 
     if not (t := await glob.players.get_by_name(' '.join(msg))):
@@ -462,9 +486,10 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     await t.join_match(m)
     return 'Welcome.'
 
+@mp_command(trigger='map', priv=Privileges.Normal)
 async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
-    """Set a multiplayer matches current map by id."""
-    if len(msg) < 1 or not msg[0].isdecimal():
+    """Set `m`'s current map by id."""
+    if len(msg) != 1 or not msg[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
 
     if not (bmap := await Beatmap.from_bid(int(msg[0]))):
@@ -474,9 +499,41 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.updateMatch(m))
     return f'Map selected: {bmap.embed}.'
 
+@mp_command(trigger='mods', priv=Privileges.Normal)
+async def mp_mods(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Set `m`'s mods, from string form."""
+    if len(msg) != 1 or not ~len(msg[0]) & 1: # len(msg[0]) % 2 == 0
+        return 'Invalid syntax: !mp mods <mods>'
+
+    mods = Mods.from_str(msg[0])
+
+    if m.freemods:
+        if p.id == m.host.id:
+            # allow host to set speed-changing mods.
+            m.mods = mods & Mods.SPEED_CHANGING
+
+        # set slot mods
+        m.get_slot(p).mods = mods & ~Mods.SPEED_CHANGING
+    else:
+        # not freemods, set match mods.
+        m.mods = mods
+
+    m.enqueue(packets.updateMatch(m))
+    return 'Match mods updated.'
+
+@mp_command(trigger='freemods', priv=Privileges.Normal)
+async def mp_freemods(p: Player, m: Match, msg: Sequence[str]) -> str:
+    if len(msg) != 1 or msg[0] not in ('on', 'off'):
+        return 'Invalid syntax: !mp freemods <on/off>'
+
+    m.freemods = msg[0] == 'on'
+    m.enqueue(packets.updateMatch(m))
+    return 'Match freemod status updated.'
+
+@mp_command(trigger='host', priv=Privileges.Normal)
 async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
-    """Set a multiplayer matches current host by id."""
-    if len(msg) < 1:
+    """Set `m`'s current host by id."""
+    if len(msg) != 1:
         return 'Invalid syntax: !mp host <name>'
 
     if not (t := await glob.players.get_by_name(' '.join(msg))):
@@ -493,47 +550,106 @@ async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue(packets.updateMatch(m), lobby=False)
     return 'Match host updated.'
 
-_mp_triggers = defaultdict(lambda: None, {
-    'start': {
-        'callback': mp_start,
-        'priv': Privileges.Normal
-    },
-    'abort': {
-        'callback': mp_abort,
-        'priv': Privileges.Normal
-    },
-    'host': {
-        'callback': mp_host,
-        'priv': Privileges.Normal
-    },
-    'map': {
-        'callback': mp_map,
-        'priv': Privileges.Normal
-    },
-    'force': {
-        'callback': mp_force,
-        'priv': Privileges.Admin
-    }
-})
+@mp_command(trigger='randpw', priv=Privileges.Normal)
+async def mp_randpw(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Randomize `m`'s password."""
+    m.passwd = cmyui.rstring(16)
+    return 'Match password randomized.'
+
+@mp_command(trigger='invite', priv=Privileges.Normal)
+async def mp_invite(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Invite a player to `m` by name."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp invite <name>'
+
+    if not (t := await glob.players.get_by_name(msg[0])):
+        return 'Could not find a user by that name.'
+
+    if p == t:
+        return "You can't invite yourself!"
+
+    t.enqueue(packets.matchInvite(p, t.name))
+    return f'Invited {t} to the match.'
+
+@mp_command(trigger='addref', priv=Privileges.Normal)
+async def mp_addref(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Add a referee to `m` by name."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp addref <name>'
+
+    if not (t := await glob.players.get_by_name(msg[0])):
+        return 'Could not find a user by that name.'
+
+    if t in m.refs:
+        return f'{t} is already a match referee!'
+
+    m.refs.add(t)
+    return 'Match referees updated.'
+
+@mp_command(trigger='rmref', priv=Privileges.Normal)
+async def mp_rmref(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Remove a referee from `m` by name."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp addref <name>'
+
+    if not (t := await glob.players.get_by_name(msg[0])):
+        return 'Could not find a user by that name.'
+
+    if t not in m.refs:
+        return f'{t} is not a match referee!'
+
+    if t == m.host:
+        return 'The host is always a referee!'
+
+    m.refs.remove(t)
+    return 'Match referees updated.'
+
+@mp_command(trigger='listref', priv=Privileges.Normal)
+async def mp_listref(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """List all referees from `m`."""
+    return ' '.join(str(i) for i in m.refs)
+
+@mp_command(trigger='lock', priv=Privileges.Normal)
+async def mp_lock(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Lock all unused slots in `m`."""
+    for slot in m.slots:
+        if slot.status == SlotStatus.open:
+            slot.status = SlotStatus.locked
+
+    m.enqueue(packets.updateMatch(m))
+    return 'All unused slots locked.'
+
+@mp_command(trigger='unlock', priv=Privileges.Normal)
+async def mp_unlock(p: Player, m: Match, msg: Sequence[str]) -> str:
+    """Unlock locked slots in `m`."""
+    for slot in m.slots:
+        if slot.status == SlotStatus.locked:
+            slot.status = SlotStatus.open
+
+    m.enqueue(packets.updateMatch(m))
+    return 'All locked slots unlocked.'
 
 @command(trigger='!mp', priv=Privileges.Normal, public=True)
 async def multiplayer(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """A parent command to subcommands for multiplayer match manipulation."""
+
     # used outside of a multiplayer match.
     if not (c._name.startswith('#multi_') and (m := p.match)):
         return
 
+    cmds = glob.mp_commands
+
     # no subcommand specified, send back a list.
     if not msg:
         # TODO: maybe filter to only the commands they can actually use?
-        return f"Available subcommands: {', '.join(_mp_triggers.keys())}."
+        return f"Available subcommands: {', '.join(cmds)}."
 
     # no valid subcommands triggered.
-    if not (trigger := _mp_triggers[msg[0]]):
+    if not (trigger := cmds[msg[0]]):
         return 'Invalid subcommand.'
 
     # missing privileges to use mp commands.
-    if not (p == m.host or p.priv & Privileges.Tournament):
+    if not (p in m.refs or p.priv & Privileges.Tournament):
         return
 
     # missing privileges to run this specific mp command.

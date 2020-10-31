@@ -78,8 +78,8 @@ class ScoreFrame:
     current_hp: int
     tag_byte: int
 
+    score_v2: bool
     # scorev2 only
-    score_v2: Optional[bool] = None
     combo_portion: Optional[float] = None
     bonus_portion: Optional[float] = None
 
@@ -153,6 +153,9 @@ class Match:
     host: `Player`
         A player obj of the match's host.
 
+    _refs: set[`Player`]
+        A set of players who have access to mp commands in the match.
+
     bmap: Optional[`Beatmap`]
         A beatmap obj representing the osu map.
 
@@ -188,8 +191,8 @@ class Match:
         XXX: this is used for osu!mania's random mod!
     """
     __slots__ = (
-        'id', 'name', 'passwd', 'host',
-        'bmap',
+        'id', 'name', 'passwd',
+        'host', '_refs', 'bmap',
         'mods', 'freemods', 'mode',
         'chat', 'slots',
         'type', 'team_type', 'match_scoring',
@@ -200,7 +203,9 @@ class Match:
         self.id = 0
         self.name = ''
         self.passwd = '' # TODO: filter from lobby
+
         self.host = None
+        self._refs = set()
 
         self.bmap: Optional[Beatmap] = None
 
@@ -227,6 +232,11 @@ class Match:
     def embed(self) -> str:
         """An osu! chat embed for the match."""
         return f'[{self.url} {self.name}]'
+
+    @property
+    def refs(self) -> set['Player']:
+        """Return all players with referee permissions."""
+        return {self.host} | self._refs
 
     def __contains__(self, p: 'Player') -> bool:
         return p in {s.player for s in self.slots}
