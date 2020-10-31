@@ -403,13 +403,17 @@ class Player:
 
     @staticmethod
     def generate_token() -> str:
+        """Generate a random uuid as a token."""
         return str(uuid.uuid4())
 
     @staticmethod
     def make_safe(name: str) -> str:
+        """Return a name safe for usage in sql."""
         return name.lower().replace(' ', '_')
 
     async def logout(self) -> None:
+        """Log `self` out of the server."""
+
         # invalidate the user's token.
         self.token = ''
 
@@ -430,9 +434,8 @@ class Player:
         glob.players.remove(self)
         glob.players.enqueue(packets.logout(self.id))
 
-    # NOTE: bans *require* a reason, while unbans leave it optional.
-
     async def ban(self, admin: 'Player', reason: str) -> None:
+        """Ban `self` for `reason`, and log to sql."""
         self.priv &= ~Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
@@ -461,6 +464,7 @@ class Player:
         log(f'Banned {self}.', Ansi.CYAN)
 
     async def unban(self, admin: 'Player', reason: str) -> None:
+        """Unban `self` for `reason`, and log to sql."""
         self.priv &= Privileges.Normal
         await glob.db.execute(
             'UPDATE users SET priv = %s WHERE id = %s',
@@ -523,6 +527,7 @@ class Player:
         log(f'Unsilenced {self}.', Ansi.CYAN)
 
     async def join_match(self, m: Match, passwd: str) -> bool:
+        """Attempt to add `self` to `m`."""
         if self.match:
             log(f'{self} tried to join multiple matches?')
             self.enqueue(packets.matchJoinFail())
@@ -579,6 +584,7 @@ class Player:
         return True
 
     async def leave_match(self) -> None:
+        """Attempt to remove `self` from their match."""
         if not self.match:
             if glob.config.debug:
                 log(f"{self} tried leaving a match they're not in?")
@@ -607,6 +613,7 @@ class Player:
         self.match = None
 
     async def join_channel(self, c: Channel) -> bool:
+        """Attempt to add `self` to `c`."""
         if self in c:
             # user already in the channel.
             if glob.config.debug:
@@ -641,6 +648,7 @@ class Player:
         return True
 
     async def leave_channel(self, c: Channel) -> None:
+        """Attempt to remove `self` from `c`."""
         if self not in c:
             log(f'{self} tried to leave {c} but is not in it.')
             return
@@ -662,6 +670,7 @@ class Player:
             log(f'{self} left {c}.')
 
     async def add_spectator(self, p: 'Player') -> None:
+        """Attempt to add `p` to `self`'s spectators."""
         chan_name = f'#spec_{self.id}'
 
         if not (c := glob.channels[chan_name]):
@@ -697,6 +706,7 @@ class Player:
         log(f'{p} is now spectating {self}.')
 
     async def remove_spectator(self, p: 'Player') -> None:
+        """Attempt to remove `p` from `self`'s spectators."""
         self.spectators.remove(p)
         p.spectating = None
 
@@ -719,6 +729,7 @@ class Player:
         log(f'{p} is no longer spectating {self}.')
 
     async def add_friend(self, p: 'Player') -> None:
+        """Attempt to add `p` to `self`'s friends."""
         if p.id in self.friends:
             log(f'{self} tried to add {p}, who is already their friend!')
             return
@@ -732,6 +743,7 @@ class Player:
         log(f'{self} added {p} to their friends.')
 
     async def remove_friend(self, p: 'Player') -> None:
+        """Attempt to remove `p` from `self`'s friends."""
         if not p.id in self.friends:
             log(f'{self} tried to remove {p}, who is not their friend!')
             return
@@ -745,6 +757,7 @@ class Player:
         log(f'{self} removed {p} from their friends.')
 
     def queue_empty(self) -> bool:
+        """Whether or not `self`'s packet queue is empty."""
         return self._queue.empty()
 
     def enqueue(self, b: bytes) -> None:
@@ -822,6 +835,7 @@ class Player:
         self.enqueue(packets.userStats(self))
 
     async def friends_from_sql(self) -> None:
+        """Retrieve `self`'s friends from sql."""
         _friends = {row['user2'] async for row in glob.db.iterall(
             'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
         )}
@@ -830,7 +844,7 @@ class Player:
         self.friends = _friends | {1, self.id}
 
     async def stats_from_sql_full(self) -> None:
-        """Fetch the player's stats for all gamemodes from sql."""
+        """Retrieve `self`'s stats (all modes) from sql."""
         for mode in GameMode:
             # grab static stats from SQL.
             res = await glob.db.fetch(
@@ -856,7 +870,7 @@ class Player:
             self.stats[mode].update(**res)
 
     async def stats_from_sql(self, mode: GameMode) -> None:
-        """Fetch the player's stats for a specified gamemode."""
+        """Retrieve `self`'s `mode` stats from sql."""
         res = await glob.db.fetch(
             'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
             'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '

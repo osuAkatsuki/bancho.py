@@ -146,8 +146,8 @@ class BanchoPacket:
     args: Optional[tuple[osuTypes]] = None
     length: Optional[int] = None
 
-    def __init_subclass__(cls, type: Packets, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
+    def __init_subclass__(cls, type: Packets) -> None:
+        super().__init_subclass__()
 
         cls.type = type
         cls.args = cls.__annotations__
@@ -223,28 +223,13 @@ class BanchoPacketReader:
         return self._current
 
     async def read_arguments(self) -> None:
+        """Read all arguments from the internal buffer."""
         for arg_name, arg_type in self._current.args.items():
             # read value from buffer
-            val = None
-
-            # osu!-specific data types
-            if arg_type == osuTypes.string:
-                val = await self.read_string()
-            elif arg_type == osuTypes.i32_list:
-                val = await self.read_i32_list_i16l()
-            elif arg_type == osuTypes.i32_list4l:
-                val = await self.read_i32_list_i32l()
-            elif arg_type == osuTypes.message:
-                val = await self.read_message()
-            elif arg_type == osuTypes.channel:
-                val = await self.read_channel()
-            elif arg_type == osuTypes.match:
-                val = await self.read_match()
-            elif arg_type == osuTypes.scoreframe:
-                val = await self.read_scoreframe()
+            val: Any = None
 
             # non-osu! datatypes
-            elif arg_type == osuTypes.i8:
+            if arg_type == osuTypes.i8:
                 val = await self.read_i8()
             elif arg_type == osuTypes.i16:
                 val = await self.read_i16()
@@ -260,6 +245,22 @@ class BanchoPacketReader:
                 val = await self.read_u32()
             elif arg_type == osuTypes.u64:
                 val = await self.read_u64()
+
+            # osu!-specific data types
+            elif arg_type == osuTypes.string:
+                val = await self.read_string()
+            elif arg_type == osuTypes.i32_list:
+                val = await self.read_i32_list_i16l()
+            elif arg_type == osuTypes.i32_list4l:
+                val = await self.read_i32_list_i32l()
+            elif arg_type == osuTypes.message:
+                val = await self.read_message()
+            elif arg_type == osuTypes.channel:
+                val = await self.read_channel()
+            elif arg_type == osuTypes.match:
+                val = await self.read_match()
+            elif arg_type == osuTypes.scoreframe:
+                val = await self.read_scoreframe()
 
             elif arg_type == osuTypes.raw:
                 # return all packet data raw.
@@ -336,12 +337,12 @@ class BanchoPacketReader:
     read_u64 = partialmethod(_read_integral, size=8, signed=False)
 
     async def read_f32(self) -> float:
-        val = struct.unpack_from('<f', self._buf[:4])
+        val, = struct.unpack_from('<f', self._buf[:4])
         self._buf = self._buf[4:]
         return val
 
     async def read_f64(self) -> float:
-        val = struct.unpack_from('<d', self._buf[:8])
+        val, = struct.unpack_from('<d', self._buf[:8])
         self._buf = self._buf[8:]
         return val
 
@@ -388,6 +389,8 @@ class BanchoPacketReader:
 
         m.name = await self.read_string()
         m.passwd = await self.read_string()
+
+        # TODO: don't do this, do it like everyone else..
 
         # ignore the map's name, we're going
         # to get all it's info from the md5.

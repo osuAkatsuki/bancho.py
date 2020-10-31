@@ -80,8 +80,8 @@ class ScoreFrame:
 
     # scorev2 only
     score_v2: Optional[bool] = None
-    combo_portion: Optional[int] = None
-    bonus_portion: Optional[int] = None
+    combo_portion: Optional[float] = None
+    bonus_portion: Optional[float] = None
 
 class Slot:
     """\

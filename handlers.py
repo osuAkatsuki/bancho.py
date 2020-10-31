@@ -36,7 +36,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
 
     if conn.headers['User-Agent'] != 'osu!':
         # most likely a request from a browser.
-        resp = '<br>'.join((
+        html_resp = '<br>'.join((
             f'Running gulag v{glob.version}',
             f'Players online: {len(glob.players) - 1}',
             '<a href="https://github.com/cmyui/gulag">Source code</a>',
@@ -51,7 +51,7 @@ async def handle_bancho(conn: AsyncConnection) -> None:
             '<br>'.join(glob.api_map)
         ))
 
-        await conn.send(200, f'<!DOCTYPE html>{resp}'.encode())
+        await conn.send(200, f'<!DOCTYPE html>{html_resp}'.encode())
         return
 
     # check for 'osu-token' in the headers.

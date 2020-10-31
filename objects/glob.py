@@ -16,11 +16,11 @@ __all__ = ('players', 'channels',
 players = PlayerList()
 channels = ChannelList()
 matches = MatchList()
-db: Optional['AsyncSQLPoolWrapper'] = None
-http: Optional['ClientSession'] = None
-version: Optional['Version'] = None
-serv: Optional['AsyncTCPServer'] = None
-bot: Optional['Player'] = None
+db: 'AsyncSQLPoolWrapper'
+http: 'ClientSession'
+version: 'Version'
+serv: 'AsyncTCPServer'
+bot: 'Player'
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or

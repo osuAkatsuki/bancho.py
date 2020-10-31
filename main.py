@@ -99,12 +99,11 @@ async def disconnect_inactive() -> None:
             if ctime - p.last_recv_time > PING_TIMEOUT:
                 await p.logout()
 
-        # run the loop every 30
-        # seconds indefinitely
+        # run this indefinitely
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 2)
+    glob.version = Version(2, 8, 3)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

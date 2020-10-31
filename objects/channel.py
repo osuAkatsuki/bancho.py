@@ -94,7 +94,8 @@ class Channel:
         return p in self.players
 
     async def send(self, client: 'Player', msg: str,
-                   to_client: bool = False) -> None:
+                   to_self: bool = False) -> None:
+        """Enqueue `client`'s `msg` to all connected clients."""
         self.enqueue(
             packets.sendMessage(
                 client = client.name,
@@ -102,12 +103,12 @@ class Channel:
                 target = self.name,
                 client_id = client.id
             ),
-            immune = () if to_client else (client.id,)
+            immune = () if to_self else (client.id,)
         )
 
     async def send_selective(self, client: 'Player', msg: str,
                              targets: list['Player']) -> None:
-        """Accept a set of players to enqueue the data to."""
+        """Enqueue `client`'s `msg` to `targets`."""
         for p in targets:
             p.enqueue(packets.sendMessage(
                 client = client.name,
@@ -117,9 +118,11 @@ class Channel:
             ))
 
     def append(self, p: 'Player') -> None:
+        """Add `p` to the channel's players."""
         self.players.append(p)
 
     async def remove(self, p: 'Player') -> None:
+        """Remove `p` from the channel's players."""
         if len(self.players) == 1 and self.instance:
             # if it's an instance channel and this
             # is the last member leaving, just remove
@@ -129,7 +132,7 @@ class Channel:
             self.players.remove(p)
 
     def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
-        """Enqueue bytes to all players in a channel."""
+        """Enqueue `data` to all connected clients not in `immune`."""
         for p in self.players:
             if p.id in immune:
                 continue
