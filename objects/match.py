@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, Sequence, Union, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
@@ -8,6 +8,7 @@ from objects.channel import Channel
 from objects.beatmap import Beatmap
 from constants.mods import Mods
 from constants.gamemodes import GameMode
+import packets
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -277,7 +278,7 @@ class Match:
         self.name = m.name
 
     def enqueue(self, data: bytes, lobby: bool = True,
-                immune: tuple[int, ...] = ()) -> None:
+                immune: Sequence[int] = []) -> None:
         """Add data to be sent to all clients in the match."""
 
         if self.chat:
@@ -289,3 +290,23 @@ class Match:
 
         if lobby and (lchan := glob.channels['#lobby']):
             lchan.enqueue(data)
+
+    def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
+        """Unready any players in the `expected` state."""
+        for s in self.slots:
+            if s.status == expected:
+                s.status = SlotStatus.not_ready
+
+    def start(self) -> None:
+        no_map: list[Player] = []
+
+        for s in self.slots:
+            # start each player who has the map.
+            if s.status & SlotStatus.has_player:
+                if s.status != SlotStatus.no_map:
+                    s.status = SlotStatus.playing
+                else:
+                    no_map.append(s.player.id)
+
+        self.in_progress = True
+        self.enqueue(packets.matchStart(self), immune=no_map)

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from typing import Callable
 from datetime import datetime as dt, timedelta as td
 import time
 from cmyui import log, Ansi, _isdecimal
@@ -388,6 +387,29 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         ))
 
     # TODO: enqueue ingame admin panel to staff members.
+    """
+    if p.priv & Privileges.Staff:
+        async def get_server_stats():
+            notif = packets.notification('\n'.join((
+                f'Players online: {len(glob.players)}',
+                f'Staff online: {len(glob.players.staff)}'
+            )))
+
+            p.enqueue(notif)
+
+        server_stats = await p.add_to_menu(get_server_stats, reusable=True)
+
+        admin_panel = (
+            ''
+            f'[osu://dl/{server_stats} server_stats]',
+            ...
+        )
+
+        p.enqueue(packets.sendMessage(
+            glob.bot.name, ' '.join(admin_panel),
+            p.name, glob.bot.id
+        ))
+    """
 
     # add `p` to the global player list,
     # making them officially logged in.
@@ -574,7 +596,7 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
     match_passwd: osuTypes.string
 
     async def handle(self, p: Player) -> None:
-        if 64 > self.match_id > 0:
+        if self.match_id not in range(64):
             # make sure it's
             # a valid match id.
             return
@@ -606,7 +628,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
             log(f'{p} tried to move into a slot with another player.')
             return
 
-        if m.slots[self.slot_id].status & SlotStatus.locked:
+        if m.slots[self.slot_id].status == SlotStatus.locked:
             log(f'{p} tried to move to into locked slot.')
             return
 
@@ -639,7 +661,7 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
 
         slot = m.slots[self.slot_id]
 
-        if slot.status & SlotStatus.locked:
+        if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
         else:
             if slot.player:
@@ -676,9 +698,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
 
         if not self.new.bmap:
             # map being changed, unready players.
-            for s in m.slots:
-                if s.status & SlotStatus.ready:
-                    s.status = SlotStatus.not_ready
+            m.unready_players(expected=SlotStatus.ready)
         elif not m.bmap:
             # new map has been chosen, send to match chat.
             await m.chat.send(glob.bot, f'Map selected: {self.new.bmap.embed}.')
@@ -717,12 +737,7 @@ class MatchStart(BanchoPacket, type=Packets.OSU_MATCH_START):
         if not (m := p.match):
             return
 
-        for s in m.slots:
-            if s.status & SlotStatus.ready:
-                s.status = SlotStatus.playing
-
-        m.in_progress = True
-        m.enqueue(packets.matchStart(m))
+        m.start()
 
 @register
 class MatchScoreUpdate(BanchoPacket, type=Packets.OSU_MATCH_SCORE_UPDATE):
@@ -750,20 +765,15 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
 
         m.get_slot(p).status = SlotStatus.complete
 
-        all_completed = True
+        # check if there are any players that haven't finished.
+        if any(s.status == SlotStatus.playing for s in m.slots):
+            return
 
-        for s in m.slots:
-            if s.status & SlotStatus.playing:
-                all_completed = False
-                break
+        m.unready_players(expected=SlotStatus.complete)
 
-        if all_completed:
-            m.in_progress = False
-            m.enqueue(packets.matchComplete())
-
-            for s in m.slots: # reset match statuses
-                if s.status == SlotStatus.complete:
-                    s.status = SlotStatus.not_ready
+        m.in_progress = False
+        m.enqueue(packets.matchComplete())
+        m.enqueue(packets.updateMatch(m))
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
@@ -796,7 +806,7 @@ class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
         m.get_slot(p).loaded = True
 
         # check if all players are ready.
-        if not any(s.status & SlotStatus.playing and not s.loaded for s in m.slots):
+        if not any(s.status == SlotStatus.playing and not s.loaded for s in m.slots):
             m.enqueue(packets.matchAllPlayerLoaded(), lobby=False)
 
 @register
@@ -846,7 +856,7 @@ class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
         m.enqueue(packets.matchPlayerSkipped(p.id))
 
         for s in m.slots:
-            if s.status & SlotStatus.playing and not s.skipped:
+            if s.status == SlotStatus.playing and not s.skipped:
                 return
 
         # all users have skipped, enqueue a skip.

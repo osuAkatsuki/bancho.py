@@ -326,9 +326,7 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        mode_vn = self.mode.as_vanilla
-
-        if mode_vn not in (0, 1):
+        if self.mode.as_vanilla not in (0, 1):
             # currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
@@ -337,7 +335,7 @@ class Score:
             'mods': self.mods,
             'combo': self.max_combo,
             'nmiss': self.nmiss,
-            'mode': mode_vn,
+            'mode': self.mode,
             'acc': self.acc
         }
 
@@ -385,8 +383,9 @@ class Score:
         mode_vn = self.mode.as_vanilla
 
         if mode_vn == 0: # osu!
-            if not (total := sum((self.n300, self.n100,
-                                  self.n50, self.nmiss))):
+            total = sum((self.n300, self.n100, self.n50, self.nmiss))
+
+            if total == 0:
                 self.acc = 0.0
                 return
 
@@ -397,20 +396,44 @@ class Score:
             )) / (total * 300.0)
 
         elif mode_vn == 1: # osu!taiko
-            if not (total := sum((self.n300, self.n100,
-                                  self.nmiss))):
+            total = sum((self.n300, self.n100, self.nmiss))
+
+            if total == 0:
                 self.acc = 0.0
                 return
 
             self.acc = 100.0 * sum((
-                self.n100 * 150.0,
-                self.n300 * 300.0
-            )) / (total * 300.0)
+                self.n100 * 0.5,
+                self.n300
+            )) / total
 
         elif mode_vn == 2:
             # osu!catch
-            NotImplemented
+            total = sum((self.n300, self.n100, self.n50,
+                         self.nkatu, self.nmiss))
+
+            if total == 0:
+                self.acc = 0.0
+                return
+
+            self.acc = 100.0 * sum((
+                self.n300,
+                self.n100,
+                self.n50
+            )) / total
 
         elif mode_vn == 3:
             # osu!mania
-            NotImplemented
+            total = sum((self.n300, self.n100, self.n50,
+                         self.ngeki, self.nkatu, self.nmiss))
+
+            if total == 0:
+                self.acc = 0.0
+                return
+
+            self.acc = 100.0 * sum((
+                self.n50 * 50.0,
+                self.n100 * 100.0,
+                self.nkatu * 200.0,
+                (self.n300 + self.ngeki) * 300.0
+            )) / (total * 300.0)

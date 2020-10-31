@@ -704,7 +704,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
-        await announce_chan.send(s.player, ' '.join(ann), to_client=True)
+        await announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
