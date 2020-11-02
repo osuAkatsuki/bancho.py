@@ -658,6 +658,8 @@ async def mp_freemods(p: Player, m: Match, msg: Sequence[str]) -> str:
 
         for s in m.slots:
             if s.status & SlotStatus.has_player:
+                # the slot takes any non-speed
+                # changing mods from the match.
                 s.mods = m.mods & ~Mods.SPEED_CHANGING
 
         m.mods = m.mods & Mods.SPEED_CHANGING
@@ -665,7 +667,10 @@ async def mp_freemods(p: Player, m: Match, msg: Sequence[str]) -> str:
         # host mods -> central mods.
         m.freemods = False
         for s in m.slots:
-            if s.player and s.player.id == m.host.id:
+            if s.status & SlotStatus.has_player \
+            and s.player.id == m.host.id:
+                # the match takes any of the player's mods,
+                # keeping any of it's own speed changing mods.
                 m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
                 break
 
@@ -722,10 +727,13 @@ async def mp_addref(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_by_name(msg[0])):
         return 'Could not find a user by that name.'
 
+    if t not in m:
+        return 'User must be in the current match!'
+
     if t in m.refs:
         return f'{t} is already a match referee!'
 
-    m.refs.add(t)
+    m._refs.add(t)
     return 'Match referees updated.'
 
 @mp_command(priv=Privileges.Normal)
@@ -743,13 +751,13 @@ async def mp_rmref(p: Player, m: Match, msg: Sequence[str]) -> str:
     if t == m.host:
         return 'The host is always a referee!'
 
-    m.refs.remove(t)
+    m._refs.remove(t)
     return 'Match referees updated.'
 
 @mp_command(priv=Privileges.Normal)
 async def mp_listref(p: Player, m: Match, msg: Sequence[str]) -> str:
     """List all referees from `m`."""
-    return ' '.join(str(i) for i in m.refs)
+    return ', '.join(str(i) for i in m.refs) + '.'
 
 @mp_command(priv=Privileges.Normal)
 async def mp_lock(p: Player, m: Match, msg: Sequence[str]) -> str:
@@ -808,8 +816,12 @@ async def multiplayer(p: Player, c: Messageable,
                       msg: Sequence[str]) -> str:
     """Multiplayer match main parent command."""
 
+    # player not in a multiplayer match.
+    if not (m := p.match):
+        return 'This command can only be used from a multiplayer match.'
+
     # used outside of a multiplayer match.
-    if not (c._name.startswith('#multi_') and (m := p.match)):
+    if not isinstance(c, Channel) or not c._name.startswith('#multi_'):
         return
 
     # missing privileges to use mp commands.

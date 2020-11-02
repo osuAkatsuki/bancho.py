@@ -539,7 +539,7 @@ def write_match(m: Match) -> bytearray:
     ret.extend(s.team for s in m.slots)
 
     for s in m.slots:
-        if s.player:
+        if s.status & SlotStatus.has_player:
             ret.extend(s.player.id.to_bytes(4, 'little'))
 
     ret.extend(m.host.id.to_bytes(4, 'little'))

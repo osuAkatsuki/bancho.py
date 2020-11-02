@@ -89,7 +89,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         msg = f'{msg[:2045]}...' if msg[2048:] else msg
 
         cmd = msg.startswith(glob.config.command_prefix) \
-        and await commands.process_commands(p, t, msg)
+          and await commands.process_commands(p, t, msg)
 
         if cmd:
             # a command was triggered.
@@ -282,7 +282,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # then ask the user to contact staff and resolve manually.
             if not all(x['priv'] & Privileges.Normal for x in hwid_matches):
                 return (packets.notification('Please contact staff directly '
-                                                   'to create an account.') +
+                                             'to create an account.') +
                         packets.userID(-1)), 'no'
 
         else:
@@ -314,7 +314,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         packets.protocolVersion(19) +
         packets.banchoPrivileges(p.bancho_priv) +
         packets.notification('Welcome back to the gulag!\n'
-                                   f'Current build: {glob.version}') +
+                            f'Current build: {glob.version}') +
 
         # tells osu! to load channels from config, i believe?
         packets.channelInfoEnd()
@@ -496,11 +496,10 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             return
 
         msg = f'{msg[:2045]}...' if msg[2048:] else msg
-        client, client_id = p.name, p.id
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            await p.send(client, t.away_msg)
+            await p.send(p.name, t.away_msg)
 
         if t.id == 1:
             # target is the bot, check if message is a command.
@@ -551,7 +550,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         else:
             # target is not aika, send the message normally
-            await t.send(client, msg)
+            await t.send(p.name, msg)
 
             # insert mail into db,
             # marked as unread.
@@ -631,7 +630,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
         s = m.get_slot(p)
         m.slots[self.slot_id].copy(s)
         s.reset()
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue(packets.updateMatch(m)) # technically not needed if host?
 
 @register
 class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
@@ -640,7 +639,7 @@ class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
             return
 
         m.get_slot(p).status = SlotStatus.ready
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue(packets.updateMatch(m), lobby=False)
 
 @register
 class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
@@ -675,21 +674,24 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
 
         if self.new.freemods != m.freemods:
             # freemods status has been changed.
+
             if self.new.freemods:
-                # switching to freemods.
-                # central mods -> all players mods.
+                # match mods -> active slot mods.
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
+                        # the slot takes any non-speed
+                        # changing mods from the match.
                         s.mods = m.mods & ~Mods.SPEED_CHANGING
 
-                m.mods = m.mods & Mods.SPEED_CHANGING
+                # keep only speed-changing mods.
+                m.mods &= Mods.SPEED_CHANGING
             else:
-                # switching to centralized mods.
-                # host mods -> central mods.
-                for s in m.slots:
-                    if s.player and s.player.id == m.host.id:
-                        m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
-                        break
+                # host mods -> match mods.
+                host = m.get_host_slot() # should always exist
+                # the match keeps any speed-changing mods,
+                # and also takes any mods the host has enabled.
+                m.mods &= Mods.SPEED_CHANGING
+                m.mods |= host.mods
 
         if not self.new.bmap:
             # map being changed, unready players.
@@ -715,7 +717,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
             # change each active slots team to
             # fit the correspoding team type.
             for s in m.slots:
-                if s.player:
+                if s.status & SlotStatus.has_player:
                     s.team = new_t
 
             # change the matches'.
@@ -764,10 +766,18 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         if any(s.status == SlotStatus.playing for s in m.slots):
             return
 
+        # find any players just sitting in the multi room
+        # that have not been playing the map; they don't
+        # need to know all the players have completed, only
+        # the ones who are playing (just new match info).
+        not_playing = [s.player.id for s in m.slots
+                       if s.status & SlotStatus.has_player
+                       and s.status != SlotStatus.complete]
+
         m.unready_players(expected=SlotStatus.complete)
 
         m.in_progress = False
-        m.enqueue(packets.matchComplete())
+        m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue(packets.updateMatch(m))
 
 @register
@@ -811,7 +821,7 @@ class MatchNoBeatmap(BanchoPacket, type=Packets.OSU_MATCH_NO_BEATMAP):
             return
 
         m.get_slot(p).status = SlotStatus.no_map
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue(packets.updateMatch(m), lobby=False)
 
 @register
 class MatchNotReady(BanchoPacket, type=Packets.OSU_MATCH_NOT_READY):
@@ -830,7 +840,7 @@ class MatchFailed(BanchoPacket, type=Packets.OSU_MATCH_FAILED):
 
         # find the player's slot id, and enqueue that
         # they've failed to all other players in the match.
-        m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)))
+        m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)), lobby=False)
 
 @register
 class MatchHasBeatmap(BanchoPacket, type=Packets.OSU_MATCH_HAS_BEATMAP):
@@ -839,7 +849,7 @@ class MatchHasBeatmap(BanchoPacket, type=Packets.OSU_MATCH_HAS_BEATMAP):
             return
 
         m.get_slot(p).status = SlotStatus.not_ready
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue(packets.updateMatch(m), lobby=False)
 
 @register
 class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
@@ -889,7 +899,7 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
 
         m.host = t
         m.host.enqueue(packets.matchTransferHost())
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue(packets.updateMatch(m))
 
 @register
 class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):

@@ -607,6 +607,14 @@ class Player:
                 lobby.enqueue(packets.disposeMatch(self.match.id))
 
         else:
+            # we may have been host, if so, find another.
+            if self == self.match.host:
+                for s in self.match.slots:
+                    if s.status & SlotStatus.has_player:
+                        self.match.host = s.player
+                        self.match.host.enqueue(packets.matchTransferHost())
+                        break
+
             # notify others of our deprature
             self.match.enqueue(packets.updateMatch(self.match))
 

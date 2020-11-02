@@ -112,7 +112,7 @@ class Slot:
                  'mods', 'loaded', 'skipped')
 
     def __init__(self) -> None:
-        self.player = None
+        self.player: Optional['Player'] = None
         self.status = SlotStatus.open
         self.team = Teams.neutral
         self.mods = Mods.NOMOD
@@ -266,6 +266,14 @@ class Match:
             if s.status == SlotStatus.open:
                 return idx
 
+    def get_host_slot(self) -> Optional[Slot]:
+        for s in self.slots:
+            if s.status & SlotStatus.has_player \
+            and s.player.id == self.host.id:
+                return s
+
+        return
+
     def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
 
@@ -284,7 +292,8 @@ class Match:
         if self.chat:
             self.chat.enqueue(data, immune)
         else:
-            for p in (s.player for s in self.slots if s.player):
+            for p in (s.player for s in self.slots
+                      if s.status & SlotStatus.has_player):
                 if p.id not in immune:
                     p.enqueue(data)
 
@@ -310,3 +319,4 @@ class Match:
 
         self.in_progress = True
         self.enqueue(packets.matchStart(self), immune=no_map)
+        self.enqueue(packets.updateMatch(self))
