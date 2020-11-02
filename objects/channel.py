@@ -109,13 +109,8 @@ class Channel:
     async def send_selective(self, client: 'Player', msg: str,
                              targets: list['Player']) -> None:
         """Enqueue `client`'s `msg` to `targets`."""
-        for p in targets:
-            p.enqueue(packets.sendMessage(
-                client = client.name,
-                msg = msg,
-                target = self.name,
-                client_id = client.id
-            ))
+        for p in (t for t in targets if t in self):
+            await p.send(client, msg, chan=self)
 
     def append(self, p: 'Player') -> None:
         """Add `p` to the channel's players."""

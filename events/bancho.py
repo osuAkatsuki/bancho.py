@@ -403,10 +403,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             f'[osu://dl/{server_stats} server_stats]',
         )
 
-        p.enqueue(packets.sendMessage(
-            glob.bot.name, ' '.join(admin_panel),
-            p.name, glob.bot.id
-        ))
+        await p.send(glob.bot, ' '.join(admin_panel))
     """
 
     # add `p` to the global player list,
@@ -503,17 +500,17 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            p.enqueue(packets.sendMessage(client, t.away_msg, target, client_id))
+            await p.send(client, t.away_msg)
 
         if t.id == 1:
             # target is the bot, check if message is a command.
             cmd = msg.startswith(glob.config.command_prefix) \
             and await commands.process_commands(p, t, msg)
 
-            if cmd and 'resp' in cmd:
-                # command triggered and there is a response to send.
-                p.enqueue(packets.sendMessage(t.name, cmd['resp'], client, t.id))
-
+            if cmd:
+                # command triggered, send response if any.
+                if 'resp' in cmd:
+                    await p.send(t, cmd['resp'])
             else:
                 # no commands triggered.
                 if match := regexes.now_playing.match(msg):
@@ -550,11 +547,11 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                     else:
                         msg = 'Could not find map.'
 
-                    p.enqueue(packets.sendMessage(t.name, msg, client, t.id))
+                    await p.send(t, msg)
 
         else:
             # target is not aika, send the message normally
-            t.enqueue(packets.sendMessage(client, msg, target, client_id))
+            await t.send(client, msg)
 
             # insert mail into db,
             # marked as unread.

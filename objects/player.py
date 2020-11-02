@@ -771,13 +771,14 @@ class Player:
         except queue.Empty:
             pass
 
-    async def send(self, client: 'Player', msg: str) -> None:
-        """Enqueue `client`'s `msg` to `self`."""
+    async def send(self, client: 'Player', msg: str,
+                   chan: Optional[Channel] = None) -> None:
+        """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             packets.sendMessage(
                 client = client.name,
                 msg = msg,
-                target = self.name,
+                target = (chan or self).name,
                 client_id = client.id
             )
         )
