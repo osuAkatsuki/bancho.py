@@ -103,7 +103,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 5)
+    glob.version = Version(2, 8, 6)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

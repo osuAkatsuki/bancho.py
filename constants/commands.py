@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from pp.owoppai import Owoppai
-from typing import Sequence, Optional, Union, Callable, Any
+from utils.recalculator import PPCalculator
+from typing import Sequence, Optional, Union, Callable
 import time
 import cmyui
 import random
 from collections import defaultdict
 
 import packets
+
+from constants.privileges import Privileges
+from constants.mods import Mods
+from constants import regexes
+
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import (Match, MatchScoringTypes,
                            MatchTeamTypes, SlotStatus)
-from constants.privileges import Privileges
-from constants.mods import Mods
-from constants import regexes
 
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
@@ -110,7 +112,9 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     for param in (p.strip('+%') for p in msg):
         if cmyui._isdecimal(param, _float=True):
-            acc = float(param)
+            if not 0 <= (acc := float(param)) <= 100:
+                return 'Invalid accuracy.'
+
         elif ~len(param) & 1: # len(param) % 2 == 0
             mods = Mods.from_str(param)
         else:
@@ -123,12 +127,15 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     _msg.append(repr(mods))
 
     if acc:
-        # they're requesting pp for specified acc value.
-        async with Owoppai(p.last_np.id, acc=acc, mods=mods) as owo:
-            await owo.calc()
-            pp_values = [(owo.acc, owo.pp)]
+        # custom accuracy specified, calculate it on the fly.
+        ppcalc = await PPCalculator.from_id(p.last_np.id, acc=acc, mods=mods)
+        if not ppcalc:
+            return 'Could not retrieve map file.'
+
+        pp, _ = await ppcalc.perform() # don't need sr
+        pp_values = [(acc, pp)]
     else:
-        # they're requesting pp for general accuracy values.
+        # general accuracy values requested.
         if mods not in p.last_np.pp_cache:
             # cache
             await p.last_np.cache_pp(mods)
@@ -357,6 +364,65 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # The commands below are either dangerous or
 # simply not useful for any other roles.
 """
+
+@command(priv=Privileges.Dangerous, public=True)
+async def recalc(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Performs a full PP recalc on a specified map, or all maps."""
+    if len(msg) != 1 or msg[0] not in ('map', 'all'):
+        return 'Invalid syntax: !recalc <map/all>'
+
+    score_counts = [] # keep track of # of scores recalced
+
+    if msg[0] == 'map':
+        # recalculate all scores on their last /np'ed map.
+        if not p.last_np:
+            return 'You must /np a map first!'
+
+        ppcalc = await PPCalculator.from_id(p.last_np.id)
+        if not ppcalc:
+            return 'Could not retrieve map file.'
+
+        await c.send(glob.bot, f'Performing full recalc on {p.last_np.embed}.')
+
+        for table in ('scores_vn', 'scores_rx', 'scores_ap'):
+            # fetch all scores from the table on this map
+            scores = await glob.db.fetchall(
+                'SELECT id, acc, mods, max_combo, '
+                'n300, n100, n50, nmiss, ngeki, nkatu '
+                f'FROM {table} WHERE map_md5 = %s '
+                'AND status = 2 AND mode = 0',
+                [p.last_np.md5]
+            )
+
+            score_counts.append(len(scores))
+
+            if not scores:
+                continue
+
+            for score in scores:
+                ppcalc.mods = Mods(score['mods'])
+                ppcalc.combo = score['max_combo']
+                ppcalc.nmiss = score['nmiss']
+                ppcalc.acc = score['acc']
+
+                pp, _ = await ppcalc.perform() # sr not needed
+
+                await glob.db.execute(
+                    f'UPDATE {table} '
+                    'SET pp = %s '
+                    'WHERE id = %s',
+                    [pp, score['id']]
+                )
+
+    else:
+        # recalculate all scores on every map
+        if not p.priv & Privileges.Dangerous:
+            return 'This command is limited to developers.'
+
+        return 'TODO'
+
+    recap = '{0} vn | {1} rx | {2} ap'.format(*score_counts)
+    return f'Recalculated {sum(score_counts)} ({recap}) scores.'
 
 @command(trigger='!switchserv', priv=Privileges.Dangerous, public=False)
 async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:

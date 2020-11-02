@@ -6,7 +6,6 @@ from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
 from cmyui import log, Ansi
 
-from pp.owoppai import Owoppai
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
@@ -14,6 +13,8 @@ from constants.gamemodes import GameMode
 from objects.beatmap import Beatmap
 from objects.player import Player
 from objects import glob
+
+from utils.recalculator import PPCalculator
 
 __all__ = (
     'Rank',
@@ -331,18 +332,15 @@ class Score:
             # since we are simply using oppai-ng alone.
             return (0.0, 0.0)
 
-        pp_params = {
-            'mods': self.mods,
-            'combo': self.max_combo,
-            'nmiss': self.nmiss,
-            'mode': self.mode,
-            'acc': self.acc
-        }
+        ppcalc = await PPCalculator.from_id(
+            self.bmap.id, mods=self.mods, combo=self.max_combo,
+            nmiss=self.nmiss, mode=self.mode, acc=self.acc
+        )
 
-        async with Owoppai(self.bmap.id, **pp_params) as owo:
-            ret = (owo.pp, owo.stars)
+        if not ppcalc:
+            return (0.0, 0.0)
 
-        return ret
+        return await ppcalc.perform()
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a score."""

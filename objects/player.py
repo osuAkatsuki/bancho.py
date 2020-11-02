@@ -771,6 +771,17 @@ class Player:
         except queue.Empty:
             pass
 
+    async def send(self, client: 'Player', msg: str) -> None:
+        """Enqueue `client`'s `msg` to `self`."""
+        self.enqueue(
+            packets.sendMessage(
+                client = client.name,
+                msg = msg,
+                target = self.name,
+                client_id = client.id
+            )
+        )
+
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""
         url = f'http://ip-api.com/json/{ip}'

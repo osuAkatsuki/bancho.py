@@ -7,7 +7,7 @@ from collections import defaultdict
 from cmyui import log, Ansi
 import time
 
-from pp.owoppai import Owoppai
+from utils.recalculator import PPCalculator
 from objects import glob
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -471,19 +471,15 @@ class Beatmap:
 
     async def cache_pp(self, mods: Mods) -> None:
         """Cache some common acc pp values for specified mods."""
-        pp_params = {'mode': self.mode.as_vanilla, 'mods': mods}
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        async with Owoppai(self.id, **pp_params) as owo:
-            # start with 100% on vanilla
-            self.pp_cache[mods][-1] = owo.pp
+        ppcalc = await PPCalculator.from_id(self.id, mode=self.mode, mods=mods)
 
-            # calc other acc values
-            for idx, acc in enumerate((90, 95, 98, 99)):
-                owo.acc = acc
-                await owo.calc()
+        for idx, acc in enumerate((90, 95, 98, 99, 100)):
+            ppcalc.acc = acc
 
-                self.pp_cache[mods][idx] = owo.pp
+            pp, _ = await ppcalc.perform() # don't need sr
+            self.pp_cache[mods][idx] = pp
 
     async def save_to_sql(self) -> None:
         """Save the the object into sql."""
