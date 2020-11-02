@@ -92,6 +92,20 @@ class Mods(IntFlag):
             mod_str.append(mod_dict[m])
         return f"+{''.join(mod_str)}"
 
+    @staticmethod
+    def filter_invalid_combos(m: 'Mods') -> 'Mods':
+        """Remove any invalid mod combinations from and return `m`."""
+        if m & (Mods.DOUBLETIME | Mods.NIGHTCORE) and m & Mods.HALFTIME:
+            m &= ~Mods.HALFTIME
+        if m & Mods.EASY and m & Mods.HARDROCK:
+            m &= ~Mods.HARDROCK
+        if m & Mods.RELAX and m & Mods.AUTOPILOT:
+            m &= ~Mods.AUTOPILOT
+        if m & Mods.PERFECT and m & Mods.SUDDENDEATH:
+            m &= ~Mods.SUDDENDEATH
+
+        return m
+
     @classmethod
     def from_str(cls, s: str):
         # from fmt: `HDDTRX`
@@ -120,7 +134,7 @@ class Mods(IntFlag):
 
             mods |= mod_dict[m]
 
-        return mods
+        return cls.filter_invalid_combos(mods)
 
     @classmethod
     def from_np(cls, s: str):
@@ -148,4 +162,4 @@ class Mods(IntFlag):
             # a bit unsafe.. perhaps defaultdict?
             mods |= mod_dict[mod]
 
-        return mods
+        return cls.filter_invalid_combos(mods)
