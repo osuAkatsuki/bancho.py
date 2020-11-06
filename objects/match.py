@@ -288,17 +288,26 @@ class Match:
     def enqueue(self, data: bytes, lobby: bool = True,
                 immune: Sequence[int] = []) -> None:
         """Add data to be sent to all clients in the match."""
+        if not self.chat:
+            breakpoint()
 
-        if self.chat:
-            self.chat.enqueue(data, immune)
-        else:
-            for p in (s.player for s in self.slots
-                      if s.status & SlotStatus.has_player):
-                if p.id not in immune:
-                    p.enqueue(data)
+        self.chat.enqueue(data, immune)
 
-        if lobby and (lchan := glob.channels['#lobby']):
+        if lobby and (lchan := glob.channels['#lobby']) and lchan.players:
             lchan.enqueue(data)
+
+    def enqueue_state(self, lobby: bool = True) -> None:
+        """Enqueue `self`'s state to players in the match & lobby."""
+        if not self.chat:
+            breakpoint()
+
+        # TODO: hmm this is pretty bad, writes twice
+
+        # send password only to users currently in the match.
+        self.chat.enqueue(packets.updateMatch(self, send_pw=True))
+
+        if lobby and (lchan := glob.channels['#lobby']) and lchan.players:
+            lchan.enqueue(packets.updateMatch(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
         """Unready any players in the `expected` state."""
@@ -319,4 +328,4 @@ class Match:
 
         self.in_progress = True
         self.enqueue(packets.matchStart(self), immune=no_map)
-        self.enqueue(packets.updateMatch(self))
+        self.enqueue_state()

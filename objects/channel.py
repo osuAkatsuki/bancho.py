@@ -129,7 +129,5 @@ class Channel:
     def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""
         for p in self.players:
-            if p.id in immune:
-                continue
-
-            p.enqueue(data)
+            if p.id not in immune:
+                p.enqueue(data)

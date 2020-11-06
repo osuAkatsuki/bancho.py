@@ -4,6 +4,7 @@ from typing import Any
 from enum import IntEnum, unique
 from typing import Optional
 from functools import partialmethod, cache, lru_cache
+from collections import namedtuple
 from cmyui import log, Ansi
 import struct
 
@@ -159,7 +160,6 @@ class BanchoPacket:
     async def handle(self, p: Player) -> None: ...
 
 # TODO: should probably be.. not here :P
-from collections import namedtuple
 Message = namedtuple('Message', ['client', 'msg', 'target', 'client_id'])
 Channel = namedtuple('Channel', ['name', 'topic', 'players'])
 
@@ -278,7 +278,6 @@ class BanchoPacketReader:
         if len(self._buf) < 7:
             # not even minimal data
             # remaining in buffer.
-            # XXX: not sure if this works? lol
             raise StopAsyncIteration
 
         # read type & length from the body
@@ -518,12 +517,17 @@ def write_channel(name: str, topic: str,
 #
 #     return ret
 
-def write_match(m: Match) -> bytearray:
+def write_match(m: Match, send_pw: bool = True) -> bytearray:
     """ Write `m` into bytes (osu! match). """
+    if m.passwd:
+        passwd = write_string(m.passwd) if send_pw \
+            else b'\x0b\x00'
+    else:
+        passwd = b'\x00'
+
     ret = bytearray(
         struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods) +
-        write_string(m.name) +
-        write_string(m.passwd)
+        write_string(m.name) + passwd
     )
 
     if m.bmap:
@@ -577,7 +581,7 @@ def write(packid: int, *args: tuple[Any, ...]) -> bytes:
         elif p_type == osuTypes.channel:
             ret.extend(write_channel(*p))
         elif p_type == osuTypes.match:
-            ret.extend(write_match(p))
+            ret.extend(write_match(*p))
         elif p_type == osuTypes.scoreframe:
             ret.extend(write_scoreframe(p))
         #elif p_type == osuTypes.mapInfoReply:
@@ -718,17 +722,17 @@ def notification(msg: str) -> bytes:
     )
 
 # packet id: 26
-def updateMatch(m: Match) -> bytes:
+def updateMatch(m: Match, send_pw: bool = True) -> bytes:
     return write(
         Packets.CHO_UPDATE_MATCH,
-        (m, osuTypes.match)
+        ((m, send_pw), osuTypes.match)
     )
 
 # packet id: 27
 def newMatch(m: Match) -> bytes:
     return write(
         Packets.CHO_NEW_MATCH,
-        (m, osuTypes.match)
+        ((m, True), osuTypes.match)
     )
 
 # packet id: 28
@@ -748,7 +752,7 @@ def toggleBlockNonFriendPM() -> bytes:
 def matchJoinSuccess(m: Match) -> bytes:
     return write(
         Packets.CHO_MATCH_JOIN_SUCCESS,
-        (m, osuTypes.match)
+        ((m, True), osuTypes.match)
     )
 
 # packet id: 37
@@ -776,7 +780,7 @@ def fellowSpectatorLeft(id: int) -> bytes:
 def matchStart(m: Match) -> bytes:
     return write(
         Packets.CHO_MATCH_START,
-        (m, osuTypes.match)
+        ((m, True), osuTypes.match)
     )
 
 # packet id: 48

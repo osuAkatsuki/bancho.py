@@ -66,6 +66,22 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return f'{p.name} rolls {points} points!'
 
 @command(priv=Privileges.Normal, public=True)
+async def bloodcat(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+    """Return a bloodcat link of the user's current map (situation dependant)."""
+    bmap = None
+
+    if p.match and p.match.bmap:
+        # return the match beatmap
+        bmap = p.match.bmap
+    # TODO: spectator?
+    elif p.last_np:
+        bmap = p.last_np
+    else:
+        return 'No map found!'
+
+    return '[https://bloodcat.com/d/{} {}]'.format(bmap.set_id, bmap.full)
+
+@command(priv=Privileges.Normal, public=True)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
     if not (s := p.recent_score):
@@ -82,8 +98,8 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     if not (res := await glob.db.fetchall(
         'SELECT id, set_id, artist, title, version '
-        'FROM maps WHERE title LIKE %s '
-        'LIMIT 50', [f'%{" ".join(msg)}%']
+        'FROM maps WHERE title LIKE %s LIMIT 50',
+        [f'%{" ".join(msg)}%']
     )): return 'No matches found :('
 
     mirror = glob.config.mirror
@@ -155,8 +171,8 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 """
 
 status_to_id = lambda s: {
-    'rank': 2,
     'unrank': 0,
+    'rank': 2,
     'love': 5
 }[s]
 @command(trigger='!map', priv=Privileges.Nominator, public=True)
@@ -179,8 +195,8 @@ async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if msg[1] == 'set':
         # update whole set
         await glob.db.execute(
-            'UPDATE maps SET status = %s '
-            'WHERE set_id = %s',
+            'UPDATE maps SET status = %s, '
+            'frozen = 1 WHERE set_id = %s',
             [new_status, p.last_np.set_id]
         )
 
@@ -192,8 +208,8 @@ async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     else:
         # update only map
         await glob.db.execute(
-            'UPDATE maps SET status = %s '
-            'WHERE id = %s',
+            'UPDATE maps SET status = %s, '
+            'frozen = 1 WHERE id = %s',
             [new_status, p.last_np.id]
         )
 
@@ -597,7 +613,7 @@ async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
 
     m.in_progress = False
     m.enqueue(packets.matchAbort())
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'Match aborted.'
 
 @mp_command(priv=Privileges.Admin)
@@ -622,7 +638,7 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
         return 'Beatmap not found.'
 
     m.bmap = bmap
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return f'Map selected: {bmap.embed}.'
 
 @mp_command(priv=Privileges.Normal)
@@ -644,7 +660,7 @@ async def mp_mods(p: Player, m: Match, msg: Sequence[str]) -> str:
         # not freemods, set match mods.
         m.mods = mods
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'Match mods updated.'
 
 @mp_command(priv=Privileges.Normal)
@@ -662,19 +678,17 @@ async def mp_freemods(p: Player, m: Match, msg: Sequence[str]) -> str:
                 # changing mods from the match.
                 s.mods = m.mods & ~Mods.SPEED_CHANGING
 
-        m.mods = m.mods & Mods.SPEED_CHANGING
+        m.mods &= Mods.SPEED_CHANGING
     else:
         # host mods -> central mods.
         m.freemods = False
-        for s in m.slots:
-            if s.status & SlotStatus.has_player \
-            and s.player.id == m.host.id:
-                # the match takes any of the player's mods,
-                # keeping any of it's own speed changing mods.
-                m.mods = s.mods | (m.mods & Mods.SPEED_CHANGING)
-                break
+        host = m.get_host_slot() # should always exist
+        # the match keeps any speed-changing mods,
+        # and also takes any mods the host has enabled.
+        m.mods &= Mods.SPEED_CHANGING
+        m.mods |= host.mods
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'Match freemod status updated.'
 
 @mp_command(priv=Privileges.Normal)
@@ -694,7 +708,7 @@ async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
 
     m.host = t
     m.host.enqueue(packets.matchTransferHost())
-    m.enqueue(packets.updateMatch(m), lobby=False)
+    m.enqueue_state(lobby=False)
     return 'Match host updated.'
 
 @mp_command(priv=Privileges.Normal)
@@ -766,7 +780,7 @@ async def mp_lock(p: Player, m: Match, msg: Sequence[str]) -> str:
         if slot.status == SlotStatus.open:
             slot.status = SlotStatus.locked
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'All unused slots locked.'
 
 @mp_command(priv=Privileges.Normal)
@@ -776,7 +790,7 @@ async def mp_unlock(p: Player, m: Match, msg: Sequence[str]) -> str:
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'All locked slots unlocked.'
 
 @mp_command(priv=Privileges.Normal)
@@ -792,7 +806,7 @@ async def mp_teams(p: Player, m: Match, msg: Sequence[str]) -> str:
         'tag-team-vs': MatchTeamTypes.tag_team_vs
     }[msg[0]]
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state()
     return 'Match team type updated.'
 
 @mp_command(priv=Privileges.Normal)
@@ -808,7 +822,7 @@ async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
         'scorev2': MatchScoringTypes.scorev2
     }[msg[0]]
 
-    m.enqueue(packets.updateMatch(m))
+    m.enqueue_state(lobby=False)
     return 'Match win condition updated.'
 
 @command(trigger='!mp', priv=Privileges.Normal, public=True)

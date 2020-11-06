@@ -578,8 +578,9 @@ class Player:
         slot.status = SlotStatus.not_ready
         slot.player = self
         self.match = m
+
         self.enqueue(packets.matchJoinSuccess(m))
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
         return True
 
@@ -616,7 +617,7 @@ class Player:
                         break
 
             # notify others of our deprature
-            self.match.enqueue(packets.updateMatch(self.match))
+            self.match.enqueue_state()
 
         self.match = None
 

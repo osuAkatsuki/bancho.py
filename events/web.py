@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from constants.gamemodes import GameMode
-from typing import Optional, Callable
+from typing import Any, Optional, Callable
 from enum import IntEnum, unique
 from functools import partial, wraps
 import os
@@ -728,6 +728,12 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # going to be ugly no matter what i do lol :v
         charts = []
 
+        # these should probably just be abstracted
+        # into a class of some sort so the if/else
+        # part isn't just left in the open like this lol
+        def kv_pair(name: str, k: Optional[Any], v: Any) -> str:
+            return f'{name}Before:{k or ""}|{name}After:{v}'
+
         # append beatmap info chart (#1)
         charts.append(
             f'beatmapId:{s.bmap.id}|'
@@ -743,23 +749,23 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             f'chartUrl:https://akatsuki.pw/b/{s.bmap.id}',
             'chartName:Beatmap Ranking',
 
-            ( # we had a score on the map prior to this
-                f'rankBefore:{s.prev_best.rank}|rankAfter:{s.rank}|'
-                f'rankedScoreBefore:{s.prev_best.score}|rankedScoreAfter:{s.score}|'
-                f'totalScoreBefore:{s.prev_best.score}|totalScoreAfter:{s.score}|'
-                f'maxComboBefore:{s.prev_best.max_combo}|maxComboAfter:{s.max_combo}|'
-                f'accuracyBefore:{s.prev_best.acc:.2f}|accuracyAfter:{s.acc:.2f}|'
-                f'ppBefore:{s.prev_best.pp:.4f}|ppAfter:{s.pp:.4f}|'
-                f'onlineScoreId:{s.id}'
-            ) if s.prev_best else ( # we don't, this is our first
-                f'rankBefore:|rankAfter:{s.rank}|'
-                f'rankedScoreBefore:|rankedScoreAfter:{s.score}|' # these are
-                f'totalScoreBefore:|totalScoreAfter:{s.score}|' # prolly wrong
-                f'maxComboBefore:|maxComboAfter:{s.max_combo}|'
-                f'accuracyBefore:|accuracyAfter:{s.acc:.2f}|'
-                f'ppBefore:|ppAfter:{s.pp:.4f}|'
-                f'onlineScoreId:{s.id}'
-            )
+            *((
+                kv_pair('rank', s.prev_best.rank, s.rank),
+                kv_pair('rankedScore', s.prev_best.score, s.score),
+                kv_pair('totalScore', s.prev_best.score, s.score),
+                kv_pair('maxCombo', s.prev_best.max_combo, s.max_combo),
+                kv_pair('accuracy', round(s.prev_best.acc, 2), round(s.acc, 2)),
+                kv_pair('pp', s.prev_best.pp, s.pp)
+            ) if s.prev_best else (
+                kv_pair('rank', None, s.rank),
+                kv_pair('rankedScore', None, s.score),
+                kv_pair('totalScore', None, s.score),
+                kv_pair('maxCombo', None, s.max_combo),
+                kv_pair('accuracy', None, round(s.acc, 2)),
+                kv_pair('pp', None, s.pp)
+            )),
+
+            f'onlineScoreId:{s.id}'
         )))
 
         # append overall ranking chart (#3)
@@ -769,26 +775,21 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
             'chartName:Overall Ranking',
 
             # TODO: achievements
-            ( # we have a score on the account prior to this
-                f'rankBefore:{prev_stats.rank}|rankAfter:{stats.rank}|'
-                f'rankedScoreBefore:{prev_stats.rscore}|rankedScoreAfter:{stats.rscore}|'
-                f'totalScoreBefore:{prev_stats.tscore}|totalScoreAfter:{stats.tscore}|'
-                f'maxComboBefore:{prev_stats.max_combo}|maxComboAfter:{stats.max_combo}|'
-                f'accuracyBefore:{prev_stats.acc:.2f}|accuracyAfter:{stats.acc:.2f}|'
-                f'ppBefore:{prev_stats.pp:.4f}|ppAfter:{stats.pp:.4f}|'
-                # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
-                f'onlineScoreId:{s.id}'
-            ) if prev_stats else ( # this is the account's first score
-                f'rankBefore:|rankAfter:{stats.rank}|'
-                f'rankedScoreBefore:|rankedScoreAfter:{stats.rscore}|'
-                f'totalScoreBefore:|totalScoreAfter:{stats.tscore}|'
-                f'maxComboBefore:|maxComboAfter:{stats.max_combo}|'
-                f'accuracyBefore:|accuracyAfter:{stats.acc:.2f}|'
-                f'ppBefore:|ppAfter:{stats.pp:.4f}|'
-                # f'achievements-new:taiko-skill-pass-2+Katsu Katsu Katsu+Hora! Ikuzo!/taiko-skill-fc-2+To Your Own Beat+Straight and steady.|'
-                f'onlineScoreId:{s.id}'
-            )
-
+            *((
+                kv_pair('rank', prev_stats.rank, stats.rank),
+                kv_pair('rankedScore', prev_stats.rscore, stats.rscore),
+                kv_pair('totalScore', prev_stats.tscore, stats.tscore),
+                kv_pair('maxCombo', prev_stats.max_combo, stats.max_combo),
+                kv_pair('accuracy', round(prev_stats.acc, 2), round(stats.acc, 2)),
+                kv_pair('pp', prev_stats.pp, stats.pp),
+            ) if prev_stats else (
+                kv_pair('rank', None, stats.rank),
+                kv_pair('rankedScore', None, stats.rscore),
+                kv_pair('totalScore', None, stats.tscore),
+                kv_pair('maxCombo', None, stats.max_combo),
+                kv_pair('accuracy', None, round(stats.acc, 2)),
+                kv_pair('pp', None, stats.pp),
+            ))
         )))
 
         ret = '\n'.join(charts).encode()

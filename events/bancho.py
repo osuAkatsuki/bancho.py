@@ -630,7 +630,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
         s = m.get_slot(p)
         m.slots[self.slot_id].copy(s)
         s.reset()
-        m.enqueue(packets.updateMatch(m)) # technically not needed if host?
+        m.enqueue_state() # technically not needed for host?
 
 @register
 class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
@@ -639,7 +639,7 @@ class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
             return
 
         m.get_slot(p).status = SlotStatus.ready
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state(lobby=False)
 
 @register
 class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
@@ -662,7 +662,7 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
                 slot.reset()
             slot.status = SlotStatus.locked
 
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
 @register
 class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
@@ -726,7 +726,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         m.match_scoring = self.new.match_scoring
         m.name = self.new.name
 
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
 @register
 class MatchStart(BanchoPacket, type=Packets.OSU_MATCH_START):
@@ -778,7 +778,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
 
         m.in_progress = False
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
@@ -799,7 +799,7 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
             # not freemods, set match mods.
             m.mods = self.mods
 
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
 @register
 class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
@@ -821,7 +821,7 @@ class MatchNoBeatmap(BanchoPacket, type=Packets.OSU_MATCH_NO_BEATMAP):
             return
 
         m.get_slot(p).status = SlotStatus.no_map
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state(lobby=False)
 
 @register
 class MatchNotReady(BanchoPacket, type=Packets.OSU_MATCH_NOT_READY):
@@ -830,7 +830,7 @@ class MatchNotReady(BanchoPacket, type=Packets.OSU_MATCH_NOT_READY):
             return
 
         m.get_slot(p).status = SlotStatus.not_ready
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state(lobby=False)
 
 @register
 class MatchFailed(BanchoPacket, type=Packets.OSU_MATCH_FAILED):
@@ -849,7 +849,7 @@ class MatchHasBeatmap(BanchoPacket, type=Packets.OSU_MATCH_HAS_BEATMAP):
             return
 
         m.get_slot(p).status = SlotStatus.not_ready
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state(lobby=False)
 
 @register
 class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
@@ -899,7 +899,7 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
 
         m.host = t
         m.host.enqueue(packets.matchTransferHost())
-        m.enqueue(packets.updateMatch(m))
+        m.enqueue_state()
 
 @register
 class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
@@ -951,7 +951,7 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
             log(f'{p} tried changing team outside of a match? (2)')
             return
 
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state(lobby=False)
 
 @register
 class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
@@ -1026,7 +1026,7 @@ class MatchChangePassword(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_PASSWORD):
             return
 
         m.passwd = self.match.passwd
-        m.enqueue(packets.updateMatch(m), lobby=False)
+        m.enqueue_state()
 
 @register
 class UserPresenceRequest(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST):

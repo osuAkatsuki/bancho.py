@@ -206,32 +206,32 @@ class Beatmap:
 
     @property
     def filename(self) -> str:
-        """The name of the beatmap's .osu file."""
+        """The name of `self`'s .osu file."""
         return f'{self.id}.osu'
 
     @property
     def full(self) -> str:
-        """The full osu! formatted name of the beatmap."""
+        """The full osu! formatted name `self`."""
         return f'{self.artist} - {self.title} [{self.version}]'
 
     @property
     def url(self):
-        """The url to the beatmap's page."""
+        """The osu! beatmap url for `self`."""
         return f'https://osu.ppy.sh/b/{self.id}'
 
     @property
     def set_url(self) -> str:
-        """The url to the beatmap set's page."""
+        """The osu! beatmap set url for `self`."""
         return f'https://osu.ppy.sh/s/{self.set_id}'
 
     @property
     def embed(self) -> str:
-        """An osu! chat embed to the beatmap's page."""
+        """An osu! chat embed to `self`'s osu! beatmap page."""
         return f'[{self.url} {self.full}]'
 
     @classmethod
     async def from_bid(cls, bid: int):
-        """Create a beatmap object from sql using a beatmapid."""
+        """Create a `Beatmap` from sql using a beatmap id."""
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
 
@@ -265,7 +265,7 @@ class Beatmap:
 
     @classmethod
     async def from_md5(cls, md5: str, set_id: Optional[int] = None):
-        """Create a beatmap object from sql or osu!api using it's md5."""
+        """Create a `Beatmap` from sql or osu!api using it's md5."""
         # check if the map is in the cache.
         if md5 in glob.cache['beatmap']:
             # check if our cached result is within timeout.
@@ -326,14 +326,12 @@ class Beatmap:
             params = {'k': glob.config.osu_api_key, 's': set_id}
 
             async with glob.http.get(url, params=params) as resp:
-                if not resp or resp.status != 200 or await resp.read() == b'[]':
+                if not resp or resp.status != 200:
                     return # osu!api request failed.
 
-                apidata = await resp.json()
-
-            if not apidata:
-                # map doesn't exist by set id.
-                return
+                # we want all maps returned, so get full json
+                if not (apidata := await resp.json()):
+                    return
 
             res = await glob.db.fetchall(
                 'SELECT id, last_update, status, frozen '
@@ -413,10 +411,14 @@ class Beatmap:
         params = {'k': glob.config.osu_api_key, 'h': md5}
 
         async with glob.http.get(url, params=params) as resp:
-            if not resp or resp.status != 200 or await resp.read() == b'[]':
+            if not resp or resp.status != 200:
                 return # osu!api request failed.
 
-            apidata = (await resp.json())[0]
+            if not (json := await resp.json()):
+                return
+
+            # just take the first map result
+            apidata = json[0]
 
         m = cls()
         m.md5 = md5
