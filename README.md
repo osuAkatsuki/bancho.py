@@ -54,8 +54,14 @@ If you have any difficulties setting up gulag, feel free to join the Discord ser
 NOTE: I will not be able to help you out with creating a certificate to connect on the latest osu! versions.
 Oh, and also, if I remember correctly nginx has some issues on Ubuntu 20.04, so I don't recommend trying lol..
 ```sh
-# Install our database & reverse proxy, if not already installed.
-sudo apt install mysql-server nginx build-essential
+# Install python 3.9 and latest version of pip.
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3.9 python3.9-dev python3.9-distutils
+wget https://bootstrap.pypa.io/get-pip.py
+python3.9 get-pip.py && rm get-pip.py
+
+# Install our database, reverse-proxy, and C/C++ compiler, if not already installed.
+sudo apt install mysql-server nginx build-essential 
 
 # Clone gulag from github.
 git clone https://github.com/cmyui/gulag.git
