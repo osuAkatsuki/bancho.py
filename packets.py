@@ -465,7 +465,7 @@ def write_uleb128(num: int) -> bytearray:
 
 def write_string(s: str) -> bytearray:
     """ Write `s` into bytes (ULEB128 & string). """
-    if (length := len(s)) > 0:
+    if (length := len(s.encode())) > 0:
         # non-empty string
         data = b'\x0b' + write_uleb128(length) + s.encode()
     else:
