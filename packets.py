@@ -389,21 +389,9 @@ class BanchoPacketReader:
         m.name = await self.read_string()
         m.passwd = await self.read_string()
 
-        # TODO: don't do this, do it like everyone else..
-
-        # ignore the map's name, we're going
-        # to get all it's info from the md5.
-        await self.read_string()
-
-        map_id = await self.read_i32()
-        map_md5 = await self.read_string()
-
-        m.bmap = await Beatmap.from_md5(map_md5)
-        if not m.bmap and map_id != (1 << 32) - 1:
-            # if they pick an unsubmitted map,
-            # just give them vivid [insane] lol.
-            vivid_md5 = '1cf5b2c2edfafd055536d2cefcb89c0e'
-            m.bmap = await Beatmap.from_md5(vivid_md5)
+        m.map_name = await self.read_string()
+        m.map_id = await self.read_i32()
+        m.map_md5 = await self.read_string()
 
         for slot in m.slots:
             slot.status = await self.read_i8()
@@ -481,7 +469,7 @@ def write_i32_list(l: tuple[int, ...]) -> bytearray:
     ret = bytearray(len(l).to_bytes(2, 'little'))
 
     for i in l:
-        ret.extend(i.to_bytes(4, 'little'))
+        ret += i.to_bytes(4, 'little')
 
     return ret
 
@@ -511,11 +499,11 @@ def write_channel(name: str, topic: str,
 #
 #     # Write files
 #     for m in maps:
-#         ret.extend(struct.pack('<hiiiBbbbb',
+#         ret += struct.pack('<hiiiBbbbb',
 #             m.id, m.map_id, m.set_id, m.thread_id, m.status,
 #             m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
-#         ))
-#         ret.extend(write_string(m.map_md5))
+#         )
+#         ret += write_string(m.map_md5)
 #
 #     return ret
 
@@ -532,31 +520,26 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
         write_string(m.name) + passwd
     )
 
-    if m.bmap:
-        ret.extend(write_string(m.bmap.full))
-        ret.extend(m.bmap.id.to_bytes(4, 'little'))
-        ret.extend(write_string(m.bmap.md5))
-    else:
-        ret.extend(write_string('')) # name
-        ret.extend(((1 << 32) - 1).to_bytes(4, 'little')) # id
-        ret.extend(write_string('')) # md5
+    ret += write_string(m.map_name)
+    ret += m.map_id.to_bytes(4, 'little', signed=True)
+    ret += write_string(m.map_md5)
 
     ret.extend(s.status for s in m.slots)
     ret.extend(s.team for s in m.slots)
 
     for s in m.slots:
         if s.status & SlotStatus.has_player:
-            ret.extend(s.player.id.to_bytes(4, 'little'))
+            ret += s.player.id.to_bytes(4, 'little')
 
-    ret.extend(m.host.id.to_bytes(4, 'little'))
+    ret += m.host.id.to_bytes(4, 'little')
     ret.extend((m.mode, m.match_scoring,
                 m.team_type, m.freemods))
 
     if m.freemods:
         for s in m.slots:
-            ret.extend(s.mods.to_bytes(4, 'little'))
+            ret += s.mods.to_bytes(4, 'little')
 
-    ret.extend(m.seed.to_bytes(4, 'little'))
+    ret += m.seed.to_bytes(4, 'little')
     return ret
 
 def write_scoreframe(s: ScoreFrame) -> bytearray:
@@ -573,24 +556,24 @@ def write(packid: int, *args: tuple[Any, ...]) -> bytes:
 
     for p, p_type in args:
         if p_type == osuTypes.raw:
-            ret.extend(p)
+            ret += p
         elif p_type == osuTypes.string:
-            ret.extend(write_string(p))
+            ret += write_string(p)
         elif p_type == osuTypes.i32_list:
-            ret.extend(write_i32_list(p))
+            ret += write_i32_list(p)
         elif p_type == osuTypes.message:
-            ret.extend(write_message(*p))
+            ret += write_message(*p)
         elif p_type == osuTypes.channel:
-            ret.extend(write_channel(*p))
+            ret += write_channel(*p)
         elif p_type == osuTypes.match:
-            ret.extend(write_match(*p))
+            ret += write_match(*p)
         elif p_type == osuTypes.scoreframe:
-            ret.extend(write_scoreframe(p))
+            ret += write_scoreframe(p)
         #elif p_type == osuTypes.mapInfoReply:
-        #    ret.extend(write_mapInfoReply(p))
+        #    ret += write_mapInfoReply(p)
         else:
             # not a custom type, use struct to pack the data.
-            ret.extend(struct.pack(f'<{_specifiers[p_type]}', p))
+            ret += struct.pack(f'<{_specifiers[p_type]}', p)
 
     # add size
     ret[3:3] = struct.pack('<I', len(ret) - 3)

@@ -637,7 +637,10 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not (bmap := await Beatmap.from_bid(int(msg[0]))):
         return 'Beatmap not found.'
 
-    m.bmap = bmap
+    m.map_id = bmap.id
+    m.map_md5 = bmap.md5
+    m.map_name = bmap.full
+
     m.enqueue_state()
     return f'Map selected: {bmap.embed}.'
 

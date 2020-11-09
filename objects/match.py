@@ -140,60 +140,25 @@ class Match:
     """\
     A class to represent an osu! multiplayer match.
 
-    Attributes
+    Possibly confusing attributes
     -----------
-    id: `int`
-        The match's unique ID.
-
-    name: `str`
-        The match's name.
-
-    passwd: `str`
-        The match's password.
-
-    host: `Player`
-        A player obj of the match's host.
-
     _refs: set[`Player`]
         A set of players who have access to mp commands in the match.
-
-    bmap: Optional[`Beatmap`]
-        A beatmap obj representing the osu map.
-
-    mods: `int`
-        The match's currently selected mods.
-
-    freemods: `bool`
-        Whether the match is in freemods mode.
-
-    mode: `int`
-        The match's currently selected gamemode.
-
-    chat: `Channel`
-        A channel obj of the match's chat.
+        These can be used with the !mp <addref/rmref/listref> commands.
 
     slots: list[`Slot`]
-        A list of 16 slots representing the match's slots.
+        A list of 16 `Slot` objects representing the match's slots.
 
     type: `MatchTypes`
-        The match's currently selected match type.
-
-    team_type: `MatchTeamTypes`
-        The match's currently selected team type.
-
-    match_scoring: `MatchScoringTypes`
-        The match's currently selected match scoring type.
-
-    in_progress: `bool`
-        Whether the match is currently in progress.
+        I have no idea why this exists.
 
     seed: `int`
-        The match's randomly generated seed.
-        XXX: this is used for osu!mania's random mod!
+        The seed used for osu!mania's random mod.
+
     """
     __slots__ = (
-        'id', 'name', 'passwd',
-        'host', '_refs', 'bmap',
+        'id', 'name', 'passwd', 'host', '_refs',
+        'map_id', 'map_md5', 'map_name',
         'mods', 'freemods', 'mode',
         'chat', 'slots',
         'type', 'team_type', 'match_scoring',
@@ -203,18 +168,20 @@ class Match:
     def __init__(self) -> None:
         self.id = 0
         self.name = ''
-        self.passwd = '' # TODO: filter from lobby
+        self.passwd = ''
 
         self.host = None
         self._refs = set()
 
-        self.bmap: Optional[Beatmap] = None
+        self.map_id = 0
+        self.map_md5 = ''
+        self.map_name = ''
 
         self.mods = Mods.NOMOD
         self.mode = GameMode.vn_std
         self.freemods = False
 
-        self.chat: Optional[Channel] = None
+        self.chat: Optional[Channel] = None #multiplayer
         self.slots = [Slot() for _ in range(16)]
 
         self.type = MatchTypes.standard
@@ -230,9 +197,19 @@ class Match:
         return f'osump://{self.id}/{self.passwd}'
 
     @property
+    def map_url(self):
+        """The osu! beatmap url for `self`'s map."""
+        return f'https://osu.ppy.sh/b/{self.map_id}'
+
+    @property
     def embed(self) -> str:
-        """An osu! chat embed for the match."""
+        """An osu! chat embed for `self`."""
         return f'[{self.url} {self.name}]'
+
+    @property
+    def map_embed(self) -> str:
+        """An osu! chat embed for `self`'s map."""
+        return f'[{self.map_url} {self.map_name}]'
 
     @property
     def refs(self) -> set['Player']:
@@ -277,7 +254,9 @@ class Match:
     def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
 
-        self.bmap = m.bmap
+        self.map_id = m.map_id
+        self.map_md5 = m.map_md5
+        self.map_name = m.map_name
         self.freemods = m.freemods
         self.mode = m.mode
         self.team_type = m.team_type

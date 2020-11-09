@@ -330,9 +330,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # NOTE: p.join_channel enqueues channelJoin, but
             # if we don't send this back in this specific request,
             # the client will attempt to join the channel again.
-            data.extend(packets.channelJoin(c.name))
+            data += packets.channelJoin(c.name)
 
-        data.extend(packets.channelInfo(*c.basic_info))
+        data += packets.channelInfo(*c.basic_info)
 
     # fetch some of the player's
     # information from sql to be cached.
@@ -350,7 +350,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         packets.userStats(p)
     )
 
-    data.extend(user_data)
+    data += user_data
 
     # o for online, or other
     for o in glob.players:
@@ -358,16 +358,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         o.enqueue(user_data)
 
         # enqueue them to us.
-        data.extend(
-            packets.userPresence(o) +
-            packets.userStats(o)
-        )
+        data += (packets.userPresence(o) +
+                 packets.userStats(o))
 
-    data.extend(
-        packets.mainMenuIcon() +
-        packets.friendsList(*p.friends) +
-        packets.silenceEnd(p.remaining_silence)
-    )
+    data += (packets.mainMenuIcon() +
+             packets.friendsList(*p.friends) +
+             packets.silenceEnd(p.remaining_silence))
 
     # thank u osu for doing this by username rather than id
     query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
@@ -381,10 +377,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         msg_time = dt.fromtimestamp(msg['time'])
         msg_ts = f'[{msg_time:%Y-%m-%d %H:%M:%S}] {msg["msg"]}'
 
-        data.extend(packets.sendMessage(
+        data += packets.sendMessage(
             msg['from'], msg_ts,
             msg['to'], msg['from_id']
-        ))
+        )
 
     # TODO: enqueue ingame admin panel to staff members.
     """
@@ -693,15 +689,17 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 m.mods &= Mods.SPEED_CHANGING
                 m.mods |= host.mods
 
-        if not self.new.bmap:
+        if self.new.map_id == -1:
             # map being changed, unready players.
             m.unready_players(expected=SlotStatus.ready)
-        elif not m.bmap:
+        elif m.map_id == -1:
             # new map has been chosen, send to match chat.
-            await m.chat.send(glob.bot, f'Map selected: {self.new.bmap.embed}.')
+            await m.chat.send(glob.bot, f'Map selected: {self.new.map_embed}.')
 
-        # copy basic match info into our match.
-        m.bmap = self.new.bmap
+        # copy map & basic match info
+        m.map_id = self.new.map_id
+        m.map_md5 = self.new.map_md5
+        m.map_name = self.new.map_name
         m.freemods = self.new.freemods
         m.mode = self.new.mode
 
