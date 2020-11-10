@@ -71,7 +71,7 @@ cd gulag
 git submodule init && git submodule update
 
 # Build oppai-ng's binary.
-cd pp && ./build && cd ..
+cd oppai-ng && ./build && cd ..
 
 # Install project requirements.
 python3.9 -m pip install -r requirements.txt
