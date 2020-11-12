@@ -108,7 +108,7 @@ class RankedStatus(IntEnum):
 class Beatmap:
     """A class representing an osu! beatmap.
 
-    Possibly confusing ttributes
+    Possibly confusing attributes
     -----------
     frozen: `bool`
         Whether the beatmap's status is to be kept when a newer
