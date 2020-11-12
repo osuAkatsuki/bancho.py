@@ -29,35 +29,7 @@ __all__ = (
 )
 
 class ModeData:
-    """\
-    A class to represent a player's stats in a single gamemode.
-
-    Attributes
-    -----------
-    tscore: `int`
-        The player's total score.
-
-    rscore: `int`
-        The player's ranked score.
-
-    pp: `float`
-        The player's total performance points.
-
-    acc: `float`
-        The player's overall accuracy.
-
-    plays: `int`
-        The player's number of total plays.
-
-    playtime: `int`
-        The player's total playtime (in seconds).
-
-    max_combo: `int`
-        The player's highest combo.
-
-    rank: `int`
-        The player's global rank.
-    """
+    """A class to represent a player's stats in a single gamemode."""
     __slots__ = (
         'tscore', 'rscore', 'pp', 'acc',
         'plays', 'playtime', 'max_combo', 'rank'
@@ -71,7 +43,7 @@ class ModeData:
         self.plays = 0
         self.playtime = 0
         self.max_combo = 0
-        self.rank = 0
+        self.rank = 0 # global rank
 
     def update(self, **kwargs) -> None:
         self.tscore = kwargs.get('tscore', 0)
@@ -86,7 +58,6 @@ class ModeData:
 @unique
 class PresenceFilter(IntEnum):
     """A class to represent the update scope the client wishes to receive."""
-
     Nil     = 0
     All     = 1
     Friends = 2
@@ -94,7 +65,6 @@ class PresenceFilter(IntEnum):
 @unique
 class Action(IntEnum):
     """A class to represent the client's current state."""
-
     Idle         = 0
     Afk          = 1
     Playing      = 2
@@ -111,29 +81,7 @@ class Action(IntEnum):
     OsuDirect    = 13
 
 class Status:
-    """\
-    A class to represent the current status of a player.
-
-    Attributes
-    -----------
-    action: `Action`
-        The user's current set action.
-
-    info_text: `str`
-        The text representing the user's action.
-
-    map_md5: `str`
-        The md5 of the map the player is on.
-
-    mods: `Mods`
-        The mods the player currently has enabled.
-
-    mode: `GameMode`
-        The current gamemode of the player.
-
-    map_id: `int`
-        The id of the map the player is on.
-    """
+    """A class to represent the current status of a player."""
     __slots__ = (
         'action', 'info_text', 'map_md5',
         'mods', 'mode', 'map_id'
@@ -165,85 +113,24 @@ class Player:
     """\
     A class to represent a player.
 
-    Attributes
+    Possibly confusing attributes
     -----------
     token: `str`
         The player's unique token; used to
         communicate with the osu! client.
 
-    id: `int`
-        The player's unique ID.
-
-    name: `str`
-        The player's username (unsafe).
-
     safe_name: `str`
         The player's username (safe).
         XXX: Equivalent to `cls.name.lower().replace(' ', '_')`.
 
-    priv: `Privileges`
-        The player's privileges.
-
-    stats: list[ModeData]
-        A list of `ModeData` objs representing
-        the player's stats for each gamemode.
-
-    status: `Status`
-        A `Status` obj representing the player's current status.
-
-    friends: list[`int`]
-        A list of player ids representing the player's friends.
-
-    channels: list[`Channel`]
-        A list of `Channel` objs representing the channels the user is in.
-
-    spectators: list[`Player`]
-        A list of `Player` objs representing the player's spectators.
-
-    spectating: Optional[`Player`]
-        A `Player` obj representing the player this player is spectating.
-
-    match: Optional[`Match`]
-        A `Match` obj representing the match the player is in.
-
-    location: tuple[`float`, `float`]
-        A tuple containing the latitude and longitude of the player.
-
-    country: tuple[`str`, `int`]
-        A tuple containing the country code in letter and number forms.
-
-    utc_offset: `int`
-        The player's UTC offset as an integer.
-
     pm_private: `bool`
         Whether the player is blocking pms from non-friends.
-
-    away_msg: Optional[`str`]
-        A string representing the player's away message.
 
     silence_end: `int`
         The UNIX timestamp the player's silence will end at.
 
-    in_lobby: `bool`
-        Whether the player is currently in the multiplayer lobby.
-
-    login_time: `int`
-        The UNIX timestamp of when the player logged in.
-
-    last_recv_time: `int`
-        The UNIX timestamp of the last time the client connected.
-
-    osu_ver: `datetime`
-        The osu! version the client logged in with.
-
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
-
-    recent_scores: list[Optional[`Score`]]
-        A list of recent scores, one for each gamemode.
-
-    last_np: Optional[`Beatmap`]
-        The last map /np'ed by the user, if there was one.
 
     # XXX: below is mostly custom gulag,
            or internal player class stuff.
@@ -256,26 +143,6 @@ class Player:
         A `SimpleQueue` obj representing our packet queue.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
-
-    Properties
-    -----------
-    url: `str`
-        The user's url to their profile.
-
-    embed: `str`
-        An osu! chat embed of a user's profile which displays their username.
-
-    silenced: `bool`
-        Whether the user is currently silenced.
-
-    remaining_silence: `int`
-        The remaining amount of seconds the user is silenced for.
-
-    bancho_priv: `BanchoPrivileges`
-        The user's privileges in the osu! client.
-
-    gm_stats: `ModeData`
-        The user's stats for the current gamemode.
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'priv',
@@ -308,7 +175,7 @@ class Player:
         self.spectating: Optional[Player] = None
         self.match: Optional[Match] = None
 
-        self.country = (0, 'XX') # (code , letters)
+        self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
 
         self.utc_offset = utc_offset

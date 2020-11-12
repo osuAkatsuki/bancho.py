@@ -4,8 +4,8 @@
 # if you're interested in development, my test server is
 # usually up at 51.161.34.235. just switch the ip of any
 # switcher to the one above, toggle it off and on again, and
-# you should be connected. registration is done on login,
-# so login with whatever credentials you'd like permanently.
+# you should be connected. registration is done ingame with
+# osu!'s built-in registration.
 # certificate: https://akatsuki.pw/static/ca.crt
 
 __all__ = ()
@@ -103,7 +103,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 7)
+    glob.version = Version(2, 8, 8)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()
@@ -115,7 +115,7 @@ async def run_server(addr: Address) -> None:
         pass
 
     glob.db = AsyncSQLPoolWrapper()
-    await glob.db.connect(**glob.config.mysql)
+    await glob.db.connect(glob.config.mysql)
 
     # create our bot & append it to the global player list.
     glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)

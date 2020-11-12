@@ -22,13 +22,7 @@ __all__ = (
 Slice = Union[int, slice]
 
 class ChannelList:
-    """A class to represent all chat channels on the gulag.
-
-    Attributes
-    -----------
-    channels: list[`Channel`]
-        A list of channel objects representing the current chat channels.
-    """
+    """A class to represent all chat channels on the gulag."""
     __slots__ = ('channels',)
 
     def __init__(self):
@@ -78,14 +72,7 @@ class ChannelList:
             log(f'{c} removed from channels list.')
 
 class MatchList:
-    """A class to represent all multiplayer matches on the gulag.
-
-    Attributes
-    -----------
-    matches: list[Optional[`Match`]]
-        A list of match objects representing the current mp matches.
-        The size of this attr is constant; slots will be None if not in use.
-    """
+    """A class to represent all multiplayer matches on the gulag."""
     __slots__ = ('matches',)
 
     def __init__(self):
@@ -134,13 +121,7 @@ class MatchList:
             log(f'{m} removed from matches list.')
 
 class PlayerList:
-    """A class to represent all players online on the gulag.
-
-    Attributes
-    -----------
-    players: list[`Player`]
-        A list of player objects representing the online users.
-    """
+    """A class to represent all players online on the gulag."""
     __slots__ = ('players',)
 
     def __init__(self):

@@ -13,7 +13,7 @@ __all__ = 'Channel',
 class Channel:
     """A class to represent a chat channel.
 
-    Attributes
+    Possibly confusing attributes
     -----------
     _name: `str`
         A name string of the channel.
@@ -22,38 +22,9 @@ class Channel:
         this attr when you need the channel's true name; otherwise you
         should use the `name` property described below.
 
-    topic: `str`
-        The topic string of the channel.
-
-    players: list[`Player`]
-        A list of player objects representing the players in the channel.
-        XXX: While channels store a list of player objs, players also
-             store a list of channel objs for channels they're in.
-
-    read: `Privileges`
-        The privileges required to read messages in the channel.
-
-    write: `Privileges`
-        The privileges required to write messages in the channel.
-
-    auto_join: `bool`
-        A bool representing whether the channel should automatically
-        be joined on connection to the server.
-
     instance: `bool`
-        A bool representing whether the channel is an instance.
         Instanced channels are deleted when all players have left;
         this is useful for things like multiplayer, spectator, etc.
-
-    Properties
-    -----------
-    name: `str`
-        A name string of the channel with #spec_x and #multi_x
-        replaced with the more readable '#spectator' and '#multiplayer'.
-
-    basic_info: tuple[Union[`str`, `str`, `int`]]
-        A tuple containing the channel's name
-        (clean output), topic, and playercount.
     """
     __slots__ = ('_name', 'topic', 'players',
                  'read', 'write',

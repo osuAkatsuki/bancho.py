@@ -529,25 +529,35 @@ async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # XXX: this actually comes in handy sometimes, i initially
 # wrote it completely as a joke, but i might keep it in for
 # devs.. Comes in handy when debugging to be able to run something
-# like `!ev return await glob.players.get_by_name('cmyui').status.action`
+# like `!py return await glob.players.get_by_name('cmyui').status.action`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=False)
-async def ex(p: Player, c: Messageable, msg: Sequence[str]) -> str:
+async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # create the new coroutine definition as a string
     # with the lines from our message (split by '\n').
     lines = ' '.join(msg).split(r'\n')
-    definition = '\n '.join(['async def __ex():'] + lines)
+    definition = '\n '.join(['async def __py(p, c, msg):'] + lines)
 
     try:
         # define, and run the coroutine
         exec(definition)
-        ret = await locals()['__ex']() # type: ignore
+
+        _locals = locals()
+        loop = asyncio.get_event_loop()
+
+        try:
+            task = loop.create_task(_locals['__py'](p, c, msg))
+            ret = await asyncio.wait_for(asyncio.shield(task), 5.0)
+        except asyncio.TimeoutError:
+            ret = 'Left running (took >=5 sec).'
+
+        del _locals['__py']
     except Exception as e:
         # code was invalid, return
         # the error in the osu! chat.
-        return str(e)
+        ret = f'{e.__class__}: {e}'
 
-    return ret if ret else 'Success'
+    return ret or 'Success.'
 
 """ Multiplayer commands
 # The commands below are specifically for
@@ -561,10 +571,17 @@ def mp_command(priv: Privileges, trigger: Optional[str] = None) -> Callable:
             'trigger': trigger or f'{f.__name__.removeprefix("mp_")}',
             'callback': f,
             'priv': priv,
-            'doc': f.__doc__
+            'doc': f.__doc__,
+            'public': True # all mp commands are public
         })
         return f
     return wrapper
+
+@mp_command(priv=Privileges.Normal)
+async def mp_help(p: Player, m: Match, msg: Sequence[str]) -> str:
+    return '\n'.join('!mp {trigger}: {doc}'.format(**cmd)
+                     for cmd in glob.mp_commands if cmd['doc']
+                     if p.priv & cmd['priv'])
 
 @mp_command(priv=Privileges.Normal)
 async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
@@ -828,44 +845,6 @@ async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue_state(lobby=False)
     return 'Match win condition updated.'
 
-@command(trigger='!mp', priv=Privileges.Normal, public=True)
-async def multiplayer(p: Player, c: Messageable,
-                      msg: Sequence[str]) -> str:
-    """Multiplayer match main parent command."""
-
-    # player not in a multiplayer match.
-    if not (m := p.match):
-        return 'This command can only be used from a multiplayer match.'
-
-    # used outside of a multiplayer match.
-    if not isinstance(c, Channel) or not c._name.startswith('#multi_'):
-        return
-
-    # missing privileges to use mp commands.
-    if not (p in m.refs or p.priv & Privileges.Tournament):
-        return
-
-    # no subcommand specified, send back a list.
-    if not msg:
-        return '\n'.join('!mp {trigger}: {doc}'.format(**cmd)
-                         for cmd in glob.mp_commands if cmd['doc']
-                         if p.priv & cmd['priv'])
-
-    # find a command with a matching
-    # trigger & privilege level.
-
-    for cmd in glob.mp_commands:
-        if msg[0] == cmd['trigger'] and p.priv & cmd['priv']:
-            # forward the params to the specific command.
-            # XXX: here, rather than sending the channel
-            # as the 2nd arg, we'll send the match obj.
-            # this is used much more frequently, and we've
-            # already asserted than p.match.chat == c anyways.
-            return await cmd['callback'](p, m, msg[1:])
-    else:
-        # no commands triggered.
-        return 'Invalid subcommand.'
-
 async def process_commands(p: Player, t: Messageable,
                            msg: str) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
@@ -873,12 +852,35 @@ async def process_commands(p: Player, t: Messageable,
     st = time.time_ns()
     trigger, *args = msg.strip().split(' ')
 
-    for cmd in glob.commands:
+    if trigger == '!mp':
+        # multiplayer commands
+        if not (m := p.match):
+            # player not in a match
+            return
+
+        if t is not m.chat:
+            # message not in match channel
+            return
+
+        if p not in m.refs or not p.priv & Privileges.Tournament:
+            # doesn't have privs to use !mp commands.
+            return
+
+        if not msg:
+            # no subcommand specified, send back !mp help
+            return await mp_help(p, m, ())
+
+        commands = glob.mp_commands
+        trigger, *args = args # get subcommand
+        t = m # send match for mp commands instead of chan
+    else:
+        # regular commands
+        commands = glob.commands
+
+    for cmd in commands:
         if trigger == cmd['trigger'] and p.priv & cmd['priv']:
-            # command found & we have privileges - run it.
-            if (res := await cmd['callback'](p, t, args)):
-                # returned a message for us to send back.
-                # print elapsed time in milliseconds.
+            # command found & we have privileges, run it.
+            if res := await cmd['callback'](p, t, args):
                 time_taken = (time.time_ns() - st) / 1000000
 
                 return {

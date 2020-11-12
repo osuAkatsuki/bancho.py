@@ -85,29 +85,7 @@ class ScoreFrame:
     bonus_portion: Optional[float] = None
 
 class Slot:
-    """\
-    A class to represent a single slot in an osu! multiplayer match.
-
-    Attributes
-    -----------
-    player: Optional[`Player`]
-        A player obj representing the player in the slot, if available.
-
-    status: `SlotStatus`
-        An obj representing the slot's current status.
-
-    team: `Teams`
-        An obj representing the slot's current team.
-
-    mods: `int`
-        The slot's currently selected mods.
-
-    loaded: `bool`
-        Whether the player is loaded into the current map.
-
-    skipped: `bool`
-        Whether the player has decided to skip the current map intro.
-    """
+    """A class to represent a single slot in an osu! multiplayer match."""
     __slots__ = ('player', 'status', 'team',
                  'mods', 'loaded', 'skipped')
 

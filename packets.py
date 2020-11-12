@@ -326,6 +326,7 @@ class BanchoPacketReader:
         self._buf = self._buf[size:]
         return val
 
+    # just wait for macros..
     read_i8 = partialmethod(_read_integral, size=1, signed=True)
     read_u8 = partialmethod(_read_integral, size=1, signed=False)
     read_i16 = partialmethod(_read_integral, size=2, signed=True)
@@ -474,7 +475,7 @@ def write_i32_list(l: tuple[int, ...]) -> bytearray:
     return ret
 
 def write_message(client: str, msg: str, target: str,
-                        client_id: int) -> bytearray:
+                  client_id: int) -> bytearray:
     """ Write params into bytes (osu! message). """
     return bytearray(
         write_string(client) +
@@ -484,7 +485,7 @@ def write_message(client: str, msg: str, target: str,
     )
 
 def write_channel(name: str, topic: str,
-                        count: int) -> bytearray:
+                  count: int) -> bytearray:
     """ Write params into bytes (osu! channel). """
     return bytearray(
         write_string(name) +
@@ -995,7 +996,9 @@ def versionUpdateForced() -> bytes:
     return write(Packets.CHO_VERSION_UPDATE_FORCED)
 
 # packet id: 103
-def switchServer(t: int) -> bytes: # (idletime < t || match != null)
+def switchServer(t: int) -> bytes:
+    # increment endpoint index if
+    # idletime >= t && match == null
     return write(
         Packets.CHO_SWITCH_SERVER,
         (t, osuTypes.i32)

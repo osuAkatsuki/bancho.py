@@ -34,6 +34,7 @@ class RankedStatus(IntEnum):
 
     @property
     def osu_api(self):
+        """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
         return {
             self.Pending: 0,
@@ -45,6 +46,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     def from_osuapi(cls, osuapi_status: int):
+        """Convert from osu!api status."""
         return cls(
             defaultdict(lambda: cls.UpdateAvailable, {
                 -2: cls.Pending, # graveyard
@@ -59,6 +61,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     def from_osudirect(cls, osudirect_status: int):
+        """Convert from osu!direct status."""
         return cls(
             defaultdict(lambda: cls.UpdateAvailable, {
                 0: cls.Ranked,
@@ -73,6 +76,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     def from_str(cls, status_str: str):
+        """Convert from string value."""
         return cls( # could perhaps have `'unranked': cls.Pending`?
             defaultdict(lambda: cls.UpdateAvailable, {
                 'pending': cls.Pending,
@@ -104,67 +108,12 @@ class RankedStatus(IntEnum):
 class Beatmap:
     """A class representing an osu! beatmap.
 
-    Attributes
+    Possibly confusing ttributes
     -----------
-    md5: `str`
-        The MD5 hash of the map's .osu file.
-
-    id: `int`
-        The unique id of the beatmap.
-
-    set_id: `int`
-        The unique id of the beatmap set.
-
-    artist: `str`
-        The song's artist.
-
-    title: `str`
-        The song's title.
-
-    version: `str`
-        The difficulty name of the beatmap.
-
-    creator: `str`
-        The beatmap's creator.
-
-    last_update: `datetime`
-        The datetime of the beatmap's last update.
-        Used for making sure we always have the newest version.
-
-    status: `RankedStatus`
-        The ranked status of the beatmap.
-
     frozen: `bool`
         Whether the beatmap's status is to be kept when a newer
         version is found in the osu!api.
         # XXX: This is set when a map's status is manually changed.
-
-    plays: `int`
-        The amount of plays on the map.
-
-    passes: `int`
-        The amount of passes on the map.
-
-    mode: `GameMode`
-        The primary gamemode of the map.
-
-    bpm: `float`
-        The BPM of the map.
-
-    cs: `float`
-        The circle size of the beatmap.
-
-    od: `float`
-        The overall difficulty of the beatmap.
-
-    ar: `float`
-        The approach rate of the beatmap.
-
-    hp: `float`
-        The health drain of the beatmap.
-
-    diff: `float`
-        A float representing the star rating for the map's primary gamemode.
 
     pp_cache: dict[`Mods`, list[`float`]]
         Cached pp values to serve when a map is /np'ed.
@@ -184,7 +133,7 @@ class Beatmap:
 
         self.artist = kwargs.pop('artist', '')
         self.title = kwargs.pop('title', '')
-        self.version = kwargs.pop('version', '')
+        self.version = kwargs.pop('version', '') # diff name
         self.creator = kwargs.pop('creator', '')
 
         self.last_update = kwargs.pop('last_update', datetime(1970, 1, 1))
