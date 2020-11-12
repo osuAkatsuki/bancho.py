@@ -476,7 +476,7 @@ class Player:
 
         else:
             # we may have been host, if so, find another.
-            if self == self.match.host:
+            if self is self.match.host:
                 for s in self.match.slots:
                     if s.status & SlotStatus.has_player:
                         self.match.host = s.player

@@ -114,7 +114,7 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 @command(trigger='!with', priv=Privileges.Normal, public=False)
 async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
-    if isinstance(c, Channel) or c.id != 1:
+    if c is not glob.bot:
         return 'This command can only be used in DM with Aika.'
 
     if not p.last_np:
@@ -202,7 +202,7 @@ async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
         for cached in glob.cache['beatmap'].values():
             # not going to bother checking timeout
-            if cached['map'].set_id == p.last_np.set_id:
+            if cached['map'] is p.last_np:
                 cached['map'].status = RankedStatus(new_status)
 
     else:
@@ -215,7 +215,7 @@ async def _map(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
         for cached in glob.cache['beatmap'].values():
             # not going to bother checking timeout
-            if cached['map'].id == p.last_np.id:
+            if cached['map'] is p.last_np:
                 cached['map'].status = RankedStatus(new_status)
                 break
 
@@ -670,7 +670,7 @@ async def mp_mods(p: Player, m: Match, msg: Sequence[str]) -> str:
     mods = Mods.from_str(msg[0])
 
     if m.freemods:
-        if p.id == m.host.id:
+        if p is m.host:
             # allow host to set speed-changing mods.
             m.mods = mods & Mods.SPEED_CHANGING
 
@@ -720,7 +720,7 @@ async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_by_name(' '.join(msg))):
         return 'Could not find a user by that name.'
 
-    if m.host == t:
+    if t is m.host:
         return "They're already host, silly!"
 
     if t not in m:
@@ -746,7 +746,7 @@ async def mp_invite(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_by_name(msg[0])):
         return 'Could not find a user by that name.'
 
-    if p == t:
+    if p is t:
         return "You can't invite yourself!"
 
     t.enqueue(packets.matchInvite(p, t.name))
@@ -782,7 +782,7 @@ async def mp_rmref(p: Player, m: Match, msg: Sequence[str]) -> str:
     if t not in m.refs:
         return f'{t} is not a match referee!'
 
-    if t == m.host:
+    if t is m.host:
         return 'The host is always a referee!'
 
     m._refs.remove(t)

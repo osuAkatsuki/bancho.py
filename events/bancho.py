@@ -309,16 +309,15 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     p = Player(**p_row)
 
-    data = bytearray(
-        packets.userID(p.id) +
-        packets.protocolVersion(19) +
-        packets.banchoPrivileges(p.bancho_priv) +
-        packets.notification('Welcome back to the gulag!\n'
-                            f'Current build: {glob.version}') +
+    data = bytearray(packets.userID(p.id))
+    data += packets.protocolVersion(19)
+    data += packets.banchoPrivileges(p.bancho_priv)
+    data += packets.notification('Welcome back to the gulag!\n'
+                                f'Current build: {glob.version}')
 
-        # tells osu! to load channels from config, i believe?
-        packets.channelInfoEnd()
-    )
+    # tells osu! to load channels from config, i believe?
+    data += packets.channelInfoEnd()
+
 
     # channels
     for c in glob.channels:
@@ -497,8 +496,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             # send away message if target is afk and has one set.
             await p.send(p.name, t.away_msg)
 
-        if t.id == 1:
-            # target is the bot, check if message is a command.
+        if t is glob.bot:
+            # may have a command in the message.
             cmd = msg.startswith(glob.config.command_prefix) \
             and await commands.process_commands(p, t, msg)
 
@@ -787,7 +786,7 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
             return
 
         if m.freemods:
-            if p.id == m.host.id:
+            if p is m.host:
                 # allow host to set speed-changing mods.
                 m.mods = self.mods & Mods.SPEED_CHANGING
 
@@ -942,7 +941,7 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
             return
 
         for s in m.slots:
-            if p == s.player:
+            if p is s.player:
                 s.team = Teams.blue if s.team != Teams.blue else Teams.red
                 break
         else:
@@ -1045,7 +1044,7 @@ class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUES
         # i'm supposed to filter the users presences to send back with the
         # player's presence filter; i can add it in the future perhaps.
         for t in glob.players:
-            if p != t:
+            if p is not t:
                 p.enqueue(packets.userPresence(t))
 
 @register

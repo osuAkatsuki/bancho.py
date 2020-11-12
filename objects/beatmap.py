@@ -184,6 +184,11 @@ class Beatmap:
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
 
+        # O(n) cache hmmm
+        for cached in glob.cache['beatmap'].values():
+            if bid == cached['map'].id:
+                return cached['map']
+
         # try to get from sql.
         if (m := await cls.from_bid_sql(bid)):
             # add the map to our cache.
@@ -266,10 +271,9 @@ class Beatmap:
 
         return cls(**res, md5=md5)
 
-    @classmethod
-    async def from_md5_osuapi(cls, md5: str,
-                              set_id: Optional[int] = None):
-        if set_id:
+    @classmethod # TODO: rewrite this garabge
+    async def from_md5_osuapi(cls, md5: str, set_id: int = -1):
+        if set_id != -1:
             # cache the whole set's data.
             url = 'https://old.ppy.sh/api/get_beatmaps'
             params = {'k': glob.config.osu_api_key, 's': set_id}

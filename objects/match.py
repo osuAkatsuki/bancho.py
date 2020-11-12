@@ -206,13 +206,13 @@ class Match:
     def get_slot(self, p: 'Player') -> Optional[Slot]:
         # get the slot containing a given player.
         for s in self.slots:
-            if p == s.player:
+            if p is s.player:
                 return s
 
     def get_slot_id(self, p: 'Player') -> Optional[int]:
         # get the slot index containing a given player.
         for idx, s in enumerate(self.slots):
-            if p == s.player:
+            if p is s.player:
                 return idx
 
     def get_free(self) -> Optional[Slot]:
@@ -224,7 +224,7 @@ class Match:
     def get_host_slot(self) -> Optional[Slot]:
         for s in self.slots:
             if s.status & SlotStatus.has_player \
-            and s.player.id == self.host.id:
+            and s.player is self.host:
                 return s
 
         return

@@ -38,7 +38,7 @@ def register(uri: str) -> Callable:
 async def getOnline(conn: AsyncConnection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
-    return f'Current: {{"online":{len(glob.players)-1}}}'.encode()
+    return f'{{"online":{len(glob.players)-1}}}'.encode()
 
 @register('get_user')
 async def getUser(conn: AsyncConnection) -> Optional[bytes]:

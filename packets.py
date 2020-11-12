@@ -292,41 +292,12 @@ class BanchoPacketReader:
 
     """ simple types """
 
-    async def read_uleb128(self) -> int:
-        val = shift = 0
-
-        while True:
-            b = self._buf[0]
-            self._buf = self._buf[1:]
-
-            val |= ((b & 0b01111111) << shift)
-            if (b & 0b10000000) == 0:
-                break
-
-            shift += 7
-
-        return val
-
-    async def read_string(self) -> str:
-        exists = self._buf[0] == 0x0b
-        self._buf = self._buf[1:]
-
-        if not exists:
-            # no string sent.
-            return ''
-
-        # non-empty string
-        uleb = await self.read_uleb128()
-        val = self._buf[:uleb].tobytes().decode() # copy
-        self._buf = self._buf[uleb:]
-        return val
-
     async def _read_integral(self, size: int, signed: bool) -> int:
         val = int.from_bytes(self._buf[:size], 'little', signed=signed)
         self._buf = self._buf[size:]
         return val
 
-    # just wait for macros..
+    # zero overhead coming with macros? perhaps
     read_i8 = partialmethod(_read_integral, size=1, signed=True)
     read_u8 = partialmethod(_read_integral, size=1, signed=False)
     read_i16 = partialmethod(_read_integral, size=2, signed=True)
@@ -357,6 +328,35 @@ class BanchoPacketReader:
     # XXX: some osu! packets use i16 for array length, some others use i32
     read_i32_list_i16l = partialmethod(_read_i32_list, len_size=2)
     read_i32_list_i32l = partialmethod(_read_i32_list, len_size=4)
+
+    async def read_uleb128(self) -> int:
+        val = shift = 0
+
+        while True:
+            b = self._buf[0]
+            self._buf = self._buf[1:]
+
+            val |= ((b & 0b01111111) << shift)
+            if (b & 0b10000000) == 0:
+                break
+
+            shift += 7
+
+        return val
+
+    async def read_string(self) -> str:
+        exists = self._buf[0] == 0x0b
+        self._buf = self._buf[1:]
+
+        if not exists:
+            # no string sent.
+            return ''
+
+        # non-empty string
+        length = await self.read_uleb128()
+        val = self._buf[:length].tobytes().decode() # copy
+        self._buf = self._buf[length:]
+        return val
 
     """ advanced types """
 
@@ -454,16 +454,15 @@ def write_uleb128(num: int) -> bytearray:
 
 def write_string(s: str) -> bytearray:
     """ Write `s` into bytes (ULEB128 & string). """
-    encoded_str = s.encode()
-
-    if (length := len(encoded_str)) > 0:
-        # non-empty string
-        data = b'\x0b' + write_uleb128(length) + encoded_str
+    if s:
+        encoded = s.encode()
+        ret = bytearray(b'\x0b')
+        ret += write_uleb128(len(encoded))
+        ret += encoded
     else:
-        # empty string
-        data = b'\x00'
+        ret = bytearray(b'\x00')
 
-    return bytearray(data)
+    return ret
 
 def write_i32_list(l: tuple[int, ...]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
@@ -477,21 +476,19 @@ def write_i32_list(l: tuple[int, ...]) -> bytearray:
 def write_message(client: str, msg: str, target: str,
                   client_id: int) -> bytearray:
     """ Write params into bytes (osu! message). """
-    return bytearray(
-        write_string(client) +
-        write_string(msg) +
-        write_string(target) +
-        client_id.to_bytes(4, 'little', signed=True)
-    )
+    ret = bytearray(write_string(client))
+    ret += write_string(msg)
+    ret += write_string(target)
+    ret += client_id.to_bytes(4, 'little', signed=True)
+    return ret
 
 def write_channel(name: str, topic: str,
                   count: int) -> bytearray:
     """ Write params into bytes (osu! channel). """
-    return bytearray(
-        write_string(name) +
-        write_string(topic) +
-        count.to_bytes(2, 'little')
-    )
+    ret = bytearray(write_string(name))
+    ret += write_string(topic)
+    ret += count.to_bytes(2, 'little')
+    return ret
 
 # XXX: deprecated
 # def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
@@ -516,10 +513,9 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     else:
         passwd = b'\x00'
 
-    ret = bytearray(
-        struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods) +
-        write_string(m.name) + passwd
-    )
+    ret = bytearray(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
+    ret += write_string(m.name)
+    ret += passwd
 
     ret += write_string(m.map_name)
     ret += m.map_id.to_bytes(4, 'little', signed=True)
@@ -639,7 +635,7 @@ def userStats(p: Player) -> bytes:
         (p.gm_stats.tscore, osuTypes.i64),
         (p.gm_stats.rank, osuTypes.i32),
         (p.gm_stats.pp, osuTypes.i16)
-    ) if p.id != 1 else ( # default for bot
+    ) if p is not glob.bot else (
         b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
         b'\x00\x08\x0b\x0eout new code..\x00\x00'
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -909,7 +905,7 @@ def userPresence(p: Player) -> bytes:
         (p.location[0], osuTypes.f32), # long
         (p.location[1], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
-    ) if p.id != 1 else ( # default for bot
+    ) if p is not glob.bot else ( # default for bot
         b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00'
         b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00'
         b'\x000B\x00\x00\x00\x00'

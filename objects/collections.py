@@ -88,7 +88,7 @@ class MatchList:
         return m in self.matches
 
     def get_free(self) -> Optional[int]:
-        # return first free match slot.
+        """Return the first free slot id from `self`."""
         for idx, m in enumerate(self.matches):
             if not m:
                 return idx
@@ -112,8 +112,8 @@ class MatchList:
 
     async def remove(self, m: Match) -> None:
         """Attempt to remove `m` from the list."""
-        for idx, i in enumerate(self.matches):
-            if m == i:
+        for idx, _m in enumerate(self.matches):
+            if m is _m:
                 self.matches[idx] = None
                 break
 
@@ -160,10 +160,10 @@ class PlayerList:
                 return p
 
     async def get_by_name(self, name: str, sql: bool = False) -> Player:
-        name_safe = Player.make_safe(name)
+        safe_name = Player.make_safe(name)
 
         for p in self.players:
-            if p.safe_name == name_safe:
+            if p.safe_name == safe_name:
                 return p
 
         if not sql:
@@ -175,7 +175,7 @@ class PlayerList:
         res = await glob.db.fetch(
             'SELECT id, priv, silence_end '
             'FROM users WHERE name_safe = %s',
-            [name_safe]
+            [safe_name]
         )
 
         return Player(**res, name=name) if res else None
