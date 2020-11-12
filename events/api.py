@@ -56,7 +56,7 @@ async def getUser(conn: AsyncConnection) -> Optional[bytes]:
 
         pid = conn.args['id']
     else:
-        if 2 <= len(name := unquote(conn.args['name'])) < 16:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
             return b'Invalid player name.'
 
         # get their id from username.
@@ -94,7 +94,7 @@ async def getScores(conn: AsyncConnection) -> Optional[bytes]:
 
         pid = conn.args['id']
     else:
-        if 2 <= len(name := unquote(conn.args['name'])) < 16:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
             return b'Invalid player name.'
 
         # get their id from username.
