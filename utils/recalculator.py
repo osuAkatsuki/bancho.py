@@ -10,8 +10,6 @@ from cmyui import log, Ansi
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 
-from maniera.calculator import Maniera
-
 __all__ = 'PPCalculator',
 
 class PPCalculator:
@@ -23,7 +21,6 @@ class PPCalculator:
         self.file = f'.data/osu/{map_id}.osu'
 
         self.mods = kwargs.get('mods', Mods.NOMOD)
-        self.score = kwargs.get('score', 0)
         self.combo = kwargs.get('combo', 0)
         self.nmiss = kwargs.get('nmiss', 0)
         self.mode = kwargs.get('mode', GameMode.vn_std)
@@ -69,57 +66,47 @@ class PPCalculator:
 
     async def perform(self) -> tuple[float, float]:
         """Perform the calculations with the current state, returning (pp, sr)."""
+        # TODO: PLEASE rewrite this with c bindings,
+        # add ways to get specific stuff like aim pp
 
-        # std and taiko.
-        if self.mode.as_vanilla in (0, 1):
-            # TODO: PLEASE rewrite this with c bindings,
-            # add ways to get specific stuff like aim pp
+        # for now, we'll generate a bash command and
+        # use subprocess to do the calculations (yikes).
+        cmd = [f'./oppai-ng/oppai {self.file}']
 
-            # for now, we'll generate a bash command and
-            # use subprocess to do the calculations (yikes).
-            cmd = [f'./oppai-ng/oppai {self.file}']
+        if self.mods:  cmd.append(repr(self.mods))
+        if self.combo: cmd.append(f'{self.combo}x')
+        if self.nmiss: cmd.append(f'{self.nmiss}xM')
+        if self.acc:   cmd.append(f'{self.acc:.4f}%')
 
-            if self.mods:  cmd.append(repr(self.mods))
-            if self.combo: cmd.append(f'{self.combo}x')
-            if self.nmiss: cmd.append(f'{self.nmiss}xM')
-            if self.acc:   cmd.append(f'{self.acc:.4f}%')
+        if self.mode:
+            mode_vn = self.mode.as_vanilla
 
-            if self.mode:
-                mode_vn = self.mode.as_vanilla
+            if mode_vn not in (0, 1):
+                # oppai-ng only supports std & taiko
+                # TODO: osu!catch & mania support
+                return
 
-                cmd.append(f'-m{mode_vn}')
-                if mode_vn == GameMode.vn_taiko:
-                    cmd.append('-otaiko')
+            cmd.append(f'-m{mode_vn}')
+            if mode_vn == GameMode.vn_taiko:
+                cmd.append('-otaiko')
 
-            # XXX: could probably use binary to save a bit
-            # of time.. but in reality i should just write
-            # some bindings lmao this is so cursed overall
-            cmd.append('-ojson')
+        # XXX: could probably use binary to save a bit
+        # of time.. but in reality i should just write
+        # some bindings lmao this is so cursed overall
+        cmd.append('-ojson')
 
-            # join & run the command
-            pipe = asyncio.subprocess.PIPE
+        # join & run the command
+        pipe = asyncio.subprocess.PIPE
 
-            proc = await asyncio.create_subprocess_shell(
-                ' '.join(cmd), stdout=pipe, stderr=pipe
-            )
+        proc = await asyncio.create_subprocess_shell(
+            ' '.join(cmd), stdout=pipe, stderr=pipe
+        )
 
-            stdout, _ = await proc.communicate() # stderr not needed
-            output = orjson.loads(stdout.decode())
+        stdout, _ = await proc.communicate() # stderr not needed
+        output = orjson.loads(stdout.decode())
 
-            if 'code' not in output or output['code'] != 200:
-                log(f"oppai-ng: {output['errstr']}", Ansi.LRED)
+        if 'code' not in output or output['code'] != 200:
+            log(f"oppai-ng: {output['errstr']}", Ansi.LRED)
 
-            await proc.wait() # wait for exit
-            return output['pp'], output['stars']
-        
-        # mania.
-        elif self.mode.as_vanilla == 3:
-            # You can see what calculations are done here:
-            # https://github.com/NiceAesth/maniera/blob/master/maniera/calculator.py
-            calc = Maniera(self.file, self.mods, self.score)
-            await asyncio.get_event_loop().run_in_executor(None, calc.calculate)
-            return calc.pp, calc.sr
-
-        # TODO: osu!catch support
-        else:
-            return
+        await proc.wait() # wait for exit
+        return output['pp'], output['stars']
