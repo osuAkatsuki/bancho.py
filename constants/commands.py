@@ -866,9 +866,9 @@ async def process_commands(p: Player, t: Messageable,
             # doesn't have privs to use !mp commands.
             return
 
-        if not msg:
+        if not args:
             # no subcommand specified, send back !mp help
-            return await mp_help(p, m, ())
+            args = ['help']
 
         commands = glob.mp_commands
         trigger, *args = args # get subcommand
