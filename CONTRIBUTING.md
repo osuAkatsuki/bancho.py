@@ -30,7 +30,6 @@ This project and everyone participating in it must follow the [gulag Code of Con
 This section guides you through submitting a bug report for gulag. Following these guidelines help maintainers and the community understand your report :pencil:, reproduce the bug :computer:, and find related reports :mag_right:.
 
 Before creating bug reports, please perform a [cursory search](https://github.com/search?l=&p=2&q=is%3Aissue+repo%3Acmyui%2Fgulag) to see if the problem has already been reported. If it has **and the issue is still open**, add a comment to the existing issue instead of creating a new one. When creating a bug report please [use as many details as possible](#how-do-i-submit-a-good-bug-report).
-You may find out you don't even need to create one!
 
 > **NOTE:** If you find a **Closed** issue that seems like it is the same thing that you're experiencing, open a new issue and include a link to the original issue in the body of your new one.
 
@@ -126,7 +125,7 @@ Explain the idea and include additional details to help maintainers understand y
 
 ### Your First Contribution
 
-Unsure of where to begin contributing to gulag? You can start by looking through the [good first issue](good-first-issue) issues. These issues usually only require a few lines of code, and a test or two.
+Unsure of where to begin contributing to gulag? You can start by looking through the [good first issue](https://github.com/cmyui/gulag/labels/good%20first%20issue) issues. These issues usually only require a few lines of code, and a test or two.
 
 ### Pull Requests
 
