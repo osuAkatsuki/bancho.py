@@ -8,3 +8,4 @@ aiofiles
 uvloop
 mysql-connector-python
 asyncpg
+maniera
