@@ -327,15 +327,23 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        if self.mode.as_vanilla not in (0, 1):
-            # currently only std and taiko are supported,
-            # since we are simply using oppai-ng alone.
-            return (0.0, 0.0)
+        # std and taiko.
+        if self.mode.as_vanilla in (0, 1):
+            ppcalc = await PPCalculator.from_id(
+                self.bmap.id, mods=self.mods, combo=self.max_combo,
+                nmiss=self.nmiss, mode=self.mode, acc=self.acc
+            )
 
-        ppcalc = await PPCalculator.from_id(
-            self.bmap.id, mods=self.mods, combo=self.max_combo,
-            nmiss=self.nmiss, mode=self.mode, acc=self.acc
-        )
+        # mania.
+        elif self.mode.as_vanilla == 3:
+            ppcalc = await PPCalculator.from_id(
+                self.bmap.id, mods=self.mods, score=self.score, 
+                mode=self.mode
+            )
+        
+        # TODO: catch support.
+        else:
+            return (0.0, 0.0)
 
         if not ppcalc:
             return (0.0, 0.0)
