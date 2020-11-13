@@ -212,7 +212,7 @@ class Player:
     @property
     def url(self) -> str:
         """The url to the player's profile."""
-        return f'https://akatsuki.pw/u/{self.id}'
+        return f'https://{glob.config.domain}/u/{self.id}'
 
     @property
     def embed(self) -> str:

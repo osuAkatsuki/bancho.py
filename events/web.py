@@ -746,7 +746,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # append beatmap ranking chart (#2)
         charts.append('|'.join((
             'chartId:beatmap',
-            f'chartUrl:https://akatsuki.pw/b/{s.bmap.id}',
+            f'chartUrl:https://{glob.config.domain}/b/{s.bmap.id}',
             'chartName:Beatmap Ranking',
 
             *((
@@ -771,7 +771,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
         # append overall ranking chart (#3)
         charts.append('|'.join((
             'chartId:overall',
-            f'chartUrl:https://akatsuki.pw/u/{s.player.id}',
+            f'chartUrl:https://{glob.config.domain}/u/{s.player.id}',
             'chartName:Overall Ranking',
 
             # TODO: achievements
