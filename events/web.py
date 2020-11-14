@@ -192,7 +192,7 @@ async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetFriends(p: Player, conn: AsyncConnection) -> Optional[bytes]:
-    return '\n'.join(str(i) for i in p.friends).encode()
+    return '\n'.join(map(str, p.friends)).encode()
 
 @register('osu-getbeatmapinfo.php')
 @required_args({'u', 'h'})

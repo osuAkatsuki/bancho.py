@@ -128,7 +128,7 @@ class Mods(IntFlag):
 
         mods = cls.NOMOD
 
-        for m in (s[i:i+2].upper() for i in range(0, len(s), 2)):
+        for m in map(lambda i: s[i:i+2].upper(), range(0, len(s), 2)):
             if m not in mod_dict:
                 continue
 

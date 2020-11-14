@@ -46,10 +46,8 @@ async def handle_conn(conn: AsyncConnection) -> None:
         subdomain = domain.removesuffix('.ppy.sh')
 
         if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
-            # connection to `c[e4-6]?.ppy.sh/*`
             handler = handle_bancho
         elif subdomain == 'osu':
-            # connection to `osu.ppy.sh/*`
             if conn.path.startswith('/web/'):
                 handler = handle_web
             elif conn.path.startswith('/ss/'):
@@ -103,7 +101,7 @@ async def disconnect_inactive() -> None:
         await asyncio.sleep(30)
 
 async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 9)
+    glob.version = Version(2, 8, 10)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     loop = asyncio.get_event_loop()

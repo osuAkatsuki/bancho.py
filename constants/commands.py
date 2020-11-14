@@ -90,6 +90,11 @@ async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     return (f'[{s.mode!r}] {s.bmap.embed} {s.mods!r} {s.acc:.2f}% | '
             f'{s.pp:.2f}pp #{s.rank}')
 
+_mapsearch_fmt = (
+    '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '
+    '([{mirror}/d/{set_id} download])'
+)
+_mapsearch_func = lambda row: _mapsearch_fmt.format(**row, mirror=glob.config.mirror)
 @command(priv=Privileges.Normal, public=False)
 async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Search map titles with user input as a wildcard."""
@@ -98,17 +103,11 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     if not (res := await glob.db.fetchall(
         'SELECT id, set_id, artist, title, version '
-        'FROM maps WHERE title LIKE %s LIMIT 50',
+        'FROM maps WHERE title LIKE %s LIMIT 25',
         [f'%{" ".join(msg)}%']
     )): return 'No matches found :('
 
-    mirror = glob.config.mirror
-
-    return '\n'.join(
-        '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '
-        '([{mirror}/d/{set_id} download])'.format(**row, mirror=mirror)
-        for row in res
-    ) + f'\nMaps: {len(res)}'
+    return '\n'.join(map(_mapsearch_func, res)) + f'\nMaps: {len(res)}'
 
 # TODO: refactor with acc and more stuff
 @command(trigger='!with', priv=Privileges.Normal, public=False)
@@ -246,10 +245,7 @@ async def notes(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         [t.id, days * 86400]
     )
 
-    return '\n'.join(
-        '[{time}] {msg}'.format(**row)
-        for row in res
-    )
+    return '\n'.join(map(lambda row: '[{time}] {msg}'.format(**row), res))
 
 @command(priv=Privileges.Mod, public=False)
 async def addnote(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -484,7 +480,7 @@ async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
 str_to_priv = lambda p: defaultdict(lambda: None, {
     'normal': Privileges.Normal,
-    'verified': Privileges.Verfied,
+    'verified': Privileges.Verified,
     'whitelisted': Privileges.Whitelisted,
     'supporter': Privileges.Supporter,
     'premium': Privileges.Premium,
@@ -502,17 +498,21 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     # a mess that gets each unique privilege out of msg.
     # TODO: rewrite to be at least a bit more readable..
-    priv = [str_to_priv(i) for i in set(''.join(msg[1:]).replace(' ', '').lower().split('|'))]
+    priv = map(str_to_priv, set(''.join(msg[1:]).replace(' ', '').lower().split('|')))
+
     if any(x is None for x in priv):
         return 'Invalid privileges.'
 
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return 'Could not find user.'
 
-    await glob.db.execute('UPDATE users SET priv = %s WHERE id = %s',
-                    [newpriv := sum(priv), t.id])
+    new_priv = sum(priv)
+    await glob.db.execute(
+        'UPDATE users SET priv = %s WHERE id = %s',
+        [new_priv, t.id]
+    )
 
-    t.priv = Privileges(newpriv)
+    t.priv = Privileges(new_priv)
     return 'Success.'
 
 # temp command, to illustrate how menu options will work
@@ -791,7 +791,7 @@ async def mp_rmref(p: Player, m: Match, msg: Sequence[str]) -> str:
 @mp_command(priv=Privileges.Normal)
 async def mp_listref(p: Player, m: Match, msg: Sequence[str]) -> str:
     """List all referees from `m`."""
-    return ', '.join(str(i) for i in m.refs) + '.'
+    return ', '.join(map(str, m.refs)) + '.'
 
 @mp_command(priv=Privileges.Normal)
 async def mp_lock(p: Player, m: Match, msg: Sequence[str]) -> str:
@@ -867,7 +867,8 @@ async def process_commands(p: Player, t: Messageable,
             return
 
         if not args:
-            # no subcommand specified, send back !mp help
+            # no subcommand specified,
+            # send back !mp help
             args = ['help']
 
         commands = glob.mp_commands

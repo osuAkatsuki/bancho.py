@@ -269,12 +269,12 @@ class Score:
         # perhaps will use to improve security at some point?
 
         # ensure all ints are safe to cast.
-        if not all(i.isdecimal() for i in data[3:11] + [data[13], data[15]]):
+        if not all(map(lambda x: x.isdecimal(), data[3:11] + [data[13], data[15]])):
             log('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
 
         (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,
-         s.score, s.max_combo) = (int(i) for i in data[3:11])
+         s.score, s.max_combo) = map(int, data[3:11])
 
         s.perfect = data[11] == '1'
         _grade = data[12] # letter grade
