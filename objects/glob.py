@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, TYPE_CHECKING
-from objects.collections import PlayerList, ChannelList, MatchList
+from typing import TYPE_CHECKING
+from objects.collections import *
 
 import config # imported for indirect use
 
 if TYPE_CHECKING:
     from aiohttp.client import ClientSession
-    from cmyui import AsyncSQLPoolWrapper, Version, AsyncTCPServer
+    from cmyui import AsyncSQLPoolWrapper, Version
     from objects.player import Player
 
 __all__ = ('players', 'channels',
@@ -19,7 +19,6 @@ matches = MatchList()
 db: 'AsyncSQLPoolWrapper'
 http: 'ClientSession'
 version: 'Version'
-serv: 'AsyncTCPServer'
 bot: 'Player'
 
 # gulag's main cache.

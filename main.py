@@ -11,108 +11,24 @@
 __all__ = ()
 
 import asyncio
-import importlib
-import aiohttp
-import signal
-import orjson # faster & more accurate than stdlib json
-import time
-import sys
+import cmyui
 import os
-from cmyui import (Version, Address, Ansi, AnsiRGB, log,
-                   AsyncConnection, AsyncTCPServer,
-                   AsyncSQLPoolWrapper)
 
-from handlers import *
+import aiohttp
+import orjson # go zoom
+import time
 
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from constants.privileges import Privileges
 
-async def handle_conn(conn: AsyncConnection) -> None:
-    if 'Host' not in conn.headers:
-        await conn.send(400, b'Missing required headers.')
-        return
-
-    st = time.time_ns()
-    handler = None
-
-    domain = conn.headers['Host']
-
-    # match the host & uri to the correct handlers.
-
-    if domain.endswith('.ppy.sh'):
-        # osu! handlers
-        subdomain = domain.removesuffix('.ppy.sh')
-
-        if subdomain in ('c', 'ce', 'c4', 'c5', 'c6'):
-            handler = handle_bancho
-        elif subdomain == 'osu':
-            if conn.path.startswith('/web/'):
-                handler = handle_web
-            elif conn.path.startswith('/ss/'):
-                handler = handle_ss
-            elif conn.path.startswith('/d/'):
-                handler = handle_dl
-            elif conn.path.startswith('/api/'):
-                handler = handle_api
-            elif conn.path == '/users':
-                handler = handle_registration
-        elif subdomain == 'a':
-            handler = handle_avatar
-
-    else:
-        # non osu!-related handler
-        if domain.endswith(glob.config.domain):
-            if conn.path.startswith('/api/'):
-                handler = handle_api # gulag!api
-            else:
-                # frontend handler?
-                ...
-        else:
-            # nginx sending something that we're not handling?
-            ...
-
-    if handler:
-        # we have a handler for this request.
-        await handler(conn)
-    else:
-        # we have no such handler.
-        log(f'Unhandled {conn.path}.', Ansi.LRED)
-        await conn.send(400, b'Request handler not implemented.')
-
-    if glob.config.debug:
-        time_taken = (time.time_ns() - st) / 1000 # nanos -> micros
-        time_str = (f'{time_taken:.2f}μs' if time_taken < 1000
-               else f'{time_taken / 1000:.2f}ms')
-
-        log(f'Request handled in {time_str}.', Ansi.LCYAN)
-
-PING_TIMEOUT = 300000 // 10
-async def disconnect_inactive() -> None:
-    while True:
-        ctime = time.time()
-
-        for p in glob.players:
-            if ctime - p.last_recv_time > PING_TIMEOUT:
-                await p.logout()
-
-        # run this indefinitely
-        await asyncio.sleep(30)
-
-async def run_server(addr: Address) -> None:
-    glob.version = Version(2, 8, 10)
+async def on_start() -> None:
+    glob.version = cmyui.Version(2, 9, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
-    loop = asyncio.get_event_loop()
-
-    try:
-        loop.add_signal_handler(signal.SIGINT, loop.stop)
-        loop.add_signal_handler(signal.SIGTERM, loop.stop)
-    except NotImplementedError:
-        pass
-
-    glob.db = AsyncSQLPoolWrapper()
+    # connect to mysql
+    glob.db = cmyui.AsyncSQLPool()
     await glob.db.connect(glob.config.mysql)
 
     # create our bot & append it to the global player list.
@@ -125,14 +41,23 @@ async def run_server(addr: Address) -> None:
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
 
-    # run background process to
-    # disconnect inactive clients.
-    loop.create_task(disconnect_inactive())
+PING_TIMEOUT = 300000 // 10
+async def disconnect_inactive() -> None:
+    """Actively disconnect users above the
+       disconnection time threshold on the osu! server."""
+    while True:
+        ctime = time.time()
 
-    async with AsyncTCPServer(addr) as glob.serv:
-        log(f'Gulag v{glob.version} online!', AnsiRGB(0x00ff7f))
-        async for conn in glob.serv.listen(glob.config.max_conns):
-            loop.create_task(handle_conn(conn))
+        for p in glob.players:
+            if ctime - p.last_recv_time > PING_TIMEOUT:
+                await p.logout()
+
+        # run this indefinitely
+        await asyncio.sleep(30)
+
+from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
+from domains.osu import domain as osu_domain # osu.ppy.sh
+from domains.ava import domain as ava_domain # a.ppy.sh
 
 if __name__ == '__main__':
     # set cwd to /gulag.
@@ -147,12 +72,9 @@ if __name__ == '__main__':
         if not os.path.isdir(f'.data/{p}'):
             os.mkdir(f'.data/{p}')
 
-    # use uvloop if available (faster event loop).
-    if spec := importlib.util.find_spec('uvloop'):
-        uvloop = importlib.util.module_from_spec(spec)
-        sys.modules['uvloop'] = uvloop
-        spec.loader.exec_module(uvloop)
+    app = cmyui.Server(name='gulag', gzip=4, verbose=True)
 
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    app.add_domains({cho_domain, osu_domain, ava_domain})
+    app.add_tasks({on_start(), disconnect_inactive()})
 
-    asyncio.run(run_server(glob.config.server_addr))
+    app.run('/tmp/gulag.sock') # blocking call

@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any
+# NOTE: at some point, parts (or all) of this may
+# be rewritten in cython (or c++ ported with cython)?
+# i'm not sure how well it works with an async setup
+# like this, but we'll see B) massive speed gains tho
+
+from typing import TYPE_CHECKING, Any
 from enum import IntEnum, unique
 from typing import Optional
 from functools import partialmethod, cache, lru_cache
@@ -9,14 +14,15 @@ from cmyui import log, Ansi
 import struct
 
 from objects import glob
-from objects.beatmap import Beatmap
-from objects.player import Player
 from objects.match import (Match, ScoreFrame, SlotStatus,
                            MatchTypes, MatchTeamTypes,
                            MatchScoringTypes, Teams)
 from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -157,7 +163,7 @@ class BanchoPacket:
             if x in cls.args:
                 del cls.args[x]
 
-    async def handle(self, p: Player) -> None: ...
+    async def handle(self, p: 'Player') -> None: ...
 
 # TODO: should probably be.. not here :P
 Message = namedtuple('Message', ['client', 'msg', 'target', 'client_id'])
@@ -202,7 +208,7 @@ class BanchoPacketReader:
                 # still active; we don't have to handle anything.
                 continue
 
-            if p_type not in glob.bancho_map:
+            if p_type not in glob.bancho_packets:
                 # cannot handle - remove from
                 # internal buffer and continue.
                 log(f'Unhandled: {p_type!r}', Ansi.LYELLOW)
@@ -214,7 +220,7 @@ class BanchoPacketReader:
                 break
 
         # we have a packet handler for this.
-        self._current = glob.bancho_map[p_type]()
+        self._current = glob.bancho_packets[p_type]()
         self._current.length = p_len
 
         if self._current.args:
@@ -619,7 +625,7 @@ def changeUsername(old: str, new: str) -> bytes:
     )
 
 # packet id: 11
-def userStats(p: Player) -> bytes:
+def userStats(p: 'Player') -> bytes:
     return write(
         Packets.CHO_USER_STATS,
         (p.id, osuTypes.i32),
@@ -894,7 +900,7 @@ def matchPlayerSkipped(pid: int) -> bytes:
     )
 
 # packet id: 83
-def userPresence(p: Player) -> bytes:
+def userPresence(p: 'Player') -> bytes:
     return write(
         Packets.CHO_USER_PRESENCE,
         (p.id, osuTypes.i32),
@@ -921,7 +927,7 @@ def restartServer(ms: int) -> bytes:
 
 # packet id: 88
 @lru_cache(maxsize=4)
-def matchInvite(p: Player, t_name: str) -> bytes:
+def matchInvite(p: 'Player', t_name: str) -> bytes:
     msg = f'Come join my game: {p.match.embed}.'
     return write(
         Packets.CHO_MATCH_INVITE,

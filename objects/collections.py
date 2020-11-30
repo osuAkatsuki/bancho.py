@@ -10,7 +10,6 @@ from constants.privileges import Privileges
 from objects import glob
 
 __all__ = (
-    'Slice',
     'ChannelList',
     'MatchList',
     'PlayerList'
@@ -19,8 +18,6 @@ __all__ = (
 # NOTE: these should all inherit from a base class,
 # a lot of their functionality is common between all.
 
-Slice = Union[int, slice]
-
 class ChannelList:
     """A class to represent all chat channels on the gulag."""
     __slots__ = ('channels',)
@@ -28,7 +25,7 @@ class ChannelList:
     def __init__(self):
         self.channels: list[Channel] = []
 
-    def __getitem__(self, index: Union[Slice, str]) -> Channel:
+    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -78,7 +75,7 @@ class MatchList:
     def __init__(self):
         self.matches = [None for _ in range(32)] # max matches.
 
-    def __getitem__(self, index: Slice) -> Optional[Match]:
+    def __getitem__(self, index: Union[int, slice]) -> Optional[Match]:
         return self.matches[index]
 
     def __len__(self) -> int:
@@ -127,7 +124,7 @@ class PlayerList:
     def __init__(self):
         self.players = []
 
-    def __getitem__(self, index: Slice) -> Player:
+    def __getitem__(self, index: Union[int, slice]) -> Player:
         return self.players[index]
 
     def __contains__(self, p: Union[Player, str]) -> bool:

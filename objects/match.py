@@ -4,14 +4,13 @@ from typing import Optional, Sequence, Union, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from objects import glob
-from objects.channel import Channel
-from objects.beatmap import Beatmap
 from constants.mods import Mods
 from constants.gamemodes import GameMode
 import packets
 
 if TYPE_CHECKING:
     from objects.player import Player
+    from objects.channel import Channel
 
 __all__ = (
     'SlotStatus',
@@ -159,7 +158,7 @@ class Match:
         self.mode = GameMode.vn_std
         self.freemods = False
 
-        self.chat: Optional[Channel] = None #multiplayer
+        self.chat: Optional['Channel'] = None #multiplayer
         self.slots = [Slot() for _ in range(16)]
 
         self.type = MatchTypes.standard

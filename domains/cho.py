@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from datetime import datetime as dt, timedelta as td
+import re
 import time
-from cmyui import log, Ansi, _isdecimal
 import bcrypt
+from cmyui import (Connection, Domain,
+                   log, Ansi, _isdecimal)
+from datetime import datetime as dt, timedelta as td
 
 import packets
-from packets import Packets, BanchoPacket # convenience
+from packets import Packets, BanchoPacket, BanchoPacketReader
 
 from constants.types import osuTypes
 from constants.mods import Mods
@@ -18,11 +20,84 @@ from objects.player import Player, PresenceFilter, Action
 from objects.beatmap import Beatmap
 from constants.privileges import Privileges
 
-glob.bancho_map = {}
+""" Bancho: handle connections from the osu! client """
+
+domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
+
+@domain.route('/', methods=['POST'])
+async def bancho_handler(conn: Connection) -> bytes:
+    if 'User-Agent' not in conn.headers:
+        return
+
+    if conn.headers['User-Agent'] != 'osu!':
+        # most likely a request from a browser.
+        return b'<!DOCTYPE html>' + '<br>'.join((
+            f'Running gulag v{glob.version}',
+            f'Players online: {len(glob.players) - 1}',
+            '<a href="https://github.com/cmyui/gulag">Source code</a>',
+            '',
+            '<b>Packets handled</b>',
+            '<br>'.join(f'{p.name} ({p.value})' for p in glob.bancho_packets)
+        )).encode()
+
+    # check for 'osu-token' in the headers.
+    # if it's not there, this is a login request.
+
+    if 'osu-token' not in conn.headers:
+        # login is a bit of a special case,
+        # so we'll handle it separately.
+        resp, token = await login(
+            conn.body, conn.headers['X-Real-IP']
+        )
+
+        conn.add_resp_header(f'cho-token: {token}')
+        return resp
+
+    # get the player from the specified osu token.
+    player = glob.players.get(conn.headers['osu-token'])
+
+    if not player:
+        # token was not found; changes are, we just restarted
+        # the server. just tell their client to re-connect.
+        return packets.notification('Server is restarting') + \
+               packets.restartServer(0) # send 0ms since server is up
+
+    # bancho connections can be comprised of multiple packets;
+    # our reader is designed to iterate through them individually,
+    # allowing logic to be implemented around the actual handler.
+
+    # NOTE: the reader will internally discard any
+    # packets whose logic has not been defined.
+    async for packet in BanchoPacketReader(conn.body):
+        await packet.handle(player)
+
+        if glob.config.debug:
+            log(repr(packet.type), Ansi.LMAGENTA)
+
+    player.last_recv_time = int(time.time())
+
+    # TODO: this could probably be done better?
+    resp = bytearray()
+
+    while not player.queue_empty():
+        # read all queued packets into stream
+        resp += player.dequeue()
+
+    conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+    resp = bytes(resp)
+
+    # even if the packet is empty, we have to
+    # send back an empty response so the client
+    # knows it was successfully delivered.
+    return resp
+
+""" Packet logic """
+
+glob.bancho_packets = {}
 
 def register(cls: BanchoPacket):
-    """Register a handler in `glob.bancho_map`."""
-    glob.bancho_map |= {cls.type: cls}
+    """Register a handler in `glob.bancho_packets`."""
+    glob.bancho_packets |= {cls.type: cls}
     return cls
 
 @register
@@ -170,7 +245,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     pw_hash = s[1].encode()
 
     if len(s := s[2].split('|')) != 5:
-        return
+        return packets.userID(-2), 'no'
 
     if not (r := regexes.osu_ver.match(s[0])):
         # invalid client version?
@@ -318,7 +393,6 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # tells osu! to load channels from config, i believe?
     data += packets.channelInfoEnd()
 
-
     # channels
     for c in glob.channels:
         if not p.priv & c.read:
@@ -357,12 +431,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         o.enqueue(user_data)
 
         # enqueue them to us.
-        data += (packets.userPresence(o) +
-                 packets.userStats(o))
+        data += packets.userPresence(o)
+        data += packets.userStats(o)
 
-    data += (packets.mainMenuIcon() +
-             packets.friendsList(*p.friends) +
-             packets.silenceEnd(p.remaining_silence))
+    data += packets.mainMenuIcon()
+    data += packets.friendsList(*p.friends)
+    data += packets.silenceEnd(p.remaining_silence)
 
     # thank u osu for doing this by username rather than id
     query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
@@ -804,11 +878,15 @@ class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
         if not (m := p.match):
             return
 
-        # ready up our player.
+        # our player has loaded in and is ready to play.
         m.get_slot(p).loaded = True
 
-        # check if all players are ready.
-        if not any(s.status == SlotStatus.playing and not s.loaded for s in m.slots):
+        is_playing = lambda s: s.status == SlotStatus.playing \
+                           and not s.loaded
+
+        # check if all players are loaded,
+        # if so, tell all players to begin.
+        if not any(map(is_playing, m.slots)):
             m.enqueue(packets.matchAllPlayerLoaded(), lobby=False)
 
 @register

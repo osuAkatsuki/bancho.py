@@ -428,7 +428,9 @@ class Beatmap:
         """Cache some common acc pp values for specified mods."""
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        ppcalc = await PPCalculator.from_id(self.id, mode=self.mode, mods=mods)
+        ppcalc = await PPCalculator.from_id(
+            self.id, mode=self.mode, mods=mods
+        )
 
         for idx, acc in enumerate((90, 95, 98, 99, 100)):
             ppcalc.acc = acc
@@ -438,24 +440,24 @@ class Beatmap:
 
     async def save_to_sql(self) -> None:
         """Save the the object into sql."""
-        if any(x is None for x in (
+        params = [
             self.md5, self.id, self.set_id, self.status,
             self.artist, self.title, self.version, self.creator,
             self.last_update, self.frozen, self.mode, self.bpm,
             self.cs, self.od, self.ar, self.hp, self.diff
-        )):
+        ]
+
+        if any(map(lambda x: x is None, params)):
             log('Tried to save invalid beatmap to SQL!', Ansi.LRED)
             return
+
+        params[2] = int(params[2]) # status
+        params[10] = int(params[10]) # mode
 
         await glob.db.execute(
             'REPLACE INTO maps (id, set_id, status, md5, '
             'artist, title, version, creator, last_update, '
-            'frozen, mode, bpm, cs, od, ar, hp, diff) VALUES ('
-            '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
-            '%s, %s, %s, %s, %s, %s, %s, %s)', [
-                self.id, self.set_id, int(self.status), self.md5,
-                self.artist, self.title, self.version, self.creator,
-                self.last_update, self.frozen, int(self.mode), self.bpm,
-                self.cs, self.od, self.ar, self.hp, self.diff
-            ]
+            'frozen, mode, bpm, cs, od, ar, hp, diff) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '
+            '%s, %s, %s, %s, %s, %s, %s, %s)', params
         )

@@ -4,42 +4,41 @@ from constants.gamemodes import GameMode
 from typing import Any, Optional, Callable
 from enum import IntEnum, unique
 from functools import partial, wraps
+import re
 import os
 import time
 import copy
+import hashlib
+import bcrypt
 import random
 import orjson
 import aiofiles
 
-from cmyui import AsyncConnection, rstring, log, Ansi, _isdecimal
 from urllib.parse import unquote
+from cmyui import (Connection, Domain,
+                   _isdecimal, rstring,
+                   log, Ansi)
 
 import packets
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants import regexes
 from objects.score import Score, SubmissionStatus
-from objects.player import Privileges
+from objects.player import Player, Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
-
-# for /web/ requests, we send the
-# data directly back in the event.
 
 # TODO:
 # osu-rate.php: beatmap rating on score submission.
 # osu-osz2-bmsubmit-upload.php: beatmap submission upload
 # osu-osz2-bmsubmit-getid.php: beatmap submission getinfo
 
-glob.web_map = {}
+""" osu: handle connections from web, api, and beyond? """
 
-def register(uri: str) -> Callable:
-    """Register a handler in `glob.web_map`."""
-    def register_cb(cb: Callable) -> Callable:
-        glob.web_map |= {uri: cb}
-        return cb
+domain = Domain('osu.ppy.sh')
 
-    return register_cb
+
+# Some helper decorators (used for /web/ connections)
 
 def _required_args(args: set[str], argset: str) -> Callable:
     def wrapper(f: Callable) -> Callable:
@@ -47,7 +46,7 @@ def _required_args(args: set[str], argset: str) -> Callable:
         # modify the handler code to ensure that
         # all arguments are sent in the request.
         @wraps(f)
-        async def handler(conn: AsyncConnection) -> Optional[bytes]:
+        async def handler(conn: Connection) -> Optional[bytes]:
             _argset = getattr(conn, argset)
             if all(x in _argset for x in args):
                 # all args given, call the
@@ -67,7 +66,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         # modify the handler code to get the player
         # object before calling the handler itself.
         @wraps(f)
-        async def handler(conn: AsyncConnection) -> Optional[bytes]:
+        async def handler(conn: Connection) -> Optional[bytes]:
             name = passwd = None
 
             for argset in (conn.args, conn.multipart_args):
@@ -88,8 +87,10 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         return handler
     return wrapper
 
-@register('bancho_connect.php')
-async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
+""" /web/ handlers """
+
+@domain.route('/web/bancho_connect.php')
+async def banchoConnect(conn: Connection) -> Optional[bytes]:
     if 'v' in conn.args:
         # TODO: implement verification..?
         # long term. For now, just send an empty reply
@@ -106,8 +107,8 @@ async def banchoConnect(conn: AsyncConnection) -> Optional[bytes]:
 required_params_bmsubmit_upload = frozenset({
     'u', 'h', 't', 'vv', 'z', 's'
 })
-@register('osu-osz2-bmsubmit-upload.php')
-async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
+@domain.route('/web/osu-osz2-bmsubmit-upload.php')
+async def osuMapBMSubmitUpload(conn: Connection) -> Optional[bytes]:
     if not all(x in conn.args for x in required_params_bmsubmit_upload):
         log(f'bmsubmit-upload req missing params.', Ansi.LRED)
         return
@@ -121,8 +122,8 @@ async def osuMapBMSubmitUpload(conn: AsyncConnection) -> Optional[bytes]:
 required_params_bmsubmit_getid = frozenset({
     'h', 's', 'b', 'z', 'vv'
 })
-@register('osu-osz2-bmsubmit-getid.php')
-async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
+@domain.route('/web/osu-osz2-bmsubmit-getid.php')
+async def osuMapBMSubmitGetID(conn: Connection) -> Optional[bytes]:
     if not all(x in conn.args for x in required_params_bmsubmit_getid):
         log(f'bmsubmit-getid req missing params.', Ansi.LRED)
         return
@@ -170,15 +171,13 @@ async def osuMapBMSubmitGetID(conn: AsyncConnection) -> Optional[bytes]:
     ...
 """
 
-from objects.player import Player
-
-@register('osu-screenshot.php')
+@domain.route('/web/osu-screenshot.php')
 @required_mpargs({'u', 'p', 'v'})
 @get_login('u', 'p')
-async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuScreenshot(p: Player, conn: Connection) -> Optional[bytes]:
     if 'ss' not in conn.files:
         log(f'screenshot req missing file.', Ansi.LRED)
-        return
+        return (400, b'')
 
     filename = f'{rstring(8)}.png'
 
@@ -188,16 +187,16 @@ async def osuScreenshot(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     log(f'{p} uploaded {filename}.')
     return filename.encode()
 
-@register('osu-getfriends.php')
+@domain.route('/web/osu-getfriends.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetFriends(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuGetFriends(p: Player, conn: Connection) -> Optional[bytes]:
     return '\n'.join(map(str, p.friends)).encode()
 
-@register('osu-getbeatmapinfo.php')
+@domain.route('/web/osu-getbeatmapinfo.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
     data = orjson.loads(conn.body)
     ret = []
 
@@ -257,10 +256,10 @@ async def osuGetBeatmapInfo(p: Player, conn: AsyncConnection) -> Optional[bytes]
 
     return '\n'.join(ret).encode()
 
-@register('osu-getfavourites.php')
+@domain.route('/web/osu-getfavourites.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetFavourites(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuGetFavourites(p: Player, conn: Connection) -> Optional[bytes]:
     favourites = await glob.db.fetchall(
         'SELECT setid FROM favourites '
         'WHERE userid = %s',
@@ -269,13 +268,13 @@ async def osuGetFavourites(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(favourites).encode()
 
-@register('osu-addfavourite.php')
+@domain.route('/web/osu-addfavourite.php')
 @required_args({'u', 'h', 'a'})
 @get_login('u', 'h', b'Please login to add favourites!')
-async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuAddFavourite(p: Player, conn: Connection) -> Optional[bytes]:
     # make sure set id is valid
     if not conn.args['a'].isdecimal():
-        return b'Invalid beatmap set id.'
+        return (400, b'Invalid beatmap set id.')
 
     # check if they already have this favourited.
     if await glob.db.fetch(
@@ -291,10 +290,10 @@ async def osuAddFavourite(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         [p.id, conn.args['a']]
     )
 
-@register('lastfm.php')
+@domain.route('/web/lastfm.php')
 @required_args({'b', 'action', 'us', 'ha'})
 @get_login('us', 'ha')
-async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def lastFM(p: Player, conn: Connection) -> Optional[bytes]:
     if conn.args['b'][0] != 'a':
         # not anticheat related, tell the
         # client not to send any more for now.
@@ -324,7 +323,7 @@ async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
             "Hey!",
             "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
             "This tool leaves a change in your registry that the osu! client can detect.",
-            "Please re-install relife and disable the program to avoid possible ban."
+            "Please re-install relife and disable the program to avoid any restrictions."
         ])))
 
         await p.logout()
@@ -340,12 +339,12 @@ async def lastFM(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         pass
     """
 
-@register('osu-search.php')
+@domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login('u', 'h')
-async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuSearchHandler(p: Player, conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
-        return
+        return (400, b'')
 
     url = f'{glob.config.mirror}/api/search'
     params = {
@@ -442,10 +441,10 @@ async def osuSearchHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
     return '\n'.join(ret).encode()
     """
 
-@register('osu-search-set.php')
+@domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuSearchSetHandler(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuSearchSetHandler(p: Player, conn: Connection) -> Optional[bytes]:
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
     if 's' in conn.args:
@@ -520,10 +519,10 @@ autoban_pp = (
 )
 del UNDEF
 
-@register('osu-submit-modular-selector.php')
+@domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
-async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
+async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     # Parse our score data into a score obj.
@@ -573,7 +572,7 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     time_elapsed = mp_args['st' if s.passed else 'ft']
 
     if not time_elapsed.isdecimal():
-        return
+        return (400, b'?')
 
     s.time_elapsed = int(time_elapsed)
 
@@ -797,22 +796,22 @@ async def osuSubmitModularSelector(conn: AsyncConnection) -> Optional[bytes]:
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
 
-@register('osu-getreplay.php')
+@domain.route('/web/osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
-async def getReplay(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def getReplay(p: Player, conn: Connection) -> Optional[bytes]:
     path = f".data/osr/{conn.args['c']}.osr"
     if not os.path.exists(path):
-        return
+        return # osu! expects empty resp for no replay
 
     async with aiofiles.open(path, 'rb') as f:
         return await f.read()
 
 """ XXX: going to be slightly more annoying than expected to set this up :P
-@register('osu-session.php')
+@domain.route('/web/osu-session.php', methods=['POST'])
 @required_mpargs({'u', 'h', 'action'})
 @get_login('u', 'h')
-async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     if mp_args['action'] not in ('check', 'submit'):
@@ -912,10 +911,10 @@ async def osuSession(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         return
 """
 
-@register('osu-rate.php')
+@domain.route('/web/osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login('u', 'p', b'auth fail')
-async def osuRate(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuRate(p: Player, conn: Connection) -> Optional[bytes]:
     map_md5 = conn.args['c']
 
     if 'v' not in conn.args:
@@ -970,11 +969,11 @@ class RankingType(IntEnum):
     Friends = 3
     Country = 4
 
-@register('osu-osz2-getscores.php')
+@domain.route('/web/osu-osz2-getscores.php')
 @required_args({'s', 'vv', 'v', 'c', 'f', 'm',
                 'i', 'mods', 'h', 'a', 'us', 'ha'})
 @get_login('us', 'ha')
-async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def getScores(p: Player, conn: Connection) -> Optional[bytes]:
     isdecimal_n = partial(_isdecimal, _negative=True)
 
     # make sure all int args are integral
@@ -1006,7 +1005,7 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         filename = conn.args['f'].replace('+', ' ')
         if not (re := regexes.mapfile.match(unquote(filename))):
             log(f'Requested invalid file - {filename}.', Ansi.LRED)
-            return
+            return (400, b'invalid map file syntax.')
 
         set_exists = await glob.db.fetch(
             'SELECT 1 FROM maps '
@@ -1122,11 +1121,11 @@ async def getScores(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     return '\n'.join(res).encode()
 
-@register('osu-comment.php')
+@domain.route('/web/osu-comment.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'b', 's',
                   'm', 'r', 'a'})
 @get_login('u', 'p')
-async def osuComment(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     action = mp_args['a']
@@ -1169,14 +1168,14 @@ async def osuComment(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         # get the comment's target scope
         target = mp_args['target']
         if target not in ('song', 'map', 'replay'):
-            return b'Invalid target.'
+            return (400, b'Invalid target.')
 
         # get the corresponding id from the request
         com_id = mp_args[{'song': 's', 'map': 'b',
                           'replay': 'r'}[target]]
 
         if not com_id.isdecimal():
-            return b'Invalid corresponding id.'
+            return (400, b'Invalid corresponding id.')
 
         # get some extra params
         sttime = mp_args['starttime']
@@ -1202,14 +1201,14 @@ async def osuComment(p: Player, conn: AsyncConnection) -> Optional[bytes]:
 
     else:
         # invalid action
-        return b'Invalid action.'
+        return (400, b'Invalid action.')
 
-@register('osu-markasread.php')
+@domain.route('/web/osu-markasread.php')
 @required_args({'u', 'h', 'channel'})
 @get_login('u', 'h')
-async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
+async def osuMarkAsRead(p: Player, conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
-        return b'' # no channel specified
+        return # no channel specified
 
     if not (t := await glob.players.get_by_name(t_name, sql=True)):
         return
@@ -1222,25 +1221,25 @@ async def osuMarkAsRead(p: Player, conn: AsyncConnection) -> Optional[bytes]:
         [p.id, t.id]
     )
 
-@register('osu-getseasonal.php')
-async def osuSeasonal(conn: AsyncConnection) -> Optional[bytes]:
+@domain.route('/web/osu-getseasonal.php')
+async def osuSeasonal(conn: Connection) -> Optional[bytes]:
     return orjson.dumps(glob.config.seasonal_bgs)
 
-@register('osu-error.php')
-async def osuError(conn: AsyncConnection) -> Optional[bytes]:
+@domain.route('/web/osu-error.php', methods=['POST'])
+async def osuError(conn: Connection) -> Optional[bytes]:
     ...
 
-@register('check-updates.php')
+@domain.route('/web/check-updates.php')
 @required_args({'action', 'stream'})
-async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
+async def checkUpdates(conn: Connection) -> Optional[bytes]:
     action = conn.args['action']
     stream = conn.args['stream']
 
     if action not in ('check', 'path', 'error'):
-        return b'Invalid action.'
+        return (400, b'Invalid action.')
 
     if stream not in ('cuttingedge', 'stable40', 'beta40', 'stable'):
-        return b'Invalid stream.'
+        return (400, b'Invalid stream.')
 
     if action == 'error':
         # client is just reporting an error updating
@@ -1255,7 +1254,7 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
     url = 'https://old.ppy.sh/web/check-updates.php'
     async with glob.http.get(url, params = conn.args) as resp:
         if not resp or resp.status != 200:
-            return b'Failed to retrieve data from osu!'
+            return (503, b'Failed to retrieve data from osu!')
 
         result = await resp.read()
 
@@ -1266,10 +1265,140 @@ async def checkUpdates(conn: AsyncConnection) -> Optional[bytes]:
 
     return result
 
-async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
+""" /api/ Handlers """
+
+@domain.route('/api/get_online')
+async def api_get_online(conn: Connection) -> Optional[bytes]:
+    """Get the current amount of online players."""
+    # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
+    return f'{{"online":{len(glob.players)-1}}}'.encode()
+
+@domain.route('/api/get_user')
+async def api_get_user(conn: Connection) -> Optional[bytes]:
+    """Get user info/stats from a specified name or id."""
+    if 'name' not in conn.args and 'id' not in conn.args:
+        return (400, b'Must provide either id or name!')
+
+    if 'scope' not in conn.args \
+    or conn.args['scope'] not in ('info', 'stats'):
+        return (400, b'Must provide scope (info/stats).')
+
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+
+        pid = conn.args['id']
+    else:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+            return (400, b'Invalid player name.')
+
+        # get their id from username.
+        pid = await glob.db.fetch(
+            'SELECT id FROM users '
+            'WHERE name_safe = %s',
+            [name]
+        )
+
+        if not pid:
+            return (404, b'User not found.')
+
+        pid = pid['id']
+
+    if conn.args['scope'] == 'info':
+        # return user info
+        query = ('SELECT id, name, name_safe, '
+                 'priv, country, silence_end ' # silence_end public?
+                 'FROM users WHERE id = %s')
+    else:
+        # return user stats
+        query = 'SELECT * FROM stats WHERE id = %s'
+
+    res = await glob.db.fetch(query, [pid])
+    return orjson.dumps(res) if res else b'User not found.'
+
+@domain.route('/api/get_scores')
+async def api_get_scores(conn: Connection) -> Optional[bytes]:
+    if 'name' not in conn.args and 'id' not in conn.args:
+        return (400, b'Must provide either player id or name!')
+
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+
+        pid = conn.args['id']
+    else:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+            return (400, b'Invalid player name.')
+
+        # get their id from username.
+        pid = await glob.db.fetch(
+            'SELECT id FROM users '
+            'WHERE name_safe = %s',
+            [name]
+        )
+
+        if not pid:
+            return (404, b'User not found.')
+
+        pid = pid['id']
+
+    if 'mods' in conn.args:
+        if not conn.args['mods'].isdecimal():
+            return (400, b'Invalid mods.')
+
+        mods = Mods(int(conn.args['mods']))
+
+        if mods & Mods.RELAX:
+            mods &= ~Mods.RELAX
+            table = 'scores_rx'
+        elif mods & Mods.AUTOPILOT:
+            mods &= ~Mods.AUTOPILOT
+            table = 'scores_ap'
+        else:
+            table = 'scores_vn'
+    else:
+        mods = Mods.NOMOD
+        table = 'scores_vn'
+
+    if 'limit' in conn.args:
+        if not conn.args['limit'].isdecimal():
+            return (400, b'Invalid limit.')
+
+        limit = min(int(conn.args['limit']), 100)
+    else:
+        limit = 100
+
+    res = await glob.db.fetchall(
+        'SELECT id, map_md5, score, pp, acc, max_combo, mods, '
+        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+        'mode, play_time, time_elapsed, userid, perfect '
+        f'FROM {table} WHERE userid = %s '
+        'ORDER BY id DESC LIMIT %s',
+        [pid, limit]
+    )
+
+    return orjson.dumps(res) if res else b'No scores found.'
+
+""" Misc handlers """
+
+@domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.png$'))
+async def get_screenshot(conn: Connection) -> Optional[bytes]:
+    if len(conn.path) != 16:
+        return (400, b'Invalid request.')
+
+    path = f'.data/ss/{conn.path[4:]}'
+
+    if not os.path.exists(path):
+        return (404, b'Screenshot not found.')
+
+    async with aiofiles.open(path, 'rb') as f:
+        return await f.read()
+
+@domain.route(re.compile(r'^/web/maps/'))
+async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
         log(f'Requested invalid map update {conn.path}.', Ansi.LRED)
-        return
+        return (400, b'Invalid map file syntax.')
 
     if not (res := await glob.db.fetch(
         'SELECT id, md5 FROM maps WHERE '
@@ -1278,7 +1407,7 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
             re['artist'], re['title'],
             re['creator'], re['version']
         ]
-    )): return # no map found
+    )): return (404, b'Map not found.')
 
     if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
         # map found on disk.
@@ -1292,7 +1421,7 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f'Could not find map {filepath}!', Ansi.LRED)
-                return
+                return (404, b'Could not find map on osu! server.')
 
             content = await resp.read()
 
@@ -1301,29 +1430,93 @@ async def updateBeatmap(conn: AsyncConnection) -> Optional[bytes]:
 
     return content
 
-# some depreacted handlers - no longer used in regular connections.
-# XXX: perhaps these could be turned into decorators to allow
-# for better specialization of params? perhaps prettier too :P
-async def deprecated_handler(conn: AsyncConnection) -> Optional[bytes]:
-    args = conn.args or conn.multipart_args # cant support both :/.. could union
-    pname = phash = None
+""" ingame registration """
 
-    for p in ('u', 'us'):
-        if pname := args[p]:
-            break
-    else:
-        return
+from collections import defaultdict
+@domain.route('/users', methods=['POST'])
+async def register_account(conn: Connection) -> Optional[bytes]:
+    mp_args = conn.multipart_args
 
-    for p in ('h', 'ha', 'p'):
-        if phash := args[p]:
-            break
-    else:
-        return
+    name = mp_args['user[username]']
+    email = mp_args['user[user_email]']
+    pw_txt = mp_args['user[password]']
 
-    if not (p := await glob.players.get_login(unquote(pname), phash)):
-        return
+    if not all((name, email, pw_txt)) or 'check' not in mp_args:
+        return (400, b'Missing required params')
 
-    log(f'{p} used deprecated handler {conn.path!r}.', Ansi.LRED)
+    # ensure all args passed
+    # are safe for registration.
+    errors = defaultdict(list)
 
-# won't work for submit modular cuz it's special case lol
-#osuSubmitModular = web_handler('osu-submit-modular.php')(deprecated_handler)
+    # Usernames must:
+    # - be within 2-15 characters in length
+    # - not contain both ' ' and '_', one is fine
+    # - not be in the config's `disallowed_names` list
+    # - not already be taken by another player
+    if not regexes.username.match(name):
+        errors['username'].append('Must be 2-15 characters in length.')
+
+    if '_' in name and ' ' in name:
+        errors['username'].append('May contain "_" and " ", but not both.')
+
+    if name in glob.config.disallowed_names:
+        errors['username'].append('Disallowed username; pick another.')
+
+    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', name):
+        errors['username'].append('Username already taken by another player.')
+
+    # Emails must:
+    # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
+    # - not already be taken by another player
+    if not regexes.email.match(email):
+        errors['user_email'].append('Invalid email syntax.')
+
+    if await glob.db.fetch('SELECT 1 FROM users WHERE email = %s', email):
+        errors['user_email'].append('Email already taken by another player.')
+
+    # Passwords must:
+    # - be within 8-32 characters in length
+    # - have more than 3 unique characters
+    # - not be in the config's `disallowed_passwords` list
+    if not 8 < len(pw_txt) <= 32:
+        errors['password'].append('Must be 8-32 characters in length.')
+
+    if len(set(pw_txt)) <= 3:
+        errors['password'].append('Must have more than 3 unique characters.')
+
+    if pw_txt.lower() in glob.config.disallowed_passwords:
+        errors['password'].append('That password was deemed too simple.')
+
+    if errors:
+        # we have errors to send back.
+        errors_full = {'form_error': {'user': errors}}
+        return (400, orjson.dumps(errors_full))
+
+    if mp_args['check'] == '0':
+        # the client isn't just checking values,
+        # they want to register the account now.
+        # make the md5 & bcrypt the md5 for sql.
+        pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
+        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt()).decode()
+        glob.cache['bcrypt'][pw_md5] = pw_bcrypt # cache result for login
+
+        safe_name = name.lower().replace(' ', '_')
+
+        # add to `users` table.
+        user_id = await glob.db.execute(
+            'INSERT INTO users '
+            '(name, name_safe, email, pw_hash, creation_time) '
+            'VALUES (%s, %s, %s, %s, NOW())',
+            [name, safe_name, email, pw_bcrypt]
+        )
+
+        # add to `stats` table.
+        await glob.db.execute(
+            'INSERT INTO stats '
+            '(id) VALUES (%s)',
+            [user_id]
+        )
+
+        log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
+
+    return b'ok' # success
