@@ -89,13 +89,13 @@ class Channel:
 
     async def remove(self, p: 'Player') -> None:
         """Remove `p` from the channel's players."""
+        self.players.remove(p)
+
         if len(self.players) == 1 and self.instance:
             # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.
             await glob.channels.remove(self)
-        else:
-            self.players.remove(p)
 
     def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""
