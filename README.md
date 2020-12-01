@@ -11,12 +11,22 @@ realistic private server use-case™️.
 I'm mainly writing this as it's by-far the subject I'm currently the most
 educated in.. I started [Akatsuki](https://akatsuki.pw/) (and programming
 alltogether) back in October of 2017, and I've been managing it since..
-And so it's kinda also where my brain can exercise the most, so here we
-are.
 
 If you're only in it for performance and don't mind using a lower-level
 language, consider checking out [Peace](https://github.com/Pure-Peace/Peace),
 a somewhat similar modern implementation written in Rust.
+
+The server is already nearly on-par with competing servers and is already likely
+production-capable; however there's not currently an official finished frontend
+for the project. The central db structure's (users, maps, scores) core elements
+are obviously similar on both ripple and gulag's db setup, so it should not be too
+difficult to get this project working with [Hanayo](https://github.com/osuripple/hanayo),
+though I haven't tried myself. There are also some partially comlpete implementations
+of a frontend for gulag, such as [gulag-web](https://github.com/Yo-ru/gulag-web).
+
+If you're just looking for a standalone osu! server, this is likely one of your
+best bets on the current market, though. Hopefully that will become true on a
+much larger scale with some time ;).
 
 ## Plans/Ideas
 
