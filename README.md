@@ -71,6 +71,7 @@ Setup should be pretty simple, the commands below should set you right ups.
 
 Notes:
 
+- Ubuntu 20.04 is known to have issues with nginx and osu for unknown reasons?
 - I will not be able to help you out with creating a custom certificate of your own.
 - If you have any difficulties setting up gulag, feel free to join the Discord server at the top of the README, we now have a bit of a community!
 
