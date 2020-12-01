@@ -301,6 +301,26 @@ class Player:
         glob.players.remove(self)
         glob.players.enqueue(packets.logout(self.id))
 
+    async def update_priv(self, new: Privileges) -> None:
+        self.priv = new
+
+        await glob.db.execute(
+            'UPDATE users '
+            'SET priv = %s '
+            'WHERE id = %s',
+            [int(self.priv), self.id]
+        )
+
+    async def remove_priv(self, mask: Privileges) -> None:
+        self.priv &= ~mask
+
+        await glob.db.execute(
+            'UPDATE users '
+            'SET priv = %s '
+            'WHERE id = %s',
+            [int(self.priv), self.id]
+        )
+
     async def ban(self, admin: 'Player', reason: str) -> None:
         """Ban `self` for `reason`, and log to sql."""
         self.priv &= ~Privileges.Normal

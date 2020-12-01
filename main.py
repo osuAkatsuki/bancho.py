@@ -11,12 +11,13 @@
 __all__ = ()
 
 import asyncio
-import cmyui
 import os
-
 import aiohttp
 import orjson # go zoom
 import time
+
+import cmyui
+from cmyui import log, Ansi
 
 from objects import glob
 from objects.player import Player
@@ -24,7 +25,7 @@ from objects.channel import Channel
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(2, 9, 0)
+    glob.version = cmyui.Version(2, 9, 1)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
@@ -40,6 +41,33 @@ async def on_start() -> None:
     # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
+
+    # add new donation ranks & enqueue tasks to remove current ones.
+    # TODO: this system can get quite a bit better; rather than just
+    # removing, it should rather update with the new perks (potentially
+    # a different tier, enqueued after their current perks).
+
+    async def rm_donor(userid: int, delay: int):
+        await asyncio.sleep(delay)
+
+        p = await glob.players.get_by_id(userid, sql=True)
+        p.remove_priv(Privileges.Donator)
+
+        log(f"{p}'s donation perks have expired.", Ansi.MAGENTA)
+
+    query = ('SELECT id, donor_end FROM users '
+             'WHERE donor_end > UNIX_TIMESTAMP()')
+
+    async for donation in glob.db.iterall(query):
+        # calculate the delta between now & the exp date.
+        delta = donation['donor_end'] - time.time()
+
+        if delta > (60 * 60 * 24 * 30):
+            # ignore donations expiring in over a months time;
+            # the server should restart relatively often anyways.
+            continue
+
+        asyncio.create_task(rm_donor(donation['id'], delta))
 
 PING_TIMEOUT = 300000 // 10
 async def disconnect_inactive() -> None:

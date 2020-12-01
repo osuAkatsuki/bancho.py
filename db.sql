@@ -24,7 +24,9 @@ create table users
 	pw_hash char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
-	creation_time datetime not null,
+	donor_end int default 0 not null,
+	creation_time int default 0 not null,
+	latest_activity int default 0 not null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_safe_uindex
@@ -320,9 +322,9 @@ create table logs
 
 # insert vital stuff, such as bot user & basic channels.
 
-insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time)
+insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time, latest_activity)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
-        '_______________________my_cool_bcrypt_______________________', NOW());
+        '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 insert into stats (id) values (1);
 

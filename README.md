@@ -2,70 +2,79 @@
 
 # A dev-friendly osu! server written in modern python
 
-Looking for a well-organized, async & completely open-source osu! server implementation with unique features rapidly undergoing development?
+gulag is my take on the abstraction of an osu! server; it's native
+async and relatively low-level design allows for many features not seen
+in other server implementations (especially for python), and it should
+be more than packed enough with performance-driven programming for any
+realistic private server use-case™️.
 
-Disclaimer: while this project itself is actually in a usable state and genuinely already has many unique features.. we still don't have a frontend :P
+I'm mainly writing this as it's by-far the subject I'm currently the most
+educated in.. I started [Akatsuki](https://akatsuki.pw/) (and programming
+alltogether) back in October of 2017, and I've been managing it since..
+And so it's kinda also where my brain can exercise the most, so here we
+are.
 
-## There are many other osu! server implementations, what makes this any different?
+If you're only in it for performance and don't mind using a lower-level
+language, consider checking out [Peace](https://github.com/Pure-Peace/Peace),
+a somewhat similar modern implementation written in Rust.
 
-Well.. Back in October of 2017, I decided to [start an osu! server](https://akatsuki.pw), which ended up working out pretty well..
-We've always used the [Ripple](https://github.com/osuripple) source, and it's great; however, it's quite different from my programming style.
+## Plans/Ideas
 
-All projects will have their flaws, and while I now heavily prefer working with this server over any other, you may see things in another way.
-This is simply the result of my programming values and time thrown together; I'd recommend you try gulag out and see what you actually think!
+- Beatmap submission system (medium difficulty & effort)
+This one is pretty self-explanatory - be able to submit maps to the server
+using osu!'s normal in-game beatmap submission system. For this, I'm pretty
+sure the id is constrained to being an int32 and negative numbers won't work
+(and i'm already using them for buttons anyways), so we'll probably have to
+count down from 2147483647.. or start from 1b or something lol..
 
-### Features
+- Tournament host commandset (low/medium difficulty & effort)
+Basically the idea for this one is a set of commands for event managers to be
+able to set up things like mappools with the server before the matches, so that
+referees have a set of commands to automatically pick maps/mods, keep score,
+and post updates to the chat and stuff. Could also make it so players are
+automatically moved into the right slots for their team and for team names to
+be gotten from the regex of the tourney match name.. Most of this abstraction
+is also independant of the osu! implementation, so I pretty much have free reign
+on how I do things, so this sounds pretty fun.
 
-- Asynchronous server design, allowing for high efficiency along with many cool features unavailable on many other implementations.
-- Nearly full completion of multiplayer, spectator, leaderboards, score submission, osu!direct and most other features that you'd expect.
-- Fully functional relax & autopilot play with pp modified to suit each mode properly, allowing for gameplay in each right out of the box.
-- A strong focus on keeping an accurate cache for many things (maps [with pp values], osu! updates, many more to come..) allowing for quick responses.
-- Undergoing active development; an osu! server has always been a large goal of mine, so motivation is very high.
-- Clean and concise code, easy to make small modifications & add to the codebase; designed around this idea.
-
-### Project focuses & goals
-
-1. A focus on the developer. Many other osu! server implementations are far too complicated for the job, either in an
-   'overkill' sense, or through poor abstraction. With this project I aim to keep the code as simple and concise as
-   possible, while still maintaining high performance and providing an accurate representation of osu!'s protocol.
-
-   Developing features for the server should be an enjoyable and thought-provoking experience of finding new ideas;
-   when the codebase makes that difficult, programming loses the aspect of fun and everything becomes an activity
-   that requires effort - I'm trying my best to never let this code get to that state, as it's mostly what drove me to
-   start this project to begin with.
-
-2. Provide an accurate representation of osu!'s protocol. Many other implementations have either features missing, or
-   are simply out of date and do not include the newer features of the osu! client. As long as gulag is being updated,
-   we'll be keeping up to date with the newest features. (moving to osuapi v2 when? :eyes:)
+- Clickable in-game chat embeds to exec code server-side (medium/high difficulty & effort)
+This might not make a hell of a lot of sense, but it's actually already mostly
+working.. Basically, I want clickable embeds in the osu! chat that when clicked,
+run some pre-allocated function server-side that's bound to the player (security).
+This is a really abstract idea so it can be expanded to pretty much everything,
+like in-game admin panels and maybe even interactive menus with some higher-order
+abstraction? We'll see lol.. Credits go to rumoi for the original idea on this one,
+as they tried to implement something similar back in [ruri](https://github.com/rumoi/ruri).
 
 ## Requirements
 
-- Python 3.9 & pip
-- MySQL & Nginx & build-essential (all installed in setup below)
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
 - An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full feature-set.
+- An SSL Certificate for c(e4-6).ppy.sh (such as [this](https://github.com/osuthailand/ainu-certificate)).
 
 ## Setup
 
-Setup is relatively simple, the commands below should basically be copy-pastable.
+Setup should be pretty simple, the commands below should set you right ups.
 
-If you have any difficulties setting up gulag, feel free to join the Discord server at the top of the README, we now have a bit of a community!
+Notes:
 
-NOTE: I will not be able to help you out with creating a certificate to connect on the latest osu! versions.
-Oh, and also, if I remember correctly nginx has some issues on Ubuntu 20.04, so I don't recommend trying lol..
+- I will not be able to help you out with creating a custom certificate of your own.
+- If you have any difficulties setting up gulag, feel free to join the Discord server at the top of the README, we now have a bit of a community!
+
 ```sh
-# Install python 3.9 and latest version of pip.
+# Install python3.9 (requires ppa).
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt install python3.9 python3.9-dev python3.9-distutils
+
+# Install pip for 3.9.
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
-# Install our database, reverse-proxy, and C/C++ compiler, if not already installed.
-sudo apt install mysql-server nginx build-essential 
+# Install our db, reverse-proxy, and build tools.
+sudo apt install mysql-server nginx build-essential
 
 # Clone gulag from github.
-git clone https://github.com/cmyui/gulag.git
-cd gulag
+git clone https://github.com/cmyui/gulag.git && cd gulag
 
 # Init & update submodules.
 git submodule init && git submodule update
@@ -82,10 +91,10 @@ python3.9 -m pip install -r requirements.txt
 mysql -u your_sql_username -p your_db_name < db.sql
 
 # Add gulag's nginx config to your nginx/sites-enabled.
-# NOTE: default unix socket location is `/tmp/gulag.sock`.
+# NOTE: default unix socket location is `/tmp/gulag.sock`,
+# and you will have to change the certificate pathes in
+# the nginx config file to your own certificate pathes.
 sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
-
-# Reload nginx to put the reverse proxy online.
 sudo nginx -s reload
 
 # Configure gulag.
