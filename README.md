@@ -1,6 +1,6 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-# A dev-friendly osu! server written in modern python
+## A dev-friendly osu! server written in modern python
 
 gulag is my take on the abstraction of an osu! server; it's native
 async and relatively low-level design allows for many features not seen
@@ -20,14 +20,16 @@ a somewhat similar modern implementation written in Rust.
 
 ## Plans/Ideas
 
-- Beatmap submission system (medium difficulty & effort)
+### Beatmap submission system (medium difficulty & effort)
+
 This one is pretty self-explanatory - be able to submit maps to the server
 using osu!'s normal in-game beatmap submission system. For this, I'm pretty
 sure the id is constrained to being an int32 and negative numbers won't work
 (and i'm already using them for buttons anyways), so we'll probably have to
 count down from 2147483647.. or start from 1b or something lol..
 
-- Tournament host commandset (low/medium difficulty & effort)
+### Tournament host commandset (low/medium difficulty & effort)
+
 Basically the idea for this one is a set of commands for event managers to be
 able to set up things like mappools with the server before the matches, so that
 referees have a set of commands to automatically pick maps/mods, keep score,
@@ -37,7 +39,8 @@ be gotten from the regex of the tourney match name.. Most of this abstraction
 is also independant of the osu! implementation, so I pretty much have free reign
 on how I do things, so this sounds pretty fun.
 
-- Clickable in-game chat embeds to exec code server-side (medium/high difficulty & effort)
+### Bound chat embeds that run code server-side (medium? difficulty & effort)
+
 This might not make a hell of a lot of sense, but it's actually already mostly
 working.. Basically, I want clickable embeds in the osu! chat that when clicked,
 run some pre-allocated function server-side that's bound to the player (security).
@@ -49,7 +52,7 @@ as they tried to implement something similar back in [ruri](https://github.com/r
 ## Requirements
 
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
-- An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full feature-set.
+- An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full usage.
 - An SSL Certificate for c(e4-6).ppy.sh (such as [this](https://github.com/osuthailand/ainu-certificate)).
 
 ## Setup
