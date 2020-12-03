@@ -193,7 +193,7 @@ async def osuScreenshot(p: Player, conn: Connection) -> Optional[bytes]:
 async def osuGetFriends(p: Player, conn: Connection) -> Optional[bytes]:
     return '\n'.join(map(str, p.friends)).encode()
 
-@domain.route('/web/osu-getbeatmapinfo.php')
+@domain.route('/web/osu-getbeatmapinfo.php', methods=['POST'])
 @required_args({'u', 'h'})
 @get_login('u', 'h')
 async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
@@ -585,8 +585,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
         if s.pp > pp_cap:
             log(f'{s.player} banned for submitting '
-                 f'{s.pp:.2f} score on gm {s.mode!r}.',
-                 Ansi.LRED)
+                f'{s.pp:.2f} score on gm {s.mode!r}.',
+                Ansi.LRED)
 
             await s.player.ban(glob.bot, f'[{s.mode!r}] autoban @ {s.pp:.2f}')
             return b'error: ban'
@@ -1393,6 +1393,13 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
 
     async with aiofiles.open(path, 'rb') as f:
         return await f.read()
+
+@domain.route(re.compile(r'^/d/\d{0,10}$'))
+async def get_osz(conn: Connection) -> Optional[bytes]:
+    """Handle a map download request (osu.ppy.sh/d/*)."""
+    mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
+    conn.add_resp_header(f'Location: {mirror_url}')
+    return (302, b'')
 
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
