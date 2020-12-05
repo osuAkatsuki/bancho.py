@@ -90,7 +90,7 @@ class Mods(IntFlag):
         for m in (_m for _m in Mods if self.value & _m
                                     and _m != Mods.SPEED_CHANGING):
             mod_str.append(mod_dict[m])
-        return f"+{''.join(mod_str)}"
+        return ''.join(mod_str)
 
     @staticmethod
     def filter_invalid_combos(m: 'Mods') -> 'Mods':

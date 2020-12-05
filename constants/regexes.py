@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from re import compile as rcomp
+from re import compile as rcomp, IGNORECASE
 
 __all__ = ('mapfile', 'osu_ver', 'username', 'email', 'now_playing')
 
@@ -16,4 +16,10 @@ now_playing = rcomp(
 silence_duration = rcomp(
     r'^(?P<duration>\d{1,6})'
     r'(?P<scale>s|m|h|d|w)$'
+)
+tourney_matchname = rcomp(
+    r'^(?P<name>\w+): '
+    r'\((?P<T1>\w+)\) vs\.? '
+    r'\((?P<T2>\w+)\)$',
+    flags = IGNORECASE
 )

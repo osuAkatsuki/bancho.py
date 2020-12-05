@@ -320,6 +320,29 @@ create table logs
 	time datetime not null on update CURRENT_TIMESTAMP
 );
 
+create table tourney_pools
+(
+	id int auto_increment
+		primary key,
+	name varchar(16) not null,
+	created_at datetime not null,
+	created_by int not null,
+	constraint tourney_pools_users_id_fk
+		foreign key (created_by) references users (id)
+);
+
+create table tourney_pool_maps
+(
+	map_id int not null,
+	pool_id int not null,
+	mods int not null,
+	slot tinyint not null,
+	primary key (map_id, pool_id),
+	constraint tourney_pool_maps_tourney_pools_id_fk
+		foreign key (pool_id) references tourney_pools (id)
+			on update cascade on delete cascade
+);
+
 # insert vital stuff, such as bot user & basic channels.
 
 insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time, latest_activity)

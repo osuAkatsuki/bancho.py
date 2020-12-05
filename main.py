@@ -22,10 +22,12 @@ from cmyui import log, Ansi
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
+from objects.match import MapPool
+
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(2, 9, 1)
+    glob.version = cmyui.Version(3, 0, 0)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
@@ -41,6 +43,15 @@ async def on_start() -> None:
     # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
         await glob.channels.add(Channel(**chan))
+
+    # add all mappools from db.
+    async for pool in glob.db.iterall('SELECT * FROM tourney_pools'):
+        # overwrite basic types with some class types
+        pool['created_by'] = await glob.players.get_by_id(pool['created_by'], sql=True)
+
+        pool = MapPool(**pool)
+        await pool.maps_from_sql()
+        await glob.pools.add(pool)
 
     # add new donation ranks & enqueue tasks to remove current ones.
     # TODO: this system can get quite a bit better; rather than just

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 import re
 import time
 import bcrypt
@@ -251,15 +252,14 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         # invalid client version?
         return packets.userID(-2), 'no'
 
-    # parse their osu version into a datetime object.
-    # this will be saved to `p.osu_ver` if login succeeds.
     osu_ver = dt.strptime(r['ver'], '%Y%m%d')
 
-    if osu_ver < dt.now() - td(60):
-        # the osu! client is older than 2 months old,
-        # disallow login and force an update re-check.
-        return (packets.versionUpdateForced() +
-                packets.userID(-2)), 'no'
+    if not glob.config.debug:
+        # disallow the login if their osu! client is older
+        # than two months old, forcing an update re-check.
+        if osu_ver < (dt.now() - td(60)):
+            return (packets.versionUpdateForced() +
+                    packets.userID(-2)), 'no'
 
     if not _isdecimal(s[1], _negative=True):
         # utc-offset isn't a number (negative inclusive).
@@ -603,7 +603,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         #       modify these values :P
                         _msg = [p.last_np.embed]
                         if mods:
-                            _msg.append(f'{mods!r}')
+                            _msg.append(f'+{mods!r}')
 
                         msg = f"{' '.join(_msg)}: " + ' | '.join(
                             f'{acc}%: {pp:.2f}pp'
@@ -777,24 +777,36 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         m.mode = self.new.mode
 
         if m.team_type != self.new.team_type:
-            # team type is changing, find the new appropriate default team.
-            # if it's head vs. head, the default should be red, otherwise neutral.
-            if self.new.team_type in (MatchTeamTypes.head_to_head,
-                                      MatchTeamTypes.tag_coop):
-                new_t = Teams.red
+            # if theres currently a scrim going on, only allow
+            # team mode to change by using the !mp teams command.
+            if m.best_of != 0:
+                _team = (
+                    'head-to-head', 'tag-coop',
+                    'team-vs', 'tag-team-vs'
+                )[self.new.team_type]
+
+                msg = ('To change team mode in a scrim, please use '
+                      f'!mp teams {_team}. (just preventing misclicks)')
+                await m.chat.send(glob.bot, msg)
             else:
-                new_t = Teams.neutral
+                # find the new appropriate default team.
+                # defaults are (ffa: neutral, teams: red).
+                if self.new.team_type in (MatchTeamTypes.head_to_head,
+                                          MatchTeamTypes.tag_coop):
+                    new_t = Teams.neutral
+                else:
+                    new_t = Teams.red
 
-            # change each active slots team to
-            # fit the correspoding team type.
-            for s in m.slots:
-                if s.status & SlotStatus.has_player:
-                    s.team = new_t
+                # change each active slots team to
+                # fit the correspoding team mode.
+                for s in m.slots:
+                    if s.status & SlotStatus.has_player:
+                        s.team = new_t
 
-            # change the matches'.
-            m.team_type = self.new.team_type
+                # change the matches'.
+                m.team_type = self.new.team_type
 
-        m.match_scoring = self.new.match_scoring
+        m.win_condition = self.new.win_condition
         m.name = self.new.name
 
         m.enqueue_state()
@@ -845,11 +857,18 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
                        if s.status & SlotStatus.has_player
                        and s.status != SlotStatus.complete]
 
+        was_playing = [s for s in m.slots if s.player
+                       and s.player.id not in not_playing]
+
         m.unready_players(expected=SlotStatus.complete)
 
         m.in_progress = False
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue_state()
+
+        if m.best_of != 0:
+            # determine winner, update match points & inform players.
+            asyncio.create_task(m.update_matchpoints(was_playing))
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):

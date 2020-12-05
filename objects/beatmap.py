@@ -344,8 +344,8 @@ class Beatmap:
                     'md5, artist, title, version, creator, '
                     'last_update, frozen, mode, bpm, cs, '
                     'od, ar, hp, diff) VALUES ('
-                    '%s, %s, %s, %s, %s, %s, %s, %s, '
-                    '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
+                    '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
+                    '%s, %s, %s, %s, %s, %s, %s, %s)', [
                         bmap['beatmap_id'], bmap['beatmapset_id'],
                         int(bmap['approved']), bmap['file_md5'],
                         bmap['artist'], bmap['title'], bmap['version'],
@@ -451,11 +451,11 @@ class Beatmap:
             log('Tried to save invalid beatmap to SQL!', Ansi.LRED)
             return
 
-        params[2] = int(params[2]) # status
+        params[3] = int(params[3]) # status
         params[10] = int(params[10]) # mode
 
         await glob.db.execute(
-            'REPLACE INTO maps (id, set_id, status, md5, '
+            'REPLACE INTO maps (md5, id, set_id, status, '
             'artist, title, version, creator, last_update, '
             'frozen, mode, bpm, cs, od, ar, hp, diff) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '

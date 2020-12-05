@@ -73,7 +73,7 @@ class PPCalculator:
         # use subprocess to do the calculations (yikes).
         cmd = [f'./oppai-ng/oppai {self.file}']
 
-        if self.mods:  cmd.append(repr(self.mods))
+        if self.mods:  cmd.append(f'+{self.mods!r}')
         if self.combo: cmd.append(f'{self.combo}x')
         if self.nmiss: cmd.append(f'{self.nmiss}xM')
         if self.acc:   cmd.append(f'{self.acc:.4f}%')

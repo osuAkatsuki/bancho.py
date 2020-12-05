@@ -5,14 +5,15 @@ from cmyui import log
 
 from objects.player import Player
 from objects.channel import Channel
-from objects.match import Match
+from objects.match import Match, MapPool
 from constants.privileges import Privileges
 from objects import glob
 
 __all__ = (
     'ChannelList',
     'MatchList',
-    'PlayerList'
+    'PlayerList',
+    'MapPoolList'
 )
 
 # NOTE: these should all inherit from a base class,
@@ -244,3 +245,52 @@ class PlayerList:
 
         if glob.config.debug:
             log(f'{p} removed from global player list.')
+
+class MapPoolList:
+    __slots__ = ('pools',)
+
+    def __init__(self) -> None:
+        self.pools: list[MapPool] = []
+
+    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
+        # XXX: can be either a string (to get by name),
+        # or a slice, for indexing the internal array.
+        if isinstance(index, str):
+            return self.get(index)
+        else:
+            return self.pools[index]
+
+    def __len__(self) -> int:
+        return len(self.pools)
+
+    def __contains__(self, p: Union[MapPool, str]) -> bool:
+        # allow us to either pass in the pool
+        # obj, or the pool name as a string.
+        if isinstance(p, str):
+            return p in [pool.name for pool in self.pools]
+        else:
+            return p in self.pools
+
+    def get(self, name: str) -> Optional[MapPool]:
+        """Get a pool from the list by `name`."""
+        for p in self.pools:
+            if p.name == name:
+                return p
+
+    async def add(self, p: MapPool) -> None:
+        """Attempt to add `p` to the list."""
+        if p in self.pools:
+            log(f'{p} double-added to pools list?')
+            return
+
+        self.pools.append(p)
+
+        if glob.config.debug:
+            log(f'{p} added to pools list.')
+
+    async def remove(self, p: MapPool) -> None:
+        """Attempt to remove `p` from the list."""
+        self.pools.remove(p)
+
+        if glob.config.debug:
+            log(f'{p} removed from pools list.')

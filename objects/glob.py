@@ -7,16 +7,17 @@ import config # imported for indirect use
 
 if TYPE_CHECKING:
     from aiohttp.client import ClientSession
-    from cmyui import AsyncSQLPoolWrapper, Version
+    from cmyui import AsyncSQLPool, Version
     from objects.player import Player
 
 __all__ = ('players', 'channels',
            'matches', 'db', 'cache')
 
-players = PlayerList()
 channels = ChannelList()
 matches = MatchList()
-db: 'AsyncSQLPoolWrapper'
+players = PlayerList()
+pools = MapPoolList()
+db: 'AsyncSQLPool'
 http: 'ClientSession'
 version: 'Version'
 bot: 'Player'

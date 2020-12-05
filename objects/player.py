@@ -485,7 +485,7 @@ class Player:
 
         await self.leave_channel(self.match.chat)
 
-        if all(s.empty() for s in self.match.slots):
+        if all(map(lambda s: s.empty(), self.match.slots)):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f'Match {self.match} finished.')

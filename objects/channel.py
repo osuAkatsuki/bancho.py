@@ -91,7 +91,7 @@ class Channel:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
 
-        if len(self.players) == 1 and self.instance:
+        if len(self.players) == 0 and self.instance:
             # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.

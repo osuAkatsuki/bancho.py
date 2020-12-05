@@ -502,7 +502,7 @@ async def osuSearchSetHandler(p: Player, conn: Connection) -> Optional[bytes]:
 UNDEF = 9999
 autoban_pp = (
     # high ceiling values for autoban as a very simple form
-    #  of "anticheat", simply ban a user if they are not
+    # of "anticheat", simply ban a user if they are not
     # whitelisted, and submit a score of too high caliber.
     # Values below are in form (non_fl, fl), as fl has custom
     # vals as it finds quite a few additional cheaters on the side.
@@ -698,7 +698,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
         performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
 
-        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed} {s.mods!r} with {s.acc:.2f}% for {performance}.']
+        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed} +{s.mods!r} with {s.acc:.2f}% for {performance}.']
 
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previously: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
@@ -1394,7 +1394,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
     async with aiofiles.open(path, 'rb') as f:
         return await f.read()
 
-@domain.route(re.compile(r'^/d/\d{0,10}$'))
+@domain.route(re.compile(r'^/d/\d{1,10}$'))
 async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'

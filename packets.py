@@ -415,7 +415,7 @@ class BanchoPacketReader:
         m.host = await glob.players.get_by_id(host_id)
 
         m.mode = GameMode(await self.read_i8())
-        m.match_scoring = MatchScoringTypes(await self.read_i8())
+        m.win_condition = MatchScoringTypes(await self.read_i8())
         m.team_type = MatchTeamTypes(await self.read_i8())
         m.freemods = await self.read_i8() == 1
 
@@ -535,7 +535,7 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
             ret += s.player.id.to_bytes(4, 'little')
 
     ret += m.host.id.to_bytes(4, 'little')
-    ret.extend((m.mode, m.match_scoring,
+    ret.extend((m.mode, m.win_condition,
                 m.team_type, m.freemods))
 
     if m.freemods:
