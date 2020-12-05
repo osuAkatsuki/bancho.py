@@ -624,7 +624,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         else:
             # target is not aika, send the message normally
-            await t.send(p.name, msg)
+            await t.send(p, msg)
 
             # insert mail into db,
             # marked as unread.
