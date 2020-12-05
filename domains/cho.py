@@ -15,11 +15,15 @@ from constants.types import osuTypes
 from constants.mods import Mods
 from constants import commands
 from constants import regexes
-from objects import glob
-from objects.match import MatchTeamTypes, SlotStatus, Teams
+
+from objects.match import MatchTeamTypes, SlotStatus, MatchTeams
 from objects.player import Player, PresenceFilter, Action
+from objects.channel import Channel
 from objects.beatmap import Beatmap
+from objects import glob
+
 from constants.privileges import Privileges
+from constants.gamemodes import GameMode
 
 """ Bancho: handle connections from the osu! client """
 
@@ -73,7 +77,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         await packet.handle(player)
 
         if glob.config.debug:
-            log(repr(packet.type), Ansi.LMAGENTA)
+            log(f'{packet.type!r}', Ansi.LMAGENTA)
 
     player.last_recv_time = int(time.time())
 
@@ -112,11 +116,12 @@ class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
 
     async def handle(self, p: Player) -> None:
         # update the user's status.
-        p.status.update(
-            self.action, self.info_text,
-            self.map_md5, self.mods,
-            self.mode, self.map_id
-        )
+        p.status.action = Action(self.action)
+        p.status.info_text = self.info_text
+        p.status.map_md5 = self.map_md5
+        p.status.mods = Mods(self.mods)
+        p.status.mode = GameMode(self.mode)
+        p.status.map_id = self.map_id
 
         # broadcast it to all online players.
         glob.players.enqueue(packets.userStats(p))
@@ -477,7 +482,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # add `p` to the global player list,
     # making them officially logged in.
-    glob.players.add(p)
+    glob.players.append(p)
 
     log(f'{p} logged in.', Ansi.LCYAN)
     return bytes(data), p.token
@@ -649,7 +654,25 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
     match: osuTypes.match
 
     async def handle(self, p: Player) -> None:
-        self.match.host = p
+        if not glob.matches.append(self.match):
+            # failed to create match (match slots full).
+            await p.send(glob.bot, 'Failed to create match (no slots available).')
+            p.enqueue(packets.matchJoinFail())
+            return
+
+        # create the channel and add it
+        # to the global channel list as
+        # an instanced channel.
+        chan = Channel(
+            name=f'#multi_{self.match.id}',
+            topic=f"MID {self.match.id}'s multiplayer channel.",
+            auto_join=False,
+            instance=True
+        )
+
+        glob.channels.append(chan)
+        self.match.chat = chan
+
         await p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
 
@@ -778,14 +801,14 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
 
         if m.team_type != self.new.team_type:
             # if theres currently a scrim going on, only allow
-            # team mode to change by using the !mp teams command.
+            # team type to change by using the !mp teams command.
             if m.winning_pts != 0:
                 _team = (
                     'head-to-head', 'tag-coop',
                     'team-vs', 'tag-team-vs'
                 )[self.new.team_type]
 
-                msg = ('Changing team mode while scrimming will reset '
+                msg = ('Changing team type while scrimming will reset '
                        'the overall score - to do so, please use the '
                        f'!mp teams {_team} command.')
                 await m.chat.send(glob.bot, msg)
@@ -794,12 +817,12 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 # defaults are (ffa: neutral, teams: red).
                 if self.new.team_type in (MatchTeamTypes.head_to_head,
                                           MatchTeamTypes.tag_coop):
-                    new_t = Teams.neutral
+                    new_t = MatchTeams.neutral
                 else:
-                    new_t = Teams.red
+                    new_t = MatchTeams.red
 
                 # change each active slots team to
-                # fit the correspoding team mode.
+                # fit the correspoding team type.
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
                         s.team = new_t
@@ -1047,7 +1070,7 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
 
         for s in m.slots:
             if p is s.player:
-                s.team = Teams.blue if s.team != Teams.blue else Teams.red
+                s.team = MatchTeams.blue if s.team != MatchTeams.blue else MatchTeams.red
                 break
         else:
             log(f'{p} tried changing team outside of a match? (2)')

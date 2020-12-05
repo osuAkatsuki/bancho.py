@@ -19,8 +19,8 @@ from objects import glob
 from objects.player import Player
 from objects.channel import Channel
 from objects.beatmap import Beatmap, RankedStatus
-from objects.match import (MapPool, Match, MatchScoringTypes,
-                           MatchTeamTypes, SlotStatus, Teams)
+from objects.match import (MapPool, Match, MatchWinConditions,
+                           MatchTeamTypes, SlotStatus, MatchTeams)
 
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
@@ -180,7 +180,7 @@ async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not mods:
         mods = Mods.NOMOD
 
-    _msg.append(repr(mods))
+    _msg.append(f'{mods!r}')
 
     if acc:
         # custom accuracy specified, calculate it on the fly.
@@ -836,28 +836,33 @@ async def mp_unlock(p: Player, m: Match, msg: Sequence[str]) -> str:
 
 @mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_teams(p: Player, m: Match, msg: Sequence[str]) -> str:
-    """Change the team mode for the current match."""
-    if len(msg) != 1 or msg[0] not in ('head-to-head', 'tag-coop',
-                                       'team-vs', 'tag-team-vs'):
-        return 'Invalid syntax: !mp teams <mode>'
+    """Change the team type for the current match."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp teams <type>'
 
-    m.team_type = {
-        'head-to-head': MatchTeamTypes.head_to_head,
-        'tag-coop': MatchTeamTypes.tag_coop,
-        'team-vs': MatchTeamTypes.team_vs,
-        'tag-team-vs': MatchTeamTypes.tag_team_vs
-    }[msg[0]]
+    team_type = msg[0]
+
+    if team_type in ('ffa', 'freeforall', 'head-to-head'):
+        m.team_type = MatchTeamTypes.head_to_head
+    elif team_type in ('tag', 'coop', 'co-op', 'tag-coop'):
+        m.team_type = MatchTeamTypes.tag_coop
+    elif team_type in ('teams', 'team-vs', 'teams-vs'):
+        m.team_type = MatchTeamTypes.team_vs
+    elif team_type in ('tag-teams', 'tag-team-vs', 'tag-teams-vs'):
+        m.team_type = MatchTeamTypes.tag_team_vs
+    else:
+        return 'Unknown team type. (ffa, tag, teams, tag-teams)'
 
     # find the new appropriate default team.
     # defaults are (ffa: neutral, teams: red).
     if m.team_type in (MatchTeamTypes.head_to_head,
                        MatchTeamTypes.tag_coop):
-        new_t = Teams.neutral
+        new_t = MatchTeams.neutral
     else:
-        new_t = Teams.red
+        new_t = MatchTeams.red
 
     # change each active slots team to
-    # fit the correspoding team mode.
+    # fit the correspoding team type.
     for s in m.slots:
         if s.status & SlotStatus.has_player:
             s.team = new_t
@@ -867,13 +872,13 @@ async def mp_teams(p: Player, m: Match, msg: Sequence[str]) -> str:
         m.match_points.clear()
 
     m.enqueue_state()
-    return 'Match team mode updated.'
+    return 'Match team type updated.'
 
 @mp_commands.add(triggers=['condition', 'cond'], priv=Privileges.Normal, public=True)
 async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Change the win condition for the match."""
     if len(msg) != 1:
-        return 'Invalid syntax: !mp condition <mode>'
+        return 'Invalid syntax: !mp condition <type>'
 
     cond = msg[0]
 
@@ -892,13 +897,13 @@ async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
             m.use_pp_scoring = False
 
         if cond == 'score':
-            m.win_condition = MatchScoringTypes.score
+            m.win_condition = MatchWinConditions.score
         elif cond in ('accuracy', 'acc'):
-            m.win_condition = MatchScoringTypes.accuracy
+            m.win_condition = MatchWinConditions.accuracy
         elif cond == 'combo':
-            m.win_condition = MatchScoringTypes.combo
+            m.win_condition = MatchWinConditions.combo
         elif cond in ('scorev2', 'v2'):
-            m.win_condition = MatchScoringTypes.scorev2
+            m.win_condition = MatchWinConditions.scorev2
         else:
             return 'Invalid win condition. (score, acc, combo, scorev2, *pp)'
 
@@ -1050,7 +1055,7 @@ async def pool_create(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     res = await glob.db.fetch('SELECT * FROM tourney_pools '
                               'WHERE name = %s', [name])
 
-    glob.pools.add(MapPool(**res))
+    glob.pools.append(MapPool(**res))
 
     return f'{name} created.'
 

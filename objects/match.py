@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 
 __all__ = (
     'SlotStatus',
-    'Teams',
-    'MatchTypes',
-    'MatchScoringTypes',
+    'MatchTeams',
+    #'MatchTypes',
+    'MatchWinConditions',
     'MatchTeamTypes',
     'ScoreFrame',
     'MapPool',
@@ -49,18 +49,22 @@ class SlotStatus(IntEnum):
     has_player = not_ready | ready | no_map | playing | complete
 
 @unique
-class Teams(IntEnum):
+class MatchTeams(IntEnum):
     neutral = 0
     blue    = 1
     red     = 2
 
+"""
+# implemented by osu! and send between client/server,
+# quite frequently even, but seems useless??
 @unique
 class MatchTypes(IntEnum):
     standard  = 0
     powerplay = 1 # literally no idea what this is for
+"""
 
 @unique
-class MatchScoringTypes(IntEnum):
+class MatchWinConditions(IntEnum):
     score    = 0
     accuracy = 1
     combo    = 2
@@ -124,14 +128,14 @@ class MapPool:
             self.maps[key] = bmap
 
 class Slot:
-    """A class to represent a single slot in an osu! multiplayer match."""
+    """An individual player slot in an osu! multiplayer match."""
     __slots__ = ('player', 'status', 'team',
                  'mods', 'loaded', 'skipped')
 
     def __init__(self) -> None:
         self.player: Optional['Player'] = None
         self.status = SlotStatus.open
-        self.team = Teams.neutral
+        self.team = MatchTeams.neutral
         self.mods = Mods.NOMOD
         self.loaded = False
         self.skipped = False
@@ -148,14 +152,14 @@ class Slot:
     def reset(self) -> None:
         self.player = None
         self.status = SlotStatus.open
-        self.team = Teams.neutral
+        self.team = MatchTeams.neutral
         self.mods = Mods.NOMOD
         self.loaded = False
         self.skipped = False
 
 class Match:
     """\
-    A class to represent an osu! multiplayer match.
+    An osu! multiplayer match.
 
     Possibly confusing attributes
     -----------
@@ -165,9 +169,6 @@ class Match:
 
     slots: list[`Slot`]
         A list of 16 `Slot` objects representing the match's slots.
-
-    type: `MatchTypes`
-        I have no idea why this exists.
 
     seed: `int`
         The seed used for osu!mania's random mod.
@@ -180,7 +181,8 @@ class Match:
         'map_id', 'map_md5', 'map_name',
         'mods', 'freemods', 'mode',
         'chat', 'slots',
-        'type', 'team_type', 'win_condition',
+        #'type',
+        'team_type', 'win_condition',
         'in_progress', 'seed',
 
         'pool', # mappool currently selected
@@ -209,9 +211,9 @@ class Match:
         self.chat: Optional['Channel'] = None #multiplayer
         self.slots = [Slot() for _ in range(16)]
 
-        self.type = MatchTypes.standard
+        #self.type = MatchTypes.standard
         self.team_type = MatchTeamTypes.head_to_head
-        self.win_condition = MatchScoringTypes.score
+        self.win_condition = MatchWinConditions.score
 
         self.in_progress = False
         self.seed = 0
@@ -436,9 +438,9 @@ class Match:
         def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
             if self.use_pp_scoring:
                 return f'{score:.2f}pp'
-            elif self.win_condition == MatchScoringTypes.accuracy:
+            elif self.win_condition == MatchWinConditions.accuracy:
                 return f'{score:.2f}%'
-            elif self.win_condition == MatchScoringTypes.combo:
+            elif self.win_condition == MatchWinConditions.combo:
                 return f'{score}x'
             else:
                 return str(score)
@@ -469,14 +471,14 @@ class Match:
             # TODO: check if the teams are named or not
             if rgx := regexes.tourney_matchname.match(self.name):
                 match_name = rgx['name']
-                team_names = {Teams.blue: rgx['T1'],
-                              Teams.red: rgx['T2']}
+                team_names = {MatchTeams.blue: rgx['T1'],
+                              MatchTeams.red: rgx['T2']}
             else:
                 match_name = self.name
-                team_names = {Teams.blue: 'Blue',
-                              Teams.red: 'Red'}
+                team_names = {MatchTeams.blue: 'Blue',
+                              MatchTeams.red: 'Red'}
 
-            loser = Teams({1: 2, 2: 1}[winner])
+            loser = MatchTeams({1: 2, 2: 1}[winner])
 
             # w/l = winner/loser
 

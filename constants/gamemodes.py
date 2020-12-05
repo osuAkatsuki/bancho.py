@@ -33,7 +33,6 @@ gm_sql = (
 
 @unique
 class GameMode(IntEnum):
-    """A class to represent a gamemode."""
     vn_std   = 0
     vn_taiko = 1
     vn_catch = 2

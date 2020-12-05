@@ -14,9 +14,8 @@ from cmyui import log, Ansi
 import struct
 
 from objects import glob
-from objects.match import (Match, ScoreFrame, SlotStatus,
-                           MatchTypes, MatchTeamTypes,
-                           MatchScoringTypes, Teams)
+from objects.match import (Match, ScoreFrame, SlotStatus, MatchTeamTypes,
+                           MatchWinConditions, MatchTeams)
 from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -409,7 +408,7 @@ class BanchoPacketReader:
             slot.status = await self.read_i8()
 
         for slot in m.slots:
-            slot.team = Teams(await self.read_i8())
+            slot.team = MatchTeams(await self.read_i8())
 
         for slot in m.slots:
             if slot.status & SlotStatus.has_player:
@@ -420,7 +419,7 @@ class BanchoPacketReader:
         m.host = await glob.players.get_by_id(host_id)
 
         m.mode = GameMode(await self.read_i8())
-        m.win_condition = MatchScoringTypes(await self.read_i8())
+        m.win_condition = MatchWinConditions(await self.read_i8())
         m.team_type = MatchTeamTypes(await self.read_i8())
         m.freemods = await self.read_i8() == 1
 
@@ -524,7 +523,8 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     else:
         passwd = b'\x00'
 
-    ret = bytearray(struct.pack('<HbbI', m.id, m.in_progress, m.type, m.mods))
+    # 0 is for match type
+    ret = bytearray(struct.pack('<HbbI', m.id, m.in_progress, 0, m.mods))
     ret += write_string(m.name)
     ret += passwd
 

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
-import asyncio
 from datetime import datetime
 from functools import partial
 from typing import Any, Optional, Coroutine
+from dataclasses import dataclass
+from enum import IntEnum, unique
 from cmyui import log, Ansi
 import queue
 import time
@@ -19,7 +20,7 @@ from objects.channel import Channel
 from objects.match import Match, SlotStatus
 from objects.beatmap import Beatmap
 from objects import glob
-from enum import IntEnum, unique
+
 import packets
 
 __all__ = (
@@ -28,43 +29,16 @@ __all__ = (
     'Player'
 )
 
-class ModeData:
-    """A class to represent a player's stats in a single gamemode."""
-    __slots__ = (
-        'tscore', 'rscore', 'pp', 'acc',
-        'plays', 'playtime', 'max_combo', 'rank'
-    )
-
-    def __init__(self):
-        self.tscore = 0
-        self.rscore = 0
-        self.pp = 0
-        self.acc = 0.0
-        self.plays = 0
-        self.playtime = 0
-        self.max_combo = 0
-        self.rank = 0 # global rank
-
-    def update(self, **kwargs) -> None:
-        self.tscore = kwargs.get('tscore', 0)
-        self.rscore = kwargs.get('rscore', 0)
-        self.pp = kwargs.get('pp', 0)
-        self.acc = kwargs.get('acc', 0.0)
-        self.plays = kwargs.get('plays', 0)
-        self.playtime = kwargs.get('playtime', 0)
-        self.max_combo = kwargs.get('max_combo', 0)
-        self.rank = kwargs.get('rank', 0)
-
 @unique
 class PresenceFilter(IntEnum):
-    """A class to represent the update scope the client wishes to receive."""
+    """osu! client side filter for which users the player can see."""
     Nil     = 0
     All     = 1
     Friends = 2
 
 @unique
 class Action(IntEnum):
-    """A class to represent the client's current state."""
+    """The client's current state."""
     Idle         = 0
     Afk          = 1
     Playing      = 2
@@ -80,38 +54,32 @@ class Action(IntEnum):
     Multiplaying = 12
     OsuDirect    = 13
 
+@dataclass
+class ModeData:
+    """A player's stats in a single gamemode."""
+    tscore: int
+    rscore: int
+    pp: int
+    acc: float
+    plays: int
+    playtime: int
+    max_combo: int
+    rank: int # global
+
+@dataclass
 class Status:
-    """A class to represent the current status of a player."""
-    __slots__ = (
-        'action', 'info_text', 'map_md5',
-        'mods', 'mode', 'map_id'
-    )
+    """The current status of a player."""
+    action: Action = Action.Idle
+    info_text: str = ''
+    map_md5: str = ''
+    mods: Mods = Mods.NOMOD
+    mode: GameMode = GameMode.vn_std
+    map_id: int = 0
 
-    def __init__(self):
-        self.action = Action.Idle
-        self.info_text = ''
-        self.map_md5 = ''
-        self.mods = Mods.NOMOD
-        self.mode = GameMode.vn_std
-        self.map_id = 0
-
-    def update(self, action: int, info_text: str, map_md5: str,
-               mods: int, mode: int, map_id: int) -> None:
-        """Fully overwrite the class with new params."""
-
-        # osu! sends both map id and md5, but
-        # we'll only need one since we fetch a
-        # beatmap obj from cache/sql anyways..
-        self.action = Action(action)
-        self.info_text = info_text
-        self.map_md5 = map_md5
-        self.mods = Mods(mods)
-        self.mode = GameMode.from_params(mode, self.mods)
-        self.map_id = map_id
 
 class Player:
     """\
-    A class to represent a player.
+    Server side representation of a player; not necessarily online.
 
     Possibly confusing attributes
     -----------
@@ -166,7 +134,7 @@ class Player:
         self.token = self.generate_token()
         self.safe_name = self.make_safe(self.name)
 
-        self.stats = {mode: ModeData() for mode in GameMode}
+        self.stats = {mode: None for mode in GameMode}
         self.status = Status()
 
         self.friends: set[int] = set() # userids, not player objects
@@ -420,8 +388,9 @@ class Player:
             self.enqueue(packets.matchJoinFail())
             return False
 
-        if m.chat: # match already exists, we're simply joining.
-            if passwd != m.passwd: # eff: could add to if? or self.create_m..
+        if self is not m.host:
+            # match already exists, we're simply joining.
+            if passwd != m.passwd:
                 log(f'{self} tried to join {m} with incorrect passwd.')
                 self.enqueue(packets.matchJoinFail())
                 return False
@@ -433,25 +402,6 @@ class Player:
         else:
             # match is being created
             slotID = 0
-
-            # add to our global match list;
-            # this will generate a match id.
-            await glob.matches.add(m)
-
-            # create the channel and add it
-            # to the global channel list as
-            # an instanced channel.
-            match_chan = Channel(
-                name = f'#multi_{m.id}',
-                topic = f"MID {m.id}'s multiplayer channel.",
-                read = Privileges.Normal,
-                write = Privileges.Normal,
-                auto_join = False,
-                instance = True
-            )
-
-            await glob.channels.add(match_chan)
-            m.chat = glob.channels[f'#multi_{m.id}']
 
         if not await self.join_channel(m.chat):
             log(f'{self} failed to join {m.chat}.')
@@ -489,7 +439,7 @@ class Player:
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f'Match {self.match} finished.')
-            await glob.matches.remove(self.match)
+            glob.matches.remove(self.match)
 
             if lobby := glob.channels['#lobby']:
                 lobby.enqueue(packets.disposeMatch(self.match.id))
@@ -580,7 +530,7 @@ class Player:
                 instance = True
             )
 
-            await glob.channels.add(spec_chan)
+            glob.channels.append(spec_chan)
 
             c = glob.channels[chan_name]
 
@@ -775,7 +725,8 @@ class Player:
                 'AND priv & 1', [res['pp']]
             ))['c'] + 1
 
-            self.stats[mode].update(**res)
+            # update stats
+            self.stats[mode] = ModeData(**res)
 
     async def stats_from_sql(self, mode: GameMode) -> None:
         """Retrieve `self`'s `mode` stats from sql."""

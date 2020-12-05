@@ -27,7 +27,7 @@ from objects.match import MapPool
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(3, 0, 1)
+    glob.version = cmyui.Version(3, 0, 2)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
@@ -38,11 +38,11 @@ async def on_start() -> None:
     glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
     glob.bot.last_recv_time = 0x7fffffff
 
-    glob.players.add(glob.bot)
+    glob.players.append(glob.bot)
 
     # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
-        await glob.channels.add(Channel(**chan))
+        glob.channels.append(Channel(**chan))
 
     # add all mappools from db.
     async for pool in glob.db.iterall('SELECT * FROM tourney_pools'):
@@ -51,7 +51,7 @@ async def on_start() -> None:
 
         pool = MapPool(**pool)
         await pool.maps_from_sql()
-        await glob.pools.add(pool)
+        glob.pools.append(pool)
 
     # add new donation ranks & enqueue tasks to remove current ones.
     # TODO: this system can get quite a bit better; rather than just

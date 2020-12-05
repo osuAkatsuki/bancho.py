@@ -6,10 +6,7 @@ __all__ = ('Privileges', 'BanchoPrivileges')
 
 @unique
 class Privileges(IntFlag):
-    """\
-    A class to represent user privileges server-side.
-    Gaps inbetween groups are left for future changes.
-    """
+    """Server side user privileges."""
 
     # privileges intended for all normal players.
     Normal      = 1 << 0 # is an unbanned player.

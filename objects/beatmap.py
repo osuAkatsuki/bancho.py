@@ -21,8 +21,8 @@ __all__ = 'RankedStatus', 'Beatmap'
 
 @unique
 class RankedStatus(IntEnum):
-    """A class to represent osu! ranked statuses server-side for gulag.
-       These are the same as the statuses used in osu!'s getscores.php.
+    """Server side osu! beatmap ranked statuses.
+       Same as used in osu!'s /web/getscores.php.
     """
     NotSubmitted = -1
     Pending = 0

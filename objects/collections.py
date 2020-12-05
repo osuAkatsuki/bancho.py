@@ -19,12 +19,16 @@ __all__ = (
 # NOTE: these should all inherit from a base class,
 # a lot of their functionality is common between all.
 
-class ChannelList:
-    """A class to represent all chat channels on the gulag."""
-    __slots__ = ('channels',)
+class ChannelList(list):
+    """The currently active chat channels on the server."""
 
-    def __init__(self):
-        self.channels: list[Channel] = []
+    def __contains__(self, o: Union[Channel, str]) -> bool:
+        """Check whether internal list contains `o`."""
+        # Allow string to be passed to compare vs. name.
+        if isinstance(o, str):
+            return o in map(lambda c: c.name, self)
+        else:
+            return super().__contains__(o)
 
     def __getitem__(self, index: Union[int, slice, str]) -> Channel:
         # XXX: can be either a string (to get by name),
@@ -32,94 +36,71 @@ class ChannelList:
         if isinstance(index, str):
             return self.get(index)
         else:
-            return self.channels[index]
-
-    def __len__(self) -> int:
-        return len(self.channels)
-
-    def __contains__(self, c: Union[Channel, str]) -> bool:
-        # allow us to either pass in the channel
-        # obj, or the channel name as a string.
-        if isinstance(c, str):
-            return c in [chan.name for chan in self.channels]
-        else:
-            return c in self.channels
+            return self[index]
 
     def get(self, name: str) -> Optional[Channel]:
         """Get a channel from the list by `name`."""
-        for c in self.channels:
+        for c in self:
             if c._name == name:
                 return c
 
-    async def add(self, c: Channel) -> None:
-        """Attempt to add `c` to the list."""
-        if c in self.channels:
-            log(f'{c} double-added to channels list?')
-            return
-
-        self.channels.append(c)
-
+    def append(self, c: Channel) -> None:
+        """Append `c` to internal list."""
         if glob.config.debug:
             log(f'{c} added to channels list.')
 
-    async def remove(self, c: Channel) -> None:
-        """Attempt to remove `c` from the list."""
-        self.channels.remove(c)
+        return super().append(c)
 
+    def remove(self, c: Channel) -> None:
+        """Remove `c` from internal list."""
         if glob.config.debug:
             log(f'{c} removed from channels list.')
 
-class MatchList:
-    """A class to represent all multiplayer matches on the gulag."""
-    __slots__ = ('matches',)
+        try:
+            return super().remove(c)
+        except:
+            ...
+class MatchList(list):
+    """The currently active multiplayer matches on the server."""
 
-    def __init__(self):
-        self.matches = [None for _ in range(32)] # max matches.
-
-    def __getitem__(self, index: Union[int, slice]) -> Optional[Match]:
-        return self.matches[index]
-
-    def __len__(self) -> int:
-        return len(self.matches)
-
-    def __contains__(self, m: Match) -> bool:
-        return m in self.matches
+    def __init__(self) -> None:
+        super().__init__()
+        self.extend([None] * 32)
 
     def get_free(self) -> Optional[int]:
         """Return the first free slot id from `self`."""
-        for idx, m in enumerate(self.matches):
-            if not m:
+        for idx, m in enumerate(self):
+            if m is None:
                 return idx
 
-    async def add(self, m: Match) -> None:
-        """Attempt to add `m` to the list."""
-        if m in self.matches:
-            log(f'{m} double-added to matches list?')
-            return
+    def append(self, m: Match) -> bool:
+        if m in self:
+            breakpoint()
 
         if (free := self.get_free()) is not None:
-            # set the id of the match
-            # to our free slot found.
+            # set the id of the match to the free slot.
             m.id = free
-            self.matches[free] = m
+            self[free] = m
 
             if glob.config.debug:
                 log(f'{m} added to matches list.')
+
+            return True
         else:
             log(f'Match list is full! Could not add {m}.')
+            return False
 
-    async def remove(self, m: Match) -> None:
-        """Attempt to remove `m` from the list."""
-        for idx, _m in enumerate(self.matches):
+    def remove(self, m: Match) -> None:
+        for i, _m in enumerate(self):
             if m is _m:
-                self.matches[idx] = None
+                self[i] = None
                 break
 
         if glob.config.debug:
             log(f'{m} removed from matches list.')
 
 class PlayerList:
-    """A class to represent all players online on the gulag."""
+    """The currently active players on the server."""
     __slots__ = ('players',)
 
     def __init__(self):
@@ -227,7 +208,7 @@ class PlayerList:
 
         return await self.get_by_name(name)
 
-    def add(self, p: Player) -> None:
+    def append(self, p: Player) -> None:
         """Attempt to add `p` to the list."""
         if p in self.players:
             if glob.config.debug:
@@ -246,51 +227,41 @@ class PlayerList:
         if glob.config.debug:
             log(f'{p} removed from global player list.')
 
-class MapPoolList:
-    __slots__ = ('pools',)
+class MapPoolList(list):
+    """The currently active mappools on the server."""
 
-    def __init__(self) -> None:
-        self.pools: list[MapPool] = []
-
-    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
+    def __getitem__(self, index: Union[int, slice, str]) -> MapPool:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
             return self.get(index)
         else:
-            return self.pools[index]
+            return super().__getitem__(index)
 
-    def __len__(self) -> int:
-        return len(self.pools)
-
-    def __contains__(self, p: Union[MapPool, str]) -> bool:
-        # allow us to either pass in the pool
-        # obj, or the pool name as a string.
-        if isinstance(p, str):
-            return p in [pool.name for pool in self.pools]
+    def __contains__(self, o: Union[MapPool, str]) -> bool:
+        """Check whether internal list contains `o`."""
+        # Allow string to be passed to compare vs. name.
+        if isinstance(o, str):
+            return o in [p.name for p in self]
         else:
-            return p in self.pools
+            return o in self
 
     def get(self, name: str) -> Optional[MapPool]:
         """Get a pool from the list by `name`."""
-        for p in self.pools:
+        for p in self:
             if p.name == name:
                 return p
 
-    async def add(self, p: MapPool) -> None:
+    def append(self, p: MapPool) -> None:
         """Attempt to add `p` to the list."""
-        if p in self.pools:
-            log(f'{p} double-added to pools list?')
-            return
-
-        self.pools.append(p)
+        super().append(p)
 
         if glob.config.debug:
             log(f'{p} added to pools list.')
 
-    async def remove(self, p: MapPool) -> None:
+    def remove(self, p: MapPool) -> None:
         """Attempt to remove `p` from the list."""
-        self.pools.remove(p)
+        super().remove(p)
 
         if glob.config.debug:
             log(f'{p} removed from pools list.')

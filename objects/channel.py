@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 __all__ = 'Channel',
 
 class Channel:
-    """A class to represent a chat channel.
+    """An osu! chat channel.
 
     Possibly confusing attributes
     -----------
@@ -95,7 +95,7 @@ class Channel:
             # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.
-            await glob.channels.remove(self)
+            glob.channels.remove(self)
 
     def enqueue(self, data: bytes, immune: tuple[int, ...] = ()) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""

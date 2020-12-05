@@ -63,7 +63,8 @@ class SubmissionStatus(IntEnum):
         }[self.value]
 
 class Score:
-    """A class to represent an osu! score.
+    """\
+    Server side representation of an osu! score; any gamemode.
 
     Attributes
     -----------
