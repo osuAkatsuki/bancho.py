@@ -20,7 +20,7 @@ from objects.player import Player
 from objects.channel import Channel
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import (MapPool, Match, MatchScoringTypes,
-                           MatchTeamTypes, SlotStatus)
+                           MatchTeamTypes, SlotStatus, Teams)
 
 Messageable = Union[Channel, Player]
 CommandResponse = dict[str, str]
@@ -863,26 +863,59 @@ async def mp_teams(p: Player, m: Match, msg: Sequence[str]) -> str:
         'tag-team-vs': MatchTeamTypes.tag_team_vs
     }[msg[0]]
 
-    if m.best_of:
+    # find the new appropriate default team.
+    # defaults are (ffa: neutral, teams: red).
+    if m.team_type in (MatchTeamTypes.head_to_head,
+                       MatchTeamTypes.tag_coop):
+        new_t = Teams.neutral
+    else:
+        new_t = Teams.red
+
+    # change each active slots team to
+    # fit the correspoding team mode.
+    for s in m.slots:
+        if s.status & SlotStatus.has_player:
+            s.team = new_t
+
+    if m.winning_pts != 0:
         # reset score if scrimming.
         m.match_points.clear()
 
     m.enqueue_state()
     return 'Match team mode updated.'
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['condition', 'cond'], priv=Privileges.Normal, public=True)
 async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Change the win condition for the match."""
-    if len(msg) != 1 or msg[0] not in ('score', 'accuracy',
-                                       'combo', 'scorev2'):
+    if len(msg) != 1:
         return 'Invalid syntax: !mp condition <mode>'
 
-    m.win_condition = {
-        'score': MatchScoringTypes.score,
-        'accuracy': MatchScoringTypes.accuracy,
-        'combo': MatchScoringTypes.combo,
-        'scorev2': MatchScoringTypes.scorev2
-    }[msg[0]]
+    cond = msg[0]
+
+    if cond == 'pp':
+        # special case - pp can't actually be used as an ingame
+        # win condition, but gulag allows it to be passed into
+        # this command during a scrims to use pp as a win cond.
+        if m.winning_pts == 0:
+            return 'PP is only useful as a win condition during scrims.'
+        if m.use_pp_scoring:
+            return 'PP scoring already enabled.'
+
+        m.use_pp_scoring = True
+    else:
+        if m.use_pp_scoring:
+            m.use_pp_scoring = False
+
+        if cond == 'score':
+            m.win_condition = MatchScoringTypes.score
+        elif cond in ('accuracy', 'acc'):
+            m.win_condition = MatchScoringTypes.accuracy
+        elif cond == 'combo':
+            m.win_condition = MatchScoringTypes.combo
+        elif cond in ('scorev2', 'v2'):
+            m.win_condition = MatchScoringTypes.scorev2
+        else:
+            return 'Invalid win condition. (score, acc, combo, scorev2, *pp)'
 
     m.enqueue_state(lobby=False)
     return 'Match win condition updated.'
@@ -897,23 +930,26 @@ async def mp_scrim(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not 0 <= (best_of := int(rgx[1])) < 16:
         return 'Best of must be in range 0-15.'
 
-    if best_of != 0:
+    winning_pts = (best_of // 2) + 1
+
+    if winning_pts != 0:
         # setting to real num
-        if m.best_of != 0:
+        if m.winning_pts != 0:
             return 'Already scrimming!'
 
-        if ~best_of & 1:
+        if ~winning_pts & 1:
             return 'Best of must be an odd number!'
 
-        msg = f'Started a best of {best_of} match!'
+        msg = (f'A scrimmage has been started by {p.name}; '
+               f'first to {winning_pts} points wins. Best of luck!')
     else:
         # setting to 0
-        if m.best_of == 0:
+        if m.winning_pts == 0:
             return 'Not currently scrimming!'
 
         msg = 'Scrimming cancelled.'
 
-    m.best_of = best_of
+    m.winning_pts = winning_pts
     m.match_points.clear()
 
     return msg

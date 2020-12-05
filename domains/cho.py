@@ -779,14 +779,15 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         if m.team_type != self.new.team_type:
             # if theres currently a scrim going on, only allow
             # team mode to change by using the !mp teams command.
-            if m.best_of != 0:
+            if m.winning_pts != 0:
                 _team = (
                     'head-to-head', 'tag-coop',
                     'team-vs', 'tag-team-vs'
                 )[self.new.team_type]
 
-                msg = ('To change team mode in a scrim, please use '
-                      f'!mp teams {_team}. (just preventing misclicks)')
+                msg = ('Changing team mode while scrimming will reset '
+                       'the overall score - to do so, please use the '
+                       f'!mp teams {_team} command.')
                 await m.chat.send(glob.bot, msg)
             else:
                 # find the new appropriate default team.
@@ -806,7 +807,14 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 # change the matches'.
                 m.team_type = self.new.team_type
 
-        m.win_condition = self.new.win_condition
+        if m.win_condition != self.new.win_condition:
+            # win condition changing; if `use_pp_scoring`
+            # is enabled, disable it. always use new cond.
+            if m.use_pp_scoring:
+                m.use_pp_scoring = False
+
+            m.win_condition = self.new.win_condition
+
         m.name = self.new.name
 
         m.enqueue_state()
@@ -866,7 +874,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue_state()
 
-        if m.best_of != 0:
+        if m.winning_pts != 0:
             # determine winner, update match points & inform players.
             asyncio.create_task(m.update_matchpoints(was_playing))
 

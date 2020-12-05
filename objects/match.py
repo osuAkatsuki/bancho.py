@@ -170,6 +170,8 @@ class Match:
     seed: `int`
         The seed used for osu!mania's random mod.
 
+    use_pp_scoring: `bool`
+        Whether pp should be used as a win condition override during scrims.
     """
     __slots__ = (
         'id', 'name', 'passwd', 'host', '_refs',
@@ -179,8 +181,11 @@ class Match:
         'type', 'team_type', 'win_condition',
         'in_progress', 'seed',
 
-        # tourney stuff
-        'pool', 'match_points', 'bans', 'best_of'
+        'pool', # mappool currently selected
+
+        # scrimmage stuff
+        'match_points', 'bans',
+        'winning_pts', 'use_pp_scoring'
     )
 
     def __init__(self) -> None:
@@ -209,11 +214,13 @@ class Match:
         self.in_progress = False
         self.seed = 0
 
-        # tourney stuff
         self.pool: Optional[MapPool] = None
+
+        # scrimmage stuff
         self.match_points = defaultdict(int) # {team/user: wins, ...} (resets when changing teams)
         self.bans = set() # {(mods, slot), ...}
-        self.best_of = 0
+        self.winning_pts = 0
+        self.use_pp_scoring = False # only for scrims
 
     @property
     def url(self) -> str:
@@ -348,7 +355,7 @@ class Match:
         Teams, match title: `OWC2015: (United States) vs. (China)`.
           United States takes the point! (293.32% vs 292.12%)
           Total Score: United States | 7 - 2 | China
-          United States takes the match, finishing with a score of 7 - 2!
+          United States takes the match, finishing OWC2015 with a score of 7 - 2!
 
         FFA, the top <=3 players will be listed for the total score.
           Justice takes the point! (94.32% [Match avg. 91.22%])
@@ -375,11 +382,16 @@ class Match:
     async def await_submissions(self, was_playing: list['Player']) -> Optional[dict[str, Union[int, float]]]:
         """Await score submissions from all players in completed state."""
         scores = defaultdict(int)
-        time_taken = 0 # allow up to 15s
+        time_taken = 0 # allow up to 10s
 
         ffa = self.team_type in (MatchTeamTypes.head_to_head,
                                  MatchTeamTypes.tag_coop)
-        win_cond = ('score', 'acc', 'max_combo', 'score')[self.win_condition]
+
+        if self.use_pp_scoring:
+            win_cond = 'pp'
+        else:
+            win_cond = ('score', 'acc', 'max_combo',
+                        'score')[self.win_condition]
 
         for s in was_playing:
             # continue trying to fetch each player's
@@ -388,7 +400,7 @@ class Match:
                 rc_score = s.player.recent_score
 
                 if rc_score and rc_score.bmap.md5 == self.map_md5 \
-                and rc_score.play_time > dt.now() - td(seconds=15):
+                and rc_score.play_time > dt.now() - td(seconds=10):
                     # score found, add to our scores dict if != 0.
                     if score := getattr(rc_score, win_cond):
                         key = s.player if ffa else s.team
@@ -400,7 +412,7 @@ class Match:
                 await asyncio.sleep(0.5)
                 time_taken += 0.5
 
-                if time_taken > 15:
+                if time_taken > 10:
                     # inform the match this user didn't
                     # submit a score in time, and thus
                     # the score couldn't be autocalced.
@@ -420,7 +432,9 @@ class Match:
         msg: list[str] = []
 
         def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
-            if self.win_condition == MatchScoringTypes.accuracy:
+            if self.use_pp_scoring:
+                return f'{score:.2f}pp'
+            elif self.win_condition == MatchScoringTypes.accuracy:
                 return f'{score:.2f}%'
             elif self.win_condition == MatchScoringTypes.combo:
                 return f'{score}x'
@@ -436,9 +450,9 @@ class Match:
             wmp = self.match_points[winner]
 
             # check if match point #1 has enough points to win.
-            if self.best_of and (wmp // 2) + 1 > self.best_of:
+            if self.winning_pts and wmp == self.winning_pts:
                 # we have a champion, announce & reset our match.
-                self.best_of = 0
+                self.winning_pts = 0
                 self.match_points.clear()
                 self.bans.clear()
 
@@ -481,9 +495,9 @@ class Match:
             msg.append(f'{wname} takes the point! ({ws} vs. {ls})')
 
             # check if the winner has enough match points to win the match.
-            if self.best_of and (wmp // 2) + 1 > self.best_of:
+            if self.winning_pts and wmp == self.winning_pts:
                 # we have a champion, announce & reset our match.
-                self.best_of = 0
+                self.winning_pts = 0
                 self.match_points.clear()
                 self.bans.clear()
 

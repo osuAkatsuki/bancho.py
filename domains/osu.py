@@ -1048,10 +1048,10 @@ async def getScores(p: Player, conn: Connection) -> Optional[bytes]:
         query.append('AND s.mods = %s')
         params.append(mods)
     elif rank_type == RankingType.Friends:
-        query.append( # kinda ugly doe
-            'AND s.userid IN ((SELECT user2 FROM friendships '
-            'WHERE user1 = {0}), {0})'.format(p.id)
-        )
+        # a little cursed, but my wrapper doesn't like being
+        # passed iterables yet, and nor does the lower lv api xd
+        friends_str = ','.join(map(str, p.friends))
+        query.append(f'AND s.userid IN ({friends_str}, {p.id})')
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
         params.append(p.country[1]) # letters, not id

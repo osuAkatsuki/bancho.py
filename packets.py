@@ -390,7 +390,10 @@ class BanchoPacketReader:
         # ignore match id (i16) and inprogress (i8).
         self._buf = self._buf[3:]
 
-        m.type = MatchTypes(await self.read_i8())
+        #m.type = MatchTypes(await self.read_i8())
+        if await self.read_i8() == 1:
+            breakpoint() # what is powerplay
+
         m.mods = Mods(await self.read_i32())
 
         m.name = await self.read_string()
