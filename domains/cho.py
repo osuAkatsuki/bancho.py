@@ -154,7 +154,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                 # they're not in a match?
                 return
 
-            t = glob.channels[f'#multi_{p.match.id}']
+            t = p.match.chat
         else:
             t = glob.channels[target]
 
@@ -289,6 +289,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         'FROM users WHERE name_safe = %s',
         [Player.make_safe(username)]
     )
+
+    p_row['priv'] = Privileges(p_row['priv'])
 
     if not p_row:
         # no account by this name exists.
@@ -1012,6 +1014,9 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
+            return
+
+        if p is not m.host:
             return
 
         # read new slot ID

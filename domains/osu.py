@@ -1517,7 +1517,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         user_id = await glob.db.execute(
             'INSERT INTO users '
             '(name, name_safe, email, pw_hash, creation_time, latest_activity) '
-            'VALUES (%s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
+            'VALUES (%s, %s, %s, %s, NOW(), UNIX_TIMESTAMP())',
             [name, safe_name, email, pw_bcrypt]
         )
 

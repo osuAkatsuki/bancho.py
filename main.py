@@ -111,7 +111,7 @@ if __name__ == '__main__':
         if not os.path.isdir(f'.data/{p}'):
             os.mkdir(f'.data/{p}')
 
-    app = cmyui.Server(name='gulag', gzip=4, verbose=True)
+    app = cmyui.Server(name='gulag', gzip=4, verbose=glob.config.debug)
 
     app.add_domains({cho_domain, osu_domain, ava_domain})
     app.add_tasks({on_start(), disconnect_inactive()})

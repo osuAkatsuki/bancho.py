@@ -663,7 +663,7 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_by_name(' '.join(msg))):
         return 'Could not find a user by that name.'
 
-    await t.join_match(m)
+    await t.join_match(m, m.passwd)
     return 'Welcome.'
 
 @mp_commands.add(priv=Privileges.Normal, public=True)
@@ -1225,7 +1225,7 @@ async def process_commands(p: Player, t: Messageable,
                     # message not in match channel
                     return
 
-                if p not in m.refs or not p.priv & Privileges.Tournament:
+                if p not in m.refs and not p.priv & Privileges.Tournament:
                     # doesn't have privs to use !mp commands.
                     return
 
