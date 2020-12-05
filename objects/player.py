@@ -17,7 +17,7 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 
 from objects.channel import Channel
-from objects.match import Match, SlotStatus
+from objects.match import Match, SlotStatus, MatchTeamTypes, MatchTeams
 from objects.beatmap import Beatmap
 from objects import glob
 
@@ -411,6 +411,11 @@ class Player:
             await self.leave_channel(lobby)
 
         slot = m.slots[0 if slotID == -1 else slotID]
+
+        # if in a teams-vs mode, switch team from neutral to red.
+        if m.team_type in (MatchTeamTypes.team_vs,
+                           MatchTeamTypes.tag_team_vs):
+            slot.team = MatchTeams.red
 
         slot.status = SlotStatus.not_ready
         slot.player = self
