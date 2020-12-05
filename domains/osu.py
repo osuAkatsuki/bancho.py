@@ -20,13 +20,17 @@ from cmyui import (Connection, Domain,
                    log, Ansi)
 
 import packets
+
 from constants.mods import Mods
 from constants.clientflags import ClientFlags
 from constants import regexes
+
 from objects.score import Score, SubmissionStatus
 from objects.player import Player, Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
+
+from utils.misc import __point_of_interest
 
 # TODO:
 # osu-rate.php: beatmap rating on score submission.
@@ -252,7 +256,7 @@ async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
         ))
 
     for bid in data['Ids']:
-        breakpoint()
+        __point_of_interest()
 
     return '\n'.join(ret).encode()
 
@@ -577,7 +581,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     s.time_elapsed = int(time_elapsed)
 
     if 'i' in conn.files:
-        breakpoint()
+        __point_of_interest()
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -850,7 +854,7 @@ async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
         average_frametime = data['AverageFrameTime'] * 1000
 
         if identifier:
-            breakpoint()
+            __point_of_interest()
 
         # chances are, if we can't find a very
         # recent score by a user, it just hasn't
@@ -884,7 +888,7 @@ async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
         # TODO: timing checks
 
         #if version != p.osu_ver:
-        #    breakpoint()
+        #    __point_of_interest()
 
         # remember that we've already received a report
         # for this score, so that we don't overwrite it.

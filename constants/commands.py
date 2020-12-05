@@ -151,7 +151,6 @@ async def mapsearch(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     return '\n'.join(map(_mapsearch_func, res)) + f'\nMaps: {len(res)}'
 
-# TODO: refactor with acc and more stuff
 @command(triggers=['with'], priv=Privileges.Normal, public=False)
 async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
@@ -500,20 +499,6 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 #    t.enqueue(packets.RTX(msg[1]))
 #    return 'pong'
 
-# XXX: not very useful, mostly just for testing/fun.
-@command(triggers=['spack'], priv=Privileges.Dangerous, public=False)
-async def send_empty_packet(p: Player, c: Messageable, msg: Sequence[str]) -> str:
-    """Send a specific (empty) packet by id to a player."""
-    if len(msg) < 2 or not msg[-1].isdecimal():
-        return 'Invalid syntax: !spack <name> <packetid>'
-
-    if not (t := await glob.players.get_by_name(' '.join(msg[:-1]))):
-        return 'Could not find a user by that name.'
-
-    packet = packets.BanchoPacket(int(msg[-1]))
-    t.enqueue(packets.write(packet))
-    return f'Wrote {packet!r} to {t}.'
-
 @command(priv=Privileges.Dangerous, public=False)
 async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Toggle the console's debug setting."""
@@ -606,7 +591,7 @@ async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # multiplayer match management.
 """
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['help', 'h'], priv=Privileges.Normal, public=True)
 async def mp_help(p: Player, m: Match, msg: Sequence[str]) -> str:
     cmds = []
 
@@ -656,7 +641,7 @@ async def mp_start(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.start()
     return 'Good luck!'
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['abort', 'a'], priv=Privileges.Normal, public=True)
 async def mp_abort(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Abort an in-progress multiplayer match."""
     if not m.in_progress:
@@ -700,7 +685,7 @@ async def mp_map(p: Player, m: Match, msg: Sequence[str]) -> str:
 @mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_mods(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Set the current match's mods, from string form."""
-    if len(msg) != 1 or not ~len(msg[0]) & 1: # len(msg[0]) % 2 == 0
+    if len(msg) != 1 or not ~len(msg[0]) & 1:
         return 'Invalid syntax: !mp mods <mods>'
 
     mods = Mods.from_str(msg[0])
@@ -719,7 +704,7 @@ async def mp_mods(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue_state()
     return 'Match mods updated.'
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['freemods', 'fm'], priv=Privileges.Normal, public=True)
 async def mp_freemods(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1 or msg[0] not in ('on', 'off'):
         return 'Invalid syntax: !mp freemods <on/off>'
@@ -773,7 +758,7 @@ async def mp_randpw(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.passwd = cmyui.rstring(16)
     return 'Match password randomized.'
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['invite', 'inv'], priv=Privileges.Normal, public=True)
 async def mp_invite(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Invite a player to the current match by name."""
     if len(msg) != 1:
@@ -956,7 +941,7 @@ async def mp_scrim(p: Player, m: Match, msg: Sequence[str]) -> str:
 
 # Mappool commands
 
-@mp_commands.add(priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['lp', 'loadpool'], priv=Privileges.Normal, public=True)
 async def mp_loadpool(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Load a specified mappool into the current match."""
     if len(msg) != 1:

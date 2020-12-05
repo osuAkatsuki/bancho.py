@@ -15,6 +15,8 @@ from constants.gamemodes import GameMode
 from objects import glob
 from objects.beatmap import Beatmap
 
+from utils.misc import __point_of_interest
+
 import packets
 
 if TYPE_CHECKING:
@@ -299,7 +301,7 @@ class Match:
                 immune: Sequence[int] = []) -> None:
         """Add data to be sent to all clients in the match."""
         if not self.chat:
-            breakpoint()
+            __point_of_interest()
 
         self.chat.enqueue(data, immune)
 
@@ -309,7 +311,7 @@ class Match:
     def enqueue_state(self, lobby: bool = True) -> None:
         """Enqueue `self`'s state to players in the match & lobby."""
         if not self.chat:
-            breakpoint()
+            __point_of_interest()
 
         # TODO: hmm this is pretty bad, writes twice
 

@@ -27,7 +27,7 @@ from objects.match import MapPool
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(3, 0, 0)
+    glob.version = cmyui.Version(3, 0, 1)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
