@@ -207,6 +207,7 @@ create table maps
 	version varchar(128) not null,
 	creator varchar(19) not null comment 'not 100% certain on len',
 	last_update datetime not null,
+	total_length int not null,
 	frozen tinyint(1) default 0 not null,
 	plays int default 0 not null,
 	passes int default 0 not null,
