@@ -5,7 +5,7 @@ import inspect
 from pathlib import Path
 from cmyui.logging import log, printc, Ansi
 
-def __point_of_interest():
+def point_of_interest():
     """Leave a pseudo-breakpoint somewhere to ask the user if
        they could pls submit their stacktrace to cmyui <3."""
     for fi in inspect.stack()[1:]:
@@ -22,7 +22,7 @@ def __point_of_interest():
         "Hey! If you're seeing this, osu! just did something pretty strange,",
         "and the gulag devs have left a breakpoint here. We'd really appreciate ",
         "if you could screenshot the data above, and send it to cmyui, either via ",
-        "Discord (cmyui#0425), or by email (cmyuiosu@gmail.com). Thanks! <3"
+        "Discord (cmyui#0425), or by email (cmyuiosu@gmail.com). Thanks! 😳😳😳"
     ))
 
     printc(msg, Ansi.LRED)

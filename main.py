@@ -27,7 +27,7 @@ from objects.match import MapPool
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(3, 0, 2)
+    glob.version = cmyui.Version(3, 0, 3)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
@@ -62,7 +62,7 @@ async def on_start() -> None:
         await asyncio.sleep(delay)
 
         p = await glob.players.get_by_id(userid, sql=True)
-        p.remove_priv(Privileges.Donator)
+        p.remove_privs(Privileges.Donator)
 
         log(f"{p}'s donation perks have expired.", Ansi.MAGENTA)
 

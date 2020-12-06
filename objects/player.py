@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from functools import partial
-from typing import Any, Optional, Coroutine
+from typing import TYPE_CHECKING, Any, Optional, Coroutine
 from dataclasses import dataclass
 from enum import IntEnum, unique
 from cmyui import log, Ansi
@@ -22,6 +22,9 @@ from objects.beatmap import Beatmap
 from objects import glob
 
 import packets
+
+if TYPE_CHECKING:
+    from objects.score import Score
 
 __all__ = (
     'ModeData',
@@ -123,13 +126,13 @@ class Player:
         'pres_filter', 'menu_options', '_queue'
     )
 
-    def __init__(self, id: int, name: str, priv: Privileges,
+    def __init__(self, id: int, name: str, priv: int,
                  utc_offset: int = 0, pm_private: bool = False,
                  silence_end: int = 0, osu_ver: datetime = None,
                  *args, **kwargs) -> None:
         self.id = id
         self.name = name
-        self.priv = priv
+        self.priv = Privileges(priv)
 
         self.token = self.generate_token()
         self.safe_name = self.make_safe(self.name)
@@ -220,7 +223,7 @@ class Player:
         return self.stats[self.status.mode]
 
     @property
-    def recent_score(self):
+    def recent_score(self) -> 'Score':
         """The player's most recently submitted score."""
         score = None
         for s in self.recent_scores.values():
@@ -269,7 +272,8 @@ class Player:
         glob.players.remove(self)
         glob.players.enqueue(packets.logout(self.id))
 
-    async def update_priv(self, new: Privileges) -> None:
+    async def update_privs(self, new: Privileges) -> None:
+        """Update `self`'s privileges to `new`."""
         self.priv = new
 
         await glob.db.execute(
@@ -279,8 +283,20 @@ class Player:
             [int(self.priv), self.id]
         )
 
-    async def remove_priv(self, mask: Privileges) -> None:
-        self.priv &= ~mask
+    async def add_privs(self, bits: Privileges) -> None:
+        """Update `self`'s privileges, adding `bits`."""
+        self.priv |= bits
+
+        await glob.db.execute(
+            'UPDATE users '
+            'SET priv = %s '
+            'WHERE id = %s',
+            [int(self.priv), self.id]
+        )
+
+    async def remove_privs(self, bits: Privileges) -> None:
+        """Update `self`'s privileges, removing `bits`."""
+        self.priv &= ~bits
 
         await glob.db.execute(
             'UPDATE users '
@@ -291,11 +307,7 @@ class Player:
 
     async def ban(self, admin: 'Player', reason: str) -> None:
         """Ban `self` for `reason`, and log to sql."""
-        self.priv &= ~Privileges.Normal
-        await glob.db.execute(
-            'UPDATE users SET priv = %s WHERE id = %s',
-            [int(self.priv), self.id]
-        )
+        self.remove_privs(Privileges.Normal)
 
         log_msg = f'{admin} banned for "{reason}".'
         await glob.db.execute(
@@ -320,11 +332,7 @@ class Player:
 
     async def unban(self, admin: 'Player', reason: str) -> None:
         """Unban `self` for `reason`, and log to sql."""
-        self.priv &= Privileges.Normal
-        await glob.db.execute(
-            'UPDATE users SET priv = %s WHERE id = %s',
-            [int(self.priv), self.id]
-        )
+        self.add_privs(Privileges.Normal)
 
         log_msg = f'{admin} unbanned for "{reason}".'
         await glob.db.execute(
@@ -672,17 +680,23 @@ class Player:
         if not res:
             return # ?
 
-        # update the user's stats in-game, then update db.
-        self.stats[mode].plays += 1
-        self.stats[mode].acc = sum([row['acc'] for row in res][:50]) / min(50, len(res))
-        self.stats[mode].pp = round(sum(row['pp'] * 0.95 ** i
-                                  for i, row in enumerate(res)))
+        stats = self.stats[mode]
 
+        # increment playcount
+        stats.plays += 1
+
+        # calculate avg acc based on top 50 scores
+        stats.acc = sum([row['acc'] for row in res[:50]]) / min(50, len(res))
+
+        # calculate weighted pp based on top 100 scores
+        stats.pp = round(sum(row['pp'] * 0.95 ** i for i, row in enumerate(res)))
+
+        # keep stats up to date in sql
         await glob.db.execute(
             'UPDATE stats SET pp_{0:sql} = %s, '
             'plays_{0:sql} = plays_{0:sql} + 1, '
             'acc_{0:sql} = %s WHERE id = %s'.format(mode),
-            [self.stats[mode].pp, self.stats[mode].acc, self.id]
+            [stats.pp, stats.acc, self.id]
         )
 
         # calculate rank.
@@ -691,10 +705,10 @@ class Player:
             'LEFT JOIN users USING(id) '
             f'WHERE pp_{mode:sql} > %s '
             'AND priv & 1',
-            [self.stats[mode].pp]
+            [stats.pp]
         )
 
-        self.stats[mode].rank = res['c'] + 1
+        stats.rank = res['c'] + 1
         self.enqueue(packets.userStats(self))
 
     async def friends_from_sql(self) -> None:
@@ -756,7 +770,7 @@ class Player:
             [res['pp']]
         )['c']
 
-        self.stats[mode].update(**res)
+        self.stats[mode] = ModeData(**res)
 
     async def add_to_menu(self, coroutine: Coroutine,
                           timeout: int = -1, reusable: bool = False

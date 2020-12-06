@@ -20,7 +20,7 @@ from constants.types import osuTypes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 
-from utils.misc import __point_of_interest
+from utils.misc import point_of_interest
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -393,7 +393,7 @@ class BanchoPacketReader:
 
         #m.type = MatchTypes(await self.read_i8())
         if await self.read_i8() == 1:
-            __point_of_interest() # what is powerplay
+            point_of_interest() # what is powerplay
 
         m.mods = Mods(await self.read_i32())
 

@@ -121,8 +121,8 @@ class Beatmap:
     """
     __slots__ = ('md5', 'id', 'set_id',
                  'artist', 'title', 'version', 'creator',
-                 'status', 'last_update', 'frozen',
-                 'plays', 'passes',
+                 'status', 'last_update', 'total_length',
+                 'frozen', 'plays', 'passes',
                  'mode', 'bpm', 'cs', 'od', 'ar', 'hp',
                  'diff', 'pp_cache')
 
@@ -137,6 +137,7 @@ class Beatmap:
         self.creator = kwargs.pop('creator', '')
 
         self.last_update = kwargs.pop('last_update', datetime(1970, 1, 1))
+        self.total_length = kwargs.pop('total_length', 0)
         self.status = RankedStatus(kwargs.pop('status', 0))
         self.frozen = kwargs.pop('frozen', False) == 1
 
@@ -209,8 +210,9 @@ class Beatmap:
         if not (res := await glob.db.fetch(
             'SELECT set_id, status, md5, '
             'artist, title, version, creator, '
-            'last_update, frozen, mode, plays, '
-            'passes, bpm, cs, od, ar, hp, diff '
+            'last_update, total_length, frozen, '
+            'mode, plays, passes, bpm, cs, od, '
+            'ar, hp, diff '
             'FROM maps WHERE id = %s',
             [bid]
         )): return
@@ -263,8 +265,9 @@ class Beatmap:
         if not (res := await glob.db.fetch(
             'SELECT id, set_id, status, '
             'artist, title, version, creator, '
-            'last_update, frozen, plays, passes, '
-            'mode, bpm, cs, od, ar, hp, diff '
+            'last_update, total_length, frozen, '
+            'plays, passes, mode, bpm, cs, od, '
+            'ar, hp, diff '
             'FROM maps WHERE md5 = %s',
             [md5]
         )): return
@@ -342,14 +345,15 @@ class Beatmap:
                 await glob.db.execute(
                     'REPLACE INTO maps (id, set_id, status, '
                     'md5, artist, title, version, creator, '
-                    'last_update, frozen, mode, bpm, cs, '
-                    'od, ar, hp, diff) VALUES ('
+                    'last_update, total_length, frozen, mode, '
+                    'bpm, cs, od, ar, hp, diff) VALUES ('
                     '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
-                    '%s, %s, %s, %s, %s, %s, %s, %s)', [
+                    '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
                         bmap['beatmap_id'], bmap['beatmapset_id'],
                         int(bmap['approved']), bmap['file_md5'],
-                        bmap['artist'], bmap['title'], bmap['version'],
-                        bmap['creator'], bmap['last_update'],
+                        bmap['artist'], bmap['title'],
+                        bmap['version'], bmap['creator'],
+                        bmap['last_update'], int(bmap['total_length']),
                         bmap['frozen'], bmap['mode'], bmap['bpm'],
                         bmap['diff_size'], bmap['diff_overall'],
                         bmap['diff_approach'], bmap['diff_drain'],
@@ -443,8 +447,9 @@ class Beatmap:
         params = [
             self.md5, self.id, self.set_id, self.status,
             self.artist, self.title, self.version, self.creator,
-            self.last_update, self.frozen, self.mode, self.bpm,
-            self.cs, self.od, self.ar, self.hp, self.diff
+            self.last_update, self.total_length, self.frozen,
+            self.mode, self.bpm, self.cs, self.od, self.ar,
+            self.hp, self.diff
         ]
 
         if any(map(lambda x: x is None, params)):
@@ -459,5 +464,5 @@ class Beatmap:
             'artist, title, version, creator, last_update, '
             'frozen, mode, bpm, cs, od, ar, hp, diff) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '
-            '%s, %s, %s, %s, %s, %s, %s, %s)', params
+            '%s, %s, %s, %s, %s, %s, %s, %s, %s)', params
         )

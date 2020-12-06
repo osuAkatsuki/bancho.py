@@ -18,6 +18,7 @@ from constants import regexes
 from objects import glob
 from objects.player import Player
 from objects.channel import Channel
+from objects.score import SubmissionStatus
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import (MapPool, Match, MatchWinConditions,
                            MatchTeamTypes, SlotStatus, MatchTeams)
@@ -127,10 +128,18 @@ async def bloodcat(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
     if not (s := p.recent_score):
-        return 'No scores found :o'
+        return 'No scores found :o (only saves per play session)'
 
-    return (f'[{s.mode!r}] {s.bmap.embed} +{s.mods!r} {s.acc:.2f}% | '
-            f'{s.pp:.2f}pp #{s.rank}')
+    l = [f'[{s.mode!r}] {s.bmap.embed} +{s.mods!r} {s.acc:.2f}%']
+
+    if s.passed:
+        rank = s.rank if s.status == SubmissionStatus.BEST else 'NA'
+        l.append(f'PASS {{{s.pp:.2f}pp #{rank}}}')
+    else:
+        completion = s.time_elapsed / (s.bmap.total_length * 1000)
+        l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
+
+    return ' | '.join(l)
 
 _mapsearch_fmt = (
     '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '
@@ -505,7 +514,7 @@ async def debug(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     glob.config.debug = not glob.config.debug
     return f"Toggled {'on' if glob.config.debug else 'off'}."
 
-str_to_priv = lambda p: defaultdict(lambda: None, {
+str_priv_dict = defaultdict(lambda: None, {
     'normal': Privileges.Normal,
     'verified': Privileges.Verified,
     'whitelisted': Privileges.Whitelisted,
@@ -516,31 +525,26 @@ str_to_priv = lambda p: defaultdict(lambda: None, {
     'mod': Privileges.Mod,
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
-})[p]
+})
 @command(priv=Privileges.Dangerous, public=False)
 async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Set privileges for a player (by name)."""
     if len(msg) < 2:
-        return 'Invalid syntax: !setpriv <name> <role1 | role2 | ...>'
+        return 'Invalid syntax: !setpriv <name> <role1 role2 role3 ...>'
 
-    # a mess that gets each unique privilege out of msg.
-    # TODO: rewrite to be at least a bit more readable..
-    priv = map(str_to_priv, set(''.join(msg[1:]).replace(' ', '').lower().split('|')))
+    priv = Privileges(0)
 
-    if any(x is None for x in priv):
-        return 'Invalid privileges.'
+    for m in msg[1:]:
+        if not (_priv := str_priv_dict[m]):
+            return f'Not found: {m}.'
+
+        priv |= _priv
 
     if not (t := await glob.players.get_by_name(msg[0], sql=True)):
         return 'Could not find user.'
 
-    new_priv = sum(priv)
-    await glob.db.execute(
-        'UPDATE users SET priv = %s WHERE id = %s',
-        [new_priv, t.id]
-    )
-
-    t.priv = Privileges(new_priv)
-    return 'Success.'
+    t.update_privs(priv)
+    return f"Updated {t}'s privileges to {priv}."
 
 # temp command, to illustrate how menu options will work
 @command(triggers=['men'], priv=Privileges.Dangerous, public=False)
@@ -558,7 +562,7 @@ async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # devs.. Comes in handy when debugging to be able to run something
 # like `!py return await glob.players.get_by_name('cmyui').status.action`
 # or for anything while debugging on-the-fly..
-@command(priv=Privileges.Dangerous, public=False)
+@command(priv=Privileges.Dangerous, public=True)
 async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # create the new coroutine definition as a string
     # with the lines from our message (split by '\n').
@@ -584,7 +588,7 @@ async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         # the error in the osu! chat.
         ret = f'{e.__class__}: {e}'
 
-    return ret or 'Success.'
+    return (ret and str(ret)) or 'Success.'
 
 """ Multiplayer commands
 # The commands below are specifically for

@@ -30,7 +30,7 @@ from objects.player import Player, Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
 
-from utils.misc import __point_of_interest
+from utils.misc import point_of_interest
 
 # TODO:
 # osu-rate.php: beatmap rating on score submission.
@@ -256,7 +256,7 @@ async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
         ))
 
     for bid in data['Ids']:
-        __point_of_interest()
+        point_of_interest()
 
     return '\n'.join(ret).encode()
 
@@ -561,9 +561,11 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     # Check for score duplicates
     # TODO: might need to improve?
     res = await glob.db.fetch(
-        f'SELECT 1 FROM {table} WHERE mode = %s '
-        'AND map_md5 = %s AND userid = %s AND mods = %s '
-        'AND score = %s', [
+        f'SELECT 1 FROM {table} '
+        'WHERE play_time > DATE_SUB(NOW(), INTERVAL 2 MINUTE) ' # last 2mins
+        'AND mode = %s AND map_md5 = %s '
+        'AND userid = %s AND mods = %s '
+        'AND score = %s AND play_time', [
             s.mode.as_vanilla, s.bmap.md5,
             s.player.id, int(s.mods), s.score
         ]
@@ -581,7 +583,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     s.time_elapsed = int(time_elapsed)
 
     if 'i' in conn.files:
-        __point_of_interest()
+        point_of_interest()
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
@@ -854,7 +856,7 @@ async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
         average_frametime = data['AverageFrameTime'] * 1000
 
         if identifier:
-            __point_of_interest()
+            point_of_interest()
 
         # chances are, if we can't find a very
         # recent score by a user, it just hasn't
@@ -888,7 +890,7 @@ async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
         # TODO: timing checks
 
         #if version != p.osu_ver:
-        #    __point_of_interest()
+        #    point_of_interest()
 
         # remember that we've already received a report
         # for this score, so that we don't overwrite it.

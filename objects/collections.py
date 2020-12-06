@@ -176,8 +176,6 @@ class PlayerList:
             [pid]
         )
 
-        res['priv'] = Privileges(res['priv'])
-
         return Player(**res, id=pid) if res else None
 
     async def get_login(self, name: str, phash: str) -> Optional[Player]:

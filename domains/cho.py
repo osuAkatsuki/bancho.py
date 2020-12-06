@@ -290,8 +290,6 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         [Player.make_safe(username)]
     )
 
-    p_row['priv'] = Privileges(p_row['priv'])
-
     if not p_row:
         # no account by this name exists.
         return packets.userID(-1), 'no'
@@ -379,7 +377,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         p_row['priv'] |= int(Privileges.Verified)
 
         await glob.db.execute(
-            'UPDATE users SET priv = priv | %s WHERE id = %s',
+            'UPDATE users '
+            'SET priv = %s '
+            'WHERE id = %s',
             [p_row['priv'], p_row['id']]
         )
 
