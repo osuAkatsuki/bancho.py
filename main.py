@@ -116,4 +116,4 @@ if __name__ == '__main__':
     app.add_domains({cho_domain, osu_domain, ava_domain})
     app.add_tasks({on_start(), disconnect_inactive()})
 
-    app.run('/tmp/gulag.sock') # blocking call
+    app.run(glob.config.server_addr) # blocking call
