@@ -11,7 +11,7 @@ import time
 import uuid
 import random
 
-from constants.privileges import Privileges, BanchoPrivileges
+from constants.privileges import Privileges, ClientPrivileges
 from constants.countries import country_codes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -203,18 +203,18 @@ class Player:
     @property
     def bancho_priv(self) -> int:
         """The player's privileges according to the client."""
-        ret = BanchoPrivileges(0)
+        ret = ClientPrivileges(0)
         if self.priv & Privileges.Normal:
             # all players have in-game "supporter".
             # this enables stuff like osu!direct,
             # multiplayer in cutting edge, etc.
-            ret |= (BanchoPrivileges.Player | BanchoPrivileges.Supporter)
+            ret |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
         if self.priv & Privileges.Mod:
-            ret |= BanchoPrivileges.Moderator
+            ret |= ClientPrivileges.Moderator
         if self.priv & Privileges.Admin:
-            ret |= BanchoPrivileges.Developer
+            ret |= ClientPrivileges.Developer
         if self.priv & Privileges.Dangerous:
-            ret |= BanchoPrivileges.Owner
+            ret |= ClientPrivileges.Owner
         return ret
 
     @property

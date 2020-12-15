@@ -4,13 +4,15 @@ import asyncio
 import aiofiles
 import aiohttp
 import orjson
-import os
+from pathlib import Path
 from cmyui import log, Ansi
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 
 __all__ = 'PPCalculator',
+
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 class PPCalculator:
     """Asynchronously wraps the process of calculating difficulty in osu!."""
@@ -26,8 +28,8 @@ class PPCalculator:
         self.mode = kwargs.get('mode', GameMode.vn_std)
         self.acc = kwargs.get('acc', 100.00)
 
-    @classmethod
-    async def get_from_osuapi(cls, map_id: int, dest_path: str) -> bool:
+    @staticmethod
+    async def get_from_osuapi(map_id: int, dest_path: Path) -> bool:
         url = f'https://old.ppy.sh/osu/{map_id}'
 
         async with aiohttp.ClientSession() as session:
@@ -45,16 +47,17 @@ class PPCalculator:
 
     @classmethod
     async def get_file(cls, map_id: int) -> None:
-        filepath = f'.data/osu/{map_id}.osu'
+        path = BEATMAPS_PATH / f'{map_id}.osu'
+
         # check if file exists on disk already
-        if not os.path.exists(filepath):
+        if not path.exists():
             # not found on disk, try osu!api
-            if not await cls.get_from_osuapi(map_id, filepath):
+            if not await cls.get_from_osuapi(map_id, path):
                 # failed to find the map
                 return
 
         # map is now on disk, return filepath.
-        return filepath
+        return path
 
     @classmethod
     async def from_id(cls, map_id: int, **kwargs):

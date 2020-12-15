@@ -2,7 +2,7 @@
 
 from enum import IntFlag, unique
 
-__all__ = ('Privileges', 'BanchoPrivileges')
+__all__ = ('Privileges', 'ClientPrivileges')
 
 @unique
 class Privileges(IntFlag):
@@ -33,7 +33,9 @@ class Privileges(IntFlag):
     Staff = Mod | Admin | Dangerous
 
 @unique
-class BanchoPrivileges(IntFlag):
+class ClientPrivileges(IntFlag):
+    """Client side user privileges."""
+
     Player     = 1 << 0
     Moderator  = 1 << 1
     Supporter  = 1 << 2

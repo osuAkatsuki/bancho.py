@@ -4,8 +4,8 @@ from constants.gamemodes import GameMode
 from typing import Any, Optional, Callable
 from enum import IntEnum, unique
 from functools import partial, wraps
+from pathlib import Path
 import re
-import os
 import time
 import copy
 import hashlib
@@ -175,7 +175,7 @@ async def osuMapBMSubmitGetID(conn: Connection) -> Optional[bytes]:
     ...
 """
 
-@domain.route('/web/osu-screenshot.php')
+@domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login('u', 'p')
 async def osuScreenshot(p: Player, conn: Connection) -> Optional[bytes]:
@@ -802,12 +802,14 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
 
+REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
 async def getReplay(p: Player, conn: Connection) -> Optional[bytes]:
-    path = f".data/osr/{conn.args['c']}.osr"
-    if not os.path.exists(path):
+    path = REPLAYS_PATH / f'{conn.args["c"]}.osr'
+
+    if not path.exists():
         return # osu! expects empty resp for no replay
 
     async with aiofiles.open(path, 'rb') as f:
@@ -1272,6 +1274,9 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
     return result
 
 """ /api/ Handlers """
+# TODO: add oauth so we can do more stuff owo..
+# also, give me ideas for api things
+# POST /api/set_avatar
 
 @domain.route('/api/get_online')
 async def api_get_online(conn: Connection) -> Optional[bytes]:
@@ -1387,14 +1392,15 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
 
 """ Misc handlers """
 
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.png$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
     if len(conn.path) != 16:
         return (400, b'Invalid request.')
 
-    path = f'.data/ss/{conn.path[4:]}'
+    path = SCREENSHOTS_PATH / conn.path[4:]
 
-    if not os.path.exists(path):
+    if not path.exists():
         return (404, b'Screenshot not found.')
 
     async with aiofiles.open(path, 'rb') as f:
@@ -1407,6 +1413,7 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Location: {mirror_url}')
     return (302, b'')
 
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
@@ -1422,10 +1429,11 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
         ]
     )): return (404, b'Map not found.')
 
-    if os.path.exists(filepath := f".data/osu/{res['id']}.osu"):
-        # map found on disk.
+    path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
-        async with aiofiles.open(filepath, 'rb') as f:
+    if path.exists():
+        # map found on disk.
+        async with aiofiles.open(path, 'rb') as f:
             content = await f.read()
     else:
         # we don't have map, get from osu!
@@ -1433,12 +1441,12 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
-                log(f'Could not find map {filepath}!', Ansi.LRED)
+                log(f'Could not find map {path}!', Ansi.LRED)
                 return (404, b'Could not find map on osu! server.')
 
             content = await resp.read()
 
-        async with aiofiles.open(filepath, 'wb') as f:
+        async with aiofiles.open(path, 'wb') as f:
             await f.write(content)
 
     return content

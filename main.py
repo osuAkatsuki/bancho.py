@@ -15,6 +15,7 @@ import os
 import aiohttp
 import orjson # go zoom
 import time
+from pathlib import Path
 
 import cmyui
 from cmyui import log, Ansi
@@ -27,7 +28,7 @@ from objects.match import MapPool
 from constants.privileges import Privileges
 
 async def on_start() -> None:
-    glob.version = cmyui.Version(3, 0, 3)
+    glob.version = cmyui.Version(3, 0, 4)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
@@ -94,25 +95,24 @@ async def disconnect_inactive() -> None:
         # run this indefinitely
         await asyncio.sleep(30)
 
-from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
-from domains.osu import domain as osu_domain # osu.ppy.sh
-from domains.ava import domain as ava_domain # a.ppy.sh
-
 if __name__ == '__main__':
     # set cwd to /gulag.
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-    # make sure gulag/.data directory exists.
-    if not os.path.isdir('.data'):
-        os.mkdir('.data')
+    # create /.data and its subdirectories.
+    data_path = Path.cwd() / '.data'
+    data_path.mkdir(exist_ok=True)
 
-    # make sure that all gulag/.data subdirectories exist.
-    for p in ('avatars', 'logs', 'osu', 'osr', 'ss'):
-        if not os.path.isdir(f'.data/{p}'):
-            os.mkdir(f'.data/{p}')
+    for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
+        subdir = data_path / sub_dir
+        subdir.mkdir(exist_ok=True)
 
     app = cmyui.Server(name='gulag', gzip=4, verbose=glob.config.debug)
 
+    # add our domains & tasks
+    from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
+    from domains.osu import domain as osu_domain # osu.ppy.sh
+    from domains.ava import domain as ava_domain # a.ppy.sh
     app.add_domains({cho_domain, osu_domain, ava_domain})
     app.add_tasks({on_start(), disconnect_inactive()})
 

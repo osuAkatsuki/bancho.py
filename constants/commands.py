@@ -108,21 +108,23 @@ async def roll(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-@command(priv=Privileges.Normal, public=True)
+@command(triggers=['bloodcat', 'bc'], priv=Privileges.Normal, public=True)
 async def bloodcat(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Return a bloodcat link of the user's current map (situation dependant)."""
     bmap = None
 
-    if p.match and p.match.bmap:
-        # return the match beatmap
-        bmap = p.match.bmap
-    # TODO: spectator?
+    # priority: multiplayer -> spectator -> last np
+
+    if p.match and p.match.map_id:
+        bmap = await Beatmap.from_md5(p.match.map_md5)
+    elif p.spectating and p.spectating.status.map_id:
+        bmap = await Beatmap.from_md5(p.spectating.status.map_md5)
     elif p.last_np:
         bmap = p.last_np
     else:
         return 'No map found!'
 
-    return '[https://bloodcat.com/d/{} {}]'.format(bmap.set_id, bmap.full)
+    return f'[https://bloodcat.com/d/{bmap.set_id} {bmap.full}]'
 
 @command(priv=Privileges.Normal, public=True)
 async def last(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -918,7 +920,7 @@ async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
 async def mp_scrim(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Start a scrim in the current match."""
     if len(msg) != 1 \
-    or not (rgx := re.match(r'^(?:bo)?(\d{1,2})$', msg[0])):
+    or not (rgx := re.fullmatch(r'^(?:bo)?(\d{1,2})$', msg[0])):
         return 'Invalid syntax: !mp scrim <bo#>'
 
     if not 0 <= (best_of := int(rgx[1])) < 16:
@@ -982,7 +984,7 @@ async def mp_ban(p: Player, m: Match, msg: Sequence[str]) -> str:
     mods_slot = msg[0]
 
     # separate mods & slot
-    if not (rgx := re.match(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
+    if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
         return 'Invalid <mods#> syntax; correct example: "hd2".'
 
     mods = Mods.from_str(rgx[1])
@@ -1009,7 +1011,7 @@ async def mp_pick(p: Player, m: Match, msg: Sequence[str]) -> str:
     mods_slot = msg[0]
 
     # separate mods & slot
-    if not (rgx := re.match(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
+    if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
         return 'Invalid <mods#> syntax; correct example: "hd2".'
 
     mods = Mods.from_str(rgx[1])
@@ -1098,7 +1100,7 @@ async def pool_add(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     name, mods_slot = msg
 
     # separate mods & slot
-    if not (rgx := re.match(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
+    if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
         return 'Invalid <mods#> syntax; correct example: "hd2".'
 
     if not ~len(rgx[1]) & 1:
@@ -1135,7 +1137,7 @@ async def pool_remove(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     name, mods_slot = msg
 
     # separate mods & slot
-    if not (rgx := re.match(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
+    if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
         return 'Invalid <mods#> syntax; correct example: "hd2".'
 
     mods = Mods.from_str(rgx[1])
