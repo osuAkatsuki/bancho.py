@@ -11,9 +11,9 @@
 __all__ = ()
 
 import asyncio
-import os
 import aiohttp
 import orjson # go zoom
+import os
 import time
 from pathlib import Path
 
@@ -27,13 +27,22 @@ from objects.match import MapPool
 
 from constants.privileges import Privileges
 
+from utils.updater import Updater
+
+# current version of gulag
+glob.version = cmyui.Version(3, 0, 5)
+
 async def on_start() -> None:
-    glob.version = cmyui.Version(3, 0, 4)
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
     # connect to mysql
     glob.db = cmyui.AsyncSQLPool()
     await glob.db.connect(glob.config.mysql)
+
+    # run the sql updater
+    updater = Updater(glob.version)
+    await updater.run()
+    await updater.log_startup()
 
     # create our bot & append it to the global player list.
     glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
@@ -48,7 +57,8 @@ async def on_start() -> None:
     # add all mappools from db.
     async for pool in glob.db.iterall('SELECT * FROM tourney_pools'):
         # overwrite basic types with some class types
-        pool['created_by'] = await glob.players.get_by_id(pool['created_by'], sql=True)
+        creator = await glob.players.get_by_id(pool['created_by'], sql=True)
+        pool['created_by'] = creator # replace id with player object
 
         pool = MapPool(**pool)
         await pool.maps_from_sql()
@@ -107,7 +117,8 @@ if __name__ == '__main__':
         subdir = data_path / sub_dir
         subdir.mkdir(exist_ok=True)
 
-    app = cmyui.Server(name='gulag', gzip=4, verbose=glob.config.debug)
+    app = cmyui.Server(name=f'gulag v{glob.version}',
+                       gzip=4, verbose=glob.config.debug)
 
     # add our domains & tasks
     from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh

@@ -38,7 +38,7 @@ sure the id is constrained to being an int32 and negative numbers won't work
 (and i'm already using them for buttons anyways), so we'll probably have to
 count down from 2147483647.. or start from 1b or something lol..
 
-### Tournament host commandset (low/medium difficulty & effort)
+### Tournament host commandset (low/medium difficulty & effort) [almost complete]
 
 Basically the idea for this one is a set of commands for event managers to be
 able to set up things like mappools with the server before the matches, so that
@@ -97,22 +97,22 @@ git submodule init && git submodule update
 cd oppai-ng && ./build && cd ..
 
 # Install project requirements.
-python3.9 -m pip install -r requirements.txt
+python3.9 -m pip install -r ext/requirements.txt
 
 # Import the database structure.
 # NOTE: create an empty database before doing this.
 # This will also insert basic osu! channels & the bot.
-mysql -u your_sql_username -p your_db_name < db.sql
+mysql -u your_sql_username -p your_db_name < ext/db.sql
 
 # Add gulag's nginx config to your nginx/sites-enabled.
 # NOTE: default unix socket location is `/tmp/gulag.sock`,
 # and you will have to change the certificate pathes in
 # the nginx config file to your own certificate pathes.
-sudo ln nginx.conf /etc/nginx/sites-enabled/gulag.conf
+sudo ln ext/nginx.conf /etc/nginx/sites-enabled/gulag.conf
 sudo nginx -s reload
 
 # Configure gulag.
-mv config.sample.py config.py
+cp ext/config.sample.py config.py
 nano config.py
 
 # Start the server.

@@ -7,11 +7,15 @@ drop table if exists scores_ap;
 drop table if exists scores_vn;
 drop table if exists maps;
 drop table if exists friendships;
+drop table if exists channels;
 drop table if exists ratings;
 drop table if exists performance_reports;
 drop table if exists favourites;
 drop table if exists comments;
-drop table if exists channels;
+drop table if exists mail;
+drop table if exists logs;
+drop table if exists tourney_pools;
+drop table if exists tourney_pool_maps;
 
 create table users
 (
@@ -342,6 +346,16 @@ create table tourney_pool_maps
 	constraint tourney_pool_maps_tourney_pools_id_fk
 		foreign key (pool_id) references tourney_pools (id)
 			on update cascade on delete cascade
+);
+
+create table startups
+(
+	id int auto_increment
+		primary key,
+	ver_major tinyint not null,
+	ver_minor tinyint not null,
+	ver_micro tinyint not null,
+	datetime datetime not null
 );
 
 # insert vital stuff, such as bot user & basic channels.

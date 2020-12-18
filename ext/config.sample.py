@@ -4,7 +4,7 @@
 # the domain you'd like gulag to be hosted on.
 # XXX: don't include the 'http(s)' prefix, it will be
 #      handled automatically situationally by gulag.
-domain = 'cmyui.codes' # https://cmyui.codes
+domain = 'cmyui.codes' # cmyui.codes
 
 # the address which the server runs on.
 # the server supports both inet4 and unix sockets.
@@ -72,6 +72,7 @@ command_prefix = '!'
 # you can hardcode usernames & passwords here to be blocked
 # from usage at registration and other vectors to chage them.
 # TODO: retrieve the names of the top ~100 (configurable)
+# TODO: add more defaults; servers deserve better than this lol..
 # players on bancho, and auto-add them to this set on startup?
 disallowed_names = {
     'cookiezi', 'rrtyui',
