@@ -231,7 +231,7 @@ class Score:
 
     @classmethod
     async def from_submission(cls, data_b64: str, iv_b64: str,
-                              osu_ver: str, phash: str) -> None:
+                              osu_ver: str, pw_md5: str) -> None:
         """Create a score object from an osu! submission string."""
         iv = b64decode(iv_b64).decode('latin_1')
         data_aes = b64decode(data_b64).decode('latin_1')
@@ -255,7 +255,7 @@ class Score:
 
         # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
-        s.player = await glob.players.get_login(pname, phash)
+        s.player = await glob.players.get_login(pname, pw_md5)
 
         if not s.player:
             # return the obj with an empty player to

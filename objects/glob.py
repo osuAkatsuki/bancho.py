@@ -52,17 +52,20 @@ cache = {
     'beatmap': {}, # {md5: {timeout, map}, ...}
     # cache all beatmaps which we failed to get from the osuapi,
     # so that we do not have to perform this request multiple times.
-    'unsubmitted': set(), # {md5, ...}
-    # when a score is submitted, the osu! client will submit a
-    # performance report of the user's pc along with some technical
-    # details about the score. the performance report is submitted
-    # in a separate request from the score, so the order we receive
-    # them is somewhat arbitrary. we'll use this cache to track the
-    # scoreids we've already received, so that when we receive a
-    # performance report, we can check sql for the latest score
-    # (probably will have some cache of it's own in the future) and
-    # check if it's id is in the cache; if so, then we haven't
-    # recevied our score yet, so we'll give it some time, this
-    # way our report always gets submitted.
-    'performance_reports': set() # {scoreid, ...}
+    'unsubmitted': set() # {md5, ...}
 }
+
+""" disabled (unused) for now
+# when a score is submitted, the osu! client will submit a
+# performance report of the user's pc along with some technical
+# details about the score. the performance report is submitted
+# in a separate request from the score, so the order we receive
+# them is somewhat arbitrary. we'll use this cache to track the
+# scoreids we've already received, so that when we receive a
+# performance report, we can check sql for the latest score
+# (probably will have some cache of it's own in the future) and
+# check if it's id is in the cache; if so, then we haven't
+# recevied our score yet, so we'll give it some time, this
+# way our report always gets submitted.
+'performance_reports': set() # {scoreid, ...}
+"""

@@ -135,14 +135,14 @@ class PlayerList:
 
     async def get(self, sql: bool = False, **kwargs) -> Player:
         for attr in ('token', 'id', 'name'):
-            if val := kwargs.pop(attr):
+            if val := kwargs.pop(attr, None):
                 break
         else:
             raise ValueError('must provide valid kwarg (token, id, name) to get()')
 
         if attr == 'name':
-            # username -> username_safe
-            attr = 'name_safe'
+            # username -> usersafe_name
+            attr = 'safe_name'
             val = Player.make_safe(val)
 
         for p in self.players:
@@ -156,42 +156,33 @@ class PlayerList:
 
         # try to get from sql.
         res = await glob.db.fetch(
-            'SELECT id, name, priv, silence_end '
+            'SELECT id, name, priv, pw_bcrypt, silence_end '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
 
         return Player(**res) if res else None
 
-    async def get_login(self, name: str, phash: str) -> Optional[Player]:
+    async def get_login(self, name: str, pw_md5: str, sql: bool = False) -> Optional[Player]:
         # only used cached results - the user should have
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
 
         # let them pass as a string for ease of access
-        phash = phash.encode()
+        pw_md5 = pw_md5.encode()
 
         bcrypt_cache = glob.cache['bcrypt']
 
-        if phash not in bcrypt_cache:
+        if pw_md5 not in bcrypt_cache:
             # player has not logged in through bancho.
             return
 
-        res = await glob.db.fetch(
-            'SELECT pw_hash FROM users '
-            'WHERE name_safe = %s',
-            [Player.make_safe(name)]
-        )
+        if not (p := await self.get(name=name, sql=sql)):
+            return # no such player online
 
-        if not res:
-            # could not find the player in sql.
-            return
-
-        if bcrypt_cache[phash] != res['pw_hash']:
-            # password bcrypts do not match.
-            return
-
-        return await self.get(name=name)
+        # return if bcrypt matches
+        if bcrypt_cache[pw_md5] == p.pw_bcrypt:
+            return p
 
     def append(self, p: Player) -> None:
         """Attempt to add `p` to the list."""
@@ -242,11 +233,11 @@ class MapPoolList(list):
         super().append(p)
 
         if glob.config.debug:
-            log(f'{p} added to pools list.')
+            log(f'{p} added to mappools list.')
 
     def remove(self, p: MapPool) -> None:
         """Attempt to remove `p` from the list."""
         super().remove(p)
 
         if glob.config.debug:
-            log(f'{p} removed from pools list.')
+            log(f'{p} removed from mappools list.')

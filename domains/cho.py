@@ -250,7 +250,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     del p
 
-    pw_hash = s[1].encode()
+    pw_md5 = s[1].encode()
 
     if len(s := s[2].split('|')) != 5:
         return packets.userID(-2), 'no'
@@ -287,8 +287,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     pm_private = s[4] == '1'
 
     p_row = await glob.db.fetch(
-        'SELECT id, name, priv, pw_hash, silence_end '
-        'FROM users WHERE name_safe = %s',
+        'SELECT id, name, priv, pw_bcrypt, silence_end '
+        'FROM users WHERE safe_name = %s',
         [Player.make_safe(username)]
     )
 
@@ -302,18 +302,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # their account exists in sql.
     # check their account status & credentials against db.
 
-    if pw_hash in bcrypt_cache: # ~0.01 ms
+    if pw_md5 in bcrypt_cache: # ~0.01 ms
         # cache hit - this saves ~200ms on subsequent logins.
-        if bcrypt_cache[pw_hash] != p_row['pw_hash']:
+        if bcrypt_cache[pw_md5] != p_row['pw_bcrypt']:
             # password wrong
             return packets.userID(-1), 'no'
 
     else:
         # cache miss, their first login since the server started.
-        if not bcrypt.checkpw(pw_hash, p_row['pw_hash'].encode()):
+        if not bcrypt.checkpw(pw_md5, p_row['pw_bcrypt'].encode()):
             return packets.userID(-1), 'no'
 
-        bcrypt_cache[pw_hash] = p_row['pw_hash']
+        bcrypt_cache[pw_md5] = p_row['pw_bcrypt']
 
     if not p_row['priv'] & Privileges.Normal:
         return packets.userID(-3), 'no'
