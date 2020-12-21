@@ -57,6 +57,7 @@ class Updater:
         )
 
     async def _get_latest_cmyui(self) -> Version:
+        """Get the latest version release of cmyui_pkg from pypi."""
         url = 'https://pypi.org/pypi/cmyui/json'
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
@@ -70,6 +71,7 @@ class Updater:
             return Version.from_str(list(json['releases'])[-1])
 
     async def _update_cmyui(self) -> None:
+        """Check if cmyui_pkg has a newer release; update if available."""
         module_ver = Version.from_str(version('cmyui'))
         latest_ver = await self._get_latest_cmyui()
 
@@ -80,14 +82,14 @@ class Updater:
             pip_main(['install', '-Uq', 'cmyui']) # Update quiet
 
     async def _update_sql(self, prev_version: Version) -> None:
-        """Update the sql database & file."""
+        """Apply any structural changes to the database since the last startup."""
         if self.version == prev_version:
             # already up to date.
             return
 
         # needs update, find all updates since prev_version
         log(f'Updating sql (v{prev_version!r} -> '
-                          f'v{self.version!r}.', Ansi.MAGENTA)
+                          f'v{self.version!r}).', Ansi.MAGENTA)
         with open(SQL_UPDATES_FILE, 'r') as f:
             content = f.read()
 

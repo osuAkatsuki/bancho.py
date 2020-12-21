@@ -3,6 +3,7 @@
 from constants.gamemodes import GameMode
 from typing import Any, Optional, Callable
 from enum import IntEnum, unique
+from collections import defaultdict
 from functools import partial, wraps
 from pathlib import Path
 import re
@@ -1218,7 +1219,7 @@ async def osuMarkAsRead(p: Player, conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if not (t := await glob.players.get_by_name(t_name, sql=True)):
+    if not (t := await glob.players.get(name=t_name, sql=True)):
         return
 
     # mark any unread mail from this user as read.
@@ -1306,7 +1307,7 @@ async def api_get_user(conn: Connection) -> Optional[bytes]:
         # get their id from username.
         pid = await glob.db.fetch(
             'SELECT id FROM users '
-            'WHERE name_safe = %s',
+            'WHERE safe_name = %s',
             [name]
         )
 
@@ -1317,7 +1318,7 @@ async def api_get_user(conn: Connection) -> Optional[bytes]:
 
     if conn.args['scope'] == 'info':
         # return user info
-        query = ('SELECT id, name, name_safe, '
+        query = ('SELECT id, name, safe_name, '
                  'priv, country, silence_end ' # silence_end public?
                  'FROM users WHERE id = %s')
     else:
@@ -1344,7 +1345,7 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
         # get their id from username.
         pid = await glob.db.fetch(
             'SELECT id FROM users '
-            'WHERE name_safe = %s',
+            'WHERE safe_name = %s',
             [name]
         )
 
@@ -1453,7 +1454,6 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
 """ ingame registration """
 
-from collections import defaultdict
 @domain.route('/users', methods=['POST'])
 async def register_account(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
@@ -1526,7 +1526,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         # add to `users` table.
         user_id = await glob.db.execute(
             'INSERT INTO users '
-            '(name, name_safe, email, pw_hash, creation_time, latest_activity) '
+            '(name, safe_name, email, pw_bcrypt, creation_time, latest_activity) '
             'VALUES (%s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
             [name, safe_name, email, pw_bcrypt]
         )

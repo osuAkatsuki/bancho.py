@@ -116,8 +116,8 @@ class Player:
              cls.dequeue() will return the data, and remove it.
     """
     __slots__ = (
-        'token', 'id', 'name', 'safe_name', 'priv',
-        'stats', 'status', 'friends', 'channels',
+        'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
+        'priv', 'stats', 'status', 'friends', 'channels',
         'spectators', 'spectating', 'match',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
@@ -127,15 +127,16 @@ class Player:
     )
 
     def __init__(self, id: int, name: str, priv: int,
-                 utc_offset: int = 0, pm_private: bool = False,
-                 silence_end: int = 0, osu_ver: datetime = None,
-                 *args, **kwargs) -> None:
+                 utc_offset: int = 0, pw_bcrypt: str = '',
+                 pm_private: bool = False, silence_end: int = 0,
+                 osu_ver: Optional[datetime] = None) -> None:
         self.id = id
         self.name = name
         self.priv = Privileges(priv)
 
         self.token = self.generate_token()
         self.safe_name = self.make_safe(self.name)
+        self.pw_bcrypt = pw_bcrypt
 
         self.stats = {mode: None for mode in GameMode}
         self.status = Status()

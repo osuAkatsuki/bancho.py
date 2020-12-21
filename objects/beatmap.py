@@ -274,7 +274,7 @@ class Beatmap:
 
         return cls(**res, md5=md5)
 
-    @classmethod # TODO: rewrite this garabge
+    @classmethod # TODO: rewrite this garabge (possibly worst part in gulag)
     async def from_md5_osuapi(cls, md5: str, set_id: int = -1):
         if set_id != -1:
             # cache the whole set's data.
@@ -343,14 +343,14 @@ class Beatmap:
                 # since these are all straight off the osu!api,
                 # they will always be the most up to date.
                 await glob.db.execute(
-                    'REPLACE INTO maps (id, set_id, status, '
-                    'md5, artist, title, version, creator, '
+                    'REPLACE INTO maps (md5, id, set_id, '
+                    'status, artist, title, version, creator, '
                     'last_update, total_length, frozen, mode, '
                     'bpm, cs, od, ar, hp, diff) VALUES ('
                     '%s, %s, %s, %s, %s, %s, %s, %s, %s, '
                     '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
-                        bmap['beatmap_id'], bmap['beatmapset_id'],
-                        int(bmap['approved']), bmap['file_md5'],
+                        bmap['file_md5'], bmap['beatmap_id'],
+                        bmap['beatmapset_id'], int(bmap['approved']),
                         bmap['artist'], bmap['title'],
                         bmap['version'], bmap['creator'],
                         bmap['last_update'], int(bmap['total_length']),

@@ -22,10 +22,10 @@ create table users
 	id int auto_increment
 		primary key,
 	name varchar(32) not null,
-	name_safe varchar(32) not null,
+	safe_name varchar(32) not null,
 	email varchar(254) not null,
 	priv int default 1 not null,
-	pw_hash char(60) not null,
+	pw_bcrypt char(60) not null,
 	country char(2) default 'xx' not null,
 	silence_end int default 0 not null,
 	donor_end int default 0 not null,
@@ -33,8 +33,8 @@ create table users
 	latest_activity int default 0 not null,
 	constraint users_email_uindex
 		unique (email),
-	constraint users_name_safe_uindex
-		unique (name_safe),
+	constraint users_safe_name_uindex
+		unique (safe_name),
 	constraint users_name_uindex
 		unique (name)
 );
@@ -360,7 +360,7 @@ create table startups
 
 # insert vital stuff, such as bot user & basic channels.
 
-insert into users (id, name, name_safe, priv, country, silence_end, email, pw_hash, creation_time, latest_activity)
+insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bcrypt, creation_time, latest_activity)
 values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
@@ -375,4 +375,8 @@ alter table stats auto_increment = 3;
 insert into channels (name, topic, read_priv, write_priv, auto_join)
 values ('#osu', 'General discussion.', 1, 2, true),
 	   ('#announce', 'Exemplary performance and public announcements.', 1, 2, true),
-	   ('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false);
+	   ('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false),
+	   ('#supporter', 'General discussion for p2w gamers.', 48, 48, false),
+	   ('#staff', 'General discussion for the cool kids.', 28672, 28672, true),
+	   ('#admin', 'General discussion for the cool.', 24576, 24576, true),
+	   ('#dev',   'General discussion for the.', 16384, 16384, true);

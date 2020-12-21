@@ -47,12 +47,9 @@ class Channel:
 
     @property
     def name(self) -> str:
-        if self._name.startswith('#spec_'):
-            return '#spectator'
-        elif self._name.startswith('#multi_'):
-            return '#multiplayer'
-
-        return self._name
+        return ('#spectator' if self._name.startswith('#spec_')
+           else '#multiplayer' if self._name.startswith('#multi_')
+           else self._name)
 
     @property
     def basic_info(self) -> tuple[str, str, int]:
