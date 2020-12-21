@@ -141,7 +141,7 @@ class PlayerList:
             raise ValueError('must provide valid kwarg (token, id, name) to get()')
 
         if attr == 'name':
-            # username -> usersafe_name
+            # name -> safe_name
             attr = 'safe_name'
             val = Player.make_safe(val)
 
