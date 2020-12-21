@@ -128,8 +128,7 @@ class Player:
 
     def __init__(self, id: int, name: str, priv: int,
                  utc_offset: int = 0, pm_private: bool = False,
-                 silence_end: int = 0, osu_ver: datetime = None,
-                 *args, **kwargs) -> None:
+                 silence_end: int = 0, osu_ver: Optional[datetime] = None) -> None:
         self.id = id
         self.name = name
         self.priv = Privileges(priv)

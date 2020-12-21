@@ -283,7 +283,7 @@ async def notes(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 2 or not msg[1].isdecimal():
         return 'Invalid syntax: !notes <name> <days_back>'
 
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if (days := int(msg[1])) > 365:
@@ -305,7 +305,7 @@ async def addnote(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !addnote <name> <note ...>'
 
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     log_msg = f'{p} added note: {" ".join(msg[1:])}'
@@ -324,7 +324,7 @@ async def silence(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 3:
         return 'Invalid syntax: !silence <name> <duration> <reason>'
 
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -350,7 +350,7 @@ async def unsilence(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !unsilence <name>'
 
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if not t.silenced:
@@ -374,7 +374,7 @@ async def ban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !ban <name> (reason)'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -392,7 +392,7 @@ async def unban(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !ban <name> (reason)'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -418,7 +418,7 @@ async def alert_user(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !alertu <name> <msg>'
 
-    if not (t := await glob.players.get_by_name(msg[0])):
+    if not (t := await glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     t.enqueue(packets.notification(' '.join(msg[1:])))
@@ -504,7 +504,7 @@ async def switch_server(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 #    if len(msg) != 2:
 #        return 'Invalid syntax: !rtx <name> <msg>'
 #
-#    if not (t := await glob.players.get_by_name(msg[0])):
+#    if not (t := await glob.players.get(name=msg[0])):
 #        return 'Could not find a user by that name.'
 #
 #    t.enqueue(packets.RTX(msg[1]))
@@ -542,7 +542,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
         priv |= _priv
 
-    if not (t := await glob.players.get_by_name(msg[0], sql=True)):
+    if not (t := await glob.players.get(name=msg[0], sql=True)):
         return 'Could not find user.'
 
     t.update_privs(priv)
@@ -562,7 +562,7 @@ async def menu_preview(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # XXX: this actually comes in handy sometimes, i initially
 # wrote it completely as a joke, but i might keep it in for
 # devs.. Comes in handy when debugging to be able to run something
-# like `!py return await glob.players.get_by_name('cmyui').status.action`
+# like `!py return await glob.players.get(name='cmyui').status.action`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=True)
 async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -666,7 +666,7 @@ async def mp_force(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp force <name>'
 
-    if not (t := await glob.players.get_by_name(' '.join(msg))):
+    if not (t := await glob.players.get(name=' '.join(msg))):
         return 'Could not find a user by that name.'
 
     await t.join_match(m, m.passwd)
@@ -744,7 +744,7 @@ async def mp_host(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp host <name>'
 
-    if not (t := await glob.players.get_by_name(' '.join(msg))):
+    if not (t := await glob.players.get(name=' '.join(msg))):
         return 'Could not find a user by that name.'
 
     if t is m.host:
@@ -770,7 +770,7 @@ async def mp_invite(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp invite <name>'
 
-    if not (t := await glob.players.get_by_name(msg[0])):
+    if not (t := await glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if p is t:
@@ -785,7 +785,7 @@ async def mp_addref(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp addref <name>'
 
-    if not (t := await glob.players.get_by_name(msg[0])):
+    if not (t := await glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if t not in m:
@@ -803,7 +803,7 @@ async def mp_rmref(p: Player, m: Match, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp addref <name>'
 
-    if not (t := await glob.players.get_by_name(msg[0])):
+    if not (t := await glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if t not in m.refs:

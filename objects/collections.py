@@ -133,50 +133,35 @@ class PlayerList:
             if p not in immune:
                 p.enqueue(data)
 
-    def get(self, token: str) -> Player:
+    async def get(self, sql: bool = False, **kwargs) -> Player:
+        for attr in ('token', 'id', 'name'):
+            if val := kwargs.pop(attr):
+                break
+        else:
+            raise ValueError('must provide valid kwarg (token, id, name) to get()')
+
+        if attr == 'name':
+            # username -> username_safe
+            attr = 'name_safe'
+            val = Player.make_safe(val)
+
         for p in self.players:
-            if p.token == token:
-                return p
-
-    async def get_by_name(self, name: str, sql: bool = False) -> Player:
-        safe_name = Player.make_safe(name)
-
-        for p in self.players:
-            if p.safe_name == safe_name:
-                return p
-
-        if not sql:
-            # don't fetch from sql
-            # if not specified.
-            return
-
-        # try to get from sql.
-        res = await glob.db.fetch(
-            'SELECT id, priv, silence_end '
-            'FROM users WHERE name_safe = %s',
-            [safe_name]
-        )
-
-        return Player(**res, name=name) if res else None
-
-    async def get_by_id(self, pid: int, sql: bool = False) -> Optional[Player]:
-        for p in self.players:
-            if p.id == pid:
+            if getattr(p, attr) == val:
                 return p
 
         if not sql:
             # don't fetch from sql
-            # if not specified.
+            # if not specified
             return
 
         # try to get from sql.
         res = await glob.db.fetch(
-            'SELECT name, priv, silence_end '
-            'FROM users WHERE id = %s',
-            [pid]
+            'SELECT id, name, priv, silence_end '
+            f'FROM users WHERE {attr} = %s',
+            [val]
         )
 
-        return Player(**res, id=pid) if res else None
+        return Player(**res) if res else None
 
     async def get_login(self, name: str, phash: str) -> Optional[Player]:
         # only used cached results - the user should have
@@ -206,7 +191,7 @@ class PlayerList:
             # password bcrypts do not match.
             return
 
-        return await self.get_by_name(name)
+        return await self.get(name=name)
 
     def append(self, p: Player) -> None:
         """Attempt to add `p` to the list."""

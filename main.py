@@ -57,7 +57,7 @@ async def on_start() -> None:
     # add all mappools from db.
     async for pool in glob.db.iterall('SELECT * FROM tourney_pools'):
         # overwrite basic types with some class types
-        creator = await glob.players.get_by_id(pool['created_by'], sql=True)
+        creator = await glob.players.get(id=pool['created_by'], sql=True)
         pool['created_by'] = creator # replace id with player object
 
         pool = MapPool(**pool)
@@ -72,7 +72,7 @@ async def on_start() -> None:
     async def rm_donor(userid: int, delay: int):
         await asyncio.sleep(delay)
 
-        p = await glob.players.get_by_id(userid, sql=True)
+        p = await glob.players.get(id=userid, sql=True)
         p.remove_privs(Privileges.Donator)
 
         log(f"{p}'s donation perks have expired.", Ansi.MAGENTA)

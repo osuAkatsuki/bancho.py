@@ -416,7 +416,7 @@ class BanchoPacketReader:
                 self._buf = self._buf[4:]
 
         host_id = await self.read_i32()
-        m.host = await glob.players.get_by_id(host_id)
+        m.host = await glob.players.get(id=host_id)
 
         m.mode = GameMode(await self.read_i8())
         m.win_condition = MatchWinConditions(await self.read_i8())
