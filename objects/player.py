@@ -126,17 +126,14 @@ class Player:
         'pres_filter', 'menu_options', '_queue'
     )
 
-    def __init__(self, id: int, name: str, priv: int,
-                 utc_offset: int = 0, pw_bcrypt: str = '',
-                 pm_private: bool = False, silence_end: int = 0,
-                 osu_ver: Optional[datetime] = None) -> None:
-        self.id = id
-        self.name = name
-        self.priv = Privileges(priv)
+    def __init__(self, **kwargs) -> None:
+        self.id = kwargs.pop('id', 0)
+        self.name = kwargs.pop('name', '')
+        self.priv = kwargs.pop('priv', Privileges(0))
 
-        self.token = self.generate_token()
-        self.safe_name = self.make_safe(self.name)
-        self.pw_bcrypt = pw_bcrypt
+        self.token = kwargs.pop('token', '')
+        self.safe_name = self.make_safe(self.name) if self.name else ''
+        self.pw_bcrypt = kwargs.pop('pw_bcrypt', '')
 
         self.stats = {mode: None for mode in GameMode}
         self.status = Status()
@@ -150,18 +147,17 @@ class Player:
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset = utc_offset
-        self.pm_private = pm_private
+        self.utc_offset = kwargs.pop('utc_offset', 0)
+        self.pm_private = kwargs.pop('pm_private', False)
 
         self.away_msg: Optional[str] = None
-        self.silence_end = silence_end
+        self.silence_end = kwargs.pop('silence_end', 0)
         self.in_lobby = False
 
-        _ctime = int(time.time())
-        self.login_time = _ctime
-        self.last_recv_time = _ctime
+        self.login_time = 0.0
+        self.last_recv_time = 0.0
 
-        self.osu_ver = osu_ver
+        self.osu_ver: Optional[datetime] = kwargs.pop('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
@@ -180,6 +176,10 @@ class Player:
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
+
+    @property
+    def online(self) -> bool:
+        return self.token and self.login_time
 
     @property
     def url(self) -> str:
@@ -249,6 +249,21 @@ class Player:
     def make_safe(name: str) -> str:
         """Return a name safe for usage in sql."""
         return name.lower().replace(' ', '_')
+
+    @classmethod
+    def login(cls, user_info, utc_offset: int,
+              pm_private: bool, osu_ver: datetime,
+              login_time: float):
+        """Log a player into the server, with all info required."""
+        # user_info: {id, name, priv, pw_bcrypt, silence_end}
+        token = cls.generate_token()
+        priv = Privileges(user_info.pop('priv'))
+        p = cls(**user_info, pm_private=pm_private,
+                priv=priv, utc_offset=utc_offset,
+                token=token, osu_ver=osu_ver)
+
+        p.login_time = p.last_recv_time = login_time
+        return p
 
     async def logout(self) -> None:
         """Log `self` out of the server."""
@@ -533,7 +548,7 @@ class Player:
         """Attempt to add `p` to `self`'s spectators."""
         chan_name = f'#spec_{self.id}'
 
-        if not (c := glob.channels[chan_name]):
+        if not (spec_chan := glob.channels[chan_name]):
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
                 name = chan_name,
@@ -544,13 +559,12 @@ class Player:
                 instance = True
             )
 
+            await self.join_channel(spec_chan)
             glob.channels.append(spec_chan)
 
-            c = glob.channels[chan_name]
-
         # attempt to join their spectator channel.
-        if not await p.join_channel(c):
-            return log(f'{self} failed to join {c}?')
+        if not await p.join_channel(spec_chan):
+            return log(f'{self} failed to join {spec_chan}?')
 
         #p.enqueue(packets.channelJoin(c.name))
         p_joined = packets.fellowSpectatorJoined(p.id)

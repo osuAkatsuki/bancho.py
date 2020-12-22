@@ -585,7 +585,7 @@ def write(packid: int, *args: tuple[Any, ...]) -> bytes:
 
     # add size
     ret[3:3] = struct.pack('<I', len(ret) - 3)
-    return ret
+    return bytes(ret)
 
 #
 # packets
@@ -812,7 +812,7 @@ def matchSkip() -> bytes:
     return write(Packets.CHO_MATCH_SKIP)
 
 # packet id: 64
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=16)
 def channelJoin(name: str) -> bytes:
     return write(
         Packets.CHO_CHANNEL_JOIN_SUCCESS,

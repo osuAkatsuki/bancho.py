@@ -58,10 +58,12 @@ class CommandSet:
 
 # not sure if this should be in glob or not,
 # trying to think of some use cases lol..
+mp_commands = CommandSet('mp')
+pool_commands = CommandSet('pool')
+
 glob.commands = {
     'regular': [],
-    'sets': [mp_commands := CommandSet('mp'),
-             pool_commands := CommandSet('pool')]
+    'sets': [mp_commands, pool_commands]
 }
 
 def command(priv: Privileges, public: bool,
@@ -916,6 +918,8 @@ async def mp_condition(p: Player, m: Match, msg: Sequence[str]) -> str:
     m.enqueue_state(lobby=False)
     return 'Match win condition updated.'
 
+# XXX: probably has some issues
+#      that need to be looked into.
 @mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_scrim(p: Player, m: Match, msg: Sequence[str]) -> str:
     """Start a scrim in the current match."""

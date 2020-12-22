@@ -30,7 +30,7 @@ from constants.privileges import Privileges
 from utils.updater import Updater
 
 # current version of gulag
-glob.version = cmyui.Version(3, 0, 6)
+glob.version = cmyui.Version(3, 0, 7)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -46,7 +46,7 @@ async def on_start() -> None:
 
     # create our bot & append it to the global player list.
     glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
-    glob.bot.last_recv_time = 0x7fffffff
+    glob.bot.last_recv_time = float(0x7fffffff)
 
     glob.players.append(glob.bot)
 

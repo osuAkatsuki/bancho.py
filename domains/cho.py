@@ -79,7 +79,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         if glob.config.debug:
             log(f'{packet.type!r}', Ansi.LMAGENTA)
 
-    player.last_recv_time = int(time.time())
+    player.last_recv_time = time.time()
 
     # TODO: this could probably be done better?
     resp = bytearray()
@@ -234,9 +234,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return
 
     username = s[0]
+    login_time = time.time()
 
     if p := await glob.players.get(name=username):
-        if (time.time() - p.last_recv_time) > 10:
+        if (login_time - p.last_recv_time) > 10:
             # if the current player obj online hasn't
             # pinged the server in > 10 seconds, log
             # them out and login the new user.
@@ -286,13 +287,13 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     pm_private = s[4] == '1'
 
-    p_row = await glob.db.fetch(
+    user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, silence_end '
         'FROM users WHERE safe_name = %s',
         [Player.make_safe(username)]
     )
 
-    if not p_row:
+    if not user_info:
         # no account by this name exists.
         return packets.userID(-1), 'no'
 
@@ -304,18 +305,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     if pw_md5 in bcrypt_cache: # ~0.01 ms
         # cache hit - this saves ~200ms on subsequent logins.
-        if bcrypt_cache[pw_md5] != p_row['pw_bcrypt']:
+        if bcrypt_cache[pw_md5] != user_info['pw_bcrypt']:
             # password wrong
             return packets.userID(-1), 'no'
 
     else:
         # cache miss, their first login since the server started.
-        if not bcrypt.checkpw(pw_md5, p_row['pw_bcrypt'].encode()):
+        if not bcrypt.checkpw(pw_md5, user_info['pw_bcrypt'].encode()):
             return packets.userID(-1), 'no'
 
-        bcrypt_cache[pw_md5] = p_row['pw_bcrypt']
+        bcrypt_cache[pw_md5] = user_info['pw_bcrypt']
 
-    if not p_row['priv'] & Privileges.Normal:
+    if not user_info['priv'] & Privileges.Normal:
         return packets.userID(-3), 'no'
 
     """ handle client hashes """
@@ -327,7 +328,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         'ON DUPLICATE KEY UPDATE '
         'occurrences = occurrences + 1, '
         'latest_time = NOW() ',
-        [p_row['id'], *client_hashes]
+        [user_info['id'], *client_hashes]
     )
 
     # TODO: runningunderwine support
@@ -339,7 +340,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         'LEFT JOIN `users` u ON h.`userid` = u.`id` '
         'WHERE h.`userid` != %s AND (h.`adapters` = %s '
         'OR h.`uninstall_id` = %s OR h.`disk_serial` = %s)',
-        [p_row['id'], *client_hashes[1:]]
+        [user_info['id'], *client_hashes[1:]]
     )
 
     if hwid_matches:
@@ -357,7 +358,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
         # anyways yeah needless to say i'm gonna think about this one
 
-        if not p_row['priv'] & Privileges.Verified:
+        if not user_info['priv'] & Privileges.Verified:
             # this player is not verified yet, this is their first
             # time connecting in-game and submitting their hwid set.
             # we will not allow any banned matches; if there are any,
@@ -374,24 +375,21 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # to organize it in config tho :o
             pass
 
-    if not p_row['priv'] & Privileges.Verified:
+    if not user_info['priv'] & Privileges.Verified:
         # verify the account if it's made it this far
-        p_row['priv'] |= int(Privileges.Verified)
+        user_info['priv'] |= int(Privileges.Verified)
 
         await glob.db.execute(
             'UPDATE users '
             'SET priv = %s '
             'WHERE id = %s',
-            [p_row['priv'], p_row['id']]
+            [user_info['priv'], user_info['id']]
         )
 
-    p_row |= {
-        'utc_offset': utc_offset,
-        'pm_private': pm_private,
-        'osu_ver': osu_ver
-    }
-
-    p = Player(**p_row)
+    # user_info: {id, name, priv, pw_bcrypt, silence_end}
+    p = Player.login(user_info, utc_offset=utc_offset,
+                     osu_ver=osu_ver, pm_private=pm_private,
+                     login_time=login_time)
 
     data = bytearray(packets.userID(p.id))
     data += packets.protocolVersion(19)
@@ -457,7 +455,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # enqueue any messages from their respective authors.
     async for msg in glob.db.iterall(query, p.id):
         msg_time = dt.fromtimestamp(msg['time'])
-        msg_ts = f'[{msg_time:%Y-%m-%d %H:%M:%S}] {msg["msg"]}'
+        msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
         data += packets.sendMessage(
             msg['from'], msg_ts,
@@ -559,8 +557,10 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         msg = self.msg.msg
         target = self.msg.target
 
-        if not (t := await glob.players.get(name=target)):
-            log(f'{p} tried to write to non-existant user {target}.', Ansi.YELLOW)
+        # allow this to get from sql - players can receive
+        # messages offline, due to the mail system. B)
+        if not (t := await glob.players.get(name=target, sql=True)):
+            log(f'{p} tried to write to non-existent user {target}.', Ansi.YELLOW)
             return
 
         if t.pm_private and p.id not in t.friends:
@@ -569,6 +569,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             return
 
         if t.silenced:
+            # if target is silenced, inform player.
             p.enqueue(packets.targetSilenced(target))
             log(f'{p} tried to message {t}, but they are silenced.')
             return
@@ -627,8 +628,16 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                     await p.send(t, msg)
 
         else:
-            # target is not aika, send the message normally
-            await t.send(p, msg)
+            # target is not aika, send the message normally if online
+            if t.online:
+                await t.send(p, msg)
+            else:
+                # inform user they're offline, but
+                # will receive the mail @ next login.
+                p.enqueue(packets.notification(
+                    f'{t.name} is currently offline, but will '
+                    'receive your messsage on their next login.'
+                ))
 
             # insert mail into db,
             # marked as unread.

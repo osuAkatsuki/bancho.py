@@ -16,9 +16,6 @@ __all__ = (
     'MapPoolList'
 )
 
-# NOTE: these should all inherit from a base class,
-# a lot of their functionality is common between all.
-
 class ChannelList(list):
     """The currently active chat channels on the server."""
 
@@ -161,7 +158,11 @@ class PlayerList:
             [val]
         )
 
-        return Player(**res) if res else None
+        if not res:
+            return
+
+        priv = Privileges(res.pop('priv'))
+        return Player(**res, priv=priv)
 
     async def get_login(self, name: str, pw_md5: str, sql: bool = False) -> Optional[Player]:
         # only used cached results - the user should have
