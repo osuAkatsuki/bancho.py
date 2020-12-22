@@ -457,7 +457,7 @@ class Beatmap:
             return
 
         params[3] = int(params[3]) # status
-        params[10] = int(params[10]) # mode
+        params[11] = int(params[11]) # mode
 
         await glob.db.execute(
             'REPLACE INTO maps (md5, id, set_id, status, '
