@@ -460,8 +460,8 @@ class Beatmap:
         params[11] = int(params[11]) # mode
 
         await glob.db.execute(
-            'REPLACE INTO maps (md5, id, set_id, status, '
-            'artist, title, version, creator, last_update, '
+            'REPLACE INTO maps (md5, id, set_id, status, artist, '
+            'title, version, creator, last_update, total_length, '
             'frozen, mode, bpm, cs, od, ar, hp, diff) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '
             '%s, %s, %s, %s, %s, %s, %s, %s, %s)', params
