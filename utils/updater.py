@@ -11,7 +11,6 @@ from typing import Optional
 from cmyui import Version, log, Ansi
 from pathlib import Path
 from datetime import datetime as dt
-from collections import defaultdict
 import re
 
 from objects import glob
@@ -87,13 +86,11 @@ class Updater:
             # already up to date.
             return
 
-        # needs update, find all updates since prev_version
-        log(f'Updating sql (v{prev_version!r} -> '
-                          f'v{self.version!r}).', Ansi.MAGENTA)
+        # version changed; there may be sql changes.
         with open(SQL_UPDATES_FILE, 'r') as f:
             content = f.read()
 
-        updates = defaultdict(list)
+        updates = []
         current_ver = None
 
         for line in content.splitlines():
@@ -104,12 +101,17 @@ class Updater:
 
                 continue
 
-            updates[current_ver].append(line)
+            # we only need the updates between the
+            # previous and new version of the server.
+            if prev_version < current_ver <= self.version:
+                updates.append(line)
 
-        # now go through updates, running the ones
-        # between the previous and new versions.
-        for update_ver, update_lines in updates.items():
-            if prev_version < update_ver <= self.version:
-                await glob.db.execute('\n'.join(update_lines))
+        if not updates:
+            return
+
+        log(f'Updating sql (v{prev_version!r} -> '
+                          f'v{self.version!r}).', Ansi.MAGENTA)
+
+        await glob.db.execute('\n'.join(updates))
 
     # TODO _update_config?
