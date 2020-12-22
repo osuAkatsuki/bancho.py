@@ -547,7 +547,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get(name=msg[0], sql=True)):
         return 'Could not find user.'
 
-    t.update_privs(priv)
+    await t.update_privs(priv)
     return f"Updated {t}'s privileges to {priv}."
 
 # temp command, to illustrate how menu options will work

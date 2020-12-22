@@ -179,7 +179,7 @@ class Player:
 
     @property
     def online(self) -> bool:
-        return self.token and self.login_time
+        return self.token != ''
 
     @property
     def url(self) -> str:
@@ -323,7 +323,7 @@ class Player:
 
     async def ban(self, admin: 'Player', reason: str) -> None:
         """Ban `self` for `reason`, and log to sql."""
-        self.remove_privs(Privileges.Normal)
+        await self.remove_privs(Privileges.Normal)
 
         log_msg = f'{admin} banned for "{reason}".'
         await glob.db.execute(
@@ -348,7 +348,7 @@ class Player:
 
     async def unban(self, admin: 'Player', reason: str) -> None:
         """Unban `self` for `reason`, and log to sql."""
-        self.add_privs(Privileges.Normal)
+        await self.add_privs(Privileges.Normal)
 
         log_msg = f'{admin} unbanned for "{reason}".'
         await glob.db.execute(

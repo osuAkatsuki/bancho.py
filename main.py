@@ -73,7 +73,7 @@ async def on_start() -> None:
         await asyncio.sleep(delay)
 
         p = await glob.players.get(id=userid, sql=True)
-        p.remove_privs(Privileges.Donator)
+        await p.remove_privs(Privileges.Donator)
 
         log(f"{p}'s donation perks have expired.", Ansi.MAGENTA)
 
