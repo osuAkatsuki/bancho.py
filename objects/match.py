@@ -197,8 +197,8 @@ class Match:
         self.name = ''
         self.passwd = ''
 
-        self.host = None
-        self._refs = set()
+        self.host: Optional[Player] = None
+        self._refs: set[Player] = set()
 
         self.map_id = 0
         self.map_md5 = ''
@@ -430,7 +430,7 @@ class Match:
                                  MatchTeamTypes.tag_coop)
 
         # Find the winner & increment their matchpoints.
-        winner = max(scores, key=scores.get)
+        winner: Player = max(scores, key=scores.get)
         self.match_points[winner] += 1
 
         msg: list[str] = []

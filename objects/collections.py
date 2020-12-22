@@ -130,7 +130,7 @@ class PlayerList:
             if p not in immune:
                 p.enqueue(data)
 
-    async def get(self, sql: bool = False, **kwargs) -> Player:
+    async def get(self, sql: bool = False, **kwargs) -> Optional[Player]:
         for attr in ('token', 'id', 'name'):
             if val := kwargs.pop(attr, None):
                 break

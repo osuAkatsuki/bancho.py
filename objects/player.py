@@ -135,7 +135,7 @@ class Player:
         self.safe_name = self.make_safe(self.name) if self.name else ''
         self.pw_bcrypt = kwargs.pop('pw_bcrypt', '')
 
-        self.stats = {mode: None for mode in GameMode}
+        self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
 
         self.friends: set[int] = set() # userids, not player objects
@@ -163,7 +163,7 @@ class Player:
         # XXX: below is mostly gulag-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores = {mode: None for mode in GameMode}
+        self.recent_scores: dict[GameMode, Score] = {}
 
         # store the last beatmap /np'ed by the user.
         self.last_np: Optional[Beatmap] = None
@@ -261,6 +261,10 @@ class Player:
         p = cls(**user_info, pm_private=pm_private,
                 priv=priv, utc_offset=utc_offset,
                 token=token, osu_ver=osu_ver)
+
+        for mode in GameMode: # start empty
+            p.recent_scores[mode] = None
+            p.stats[mode] = None
 
         p.login_time = p.last_recv_time = login_time
         return p
@@ -789,7 +793,7 @@ class Player:
 
     async def add_to_menu(self, coroutine: Coroutine,
                           timeout: int = -1, reusable: bool = False
-                         ) -> None:
+                         ) -> int:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in int32 space as the key.
         rand = partial(random.randint, -0x80000000, 0)

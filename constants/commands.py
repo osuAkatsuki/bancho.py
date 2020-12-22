@@ -548,7 +548,7 @@ async def setpriv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         return 'Could not find user.'
 
     await t.update_privs(priv)
-    return f"Updated {t}'s privileges to {priv}."
+    return f"Updated {t}'s privileges."
 
 # temp command, to illustrate how menu options will work
 @command(triggers=['men'], priv=Privileges.Dangerous, public=False)

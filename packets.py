@@ -436,7 +436,7 @@ class BanchoPacketReader:
 
     async def read_scoreframe(self) -> ScoreFrame:
         fmt = '<iBHHHHHHiHH?BB?'
-        sf = ScoreFrame(struct.unpack_from(fmt, self._buf[:29]))
+        sf = ScoreFrame(*struct.unpack_from(fmt, self._buf[:29]))
         self._buf = self._buf[29:]
 
         if sf.score_v2:
@@ -552,10 +552,10 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
 
 def write_scoreframe(s: ScoreFrame) -> bytearray:
     """ Write `s` into bytes (osu! scoreframe). """
-    return bytearray(struct.pack('<ibHHHHHHIIbbbb',
+    return bytearray(struct.pack('<iBHHHHHHiHH?BB?',
         s.time, s.id, s.num300, s.num100, s.num50, s.num_geki,
-        s.num_katu, s.num_miss, s.total_score, s.max_combo,
-        s.perfect, s.current_hp, s.tag_byte, s.score_v2
+        s.num_katu, s.num_miss, s.total_score, s.current_combo,
+        s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     ))
 
 def write(packid: int, *args: tuple[Any, ...]) -> bytes:
@@ -777,6 +777,10 @@ def matchStart(m: Match) -> bytes:
     )
 
 # packet id: 48
+# NOTE: this is actually unused, since it's
+#       much faster to just send the bytes back
+#       rather than parsing them.. though I might
+#       end up doing it eventually for security reasons
 def matchScoreUpdate(frame: ScoreFrame) -> bytes:
     return write(
         Packets.CHO_MATCH_SCORE_UPDATE,
