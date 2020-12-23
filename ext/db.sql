@@ -375,7 +375,7 @@ alter table stats auto_increment = 3;
 
 insert into channels (name, topic, read_priv, write_priv, auto_join)
 values ('#osu', 'General discussion.', 1, 2, true),
-	   ('#announce', 'Exemplary performance and public announcements.', 1, 2, true),
+	   ('#announce', 'Exemplary performance and public announcements.', 1, 24576, true),
 	   ('#lobby', 'Multiplayer lobby discussion room.', 1, 2, false),
 	   ('#supporter', 'General discussion for p2w gamers.', 48, 48, false),
 	   ('#staff', 'General discussion for the cool kids.', 28672, 28672, true),

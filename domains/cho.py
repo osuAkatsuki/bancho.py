@@ -168,7 +168,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} wrote to non-existent {target}.', Ansi.YELLOW)
             return
 
-        if not p.priv & t.write:
+        if not p.priv & t.write_priv:
             log(f'{p} wrote to {target} with insufficient privileges.')
             return
 
@@ -343,7 +343,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     hwid_matches = await glob.db.fetchall(
         'SELECT u.`name`, u.`priv`, h.`occurrences` '
         'FROM `client_hashes` h '
-        'LEFT JOIN `users` u ON h.`userid` = u.`id` '
+        'INNER JOIN `users` u ON h.`userid` = u.`id` '
         'WHERE h.`userid` != %s AND (h.`adapters` = %s '
         'OR h.`uninstall_id` = %s OR h.`disk_serial` = %s)',
         [user_info['id'], *client_hashes[1:]]
@@ -408,7 +408,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # channels
     for c in glob.channels:
-        if not p.priv & c.read:
+        if not p.priv & c.read_priv:
             continue # no priv to read
 
         # autojoinable channels

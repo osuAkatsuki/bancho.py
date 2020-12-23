@@ -30,7 +30,7 @@ from constants.privileges import Privileges
 from utils.updater import Updater
 
 # current version of gulag
-glob.version = cmyui.Version(3, 0, 9)
+glob.version = cmyui.Version(3, 0, 10)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -52,6 +52,8 @@ async def on_start() -> None:
 
     # add all channels from db.
     async for chan in glob.db.iterall('SELECT * FROM channels'):
+        chan['read_priv'] = Privileges(chan.pop('read_priv', 1))
+        chan['write_priv'] = Privileges(chan.pop('write_priv', 2))
         glob.channels.append(Channel(**chan))
 
     # add all mappools from db.

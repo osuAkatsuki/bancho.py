@@ -500,7 +500,7 @@ class Player:
 
             return False
 
-        if not self.priv & c.read:
+        if not self.priv & c.read_priv:
             log(f'{self} tried to join {c} but lacks privs.')
             return False
 

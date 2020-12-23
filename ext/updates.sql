@@ -80,3 +80,6 @@ alter table stats modify maxcombo_rx_std int(11) unsigned default 0 not null;
 alter table stats modify maxcombo_rx_taiko int(11) unsigned default 0 not null;
 alter table stats modify maxcombo_rx_catch int(11) unsigned default 0 not null;
 alter table stats modify maxcombo_ap_std int(11) unsigned default 0 not null;
+
+# v3.0.10
+update channels set write_priv = 24576 where name = '#announce';
