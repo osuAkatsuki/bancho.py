@@ -12,3 +12,21 @@ insert into channels (name, topic, read_priv, write_priv, auto_join) values
   ('#staff', 'General discussion for the cool kids.', 28672, 28672, true),
   ('#admin', 'General discussion for the cool.', 24576, 24576, true),
   ('#dev',   'General discussion for the.', 16384, 16384, true);
+
+# v3.0.8
+alter table users modify safe_name varchar(32) charset utf8 not null;
+alter table users modify name varchar(32) charset utf8 not null;
+alter table mail modify msg varchar(2048) charset utf8 not null;
+alter table logs modify msg varchar(2048) charset utf8 not null;
+drop table if exists comments;
+create table comments
+(
+	id int auto_increment
+		primary key,
+	target_id int not null comment 'replay, map, or set id',
+	target_type enum('replay', 'map', 'song') not null,
+	userid int not null,
+	time int not null,
+	comment varchar(80) charset utf8 not null,
+	colour char(6) null comment 'rgb hex string'
+);

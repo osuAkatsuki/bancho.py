@@ -21,8 +21,8 @@ create table users
 (
 	id int auto_increment
 		primary key,
-	name varchar(32) not null,
-	safe_name varchar(32) not null,
+	name varchar(32) charset utf8 not null,
+	safe_name varchar(32) charset utf8 not null,
 	email varchar(254) not null,
 	priv int default 1 not null,
 	pw_bcrypt char(60) not null,
@@ -295,13 +295,14 @@ create table favourites
 
 create table comments
 (
-	id int not null comment 'replay, map, or set id',
-	target varchar(6) not null comment '''replay'', ''map'' or ''song''',
+	id int auto_increment
+		primary key,
+	target_id int not null comment 'replay, map, or set id',
+	target_type enum('replay', 'map', 'song') not null,
 	userid int not null,
 	time int not null,
-	comment varchar(80) not null,
-	colour char(6) null comment 'rgb hex string',
-	primary key (id, target, userid)
+	comment varchar(80) charset utf8 not null,
+	colour char(6) null comment 'rgb hex string'
 );
 
 create table mail
@@ -310,7 +311,7 @@ create table mail
 		primary key,
 	from_id int not null,
 	to_id int not null,
-	msg varchar(2048) not null,
+	msg varchar(2048) charset utf8 not null,
 	time int null,
 	`read` tinyint(1) default 0 not null
 );
@@ -321,7 +322,7 @@ create table logs
 		primary key,
 	`from` int not null comment 'both from and to are playerids',
 	`to` int not null,
-	msg varchar(2048) not null,
+	msg varchar(2048) charset utf8 not null,
 	time datetime not null on update CURRENT_TIMESTAMP
 );
 

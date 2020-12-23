@@ -564,7 +564,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             return
 
         if t.pm_private and p.id not in t.friends:
-            p.enqueue(packets.userPMBlocked(target))
+            p.enqueue(packets.userDMBlocked(target))
             log(f'{p} tried to message {t}, but they are blocking dms.')
             return
 

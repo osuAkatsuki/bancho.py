@@ -1142,12 +1142,12 @@ async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
     if action == 'get':
         # client is requesting all comments
         comments = glob.db.iterall(
-            "SELECT c.time, c.target, c.colour, "
+            "SELECT c.time, c.target_type, c.colour, "
             "c.comment, u.priv FROM comments c "
             "LEFT JOIN users u ON u.id = c.userid "
-            "WHERE (c.target = 'replay' AND c.id = %s) "
-            "OR (c.target = 'song' AND c.id = %s) "
-            "OR (c.target = 'map' AND c.id = %s) ",
+            "WHERE (c.target_type = 'replay' AND c.target_id = %s) "
+            "OR (c.target_type = 'song' AND c.target_id = %s) "
+            "OR (c.target_type = 'map' AND c.target_id = %s) ",
             [mp_args['r'], mp_args['s'], mp_args['b']]
         )
 
@@ -1166,7 +1166,7 @@ async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
             if com['colour']:
                 fmt += f'|{com["colour"]}'
 
-            ret.append('{time}\t{target}\t'
+            ret.append('{time}\t{target_type}\t'
                        '{fmt}\t{comment}'.format(fmt=fmt, **com))
 
         return '\n'.join(ret).encode()
@@ -1175,22 +1175,22 @@ async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
         # client is submitting a new comment
 
         # get the comment's target scope
-        target = mp_args['target']
-        if target not in ('song', 'map', 'replay'):
-            return (400, b'Invalid target.')
+        target_type = mp_args['target']
+        if target_type not in ('song', 'map', 'replay'):
+            return (400, b'Invalid target_type.')
 
         # get the corresponding id from the request
-        com_id = mp_args[{'song': 's', 'map': 'b',
-                          'replay': 'r'}[target]]
+        target_id = mp_args[{'song': 's', 'map': 'b',
+                             'replay': 'r'}[target_type]]
 
-        if not com_id.isdecimal():
-            return (400, b'Invalid corresponding id.')
+        if not target_id.isdecimal():
+            return (400, b'Invalid target id.')
 
         # get some extra params
         sttime = mp_args['starttime']
         comment = mp_args['comment']
 
-        if p.priv & Privileges.Donator:
+        if 'f' in mp_args and p.priv & Privileges.Donator:
             # only supporters can use colours.
             # XXX: colour may still be none,
             # since mp_args is a defaultdict.
@@ -1200,9 +1200,10 @@ async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
 
         # insert into sql
         await glob.db.execute(
-            'INSERT INTO comments '
-            'VALUES (%s, %s, %s, %s, %s, %s)',
-            [com_id, target, p.id,
+            'INSERT INTO comments (target_id, target_type, '
+            'userid, time, comment, colour) VALUES '
+            '(%s, %s, %s, %s, %s, %s)',
+            [target_id, target_type, p.id,
              sttime, comment, colour]
         )
 
