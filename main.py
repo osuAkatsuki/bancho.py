@@ -30,7 +30,7 @@ from constants.privileges import Privileges
 from utils.updater import Updater
 
 # current version of gulag
-glob.version = cmyui.Version(3, 0, 8)
+glob.version = cmyui.Version(3, 0, 9)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)

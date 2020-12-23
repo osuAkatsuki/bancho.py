@@ -30,3 +30,53 @@ create table comments
 	comment varchar(80) charset utf8 not null,
 	colour char(6) null comment 'rgb hex string'
 );
+
+# v3.0.9
+alter table stats modify tscore_vn_std int(11) unsigned default 0 not null;
+alter table stats modify tscore_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify tscore_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify tscore_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify tscore_rx_std int(11) unsigned default 0 not null;
+alter table stats modify tscore_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify tscore_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify tscore_ap_std int(11) unsigned default 0 not null;
+alter table stats modify rscore_vn_std int(11) unsigned default 0 not null;
+alter table stats modify rscore_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify rscore_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify rscore_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify rscore_rx_std int(11) unsigned default 0 not null;
+alter table stats modify rscore_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify rscore_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify rscore_ap_std int(11) unsigned default 0 not null;
+alter table stats modify pp_vn_std smallint(6) unsigned default 0 not null;
+alter table stats modify pp_vn_taiko smallint(6) unsigned default 0 not null;
+alter table stats modify pp_vn_catch smallint(6) unsigned default 0 not null;
+alter table stats modify pp_vn_mania smallint(6) unsigned default 0 not null;
+alter table stats modify pp_rx_std smallint(6) unsigned default 0 not null;
+alter table stats modify pp_rx_taiko smallint(6) unsigned default 0 not null;
+alter table stats modify pp_rx_catch smallint(6) unsigned default 0 not null;
+alter table stats modify pp_ap_std smallint(6) unsigned default 0 not null;
+alter table stats modify plays_vn_std int(11) unsigned default 0 not null;
+alter table stats modify plays_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify plays_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify plays_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify plays_rx_std int(11) unsigned default 0 not null;
+alter table stats modify plays_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify plays_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify plays_ap_std int(11) unsigned default 0 not null;
+alter table stats modify playtime_vn_std int(11) unsigned default 0 not null;
+alter table stats modify playtime_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify playtime_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify playtime_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify playtime_rx_std int(11) unsigned default 0 not null;
+alter table stats modify playtime_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify playtime_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify playtime_ap_std int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_vn_std int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_rx_std int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify maxcombo_ap_std int(11) unsigned default 0 not null;

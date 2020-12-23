@@ -120,6 +120,12 @@ class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
         p.status.info_text = self.info_text
         p.status.map_md5 = self.map_md5
         p.status.mods = Mods(self.mods)
+
+        if p.status.mods & Mods.RELAX:
+            self.mode += 4
+        elif p.status.mods & Mods.AUTOPILOT:
+            self.mode = 7
+
         p.status.mode = GameMode(self.mode)
         p.status.map_id = self.map_id
 

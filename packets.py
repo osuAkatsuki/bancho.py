@@ -631,6 +631,26 @@ def changeUsername(old: str, new: str) -> bytes:
 
 # packet id: 11
 def userStats(p: 'Player') -> bytes:
+    if p is glob.bot:
+        return ( # bot is const, no reason to call write()
+            b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
+            b'\x00\x08\x0b\x0eout new code..\x00\x00'
+            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+            b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?'
+            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        )
+
+    gm_stats = p.gm_stats
+    if gm_stats.pp > 0x7fff:
+        # over osu! pp cap, we'll have to
+        # show their pp as ranked score.
+        rscore = gm_stats.pp
+        pp = 0
+    else:
+        rscore = gm_stats.rscore
+        pp = gm_stats.pp
+
     return write(
         Packets.CHO_USER_STATS,
         (p.id, osuTypes.i32),
@@ -640,19 +660,12 @@ def userStats(p: 'Player') -> bytes:
         (p.status.mods, osuTypes.i32),
         (p.status.mode.as_vanilla, osuTypes.u8),
         (p.status.map_id, osuTypes.i32),
-        (p.gm_stats.rscore, osuTypes.i64),
-        (p.gm_stats.acc / 100.0, osuTypes.f32),
-        (p.gm_stats.plays, osuTypes.i32),
-        (p.gm_stats.tscore, osuTypes.i64),
-        (p.gm_stats.rank, osuTypes.i32),
-        (p.gm_stats.pp, osuTypes.i16)
-    ) if p is not glob.bot else (
-        b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
-        b'\x00\x08\x0b\x0eout new code..\x00\x00'
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?'
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        (rscore, osuTypes.i64),
+        (gm_stats.acc / 100.0, osuTypes.f32),
+        (gm_stats.plays, osuTypes.i32),
+        (gm_stats.tscore, osuTypes.i64),
+        (gm_stats.rank, osuTypes.i32),
+        (pp, osuTypes.i16) # why not u16 peppy :(
     )
 
 # packet id: 12
