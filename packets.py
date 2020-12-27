@@ -28,10 +28,10 @@ if TYPE_CHECKING:
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
 _specifiers = (
-    'b', 'B', # 8
-    'h', 'H', # 16
-    'i', 'I', 'f', # 32
-    'q', 'Q', 'd'  # 64
+    '<b', '<B', # 8
+    '<h', '<H', # 16
+    '<i', '<I', '<f', # 32
+    '<q', '<Q', '<d'  # 64
 )
 
 @unique
@@ -343,7 +343,7 @@ class BanchoPacketReader:
             b = self._buf[0]
             self._buf = self._buf[1:]
 
-            val |= ((b & 0b01111111) << shift)
+            val |= (b & 0b01111111) << shift
             if (b & 0b10000000) == 0:
                 break
 
@@ -454,10 +454,10 @@ def write_uleb128(num: int) -> bytearray:
     length = 0
 
     while num > 0:
-        ret.append(num & 127)
+        ret.append(num & 0b01111111)
         num >>= 7
         if num != 0:
-            ret[length] |= 128
+            ret[length] |= 0b10000000
         length += 1
 
     return ret
@@ -581,7 +581,7 @@ def write(packid: int, *args: tuple[Any, ...]) -> bytes:
         #    ret += write_mapInfoReply(p)
         else:
             # not a custom type, use struct to pack the data.
-            ret += struct.pack(f'<{_specifiers[p_type]}', p)
+            ret += struct.pack(_specifiers[p_type], p)
 
     # add size
     ret[3:3] = struct.pack('<I', len(ret) - 3)

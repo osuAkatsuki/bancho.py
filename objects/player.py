@@ -79,7 +79,6 @@ class Status:
     mode: GameMode = GameMode.vn_std
     map_id: int = 0
 
-
 class Player:
     """\
     Server side representation of a player; not necessarily online.

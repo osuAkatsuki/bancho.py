@@ -53,10 +53,8 @@ class ChannelList(list):
         if glob.config.debug:
             log(f'{c} removed from channels list.')
 
-        try:
-            return super().remove(c)
-        except:
-            ...
+        return super().remove(c)
+
 class MatchList(list):
     """The currently active multiplayer matches on the server."""
 
