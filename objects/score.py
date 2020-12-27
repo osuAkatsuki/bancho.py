@@ -1,5 +1,5 @@
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from enum import IntEnum, unique
 from datetime import datetime
 from base64 import b64decode
@@ -11,10 +11,12 @@ from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 
 from objects.beatmap import Beatmap
-from objects.player import Player
 from objects import glob
 
 from utils.recalculator import PPCalculator
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 __all__ = (
     'Rank',
@@ -156,7 +158,7 @@ class Score:
         self.id: Optional[int] = None
 
         self.bmap: Optional[Beatmap] = None
-        self.player: Optional[Player] = None
+        self.player: Optional['Player'] = None
 
         self.pp: Optional[float] = None
         self.score: Optional[int] = None

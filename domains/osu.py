@@ -14,6 +14,7 @@ import bcrypt
 import random
 import orjson
 import aiofiles
+from typing import TYPE_CHECKING
 
 from urllib.parse import unquote
 from cmyui import (Connection, Domain,
@@ -27,11 +28,14 @@ from constants.clientflags import ClientFlags
 from constants import regexes
 
 from objects.score import Score, SubmissionStatus
-from objects.player import Player, Privileges
+from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
 from objects import glob
 
 from utils.misc import point_of_interest
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 # TODO:
 # osu-rate.php: beatmap rating on score submission.
@@ -179,7 +183,7 @@ async def osuMapBMSubmitGetID(conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login('u', 'p')
-async def osuScreenshot(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
     if 'ss' not in conn.files:
         log(f'screenshot req missing file.', Ansi.LRED)
         return (400, b'')
@@ -195,13 +199,13 @@ async def osuScreenshot(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-getfriends.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetFriends(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuGetFriends(p: 'Player', conn: Connection) -> Optional[bytes]:
     return '\n'.join(map(str, p.friends)).encode()
 
 @domain.route('/web/osu-getbeatmapinfo.php', methods=['POST'])
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
     data = orjson.loads(conn.body)
     ret = []
 
@@ -256,7 +260,9 @@ async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
             i = idx, ranks = '|'.join(ranks), **res
         ))
 
-    for bid in data['Ids']:
+    for _ in data['Ids']:
+        # still have yet to see
+        # this actually used..
         point_of_interest()
 
     return '\n'.join(ret).encode()
@@ -264,7 +270,7 @@ async def osuGetBeatmapInfo(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-getfavourites.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuGetFavourites(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuGetFavourites(p: 'Player', conn: Connection) -> Optional[bytes]:
     favourites = await glob.db.fetchall(
         'SELECT setid FROM favourites '
         'WHERE userid = %s',
@@ -276,7 +282,7 @@ async def osuGetFavourites(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-addfavourite.php')
 @required_args({'u', 'h', 'a'})
 @get_login('u', 'h', b'Please login to add favourites!')
-async def osuAddFavourite(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuAddFavourite(p: 'Player', conn: Connection) -> Optional[bytes]:
     # make sure set id is valid
     if not conn.args['a'].isdecimal():
         return (400, b'Invalid beatmap set id.')
@@ -298,7 +304,7 @@ async def osuAddFavourite(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/lastfm.php')
 @required_args({'b', 'action', 'us', 'ha'})
 @get_login('us', 'ha')
-async def lastFM(p: Player, conn: Connection) -> Optional[bytes]:
+async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
     if conn.args['b'][0] != 'a':
         # not anticheat related, tell the
         # client not to send any more for now.
@@ -347,7 +353,7 @@ async def lastFM(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login('u', 'h')
-async def osuSearchHandler(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
@@ -393,63 +399,62 @@ async def osuSearchHandler(p: Player, conn: Connection) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
-    """ XXX: some work on gulag's possible future mirror
-    query = conn.args['q'].replace('+', ' ') # TODO: allow empty
-    offset = int(conn.args['p']) * 100
-
-    sql_query = [
-        'SELECT DISTINCT set_id, artist, title,',
-        'status, creator, last_update FROM maps',
-        'LIMIT %s, 100'
-    ]
-
-    sql_params = [offset]
-
-    # TODO: actually support the buttons lol
-    if query not in ('Newest', 'Top Rated', 'Most Played'):
-        # They're searching something specifically.
-        sql_query.insert(2, 'WHERE title LIKE %s')
-        sql_params.insert(0, f'%{query}%')
-
-    if not (res := await glob.db.fetchall(' '.join(sql_query), sql_params)):
-        return b'-1\nNo matches found.'
-
-    # We'll construct the response as a list of
-    # strings, then join and encode when returning.
-    ret = [f'{len(res)}']
-
-    # For each beatmap set
-    for bmapset in res:
-        # retrieve the data for each difficulty
-        if not (bmaps := await glob.db.fetchall(
-            # Remove ',' from diffname since it's our split char.
-            "SELECT REPLACE(version, ',', '') AS version, "
-            'mode, cs, od, ar, hp, diff '
-            'FROM maps WHERE set_id = %s '
-            # Order difficulties by mode > star rating > ar.
-            'ORDER BY mode ASC, diff ASC, ar ASC',
-            [bmapset['set_id']]
-        )): continue
-
-        # Construct difficulty-specific information.
-        diffs = ','.join(
-            '[{diff:.2f}⭐] {version} {{CS{cs} OD{od} AR{ar} HP{hp}}}@{mode}'.format(**row)
-            for row in bmaps
-        )
-
-        ret.append(
-            '{set_id}.osz|{artist}|{title}|{creator}|'
-            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
-            '0|0|0|0|0|{diffs}'.format(**bmapset, diffs=diffs)
-        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
-
-    return '\n'.join(ret).encode()
-    """
+#    # XXX: some work on gulag's possible future mirror
+#    query = conn.args['q'].replace('+', ' ') # TODO: allow empty
+#    offset = int(conn.args['p']) * 100
+#
+#    sql_query = [
+#        'SELECT DISTINCT set_id, artist, title,',
+#        'status, creator, last_update FROM maps',
+#        'LIMIT %s, 100'
+#    ]
+#
+#    sql_params = [offset]
+#
+#    # TODO: actually support the buttons lol
+#    if query not in ('Newest', 'Top Rated', 'Most Played'):
+#        # They're searching something specifically.
+#        sql_query.insert(2, 'WHERE title LIKE %s')
+#        sql_params.insert(0, f'%{query}%')
+#
+#    if not (res := await glob.db.fetchall(' '.join(sql_query), sql_params)):
+#        return b'-1\nNo matches found.'
+#
+#    # We'll construct the response as a list of
+#    # strings, then join and encode when returning.
+#    ret = [f'{len(res)}']
+#
+#    # For each beatmap set
+#    for bmapset in res:
+#        # retrieve the data for each difficulty
+#        if not (bmaps := await glob.db.fetchall(
+#            # Remove ',' from diffname since it's our split char.
+#            "SELECT REPLACE(version, ',', '') AS version, "
+#            'mode, cs, od, ar, hp, diff '
+#            'FROM maps WHERE set_id = %s '
+#            # Order difficulties by mode > star rating > ar.
+#            'ORDER BY mode ASC, diff ASC, ar ASC',
+#            [bmapset['set_id']]
+#        )): continue
+#
+#        # Construct difficulty-specific information.
+#        diffs = ','.join(
+#            '[{diff:.2f}⭐] {version} {{CS{cs} OD{od} AR{ar} HP{hp}}}@{mode}'.format(**row)
+#            for row in bmaps
+#        )
+#
+#        ret.append(
+#            '{set_id}.osz|{artist}|{title}|{creator}|'
+#            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
+#            '0|0|0|0|0|{diffs}'.format(**bmapset, diffs=diffs)
+#        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+#
+#    return '\n'.join(ret).encode()
 
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login('u', 'h')
-async def osuSearchSetHandler(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
     if 's' in conn.args:
@@ -807,7 +812,7 @@ REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
-async def getReplay(p: Player, conn: Connection) -> Optional[bytes]:
+async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
     path = REPLAYS_PATH / f'{conn.args["c"]}.osr'
 
     if not path.exists():
@@ -816,114 +821,113 @@ async def getReplay(p: Player, conn: Connection) -> Optional[bytes]:
     async with aiofiles.open(path, 'rb') as f:
         return await f.read()
 
-""" XXX: going to be slightly more annoying than expected to set this up :P
-@domain.route('/web/osu-session.php', methods=['POST'])
-@required_mpargs({'u', 'h', 'action'})
-@get_login('u', 'h')
-async def osuSession(p: Player, conn: Connection) -> Optional[bytes]:
-    mp_args = conn.multipart_args
-
-    if mp_args['action'] not in ('check', 'submit'):
-        return # invalid action
-
-    if mp_args['action'] == 'submit':
-        # client is submitting a performance session after a score
-        # we'll save some basic information, and do some basic checks,
-        # could surely be useful for anticheat and debugging purposes.
-        data = orjson.loads(mp_args['content'])
-
-        if data['Tags']['Replay'] == 'True':
-            # the user was viewing a replay,
-            # no need to save to sql.
-            return
-
-        # so, osu! sends a 'Fullscreen' param and a 'Beatmap'
-        # param, but both of them are the fullscreen value? lol
-
-        op_sys = data['Tags']['OS']
-        fullscreen = data['Tags']['Fullscreen'] == 'True'
-        fps_cap = data['Tags']['FrameSync']
-        compatibility = data['Tags']['Compatibility'] == 'True'
-        version = data['Tags']['Version'] # osu! version
-        start_time = data['StartTime']
-        end_time = data['EndTime']
-        frame_count = data['ProcessedFrameCount']
-        spike_frames = data['SpikeFrameCount']
-
-        aim_rate = data['AimFrameRate']
-        if aim_rate == 'Infinity':
-            aim_rate = 0
-
-        completion = data['Completion']
-        identifier = data['Identifier']
-        average_frametime = data['AverageFrameTime'] * 1000
-
-        if identifier:
-            point_of_interest()
-
-        # chances are, if we can't find a very
-        # recent score by a user, it just hasn't
-        # submitted yet.. we'll allow 5 seconds
-
-        rscore: Optional[Score] = None
-        retries = 0
-        ctime = time.time()
-
-        cache = glob.cache['performance_reports']
-
-        while retries < 5:
-            if (rscore := p.recent_score) and rscore.id not in cache:
-                # only accept scores submitted
-                # within the last 5 seconds.
-
-                if ((ctime + retries) - (rscore.play_time - 5)) > 0:
-                    break
-
-            retries += 1
-            await asyncio.sleep(1)
-        else:
-            # STILL no score found..
-            # this can happen if they submit a duplicate score,
-            # perhaps i should add some kind of system to prevent
-            # this from happening or re-think this overall.. i'd
-            # imagine this can be useful for old client det. tho :o
-            log('Received performance report but found no score', Ansi.LRED)
-            return
-
-        # TODO: timing checks
-
-        #if version != p.osu_ver:
-        #    point_of_interest()
-
-        # remember that we've already received a report
-        # for this score, so that we don't overwrite it.
-        glob.cache['performance_reports'].add(rscore.id)
-
-        await glob.db.execute(
-            'INSERT INTO performance_reports VALUES '
-            '(%s, %s, %s, %s, %s, %s, %s,'
-            ' %s, %s, %s, %s, %s, %s, %s)', [
-                rscore.id,
-                op_sys, fullscreen, fps_cap,
-                compatibility, version,
-                start_time, end_time,
-                frame_count, spike_frames,
-                aim_rate, completion,
-                identifier, average_frametime
-            ]
-        )
-
-    else:
-        # TODO: figure out what this wants?
-        # seems like it adds the response from server
-        # to some kind of internal buffer, dunno why tho
-        return
-"""
+# XXX: going to be slightly more annoying than expected to set this up :P
+#@domain.route('/web/osu-session.php', methods=['POST'])
+#@required_mpargs({'u', 'h', 'action'})
+#@get_login('u', 'h')
+#async def osuSession(p: 'Player', conn: Connection) -> Optional[bytes]:
+#    mp_args = conn.multipart_args
+#
+#    if mp_args['action'] not in ('check', 'submit'):
+#        return # invalid action
+#
+#    if mp_args['action'] == 'submit':
+#        # client is submitting a performance session after a score
+#        # we'll save some basic information, and do some basic checks,
+#        # could surely be useful for anticheat and debugging purposes.
+#        data = orjson.loads(mp_args['content'])
+#
+#        if data['Tags']['Replay'] == 'True':
+#            # the user was viewing a replay,
+#            # no need to save to sql.
+#            return
+#
+#        # so, osu! sends a 'Fullscreen' param and a 'Beatmap'
+#        # param, but both of them are the fullscreen value? lol
+#
+#        op_sys = data['Tags']['OS']
+#        fullscreen = data['Tags']['Fullscreen'] == 'True'
+#        fps_cap = data['Tags']['FrameSync']
+#        compatibility = data['Tags']['Compatibility'] == 'True'
+#        version = data['Tags']['Version'] # osu! version
+#        start_time = data['StartTime']
+#        end_time = data['EndTime']
+#        frame_count = data['ProcessedFrameCount']
+#        spike_frames = data['SpikeFrameCount']
+#
+#        aim_rate = data['AimFrameRate']
+#        if aim_rate == 'Infinity':
+#            aim_rate = 0
+#
+#        completion = data['Completion']
+#        identifier = data['Identifier']
+#        average_frametime = data['AverageFrameTime'] * 1000
+#
+#        if identifier:
+#            point_of_interest()
+#
+#        # chances are, if we can't find a very
+#        # recent score by a user, it just hasn't
+#        # submitted yet.. we'll allow 5 seconds
+#
+#        rscore: Optional[Score] = None
+#        retries = 0
+#        ctime = time.time()
+#
+#        cache = glob.cache['performance_reports']
+#
+#        while retries < 5:
+#            if (rscore := p.recent_score) and rscore.id not in cache:
+#                # only accept scores submitted
+#                # within the last 5 seconds.
+#
+#                if ((ctime + retries) - (rscore.play_time - 5)) > 0:
+#                    break
+#
+#            retries += 1
+#            await asyncio.sleep(1)
+#        else:
+#            # STILL no score found..
+#            # this can happen if they submit a duplicate score,
+#            # perhaps i should add some kind of system to prevent
+#            # this from happening or re-think this overall.. i'd
+#            # imagine this can be useful for old client det. tho :o
+#            log('Received performance report but found no score', Ansi.LRED)
+#            return
+#
+#        # TODO: timing checks
+#
+#        #if version != p.osu_ver:
+#        #    point_of_interest()
+#
+#        # remember that we've already received a report
+#        # for this score, so that we don't overwrite it.
+#        glob.cache['performance_reports'].add(rscore.id)
+#
+#        await glob.db.execute(
+#            'INSERT INTO performance_reports VALUES '
+#            '(%s, %s, %s, %s, %s, %s, %s,'
+#            ' %s, %s, %s, %s, %s, %s, %s)', [
+#                rscore.id,
+#                op_sys, fullscreen, fps_cap,
+#                compatibility, version,
+#                start_time, end_time,
+#                frame_count, spike_frames,
+#                aim_rate, completion,
+#                identifier, average_frametime
+#            ]
+#        )
+#
+#    else:
+#        # TODO: figure out what this wants?
+#        # seems like it adds the response from server
+#        # to some kind of internal buffer, dunno why tho
+#        return
 
 @domain.route('/web/osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login('u', 'p', b'auth fail')
-async def osuRate(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
     map_md5 = conn.args['c']
 
     if 'v' not in conn.args:
@@ -982,7 +986,7 @@ class RankingType(IntEnum):
 @required_args({'s', 'vv', 'v', 'c', 'f', 'm',
                 'i', 'mods', 'h', 'a', 'us', 'ha'})
 @get_login('us', 'ha')
-async def getScores(p: Player, conn: Connection) -> Optional[bytes]:
+async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     isdecimal_n = partial(_isdecimal, _negative=True)
 
     # make sure all int args are integral
@@ -1134,7 +1138,7 @@ async def getScores(p: Player, conn: Connection) -> Optional[bytes]:
 @required_mpargs({'u', 'p', 'b', 's',
                   'm', 'r', 'a'})
 @get_login('u', 'p')
-async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
     action = mp_args['a']
@@ -1216,7 +1220,7 @@ async def osuComment(p: Player, conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-markasread.php')
 @required_args({'u', 'h', 'channel'})
 @get_login('u', 'h')
-async def osuMarkAsRead(p: Player, conn: Connection) -> Optional[bytes]:
+async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
@@ -1381,15 +1385,20 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
     else:
         limit = 100
 
-    res = await glob.db.fetchall(
-        'SELECT id, map_md5, score, pp, acc, max_combo, mods, '
-        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
-        'mode, play_time, time_elapsed, userid, perfect '
-        f'FROM {table} WHERE userid = %s '
-        'ORDER BY id DESC LIMIT %s',
-        [pid, limit]
-    )
+    query = ['SELECT id, map_md5, score, pp, acc, max_combo, mods, '
+             'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+             'mode, play_time, time_elapsed, userid, perfect '
+             f'FROM {table} WHERE userid = %s']
+    params = [pid]
 
+    if mods:
+        query.append('WHERE mods & %s > 0')
+        params.append(int(mods))
+
+    query.append('ORDER BY id DESC LIMIT %s')
+    params.append(limit)
+
+    res = await glob.db.fetchall(' '.join(query), params)
     return orjson.dumps(res) if res else b'No scores found.'
 
 """ Misc handlers """

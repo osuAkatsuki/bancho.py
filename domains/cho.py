@@ -280,7 +280,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return packets.userID(-1), 'no'
 
     utc_offset = int(s[1])
-    display_city = s[2] == '1'
+    #display_city = s[2] == '1'
 
     # Client hashes contain a few values useful to us.
     # [0]: md5(osu path)
