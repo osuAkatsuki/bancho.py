@@ -568,7 +568,7 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 # XXX: this actually comes in handy sometimes, i initially
 # wrote it completely as a joke, but i might keep it in for
 # devs.. Comes in handy when debugging to be able to run something
-# like `!py return await glob.players.get(name='cmyui').status.action`
+# like `!py return (await glob.players.get(name='cmyui')).status.action`
 # or for anything while debugging on-the-fly..
 @command(priv=Privileges.Dangerous, public=True)
 async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -581,16 +581,14 @@ async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         # define, and run the coroutine
         exec(definition)
 
-        _locals = locals()
         loop = asyncio.get_event_loop()
 
         try:
-            task = loop.create_task(_locals['__py'](p, c, msg))
+            task = loop.create_task(locals()['__py'](p, c, msg))
             ret = await asyncio.wait_for(asyncio.shield(task), 5.0)
         except asyncio.TimeoutError:
             ret = 'Left running (took >=5 sec).'
 
-        del _locals['__py']
     except Exception as e:
         # code was invalid, return
         # the error in the osu! chat.
