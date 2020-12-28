@@ -305,29 +305,28 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # get our bcrypt cache.
     bcrypt_cache = glob.cache['bcrypt']
+    pw_bcrypt = user_info['pw_bcrypt'].encode()
 
-    # their account exists in sql.
-    # check their account status & credentials against db.
-
-    if pw_md5 in bcrypt_cache: # ~0.01 ms
-        # cache hit - this saves ~200ms on subsequent logins.
-        if bcrypt_cache[pw_md5] != user_info['pw_bcrypt']:
-            # password wrong
+    # check credentials against db.
+    # algorithms like these are intentionally
+    # designed to be slow; we'll cache the
+    # results to speed up subsequent logins.
+    if pw_bcrypt in bcrypt_cache: # ~0.01 ms
+        if pw_md5 != bcrypt_cache[pw_bcrypt]:
+            return packets.userID(-1), 'no'
+    else: # ~200ms
+        if not bcrypt.checkpw(pw_md5, pw_bcrypt):
             return packets.userID(-1), 'no'
 
-    else:
-        # cache miss, their first login since the server started.
-        if not bcrypt.checkpw(pw_md5, user_info['pw_bcrypt'].encode()):
-            return packets.userID(-1), 'no'
+        bcrypt_cache[pw_bcrypt] = pw_md5
 
-        bcrypt_cache[pw_md5] = user_info['pw_bcrypt']
-
+    # check if the user is banned.
     if not user_info['priv'] & Privileges.Normal:
         return packets.userID(-3), 'no'
 
     """ handle client hashes """
 
-    # insert new set/occurrence
+    # insert new set/occurrence.
     await glob.db.execute(
         'INSERT INTO client_hashes '
         'VALUES (%s, %s, %s, %s, %s, NOW(), 0) '

@@ -28,17 +28,9 @@ bot: 'Player'
 # ideally, the cache is hidden away in methods so that developers do not
 # need to think about it.
 cache = {
-    # doing bcrypt on a password takes a surplus of 250ms in python
-    # (at least on my current [powerful] machine). this is intentional
-    # with bcrypt, but to remove some of this performance hit, we only
-    # do it on the user's first login.
-    # XXX: this may be removed? it's a hard one, the speed benefits
-    # are undoubtably good, but it doesn't feel great.. especially
-    # with a command like !ev existing, even with almost 100%
-    # certainty nothing can be abused, it doesn't feel great. maaybe
-    # it could have a setting on whether to enable, but i don't know
-    # if that should be the server owners decision, either.
-    'bcrypt': {}, # {md5: bcrypt, ...}
+    # algorithms like brypt these are intentionally designed to be
+    # slow; we'll cache the results to speed up subsequent logins.
+    'bcrypt': {}, # {bcrypt: md5, ...}
     # we'll cache results for osu! client update requests since they
     # are relatively frequently and won't change very frequently.
     'update': { # default timeout is 1h, set on request.
