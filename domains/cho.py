@@ -306,6 +306,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # get our bcrypt cache.
     bcrypt_cache = glob.cache['bcrypt']
     pw_bcrypt = user_info['pw_bcrypt'].encode()
+    user_info['pw_bcrypt'] = pw_bcrypt
 
     # check credentials against db.
     # algorithms like these are intentionally

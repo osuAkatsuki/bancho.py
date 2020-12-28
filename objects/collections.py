@@ -169,20 +169,10 @@ class PlayerList:
         # logged into bancho at least once. (This does not
         # mean they're logged in now).
 
-        # let them pass as a string for ease of access
-        pw_md5 = pw_md5.encode()
-
-        bcrypt_cache = glob.cache['bcrypt']
-
-        if pw_md5 not in bcrypt_cache:
-            # player has not logged in through bancho.
-            return
-
         if not (p := await self.get(name=name, sql=sql)):
             return # no such player online
 
-        # return if bcrypt matches
-        if bcrypt_cache[pw_md5] == p.pw_bcrypt:
+        if glob.cache['bcrypt'][p.pw_bcrypt] == pw_md5.encode():
             return p
 
     def append(self, p: Player) -> None:

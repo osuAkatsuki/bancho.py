@@ -132,7 +132,7 @@ class Player:
 
         self.token = kwargs.pop('token', '')
         self.safe_name = self.make_safe(self.name) if self.name else ''
-        self.pw_bcrypt = kwargs.pop('pw_bcrypt', '')
+        self.pw_bcrypt = kwargs.pop('pw_bcrypt', b'')
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
