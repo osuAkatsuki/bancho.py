@@ -67,7 +67,7 @@ as they tried to implement something similar back in [ruri](https://github.com/r
 
 ## Setup
 
-Setup should be pretty simple, the commands below should set you right ups.
+Setup should be pretty simple - the commands below should set you right up.
 
 Notes:
 
