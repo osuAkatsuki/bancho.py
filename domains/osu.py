@@ -538,7 +538,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     # Parse our score data into a score obj.
     s = await Score.from_submission(
         mp_args['score'], mp_args['iv'],
-        mp_args['osuver'], mp_args['pass']
+        mp_args['osuver'], mp_args['pass'], 
+        mp_args['s'], mp_args['sbk'] if 'sbk' in mp_args else ''
     )
 
     if not s:

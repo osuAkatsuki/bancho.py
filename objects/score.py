@@ -2,6 +2,7 @@
 from typing import Optional, TYPE_CHECKING
 from enum import IntEnum, unique
 from datetime import datetime
+from hashlib import md5
 from base64 import b64decode
 from py3rijndael import RijndaelCbc, ZeroPadding
 from cmyui import log, Ansi
@@ -233,7 +234,8 @@ class Score:
 
     @classmethod
     async def from_submission(cls, data_b64: str, iv_b64: str,
-                              osu_ver: str, pw_md5: str) -> Optional['Score']:
+                              osu_ver: str, pw_md5: str,
+                              client_hash: str, sbk: str) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
         iv = b64decode(iv_b64).decode('latin_1')
         data_aes = b64decode(data_b64).decode('latin_1')
@@ -254,6 +256,16 @@ class Score:
             return
 
         pname = data[1].rstrip() # why does osu! make me rstrip lol
+
+        imods = int(data[13])
+        imode = int(data[15])
+        version = data[17].rstrip()
+        date = data[16]
+        phash = data[2]
+
+        if osu_ver != version:
+            log('osu! version mismatch in submit-modular.', Ansi.LRED)
+            return
 
         # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
@@ -281,9 +293,9 @@ class Score:
 
         s.perfect = data[11] == '1'
         _grade = data[12] # letter grade
-        s.mods = Mods(int(data[13]))
+        s.mods = Mods(imods)
         s.passed = data[14] == 'True'
-        s.mode = GameMode.from_params(int(data[15]), s.mods)
+        s.mode = GameMode.from_params(imode, s.mods)
         s.play_time = datetime.now()
         s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
@@ -303,6 +315,16 @@ class Score:
             s.pp = 0.0
             s.status = SubmissionStatus.SUBMITTED if s.passed \
                   else SubmissionStatus.FAILED
+        
+        verificationPlain = f'chickenmcnuggets{s.n100 + s.n300}o15{s.n50}' \
+            f'{s.ngeki}smustard{s.nkatu}{s.nmiss}uu{map_md5}{s.max_combo}' \
+            f'{s.perfect}{pname}{s.score}{s.grade}{imods}Q{s.passed}{imode}' \
+            f'{version}{date}{client_hash}{sbk}'
+        
+        verificationHash = md5(verificationPlain)
+
+        if verificationHash != phash:
+            log('Verification hash mismatch in submit-modular.', Ansi.LRED)
 
         return s
 
