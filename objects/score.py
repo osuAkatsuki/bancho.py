@@ -235,13 +235,23 @@ class Score:
     @classmethod
     async def from_submission(cls, data_b64: str, iv_b64: str,
                               osu_ver: str, pw_md5: str,
-                              client_hash: str, sbk: str) -> Optional['Score']:
+                              client_hash_b64: str, sbk_b64: str) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
         iv = b64decode(iv_b64).decode('latin_1')
         data_aes = b64decode(data_b64).decode('latin_1')
+        client_hash_aes = b64decode(client_hash_b64).decode('latin_1')
 
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
         cbc = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
+
+        client_hash = cbc.decrypt(client_hash_aes).decode()
+        
+        if sbk_b64 != '':
+            sbk_aes = b64decode(sbk_b64).decode('latin_1')
+            sbk = cbc.decrypt(sbk_aes).decode()
+        else:
+            sbk = ''
+        
 
         # score data is delimited by colons (:).
         data = cbc.decrypt(data_aes).decode().split(':')
@@ -259,7 +269,7 @@ class Score:
 
         imods = int(data[13])
         imode = int(data[15])
-        version = data[17].rstrip()
+        version = data[17][:8]
         date = data[16]
         phash = data[2]
 
@@ -321,10 +331,14 @@ class Score:
             f'{s.perfect}{pname}{s.score}{s.grade}{imods}Q{s.passed}{imode}' \
             f'{version}{date}{client_hash}{sbk}'
         
-        verificationHash = md5(verificationPlain)
+        verificationHash = md5(verificationPlain.encode()).hexdigest()
 
         if verificationHash != phash:
+            print(verificationPlain)
+            print(verificationHash)
+            print(phash)
             log('Verification hash mismatch in submit-modular.', Ansi.LRED)
+            return
 
         return s
 
