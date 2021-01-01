@@ -1,3 +1,4 @@
+import re
 
 from typing import Optional, TYPE_CHECKING
 from enum import IntEnum, unique
@@ -244,8 +245,9 @@ class Score:
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
         cbc = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
 
-        client_hash = cbc.decrypt(client_hash_aes).decode()
-        
+        client_hash_f = cbc.decrypt(client_hash_aes).decode()
+        client_hash = re.sub('[\x00-\x08\x0B-\x1F]', '', client_hash_f.strip())
+
         if sbk_b64 != '':
             sbk_aes = b64decode(sbk_b64).decode('latin_1')
             sbk = cbc.decrypt(sbk_aes).decode()
@@ -271,7 +273,7 @@ class Score:
         imode = int(data[15])
         version = data[17][:8]
         date = data[16]
-        phash = data[2]
+        vhash = data[2]
 
         if osu_ver != version:
             log('osu! version mismatch in submit-modular.', Ansi.LRED)
@@ -333,10 +335,7 @@ class Score:
         
         verificationHash = md5(verificationPlain.encode()).hexdigest()
 
-        if verificationHash != phash:
-            print(verificationPlain)
-            print(verificationHash)
-            print(phash)
+        if verificationHash != vhash:
             log('Verification hash mismatch in submit-modular.', Ansi.LRED)
             return
 
