@@ -383,7 +383,8 @@ class Match:
 
         await self._update_matchpoints(ret)
 
-    async def await_submissions(self, was_playing: list['Player']) -> Optional[dict[str, Union[int, float]]]:
+    async def await_submissions(self, was_playing: list['Player']
+                               ) -> Optional[dict[str, Union[int, float]]]:
         """Await score submissions from all players in completed state."""
         scores = defaultdict(int)
         time_taken = 0 # allow up to 10s

@@ -332,7 +332,7 @@ class BanchoPacketReader:
         self._buf = self._buf[length * 4:]
         return val
 
-    # XXX: some osu! packets use i16 for array length, some others use i32
+    # XXX: some osu! packets use i16 for array length, while others use i32
     read_i32_list_i16l = partialmethod(_read_i32_list, len_size=2)
     read_i32_list_i32l = partialmethod(_read_i32_list, len_size=4)
 
@@ -562,26 +562,26 @@ def write(packid: int, *args: tuple[Any, ...]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('<Hx', packid))
 
-    for p, p_type in args:
+    for p_args, p_type in args:
         if p_type == osuTypes.raw:
-            ret += p
+            ret += p_args
         elif p_type == osuTypes.string:
-            ret += write_string(p)
+            ret += write_string(p_args)
         elif p_type == osuTypes.i32_list:
-            ret += write_i32_list(p)
+            ret += write_i32_list(p_args)
         elif p_type == osuTypes.message:
-            ret += write_message(*p)
+            ret += write_message(*p_args)
         elif p_type == osuTypes.channel:
-            ret += write_channel(*p)
+            ret += write_channel(*p_args)
         elif p_type == osuTypes.match:
-            ret += write_match(*p)
+            ret += write_match(*p_args)
         elif p_type == osuTypes.scoreframe:
-            ret += write_scoreframe(p)
+            ret += write_scoreframe(p_args)
         #elif p_type == osuTypes.mapInfoReply:
-        #    ret += write_mapInfoReply(p)
+        #    ret += write_mapInfoReply(p_args)
         else:
             # not a custom type, use struct to pack the data.
-            ret += struct.pack(_specifiers[p_type], p)
+            ret += struct.pack(_specifiers[p_type], p_args)
 
     # add size
     ret[3:3] = struct.pack('<I', len(ret) - 3)

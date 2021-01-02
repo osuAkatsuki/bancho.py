@@ -1528,8 +1528,8 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
         pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
-        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt()).decode()
-        glob.cache['bcrypt'][pw_md5] = pw_bcrypt # cache result for login
+        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
+        glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login
 
         safe_name = name.lower().replace(' ', '_')
 
