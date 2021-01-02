@@ -99,7 +99,7 @@ async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f'{cmd.triggers[0]}: {cmd.doc}')
+        cmds.append(f'!{cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
 
