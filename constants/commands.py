@@ -99,7 +99,7 @@ async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
-            
+
         cmds.append(f'{prefix}{cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
@@ -611,7 +611,7 @@ async def mp_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
-         
+
         cmds.append(f'{prefix}mp {cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
