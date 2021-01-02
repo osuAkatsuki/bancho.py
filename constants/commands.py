@@ -92,13 +92,13 @@ def command(priv: Privileges, public: bool,
 @command(triggers=['help', 'h'], priv=Privileges.Normal, public=False)
 async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Show information of all documented commands `p` can use."""
+    prefix = glob.config.command_prefix
     cmds = []
 
     for cmd in glob.commands['regular']:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
-        prefix = glob.config.command_prefix
         cmds.append(f'{prefix}{cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
@@ -603,6 +603,7 @@ async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 @mp_commands.add(triggers=['help', 'h'], priv=Privileges.Normal, public=True)
 async def mp_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    prefix = glob.config.command_prefix
     cmds = []
 
     for cmd in mp_commands.commands:
@@ -1204,6 +1205,7 @@ async def pool_info(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 @pool_commands.add(triggers=['help', 'h'], priv=Privileges.Tournament, public=False)
 async def pool_help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    prefix = glob.config.command_prefix
     cmds = []
 
     for cmd in pool_commands.commands:
@@ -1211,7 +1213,7 @@ async def pool_help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f'!pool {cmd.triggers[0]}: {cmd.doc}')
+        cmds.append(f'{prefix}pool {cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
 
