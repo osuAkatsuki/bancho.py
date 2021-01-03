@@ -4,10 +4,11 @@ import re
 import aiofiles
 from pathlib import Path
 from cmyui import Connection, Domain
+from objects.glob import config # just the config
 
 """ ava: avatar server (for both ingame & external) """
 
-domain = Domain('a.ppy.sh')
+domain = Domain(re.compile(f'osu(\.ppy\.sh|\.{config.domain})$'))
 
 AVATARS_PATH = Path.cwd() / '.data/avatars'
 DEFAULT_AVATAR = AVATARS_PATH / 'default.jpg'

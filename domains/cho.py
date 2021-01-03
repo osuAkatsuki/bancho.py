@@ -27,7 +27,7 @@ from constants.gamemodes import GameMode
 
 """ Bancho: handle connections from the osu! client """
 
-domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
+domain = Domain(re.compile(f'^c[e4-6]?(\.ppy\.sh|\.{config.domain})$'))
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
