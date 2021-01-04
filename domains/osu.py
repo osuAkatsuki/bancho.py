@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain(re.compile(f'osu(\.ppy\.sh|\.{config.domain})$'))
+domain = Domain(re.compile(f'^osu(\.ppy\.sh|\.{config.domain})$'))
 
 # Some helper decorators (used for /web/ connections)
 

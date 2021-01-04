@@ -8,7 +8,7 @@ from objects.glob import config # just the config
 
 """ ava: avatar server (for both ingame & external) """
 
-domain = Domain(re.compile(f'osu(\.ppy\.sh|\.{config.domain})$'))
+domain = Domain(re.compile(f'^a(\.ppy\.sh|\.{config.domain})$'))
 
 AVATARS_PATH = Path.cwd() / '.data/avatars'
 DEFAULT_AVATAR = AVATARS_PATH / 'default.jpg'
