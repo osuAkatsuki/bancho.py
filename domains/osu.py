@@ -555,6 +555,10 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
 
+    # we should update their activity no matter
+    # what the result of the score submission is.
+    await s.player.update_latest_activity()
+
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
     if s.mode != s.player.status.mode:
@@ -993,7 +997,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not all(isdecimal_n(conn.args[k]) for k in ('mods', 'v', 'm', 'i')):
         return b'-1|false'
 
-    map_md5 = conn.args['c']
+    if (map_md5 := conn.args['c']) in glob.cache['unsubmitted']:
+        # map has already been confirmed as unsubmitted.
+        return b'-1|false'
 
     mods = int(conn.args['mods'])
     mode = GameMode.from_params(int(conn.args['m']), mods)
@@ -1011,34 +1017,59 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     table = mode.sql_table
     scoring = 'pp' if mode >= GameMode.rx_std else 'score'
 
-    if not (bmap := await Beatmap.from_md5(map_md5, map_set_id)):
-        # couldn't find in db or at osu! api by md5.
-        # check if we have the map in our db (by filename).
+    if not (bmap := Beatmap.from_md5_cache(map_md5)):
+        # if not found in memory, get from sql.
+        if not (bmap := await Beatmap.from_md5_sql(map_md5)):
+            # Not found in either cache or sql; we need to do an api request.
+            # osu! gives us the md5, but also the set id for the map (if known);
+            # we can simply do a single osu!api request to get any missing
+            # difficulties at once, saving resources in the long term.
+            if map_set_id != -1:
+                await Beatmap.cache_set(map_set_id)
+                bmap = Beatmap.from_md5_cache(map_md5)
+            else:
+                # map set id not known by client;
+                # they probably just downloaded it?
+                bmap = await Beatmap.from_md5_osuapi(map_md5)
 
-        filename = conn.args['f'].replace('+', ' ')
-        if not (re := regexes.mapfile.match(unquote(filename))):
-            log(f'Requested invalid file - {filename}.', Ansi.LRED)
-            return (400, b'invalid map file syntax.')
+            # Now that all diffs have been cached, try getting from the
+            # cache using the md5; if it's still not found, the map is
+            # invalid - either meaning it's out of date, or unsubmitted.
+            if not bmap:
+                # osu! also sends us the filename of the .osu file requested;
+                # search for a match in our db - since we just cached all
+                # versions of the map, a match will mean that the map is
+                # simply out of date, while no match should mean unsubmitted.
+                map_filename = conn.args['f'].replace('+', ' ')
+                if not (re := regexes.mapfile.match(unquote(map_filename))):
+                    log(f'{p} sent invalid map filename: {map_filename}.', Ansi.LRED)
+                    return (400, b'invalid map filename syntax.')
 
-        set_exists = await glob.db.fetch(
-            'SELECT 1 FROM maps '
-            'WHERE artist = %s AND title = %s '
-            'AND creator = %s AND version = %s', [
-                re['artist'], re['title'],
-                re['creator'], re['version']
-            ]
-        )
+                set_exists = await glob.db.fetch(
+                    'SELECT 1 FROM maps '
+                    'WHERE artist = %s AND title = %s '
+                    'AND creator = %s AND version = %s', [
+                        re['artist'], re['title'],
+                        re['creator'], re['version']
+                    ]
+                )
 
-        if set_exists:
-            # map can be updated.
-            return b'1|false'
+                if set_exists:
+                    # map can be updated.
+                    return b'1|false'
+                else:
+                    # map is unsubmitted.
+                    # add this map to the unsubmitted cache, so
+                    # that we don't have to make this request again.
+                    glob.cache['unsubmitted'].add(map_md5)
+                    return b'-1|false'
         else:
-            # map is unsubmitted.
-            # add this map to the unsubmitted cache, so
-            # that we don't have to make this request again.
-            glob.cache['unsubmitted'].add(map_md5)
-
-        return f'{1 if set_exists else -1}|false'.encode()
+            # found in sql - add to cache
+            glob.cache['beatmap'][bmap.md5] = {
+                'timeout': (glob.config.map_cache_timeout +
+                            time.time()),
+                'map': bmap
+            }
 
     if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,
@@ -1173,6 +1204,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
             ret.append('{time}\t{target_type}\t'
                        '{fmt}\t{comment}'.format(fmt=fmt, **com))
 
+        await p.update_latest_activity()
         return '\n'.join(ret).encode()
 
     elif action == 'post':
@@ -1211,6 +1243,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
              sttime, comment, colour]
         )
 
+        await p.update_latest_activity()
         return # empty resp is fine
 
     else:

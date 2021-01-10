@@ -1173,7 +1173,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 async def pool_list(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """List all existing mappools information."""
 
-    if not (pools := glob.pools.pools):
+    if not (pools := glob.pools):
         return 'There are currently no pools!'
 
     l = [f'Mappools ({len(pools)})']

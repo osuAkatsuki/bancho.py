@@ -204,6 +204,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
 
             await t.send(p, msg)
 
+        await p.update_latest_activity()
         log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 @register
@@ -217,6 +218,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
             return
 
         await p.logout()
+        await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
 
 @register
@@ -493,6 +495,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     glob.players.append(p)
 
     log(f'{p} logged in.', Ansi.LCYAN)
+    await p.update_latest_activity()
     return bytes(data), p.token
 
 @register
@@ -653,6 +656,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                 [p.id, t.id, msg]
             )
 
+        await p.update_latest_activity()
         log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
 
 @register
@@ -692,6 +696,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         glob.channels.append(chan)
         self.match.chat = chan
 
+        await p.update_latest_activity()
         await p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
 
@@ -710,11 +715,13 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
             log(f'{p} tried to join a non-existant mp lobby?')
             return
 
+        await p.update_latest_activity()
         await p.join_match(m, self.match_passwd)
 
 @register
 class MatchPart(BanchoPacket, type=Packets.OSU_PART_MATCH):
     async def handle(self, p: Player) -> None:
+        await p.update_latest_activity()
         await p.leave_match()
 
 @register
@@ -1064,6 +1071,7 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             # editing these in sql.
             return
 
+        await p.update_latest_activity()
         await p.add_friend(t)
 
 @register
@@ -1082,6 +1090,7 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             # editing these in sql.
             return
 
+        await p.update_latest_activity()
         await p.remove_friend(t)
 
 @register
@@ -1162,6 +1171,8 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
             return
 
         t.enqueue(packets.matchInvite(p, t.name))
+        await p.update_latest_activity()
+
         log(f'{p} invited {t} to their match.')
 
 @register
@@ -1203,3 +1214,5 @@ class ToggleBlockingDMs(BanchoPacket, type=Packets.OSU_TOGGLE_BLOCK_NON_FRIEND_D
 
     async def handle(self, p: Player) -> None:
         p.pm_private = self.value == 1
+
+        await p.update_latest_activity()

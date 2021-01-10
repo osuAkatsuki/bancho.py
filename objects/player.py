@@ -633,33 +633,6 @@ class Player:
 
         log(f'{self} removed {p} from their friends.')
 
-    def queue_empty(self) -> bool:
-        """Whether or not `self`'s packet queue is empty."""
-        return self._queue.empty()
-
-    def enqueue(self, b: bytes) -> None:
-        """Add data to be sent to the client."""
-        self._queue.put_nowait(b)
-
-    def dequeue(self) -> Optional[bytes]:
-        """Get data from the queue to send to the client."""
-        try:
-            return self._queue.get_nowait()
-        except queue.Empty:
-            pass
-
-    async def send(self, client: 'Player', msg: str,
-                   chan: Optional[Channel] = None) -> None:
-        """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
-        self.enqueue(
-            packets.sendMessage(
-                client = client.name,
-                msg = msg,
-                target = (chan or self).name,
-                client_id = client.id
-            )
-        )
-
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""
         url = f'http://ip-api.com/json/{ip}'
@@ -810,3 +783,38 @@ class Player:
 
         # return the key.
         return randnum
+
+    async def update_latest_activity(self) -> None:
+        await glob.db.execute(
+            'UPDATE users '
+            'SET latest_activity = UNIX_TIMESTAMP() '
+            'WHERE id = %s',
+            [self.id]
+        )
+
+    def queue_empty(self) -> bool:
+        """Whether or not `self`'s packet queue is empty."""
+        return self._queue.empty()
+
+    def enqueue(self, b: bytes) -> None:
+        """Add data to be sent to the client."""
+        self._queue.put_nowait(b)
+
+    def dequeue(self) -> Optional[bytes]:
+        """Get data from the queue to send to the client."""
+        try:
+            return self._queue.get_nowait()
+        except queue.Empty:
+            pass
+
+    async def send(self, client: 'Player', msg: str,
+                   chan: Optional[Channel] = None) -> None:
+        """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
+        self.enqueue(
+            packets.sendMessage(
+                client = client.name,
+                msg = msg,
+                target = (chan or self).name,
+                client_id = client.id
+            )
+        )

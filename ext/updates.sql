@@ -83,3 +83,30 @@ alter table stats modify maxcombo_ap_std int(11) unsigned default 0 not null;
 
 # v3.0.10
 update channels set write_priv = 24576 where name = '#announce';
+
+# v3.1.0
+alter table maps modify bpm float(12,2) default 0.00 not null;
+alter table stats modify tscore_vn_std bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_vn_taiko bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_vn_catch bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_vn_mania bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_rx_std bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_rx_taiko bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_rx_catch bigint(21) unsigned default 0 not null;
+alter table stats modify tscore_ap_std bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_vn_std bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_vn_taiko bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_vn_catch bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_vn_mania bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_rx_std bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_rx_taiko bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_rx_catch bigint(21) unsigned default 0 not null;
+alter table stats modify rscore_ap_std bigint(21) unsigned default 0 not null;
+alter table stats modify pp_vn_std int(11) unsigned default 0 not null;
+alter table stats modify pp_vn_taiko int(11) unsigned default 0 not null;
+alter table stats modify pp_vn_catch int(11) unsigned default 0 not null;
+alter table stats modify pp_vn_mania int(11) unsigned default 0 not null;
+alter table stats modify pp_rx_std int(11) unsigned default 0 not null;
+alter table stats modify pp_rx_taiko int(11) unsigned default 0 not null;
+alter table stats modify pp_rx_catch int(11) unsigned default 0 not null;
+alter table stats modify pp_ap_std int(11) unsigned default 0 not null;
