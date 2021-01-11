@@ -879,9 +879,9 @@ async def mp_teams(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         if s.status & SlotStatus.has_player:
             s.team = new_t
 
-    if m.winning_pts != 0:
+    if m.is_scrimming:
         # reset score if scrimming.
-        m.match_points.clear()
+        m.reset_scrim()
 
     m.enqueue_state()
     return 'Match team type updated.'
@@ -898,7 +898,7 @@ async def mp_condition(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         # special case - pp can't actually be used as an ingame
         # win condition, but gulag allows it to be passed into
         # this command during a scrims to use pp as a win cond.
-        if m.winning_pts == 0:
+        if not m.is_scrimming:
             return 'PP is only useful as a win condition during scrims.'
         if m.use_pp_scoring:
             return 'PP scoring already enabled.'
@@ -922,8 +922,6 @@ async def mp_condition(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.enqueue_state(lobby=False)
     return 'Match win condition updated.'
 
-# XXX: probably has some issues
-#      that need to be looked into.
 @mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_scrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Start a scrim in the current match."""
@@ -938,29 +936,70 @@ async def mp_scrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     if winning_pts != 0:
         # setting to real num
-        if m.winning_pts != 0:
+        if m.is_scrimming:
             return 'Already scrimming!'
 
-        if ~winning_pts & 1:
+        if ~best_of & 1:
             return 'Best of must be an odd number!'
 
+        m.is_scrimming = True
         msg = (f'A scrimmage has been started by {p.name}; '
                f'first to {winning_pts} points wins. Best of luck!')
     else:
         # setting to 0
-        if m.winning_pts == 0:
+        if not m.is_scrimming:
             return 'Not currently scrimming!'
 
+        m.is_scrimming = False
+        m.reset_scrim()
         msg = 'Scrimming cancelled.'
 
     m.winning_pts = winning_pts
-    m.match_points.clear()
+    return msg
+
+@mp_commands.add(priv=Privileges.Normal, public=True)
+async def mp_endscrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """End the current matches ongoing scrim."""
+    if not m.is_scrimming:
+        return 'Not currently scrimming!'
+
+    m.is_scrimming = False
+    m.reset_scrim()
+    return 'Scrimmage ended.' # TODO: final score (get_score method?)
+
+@mp_commands.add(triggers=['rematch', 'rm'], priv=Privileges.Normal, public=True)
+async def mp_rematch(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Restart a scrim with the previous match points, """ \
+    """or roll back the most recent match point."""
+    if msg:
+        return 'Invalid syntax: !mp rematch'
+
+    if p is not m.host:
+        return 'Only available to the host.'
+
+    if not m.is_scrimming:
+        # re-start scrimming with old points
+        m.is_scrimming = True
+        msg = (f'A rematch has been started by {p.name}; '
+               f'first to {m.winning_pts} points wins. Best of luck!')
+    else:
+        # reset the last match point awarded
+        if not m.winners:
+            return "No match points have yet been awarded!"
+
+        if (recent_winner := m.winners[-1]) is None:
+            return 'The last point was a tie!'
+
+        m.match_points[recent_winner] -= 1 # TODO: team name
+        m.winners.pop()
+
+        msg = f'A point has been deducted from {recent_winner}.'
 
     return msg
 
 # Mappool commands
 
-@mp_commands.add(triggers=['lp', 'loadpool'], priv=Privileges.Normal, public=True)
+@mp_commands.add(triggers=['loadpool', 'lp'], priv=Privileges.Normal, public=True)
 async def mp_loadpool(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Load a specified mappool into the current match."""
     if len(msg) != 1:
@@ -980,6 +1019,21 @@ async def mp_loadpool(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.pool = pool
     return f'{pool!r} selected.'
 
+@mp_commands.add(triggers=['unloadpool', 'ulp'], priv=Privileges.Normal, public=True)
+async def mp_unloadpool(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Unload the current matches mappool."""
+    if msg:
+        return 'Invalid syntax: !mp unloadpool'
+
+    if p is not m.host:
+        return 'Only available to the host.'
+
+    if not m.pool:
+        return 'No mappool currently selected!'
+
+    m.pool = None
+    return 'Mappool unloaded.'
+
 @mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Ban a specified pick in the current pool from being picked."""
@@ -993,7 +1047,7 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
-        return 'Invalid <mods#> syntax; correct example: "hd2".'
+        return 'Invalid <mods#> syntax; correct example: "HD2".'
 
     mods = Mods.from_str(rgx[1])
     slot = int(rgx[2])
@@ -1008,6 +1062,33 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     return f'{mods_slot} banned.'
 
 @mp_commands.add(priv=Privileges.Normal, public=True)
+async def mp_unban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Unban a specified pick in the current pool from being picked."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp unban <mods#>'
+
+    if not m.pool:
+        return 'No pool currently selected!'
+
+    mods_slot = msg[0]
+
+    # separate mods & slot
+    if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
+        return 'Invalid <mods#> syntax; correct example: "HD2".'
+
+    mods = Mods.from_str(rgx[1])
+    slot = int(rgx[2])
+
+    if (mods, slot) not in m.pool.maps:
+        return f'Found no {mods_slot} pick in the pool.'
+
+    if (mods, slot) not in m.bans:
+        return 'That pick is not currently banned!'
+
+    m.bans.remove((mods, slot))
+    return f'{mods_slot} unbanned.'
+
+@mp_commands.add(priv=Privileges.Normal, public=True)
 async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Pick a map from the currently selected mappool."""
     if len(msg) != 1:
@@ -1020,7 +1101,7 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
-        return 'Invalid <mods#> syntax; correct example: "hd2".'
+        return 'Invalid <mods#> syntax; correct example: "HD2".'
 
     mods = Mods.from_str(rgx[1])
     slot = int(rgx[2])
@@ -1109,7 +1190,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
-        return 'Invalid <mods#> syntax; correct example: "hd2".'
+        return 'Invalid <mods#> syntax; correct example: "HD2".'
 
     if not ~len(rgx[1]) & 1:
         return 'Invalid mods.'
@@ -1146,7 +1227,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := re.fullmatch(r'^([a-zA-Z]+)([0-9]+)$', mods_slot)):
-        return 'Invalid <mods#> syntax; correct example: "hd2".'
+        return 'Invalid <mods#> syntax; correct example: "HD2".'
 
     mods = Mods.from_str(rgx[1])
     slot = int(rgx[2])

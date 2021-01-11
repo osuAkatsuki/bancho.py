@@ -18,8 +18,8 @@ silence_duration = rcomp(
     r'(?P<scale>s|m|h|d|w)$'
 )
 tourney_matchname = rcomp(
-    r'^(?P<name>\w+): '
-    r'\((?P<T1>\w+)\) vs\.? '
-    r'\((?P<T2>\w+)\)$',
+    r'^(?P<name>[a-zA-Z0-9_ ]+): '
+    r'\((?P<T1>[a-zA-Z0-9_ ]+)\) vs\.? '
+    r'\((?P<T2>[a-zA-Z0-9_ ]+)\)$',
     flags = IGNORECASE
 )

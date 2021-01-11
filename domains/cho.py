@@ -828,7 +828,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         if m.team_type != self.new.team_type:
             # if theres currently a scrim going on, only allow
             # team type to change by using the !mp teams command.
-            if m.winning_pts != 0:
+            if m.is_scrimming:
                 _team = (
                     'head-to-head', 'tag-coop',
                     'team-vs', 'tag-team-vs'
@@ -923,7 +923,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue_state()
 
-        if m.winning_pts != 0:
+        if m.is_scrimming:
             # determine winner, update match points & inform players.
             asyncio.create_task(m.update_matchpoints(was_playing))
 

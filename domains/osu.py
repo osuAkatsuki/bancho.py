@@ -1321,7 +1321,7 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 async def api_get_online(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
-    return f'{{"online":{len(glob.players)-1}}}'.encode()
+    return f'{{"online":{len(glob.players) - 1}}}'.encode()
 
 @domain.route('/api/get_user')
 async def api_get_user(conn: Connection) -> Optional[bytes]:

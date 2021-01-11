@@ -417,7 +417,7 @@ class Player:
 
         if self is not m.host:
             # match already exists, we're simply joining.
-            if passwd != m.passwd:
+            if self not in glob.players.staff and passwd != m.passwd:
                 log(f'{self} tried to join {m} with incorrect passwd.')
                 self.enqueue(packets.matchJoinFail())
                 return False
@@ -615,7 +615,8 @@ class Player:
         await glob.db.execute(
             'INSERT INTO friendships '
             'VALUES (%s, %s)',
-            [self.id, p.id])
+            [self.id, p.id]
+        )
 
         log(f'{self} added {p} to their friends.')
 
@@ -629,7 +630,8 @@ class Player:
         await glob.db.execute(
             'DELETE FROM friendships '
             'WHERE user1 = %s AND user2 = %s',
-            [self.id, p.id])
+            [self.id, p.id]
+        )
 
         log(f'{self} removed {p} from their friends.')
 

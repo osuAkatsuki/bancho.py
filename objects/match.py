@@ -188,8 +188,8 @@ class Match:
         'pool', # mappool currently selected
 
         # scrimmage stuff
-        'match_points', 'bans',
-        'winning_pts', 'use_pp_scoring'
+        'is_scrimming', 'match_points', 'bans',
+        'winners', 'winning_pts', 'use_pp_scoring'
     )
 
     def __init__(self) -> None:
@@ -221,8 +221,10 @@ class Match:
         self.pool: Optional[MapPool] = None
 
         # scrimmage stuff
+        self.is_scrimming = False
         self.match_points = defaultdict(int) # {team/user: wins, ...} (resets when changing teams)
         self.bans = set() # {(mods, slot), ...}
+        self.winners: list[Union[Player, MatchTeams, None]] = [] # none = tie
         self.winning_pts = 0
         self.use_pp_scoring = False # only for scrims
 
@@ -344,7 +346,61 @@ class Match:
         self.enqueue(packets.matchStart(self), immune=no_map)
         self.enqueue_state()
 
-    # NOTE: i don't actually think this can determine ties atm? coming soon..
+    def reset_scrim(self) -> None:
+        """Reset the current scrim's winning points & bans."""
+        self.match_points.clear()
+        self.winners = []
+
+        self.bans.clear()
+
+    async def await_submissions(self, was_playing: list['Player']
+                               ) -> tuple[dict[str, Union[int, float]], list['Player']]:
+        """Await score submissions from all players in completed state."""
+        scores = defaultdict(int)
+        didnt_submit: list['Player'] = []
+        time_waited = 0 # allow up to 10s (total, not per player)
+
+        ffa = self.team_type in (MatchTeamTypes.head_to_head,
+                                 MatchTeamTypes.tag_coop)
+
+        if self.use_pp_scoring:
+            win_cond = 'pp'
+        else:
+            win_cond = ('score', 'acc', 'max_combo',
+                        'score')[self.win_condition]
+
+        bmap = await Beatmap.from_md5(self.map_md5)
+
+        for s in was_playing:
+            # continue trying to fetch each player's
+            # scores until they've all been submitted.
+            while True:
+                rc_score = s.player.recent_score
+                max_age = dt.now() - td(seconds=bmap.total_length +
+                                                time_waited + 0.5)
+
+                if rc_score and rc_score.bmap.md5 == self.map_md5 \
+                 and rc_score.play_time > max_age:
+                    # score found, add to our scores dict if != 0.
+                    if score := getattr(rc_score, win_cond):
+                        key = s.player if ffa else s.team
+                        scores[key] += score
+
+                    break
+
+                # wait 0.5s and try again
+                await asyncio.sleep(0.5)
+                time_waited += 0.5
+
+                if time_waited > 10:
+                    # inform the match this user didn't
+                    # submit a score in time, and skip them.
+                    didnt_submit.append(s.player)
+                    break
+
+        # all scores retrieved, update the match.
+        return scores, didnt_submit
+
     async def update_matchpoints(self, was_playing: list['Player']) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
@@ -367,149 +423,107 @@ class Match:
           Justice takes the match, finishing with a score of 4 - 2!
         """
 
-        # this will return a dict of scores if it finds scores
-        # from all players, otherwise it will return the player
-        # it finds first that doesn't submit a score.
-        # TODO: refactor the whole thing to make it individually
-        # try to retrieve each players score separately in async,
-        # so 1. its async, 2. it can return a list of players who
-        # didn't submit a score instead.
-        ret = await self.await_submissions(was_playing)
+        scores, didnt_submit = await self.await_submissions(was_playing)
 
-        if not isinstance(ret, dict):
-            # Player failed to submit a score in time.
-            await self.chat.send(glob.bot, f"{ret} didn't submit a score in time.")
-            return
+        for p in didnt_submit:
+            await self.chat.send(glob.bot, f"{p} didn't submit a score (timeout: 10s).")
 
-        await self._update_matchpoints(ret)
+        if scores:
+            ffa = self.team_type in (MatchTeamTypes.head_to_head,
+                                    MatchTeamTypes.tag_coop)
 
-    async def await_submissions(self, was_playing: list['Player']
-                               ) -> Optional[dict[str, Union[int, float]]]:
-        """Await score submissions from all players in completed state."""
-        scores = defaultdict(int)
-        time_taken = 0 # allow up to 10s
+            # all scores are equal, it was a tie.
+            if len(scores) != 1 and len(set(scores.values())) == 1:
+                self.winners.append(None)
+                return 'The point has ended in a tie!'
 
-        ffa = self.team_type in (MatchTeamTypes.head_to_head,
-                                 MatchTeamTypes.tag_coop)
+            # Find the winner & increment their matchpoints.
+            winner: Union[Player, MatchTeams] = max(scores, key=scores.get)
+            self.winners.append(winner)
+            self.match_points[winner] += 1
 
-        if self.use_pp_scoring:
-            win_cond = 'pp'
+            msg: list[str] = []
+
+            def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
+                if self.use_pp_scoring:
+                    return f'{score:.2f}pp'
+                elif self.win_condition == MatchWinConditions.accuracy:
+                    return f'{score:.2f}%'
+                elif self.win_condition == MatchWinConditions.combo:
+                    return f'{score}x'
+                else:
+                    return str(score)
+
+            if ffa:
+                msg.append(
+                    f'{winner.name} takes the point! ({add_suffix(scores[winner])} '
+                    f'[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])'
+                )
+
+                wmp = self.match_points[winner]
+
+                # check if match point #1 has enough points to win.
+                if self.winning_pts and wmp == self.winning_pts:
+                    # we have a champion, announce & reset our match.
+                    self.reset_scrim()
+                    self.bans.clear()
+
+                    m = f'{winner.name} takes the match! Congratulations!'
+                else:
+                    # no winner, just announce the match points so far.
+                    # for ffa, we'll only announce the top <=3 players.
+                    m_points = sorted(self.match_points.items(), key=lambda x: x[1])
+                    m = f"Total Score: {' | '.join(f'{k.name} - {v}' for k, v in m_points)}"
+
+                msg.append(m)
+                del m
+
+            else: # teams
+                if rgx := regexes.tourney_matchname.match(self.name):
+                    match_name = rgx['name']
+                    team_names = {MatchTeams.blue: rgx['T1'],
+                                MatchTeams.red: rgx['T2']}
+                else:
+                    match_name = self.name
+                    team_names = {MatchTeams.blue: 'Blue',
+                                MatchTeams.red: 'Red'}
+
+                # teams are binary, so we have a loser.
+                loser = MatchTeams({1: 2, 2: 1}[winner])
+
+                # from match name if available, else blue/red.
+                wname = team_names[winner]
+                lname = team_names[loser]
+
+                # scores from the recent play
+                # (according to win condition)
+                ws = add_suffix(scores[winner])
+                ls = add_suffix(scores[loser])
+
+                # total win/loss score in the match.
+                wmp = self.match_points[winner]
+                lmp = self.match_points[loser]
+
+                # announce the score for the most recent play.
+                msg.append(f'{wname} takes the point! ({ws} vs. {ls})')
+
+                # check if the winner has enough match points to win the match.
+                if self.winning_pts and wmp == self.winning_pts:
+                    # we have a champion, announce & reset our match.
+                    self.reset_scrim()
+
+                    msg.append(f'{wname} takes the match, finishing {match_name} '
+                               f'with a score of {wmp} - {lmp}! Congratulations!')
+                else:
+                    # no winner, just announce the match points so far.
+                    msg.append(f'Total Score: {wname} | {wmp} - {lmp} | {lname}')
+
+            if didnt_submit:
+                await self.chat.send(glob.bot, "If you'd like to perform a rematch, "
+                                               "please use the `!mp rematch` command.")
+
+            for line in msg:
+                await self.chat.send(glob.bot, line)
+
         else:
-            win_cond = ('score', 'acc', 'max_combo',
-                        'score')[self.win_condition]
-
-        for s in was_playing:
-            # continue trying to fetch each player's
-            # scores until they've all been submitted.
-            while True:
-                rc_score = s.player.recent_score
-
-                if rc_score and rc_score.bmap.md5 == self.map_md5 \
-                and rc_score.play_time > dt.now() - td(seconds=10):
-                    # score found, add to our scores dict if != 0.
-                    if score := getattr(rc_score, win_cond):
-                        key = s.player if ffa else s.team
-                        scores[key] += score
-
-                    break
-
-                # wait 0.5s and try again
-                await asyncio.sleep(0.5)
-                time_taken += 0.5
-
-                if time_taken > 10:
-                    # inform the match this user didn't
-                    # submit a score in time, and thus
-                    # the score couldn't be autocalced.
-                    return s.player
-
-        # all scores retrieved, update the match.
-        return scores
-
-    async def _update_matchpoints(self, scores: dict[str, Union[int, float]]) -> None:
-        ffa = self.team_type in (MatchTeamTypes.head_to_head,
-                                 MatchTeamTypes.tag_coop)
-
-        # Find the winner & increment their matchpoints.
-        winner: Player = max(scores, key=scores.get)
-        self.match_points[winner] += 1
-
-        msg: list[str] = []
-
-        def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
-            if self.use_pp_scoring:
-                return f'{score:.2f}pp'
-            elif self.win_condition == MatchWinConditions.accuracy:
-                return f'{score:.2f}%'
-            elif self.win_condition == MatchWinConditions.combo:
-                return f'{score}x'
-            else:
-                return str(score)
-
-        if ffa:
-            msg.append(
-                f'{winner.name} takes the point! ({add_suffix(scores[winner])} '
-                f'[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])'
-            )
-
-            wmp = self.match_points[winner]
-
-            # check if match point #1 has enough points to win.
-            if self.winning_pts and wmp == self.winning_pts:
-                # we have a champion, announce & reset our match.
-                self.winning_pts = 0
-                self.match_points.clear()
-                self.bans.clear()
-
-                msg.append(f'{winner.name} takes the match! Congratulations!')
-            else:
-                # no winner, just announce the match points so far.
-                # for ffa, we'll only announce the top <=3 players.
-                m_points = sorted(self.match_points.items(), key=lambda x: x[1])
-                msg.append('Total Score: ' + ' | '.join(f'{k.name} - {v}' for k, v in m_points))
-
-        else: # teams
-            # TODO: check if the teams are named or not
-            if rgx := regexes.tourney_matchname.match(self.name):
-                match_name = rgx['name']
-                team_names = {MatchTeams.blue: rgx['T1'],
-                              MatchTeams.red: rgx['T2']}
-            else:
-                match_name = self.name
-                team_names = {MatchTeams.blue: 'Blue',
-                              MatchTeams.red: 'Red'}
-
-            loser = MatchTeams({1: 2, 2: 1}[winner])
-
-            # w/l = winner/loser
-
-            # from match name if available, else blue/red.
-            wname = team_names[winner]
-            lname = team_names[loser]
-
-            # scores from the recent play
-            # (according to win condition)
-            ws = add_suffix(scores[winner])
-            ls = add_suffix(scores[loser])
-
-            # total win/loss score in the match.
-            wmp = self.match_points[winner]
-            lmp = self.match_points[loser]
-
-            # announce the score for the most recent play.
-            msg.append(f'{wname} takes the point! ({ws} vs. {ls})')
-
-            # check if the winner has enough match points to win the match.
-            if self.winning_pts and wmp == self.winning_pts:
-                # we have a champion, announce & reset our match.
-                self.winning_pts = 0
-                self.match_points.clear()
-                self.bans.clear()
-
-                msg.append(f'{wname} takes the match, finishing {match_name} with a score of {wmp} - {lmp}!')
-            else:
-                # no winner, just announce the match points so far.
-                msg.append(f'Total Score: {wname} | {wmp} - {lmp} | {lname}')
-
-        for line in msg:
-            await self.chat.send(glob.bot, line)
+            await self.chat.send(glob.bot, 'Scores could not be calculated.')
