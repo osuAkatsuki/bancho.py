@@ -465,6 +465,7 @@ class Match:
                 # check if match point #1 has enough points to win.
                 if self.winning_pts and wmp == self.winning_pts:
                     # we have a champion, announce & reset our match.
+                    self.is_scrimming = False
                     self.reset_scrim()
                     self.bans.clear()
 
@@ -510,6 +511,7 @@ class Match:
                 # check if the winner has enough match points to win the match.
                 if self.winning_pts and wmp == self.winning_pts:
                     # we have a champion, announce & reset our match.
+                    self.is_scrimming = False
                     self.reset_scrim()
 
                     msg.append(f'{wname} takes the match, finishing {match_name} '
