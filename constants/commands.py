@@ -260,7 +260,7 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
         for cached in glob.cache['beatmap'].values():
             # not going to bother checking timeout
-            if cached['map'] is p.last_np:
+            if cached['map'].set_id == p.last_np.set_id:
                 cached['map'].status = RankedStatus(new_status)
 
     else:
