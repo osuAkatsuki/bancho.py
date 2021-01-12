@@ -20,6 +20,7 @@ from objects.match import MatchTeamTypes, SlotStatus, MatchTeams
 from objects.player import Player, PresenceFilter, Action
 from objects.channel import Channel
 from objects.beatmap import Beatmap
+from objects.clan import ClanRank
 from objects import glob
 
 from constants.privileges import Privileges
@@ -226,13 +227,6 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
-registration_msg = '\n'.join((
-    "Hey! Welcome to [https://github.com/cmyui/gulag/ the gulag].",
-    "",
-    "Command help: !help",
-    "If you have any questions or find any strange behaviour,",
-    "please feel feel free to contact cmyui(#0425) directly!"
-))
 # no specific packet id, triggered when the
 # client sends a request without an osu-token.
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
@@ -296,7 +290,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     pm_private = s[4] == '1'
 
     user_info = await glob.db.fetch(
-        'SELECT id, name, priv, pw_bcrypt, silence_end '
+        'SELECT id, name, priv, pw_bcrypt, '
+        'silence_end, clan_id, clan_rank '
         'FROM users WHERE safe_name = %s',
         [Player.make_safe(username)]
     )
@@ -394,10 +389,20 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             [user_info['priv'], user_info['id']]
         )
 
+    # get clan & clan rank if we're in a clan
+    if user_info['clan_id'] != 0:
+        clan = glob.clans.get(id=user_info.pop('clan_id'))
+        clan_rank = ClanRank(user_info.pop('clan_rank'))
+    else:
+        del user_info['clan_id']
+        del user_info['clan_rank']
+        clan = clan_rank = None
+
     # user_info: {id, name, priv, pw_bcrypt, silence_end}
     p = Player.login(user_info, utc_offset=utc_offset,
                      osu_ver=osu_ver, pm_private=pm_private,
-                     login_time=login_time)
+                     login_time=login_time, clan=clan,
+                     clan_rank=clan_rank)
 
     data = bytearray(packets.userID(p.id))
     data += packets.protocolVersion(19)
@@ -424,6 +429,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # fetch some of the player's
     # information from sql to be cached.
+    await p.achievements_from_sql()
     await p.stats_from_sql_full()
     await p.friends_from_sql()
 

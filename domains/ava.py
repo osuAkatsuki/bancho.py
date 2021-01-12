@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import re
-import aiofiles
 from pathlib import Path
 from cmyui import Connection, Domain
 
@@ -18,5 +17,4 @@ async def get_avatar(conn: Connection) -> None:
     if not path.exists():
         path = DEFAULT_AVATAR
 
-    async with aiofiles.open(path, 'rb') as f:
-        await conn.send(200, await f.read())
+    await conn.send(200, path.read_bytes())

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from objects.clan import ClanRank
 from typing import Union, Optional, TYPE_CHECKING
 from cmyui import log
 
@@ -10,12 +11,14 @@ from objects import glob
 if TYPE_CHECKING:
     from objects.channel import Channel
     from objects.match import Match, MapPool
+    from objects.clan import Clan
 
 __all__ = (
     'ChannelList',
     'MatchList',
     'PlayerList',
-    'MapPoolList'
+    'MapPoolList',
+    'ClanList'
 )
 
 class ChannelList(list):
@@ -131,6 +134,7 @@ class PlayerList:
                 p.enqueue(data)
 
     async def get(self, sql: bool = False, **kwargs) -> Optional[Player]:
+        """Get a player by token, id, or name."""
         for attr in ('token', 'id', 'name'):
             if val := kwargs.pop(attr, None):
                 break
@@ -153,7 +157,8 @@ class PlayerList:
 
         # try to get from sql.
         res = await glob.db.fetch(
-            'SELECT id, name, priv, pw_bcrypt, silence_end '
+            'SELECT id, name, priv, pw_bcrypt, '
+            'silence_end, clan_id, clan_rank '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
@@ -161,8 +166,12 @@ class PlayerList:
         if not res:
             return
 
-        priv = Privileges(res.pop('priv'))
-        return Player(**res, priv=priv)
+        # overwrite some things with classes
+        res['priv'] = Privileges(res.pop('priv'))
+        res['clan'] = glob.clans.get(id=res['clan_id'])
+        res['clan_rank'] = ClanRank(res['clan_rank'])
+
+        return Player(**res)
 
     async def get_login(self, name: str, pw_md5: str, sql: bool = False) -> Optional[Player]:
         # only used cached results - the user should have
@@ -198,8 +207,7 @@ class MapPoolList(list):
     """The currently active mappools on the server."""
 
     def __getitem__(self, index: Union[int, slice, str]) -> 'MapPool':
-        # XXX: can be either a string (to get by name),
-        # or a slice, for indexing the internal array.
+        """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(index)
         else:
@@ -232,3 +240,47 @@ class MapPoolList(list):
 
         if glob.config.debug:
             log(f'{p} removed from mappools list.')
+
+class ClanList(list):
+    """The currently active clans on the server."""
+
+    def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
+        """Allow slicing by either a string (for name), or slice."""
+        if isinstance(index, str):
+            return self.get(index)
+        else:
+            return super().__getitem__(index)
+
+    def __contains__(self, o: Union['Clan', str]) -> bool:
+        """Check whether internal list contains `o`."""
+        # Allow string to be passed to compare vs. name.
+        if isinstance(o, str):
+            return o in [c.name for c in self]
+        else:
+            return o in self
+
+    def get(self, **kwargs) -> Optional['Clan']:
+        """Get a clan by name, tag, or id."""
+        for attr in ('name', 'tag', 'id'):
+            if val := kwargs.pop(attr, None):
+                break
+        else:
+            raise ValueError('must provide valid kwarg (name, tag, id) to get()')
+
+        for c in self:
+            if getattr(c, attr) == val:
+                return c
+
+    def append(self, c: 'Clan') -> None:
+        """Attempt to add `c` to the list."""
+        super().append(c)
+
+        if glob.config.debug:
+            log(f'{c} added to clans list.')
+
+    def remove(self, c: 'Clan') -> None:
+        """Attempt to remove `c` from the list."""
+        super().remove(c)
+
+        if glob.config.debug:
+            log(f'{c} removed from clans list.')

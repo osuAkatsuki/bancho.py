@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-import aiofiles
 import aiohttp
 import orjson
 from pathlib import Path
@@ -40,9 +39,7 @@ class PPCalculator:
 
                 content = await r.read()
 
-        async with aiofiles.open(dest_path, 'wb') as f:
-            await f.write(content)
-
+        dest_path.write_bytes(content)
         return True
 
     @classmethod

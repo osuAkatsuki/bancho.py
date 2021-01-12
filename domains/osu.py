@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from constants.gamemodes import GameMode
-from typing import Any, Optional, Callable
-from enum import IntEnum, unique
-from collections import defaultdict
+from typing import Any, Optional, Callable, TYPE_CHECKING
 from functools import partial, wraps
+from collections import defaultdict
+from enum import IntEnum, unique
 from pathlib import Path
 import re
 import time
@@ -13,23 +13,20 @@ import hashlib
 import bcrypt
 import random
 import orjson
-import aiofiles
-from typing import TYPE_CHECKING
 
 from urllib.parse import unquote
-from cmyui import (Connection, Domain,
-                   _isdecimal, rstring,
-                   log, Ansi)
+from cmyui import (Connection, Domain, _isdecimal,
+                   rstring, log, Ansi)
 
 import packets
 
-from constants.mods import Mods
 from constants.clientflags import ClientFlags
+from constants.mods import Mods
 from constants import regexes
 
 from objects.score import Score, SubmissionStatus
-from objects.player import Privileges
 from objects.beatmap import Beatmap, RankedStatus
+from objects.player import Privileges
 from objects import glob
 
 from utils.misc import point_of_interest
@@ -180,6 +177,7 @@ async def osuMapBMSubmitGetID(conn: Connection) -> Optional[bytes]:
     ...
 """
 
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login('u', 'p')
@@ -190,8 +188,8 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     filename = f'{rstring(8)}.png'
 
-    async with aiofiles.open(f'.data/ss/{filename}', 'wb') as f:
-        await f.write(conn.files['ss'])
+    screenshot_file = SCREENSHOTS_PATH / filename
+    screenshot_file.write_bytes(conn.files['ss'])
 
     log(f'{p} uploaded {filename}.')
     return filename.encode()
@@ -642,8 +640,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # client compressed with LZMA; this compression can
             # be improved pretty decently by serializing it
             # manually, so we'll probably do that in the future.
-            async with aiofiles.open(f'.data/osr/{s.id}.osr', 'wb') as f:
-                await f.write(conn.files['score'])
+            replay_file = REPLAYS_PATH / f'{s.id}.osr'
+            replay_file.write_bytes(conn.files['score'])
 
     """ Update the user's & beatmap's stats """
 
@@ -738,6 +736,23 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         ret = b'error: no'
 
     else:
+        # prepare to send the user charts & achievements.
+        achievements = []
+
+        if s.bmap.status in (RankedStatus.Ranked,
+                             RankedStatus.Approved):
+            mode_vn = s.mode.as_vanilla
+            player_achs = s.player.achievements[mode_vn]
+
+            for ach in glob.achievements[mode_vn]:
+                if ach in player_achs:
+                    # player already has this achievement.
+                    continue
+
+                if ach.cond(s):
+                    await s.player.unlock_achievement(ach)
+                    achievements.append(ach)
+
         # XXX: really not a fan of how this is done atm,
         # but it's kinda just something that's probably
         # going to be ugly no matter what i do lol :v
@@ -789,7 +804,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             f'chartUrl:https://{glob.config.domain}/u/{s.player.id}',
             'chartName:Overall Ranking',
 
-            # TODO: achievements
             *((
                 kv_pair('rank', prev_stats.rank, stats.rank),
                 kv_pair('rankedScore', prev_stats.rscore, stats.rscore),
@@ -807,6 +821,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             ))
         )))
 
+        if achievements: # TODO: pretty bad lol
+            charts[-1] += f'|achievements-new:{"/".join(map(repr, achievements))}'
+
         ret = '\n'.join(charts).encode()
 
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
@@ -822,8 +839,7 @@ async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not path.exists():
         return # osu! expects empty resp for no replay
 
-    async with aiofiles.open(path, 'rb') as f:
-        return await f.read()
+    return path.read_bytes()
 
 # XXX: going to be slightly more annoying than expected to set this up :P
 #@domain.route('/web/osu-session.php', methods=['POST'])
@@ -1078,12 +1094,15 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     # statuses: 0: failed, 1: passed but not top, 2: passed top
     query = [
-        f'SELECT s.id, s.{scoring} AS _score, '
-        's.max_combo, s.n50, s.n100, s.n300, '
-        's.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, '
-        'UNIX_TIMESTAMP(s.play_time) time, u.name, u.id userid '
-        f'FROM {table} s LEFT JOIN users u ON u.id = s.userid '
-        'WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s'
+        f"SELECT s.id, s.{scoring} AS _score, "
+        "s.max_combo, s.n50, s.n100, s.n300, "
+        "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
+        "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
+        "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
+        f"FROM {table} s "
+        "LEFT JOIN users u ON u.id = s.userid "
+        "LEFT JOIN clans c ON c.id = u.clan_id "
+        "WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s"
     ]
 
     params = [map_md5, conn.args['m']]
@@ -1148,7 +1167,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         res.append(
             score_fmt.format(
                 **p_best,
-                name = p.name, userid = p.id,
+                name = p.full_name, userid = p.id,
                 score = int(p_best['_score']),
                 has_replay = '1', rank = p_best_rank
             )
@@ -1436,7 +1455,6 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
 
 """ Misc handlers """
 
-SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.png$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
     if len(conn.path) != 16:
@@ -1447,8 +1465,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
     if not path.exists():
         return (404, b'Screenshot not found.')
 
-    async with aiofiles.open(path, 'rb') as f:
-        return await f.read()
+    return path.read_bytes()
 
 @domain.route(re.compile(r'^/d/\d{1,10}$'))
 async def get_osz(conn: Connection) -> Optional[bytes]:
@@ -1477,8 +1494,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
     if path.exists():
         # map found on disk.
-        async with aiofiles.open(path, 'rb') as f:
-            content = await f.read()
+        content = path.read_bytes()
     else:
         # we don't have map, get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
@@ -1490,8 +1506,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
             content = await resp.read()
 
-        async with aiofiles.open(path, 'wb') as f:
-            await f.write(content)
+        path.write_bytes(content)
 
     return content
 

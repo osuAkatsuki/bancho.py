@@ -8,6 +8,7 @@ import time
 import re
 import cmyui
 import random
+from datetime import datetime
 from collections import defaultdict
 
 import packets
@@ -17,6 +18,7 @@ from constants.mods import Mods
 from constants import regexes
 
 from objects import glob
+from objects.clan import Clan, ClanRank
 from objects.score import SubmissionStatus
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import (MapPool, MatchWinConditions,
@@ -39,6 +41,7 @@ class Command(NamedTuple):
 
 class CommandSet:
     __slots__ = ('commands', 'trigger')
+
     def __init__(self, trigger: str) -> None:
         self.trigger = trigger
         self.commands: list[Command] = []
@@ -64,10 +67,12 @@ class CommandSet:
 # trying to think of some use cases lol..
 mp_commands = CommandSet('mp')
 pool_commands = CommandSet('pool')
+clan_commands = CommandSet('clan')
 
 glob.commands = {
     'regular': [],
-    'sets': [mp_commands, pool_commands]
+    'sets': [mp_commands, pool_commands,
+             clan_commands]
 }
 
 def command(priv: Privileges, public: bool,
@@ -378,7 +383,7 @@ async def unsilence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Ban a player's account, with a reason."""
     if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> (reason)'
+        return 'Invalid syntax: !ban <name> <reason>'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get(name=msg[0], sql=True)):
@@ -396,7 +401,7 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Unban a player's account, with a reason."""
     if (len_msg := len(msg)) < 2:
-        return 'Invalid syntax: !ban <name> (reason)'
+        return 'Invalid syntax: !ban <name> <reason>'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get(name=msg[0], sql=True)):
@@ -595,7 +600,10 @@ async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         # the error in the osu! chat.
         ret = f'{e.__class__}: {e}'
 
-    return (ret and str(ret)) or 'Success.'
+    if ret is not None:
+        return str(ret)
+    else:
+        return 'Success'
 
 """ Multiplayer commands
 # The commands below are specifically for
@@ -1011,7 +1019,7 @@ async def mp_loadpool(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     name = msg[0]
 
     if not (pool := glob.pools.get(name)):
-        return 'Could not find a pool with that name!'
+        return 'Could not find a pool by that name!'
 
     if m.pool is pool:
         return f'{pool!r} already selected!'
@@ -1121,11 +1129,25 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     return f'Picked {bmap.embed}. ({mods_slot})'
 
-""" Event management commands
+""" Mappool management commands
 # The commands below are for event managers
 # and tournament hosts/referees to help automate
 # tedious processes of running tournaments.
 """
+
+@pool_commands.add(triggers=['help', 'h'], priv=Privileges.Tournament, public=False)
+async def pool_help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    prefix = glob.config.command_prefix
+    cmds = []
+
+    for cmd in pool_commands.commands:
+        if not cmd.doc or not p.priv & cmd.priv:
+            # no doc, or insufficient permissions.
+            continue
+
+        cmds.append(f'{prefix}pool {cmd.triggers[0]}: {cmd.doc}')
+
+    return '\n'.join(cmds)
 
 @pool_commands.add(triggers=['create', 'c'], priv=Privileges.Tournament, public=False)
 async def pool_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -1136,7 +1158,7 @@ async def pool_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     name = msg[0]
 
     if glob.pools.get(name):
-        return 'Pool already exists with that name!'
+        return 'Pool already exists by that name!'
 
     # insert pool into db
     await glob.db.execute(
@@ -1163,7 +1185,7 @@ async def pool_delete(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     name = msg[0]
 
     if not (pool := glob.pools.get(name)):
-        return 'Could not find a pool with that name!'
+        return 'Could not find a pool by that name!'
 
     # delete from db
     await glob.db.execute(
@@ -1199,7 +1221,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
-        return 'Could not find a pool with that name!'
+        return 'Could not find a pool by that name!'
 
     if p.last_np in pool.maps:
         return f'Map is already in the pool!'
@@ -1233,7 +1255,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
-        return 'Could not find a pool with that name!'
+        return 'Could not find a pool by that name!'
 
     if (mods, slot) not in pool.maps:
         return f'Found no {mods_slot} pick in the pool.'
@@ -1273,31 +1295,193 @@ async def pool_info(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     name = msg[0]
 
     if not (pool := glob.pools.get(name)):
-        return 'Could not find a pool with that name!'
+        return 'Could not find a pool by that name!'
 
     _time = pool.created_at.strftime('%H:%M:%S%p')
     _date = pool.created_at.strftime('%Y-%m-%d')
     datetime_fmt = f'Created at {_time} on {_date}'
-    l = [f'{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}']
+    l = [f'{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}.']
 
     for (mods, slot), bmap in pool.maps.items():
         l.append(f'{mods!r}{slot}: {bmap.embed}')
 
     return '\n'.join(l)
 
-@pool_commands.add(triggers=['help', 'h'], priv=Privileges.Tournament, public=False)
-async def pool_help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+""" Clan managment commands
+# The commands below are for managing gulag
+# clans, for users, clan staff, and server staff.
+"""
+
+@clan_commands.add(triggers=['help', 'h'], priv=Privileges.Normal, public=True)
+async def clan_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     prefix = glob.config.command_prefix
     cmds = []
 
-    for cmd in pool_commands.commands:
+    for cmd in clan_commands.commands:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f'{prefix}pool {cmd.triggers[0]}: {cmd.doc}')
+        cmds.append(f'{prefix}clan {cmd.triggers[0]}: {cmd.doc}')
 
     return '\n'.join(cmds)
+
+@clan_commands.add(triggers=['create', 'c'], priv=Privileges.Normal, public=True)
+async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Create a clan with a given tag & name."""
+    if p.clan:
+        return f"You're already a member of {p.clan}!"
+
+    if len(msg) < 2:
+        return 'Invalid syntax: !clan create <tag> <name>'
+
+    if not 1 <= len(tag := msg[0].upper()) <= 6:
+        return 'Clan tag may be 1-6 characters long.'
+
+    if not 2 <= len(name := ' '.join(msg[1:])) <= 16:
+        return 'Clan name may be 2-16 characters long.'
+
+    if glob.clans.get(name=name):
+        return 'That name has already been claimed by another clan.'
+
+    if glob.clans.get(tag=tag):
+        return 'That tag has already been claimed by another clan.'
+
+    created_at = datetime.now()
+
+    # add clan to sql (generates id)
+    id = await glob.db.execute(
+        'INSERT INTO clans '
+        '(name, tag, created_at, owner) '
+        'VALUES (%s, %s, %s, %s)',
+        [name, tag, created_at, p.id]
+    )
+
+    # add clan to cache
+    clan = Clan(id=id, name=name, tag=tag,
+                created_at=created_at, owner=p.id)
+    glob.clans.append(clan)
+
+    # set owner's clan & clan rank (cache & sql)
+    p.clan = clan
+    p.clan_rank = ClanRank.Owner
+
+    clan.owner = p.id
+    clan.members.add(p.id)
+
+    await glob.db.execute(
+        'UPDATE users '
+        'SET clan_id = %s, '
+        'clan_rank = 3 ' # ClanRank.Owner
+        'WHERE id = %s',
+        [id, p.id]
+    )
+
+    # TODO: take currency from player
+
+    # announce clan creation
+    if announce_chan := glob.channels['#announce']:
+        msg = f'\x01ACTION founded {clan!r}.'
+        await announce_chan.send(p, msg, to_self=True)
+
+    return f'{clan!r} created.'
+
+@clan_commands.add(triggers=['disband', 'delete', 'd'], priv=Privileges.Normal, public=True)
+async def clan_disband(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Disband a clan (admins may disband others clans)."""
+    if msg:
+        # disband a specified clan by tag
+        if p not in glob.players.staff:
+            return 'Only staff members may disband the clans of others.'
+
+        if not (clan := glob.clans.get(tag=' '.join(msg).upper())):
+            return 'Could not find a clan by that tag.'
+    else:
+        # disband the player's clan
+        if not (clan := p.clan):
+            return "You're not a member of a clan!"
+
+    # delete clan from sql
+    await glob.db.execute(
+        'DELETE FROM clans '
+        'WHERE id = %s',
+        [clan.id]
+    )
+
+    # remove all members from the clan,
+    # reset their clan rank (cache & sql).
+    # NOTE: only online players need be to be uncached.
+    for m in [await glob.players.get(id=p_id) for p_id in clan.members]:
+        m.clan = m.clan_rank = None
+
+    await glob.db.execute(
+        'UPDATE users '
+        'SET clan_id = 0, '
+        'clan_rank = 0 '
+        'WHERE clan_id = %s',
+        [clan.id]
+    )
+
+    # remove clan from cache
+    glob.clans.remove(clan)
+
+    # announce clan disbanding
+    if announce_chan := glob.channels['#announce']:
+        msg = f'\x01ACTION disbanded {clan!r}.'
+        await announce_chan.send(p, msg, to_self=True)
+
+    return f'{clan!r} disbanded.'
+
+@clan_commands.add(triggers=['info', 'i'], priv=Privileges.Normal, public=True)
+async def clan_info(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Lookup information of a clan by tag."""
+    if not msg:
+        return 'Invalid syntax: !clan info <tag>'
+
+    if not (clan := glob.clans.get(tag=' '.join(msg).upper())):
+        return 'Could not find a clan by that tag.'
+
+    owner = await glob.players.get(id=clan.owner, sql=True)
+
+    _time = clan.created_at.strftime('%H:%M:%S%p')
+    _date = clan.created_at.strftime('%Y-%m-%d')
+    datetime_fmt = f'Founded at {_time} on {_date}'
+    msg = [f"{owner.embed}'s {clan!r} | {datetime_fmt}."]
+
+    # get members ranking from sql
+    res = await glob.db.fetchall(
+        'SELECT name, clan_rank '
+        'FROM users '
+        'WHERE clan_id = %s',
+        [clan.id], _dict=False
+    )
+
+    for name, clan_rank in sorted(res, key=lambda row: row[1]):
+        rank_str = ('Member', 'Officer', 'Owner')[clan_rank - 1]
+        msg.append(f'[{rank_str}] {name}')
+
+    return '\n'.join(msg)
+
+@clan_commands.add(triggers=['list', 'l'], priv=Privileges.Normal, public=True)
+async def clan_list(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """List all existing clans information."""
+    if msg:
+        if len(msg) != 1 or not msg[0].isdecimal():
+            return 'Invalid syntax: !clan list (page)'
+        else:
+            offset = 25 * int(msg[0])
+    else:
+        offset = 0
+
+    if offset >= (total_clans := len(glob.clans)):
+        return 'No clans found.'
+
+    msg = [f'gulag clans listing ({total_clans} total).']
+
+    for idx, clan in enumerate(glob.clans, offset):
+        msg.append(f'{idx + 1}. {clan!r}')
+
+    return '\n'.join(msg)
 
 async def process_commands(p: 'Player', t: Messageable,
                            msg: str) -> Optional[CommandResponse]:

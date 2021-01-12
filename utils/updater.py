@@ -87,8 +87,7 @@ class Updater:
             return
 
         # version changed; there may be sql changes.
-        with open(SQL_UPDATES_FILE, 'r') as f:
-            content = f.read()
+        content = SQL_UPDATES_FILE.read_text()
 
         updates = []
         current_ver = None

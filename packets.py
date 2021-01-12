@@ -184,10 +184,10 @@ class BanchoPacketReader:
 
     Intended Usage:
     ```
-    async for packet in BanchoPacketReader(conn.body):
-        # once you're ready to handle the packet,
-        # simply call it's .handle() method.
-        await packet.handle()
+      async for packet in BanchoPacketReader(conn.body):
+          # once you're ready to handle the packet,
+          # simply call it's .handle() method.
+          await packet.handle()
     ```
     """
 

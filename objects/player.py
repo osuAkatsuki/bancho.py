@@ -25,6 +25,8 @@ import packets
 
 if TYPE_CHECKING:
     from objects.score import Score
+    from objects.achievement import Achievement
+    from objects.clan import Clan, ClanRank
 
 __all__ = (
     'ModeData',
@@ -118,6 +120,7 @@ class Player:
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
         'priv', 'stats', 'status', 'friends', 'channels',
         'spectators', 'spectating', 'match',
+        'clan', 'clan_rank', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby',
@@ -142,6 +145,15 @@ class Player:
         self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
         self.match: Optional[Match] = None
+
+        self.clan: Optional['Clan'] = kwargs.get('clan', None)
+        self.clan_rank: Optional['ClanRank'] = kwargs.get('clan_rank', None)
+
+        # store achievements per-gamemode
+        self.achievements: dict[int, set['Achievement']] = {
+            0: set(), 1: set(),
+            2: set(), 3: set()
+        }
 
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
@@ -189,6 +201,14 @@ class Player:
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
         return f'[{self.url} {self.name}]'
+
+    @property
+    def full_name(self) -> str:
+        """The user's "full" name; including their clan tag."""
+        if self.clan:
+            return f'[{self.clan.tag}] {self.name}'
+        else:
+            return self.name
 
     @property
     def remaining_silence(self) -> int:
@@ -252,14 +272,17 @@ class Player:
     @classmethod
     def login(cls, user_info, utc_offset: int,
               pm_private: bool, osu_ver: datetime,
-              login_time: float):
+              login_time: float, clan: 'Clan',
+              clan_rank: 'ClanRank'):
         """Log a player into the server, with all info required."""
         # user_info: {id, name, priv, pw_bcrypt, silence_end}
         token = cls.generate_token()
         priv = Privileges(user_info.pop('priv'))
         p = cls(**user_info, pm_private=pm_private,
                 priv=priv, utc_offset=utc_offset,
-                token=token, osu_ver=osu_ver)
+                token=token, osu_ver=osu_ver,
+                clan=clan, clan_rank=clan_rank
+        )
 
         for mode in GameMode: # start empty
             p.recent_scores[mode] = None
@@ -657,6 +680,16 @@ class Player:
         self.country = (country_codes[country], country)
         self.location = (res['lon'], res['lat'])
 
+    async def unlock_achievement(self, ach: 'Achievement') -> None:
+        """Unlock `ach` for `self`, storing in both cache & sql."""
+        await glob.db.execute(
+            'INSERT INTO user_achievements '
+            '(userid, achid) VALUES (%s, %s)',
+            [self.id, ach.id]
+        )
+
+        self.achievements[ach.mode].add(ach)
+
     async def update_stats(self, mode: GameMode = GameMode.vn_std) -> None:
         """Update a player's stats in-game and in sql."""
         table = mode.sql_table
@@ -712,6 +745,29 @@ class Player:
 
         # always have self & bot added to friends.
         self.friends = _friends | {1, self.id}
+
+    async def achievements_from_sql(self) -> None:
+        """Retrieve `self`'s achievements from sql."""
+        for mode in range(4):
+            # get all users achievements for this mode
+            res = await glob.db.fetchall(
+                'SELECT ua.achid id FROM user_achievements ua '
+                'LEFT JOIN achievements a ON a.id = ua.achid '
+                'WHERE ua.userid = %s AND a.mode = %s',
+                [self.id, mode]
+            )
+
+            if not res:
+                # user has no achievements for this mode.
+                continue
+
+            # get cached achievements for this mode
+            achs = glob.achievements[mode]
+
+            for row in res:
+                for ach in achs:
+                    if row['id'] == ach.id:
+                        self.achievements[mode].add(ach)
 
     async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""

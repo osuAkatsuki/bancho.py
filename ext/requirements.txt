@@ -4,7 +4,6 @@ bcrypt
 aiohttp
 aiomysql
 orjson
-aiofiles
 uvloop
 mysql-connector-python
 asyncpg

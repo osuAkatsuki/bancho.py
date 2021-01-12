@@ -101,6 +101,7 @@ class ScoreFrame:
 
 class MapPool:
     __slots__ = ('id', 'name', 'created_at', 'created_by', 'maps')
+
     def __init__(self, id: int, name: str,
                  created_at: dt, created_by: 'Player') -> None:
         self.id = id
@@ -332,6 +333,7 @@ class Match:
                 s.status = SlotStatus.not_ready
 
     def start(self) -> None:
+        """Start the match for all ready players with the map."""
         no_map: list[Player] = []
 
         for s in self.slots:

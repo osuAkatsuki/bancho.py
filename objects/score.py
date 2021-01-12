@@ -147,7 +147,7 @@ class Score:
     """
     __slots__ = (
         'id', 'bmap', 'player',
-        'pp', 'score', 'max_combo', 'mods',
+        'pp', 'sr', 'score', 'max_combo', 'mods',
         'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
         'rank', 'passed', 'perfect', 'status',
         'mode', 'play_time', 'time_elapsed',
@@ -160,7 +160,10 @@ class Score:
         self.bmap: Optional[Beatmap] = None
         self.player: Optional['Player'] = None
 
+        # pp & star rating
         self.pp: Optional[float] = None
+        self.sr: Optional[float] = None
+
         self.score: Optional[int] = None
         self.max_combo: Optional[int] = None
         self.mods: Optional[Mods] = None
@@ -279,7 +282,7 @@ class Score:
         (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,
          s.score, s.max_combo) = map(int, data[3:11])
 
-        s.perfect = data[11] == '1'
+        s.perfect = data[11] == 'True'
         _grade = data[12] # letter grade
         s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
@@ -295,12 +298,12 @@ class Score:
 
         if s.bmap:
             # ignore sr for now.
-            s.pp = (await s.calc_diff())[0]
+            s.pp, s.sr = await s.calc_diff()
 
             await s.calc_status()
             s.rank = await s.calc_lb_placement()
         else:
-            s.pp = 0.0
+            s.pp = s.sr = 0.0
             s.status = SubmissionStatus.SUBMITTED if s.passed \
                   else SubmissionStatus.FAILED
 
