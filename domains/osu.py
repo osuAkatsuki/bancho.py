@@ -818,11 +818,10 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 kv_pair('maxCombo', None, stats.max_combo),
                 kv_pair('accuracy', None, round(stats.acc, 2)),
                 kv_pair('pp', None, stats.pp),
-            ))
-        )))
+            )),
 
-        if achievements: # TODO: pretty bad lol
-            charts[-1] += f'|achievements-new:{"/".join(map(repr, achievements))}'
+            f'achievements-new:{"/".join(map(repr, achievements))}'
+        )))
 
         ret = '\n'.join(charts).encode()
 
@@ -1472,7 +1471,7 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
     conn.add_resp_header(f'Location: {mirror_url}')
-    return (302, b'')
+    return (301, b'')
 
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 @domain.route(re.compile(r'^/web/maps/'))

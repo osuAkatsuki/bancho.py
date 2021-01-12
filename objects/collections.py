@@ -168,8 +168,12 @@ class PlayerList:
 
         # overwrite some things with classes
         res['priv'] = Privileges(res.pop('priv'))
-        res['clan'] = glob.clans.get(id=res['clan_id'])
-        res['clan_rank'] = ClanRank(res['clan_rank'])
+
+        if res['clan_id'] != 0:
+            res['clan'] = glob.clans.get(id=res['clan_id'])
+            res['clan_rank'] = ClanRank(res['clan_rank'])
+        else:
+            res['clan'] = res['clan_rank'] = None
 
         return Player(**res)
 
