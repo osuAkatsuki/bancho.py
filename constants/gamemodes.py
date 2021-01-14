@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from enum import IntEnum, unique
+
 from constants.mods import Mods
 
-__all__ = 'GameMode',
+__all__ = ('GameMode',)
 
 gm_str = (
     'vn!std',

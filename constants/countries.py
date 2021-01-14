@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__all__ = 'country_codes',
+__all__ = ('country_codes',)
 
 country_codes = { # talk about ugly lol
     'OC':   1, 'EU':   2, 'AD':   3, 'AE':   4, 'AF':   5, 'AG':   6, 'AI':   7, 'AL':   8, 'AM':   9, 'AN':  10,

@@ -5,7 +5,7 @@
 # and when it detects a change, it will apply any nescessary
 # changes to your sql database & keep cmyui_pkg up to date.
 
-from importlib.metadata import version
+from importlib.metadata import version as pkg_version
 from pip._internal.cli.main import main as pip_main
 from typing import Optional
 from cmyui import Version, log, Ansi
@@ -14,6 +14,8 @@ from datetime import datetime as dt
 import re
 
 from objects import glob
+
+__all__ = ('Updater',)
 
 SQL_UPDATES_FILE = Path.cwd() / 'ext/updates.sql'
 
@@ -71,7 +73,7 @@ class Updater:
 
     async def _update_cmyui(self) -> None:
         """Check if cmyui_pkg has a newer release; update if available."""
-        module_ver = Version.from_str(version('cmyui'))
+        module_ver = Version.from_str(pkg_version('cmyui'))
         latest_ver = await self._get_latest_cmyui()
 
         if module_ver < latest_ver:

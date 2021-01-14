@@ -4,7 +4,6 @@ from typing import Sequence
 import cmyui
 import inspect
 from pathlib import Path
-
 from cmyui.logging import log, printc, Ansi
 from cmyui.osu.replay import ReplayFrame, Keys
 
@@ -44,24 +43,16 @@ def point_of_interest():
 useful_keys = (Keys.M1, Keys.M2,
                Keys.K1, Keys.K2)
 
-def get_average_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
-    """A very basic function to calculate average press times.
+def get_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
+    """A very basic function to press times of an osu! replay.
        This is mostly only useful for taiko maps, since it
        doesn't take holds into account (taiko has none).
 
        In the future, we will make a version that can take
        account for the type of note that is being hit, for
        much more accurate and useful detection ability.
-
-       Intended usage
-       ```
-         replay = Replay.from_file(sys.argv[1])
-
-         print(f'Average press times for {replay.player_name}.')
-         for key, average in get_average_press_times(replay.frames).items():
-             print(f'{key}: {average:.2f}ms')
-        ```
     """
+    # TODO: remove negatives?
     press_times = {key: [] for key in useful_keys}
     cumulative = {key: 0 for key in useful_keys}
 
@@ -79,10 +70,5 @@ def get_average_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
 
         prev_frame = frame
 
-    averages = {key: 0.0 for key in useful_keys}
-
-    for key in useful_keys:
-        if times := press_times[key]:
-            averages[key] = sum(times) / len(times)
-
-    return averages
+    # return all keys with presses
+    return{k: v for k, v in press_times.items() if v}

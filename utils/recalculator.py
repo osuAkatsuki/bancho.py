@@ -9,7 +9,7 @@ from cmyui import log, Ansi
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 
-__all__ = 'PPCalculator',
+__all__ = ('PPCalculator',)
 
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 

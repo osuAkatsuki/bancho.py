@@ -2,7 +2,7 @@
 
 from enum import IntFlag, unique
 
-__all__ = 'Mods',
+__all__ = ('Mods',)
 
 @unique
 class Mods(IntFlag):

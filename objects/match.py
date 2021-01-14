@@ -2,7 +2,6 @@
 
 import asyncio
 from datetime import datetime as dt, timedelta as td
-
 from typing import Optional, Sequence, Union, TYPE_CHECKING
 from dataclasses import dataclass
 from collections import defaultdict
@@ -12,8 +11,8 @@ from constants import regexes
 from constants.mods import Mods
 from constants.gamemodes import GameMode
 
-from objects import glob
 from objects.beatmap import Beatmap
+from objects import glob
 
 from utils.misc import point_of_interest
 

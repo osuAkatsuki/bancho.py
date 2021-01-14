@@ -83,6 +83,36 @@ disallowed_passwords = {
     'password', 'minilamp'
 }
 
+""" discord webhooks """
+# gulag provides connectivity to
+# discord via a few simple webhooks.
+# simply add urls to start receiving.
+webhooks = {
+    # general logging information
+    'audit-log': '',
+
+    # notifications of sketchy plays
+    # & unusual activity auto-detected;
+    # described in more detail below.
+    'surveillance': '',
+}
+
+""" gulag score surveillance """
+# gulag has begun to develop systems for detecting scores
+# which the server deems as suspicious for any number of reasons.
+# while some features may have a confidence threshold high enough
+# to automatically ban players, the intention of this is mostly
+# to make staff more aware of what's happening. below are some
+# configurable values for what may trigger some parts of the
+# system - if you don't know what it means, you shouldn't touch it!
+surveillance = {
+    'hitobj_low_presstimes': {
+        # low presstimes on single hitobjects
+        'value': 40, # ms
+        'min_presses': 100
+    },
+}
+
 """ caching settings """
 # the max duration to
 # cache a beatmap for.

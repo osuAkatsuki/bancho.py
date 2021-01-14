@@ -10,7 +10,6 @@
 
 __all__ = ()
 
-from objects.achievement import Achievement
 from typing import TYPE_CHECKING
 import asyncio
 import aiohttp
@@ -22,10 +21,12 @@ import lzma
 import cmyui
 from cmyui import log, Ansi
 from cmyui.osu import ReplayFrame
+from cmyui.discord import Webhook, Embed
 
 from objects import glob
-from objects.player import Player
+from objects.achievement import Achievement
 from objects.channel import Channel
+from objects.player import Player
 from objects.match import MapPool
 from objects.clan import Clan
 
@@ -33,13 +34,13 @@ from constants.gamemodes import GameMode
 from constants.privileges import Privileges
 
 from utils.updater import Updater
-from utils.misc import get_average_press_times
+from utils.misc import get_press_times
 
 if TYPE_CHECKING:
     from objects.score import Score
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 3)
+glob.version = cmyui.Version(3, 1, 4)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -63,45 +64,58 @@ async def on_start() -> None:
     # should be moved and probably refactored pretty hard.
 
     # add all channels from db.
-    async for chan_res in glob.db.iterall('SELECT * FROM channels'):
-        chan_res['read_priv'] = Privileges(chan_res.pop('read_priv', 1))
-        chan_res['write_priv'] = Privileges(chan_res.pop('write_priv', 2))
-        glob.channels.append(Channel(**chan_res))
+    async for c_res in glob.db.iterall('SELECT * FROM channels'):
+        c_res['read_priv'] = Privileges(c_res.get('read_priv', 1))
+        c_res['write_priv'] = Privileges(c_res.get('write_priv', 2))
+        glob.channels.append(Channel(**c_res))
 
     # add all mappools from db.
-    async for pool_res in glob.db.iterall('SELECT * FROM tourney_pools'):
+    async for p_res in glob.db.iterall('SELECT * FROM tourney_pools'):
         # overwrite basic types with some class types
-        creator = await glob.players.get(id=pool_res['created_by'], sql=True)
-        pool_res['created_by'] = creator # replace id with player object
+        creator = await glob.players.get(id=p_res['created_by'], sql=True)
+        p_res['created_by'] = creator # replace id with player object
 
-        pool = MapPool(**pool_res)
+        pool = MapPool(**p_res)
         await pool.maps_from_sql()
         glob.pools.append(pool)
 
     # add all clans from db.
-    async for clan_res in glob.db.iterall('SELECT * FROM clans'):
+    async for c_res in glob.db.iterall('SELECT * FROM clans'):
         # fetch all members from sql
-        members_res = await glob.db.fetchall(
+        m_res = await glob.db.fetchall(
             'SELECT id, clan_rank '
             'FROM users '
             'WHERE clan_id = %s',
-            clan_res['id']
+            c_res['id']
         )
 
         members = set()
 
-        for p_id, clan_rank in members_res:
+        for p_id, clan_rank in m_res:
             if clan_rank == 3:
-                clan_res['owner'] = p_id
+                c_res['owner'] = p_id
 
             members.add(p_id)
 
-        glob.clans.append(Clan(**clan_res, members=members))
+        glob.clans.append(Clan(**c_res, members=members))
 
     # add all achievements from db.
-    async for ach_res in glob.db.iterall('SELECT * FROM achievements'):
-        ach_res['cond'] = eval(f'lambda score: {ach_res["cond"]}')
-        glob.achievements[ach_res['mode']].append(Achievement(**ach_res))
+    async for a_res in glob.db.iterall('SELECT * FROM achievements'):
+        condition = eval(f'lambda score: {a_res.pop("cond")}')
+        achievement = Achievement(**a_res, cond=condition)
+        glob.achievements[a_res['mode']].append(achievement)
+
+    """ bmsubmit stuff
+    # get the latest set & map id offsets for custom maps.
+    maps_res = await glob.db.fetch(
+        'SELECT id, set_id FROM maps '
+        'WHERE server = "gulag" '
+        'ORDER BY id ASC LIMIT 1'
+    )
+
+    if maps_res:
+        glob.gulag_maps = maps_res
+    """
 
     # add new donation ranks & enqueue tasks to remove current ones.
     # TODO: this system can get quite a bit better; rather than just
@@ -144,6 +158,66 @@ async def disconnect_inactive() -> None:
         # run this indefinitely
         await asyncio.sleep(30)
 
+# This function is currently pretty tiny and useless, but
+# will just continue to expand as more ideas come to mind.
+async def analyze_score(score: 'Score') -> None:
+    """Analyze a single score."""
+    player = score.player
+
+    # open & parse replay files frames
+    replay_file = REPLAYS_PATH / f'{score.id}.osr'
+    data = lzma.decompress(replay_file.read_bytes())
+
+    frames: list[ReplayFrame] = []
+
+    # ignore seed & blank line at end
+    for action in data.decode().split(',')[:-2]:
+        if frame := ReplayFrame.from_str(action):
+            frames.append(frame)
+
+    if score.mode.as_vanilla == GameMode.vn_taiko:
+        # calculate their average press times.
+        # NOTE: this does not currently take hit object
+        # type into account, making it completely unviable
+        # for any gamemode with holds. it's still relatively
+        # reliable for taiko though :D.
+
+        press_times = get_press_times(frames)
+        config = glob.config.surveillance['hitobj_low_presstimes']
+
+        cond = lambda pt: (sum(pt) / len(pt) < config['value']
+                           and len(pt) > config['min_presses'])
+
+        if any(map(cond, press_times.values())):
+            # at least one of the keys is under the
+            # minimum, log this occurence to Discord.
+            webhook_url = glob.config.webhooks['surveillance']
+            webhook = Webhook(url=webhook_url)
+
+            embed = Embed(
+                title = f'[{score.mode!r}] Abnormally low presstimes detected'
+            )
+
+            embed.set_author(
+                url = player.url,
+                name = player.name,
+                icon_url = player.avatar_url
+            )
+
+            # TODO: think of a way to organize a thumbnail into config?
+            thumb_url = 'https://akatsuki.pw/static/logos/logo.png'
+            embed.set_thumbnail(url=thumb_url)
+
+            for key, pt in press_times.items():
+                embed.add_field(
+                    name = f'Key: {key.name}',
+                    value = f'{sum(pt) / len(pt):.2f}ms' if pt else 'N/A',
+                    inline = True
+                )
+
+            webhook.add_embed(embed)
+            await webhook.post(glob.http)
+
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 async def run_detections() -> None:
     """Actively run a background thread throughout gulag's
@@ -152,30 +226,11 @@ async def run_detections() -> None:
     glob.sketchy_queue = asyncio.Queue() # cursed type hint fix
     queue: asyncio.Queue['Score'] = glob.sketchy_queue
 
-    frames: list[ReplayFrame] = []
+    loop = asyncio.get_event_loop()
+
 
     while score := await queue.get():
-        replay_file = REPLAYS_PATH / f'{score.id}.osr'
-        data = lzma.decompress(replay_file.read_bytes())
-
-        # ignore seed & blank line at end
-        for action in data.decode().split(',')[:-2]:
-            if frame := ReplayFrame.from_str(action):
-                frames.append(frame)
-
-        if score.mode.as_vanilla == GameMode.vn_taiko:
-            # calculate their average press times.
-            # NOTE: this does not currently take hit object
-            # type into account, making it completely unviable
-            # for any gamemode with holds. it's still relatively
-            # reliable for taiko though :D.
-            press_times = get_average_press_times(frames)
-
-            # TODO: add some settings to config for 'sketchy'
-            # values (that should report via discord webhook).
-            # this also ofcourse means.. add webhooks already..
-
-        frames.clear()
+        loop.create_task(analyze_score(score))
 
 if __name__ == '__main__':
     # set cwd to /gulag.
@@ -197,7 +252,11 @@ if __name__ == '__main__':
     from domains.osu import domain as osu_domain # osu.ppy.sh
     from domains.ava import domain as ava_domain # a.ppy.sh
     app.add_domains({cho_domain, osu_domain, ava_domain})
-    app.add_tasks({on_start(), disconnect_inactive(),
-                   run_detections()})
+    app.add_tasks({on_start(), disconnect_inactive()})
+
+    # if surveillance webhook is enabled,
+    # run our auto-detection 'thread' in bg.
+    if glob.config.webhooks['surveillance']:
+        app.add_task(run_detections())
 
     app.run(glob.config.server_addr) # blocking call

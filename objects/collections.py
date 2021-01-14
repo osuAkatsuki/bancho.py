@@ -4,8 +4,9 @@ from objects.clan import ClanRank
 from typing import Union, Optional, TYPE_CHECKING
 from cmyui import log
 
-from objects.player import Player
 from constants.privileges import Privileges
+
+from objects.player import Player
 from objects import glob
 
 if TYPE_CHECKING:

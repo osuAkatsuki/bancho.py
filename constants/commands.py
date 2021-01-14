@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from utils.recalculator import PPCalculator
 from typing import (NamedTuple, Sequence, Optional,
                     Union, Callable, TYPE_CHECKING)
 import time
@@ -23,6 +22,8 @@ from objects.score import SubmissionStatus
 from objects.beatmap import Beatmap, RankedStatus
 from objects.match import (MapPool, MatchWinConditions,
                            MatchTeamTypes, SlotStatus, MatchTeams)
+
+from utils.recalculator import PPCalculator
 
 if TYPE_CHECKING:
     from objects.channel import Channel

@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional
 from enum import IntEnum, unique
 from datetime import datetime
 from collections import defaultdict
 from cmyui import log, Ansi
 import time
 
-from utils.recalculator import PPCalculator
-from objects import glob
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 
-__all__ = 'RankedStatus', 'Beatmap'
+from objects import glob
+
+from utils.recalculator import PPCalculator
+
+__all__ = ('RankedStatus', 'Beatmap')
 
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!

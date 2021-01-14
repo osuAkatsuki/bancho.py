@@ -2,6 +2,7 @@
 
 from asyncio import Queue
 from typing import TYPE_CHECKING
+
 from objects.collections import *
 
 import config # imported for indirect use
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 
 __all__ = ('players', 'channels', 'matches',
            'pools', 'clans', 'achievements',
+           #'gulag_maps',
            'db', 'http', 'version', 'bot',
            'cache', 'sketchy_queue')
 
@@ -26,6 +28,16 @@ clans = ClanList()
 # store achievements per-gamemode
 achievements = {0: [], 1: [],
                 2: [], 3: []}
+
+""" bmsubmit stuff, released soonTM
+# store the current available ids
+# for users submitting custom maps.
+# updated from sql on gulag startup.
+gulag_maps: dict[str, int] = {
+    'set_id': (1 << 30) - 1,
+    'id': (1 << 30) - 1
+}
+"""
 
 db: 'AsyncSQLPool'
 http: 'ClientSession'
