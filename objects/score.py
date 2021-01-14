@@ -242,10 +242,10 @@ class Score:
         data_aes = b64decode(data_b64).decode('latin_1')
 
         aes_key = f'osu!-scoreburgr---------{osu_ver}'
-        cbc = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
+        aes = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
 
         # score data is delimited by colons (:).
-        data = cbc.decrypt(data_aes).decode().split(':')
+        data = aes.decrypt(data_aes).decode().split(':')
 
         if len(data) != 18:
             log('Received an invalid score submission.', Ansi.LRED)

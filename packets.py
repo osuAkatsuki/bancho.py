@@ -405,7 +405,7 @@ class BanchoPacketReader:
         m.map_md5 = await self.read_string()
 
         for slot in m.slots:
-            slot.status = await self.read_i8()
+            slot.status = SlotStatus(await self.read_i8())
 
         for slot in m.slots:
             slot.team = MatchTeams(await self.read_i8())
@@ -930,8 +930,8 @@ def userPresence(p: 'Player') -> bytes:
         (p.utc_offset + 24, osuTypes.u8),
         (p.country[0], osuTypes.u8),
         (p.bancho_priv | (p.status.mode.as_vanilla << 5), osuTypes.u8),
-        (p.location[0], osuTypes.f32), # long
-        (p.location[1], osuTypes.f32), # lat
+        (p.location[1], osuTypes.f32), # long
+        (p.location[0], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
     ) if p is not glob.bot else ( # default for bot
         b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00'

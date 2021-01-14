@@ -127,31 +127,31 @@ class Beatmap:
                  'diff', 'pp_cache')
 
     def __init__(self, **kwargs):
-        self.md5 = kwargs.pop('md5', '')
-        self.id = kwargs.pop('id', 0)
-        self.set_id = kwargs.pop('set_id', 0)
+        self.md5 = kwargs.get('md5', '')
+        self.id = kwargs.get('id', 0)
+        self.set_id = kwargs.get('set_id', 0)
 
-        self.artist = kwargs.pop('artist', '')
-        self.title = kwargs.pop('title', '')
-        self.version = kwargs.pop('version', '') # diff name
-        self.creator = kwargs.pop('creator', '')
+        self.artist = kwargs.get('artist', '')
+        self.title = kwargs.get('title', '')
+        self.version = kwargs.get('version', '') # diff name
+        self.creator = kwargs.get('creator', '')
 
-        self.last_update = kwargs.pop('last_update', datetime(1970, 1, 1))
-        self.total_length = kwargs.pop('total_length', 0)
-        self.status = RankedStatus(kwargs.pop('status', 0))
-        self.frozen = kwargs.pop('frozen', False) == 1
+        self.last_update = kwargs.get('last_update', datetime(1970, 1, 1))
+        self.total_length = kwargs.get('total_length', 0)
+        self.status = RankedStatus(kwargs.get('status', 0))
+        self.frozen = kwargs.get('frozen', False) == 1
 
-        self.plays = kwargs.pop('plays', 0)
-        self.passes = kwargs.pop('passes', 0)
+        self.plays = kwargs.get('plays', 0)
+        self.passes = kwargs.get('passes', 0)
 
-        self.mode = GameMode(kwargs.pop('mode', 0))
-        self.bpm = kwargs.pop('bpm', 0.0)
-        self.cs = kwargs.pop('cs', 0.0)
-        self.od = kwargs.pop('od', 0.0)
-        self.ar = kwargs.pop('ar', 0.0)
-        self.hp = kwargs.pop('hp', 0.0)
+        self.mode = GameMode(kwargs.get('mode', 0))
+        self.bpm = kwargs.get('bpm', 0.0)
+        self.cs = kwargs.get('cs', 0.0)
+        self.od = kwargs.get('od', 0.0)
+        self.ar = kwargs.get('ar', 0.0)
+        self.hp = kwargs.get('hp', 0.0)
 
-        self.diff = kwargs.pop('diff', 0.00)
+        self.diff = kwargs.get('diff', 0.00)
         self.pp_cache = {} # {mods: (acc: pp, ...), ...}
 
     @property
@@ -478,9 +478,9 @@ class Beatmap:
         params[11] = int(params[11]) # mode
 
         await glob.db.execute(
-            'REPLACE INTO maps (md5, id, set_id, status, artist, '
-            'title, version, creator, last_update, total_length, '
-            'frozen, mode, bpm, cs, od, ar, hp, diff) '
-            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '
+            'REPLACE INTO maps (server, md5, id, set_id, status, '
+            'artist, title, version, creator, last_update, '
+            'total_length, frozen, mode, bpm, cs, od, ar, hp, diff) '
+            'VALUES ("osu!", %s, %s, %s, %s, %s, %s, %s, %s, %s, '
             '%s, %s, %s, %s, %s, %s, %s, %s, %s)', params
         )

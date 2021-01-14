@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from objects.score import Score
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 2)
+glob.version = cmyui.Version(3, 1, 3)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)

@@ -223,3 +223,20 @@ insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (70, 'mania-skill-fc-6', 'Level Breaker', 'Finesse beyond reason', 'score.perfect and 7 >= score.sr > 6', 3);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (71, 'mania-skill-fc-7', 'Step Up', 'A precipice rarely seen.', 'score.perfect and 8 >= score.sr > 7', 3);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (72, 'mania-skill-fc-8', 'Behind The Veil', 'Supernatural!', 'score.perfect and 9 >= score.sr > 8', 3);
+
+# v3.1.3
+alter table clans modify name varchar(16) charset utf8 not null;
+alter table clans modify tag varchar(6) charset utf8 not null;
+alter table achievements modify name varchar(128) charset utf8 not null;
+alter table achievements modify `desc` varchar(256) charset utf8 not null;
+alter table maps modify artist varchar(128) charset utf8 not null;
+alter table maps modify title varchar(128) charset utf8 not null;
+alter table maps modify version varchar(128) charset utf8 not null;
+alter table maps modify creator varchar(19) charset utf8 not null comment 'not 100% certain on len';
+alter table user_hashes drop foreign key user_hashes_users_id_fk;
+alter table tourney_pools drop foreign key tourney_pools_users_id_fk;
+alter table tourney_pool_maps drop foreign key tourney_pool_maps_tourney_pools_id_fk;
+alter table stats drop foreign key stats_users_id_fk;
+alter table ratings drop foreign key ratings_maps_md5_fk;
+alter table ratings drop foreign key ratings_users_id_fk;
+alter table logs modify `from` int not null comment 'both from and to are playerids';

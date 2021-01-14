@@ -144,7 +144,12 @@ async def last(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (s := p.recent_score):
         return 'No scores found :o (only saves per play session)'
 
-    l = [f'[{s.mode!r}] {s.bmap.embed} +{s.mods!r} {s.acc:.2f}%']
+    l = [f'[{s.mode!r}] {s.bmap.embed}', f'{s.acc:.2f}%']
+
+    if s.mods:
+        l.insert(1, f'+{s.mods!r}')
+
+    l = [' '.join(l)]
 
     if s.passed:
         rank = s.rank if s.status == SubmissionStatus.BEST else 'NA'
@@ -154,6 +159,9 @@ async def last(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
 
     return ' | '.join(l)
+
+# TODO: !top (get top #1 score)
+# TODO: !compare (compare to previous !last/!top post's map)
 
 _mapsearch_fmt = (
     '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '

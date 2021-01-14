@@ -129,13 +129,13 @@ class Player:
     )
 
     def __init__(self, **kwargs) -> None:
-        self.id = kwargs.pop('id', 0)
-        self.name = kwargs.pop('name', '')
-        self.priv = kwargs.pop('priv', Privileges(0))
+        self.id = kwargs.get('id', 0)
+        self.name = kwargs.get('name', '')
+        self.priv = kwargs.get('priv', Privileges(0))
 
-        self.token = kwargs.pop('token', '')
+        self.token = kwargs.get('token', '')
         self.safe_name = self.make_safe(self.name) if self.name else ''
-        self.pw_bcrypt = kwargs.pop('pw_bcrypt', b'')
+        self.pw_bcrypt = kwargs.get('pw_bcrypt', b'')
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
@@ -158,17 +158,17 @@ class Player:
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset = kwargs.pop('utc_offset', 0)
-        self.pm_private = kwargs.pop('pm_private', False)
+        self.utc_offset = kwargs.get('utc_offset', 0)
+        self.pm_private = kwargs.get('pm_private', False)
 
         self.away_msg: Optional[str] = None
-        self.silence_end = kwargs.pop('silence_end', 0)
+        self.silence_end = kwargs.get('silence_end', 0)
         self.in_lobby = False
 
         self.login_time = 0.0
         self.last_recv_time = 0.0
 
-        self.osu_ver: Optional[datetime] = kwargs.pop('osu_ver', None)
+        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
@@ -201,6 +201,11 @@ class Player:
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
         return f'[{self.url} {self.name}]'
+
+    @property
+    def avatar_url(self) -> str:
+        """The url to the player's avatar."""
+        return f'https://a.{glob.config.domain}/{self.id}'
 
     @property
     def full_name(self) -> str:
@@ -660,35 +665,35 @@ class Player:
 
     async def fetch_geoloc(self, ip: str) -> None:
         """Fetch a player's geolocation data based on their ip."""
-        url = f'http://ip-api.com/json/{ip}'
+        url = f'http://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
                 log('Failed to get geoloc data: request failed.', Ansi.LRED)
                 return
 
-            res = await resp.json()
+            status, *lines = await resp.text().split('\n')
 
-        if 'status' not in res or res['status'] != 'success':
-            log(f"Failed to get geoloc data: {res['message']}.", Ansi.LRED)
-            return
+            if status != 'success':
+                log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
+                return
 
-        country = res['countryCode']
+        country = lines[0]
 
         # store their country as a 2-letter code, and as a number.
         # the players location is stored for the ingame world map.
         self.country = (country_codes[country], country)
-        self.location = (res['lon'], res['lat'])
+        self.location = tuple(int(x) for x in lines[6:7]) # lat, long
 
-    async def unlock_achievement(self, ach: 'Achievement') -> None:
+    async def unlock_achievement(self, a: 'Achievement') -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await glob.db.execute(
             'INSERT INTO user_achievements '
             '(userid, achid) VALUES (%s, %s)',
-            [self.id, ach.id]
+            [self.id, a.id]
         )
 
-        self.achievements[ach.mode].add(ach)
+        self.achievements[a.mode].add(a)
 
     async def update_stats(self, mode: GameMode = GameMode.vn_std) -> None:
         """Update a player's stats in-game and in sql."""
