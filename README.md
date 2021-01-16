@@ -44,32 +44,33 @@ gulag's commandset has been growing quite nicely.
 Generic
 ------
 
-!help: Show information of all documented commands `p` can use.
-!roll: Roll an n-sided die where n is the number you write (100 if empty).
+!help: Show information of all documented commands the player can access.
+!roll: Roll an n-sided die where n is the number you write (100 default).
 !bloodcat: Return a bloodcat link of the user's current map (situation dependant).
 !last: Show information about your most recent score.
-!mapsearch: Search map titles with user input as a wildcard.
 !with: Specify custom accuracy & mod combinations with `/np`.
 !map: Changes the ranked status of the most recently /np'ed map.
 !notes: Retrieve the logs of a specified player by name.
 !addnote: Add a note to a specified player by name.
-!silence: Silence `p` with a specified duration & reason.
-!unsilence: Unsilence `p`.
-!ban: Ban a player's account, with a reason.
-!unban: Unban a player's account, with a reason.
+!silence: Silence a specified player with a specified duration & reason.
+!unsilence: Unsilence a specified player.
+!ban: Ban a specified player's account, with a reason.
+!unban: Unban a specified player's account, with a reason.
 !alert: Send a notification to all players.
-!alertu: Send a notification to a specific player by name.
+!alertu: Send a notification to a specified player by name.
 !recalc: Performs a full PP recalc on a specified map, or all maps.
-!switchserv: Switch servers to a specified ip address.
+!switchserv: Switch your client's internal endpoints to a specified IP address.
 !debug: Toggle the console's debug setting.
-!setpriv: Set privileges for a player (by name).
+!setpriv: Set privileges for a specified player (by name).
+!menu_preview: Temporary command to illustrate cmyui's menu option idea.
 
 
 Multiplayer Management
 ------
 
-!mp start: Start a multiplayer match.
-!mp abort: Abort an in-progress multiplayer match.
+!mp help: Show information of all documented mp commands the player can access.
+!mp start: Start the current multiplayer match, with any players ready.
+!mp abort: Abort the current in-progress multiplayer match.
 !mp force: Force a player into the current match by name.
 !mp map: Set the current match's current map by id.
 !mp mods: Set the current match's mods, from string form.
@@ -86,16 +87,17 @@ Multiplayer Management
 !mp scrim: Start a scrim in the current match.
 !mp endscrim: End the current matches ongoing scrim.
 !mp rematch: Restart a scrim with the previous match points, or roll back the most recent match point.
-!mp loadpool: Load a specified mappool into the current match.
+!mp loadpool: Load a mappool into the current match.
 !mp unloadpool: Unload the current matches mappool.
-!mp ban: Ban a specified pick in the current pool from being picked.
-!mp unban: Unban a specified pick in the current pool from being picked.
-!mp pick: Pick a map from the currently selected mappool.
+!mp ban: Ban a pick in the currently loaded mappool.
+!mp unban: Unban a pick in the currently loaded mappool.
+!mp pick: Pick a map from the currently loaded mappool.
 
 
 Mappool Management
 ------
 
+!pool help: Show information of all documented pool commands the player can access.
 !pool create: Add a new mappool to the database.
 !pool delete: Remove a mappool from the database.
 !pool add: Add a new map to a mappool in the database.
@@ -107,6 +109,7 @@ Mappool Management
 Clan Management
 ------
 
+!clan help: Show information of all documented clan commands the player can access.
 !clan create: Create a clan with a given tag & name.
 !clan disband: Disband a clan (admins may disband others clans).
 !clan info: Lookup information of a clan by tag.

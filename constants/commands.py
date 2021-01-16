@@ -104,7 +104,7 @@ async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     prefix = glob.config.command_prefix
     cmds = []
 
-    for cmd in glob.commands['regular']:
+    for cmd in regular_commands:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
@@ -167,25 +167,6 @@ async def last(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 # TODO: !top (get top #1 score)
 # TODO: !compare (compare to previous !last/!top post's map)
-
-_mapsearch_fmt = (
-    '[https://osu.ppy.sh/b/{id} {artist} - {title} [{version}]] '
-    '([{mirror}/d/{set_id} download])'
-)
-_mapsearch_func = lambda row: _mapsearch_fmt.format(**row, mirror=glob.config.mirror)
-@command(Privileges.Normal, hidden=True)
-async def mapsearch(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Search map titles with user input as a wildcard."""
-    if not msg:
-        return 'Invalid syntax: !mapsearch <title>'
-
-    if not (res := await glob.db.fetchall(
-        'SELECT id, set_id, artist, title, version '
-        'FROM maps WHERE title LIKE %s LIMIT 25',
-        [f'%{" ".join(msg)}%']
-    )): return 'No matches found :('
-
-    return '\n'.join(map(_mapsearch_func, res)) + f'\nMaps: {len(res)}'
 
 @command(Privileges.Normal, hidden=True)
 async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -1543,7 +1524,7 @@ async def process_commands(p: 'Player', t: Messageable,
             break
     else:
         # no set commands matched, check normal commands.
-        commands = glob.commands['regular']
+        commands = regular_commands
 
     for cmd in commands:
         if trigger in cmd.triggers and p.priv & cmd.priv:

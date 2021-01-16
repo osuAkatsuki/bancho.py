@@ -86,7 +86,7 @@ async def on_start() -> None:
             'SELECT id, clan_rank '
             'FROM users '
             'WHERE clan_id = %s',
-            c_res['id']
+            c_res['id'], _dict=False
         )
 
         members = set()
