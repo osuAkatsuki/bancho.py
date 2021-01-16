@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from objects.score import Score
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 4)
+glob.version = cmyui.Version(3, 1, 5)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -144,19 +144,22 @@ async def on_start() -> None:
 
         asyncio.create_task(rm_donor(donation['id'], delta))
 
-PING_TIMEOUT = 300000 // 10
+PING_TIMEOUT = 300000 // 1000
 async def disconnect_inactive() -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
+    players_lock = asyncio.Lock()
+
     while True:
         ctime = time.time()
 
-        for p in glob.players:
-            if ctime - p.last_recv_time > PING_TIMEOUT:
-                await p.logout()
+        async with players_lock:
+            for p in glob.players:
+                if ctime - p.last_recv_time > PING_TIMEOUT:
+                    await p.logout()
 
         # run this indefinitely
-        await asyncio.sleep(30)
+        await asyncio.sleep(PING_TIMEOUT // 3)
 
 # This function is currently pretty tiny and useless, but
 # will just continue to expand as more ideas come to mind.
@@ -227,7 +230,6 @@ async def run_detections() -> None:
     queue: asyncio.Queue['Score'] = glob.sketchy_queue
 
     loop = asyncio.get_event_loop()
-
 
     while score := await queue.get():
         loop.create_task(analyze_score(score))
