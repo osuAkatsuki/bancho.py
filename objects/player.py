@@ -672,7 +672,7 @@ class Player:
                 log('Failed to get geoloc data: request failed.', Ansi.LRED)
                 return
 
-            status, *lines = await resp.text().split('\n')
+            status, *lines = (await resp.text()).split('\n')
 
             if status != 'success':
                 log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
