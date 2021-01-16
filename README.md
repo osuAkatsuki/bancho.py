@@ -1,71 +1,127 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-## A dev-friendly osu! server written in modern python
+Table of Contents
+==================
+- [Table of Contents](#table-of-contents)
+  - [What is gulag?](#what-is-gulag)
+  - [Currently supported player commands](#currently-supported-player-commands)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+  - [Directory Structure](#directory-structure)
 
-gulag is my take on the abstraction of an osu! server; it's native
-async and relatively low-level design allows for many features not seen
-in other server implementations (especially for python), and it should
-be more than packed enough with performance-driven programming for any
-realistic private server use-case™️.
+What is gulag?
+------
+
+gulag is my take on the abstraction of an osu! server; I use native async/await
+syntax, and have written the server from the ground up from sockets using my
+[python package](https://github.com/cmyui/cmyui_pkg)'s web server implementation.
+This relatively low-level design allows for flexibility, cleanliness, and efficiency
+not seen in other codebases - all while maintaining the simplicity of Python.
+
+A primary goal of gulag is to keep our codebase a developer-friendly API, so
+that programming remains about the logic and ideas, rather than the code itself.
 
 I'm mainly writing this as it's by-far the subject I'm currently the most
 educated in.. I started [Akatsuki](https://akatsuki.pw/) (and programming
 alltogether) back in October of 2017, and I've been managing it since..
 
-If you're only in it for performance and don't mind using a lower-level
-language, consider checking out [Peace](https://github.com/Pure-Peace/Peace),
-a somewhat similar modern implementation written in Rust.
+The server has come [a long way](https://cdn.discordapp.com/attachments/616400094408736779/799434379176574986/unknown.png),
+and is in quite a usable state. We most likely handle every packet/handler
+supported by any competing server implementation, and feature a very large
+api and [commandset](#commands) for both developers and players alike, with
+many unique features only available with gulag.
 
-The server is already nearly on-par with competing servers and is already likely
-production-capable; however there's not currently an official finished frontend
-for the project. The central db structure's (users, maps, scores) core elements
-are obviously similar on both ripple and gulag's db setup, so it should not be too
-difficult to get this project working with [Hanayo](https://github.com/osuripple/hanayo),
-though I haven't tried myself. There are also some partially comlpete implementations
-of a frontend for gulag, such as [gulag-web](https://github.com/Yo-ru/gulag-web).
+To implement a full osu! server, you'll also need a frontend, which is rather
+difficult considering that gulag has a completely new database structure.. There
+are [things being done about this](https://github.com/Yo-ru/gulag-web), which has
+seen quite a bit of growth (in both code and team size) in the last few weeks.
 
-If you're just looking for a standalone osu! server, this is likely one of your
-best bets on the current market, though. Hopefully that will become true on a
-much larger scale with some time ;).
+Currently supported player commands
+------
+gulag's commandset has been growing quite nicely.
 
-## Plans/Ideas
+```
+Generic
+------
 
-### Beatmap submission system (medium difficulty & effort)
+!help: Show information of all documented commands `p` can use.
+!roll: Roll an n-sided die where n is the number you write (100 if empty).
+!bloodcat: Return a bloodcat link of the user's current map (situation dependant).
+!last: Show information about your most recent score.
+!mapsearch: Search map titles with user input as a wildcard.
+!with: Specify custom accuracy & mod combinations with `/np`.
+!map: Changes the ranked status of the most recently /np'ed map.
+!notes: Retrieve the logs of a specified player by name.
+!addnote: Add a note to a specified player by name.
+!silence: Silence `p` with a specified duration & reason.
+!unsilence: Unsilence `p`.
+!ban: Ban a player's account, with a reason.
+!unban: Unban a player's account, with a reason.
+!alert: Send a notification to all players.
+!alertu: Send a notification to a specific player by name.
+!recalc: Performs a full PP recalc on a specified map, or all maps.
+!switchserv: Switch servers to a specified ip address.
+!debug: Toggle the console's debug setting.
+!setpriv: Set privileges for a player (by name).
 
-This one is pretty self-explanatory - be able to submit maps to the server
-using osu!'s normal in-game beatmap submission system. For this, I'm pretty
-sure the id is constrained to being an int32 and negative numbers won't work
-(and i'm already using them for buttons anyways), so we'll probably have to
-count down from 2147483647.. or start from 1b or something lol..
 
-### Tournament host commandset (low/medium difficulty & effort) [almost complete]
+Multiplayer Management
+------
 
-Basically the idea for this one is a set of commands for event managers to be
-able to set up things like mappools with the server before the matches, so that
-referees have a set of commands to automatically pick maps/mods, keep score,
-and post updates to the chat and stuff. Could also make it so players are
-automatically moved into the right slots for their team and for team names to
-be gotten from the regex of the tourney match name.. Most of this abstraction
-is also independant of the osu! implementation, so I pretty much have free reign
-on how I do things, so this sounds pretty fun.
+!mp start: Start a multiplayer match.
+!mp abort: Abort an in-progress multiplayer match.
+!mp force: Force a player into the current match by name.
+!mp map: Set the current match's current map by id.
+!mp mods: Set the current match's mods, from string form.
+!mp host: Set the current match's current host by id.
+!mp randpw: Randomize the current match's password.
+!mp invite: Invite a player to the current match by name.
+!mp addref: Add a referee to the current match by name.
+!mp rmref: Remove a referee from the current match by name.
+!mp listref: List all referees from the current match.
+!mp lock: Lock all unused slots in the current match.
+!mp unlock: Unlock locked slots in the current match.
+!mp teams: Change the team type for the current match.
+!mp condition: Change the win condition for the match.
+!mp scrim: Start a scrim in the current match.
+!mp endscrim: End the current matches ongoing scrim.
+!mp rematch: Restart a scrim with the previous match points, or roll back the most recent match point.
+!mp loadpool: Load a specified mappool into the current match.
+!mp unloadpool: Unload the current matches mappool.
+!mp ban: Ban a specified pick in the current pool from being picked.
+!mp unban: Unban a specified pick in the current pool from being picked.
+!mp pick: Pick a map from the currently selected mappool.
 
-### Bound chat embeds that run code server-side (medium? difficulty & effort)
 
-This might not make a hell of a lot of sense, but it's actually already mostly
-working.. Basically, I want clickable embeds in the osu! chat that when clicked,
-run some pre-allocated function server-side that's bound to the player (security).
-This is a really abstract idea so it can be expanded to pretty much everything,
-like in-game admin panels and maybe even interactive menus with some higher-order
-abstraction? We'll see lol.. Credits go to rumoi for the original idea on this one,
-as they tried to implement something similar back in [ruri](https://github.com/rumoi/ruri).
+Mappool Management
+------
 
-## Requirements
+!pool create: Add a new mappool to the database.
+!pool delete: Remove a mappool from the database.
+!pool add: Add a new map to a mappool in the database.
+!pool remove: Remove a map from a mappool in the database.
+!pool list: List all existing mappools information.
+!pool info: Get all information for a specific mappool.
+
+
+Clan Management
+------
+
+!clan create: Create a clan with a given tag & name.
+!clan disband: Disband a clan (admins may disband others clans).
+!clan info: Lookup information of a clan by tag.
+!clan list: List all existing clans information.
+```
+
+Requirements
+------
 
 - Some know-how with Linux (tested on Ubuntu 18.04), python, and general-programming knowledge.
 - An osu! account (or more specifically, an osu! api key). This is technically optional, but is required for full usage.
 - An SSL Certificate for c(e4-6).ppy.sh (such as [this](https://github.com/osuthailand/ainu-certificate)).
 
-## Setup
+Setup
+------
 
 Setup should be pretty simple - the commands below should set you right up.
 
@@ -84,7 +140,7 @@ sudo apt install python3.9 python3.9-dev python3.9-distutils
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
-# Install our db, reverse-proxy, and build tools.
+# Install our database, reverse-proxy, and build tools.
 sudo apt install mysql-server nginx build-essential
 
 # Clone gulag from github.
@@ -96,18 +152,18 @@ git submodule init && git submodule update
 # Build oppai-ng's binary.
 cd oppai-ng && ./build && cd ..
 
-# Install project requirements.
+# Install gulag's requirements.
 python3.9 -m pip install -r ext/requirements.txt
 
-# Import the database structure.
+# Import gulag's database structure.
 # NOTE: create an empty database before doing this.
 # This will also insert basic osu! channels & the bot.
 mysql -u your_sql_username -p your_db_name < ext/db.sql
 
 # Add gulag's nginx config to your nginx/sites-enabled.
 # NOTE: default unix socket location is `/tmp/gulag.sock`,
-# and you will have to change the certificate pathes in
-# the nginx config file to your own certificate pathes.
+# and you will have to change the certificate paths in
+# the nginx config file to your own certificate paths.
 sudo ln ext/nginx.conf /etc/nginx/sites-enabled/gulag.conf
 sudo nginx -s reload
 
@@ -118,3 +174,15 @@ nano config.py
 # Start the server.
 ./main.py
 ```
+
+Directory Structure
+------
+    .
+    ├── constants  # Code for representing gamemodes, mods, privileges, and other constants.
+    ├── ext        # External files from gulag's primary operation.
+    ├── objects    # Code for representing players, scores, maps, and more.
+    ├── utils      # Utility functions used throughout the codebase for general purposes.
+    └── domains    # The web routes available to the players.
+        ├── cho    # (ce|c4|c5|c6).ppy.sh/* domains
+        ├── osu    # osu.ppy.sh/* domains
+        └── ava    # a.ppy.sh/* domains

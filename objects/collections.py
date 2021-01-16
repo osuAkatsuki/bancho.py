@@ -9,6 +9,8 @@ from constants.privileges import Privileges
 from objects.player import Player
 from objects import glob
 
+from utils.misc import make_safe_name
+
 if TYPE_CHECKING:
     from objects.channel import Channel
     from objects.match import Match, MapPool
@@ -145,7 +147,7 @@ class PlayerList:
         if attr == 'name':
             # name -> safe_name
             attr = 'safe_name'
-            val = Player.make_safe(val)
+            val = make_safe_name(val)
 
         for p in self.players:
             if getattr(p, attr) == val:

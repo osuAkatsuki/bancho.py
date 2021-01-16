@@ -25,7 +25,7 @@ matches = MatchList()
 pools = MapPoolList()
 clans = ClanList()
 
-# store achievements per-gamemode
+# store achievements per-gamemode (vn only)
 achievements = {0: [], 1: [],
                 2: [], 3: []}
 

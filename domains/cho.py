@@ -13,6 +13,8 @@ from packets import Packets, BanchoPacket, BanchoPacketReader
 
 from constants.types import osuTypes
 from constants.mods import Mods
+from constants.privileges import Privileges
+from constants.gamemodes import GameMode
 from constants import commands
 from constants import regexes
 
@@ -23,8 +25,7 @@ from objects.beatmap import Beatmap
 from objects.clan import ClanRank
 from objects import glob
 
-from constants.privileges import Privileges
-from constants.gamemodes import GameMode
+from utils.misc import make_safe_name
 
 """ Bancho: handle connections from the osu! client """
 
@@ -181,7 +182,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
 
         if cmd:
             # a command was triggered.
-            if cmd['public']:
+            if not cmd['hidden']:
                 await t.send(p, msg)
                 if 'resp' in cmd:
                     await t.send(glob.bot, cmd['resp'])
@@ -293,7 +294,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         'SELECT id, name, priv, pw_bcrypt, '
         'silence_end, clan_id, clan_rank '
         'FROM users WHERE safe_name = %s',
-        [Player.make_safe(username)]
+        [make_safe_name(username)]
     )
 
     if not user_info:

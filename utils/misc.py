@@ -9,7 +9,11 @@ from cmyui.osu.replay import ReplayFrame, Keys
 
 from objects import glob
 
-__all__ = ('point_of_interest', 'get_average_press_times')
+__all__ = (
+    'point_of_interest',
+    'get_average_press_times',
+    'make_safe_name'
+)
 
 def point_of_interest():
     """Leave a pseudo-breakpoint somewhere to ask the user if
@@ -71,4 +75,8 @@ def get_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
         prev_frame = frame
 
     # return all keys with presses
-    return{k: v for k, v in press_times.items() if v}
+    return {k: v for k, v in press_times.items() if v}
+
+def make_safe_name(name: str) -> str:
+    """Return a name safe for usage in sql."""
+    return name.lower().replace(' ', '_')
