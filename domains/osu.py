@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Optional, Callable, TYPE_CHECKING
-from functools import partial, wraps
-from collections import defaultdict
-from enum import IntEnum, unique
-from pathlib import Path
+import asyncio
 import re
 import time
 import copy
@@ -12,6 +8,11 @@ import hashlib
 import bcrypt
 import random
 import orjson
+from typing import Any, Optional, Callable, TYPE_CHECKING
+from functools import partial, wraps
+from collections import defaultdict
+from enum import IntEnum, unique
+from pathlib import Path
 
 from urllib.parse import unquote
 from cmyui import (Connection, Domain, _isdecimal,
@@ -771,12 +772,11 @@ REPLAYS_PATH = Path.cwd() / '.data/osr'
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
 async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
-    path = REPLAYS_PATH / f'{conn.args["c"]}.osr'
+    replay_file = REPLAYS_PATH / f'{conn.args["c"]}.osr'
 
-    if not path.exists():
-        return # osu! expects empty resp for no replay
-
-    return path.read_bytes()
+    # osu! expects empty resp for no replay
+    if replay_file.exists():
+        return replay_file.read_bytes()
 
 # XXX: going to be slightly more annoying than expected to set this up :P
 #@domain.route('/web/osu-session.php', methods=['POST'])
@@ -1984,27 +1984,28 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
-        pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
-        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-        glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login
+        async with asyncio.Lock():
+            pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
+            pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
+            glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login
 
-        safe_name = name.lower().replace(' ', '_')
+            safe_name = name.lower().replace(' ', '_')
 
-        # add to `users` table.
-        user_id = await glob.db.execute(
-            'INSERT INTO users '
-            '(name, safe_name, email, pw_bcrypt, creation_time, latest_activity) '
-            'VALUES (%s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
-            [name, safe_name, email, pw_bcrypt]
-        )
+            # add to `users` table.
+            user_id = await glob.db.execute(
+                'INSERT INTO users '
+                '(name, safe_name, email, pw_bcrypt, creation_time, latest_activity) '
+                'VALUES (%s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
+                [name, safe_name, email, pw_bcrypt]
+            )
 
-        # add to `stats` table.
-        await glob.db.execute(
-            'INSERT INTO stats '
-            '(id) VALUES (%s)',
-            [user_id]
-        )
+            # add to `stats` table.
+            await glob.db.execute(
+                'INSERT INTO stats '
+                '(id) VALUES (%s)',
+                [user_id]
+            )
 
-        log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
+            log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success

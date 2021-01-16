@@ -53,9 +53,10 @@ async def bancho_handler(conn: Connection) -> bytes:
     if 'osu-token' not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        resp, token = await login(
-            conn.body, conn.headers['X-Real-IP']
-        )
+        async with asyncio.Lock():
+            resp, token = await login(
+                conn.body, conn.headers['X-Real-IP']
+            )
 
         conn.add_resp_header(f'cho-token: {token}')
         return resp
@@ -75,6 +76,7 @@ async def bancho_handler(conn: Connection) -> bytes:
 
     # NOTE: the reader will internally discard any
     # packets whose logic has not been defined.
+    # TODO: why is the packet reader async lol
     async for packet in BanchoPacketReader(conn.body):
         await packet.handle(player)
 
