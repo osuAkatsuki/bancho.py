@@ -5,13 +5,15 @@
 # and when it detects a change, it will apply any nescessary
 # changes to your sql database & keep cmyui_pkg up to date.
 
+import asyncio
+import re
+
 from importlib.metadata import version as pkg_version
 from pip._internal.cli.main import main as pip_main
 from typing import Optional
 from cmyui import Version, log, Ansi
 from pathlib import Path
 from datetime import datetime as dt
-import re
 
 from objects import glob
 
@@ -113,6 +115,25 @@ class Updater:
         log(f'Updating sql (v{prev_version!r} -> '
                           f'v{self.version!r}).', Ansi.MAGENTA)
 
-        await glob.db.execute('\n'.join(updates))
+        sql_lock = asyncio.Lock()
+
+        # TODO: sql transaction? for rollback
+        async with sql_lock:
+            for query in updates:
+                try:
+                    await glob.db.execute(query)
+                except:
+                    # if anything goes wrong while writing a query,
+                    # most likely something is very wrong.
+                    log(f'Failed: {query}', Ansi.GRAY)
+                    log("SQL failed to update - unless you've been modifying sql and "
+                        "know what caused this, please please contact cmyui#0425.", Ansi.LRED)
+
+                    input('Press enter to exit')
+
+                    loop = asyncio.get_event_loop()
+                    loop.stop()
+                    loop.close()
+                    exit(1)
 
     # TODO _update_config?
