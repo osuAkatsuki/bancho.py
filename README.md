@@ -23,7 +23,7 @@ that programming remains about the logic and ideas, rather than the code itself.
 
 I'm mainly writing this as it's by-far the subject I'm currently the most
 educated in.. I started [Akatsuki](https://akatsuki.pw/) (and programming
-alltogether) back in October of 2017, and I've been managing it since..
+alltogether) back in October of 2017, and I've been managing it since.
 
 The server has come [a long way](https://cdn.discordapp.com/attachments/616400094408736779/799434379176574986/unknown.png),
 and is in quite a usable state. We most likely handle every packet/handler
@@ -31,10 +31,14 @@ supported by any competing server implementation, and feature a very large
 api and [commandset](#commands) for both developers and players alike, with
 many unique features only available with gulag.
 
-To implement a full osu! server, you'll also need a frontend, which is rather
-difficult considering that gulag has a completely new database structure.. There
-are [things being done about this](https://github.com/Yo-ru/gulag-web), which has
-seen quite a bit of growth (in both code and team size) in the last few weeks.
+gulag's database structure is built from the ground up using no specific
+references; this makes it incompatible with common stacks like Ripple's.
+[gulag-web](https://github.com/Yo-ru/gulag-web) is a project being developed
+primarily by the community members of our [Discord](https://discord.gg/ShEQgUx)
+who are interested in the project; they aim to atleast create a fully
+functional frontend, while the location of the API remains undecided.
+Over the past few weeks the development effort has been growing and some
+great progress is starting to be made; I'd recommend checking it out!
 
 Currently supported player commands
 ------
