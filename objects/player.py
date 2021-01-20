@@ -678,7 +678,7 @@ class Player:
                 log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
                 return
 
-        country = lines[0]
+        country = lines[1]
 
         # store their country as a 2-letter code, and as a number.
         # the players location is stored for the ingame world map.
