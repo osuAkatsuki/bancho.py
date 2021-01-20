@@ -683,7 +683,7 @@ class Player:
         # store their country as a 2-letter code, and as a number.
         # the players location is stored for the ingame world map.
         self.country = (country_codes[country], country)
-        self.location = tuple(float(x) for x in lines[6:7]) # lat, long
+        self.location = (float(lines[6]), float(lines[7])) # lat, long
 
     async def unlock_achievement(self, a: 'Achievement') -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
