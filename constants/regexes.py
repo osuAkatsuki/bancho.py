@@ -23,3 +23,4 @@ tourney_matchname = rcomp(
     r'\((?P<T2>[a-zA-Z0-9_ ]+)\)$',
     flags = IGNORECASE
 )
+mappool_pick = rcomp(r'^([a-zA-Z]+)([0-9]+)$')

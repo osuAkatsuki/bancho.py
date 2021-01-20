@@ -31,21 +31,23 @@ from utils.misc import make_safe_name
 
 domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
 
+@domain.route('/')
+async def bancho_http_handler(conn: Connection) -> bytes:
+    # Handle requests from browser by returning html
+    return b'<!DOCTYPE html>' + '<br>'.join((
+        f'Running gulag v{glob.version}',
+        f'Players online: {len(glob.players) - 1}',
+        '<a href="https://github.com/cmyui/gulag">Source code</a>',
+        '',
+        f'<b>Packets handled ({len(glob.bancho_packets)})</b>',
+        '<br>'.join(f'{p.name} ({p.value})' for p in glob.bancho_packets)
+    )).encode()
+
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
-    if 'User-Agent' not in conn.headers:
+    if 'User-Agent' not in conn.headers \
+    or conn.headers['User-Agent'] != 'osu!':
         return
-
-    if conn.headers['User-Agent'] != 'osu!':
-        # most likely a request from a browser.
-        return b'<!DOCTYPE html>' + '<br>'.join((
-            f'Running gulag v{glob.version}',
-            f'Players online: {len(glob.players) - 1}',
-            '<a href="https://github.com/cmyui/gulag">Source code</a>',
-            '',
-            '<b>Packets handled</b>',
-            '<br>'.join(f'{p.name} ({p.value})' for p in glob.bancho_packets)
-        )).encode()
 
     # check for 'osu-token' in the headers.
     # if it's not there, this is a login request.
@@ -381,9 +383,17 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # to organize it in config tho :o
             pass
 
-    if not user_info['priv'] & Privileges.Verified:
+    if first_login := not user_info['priv'] & Privileges.Verified:
         # verify the account if it's made it this far
         user_info['priv'] |= int(Privileges.Verified)
+
+        # if this is the first user to create an account,
+        # grant them all gulag privileges.
+        if user_info['id'] == 3:
+            user_info['priv'] |= int(
+                Privileges.Staff | Privileges.Donator |
+                Privileges.Tournament | Privileges.Whitelisted
+            )
 
         await glob.db.execute(
             'UPDATE users '
@@ -470,7 +480,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # the player may have been sent mail while offline,
     # enqueue any messages from their respective authors.
-    async for msg in glob.db.iterall(query, p.id):
+    async for msg in glob.db.iterall(query, [p.id]):
         msg_time = dt.fromtimestamp(msg['time'])
         msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
@@ -478,6 +488,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             msg['from'], msg_ts,
             msg['to'], msg['from_id']
         )
+
+    # TODO: add a registration message if `first_login` == True?
 
     # TODO: enqueue ingame admin panel to staff members.
     """

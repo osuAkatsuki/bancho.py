@@ -921,10 +921,10 @@ async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
             [p.id, map_md5, int(rating)]
         )
 
-    ratings = [x[0] for x in await glob.db.fetchall(
+    ratings = [x[0] async for x in glob.db.iterall(
         'SELECT rating FROM ratings '
         'WHERE map_md5 = %s',
-        [map_md5], _dict = False
+        [map_md5], _dict=False
     )]
 
     # send back the average rating

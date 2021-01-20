@@ -205,7 +205,7 @@ class Score:
             'status, mode, play_time, '
             'time_elapsed, client_flags '
             f'FROM {sql_table} WHERE id = %s',
-            [scoreid], _dict = False
+            [scoreid], _dict=False
         )
 
         if not res:
