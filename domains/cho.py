@@ -3,28 +3,36 @@
 import asyncio
 import re
 import time
+from datetime import datetime as dt
+from datetime import timedelta as td
+
 import bcrypt
-from cmyui import (Connection, Domain,
-                   log, Ansi, _isdecimal)
-from datetime import datetime as dt, timedelta as td
+from cmyui import _isdecimal
+from cmyui import Ansi
+from cmyui import Connection
+from cmyui import Domain
+from cmyui import log
 
 import packets
-from packets import Packets, BanchoPacket, BanchoPacketReader
-
-from constants.types import osuTypes
-from constants.mods import Mods
-from constants.privileges import Privileges
-from constants.gamemodes import GameMode
 from constants import commands
 from constants import regexes
-
-from objects.match import MatchTeamTypes, SlotStatus, MatchTeams
-from objects.player import Player, PresenceFilter, Action
-from objects.channel import Channel
-from objects.beatmap import Beatmap
-from objects.clan import ClanRank
+from constants.gamemodes import GameMode
+from constants.mods import Mods
+from constants.privileges import Privileges
+from constants.types import osuTypes
 from objects import glob
-
+from objects.beatmap import Beatmap
+from objects.channel import Channel
+from objects.clan import ClanRank
+from objects.match import MatchTeams
+from objects.match import MatchTeamTypes
+from objects.match import SlotStatus
+from objects.player import Action
+from objects.player import Player
+from objects.player import PresenceFilter
+from packets import BanchoPacket
+from packets import BanchoPacketReader
+from packets import Packets
 from utils.misc import make_safe_name
 
 """ Bancho: handle connections from the osu! client """

@@ -1,27 +1,35 @@
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
-from functools import partial
-from typing import TYPE_CHECKING, Any, Optional, Coroutine
-from dataclasses import dataclass
-from enum import IntEnum, unique
-from cmyui import log, Ansi
 import queue
+import random
 import time
 import uuid
-import random
+from dataclasses import dataclass
+from datetime import datetime
+from enum import IntEnum
+from enum import unique
+from functools import partial
+from typing import Any
+from typing import Coroutine
+from typing import Optional
+from typing import TYPE_CHECKING
 
-from constants.privileges import Privileges, ClientPrivileges
+from cmyui import Ansi
+from cmyui import log
+
+import packets
 from constants.countries import country_codes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-
-from objects.channel import Channel
-from objects.match import Match, SlotStatus, MatchTeamTypes, MatchTeams
-from objects.beatmap import Beatmap
+from constants.privileges import ClientPrivileges
+from constants.privileges import Privileges
 from objects import glob
-
-import packets
+from objects.beatmap import Beatmap
+from objects.channel import Channel
+from objects.match import Match
+from objects.match import MatchTeams
+from objects.match import MatchTeamTypes
+from objects.match import SlotStatus
 
 if TYPE_CHECKING:
     from objects.score import Score

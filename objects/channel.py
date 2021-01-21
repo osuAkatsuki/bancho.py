@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from typing import TYPE_CHECKING
+
+import packets
 from constants.privileges import Privileges
 from objects import glob
-import packets
 
 if TYPE_CHECKING:
     from objects.player import Player

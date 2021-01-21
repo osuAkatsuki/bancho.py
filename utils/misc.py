@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
-from typing import Sequence
-import cmyui
 import inspect
 from pathlib import Path
-from cmyui.logging import log, printc, Ansi
-from cmyui.osu.replay import ReplayFrame, Keys
+from typing import Sequence
+
+import cmyui
+from cmyui.logging import Ansi
+from cmyui.logging import log
+from cmyui.logging import printc
+from cmyui.osu.replay import Keys
+from cmyui.osu.replay import ReplayFrame
 
 from objects import glob
 

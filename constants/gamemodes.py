@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from enum import IntEnum, unique
+from enum import IntEnum
+from enum import unique
 
 from constants.mods import Mods
 

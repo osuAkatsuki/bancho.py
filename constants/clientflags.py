@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from enum import IntFlag, unique
+from enum import IntFlag
+from enum import unique
 
 __all__ = ('ClientFlags',)
 

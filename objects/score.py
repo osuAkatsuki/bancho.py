@@ -1,18 +1,22 @@
+# -*- coding: utf-8 -*-
 
-from typing import Optional, TYPE_CHECKING
-from enum import IntEnum, unique
-from datetime import datetime
 from base64 import b64decode
-from py3rijndael import RijndaelCbc, ZeroPadding
-from cmyui import log, Ansi
+from datetime import datetime
+from enum import IntEnum
+from enum import unique
+from typing import Optional
+from typing import TYPE_CHECKING
 
-from constants.mods import Mods
+from cmyui import Ansi
+from cmyui import log
+from py3rijndael import RijndaelCbc
+from py3rijndael import ZeroPadding
+
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
-
-from objects.beatmap import Beatmap
+from constants.mods import Mods
 from objects import glob
-
+from objects.beatmap import Beatmap
 from utils.recalculator import PPCalculator
 
 if TYPE_CHECKING:

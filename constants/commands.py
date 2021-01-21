@@ -1,28 +1,35 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from typing import (NamedTuple, Sequence, Optional,
-                    Union, Callable, TYPE_CHECKING)
-import time
-import re
-import cmyui
 import random
-from datetime import datetime
+import re
+import time
 from collections import defaultdict
+from datetime import datetime
+from typing import Callable
+from typing import NamedTuple
+from typing import Optional
+from typing import Sequence
+from typing import TYPE_CHECKING
+from typing import Union
+
+import cmyui
 
 import packets
-
-from constants.privileges import Privileges
-from constants.mods import Mods
 from constants import regexes
-
+from constants.mods import Mods
+from constants.privileges import Privileges
 from objects import glob
-from objects.clan import Clan, ClanRank
+from objects.beatmap import Beatmap
+from objects.beatmap import RankedStatus
+from objects.clan import Clan
+from objects.clan import ClanRank
+from objects.match import MapPool
+from objects.match import MatchTeams
+from objects.match import MatchTeamTypes
+from objects.match import MatchWinConditions
+from objects.match import SlotStatus
 from objects.score import SubmissionStatus
-from objects.beatmap import Beatmap, RankedStatus
-from objects.match import (MapPool, MatchWinConditions,
-                           MatchTeamTypes, SlotStatus, MatchTeams)
-
 from utils.recalculator import PPCalculator
 
 if TYPE_CHECKING:

@@ -5,21 +5,30 @@
 # i'm not sure how well it works with an async setup
 # like this, but we'll see B) massive speed gains tho
 
-from typing import TYPE_CHECKING, Any
-from enum import IntEnum, unique
-from typing import Optional
-from functools import partialmethod, cache, lru_cache
-from collections import namedtuple
-from cmyui import log, Ansi
 import struct
+from collections import namedtuple
+from enum import IntEnum
+from enum import unique
+from functools import cache
+from functools import lru_cache
+from functools import partialmethod
+from typing import Any
+from typing import Optional
+from typing import TYPE_CHECKING
 
-from objects import glob
-from objects.match import (Match, ScoreFrame, SlotStatus, MatchTeamTypes,
-                           MatchWinConditions, MatchTeams)
-from constants.types import osuTypes
+from cmyui import Ansi
+from cmyui import log
+
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-
+from constants.types import osuTypes
+from objects import glob
+from objects.match import Match
+from objects.match import MatchTeams
+from objects.match import MatchTeamTypes
+from objects.match import MatchWinConditions
+from objects.match import ScoreFrame
+from objects.match import SlotStatus
 from utils.misc import point_of_interest
 
 if TYPE_CHECKING:

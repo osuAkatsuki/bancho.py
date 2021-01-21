@@ -2,7 +2,9 @@
 
 import re
 from pathlib import Path
-from cmyui import Connection, Domain
+
+from cmyui import Connection
+from cmyui import Domain
 
 """ ava: avatar server (for both ingame & external) """
 

@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-from datetime import datetime as dt, timedelta as td
-from typing import Optional, Sequence, Union, TYPE_CHECKING
-from dataclasses import dataclass
 from collections import defaultdict
-from enum import IntEnum, unique
-
-from constants import regexes
-from constants.mods import Mods
-from constants.gamemodes import GameMode
-
-from objects.beatmap import Beatmap
-from objects import glob
-
-from utils.misc import point_of_interest
+from dataclasses import dataclass
+from datetime import datetime as dt
+from datetime import timedelta as td
+from enum import IntEnum
+from enum import unique
+from typing import Optional
+from typing import Sequence
+from typing import TYPE_CHECKING
+from typing import Union
 
 import packets
+from constants import regexes
+from constants.gamemodes import GameMode
+from constants.mods import Mods
+from objects import glob
+from objects.beatmap import Beatmap
+from utils.misc import point_of_interest
 
 if TYPE_CHECKING:
     from objects.player import Player

@@ -3,9 +3,8 @@
 from asyncio import Queue
 from typing import TYPE_CHECKING
 
-from objects.collections import *
-
 import config # imported for indirect use
+from objects.collections import *
 
 if TYPE_CHECKING:
     from aiohttp.client import ClientSession

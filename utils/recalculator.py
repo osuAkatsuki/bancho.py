@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+from pathlib import Path
+
 import aiohttp
 import orjson
-from pathlib import Path
-from cmyui import log, Ansi
+from cmyui import Ansi
+from cmyui import log
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods

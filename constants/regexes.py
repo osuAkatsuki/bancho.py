@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from re import compile as rcomp, IGNORECASE
+from re import compile as rcomp
+from re import IGNORECASE
 
 __all__ = ('mapfile', 'osu_ver', 'username', 'email', 'now_playing')
 

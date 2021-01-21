@@ -1,35 +1,43 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-import re
-import time
 import copy
 import hashlib
-import bcrypt
 import random
-import orjson
-from typing import Any, Optional, Callable, TYPE_CHECKING
-from functools import partial, wraps
+import re
+import time
 from collections import defaultdict
-from enum import IntEnum, unique
+from enum import IntEnum
+from enum import unique
+from functools import partial
+from functools import wraps
 from pathlib import Path
-
+from typing import Any
+from typing import Callable
+from typing import Optional
+from typing import TYPE_CHECKING
 from urllib.parse import unquote
-from cmyui import (Connection, Domain, _isdecimal,
-                   rstring, log, Ansi)
+
+import bcrypt
+import orjson
+from cmyui import _isdecimal
+from cmyui import Ansi
+from cmyui import Connection
+from cmyui import Domain
+from cmyui import log
+from cmyui import rstring
 
 import packets
-
+from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-from constants import regexes
-
-from objects.score import Score, SubmissionStatus
-from objects.beatmap import Beatmap, RankedStatus
-from objects.player import Privileges
 from objects import glob
-
+from objects.beatmap import Beatmap
+from objects.beatmap import RankedStatus
+from objects.player import Privileges
+from objects.score import Score
+from objects.score import SubmissionStatus
 from utils.misc import point_of_interest
 
 if TYPE_CHECKING:

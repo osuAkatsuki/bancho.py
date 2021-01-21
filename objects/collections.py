@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 
-from objects.clan import ClanRank
-from typing import Union, Optional, TYPE_CHECKING
+from typing import Optional
+from typing import TYPE_CHECKING
+from typing import Union
+
 from cmyui import log
 
 from constants.privileges import Privileges
-
-from objects.player import Player
 from objects import glob
-
+from objects.clan import ClanRank
+from objects.player import Player
 from utils.misc import make_safe_name
 
 if TYPE_CHECKING:

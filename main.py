@@ -8,36 +8,37 @@
 # osu!'s built-in registration.
 # certificate: https://akatsuki.pw/static/ca.crt
 
-__all__ = ()
-
-from typing import TYPE_CHECKING
 import asyncio
-import aiohttp
-import orjson # go zoom
+import lzma
 import os
 import time
 from pathlib import Path
-import lzma
-import cmyui
-from cmyui import log, Ansi
-from cmyui.osu import ReplayFrame
-from cmyui.discord import Webhook, Embed
+from typing import TYPE_CHECKING
 
-from objects import glob
-from objects.achievement import Achievement
-from objects.channel import Channel
-from objects.player import Player
-from objects.match import MapPool
-from objects.clan import Clan
+import aiohttp
+import cmyui
+import orjson # go zoom
+from cmyui import Ansi
+from cmyui import log
+from cmyui.discord import Embed
+from cmyui.discord import Webhook
+from cmyui.osu import ReplayFrame
 
 from constants.gamemodes import GameMode
 from constants.privileges import Privileges
-
-from utils.updater import Updater
+from objects import glob
+from objects.achievement import Achievement
+from objects.channel import Channel
+from objects.clan import Clan
+from objects.match import MapPool
+from objects.player import Player
 from utils.misc import get_press_times
+from utils.updater import Updater
 
 if TYPE_CHECKING:
     from objects.score import Score
+
+__all__ = ()
 
 # current version of gulag
 glob.version = cmyui.Version(3, 1, 5)

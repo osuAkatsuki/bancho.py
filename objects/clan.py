@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
-from enum import IntEnum, unique
+from enum import IntEnum
+from enum import unique
 
 __all__ = 'Clan', 'ClanRank'
 

@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 
-from enum import IntEnum, unique
-from datetime import datetime
-from collections import defaultdict
-from cmyui import log, Ansi
 import time
+from collections import defaultdict
+from datetime import datetime
+from enum import IntEnum
+from enum import unique
+
+from cmyui import Ansi
+from cmyui import log
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-
 from objects import glob
-
 from utils.recalculator import PPCalculator
 
 __all__ = ('RankedStatus', 'Beatmap')
