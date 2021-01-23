@@ -133,7 +133,7 @@ class Updater:
 
                     input('Press enter to exit')
 
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     loop.stop()
                     loop.close()
                     exit(1)

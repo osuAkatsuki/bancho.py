@@ -392,8 +392,10 @@ class Beatmap:
                     # api's value before inserting it into the database.
                     api_status = RankedStatus.from_osuapi(int(bmap['approved']))
 
-                    if current_data[map_id]['frozen'] \
-                    and api_status != current_data[map_id]['status']:
+                    if (
+                        current_data[map_id]['frozen'] and
+                        api_status != current_data[map_id]['status']
+                    ):
                         # keep the ranked status of maps through updates,
                         # if we've specified to (by 'freezing' it).
                         bmap['approved'] = current_data[map_id]['status']

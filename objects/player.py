@@ -322,6 +322,9 @@ class Player:
         while self.channels:
             await self.leave_channel(self.channels[0])
 
+        if glob.datadog:
+            glob.datadog.decrement('online_players')
+
         # remove from playerlist and
         # enqueue logout to all users.
         glob.players.remove(self)

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import cmyui
+import datadog
 import orjson # go zoom
 from cmyui import Ansi
 from cmyui import log
@@ -24,6 +25,7 @@ from cmyui.discord import Embed
 from cmyui.discord import Webhook
 from cmyui.osu import ReplayFrame
 
+import packets
 from constants.gamemodes import GameMode
 from constants.privileges import Privileges
 from objects import glob
@@ -41,7 +43,7 @@ if TYPE_CHECKING:
 __all__ = ()
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 5)
+glob.version = cmyui.Version(3, 1, 6)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -123,27 +125,30 @@ async def on_start() -> None:
     # removing, it should rather update with the new perks (potentially
     # a different tier, enqueued after their current perks).
 
-    async def rm_donor(userid: int, delay: int):
-        await asyncio.sleep(delay)
+    async def rm_donor(userid: int, when: int):
+        if (delta := when - time.time()) >= 0:
+            await asyncio.sleep(delta)
 
         p = await glob.players.get(id=userid, sql=True)
         await p.remove_privs(Privileges.Donator)
 
-        log(f"{p}'s donation perks have expired.", Ansi.MAGENTA)
+        if p.online:
+            p.enqueue(packets.notification('Your supporter status has expired.'))
 
-    query = ('SELECT id, donor_end FROM users '
-             'WHERE donor_end > UNIX_TIMESTAMP()')
+        log(f"{p}'s supporter status has expired.", Ansi.MAGENTA)
 
-    async for donation in glob.db.iterall(query):
-        # calculate the delta between now & the exp date.
-        delta = donation['donor_end'] - time.time()
+    # enqueue rm_donor for any supporter
+    # expiring in the next 30 days.
+    query = (
+        'SELECT id, donor_end FROM users '
+        'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
+        'AND priv & 48'
+    )
 
-        if delta > (60 * 60 * 24 * 30):
-            # ignore donations expiring in over a months time;
-            # the server should restart relatively often anyways.
-            continue
+    loop = asyncio.get_running_loop()
 
-        asyncio.create_task(rm_donor(donation['id'], delta))
+    async for donation in glob.db.iterall(query, _dict=False):
+        loop.create_task(rm_donor(*donation))
 
 PING_TIMEOUT = 300000 // 1000
 async def disconnect_inactive() -> None:
@@ -230,7 +235,7 @@ async def run_detections() -> None:
     glob.sketchy_queue = asyncio.Queue() # cursed type hint fix
     queue: asyncio.Queue['Score'] = glob.sketchy_queue
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     while score := await queue.get():
         loop.create_task(analyze_score(score))
@@ -261,5 +266,19 @@ if __name__ == '__main__':
     # run our auto-detection 'thread' in bg.
     if glob.config.webhooks['surveillance']:
         app.add_task(run_detections())
+
+    # support for https://datadoghq.com
+    if all(glob.config.datadog.values()):
+        datadog.initialize(**glob.config.datadog)
+
+        # NOTE: this will start datadog's
+        #       client in another thread.
+        glob.datadog = datadog.ThreadStats()
+        glob.datadog.start()
+
+        # set some base values
+        glob.datadog.gauge('online_players', 0)
+    else:
+        glob.datadog = None
 
     app.run(glob.config.server_addr) # blocking call

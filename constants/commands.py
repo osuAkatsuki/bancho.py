@@ -242,8 +242,11 @@ status_to_id = lambda s: {
 @command(Privileges.Nominator)
 async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Changes the ranked status of the most recently /np'ed map."""
-    if len(msg) != 2 or msg[0] not in ('rank', 'unrank', 'love') \
-                     or msg[1] not in ('set', 'map'):
+    if (
+        len(msg) != 2 or
+        msg[0] not in ('rank', 'unrank', 'love') or
+        msg[1] not in ('set', 'map')
+    ):
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if not p.last_np:
@@ -593,7 +596,7 @@ async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     try: # def __py(p, c, msg)
         exec(definition)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         try: # __py(p, c, msg)
             task = loop.create_task(locals()['__py'](p, c, msg))
@@ -940,8 +943,10 @@ async def mp_condition(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 @mp_commands.add(Privileges.Normal)
 async def mp_scrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Start a scrim in the current match."""
-    if len(msg) != 1 \
-    or not (rgx := re.fullmatch(r'^(?:bo)?(\d{1,2})$', msg[0])):
+    if (
+        len(msg) != 1 or
+        not (rgx := re.fullmatch(r'^(?:bo)?(\d{1,2})$', msg[0]))
+    ):
         return 'Invalid syntax: !mp scrim <bo#>'
 
     if not 0 <= (best_of := int(rgx[1])) < 16:

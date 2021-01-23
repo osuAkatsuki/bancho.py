@@ -80,5 +80,7 @@ class GameMode(IntEnum):
         return gm_str[self.value]
 
     def __format__(self, fmt: str) -> str:
-        return gm_sql[self.value] if fmt == 'sql' \
-          else str(self.value)
+        if fmt == 'sql':
+            return gm_sql[self.value]
+        else:
+            return str(self.value)

@@ -123,3 +123,9 @@ map_cache_timeout = 3600
 # osu-checkupdates requests for.
 # recommended: ~1 hour.
 updates_cache_timeout = 3600
+
+""" 3rd party support """
+datadog = {
+    'api_key': '',
+    'app_key': ''
+}

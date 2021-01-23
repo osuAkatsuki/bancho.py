@@ -610,9 +610,10 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     # if this is our (new) best play on
     # the map, update our ranked score.
-    if s.status == SubmissionStatus.BEST \
-    and s.bmap.status in (RankedStatus.Ranked,
-                          RankedStatus.Approved):
+    if (
+        s.status == SubmissionStatus.BEST and
+        s.bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
+    ):
         # add our new ranked score.
         additive = s.score
 
@@ -642,8 +643,11 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         [s.bmap.plays, s.bmap.passes, s.bmap.md5]
     )
 
-    if s.status == SubmissionStatus.BEST and s.rank == 1 \
-    and (announce_chan := glob.channels['#announce']):
+    if (
+        s.status == SubmissionStatus.BEST and
+        s.rank == 1 and
+        (announce_chan := glob.channels['#announce'])
+    ):
         # Announce the user's #1 score.
         prev_n1 = await glob.db.fetch(
             'SELECT u.id, name FROM users u '
@@ -1678,8 +1682,10 @@ async def osuBMSubmitGetID(conn: Connection) -> Optional[bytes]:
 
     map_ids = conn.args['b'].split(',')
 
-    if not _isdecimal(conn.args['s'], _negative=True) \
-    or not all([x.isdecimal() for x in map_ids]):
+    if (
+        not _isdecimal(conn.args['s'], _negative=True) or
+        not all([x.isdecimal() for x in map_ids])
+    ):
         return b'-1\nInvalid submission.'
 
     map_ids = [int(x) for x in map_ids]
@@ -1765,8 +1771,10 @@ async def api_get_user(conn: Connection) -> Optional[bytes]:
     if 'name' not in conn.args and 'id' not in conn.args:
         return (400, b'Must provide either id or name!')
 
-    if 'scope' not in conn.args \
-    or conn.args['scope'] not in ('info', 'stats'):
+    if (
+        'scope' not in conn.args or
+        conn.args['scope'] not in ('info', 'stats')
+    ):
         return (400, b'Must provide scope (info/stats).')
 
     if 'id' in conn.args:

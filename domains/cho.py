@@ -53,8 +53,10 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
-    if 'User-Agent' not in conn.headers \
-    or conn.headers['User-Agent'] != 'osu!':
+    if (
+        'User-Agent' not in conn.headers or
+        conn.headers['User-Agent'] != 'osu!'
+    ):
         return
 
     # check for 'osu-token' in the headers.
@@ -189,8 +191,8 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         # limit message length to 2048 characters
         msg = f'{msg[:2045]}...' if msg[2048:] else msg
 
-        cmd = msg.startswith(glob.config.command_prefix) \
-          and await commands.process_commands(p, t, msg)
+        cmd = (msg.startswith(glob.config.command_prefix) and
+               await commands.process_commands(p, t, msg))
 
         if cmd:
             # a command was triggered.
@@ -523,6 +525,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # making them officially logged in.
     glob.players.append(p)
 
+    if glob.datadog:
+        glob.datadog.increment('online_players')
+
     log(f'{p} logged in.', Ansi.LCYAN)
     await p.update_latest_activity()
     return bytes(data), p.token
@@ -620,8 +625,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t is glob.bot:
             # may have a command in the message.
-            cmd = msg.startswith(glob.config.command_prefix) \
-            and await commands.process_commands(p, t, msg)
+            cmd = (msg.startswith(glob.config.command_prefix) and
+                   await commands.process_commands(p, t, msg))
 
             if cmd:
                 # command triggered, send response if any.
@@ -986,8 +991,8 @@ class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
         # our player has loaded in and is ready to play.
         m.get_slot(p).loaded = True
 
-        is_playing = lambda s: s.status == SlotStatus.playing \
-                           and not s.loaded
+        is_playing = lambda s: (s.status == SlotStatus.playing and
+                                not s.loaded)
 
         # check if all players are loaded,
         # if so, tell all players to begin.

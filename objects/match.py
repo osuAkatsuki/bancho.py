@@ -284,8 +284,10 @@ class Match:
 
     def get_host_slot(self) -> Optional[Slot]:
         for s in self.slots:
-            if s.status & SlotStatus.has_player \
-            and s.player is self.host:
+            if (
+                s.status & SlotStatus.has_player and
+                s.player is self.host
+            ):
                 return s
 
         return
@@ -382,8 +384,11 @@ class Match:
                 max_age = dt.now() - td(seconds=bmap.total_length +
                                                 time_waited + 0.5)
 
-                if rc_score and rc_score.bmap.md5 == self.map_md5 \
-                 and rc_score.play_time > max_age:
+                if (
+                    rc_score and
+                    rc_score.bmap.md5 == self.map_md5 and
+                    rc_score.play_time > max_age
+                ):
                     # score found, add to our scores dict if != 0.
                     if score := getattr(rc_score, win_cond):
                         key = s.player if ffa else s.team
