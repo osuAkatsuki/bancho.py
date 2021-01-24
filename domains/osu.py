@@ -2035,6 +2035,9 @@ async def register_account(conn: Connection) -> Optional[bytes]:
                 [user_id]
             )
 
-            log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
+        if glob.datadog:
+            glob.datadog.increment('gulag.registrations')
+
+        log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success

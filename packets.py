@@ -703,11 +703,13 @@ def spectatorLeft(id: int) -> bytes:
     )
 
 # packet id: 15
-def spectateFrames(data: bytearray) -> bytes:
-    return ( # a little hacky, but quick.
-        Packets.CHO_SPECTATE_FRAMES.to_bytes(
-            3, 'little', signed = True
-        ) + len(data).to_bytes(4, 'little') + data
+# TODO: perhaps optimize this and match
+# frames to be a bit more efficient, since
+# they're literally spammed between clients.
+def spectateFrames(data: bytes) -> bytes:
+    return write(
+        Packets.CHO_SPECTATE_FRAMES,
+        (data, osuTypes.raw)
     )
 
 # packet id: 19

@@ -126,7 +126,15 @@ async def on_start() -> None:
             await asyncio.sleep(delta)
 
         p = await glob.players.get(id=userid, sql=True)
+
+        # TODO: perhaps make a `revoke_donor` method?
         await p.remove_privs(Privileges.Donator)
+        await glob.db.execute(
+            'UPDATE users '
+            'SET donor_end = 0 '
+            'WHERE id = %s',
+            [p.id]
+        )
 
         if p.online:
             p.enqueue(packets.notification('Your supporter status has expired.'))
@@ -138,7 +146,7 @@ async def on_start() -> None:
     query = (
         'SELECT id, donor_end FROM users '
         'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
-        'AND priv & 48'
+        'AND priv & 48' # 48 = Supporter | Premium
     )
 
     loop = asyncio.get_running_loop()

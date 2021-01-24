@@ -1,10 +1,10 @@
-cmyui
-py3rijndael
-bcrypt
 aiohttp
 aiomysql
-orjson
-uvloop
-mysql-connector-python
 asyncpg
+bcrypt
+cmyui
 datadog
+mysql-connector-python
+orjson
+py3rijndael
+uvloop

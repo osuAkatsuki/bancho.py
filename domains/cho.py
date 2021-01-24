@@ -228,7 +228,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
     _: osuTypes.i32 # pretty awesome design on osu!'s end :P
 
     async def handle(self, p: Player) -> None:
-        if (time.time() - p.login_time) < 2:
+        if (time.time() - p.login_time) < 1:
             # osu! has a weird tendency to log out immediately when
             # it logs in, then reconnects? not sure why..?
             return
@@ -277,7 +277,13 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         # invalid client version?
         return packets.userID(-2), 'no'
 
-    osu_ver = dt.strptime(r['ver'], '%Y%m%d')
+    # quite a bit faster
+    # than using strptime
+    osu_ver = dt(
+        year = int(r['ver'][0:4]),
+        month = int(r['ver'][4:6]),
+        day = int(r['ver'][6:8])
+    )
 
     if not glob.config.debug:
         # disallow the login if their osu! client is older
@@ -925,11 +931,12 @@ class MatchScoreUpdate(BanchoPacket, type=Packets.OSU_MATCH_SCORE_UPDATE):
             return
 
         # if scorev2 is enabled, read an extra 8 bytes.
-        size = 37 if self.play_data[28] else 29 # no idea if required
-        data = bytearray(self.play_data)
-        data[4] = m.get_slot_id(p)
+        buf = bytearray(b'x\x00\x00')
+        buf += len(self.play_data).to_bytes(4, 'little')
+        buf += self.play_data
+        buf[11] = m.get_slot_id(p)
 
-        m.enqueue(b'0\x00\x00' + size.to_bytes(4, 'little') + data, lobby=False)
+        m.enqueue(bytes(buf), lobby=False)
 
 @register
 class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
