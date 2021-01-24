@@ -7,3 +7,4 @@ orjson
 uvloop
 mysql-connector-python
 asyncpg
+datadog
