@@ -4,7 +4,9 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 
-__all__ = 'Clan', 'ClanRank'
+from objects import glob
+
+__all__ = ('Clan', 'ClanRank')
 
 @unique
 class ClanRank(IntEnum):
@@ -19,7 +21,7 @@ class Clan:
                  'owner', 'members')
 
     def __init__(self, id: int, name: str, tag: str,
-                 owner: int, created_at: datetime,
+                 created_at: datetime, owner: int,
                  members: set[int] = set()) -> None:
         """A class representing one of gulag's clans."""
         self.id = id
@@ -29,6 +31,21 @@ class Clan:
 
         self.owner = owner # userid
         self.members = members # userids
+
+    async def members_from_sql(self) -> None:
+        """Fetch all members from sql."""
+        # TODO: in the future, we'll want to add
+        # clan 'mods', so fetching rank here may
+        # be a good idea to sort people into
+        # different roles.
+        res = await glob.db.fetchall(
+            'SELECT id FROM users '
+            'WHERE clan_id = %s',
+            [self.id], _dict=False
+        )
+
+        if res:
+            self.members.update(*res)
 
     def __repr__(self) -> str:
         return f'[{self.tag}] {self.name}'

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 __all__ = ()
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 6)
+glob.version = cmyui.Version(3, 1, 7)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -67,46 +67,41 @@ async def on_start() -> None:
     # should be moved and probably refactored pretty hard.
 
     # add all channels from db.
-    async for c_res in glob.db.iterall('SELECT * FROM channels'):
-        c_res['read_priv'] = Privileges(c_res.get('read_priv', 1))
-        c_res['write_priv'] = Privileges(c_res.get('write_priv', 2))
-        glob.channels.append(Channel(**c_res))
+    async for res in glob.db.iterall('SELECT * FROM channels'):
+        glob.channels.append(Channel(
+            name = res['name'],
+            topic = res['topic'],
+            read_priv = Privileges(res['read_priv']),
+            write_priv = Privileges(res['write_priv']),
+            auto_join = res['auto_join'] == 1
+        ))
 
     # add all mappools from db.
-    async for p_res in glob.db.iterall('SELECT * FROM tourney_pools'):
-        # overwrite basic types with some class types
-        creator = await glob.players.get(id=p_res['created_by'], sql=True)
-        p_res['created_by'] = creator # replace id with player object
+    async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
+        pool = MapPool(
+            id = res['id'],
+            name = res['name'],
+            created_at = res['created_at'],
+            created_by = await glob.players.get(id=res['created_by'], sql=True)
+        )
 
-        pool = MapPool(**p_res)
         await pool.maps_from_sql()
         glob.pools.append(pool)
 
     # add all clans from db.
-    async for c_res in glob.db.iterall('SELECT * FROM clans'):
-        # fetch all members from sql
-        m_res = await glob.db.fetchall(
-            'SELECT id, clan_rank '
-            'FROM users '
-            'WHERE clan_id = %s',
-            c_res['id'], _dict=False
-        )
+    async for res in glob.db.iterall('SELECT * FROM clans'):
+        clan = Clan(**res)
 
-        members = set()
-
-        for p_id, clan_rank in m_res:
-            if clan_rank == 3:
-                c_res['owner'] = p_id
-
-            members.add(p_id)
-
-        glob.clans.append(Clan(**c_res, members=members))
+        await clan.members_from_sql()
+        glob.clans.append(clan)
 
     # add all achievements from db.
-    async for a_res in glob.db.iterall('SELECT * FROM achievements'):
-        condition = eval(f'lambda score: {a_res.pop("cond")}')
-        achievement = Achievement(**a_res, cond=condition)
-        glob.achievements[a_res['mode']].append(achievement)
+    async for res in glob.db.iterall('SELECT * FROM achievements'):
+        # NOTE: achievement conditions are stored as
+        # stringified python expressions in the database.
+        condition = eval(f'lambda score: {res.pop("cond")}')
+        achievement = Achievement(**res, cond=condition)
+        glob.achievements[res['mode']].append(achievement)
 
     """ bmsubmit stuff
     # get the latest set & map id offsets for custom maps.
@@ -274,10 +269,10 @@ if __name__ == '__main__':
         # NOTE: this will start datadog's
         #       client in another thread.
         glob.datadog = datadog.ThreadStats()
-        glob.datadog.start()
+        glob.datadog.start(flush_interval=15)
 
         # set some base values
-        glob.datadog.gauge('online_players', 0)
+        glob.datadog.gauge('gulag.online_players', 0)
     else:
         glob.datadog = None
 

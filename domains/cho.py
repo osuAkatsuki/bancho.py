@@ -526,7 +526,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     glob.players.append(p)
 
     if glob.datadog:
-        glob.datadog.increment('online_players')
+        glob.datadog.increment('gulag.online_players')
+
+        time_taken = time.time() - login_time
+        glob.datadog.histogram('gulag.login_time', time_taken)
 
     log(f'{p} logged in.', Ansi.LCYAN)
     await p.update_latest_activity()

@@ -545,6 +545,11 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             await s.player.ban(glob.bot, f'[{s.mode!r}] autoban @ {s.pp:.2f}')
             return b'error: ban'
 
+    """ Score submission checks completed; submit the score. """
+
+    if glob.datadog:
+        glob.datadog.increment('gulag.submitted_scores')
+
     if s.status == SubmissionStatus.BEST:
         # Our score is our best score.
         # Update any preexisting personal best
@@ -555,6 +560,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'AND userid = %s AND mode = %s',
             [s.bmap.md5, s.player.id, s.mode.as_vanilla]
         )
+
+        if glob.datadog:
+            glob.datadog.increment('gulag.submitted_scores_best')
 
     s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
@@ -1039,6 +1047,10 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
                             time.time()),
                 'map': bmap
             }
+
+    # we have found a beatmap for the request.
+    if glob.datadog:
+        glob.datadog.increment('gulag.leaderboards_served')
 
     if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,

@@ -35,8 +35,7 @@ class Channel:
                  read_priv: Privileges = Privileges.Normal,
                  write_priv: Privileges = Privileges.Normal,
                  auto_join: bool = True,
-                 instance: bool = False,
-                 *args, **kwargs) -> None:
+                 instance: bool = False) -> None:
         self._name = name # 'real' name ('#{multi/spec}_{id}')
         self.topic = topic
         self.read_priv = read_priv

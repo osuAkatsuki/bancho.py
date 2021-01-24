@@ -3,9 +3,9 @@
 import asyncio
 import random
 import re
-import time
 from collections import defaultdict
 from datetime import datetime
+from time import perf_counter_ns as clock_ns
 from typing import Callable
 from typing import NamedTuple
 from typing import Optional
@@ -1501,7 +1501,7 @@ async def process_commands(p: 'Player', t: Messageable,
                            msg: str) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
-    st = time.time_ns()
+    start_time = clock_ns()
     trigger, *args = msg[len(glob.config.command_prefix):].strip().split(' ')
 
     for cmd_set in glob.commands['sets']:
@@ -1540,7 +1540,7 @@ async def process_commands(p: 'Player', t: Messageable,
         if trigger in cmd.triggers and p.priv & cmd.priv:
             # command found & we have privileges, run it.
             if res := await cmd.callback(p, t, args):
-                time_taken = (time.time_ns() - st) / 1e6
+                time_taken = (clock_ns() - start_time) / 1e6
 
                 return {
                     'resp': f'{res} | Elapsed: {time_taken:.2f}ms',
