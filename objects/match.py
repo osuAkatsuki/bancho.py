@@ -482,7 +482,7 @@ class Match:
                     # no winner, just announce the match points so far.
                     # for ffa, we'll only announce the top <=3 players.
                     m_points = sorted(self.match_points.items(), key=lambda x: x[1])
-                    m = f"Total Score: {' | '.join(f'{k.name} - {v}' for k, v in m_points)}"
+                    m = f"Total Score: {' | '.join([f'{k.name} - {v}' for k, v in m_points])}"
 
                 msg.append(m)
                 del m

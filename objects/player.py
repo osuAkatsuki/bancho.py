@@ -731,7 +731,8 @@ class Player:
         stats.acc = sum([row['acc'] for row in res[:50]]) / min(50, len(res))
 
         # calculate weighted pp based on top 100 scores
-        stats.pp = round(sum(row['pp'] * 0.95 ** i for i, row in enumerate(res)))
+        stats.pp = round(sum([row['pp'] * 0.95 ** i
+                              for i, row in enumerate(res)]))
 
         # keep stats up to date in sql
         await glob.db.execute(

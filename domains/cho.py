@@ -48,7 +48,7 @@ async def bancho_http_handler(conn: Connection) -> bytes:
         '<a href="https://github.com/cmyui/gulag">Source code</a>',
         '',
         f'<b>Packets handled ({len(glob.bancho_packets)})</b>',
-        '<br>'.join(f'{p.name} ({p.value})' for p in glob.bancho_packets)
+        '<br>'.join([f'{p.name} ({p.value})' for p in glob.bancho_packets])
     )).encode()
 
 @domain.route('/', methods=['POST'])
@@ -381,7 +381,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             # time connecting in-game and submitting their hwid set.
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
-            if not all(x['priv'] & Privileges.Normal for x in hwid_matches):
+            if not all([x['priv'] & Privileges.Normal for x in hwid_matches]):
                 return (packets.notification('Please contact staff directly '
                                              'to create an account.') +
                         packets.userID(-1)), 'no'
@@ -661,12 +661,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         if mods:
                             _msg.append(f'+{mods!r}')
 
-                        msg = f"{' '.join(_msg)}: " + ' | '.join(
+                        msg = f"{' '.join(_msg)}: " + ' | '.join([
                             f'{acc}%: {pp:.2f}pp'
                             for acc, pp in zip(
                                 (90, 95, 98, 99, 100),
                                 p.last_np.pp_cache[mods]
-                            ))
+                            )])
 
                     else:
                         msg = 'Could not find map.'
@@ -706,7 +706,7 @@ class LobbyJoin(BanchoPacket, type=Packets.OSU_JOIN_LOBBY):
     async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
-        for m in (_m for _m in glob.matches if _m):
+        for m in [_m for _m in glob.matches if _m]:
             p.enqueue(packets.newMatch(m))
 
 @register
@@ -940,7 +940,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.get_slot(p).status = SlotStatus.complete
 
         # check if there are any players that haven't finished.
-        if any(s.status == SlotStatus.playing for s in m.slots):
+        if any([s.status == SlotStatus.playing for s in m.slots]):
             return
 
         # find any players just sitting in the multi room

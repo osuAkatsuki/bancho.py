@@ -225,8 +225,8 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
             p.last_np.pp_cache[mods]
         )
 
-    pp_msg = ' | '.join(f'{acc:.2f}%: {pp:.2f}pp'
-                        for acc, pp in pp_values)
+    pp_msg = ' | '.join([f'{acc:.2f}%: {pp:.2f}pp'
+                         for acc, pp in pp_values])
     return f"{' '.join(_msg)}: {pp_msg}"
 
 """ Nominators commands

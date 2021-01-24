@@ -58,7 +58,7 @@ def _required_args(args: set[str], argset: str) -> Callable:
         @wraps(f)
         async def handler(conn: Connection) -> Optional[bytes]:
             _argset = getattr(conn, argset)
-            if all(x in _argset for x in args):
+            if all([x in _argset for x in args]):
                 # all args given, call the
                 # handler with the conn.
                 return await f(conn)
@@ -323,11 +323,11 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     diff_rating = lambda map: map['DifficultyRating']
 
     for bmap in result:
-        diffs = ','.join(
+        diffs = ','.join([
             '[{DifficultyRating:.2f}⭐] {DiffName} '
             '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
             for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
-        )
+        ])
 
         ret.append(
             '{SetID}.osz|{Artist}|{Title}|{Creator}|'
@@ -967,7 +967,8 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     isdecimal_n = partial(_isdecimal, _negative=True)
 
     # make sure all int args are integral
-    if not all(isdecimal_n(conn.args[k]) for k in ('mods', 'v', 'm', 'i')):
+    if not all([isdecimal_n(conn.args[k])
+                for k in ('mods', 'v', 'm', 'i')]):
         return b'-1|false'
 
     if (map_md5 := conn.args['c']) in glob.cache['unsubmitted']:
@@ -1140,12 +1141,12 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     else:
         res.append('')
 
-    res.extend(
+    res.extend([
         score_fmt.format(
             **s, score = int(s['_score']),
             has_replay = '1', rank = idx + 1
         ) for idx, s in enumerate(scores)
-    )
+    ])
 
     return '\n'.join(res).encode()
 
@@ -1308,7 +1309,7 @@ required_params_bmsubmit_upload = frozenset({
 async def osuBMSubmitUpload(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
-    if not all(x in mp_args for x in required_params_bmsubmit_upload):
+    if not all([x in mp_args for x in required_params_bmsubmit_upload]):
         log(f'bmsubmit-upload req missing params.', Ansi.LRED)
         return b'-1'
 

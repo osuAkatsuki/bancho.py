@@ -88,8 +88,8 @@ class Mods(IntFlag):
 
         mod_str = []
 
-        for m in (_m for _m in Mods if self.value & _m
-                                    and _m != Mods.SPEED_CHANGING):
+        for m in [_m for _m in Mods if self.value & _m and
+                                       _m != Mods.SPEED_CHANGING]:
             mod_str.append(mod_dict[m])
         return ''.join(mod_str)
 

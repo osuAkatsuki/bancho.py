@@ -78,11 +78,12 @@ async def on_start() -> None:
 
     # add all mappools from db.
     async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
+        created_by = await glob.players.get(id=res['created_by'], sql=True)
         pool = MapPool(
             id = res['id'],
             name = res['name'],
             created_at = res['created_at'],
-            created_by = await glob.players.get(id=res['created_by'], sql=True)
+            created_by = created_by
         )
 
         await pool.maps_from_sql()

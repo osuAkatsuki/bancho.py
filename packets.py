@@ -541,8 +541,8 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     ret += m.map_id.to_bytes(4, 'little', signed=True)
     ret += write_string(m.map_md5)
 
-    ret.extend(s.status for s in m.slots)
-    ret.extend(s.team for s in m.slots)
+    ret.extend([s.status for s in m.slots])
+    ret.extend([s.team for s in m.slots])
 
     for s in m.slots:
         if s.status & SlotStatus.has_player:
