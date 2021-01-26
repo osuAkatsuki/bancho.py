@@ -28,8 +28,8 @@ alltogether) back in October of 2017, and I've been managing it since.
 The server has come [a long way](https://cdn.discordapp.com/attachments/616400094408736779/799434379176574986/unknown.png),
 and is in quite a usable state. We most likely handle every packet/handler
 supported by any competing server implementation, and feature a very large
-api and [commandset](#commands) for both developers and players alike, with
-many unique features only available with gulag.
+api and [commandset](#currently-supported-player-commands) for both developers
+and players alike, with many unique features only available with gulag.
 
 gulag's database structure is built from the ground up using no specific
 references; this makes it incompatible with common stacks like Ripple's.
