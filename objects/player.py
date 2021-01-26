@@ -554,9 +554,7 @@ class Player:
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
         # in the instance; for normal channels, enqueue to all.
-        targets = c.players if c.instance else glob.players
-
-        for p in targets:
+        for p in (c.players if c.instance else glob.players):
             p.enqueue(packets.channelInfo(*c.basic_info))
 
         if glob.config.debug:
@@ -595,8 +593,6 @@ class Player:
             spec_chan = Channel(
                 name = chan_name,
                 topic = f"{self.name}'s spectator channel.'",
-                read = Privileges.Normal,
-                write = Privileges.Normal,
                 auto_join = False,
                 instance = True
             )

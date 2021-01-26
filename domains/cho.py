@@ -730,10 +730,10 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         # to the global channel list as
         # an instanced channel.
         chan = Channel(
-            name=f'#multi_{self.match.id}',
-            topic=f"MID {self.match.id}'s multiplayer channel.",
-            auto_join=False,
-            instance=True
+            name = f'#multi_{self.match.id}',
+            topic = f"MID {self.match.id}'s multiplayer channel.",
+            auto_join = False,
+            instance = True
         )
 
         glob.channels.append(chan)
