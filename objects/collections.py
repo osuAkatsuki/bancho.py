@@ -8,7 +8,7 @@ from cmyui import log
 
 from constants.privileges import Privileges
 from objects import glob
-from objects.clan import ClanRank
+from objects.clan import ClanPrivileges
 from objects.player import Player
 from utils.misc import make_safe_name
 
@@ -175,7 +175,7 @@ class PlayerList:
 
         if res['clan_id'] != 0:
             res['clan'] = glob.clans.get(id=res['clan_id'])
-            res['clan_rank'] = ClanRank(res['clan_rank'])
+            res['clan_rank'] = ClanPrivileges(res['clan_rank'])
         else:
             res['clan'] = res['clan_rank'] = None
 

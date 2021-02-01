@@ -34,7 +34,8 @@ from objects.match import SlotStatus
 if TYPE_CHECKING:
     from objects.score import Score
     from objects.achievement import Achievement
-    from objects.clan import Clan, ClanRank
+    from objects.clan import Clan
+    from objects.clan import ClanPrivileges
 
 __all__ = (
     'ModeData',
@@ -155,7 +156,7 @@ class Player:
         self.match: Optional[Match] = None
 
         self.clan: Optional['Clan'] = kwargs.get('clan', None)
-        self.clan_rank: Optional['ClanRank'] = kwargs.get('clan_rank', None)
+        self.clan_rank: Optional['ClanPrivileges'] = kwargs.get('clan_rank', None)
 
         # store achievements per-gamemode
         self.achievements: dict[int, set['Achievement']] = {
@@ -286,7 +287,7 @@ class Player:
     def login(cls, user_info, utc_offset: int,
               pm_private: bool, osu_ver: datetime,
               login_time: float, clan: 'Clan',
-              clan_rank: 'ClanRank'):
+              clan_rank: 'ClanPrivileges'):
         """Log a player into the server, with all info required."""
         # user_info: {id, name, priv, pw_bcrypt, silence_end}
         token = cls.generate_token()

@@ -6,10 +6,10 @@ from enum import unique
 
 from objects import glob
 
-__all__ = ('Clan', 'ClanRank')
+__all__ = ('Clan', 'ClanPrivileges')
 
 @unique
-class ClanRank(IntEnum):
+class ClanPrivileges(IntEnum):
     """A class to represent a clan members rank."""
     Member = 1
     Officer = 2

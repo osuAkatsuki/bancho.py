@@ -23,7 +23,7 @@ from constants.types import osuTypes
 from objects import glob
 from objects.beatmap import Beatmap
 from objects.channel import Channel
-from objects.clan import ClanRank
+from objects.clan import ClanPrivileges
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import SlotStatus
@@ -421,7 +421,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # get clan & clan rank if we're in a clan
     if user_info['clan_id'] != 0:
         clan = glob.clans.get(id=user_info.pop('clan_id'))
-        clan_rank = ClanRank(user_info.pop('clan_rank'))
+        clan_rank = ClanPrivileges(user_info.pop('clan_rank'))
     else:
         del user_info['clan_id']
         del user_info['clan_rank']
