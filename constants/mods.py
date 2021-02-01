@@ -110,7 +110,6 @@ class Mods(IntFlag):
     @classmethod
     def from_str(cls, s: str):
         # from fmt: `HDDTRX`
-        # TODO: check for invalid mod combos
         mod_dict = {
             'EZ': cls.EASY,
             'NF': cls.NOFAIL,
@@ -139,7 +138,6 @@ class Mods(IntFlag):
 
     @classmethod
     def from_np(cls, s: str):
-        # TODO: check for invalid mod combos
         # from fmt: `-DiffDown +DiffUp ~Special~`
         mod_dict = {
             '-Easy': cls.EASY,

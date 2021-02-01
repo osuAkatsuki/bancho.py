@@ -175,7 +175,6 @@ class BanchoPacket:
 
     async def handle(self, p: 'Player') -> None: ...
 
-# TODO: should probably be.. not here :P
 Message = namedtuple('Message', ['client', 'msg', 'target', 'client_id'])
 Channel = namedtuple('Channel', ['name', 'topic', 'players'])
 
@@ -638,17 +637,33 @@ def changeUsername(old: str, new: str) -> bytes:
         (f'{old}>>>>{new}', osuTypes.string)
     )
 
+# since the bot is always online and is
+# also automatically added to all player's
+# friends list, their stats are requested
+# *very* frequently; only build it once.
+@cache
+def botStats():
+    return write(
+        Packets.CHO_USER_STATS,
+        (glob.bot.id, osuTypes.i32),
+        (8, osuTypes.u8), # testing
+        ('out new code..', osuTypes.string),
+        ('', osuTypes.string),
+        (0, osuTypes.i32),
+        (0, osuTypes.u8),
+        (0, osuTypes.i32),
+        (0, osuTypes.i64),
+        (0.0, osuTypes.f32),
+        (0, osuTypes.i32),
+        (0, osuTypes.i64),
+        (0, osuTypes.i32),
+        (0, osuTypes.i16)
+    )
+
 # packet id: 11
 def userStats(p: 'Player') -> bytes:
     if p is glob.bot:
-        return ( # bot is const, no reason to call write()
-            b'\x0b\x00\x00=\x00\x00\x00\x01\x00\x00'
-            b'\x00\x08\x0b\x0eout new code..\x00\x00'
-            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-            b'\x00\x00\x00\x00\x00\x00\x00\x00\x80?'
-            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        )
+        return botStats()
 
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7fff:
@@ -932,8 +947,29 @@ def matchPlayerSkipped(pid: int) -> bytes:
         (pid, osuTypes.i32)
     )
 
+# since the bot is always online and is
+# also automatically added to all player's
+# friends list, their presence is requested
+# *very* frequently; only build it once.
+@cache
+def botPresence():
+    return write(
+        Packets.CHO_USER_PRESENCE,
+        (glob.bot.id, osuTypes.i32),
+        (glob.bot.name, osuTypes.string),
+        (-5 + 24, osuTypes.u8),
+        (245, osuTypes.u8), # satellite provider
+        (31, osuTypes.u8),
+        (1234.0, osuTypes.f32), # send coordinates waaay
+        (4321.0, osuTypes.f32), # off the map for the bot
+        (0, osuTypes.i32)
+    )
+
 # packet id: 83
 def userPresence(p: 'Player') -> bytes:
+    if p is glob.bot:
+        return botPresence()
+
     return write(
         Packets.CHO_USER_PRESENCE,
         (p.id, osuTypes.i32),
@@ -944,10 +980,6 @@ def userPresence(p: 'Player') -> bytes:
         (p.location[1], osuTypes.f32), # long
         (p.location[0], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
-    ) if p is not glob.bot else ( # default for bot
-        b'S\x00\x00\x19\x00\x00\x00\x01\x00\x00\x00'
-        b'\x0b\x04Aika\x14&\x1f\x00\x00\x9d\xc2\x00'
-        b'\x000B\x00\x00\x00\x00'
     )
 
 # packet id: 86

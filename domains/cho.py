@@ -931,7 +931,7 @@ class MatchScoreUpdate(BanchoPacket, type=Packets.OSU_MATCH_SCORE_UPDATE):
             return
 
         # if scorev2 is enabled, read an extra 8 bytes.
-        buf = bytearray(b'x\x00\x00')
+        buf = bytearray(b'0\x00\x00')
         buf += len(self.play_data).to_bytes(4, 'little')
         buf += self.play_data
         buf[11] = m.get_slot_id(p)

@@ -11,7 +11,7 @@ class ClientFlags(IntFlag):
     # broken and are even known to false positive quite often.
     # they can be helpful; just take them with a grain of salt.
 
-    # osu! anticheat <= 2016 (unsure of age)
+    """osu! anticheat <= 2016 (unsure of age)"""
     Clean                       = 0 # no flags sent
 
     # flags for timing errors or desync.
@@ -49,7 +49,7 @@ class ClientFlags(IntFlag):
 
     RawKeyboardDiscrepancy      = 1 << 13
 
-    # osu! anticheat 2019
+    """osu! anticheat 2019"""
     # XXX: the aqn flags were fixed within hours of the osu!
     # update, and vanilla hq is not so widely used anymore.
     RunWithLdFlag   = 1 << 14

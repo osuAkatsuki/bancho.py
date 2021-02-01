@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 __all__ = ()
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 7)
+glob.version = cmyui.Version(3, 1, 8)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
@@ -58,13 +58,12 @@ async def on_start() -> None:
     await updater.log_startup()
 
     # create our bot & append it to the global player list.
+    # TODO: perhaps name & id should be fetched from SQL?
+    #       or perhaps the bot shouldn't be in SQL at all?
     glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
     glob.bot.last_recv_time = float(0x7fffffff)
 
     glob.players.append(glob.bot)
-
-    # TODO: this section is getting a bit gross.. :P
-    # should be moved and probably refactored pretty hard.
 
     # add all channels from db.
     async for res in glob.db.iterall('SELECT * FROM channels'):

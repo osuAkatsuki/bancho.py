@@ -131,7 +131,7 @@ async def roll(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-# TODO: prolly beatconnect
+# TODO: prolly beatconnect/chimu.moe
 @command(Privileges.Normal, aliases=['bc'])
 async def bloodcat(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Return a bloodcat link of the user's current map (situation dependant)."""
