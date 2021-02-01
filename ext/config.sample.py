@@ -27,7 +27,7 @@ production = False
 
 # allow for use of advanced (and
 # potentially dangerous) commands.
-advanced = True
+advanced = False
 
 # your mysql authentication info.
 # XXX: we may switch to postgres in the future..

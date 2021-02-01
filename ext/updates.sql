@@ -239,3 +239,20 @@ alter table stats drop foreign key stats_users_id_fk;
 alter table ratings drop foreign key ratings_maps_md5_fk;
 alter table ratings drop foreign key ratings_users_id_fk;
 alter table logs modify `from` int not null comment 'both from and to are playerids';
+
+# v3.1.9
+alter table scores_rx modify id bigint(20) unsigned auto_increment;
+update scores_rx set id = id + (6148914691236517205 - 1);
+select @max_rx := MAX(id) + 1 from scores_rx;
+set @s = CONCAT('alter table scores_rx auto_increment = ', @max_rx);
+prepare stmt from @s;
+execute stmt;
+deallocate PREPARE stmt;
+alter table scores_ap modify id bigint(20) unsigned auto_increment;
+update scores_ap set id = id + (12297829382473034410 - 1);
+select @max_ap := MAX(id) + 1 from scores_ap;
+set @s = CONCAT('alter table scores_ap auto_increment = ', @max_ap);
+prepare stmt from @s;
+execute stmt;
+deallocate PREPARE stmt;
+alter table performance_reports modify scoreid bigint(20) unsigned auto_increment;

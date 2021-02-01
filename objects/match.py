@@ -354,8 +354,7 @@ class Match:
     def reset_scrim(self) -> None:
         """Reset the current scrim's winning points & bans."""
         self.match_points.clear()
-        self.winners = []
-
+        self.winners.clear()
         self.bans.clear()
 
     async def await_submissions(self, was_playing: list['Player']

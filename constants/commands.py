@@ -589,12 +589,11 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 # harmful tasks to the underlying machine, so use at your own risk.
 
 if glob.config.advanced:
-    __py_namespace = {
+    __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
-            'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
-            'cmyui',  'datetime', 'time', 'inspect', 'math'
-        )
-    }
+        'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
+        'cmyui',  'datetime', 'time', 'inspect', 'math'
+    )}
 
     @command(Privileges.Dangerous)
     async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -609,7 +608,7 @@ if glob.config.advanced:
         definition = '\n '.join(['async def __py(p, c, msg):'] + lines)
 
         try: # def __py(p, c, msg)
-            x = exec(definition, __py_namespace)
+            exec(definition, __py_namespace)
 
             loop = asyncio.get_running_loop()
 
@@ -624,7 +623,8 @@ if glob.config.advanced:
             # the error in the osu! chat.
             ret = f'{e.__class__}: {e}'
 
-        del __py_namespace['__py']
+        if '__py' in __py_namespace:
+            del __py_namespace['__py']
 
         if ret is not None:
             return str(ret)

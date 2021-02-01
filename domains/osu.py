@@ -125,14 +125,27 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
         log(f'screenshot req missing file.', Ansi.LRED)
         return (400, b'Missing file.')
 
+    ss_file = conn.files['ss']
+
     # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-    if len(conn.files['ss']) > (4 * 1024 * 1024):
+    if len(ss_file) > (4 * 1024 * 1024):
         return (400, b'Screenshot file too large.')
 
-    filename = f'{rstring(8)}.png'
+    # check if jpeg or png
+    if ss_file[6:10] in (b'JFIF', b'Exif'):
+        extension = 'jpeg'
+    elif ss_file.startswith(b'\211PNG\r\n\032\n'):
+        extension = 'png'
+    else:
+        return (400, b'Invalid file type.')
 
-    screenshot_file = SCREENSHOTS_PATH / filename
-    screenshot_file.write_bytes(conn.files['ss'])
+    while True:
+        filename = f'{rstring(8)}.{extension}'
+        screenshot_file = SCREENSHOTS_PATH / filename
+        if not screenshot_file.exists():
+            break
+
+    screenshot_file.write_bytes(ss_file)
 
     log(f'{p} uploaded {filename}.')
     return filename.encode()
@@ -470,6 +483,7 @@ autoban_pp = (
 )
 del UNDEF
 
+REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
@@ -790,12 +804,19 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
     return ret
 
-REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login('u', 'h')
 async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
-    replay_file = REPLAYS_PATH / f'{conn.args["c"]}.osr'
+    if 'c' not in conn.args or not conn.args['c'].isdecimal():
+        return # invalid connection
+
+    u64_max = (1 << 64) - 1
+
+    if not 0 < (score_id := int(conn.args['c'])) <= u64_max:
+        return # invalid score id
+
+    replay_file = REPLAYS_PATH / f'{score_id}.osr'
 
     # osu! expects empty resp for no replay
     if replay_file.exists():
@@ -1896,9 +1917,9 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
 
 """ Misc handlers """
 
-@domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.png$'))
+@domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.(png|jpeg)$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
-    if len(conn.path) != 16:
+    if len(conn.path) not in (16, 17):
         return (400, b'Invalid request.')
 
     path = SCREENSHOTS_PATH / conn.path[4:]

@@ -99,6 +99,9 @@ class Updater:
         current_ver = None
 
         for line in content.splitlines():
+            if not line:
+                continue
+
             if line.startswith('#') or not current_ver:
                 # may be normal comment or new version
                 if rgx := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):

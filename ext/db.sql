@@ -137,7 +137,7 @@ create table maps
 
 create table performance_reports
 (
-	scoreid int not null,
+	scoreid bigint(20) unsigned not null,
 	mod_mode enum('vanilla', 'relax', 'autopilot') default 'vanilla' not null,
 	os varchar(64) not null,
 	fullscreen tinyint(1) not null,
@@ -169,7 +169,7 @@ create table ratings
 
 create table scores_ap
 (
-	id int auto_increment
+	id bigint(20) unsigned auto_increment
 		primary key,
 	map_md5 char(32) not null,
 	score int not null,
@@ -195,7 +195,7 @@ create table scores_ap
 
 create table scores_rx
 (
-	id int auto_increment
+	id bigint(20) unsigned auto_increment
 		primary key,
 	map_md5 char(32) not null,
 	score int not null,
@@ -221,7 +221,7 @@ create table scores_rx
 
 create table scores_vn
 (
-	id int auto_increment
+	id bigint(20) unsigned auto_increment
 		primary key,
 	map_md5 char(32) not null,
 	score int not null,
@@ -387,6 +387,10 @@ values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 insert into stats (id) values (1);
+
+# offset score ids to avoid replay file collisions.
+alter table scores_rx auto_increment = 6148914691236517205;
+alter table scores_ap auto_increment = 12297829382473034410;
 
 # userid 2 is reserved for ppy in osu!, and the
 # client will not allow users to pm this id.

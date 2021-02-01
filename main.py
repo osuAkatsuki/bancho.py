@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 __all__ = ()
 
 # current version of gulag
-glob.version = cmyui.Version(3, 1, 8)
+glob.version = cmyui.Version(3, 1, 9)
 
 async def on_start() -> None:
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
