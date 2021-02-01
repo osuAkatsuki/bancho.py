@@ -79,10 +79,13 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         async def handler(conn: Connection) -> Optional[bytes]:
             name = passwd = None
 
-            for argset in (conn.args, conn.multipart_args):
-                if name_p in argset and pass_p in argset:
-                    name = argset[name_p]
-                    passwd = argset[pass_p]
+            argset = conn.args or conn.multipart_args
+
+            if not (name_p in argset and pass_p in argset):
+                return auth_error
+
+            name = argset[name_p]
+            passwd = argset[pass_p]
 
             if not (name and passwd):
                 return auth_error

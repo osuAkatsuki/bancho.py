@@ -242,13 +242,21 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
+# a message to send to players new to the server
+welcome_msg = '\n'.join((
+    f"Welcome to {glob.config.domain}.",
+    "To see a list of commands, use !help.",
+    "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
+    "Enjoy the server!"
+))
+
 # no specific packet id, triggered when the
 # client sends a request without an osu-token.
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
     if len(s := origin.decode().split('\n')[:-1]) != 3:
-        return
+        return # invalid request
 
     username = s[0]
     login_time = time.time()
@@ -305,7 +313,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # [2]: md5(adapters)
     # [3]: md5(uniqueid) (osu! uninstall id)
     # [4]: md5(uniqueid2) (disk signature/serial num)
-    client_hashes = s[3].split(':')[:-1]
+    if len(client_hashes := s[3].split(':')[:-1]) != 5:
+        return # invalid request
+
     client_hashes.pop(1) # no need for non-md5 adapters
 
     pm_private = s[4] == '1'
@@ -437,7 +447,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     data += packets.protocolVersion(19)
     data += packets.banchoPrivileges(p.bancho_priv)
     data += packets.notification('Welcome back to the gulag!\n'
-                                f'Current build: {glob.version}')
+                                f'Current build: v{glob.version}')
 
     # tells osu! to load channels from config, i believe?
     data += packets.channelInfoEnd()
@@ -462,7 +472,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     await p.stats_from_sql_full()
     await p.friends_from_sql()
 
-    if glob.config.server_build:
+    if glob.config.production:
         # update their country data with
         # the IP from the login request.
         await p.fetch_geoloc(ip)
@@ -505,7 +515,20 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             msg['to'], msg['from_id']
         )
 
-    # TODO: add a registration message if `first_login` == True?
+    if first_login:
+        # this is the player's first login, send them
+        # some basic info about the server and its usage.
+
+        if p.id == 3:
+            # this is the first player registering on
+            # the server, grant them full privileges.
+            p.add_privs(
+                Privileges.Staff | Privileges.Nominator |
+                Privileges.Whitelisted | Privileges.Tournament |
+                Privileges.Donator | Privileges.Alumni
+            )
+
+        await p.send(glob.bot, welcome_msg)
 
     # TODO: enqueue ingame admin panel to staff members.
     """

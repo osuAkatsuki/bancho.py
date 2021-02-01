@@ -23,7 +23,11 @@ debug = False
 # whether the server is running in 'production mode'.
 # having this as false will disable some features that
 # aren't used during testing.
-server_build = False
+production = False
+
+# allow for use of advanced (and
+# potentially dangerous) commands.
+advanced = True
 
 # your mysql authentication info.
 # XXX: we may switch to postgres in the future..

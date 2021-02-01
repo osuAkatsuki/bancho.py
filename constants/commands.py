@@ -132,9 +132,9 @@ async def roll(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     return f'{p.name} rolls {points} points!'
 
 # TODO: prolly beatconnect/chimu.moe
-@command(Privileges.Normal, aliases=['bc'])
-async def bloodcat(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Return a bloodcat link of the user's current map (situation dependant)."""
+@command(Privileges.Normal, aliases=['bloodcat', 'beatconnect', 'q'])
+async def maplink(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Return a download link to the user's current map (situation dependant)."""
     bmap = None
 
     # priority: multiplayer -> spectator -> last np
@@ -148,10 +148,10 @@ async def bloodcat(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     else:
         return 'No map found!'
 
-    return f'[https://bloodcat.com/d/{bmap.set_id} {bmap.full}]'
+    return f'[https://chimu.moe/d/{bmap.set_id} {bmap.full}]'
 
-@command(Privileges.Normal, aliases=['recent'])
-async def last(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+@command(Privileges.Normal, aliases=['last'])
+async def recent(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
     if not (s := p.recent_score):
         return 'No scores found :o (only saves per play session)'
@@ -581,38 +581,55 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osu://dl/{opt_id} option]'
 
-# XXX: this actually comes in handy sometimes, i initially
-# wrote it completely as a joke, but i might keep it in for
-# devs.. Comes in handy when debugging to be able to run something
-# like `!py return (await glob.players.get(name='cmyui')).status.action`
-# or for anything while debugging on-the-fly..
-@command(Privileges.Dangerous)
-async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    # create the new coroutine definition as a string
-    # with the lines from our message (split by '\n').
-    lines = ' '.join(msg).split(r'\n')
-    definition = '\n '.join(['async def __py(p, c, msg):'] + lines)
+""" Advanced commands (only allowed with `advanced = True` in config) """
 
-    try: # def __py(p, c, msg)
-        exec(definition)
+# NOTE: some of these commands are potentially dangerous, and only
+# really intended for advanced users looking for access to lower level
+# utilities. Some may give direct access to utilties that could perform
+# harmful tasks to the underlying machine, so use at your own risk.
 
-        loop = asyncio.get_running_loop()
+if glob.config.advanced:
+    __py_namespace = {
+        mod: __import__(mod) for mod in (
+            'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
+            'cmyui',  'datetime', 'time', 'inspect', 'math'
+        )
+    }
 
-        try: # __py(p, c, msg)
-            task = loop.create_task(locals()['__py'](p, c, msg))
-            ret = await asyncio.wait_for(asyncio.shield(task), 5.0)
-        except asyncio.TimeoutError:
-            ret = 'Left running (took >=5 sec).'
+    @command(Privileges.Dangerous)
+    async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+        """Allow for access to the python interpreter, in an asynchronous context."""
+        # This can be very good for getting used to gulag's API; just look
+        # around the codebase and find things to play with in your server.
+        # Ex: !py return (await glob.players.get(name='cmyui')).status.action
 
-    except Exception as e:
-        # code was invalid, return
-        # the error in the osu! chat.
-        ret = f'{e.__class__}: {e}'
+        # create the new coroutine definition as a string
+        # with the lines from our message (split by '\n').
+        lines = ' '.join(msg).split(r'\n')
+        definition = '\n '.join(['async def __py(p, c, msg):'] + lines)
 
-    if ret is not None:
-        return str(ret)
-    else:
-        return 'Success'
+        try: # def __py(p, c, msg)
+            x = exec(definition, __py_namespace)
+
+            loop = asyncio.get_running_loop()
+
+            try: # __py(p, c, msg)
+                task = loop.create_task(__py_namespace['__py'](p, c, msg))
+                ret = await asyncio.wait_for(asyncio.shield(task), 5.0)
+            except asyncio.TimeoutError:
+                ret = 'Left running (took >=5 sec).'
+
+        except Exception as e:
+            # code was invalid, return
+            # the error in the osu! chat.
+            ret = f'{e.__class__}: {e}'
+
+        del __py_namespace['__py']
+
+        if ret is not None:
+            return str(ret)
+        else:
+            return 'Success'
 
 """ Multiplayer commands
 # The commands below are specifically for

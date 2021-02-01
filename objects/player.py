@@ -287,7 +287,7 @@ class Player:
     def login(cls, user_info, utc_offset: int,
               pm_private: bool, osu_ver: datetime,
               login_time: float, clan: 'Clan',
-              clan_rank: 'ClanPrivileges'):
+              clan_rank: 'ClanPrivileges') -> 'Player':
         """Log a player into the server, with all info required."""
         # user_info: {id, name, priv, pw_bcrypt, silence_end}
         token = cls.generate_token()
