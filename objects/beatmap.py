@@ -12,6 +12,8 @@ from cmyui import log
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
+from utils.misc import escape_enum
+from utils.misc import pymysql_encode
 from utils.recalculator import PPCalculator
 
 __all__ = ('RankedStatus', 'Beatmap')
@@ -22,6 +24,7 @@ __all__ = ('RankedStatus', 'Beatmap')
 # but we have nothing to do but deal with it B).
 
 @unique
+@pymysql_encode(escape_enum)
 class RankedStatus(IntEnum):
     """Server side osu! beatmap ranked statuses.
        Same as used in osu!'s /web/getscores.php.
@@ -466,25 +469,16 @@ class Beatmap:
 
     async def save_to_sql(self) -> None:
         """Save the the object into sql."""
-        params = [
-            self.md5, self.id, self.set_id, self.status,
-            self.artist, self.title, self.version, self.creator,
-            self.last_update, self.total_length, self.frozen,
-            self.mode, self.bpm, self.cs, self.od, self.ar,
-            self.hp, self.diff
-        ]
-
-        if any(map(lambda x: x is None, params)):
-            log('Tried to save invalid beatmap to SQL!', Ansi.LRED)
-            return
-
-        params[3] = int(params[3]) # status
-        params[11] = int(params[11]) # mode
-
         await glob.db.execute(
             'REPLACE INTO maps (server, md5, id, set_id, status, '
             'artist, title, version, creator, last_update, '
             'total_length, frozen, mode, bpm, cs, od, ar, hp, diff) '
             'VALUES ("osu!", %s, %s, %s, %s, %s, %s, %s, %s, %s, '
-            '%s, %s, %s, %s, %s, %s, %s, %s, %s)', params
+            '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
+                self.md5, self.id, self.set_id, self.status,
+                self.artist, self.title, self.version, self.creator,
+                self.last_update, self.total_length, self.frozen,
+                self.mode, self.bpm, self.cs, self.od, self.ar,
+                self.hp, self.diff
+            ]
         )

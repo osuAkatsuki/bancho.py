@@ -30,56 +30,65 @@ from utils.updater import Updater
 __all__ = ()
 
 # current version of gulag
+# NOTE: this is used internally for the updater, it may be
+# worth reading through it's code before playing with it.
 glob.version = cmyui.Version(3, 1, 9)
 
 async def setup_globals() -> None:
-    """Setup & cache many global variables from various sources."""
+    """Setup & cache many global variables from sql."""
     # create our bot & append it to the global player list.
-    # TODO: perhaps name & id should be fetched from SQL?
-    #       or perhaps the bot shouldn't be in SQL at all?
-    glob.bot = Player(id=1, name='Aika', priv=Privileges.Normal)
-    glob.bot.last_recv_time = float(0x7fffffff)
+    res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
+
+    glob.bot = Player(id=1, name=res['name'], priv=Privileges.Normal)
+    glob.bot.last_recv_time = float(0x7fffffff) # never auto-dc the bot
 
     glob.players.append(glob.bot)
 
-    """ load data for global objects from sql. """
+    # cache from common data public data structures from sql.
 
-    # fetch & cache all channels from sql.
+    # channels.
     async for res in glob.db.iterall('SELECT * FROM channels'):
-        glob.channels.append(Channel(
+        chan = Channel(
             name = res['name'],
             topic = res['topic'],
             read_priv = Privileges(res['read_priv']),
             write_priv = Privileges(res['write_priv']),
             auto_join = res['auto_join'] == 1
-        ))
+        )
 
-    # fetch & cache all mappools from sql.
+        glob.channels.append(chan)
+
+    # map pools.
     async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
-        created_by = await glob.players.get(id=res['created_by'], sql=True)
         pool = MapPool(
             id = res['id'],
             name = res['name'],
             created_at = res['created_at'],
-            created_by = created_by
+            created_by = await glob.players.get(
+                id = res['created_by'],
+                sql = True # fetch even if offline
+            )
         )
 
         await pool.maps_from_sql()
         glob.pools.append(pool)
 
-    # fetch & cache all clans from sql.
+    # clans.
     async for res in glob.db.iterall('SELECT * FROM clans'):
         clan = Clan(**res)
 
         await clan.members_from_sql()
         glob.clans.append(clan)
 
-    # fetch & cache all achievements from sql.
+    # achievements.
     async for res in glob.db.iterall('SELECT * FROM achievements'):
         # NOTE: achievement conditions are stored as
-        # stringified python expressions in the database.
+        # stringified python expressions in the database
+        # to allow for easy custom achievements.
         condition = eval(f'lambda score: {res.pop("cond")}')
         achievement = Achievement(**res, cond=condition)
+
+        # NOTE: achievements are grouped by modes internally.
         glob.achievements[res['mode']].append(achievement)
 
     """ XXX: Unfinished code for beatmap submission.

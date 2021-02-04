@@ -411,20 +411,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     if first_login := not user_info['priv'] & Privileges.Verified:
         # verify the account if it's made it this far
-        user_info['priv'] |= int(Privileges.Verified)
+        user_info['priv'] |= Privileges.Verified
 
         # if this is the first user to create an account,
         # grant them all gulag privileges.
         if user_info['id'] == 3:
-            user_info['priv'] |= int(
+            user_info['priv'] |= (
                 Privileges.Staff | Privileges.Donator |
                 Privileges.Tournament | Privileges.Whitelisted
             )
 
         await glob.db.execute(
-            'UPDATE users '
-            'SET priv = %s '
-            'WHERE id = %s',
+            'UPDATE users SET priv = %s WHERE id = %s',
             [user_info['priv'], user_info['id']]
         )
 

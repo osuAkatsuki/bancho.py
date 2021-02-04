@@ -3,9 +3,13 @@
 from enum import IntFlag
 from enum import unique
 
+from utils.misc import pymysql_encode
+from utils.misc import escape_enum
+
 __all__ = ('Mods',)
 
 @unique
+@pymysql_encode(escape_enum)
 class Mods(IntFlag):
     NOMOD       = 0
     NOFAIL      = 1 << 0
@@ -108,7 +112,7 @@ class Mods(IntFlag):
         return m
 
     @classmethod
-    def from_str(cls, s: str):
+    def from_modstr(cls, s: str):
         # from fmt: `HDDTRX`
         mod_dict = {
             'EZ': cls.EASY,

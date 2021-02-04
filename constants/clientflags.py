@@ -3,9 +3,13 @@
 from enum import IntFlag
 from enum import unique
 
+from utils.misc import pymysql_encode
+from utils.misc import escape_enum
+
 __all__ = ('ClientFlags',)
 
 @unique
+@pymysql_encode(escape_enum)
 class ClientFlags(IntFlag):
     # NOTE: many of these flags are quite outdated and/or
     # broken and are even known to false positive quite often.

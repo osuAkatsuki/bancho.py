@@ -29,7 +29,9 @@ from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
+from utils.misc import escape_enum
 from utils.misc import point_of_interest
+from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -44,6 +46,7 @@ _specifiers = (
 )
 
 @unique
+@pymysql_encode(escape_enum)
 class Packets(IntEnum):
     OSU_CHANGE_ACTION = 0
     OSU_SEND_PUBLIC_MESSAGE = 1

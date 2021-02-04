@@ -196,7 +196,7 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
                 return 'Invalid accuracy.'
 
         elif ~len(param) & 1: # len(param) % 2 == 0
-            mods = Mods.from_str(param)
+            mods = Mods.from_modstr(param)
         else:
             return 'Invalid syntax: !with <mods/acc> ...'
 
@@ -735,7 +735,7 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1 or not ~len(msg[0]) & 1:
         return 'Invalid syntax: !mp mods <mods>'
 
-    mods = Mods.from_str(msg[0])
+    mods = Mods.from_modstr(msg[0])
 
     if m.freemods:
         if p is m.host:
@@ -1086,7 +1086,7 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1113,7 +1113,7 @@ async def mp_unban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1140,7 +1140,7 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1247,7 +1247,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not ~len(rgx[1]) & 1:
         return 'Invalid mods.'
 
-    mods = int(Mods.from_str(rgx[1]))
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
@@ -1265,7 +1265,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     )
 
     # add to cache
-    pool.maps[(Mods(mods), slot)] = p.last_np
+    pool.maps[(mods, slot)] = p.last_np
 
     return f'{p.last_np.embed} added to {name}.'
 
@@ -1281,7 +1281,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
@@ -1294,7 +1294,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     await glob.db.execute(
         'DELETE FROM tourney_pool_maps '
         'WHERE mods = %s AND slot = %s',
-        [int(mods), slot]
+        [mods, slot]
     )
 
     # remove from cache

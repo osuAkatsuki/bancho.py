@@ -18,7 +18,9 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
 from objects.beatmap import Beatmap
+from utils.misc import escape_enum
 from utils.misc import point_of_interest
+from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -37,6 +39,7 @@ __all__ = (
 )
 
 @unique
+@pymysql_encode(escape_enum)
 class SlotStatus(IntEnum):
     open       = 1
     locked     = 2
@@ -50,6 +53,7 @@ class SlotStatus(IntEnum):
     has_player = not_ready | ready | no_map | playing | complete
 
 @unique
+@pymysql_encode(escape_enum)
 class MatchTeams(IntEnum):
     neutral = 0
     blue    = 1
@@ -59,12 +63,14 @@ class MatchTeams(IntEnum):
 # implemented by osu! and send between client/server,
 # quite frequently even, but seems useless??
 @unique
+@pymysql_encode(escape_enum)
 class MatchTypes(IntEnum):
     standard  = 0
     powerplay = 1 # literally no idea what this is for
 """
 
 @unique
+@pymysql_encode(escape_enum)
 class MatchWinConditions(IntEnum):
     score    = 0
     accuracy = 1
@@ -72,6 +78,7 @@ class MatchWinConditions(IntEnum):
     scorev2  = 3
 
 @unique
+@pymysql_encode(escape_enum)
 class MatchTeamTypes(IntEnum):
     head_to_head = 0
     tag_coop     = 1
