@@ -2019,7 +2019,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
     # - be within 8-32 characters in length
     # - have more than 3 unique characters
     # - not be in the config's `disallowed_passwords` list
-    if not 8 < len(pw_txt) <= 32:
+    if not 8 <= len(pw_txt) <= 32:
         errors['password'].append('Must be 8-32 characters in length.')
 
     if len(set(pw_txt)) <= 3:
