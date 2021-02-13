@@ -3,7 +3,7 @@
 from re import compile as rcomp
 from re import IGNORECASE
 
-__all__ = ('mapfile', 'osu_ver', 'username', 'email', 'now_playing')
+__all__ = ('mapfile', 'osu_ver', 'username', 'email', 'now_playing', 'bancho_url')
 
 mapfile = rcomp(r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) \[(?P<version>.+)\]\.osu$')
 osu_ver = rcomp(r'^b(?P<ver>\d{8})(?:\.(?P<subver>\d))?(?:beta|cuttingedge|dev)?$')
@@ -25,3 +25,4 @@ tourney_matchname = rcomp(
     flags = IGNORECASE
 )
 mappool_pick = rcomp(r'^([a-zA-Z]+)([0-9]+)$')
+bancho_url = rcomp(r'^c[e4-6]?\.ppy\.sh$')

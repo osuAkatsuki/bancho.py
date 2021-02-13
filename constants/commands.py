@@ -513,8 +513,11 @@ async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !switch <endpoint>'
 
+    if not regexes.bancho_url.match(msg[0]):
+        return 'Invalid URL: can only switch to c[e4-6].ppy.sh domains'
+
     p.enqueue(packets.switchTournamentServer(msg[0]))
-    return 'Have a nice journey..'
+    return f'Switching to {msg}... Have a nice journey!'
 
 # rest in peace rtx - oct 2020 :candle:
 #@command(Privileges.Dangerous, hidden=True)
