@@ -844,7 +844,7 @@ class Player:
                          ) -> int:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in int32 space as the key.
-        rand = partial(random.randint, -0x80000000, 0)
+        rand = partial(random.randint, 64, 0x7fffffff)
         while (randnum := rand()) in self.menu_options:
             ...
 

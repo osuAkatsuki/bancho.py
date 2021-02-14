@@ -763,6 +763,23 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         await p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
 
+async def check_menu_option(p: Player, key: int):
+    if key not in p.menu_options:
+        return
+
+    opt = p.menu_options[key]
+
+    if time.time() > opt['timeout']:
+        # the option has expired
+        del p.menu_options[key]
+        return
+
+    # we have a menu option, call it.
+    await opt['callback']()
+
+    if not opt['reusable']:
+        del p.menu_options[key]
+
 @register
 class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
     match_id: osuTypes.i32
@@ -770,12 +787,16 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
 
     async def handle(self, p: Player) -> None:
         if not 0 <= self.match_id < 64:
-            # make sure it's
-            # a valid match id.
+            if self.match_id >= 64:
+                # NOTE: this function is unrelated to mp.
+                await check_menu_option(p, self.match_id)
+
+            p.enqueue(packets.matchJoinFail())
             return
 
         if not (m := glob.matches[self.match_id]):
             log(f'{p} tried to join a non-existant mp lobby?')
+            p.enqueue(packets.matchJoinFail())
             return
 
         await p.update_latest_activity()
