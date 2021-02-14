@@ -88,8 +88,7 @@ async def bancho_handler(conn: Connection) -> bytes:
 
     # NOTE: the reader will internally discard any
     # packets whose logic has not been defined.
-    # TODO: why is the packet reader async lol
-    async for packet in BanchoPacketReader(conn.body):
+    for packet in BanchoPacketReader(conn.body):
         await packet.handle(player)
 
         if glob.config.debug:

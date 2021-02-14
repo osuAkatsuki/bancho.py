@@ -183,37 +183,37 @@ Channel = namedtuple('Channel', ['name', 'topic', 'players'])
 
 class BanchoPacketReader:
     """\
-    A class dedicated to asynchronously reading bancho packets.
+    A class for reading bancho packets sequentially.
 
     Attributes
     -----------
-    _buf: `memoryview`
-        Internal buffer view of the reader.
+    view: `memoryview`
+        A low-level view to the underlying buffer passed in.
 
     _current: Optional[`BanchoPacket`]
         The current packet being read by the reader, if any.
 
     Intended Usage:
     ```
-      async for packet in BanchoPacketReader(conn.body):
+      for packet in BanchoPacketReader(conn.body):
           # once you're ready to handle the packet,
           # simply call it's .handle() method.
           await packet.handle()
     ```
     """
-
+    __slots__ = ('view', '_current')
     def __init__(self, data: bytes) -> None:
-        self._buf = memoryview(data)
+        self.view = memoryview(data)
         self._current: Optional[BanchoPacket] = None
 
-    def __aiter__(self):
+    def __iter__(self):
         return self
 
-    async def __anext__(self):
+    def __next__(self):
         # do not break until we've read the
         # header of a packet we can handle.
         while True:
-            p_type, p_len = await self.read_header()
+            p_type, p_len = self.read_header()
 
             if p_type == Packets.OSU_PING:
                 # the client is simply informing us that it's
@@ -226,7 +226,7 @@ class BanchoPacketReader:
                 log(f'Unhandled: {p_type!r}', Ansi.LYELLOW)
 
                 if p_len != 0:
-                    self._buf = self._buf[p_len:]
+                    self.view = self.view[p_len:]
             else:
                 # we can handle this one.
                 break
@@ -236,11 +236,11 @@ class BanchoPacketReader:
         self._current.length = p_len
 
         if self._current.args:
-            await self.read_arguments()
+            self.read_arguments()
 
         return self._current
 
-    async def read_arguments(self) -> None:
+    def read_arguments(self) -> None:
         """Read all arguments from the internal buffer."""
         for arg_name, arg_type in self._current.args.items():
             # read value from buffer
@@ -248,42 +248,42 @@ class BanchoPacketReader:
 
             # non-osu! datatypes
             if arg_type == osuTypes.i8:
-                val = await self.read_i8()
+                val = self.read_i8()
             elif arg_type == osuTypes.i16:
-                val = await self.read_i16()
+                val = self.read_i16()
             elif arg_type == osuTypes.i32:
-                val = await self.read_i32()
+                val = self.read_i32()
             elif arg_type == osuTypes.i64:
-                val = await self.read_i64()
+                val = self.read_i64()
             elif arg_type == osuTypes.u8:
-                val = await self.read_i8()
+                val = self.read_i8()
             elif arg_type == osuTypes.u16:
-                val = await self.read_u16()
+                val = self.read_u16()
             elif arg_type == osuTypes.u32:
-                val = await self.read_u32()
+                val = self.read_u32()
             elif arg_type == osuTypes.u64:
-                val = await self.read_u64()
+                val = self.read_u64()
 
             # osu!-specific data types
             elif arg_type == osuTypes.string:
-                val = await self.read_string()
+                val = self.read_string()
             elif arg_type == osuTypes.i32_list:
-                val = await self.read_i32_list_i16l()
+                val = self.read_i32_list_i16l()
             elif arg_type == osuTypes.i32_list4l:
-                val = await self.read_i32_list_i32l()
+                val = self.read_i32_list_i32l()
             elif arg_type == osuTypes.message:
-                val = await self.read_message()
+                val = self.read_message()
             elif arg_type == osuTypes.channel:
-                val = await self.read_channel()
+                val = self.read_channel()
             elif arg_type == osuTypes.match:
-                val = await self.read_match()
+                val = self.read_match()
             elif arg_type == osuTypes.scoreframe:
-                val = await self.read_scoreframe()
+                val = self.read_scoreframe()
 
             elif arg_type == osuTypes.raw:
                 # return all packet data raw.
-                val = self._buf[:self._current.length]
-                self._buf = self._buf[self._current.length:]
+                val = self.view[:self._current.length]
+                self.view = self.view[self._current.length:]
             else:
                 # should never happen?
                 raise ValueError
@@ -291,31 +291,31 @@ class BanchoPacketReader:
             # add to our packet object
             setattr(self._current, arg_name, val)
 
-    async def read_header(self) -> tuple[int, int]:
+    def read_header(self) -> tuple[int, int]:
         """Read the header of an osu! packet (id & length)."""
-        if len(self._buf) < 7:
+        if len(self.view) < 7:
             # not even minimal data
             # remaining in buffer.
-            raise StopAsyncIteration
+            raise StopIteration
 
         # read type & length from the body
-        data = struct.unpack('<HxI', self._buf[:7])
-        self._buf = self._buf[7:]
+        data = struct.unpack('<HxI', self.view[:7])
+        self.view = self.view[7:]
         return Packets(data[0]), data[1]
 
-    async def ignore_packet(self) -> None:
+    def ignore_packet(self) -> None:
         """Skip the current packet in the buffer."""
-        self._buf = self._buf[self._current.length:]
+        self.view = self.view[self._current.length:]
         self._current = None
 
-    """ simple types """
+    """ type readers (functions to read different types from buf) """
 
-    async def _read_integral(self, size: int, signed: bool) -> int:
-        val = int.from_bytes(self._buf[:size], 'little', signed=signed)
-        self._buf = self._buf[size:]
+    """ basic integral types (signed & unsigned) """
+    def _read_integral(self, size: int, signed: bool) -> int:
+        val = int.from_bytes(self.view[:size], 'little', signed=signed)
+        self.view = self.view[size:]
         return val
 
-    # zero overhead coming with macros? perhaps
     read_i8 = partialmethod(_read_integral, size=1, signed=True)
     read_u8 = partialmethod(_read_integral, size=1, signed=False)
     read_i16 = partialmethod(_read_integral, size=2, signed=True)
@@ -325,134 +325,137 @@ class BanchoPacketReader:
     read_i64 = partialmethod(_read_integral, size=8, signed=True)
     read_u64 = partialmethod(_read_integral, size=8, signed=False)
 
-    async def read_f32(self) -> float:
-        val, = struct.unpack_from('<f', self._buf[:4])
-        self._buf = self._buf[4:]
+    """ floating point types """
+    def read_f32(self) -> float:
+        val, = struct.unpack_from('<f', self.view[:4])
+        self.view = self.view[4:]
         return val
 
-    async def read_f64(self) -> float:
-        val, = struct.unpack_from('<d', self._buf[:8])
-        self._buf = self._buf[8:]
+    def read_f64(self) -> float:
+        val, = struct.unpack_from('<d', self.view[:8])
+        self.view = self.view[8:]
         return val
 
-    async def _read_i32_list(self, len_size: int) -> tuple[int]:
-        length = int.from_bytes(self._buf[:len_size], 'little')
-        self._buf = self._buf[len_size:]
+    """ integral list types """
+    # XXX: some osu! packets use i16 for
+    # array length, while others use i32
+    def _read_i32_list(self, len_size: int) -> tuple[int]:
+        length = int.from_bytes(self.view[:len_size], 'little')
+        self.view = self.view[len_size:]
 
-        val = struct.unpack(f'<{"I" * length}', self._buf[:length * 4])
-        self._buf = self._buf[length * 4:]
+        val = struct.unpack(f'<{"I" * length}', self.view[:length * 4])
+        self.view = self.view[length * 4:]
         return val
 
-    # XXX: some osu! packets use i16 for array length, while others use i32
     read_i32_list_i16l = partialmethod(_read_i32_list, len_size=2)
     read_i32_list_i32l = partialmethod(_read_i32_list, len_size=4)
 
-    async def read_uleb128(self) -> int:
-        val = shift = 0
-
-        while True:
-            b = self._buf[0]
-            self._buf = self._buf[1:]
-
-            val |= (b & 0b01111111) << shift
-            if (b & 0b10000000) == 0:
-                break
-
-            shift += 7
-
-        return val
-
-    async def read_string(self) -> str:
-        exists = self._buf[0] == 0x0b
-        self._buf = self._buf[1:]
+    """ string type (variable length encoding w/ uleb128) """
+    def read_string(self) -> str:
+        exists = self.view[0] == 0x0b
+        self.view = self.view[1:]
 
         if not exists:
             # no string sent.
             return ''
 
-        # non-empty string
-        length = await self.read_uleb128()
-        val = self._buf[:length].tobytes().decode() # copy
-        self._buf = self._buf[length:]
+        # non-empty string, decode str length (uleb128)
+        length = shift = 0
+
+        while True:
+            b = self.view[0]
+            self.view = self.view[1:]
+
+            length |= (b & 0b01111111) << shift
+            if (b & 0b10000000) == 0:
+                break
+
+            shift += 7
+
+        val = self.view[:length].tobytes().decode() # copy
+        self.view = self.view[length:]
         return val
 
-    """ advanced types """
+    """ custom osu! types """
 
-    async def read_message(self) -> Message: # namedtuple
+    def read_message(self) -> Message: # namedtuple
         """Read an osu! message from the internal buffer."""
         return Message(
-            client = await self.read_string(),
-            msg = await self.read_string(),
-            target = await self.read_string(),
-            client_id = await self.read_i32()
+            client = self.read_string(),
+            msg = self.read_string(),
+            target = self.read_string(),
+            client_id = self.read_i32()
         )
 
-    async def read_channel(self) -> Channel: # namedtuple
+    def read_channel(self) -> Channel: # namedtuple
         """Read an osu! channel from the internal buffer."""
         return Channel(
-            name = await self.read_string(),
-            topic = await self.read_string(),
-            players = await self.read_i32()
+            name = self.read_string(),
+            topic = self.read_string(),
+            players = self.read_i32()
         )
 
-    async def read_match(self) -> Match:
+    def read_match(self) -> Match:
         """Read an osu! match from the internal buffer."""
         m = Match()
 
         # ignore match id (i16) and inprogress (i8).
-        self._buf = self._buf[3:]
+        self.view = self.view[3:]
 
-        #m.type = MatchTypes(await self.read_i8())
-        if await self.read_i8() == 1:
+        #m.type = MatchTypes(self.read_i8())
+        if self.read_i8() == 1:
             point_of_interest() # what is powerplay
 
-        m.mods = Mods(await self.read_i32())
+        m.mods = Mods(self.read_i32())
 
-        m.name = await self.read_string()
-        m.passwd = await self.read_string()
+        m.name = self.read_string()
+        m.passwd = self.read_string()
 
-        m.map_name = await self.read_string()
-        m.map_id = await self.read_i32()
-        m.map_md5 = await self.read_string()
-
-        for slot in m.slots:
-            slot.status = SlotStatus(await self.read_i8())
+        m.map_name = self.read_string()
+        m.map_id = self.read_i32()
+        m.map_md5 = self.read_string()
 
         for slot in m.slots:
-            slot.team = MatchTeams(await self.read_i8())
+            slot.status = SlotStatus(self.read_i8())
+
+        for slot in m.slots:
+            slot.team = MatchTeams(self.read_i8())
 
         for slot in m.slots:
             if slot.status & SlotStatus.has_player:
                 # we don't need this, ignore it.
-                self._buf = self._buf[4:]
+                self.view = self.view[4:]
 
-        host_id = await self.read_i32()
-        m.host = await glob.players.get(id=host_id)
+        host_id = self.read_i32()
+        for p in glob.players:
+            if p.id == host_id:
+                m.host = p
+                break
 
-        m.mode = GameMode(await self.read_i8())
-        m.win_condition = MatchWinConditions(await self.read_i8())
-        m.team_type = MatchTeamTypes(await self.read_i8())
-        m.freemods = await self.read_i8() == 1
+        m.mode = GameMode(self.read_i8())
+        m.win_condition = MatchWinConditions(self.read_i8())
+        m.team_type = MatchTeamTypes(self.read_i8())
+        m.freemods = self.read_i8() == 1
 
         # if we're in freemods mode,
         # read individual slot mods.
         if m.freemods:
             for slot in m.slots:
-                slot.mods = Mods(await self.read_i32())
+                slot.mods = Mods(self.read_i32())
 
         # read the seed (used for mania)
-        m.seed = await self.read_i32()
+        m.seed = self.read_i32()
 
         return m
 
-    async def read_scoreframe(self) -> ScoreFrame:
+    def read_scoreframe(self) -> ScoreFrame:
         fmt = '<iBHHHHHHiHH?BB?'
-        sf = ScoreFrame(*struct.unpack_from(fmt, self._buf[:29]))
-        self._buf = self._buf[29:]
+        sf = ScoreFrame(*struct.unpack_from(fmt, self.view[:29]))
+        self.view = self.view[29:]
 
         if sf.score_v2:
-            sf.combo_portion = await self.read_f32()
-            sf.bonus_portion = await self.read_f32()
+            sf.combo_portion = self.read_f32()
+            sf.bonus_portion = self.read_f32()
 
         return sf
 
