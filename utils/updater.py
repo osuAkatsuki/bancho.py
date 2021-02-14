@@ -12,6 +12,7 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Optional
 
+import aiomysql
 from cmyui import Ansi
 from cmyui import log
 from cmyui import Version
@@ -127,7 +128,7 @@ class Updater:
             for query in updates:
                 try:
                     await glob.db.execute(query)
-                except:
+                except aiomysql.MySQLError:
                     # if anything goes wrong while writing a query,
                     # most likely something is very wrong.
                     log(f'Failed: {query}', Ansi.GRAY)

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# TODO: there is still a lot of inconsistency
+# in a lot of these classes; needs refactor.
+
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -255,7 +258,7 @@ class ClanList(list):
     def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
-            return self.get(index)
+            return self.get(name=index)
         else:
             return super().__getitem__(index)
 
