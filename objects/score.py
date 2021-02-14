@@ -18,6 +18,8 @@ from constants.mods import Mods
 from objects import glob
 from objects.beatmap import Beatmap
 from utils.recalculator import PPCalculator
+from utils.misc import escape_enum
+from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -29,6 +31,7 @@ __all__ = (
 )
 
 @unique
+@pymysql_encode(escape_enum)
 class Rank(IntEnum):
     XH = 0
     SH = 1
@@ -55,6 +58,7 @@ class Rank(IntEnum):
         }[self.value]
 
 @unique
+@pymysql_encode(escape_enum)
 class SubmissionStatus(IntEnum):
     # TODO: make a system more like bancho's?
     FAILED = 0

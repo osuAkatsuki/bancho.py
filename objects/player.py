@@ -30,6 +30,8 @@ from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import SlotStatus
+from utils.misc import escape_enum
+from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.score import Score
@@ -44,6 +46,7 @@ __all__ = (
 )
 
 @unique
+@pymysql_encode(escape_enum)
 class PresenceFilter(IntEnum):
     """osu! client side filter for which users the player can see."""
     Nil     = 0
@@ -51,6 +54,7 @@ class PresenceFilter(IntEnum):
     Friends = 2
 
 @unique
+@pymysql_encode(escape_enum)
 class Action(IntEnum):
     """The client's current state."""
     Idle         = 0
@@ -224,6 +228,8 @@ class Player:
         else:
             return self.name
 
+    # TODO: chat embed with clan tag hyperlinked?
+
     @property
     def remaining_silence(self) -> int:
         """The remaining time of the players silence."""
@@ -339,7 +345,7 @@ class Player:
             'UPDATE users '
             'SET priv = %s '
             'WHERE id = %s',
-            [int(self.priv), self.id]
+            [self.priv, self.id]
         )
 
     async def add_privs(self, bits: Privileges) -> None:
@@ -350,7 +356,7 @@ class Player:
             'UPDATE users '
             'SET priv = %s '
             'WHERE id = %s',
-            [int(self.priv), self.id]
+            [self.priv, self.id]
         )
 
     async def remove_privs(self, bits: Privileges) -> None:
@@ -361,7 +367,7 @@ class Player:
             'UPDATE users '
             'SET priv = %s '
             'WHERE id = %s',
-            [int(self.priv), self.id]
+            [self.priv, self.id]
         )
 
     async def ban(self, admin: 'Player', reason: str) -> None:
@@ -840,7 +846,7 @@ class Player:
                          ) -> int:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in int32 space as the key.
-        rand = partial(random.randint, -0x80000000, 0)
+        rand = partial(random.randint, 64, 0x7fffffff)
         while (randnum := rand()) in self.menu_options:
             ...
 

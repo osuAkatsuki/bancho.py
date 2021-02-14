@@ -5,10 +5,13 @@ from enum import IntEnum
 from enum import unique
 
 from objects import glob
+from utils.misc import escape_enum
+from utils.misc import pymysql_encode
 
 __all__ = ('Clan', 'ClanPrivileges')
 
 @unique
+@pymysql_encode(escape_enum)
 class ClanPrivileges(IntEnum):
     """A class to represent a clan members rank."""
     Member = 1
@@ -39,8 +42,7 @@ class Clan:
         # be a good idea to sort people into
         # different roles.
         res = await glob.db.fetchall(
-            'SELECT id FROM users '
-            'WHERE clan_id = %s',
+            'SELECT id FROM users WHERE clan_id = %s',
             [self.id], _dict=False
         )
 

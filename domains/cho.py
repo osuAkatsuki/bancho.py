@@ -88,8 +88,7 @@ async def bancho_handler(conn: Connection) -> bytes:
 
     # NOTE: the reader will internally discard any
     # packets whose logic has not been defined.
-    # TODO: why is the packet reader async lol
-    async for packet in BanchoPacketReader(conn.body):
+    for packet in BanchoPacketReader(conn.body):
         await packet.handle(player)
 
         if glob.config.debug:
@@ -411,20 +410,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     if first_login := not user_info['priv'] & Privileges.Verified:
         # verify the account if it's made it this far
-        user_info['priv'] |= int(Privileges.Verified)
+        user_info['priv'] |= Privileges.Verified
 
         # if this is the first user to create an account,
         # grant them all gulag privileges.
         if user_info['id'] == 3:
-            user_info['priv'] |= int(
+            user_info['priv'] |= (
                 Privileges.Staff | Privileges.Donator |
                 Privileges.Tournament | Privileges.Whitelisted
             )
 
         await glob.db.execute(
-            'UPDATE users '
-            'SET priv = %s '
-            'WHERE id = %s',
+            'UPDATE users SET priv = %s WHERE id = %s',
             [user_info['priv'], user_info['id']]
         )
 
@@ -766,6 +763,23 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         await p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
 
+async def check_menu_option(p: Player, key: int):
+    if key not in p.menu_options:
+        return
+
+    opt = p.menu_options[key]
+
+    if time.time() > opt['timeout']:
+        # the option has expired
+        del p.menu_options[key]
+        return
+
+    # we have a menu option, call it.
+    await opt['callback']()
+
+    if not opt['reusable']:
+        del p.menu_options[key]
+
 @register
 class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
     match_id: osuTypes.i32
@@ -773,12 +787,16 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
 
     async def handle(self, p: Player) -> None:
         if not 0 <= self.match_id < 64:
-            # make sure it's
-            # a valid match id.
+            if self.match_id >= 64:
+                # NOTE: this function is unrelated to mp.
+                await check_menu_option(p, self.match_id)
+
+            p.enqueue(packets.matchJoinFail())
             return
 
         if not (m := glob.matches[self.match_id]):
             log(f'{p} tried to join a non-existant mp lobby?')
+            p.enqueue(packets.matchJoinFail())
             return
 
         await p.update_latest_activity()

@@ -85,7 +85,6 @@ glob.commands = {
              clan_commands]
 }
 
-regular_commands = glob.commands['regular']
 def command(priv: Privileges, aliases: list[str] = [],
             hidden: bool = False) -> Callable:
     def wrapper(f: Callable):
@@ -167,15 +166,22 @@ async def recent(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         rank = s.rank if s.status == SubmissionStatus.BEST else 'NA'
         l.append(f'PASS {{{s.pp:.2f}pp #{rank}}}')
     else:
-        completion = s.time_elapsed / (s.bmap.total_length * 1000)
-        l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
+        # XXX: prior to v3.2.0, gulag didn't parse total_length from
+        # the osu!api, and thus this can do some zerodivision moments.
+        # this can probably be removed in the future, or better yet
+        # replaced with a better system to fix the maps.
+        if s.bmap.total_length != 0:
+            completion = s.time_elapsed / (s.bmap.total_length * 1000)
+            l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
+        else:
+            l.append('FAIL')
 
     return ' | '.join(l)
 
 # TODO: !top (get top #1 score)
 # TODO: !compare (compare to previous !last/!top post's map)
 
-@command(Privileges.Normal, hidden=True)
+@command(Privileges.Normal, aliases=['w'], hidden=True)
 async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
     if c is not glob.bot:
@@ -196,7 +202,7 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
                 return 'Invalid accuracy.'
 
         elif ~len(param) & 1: # len(param) % 2 == 0
-            mods = Mods.from_str(param)
+            mods = Mods.from_modstr(param)
         else:
             return 'Invalid syntax: !with <mods/acc> ...'
 
@@ -229,10 +235,62 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
                          for acc, pp in pp_values])
     return f"{' '.join(_msg)}: {pp_msg}"
 
+@command(Privileges.Normal, aliases=['req'])
+async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    if msg:
+        return 'Invalid syntax: !request'
+
+    if not p.last_np:
+        return 'You must /np a map first!'
+
+    bmap = p.last_np
+
+    if bmap.status != RankedStatus.Pending:
+        return 'Only pending maps may be requested for status change.'
+
+    await glob.db.execute(
+        'INSERT INTO map_requests '
+        '(map_id, player_id, datetime, active) '
+        'VALUES (%s, %s, NOW(), 1)',
+        [bmap.id, p.id]
+    )
+
+    return 'Request submitted.'
+
 """ Nominators commands
 # The commands below allow users to
 # manage  the server's state of beatmaps.
 """
+
+@command(Privileges.Nominator, aliases=['reqs'], hidden=True)
+async def requests(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    if msg:
+        return 'Invalid syntax: !requests'
+
+    res = await glob.db.fetchall(
+        'SELECT map_id, player_id, datetime '
+        'FROM map_requests WHERE active = 1',
+        _dict=False # return rows as tuples
+    )
+
+    if not res:
+        return 'The queue is clean! (0 map request(s))'
+
+    l = [f'Total requests: {len(res)}']
+
+    for (map_id, player_id, dt) in res:
+        # find player & map for each row, and add to output.
+        if not (p := await glob.players.get(id=player_id, sql=True)):
+            l.append(f'Failed to find requesting player ({player_id})?')
+            continue
+
+        if not (bmap := await Beatmap.from_bid(map_id)):
+            l.append(f'Failed to find requested map ({map_id})?')
+            continue
+
+        l.append(f'[{p.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.')
+
+    return '\n'.join(l)
 
 status_to_id = lambda s: {
     'unrank': 0,
@@ -252,7 +310,11 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not p.last_np:
         return 'You must /np a map first!'
 
-    new_status = status_to_id(msg[0])
+    new_status = RankedStatus(status_to_id(msg[0]))
+
+    bmap = p.last_np
+    if bmap.status == new_status:
+        return f'{bmap.embed} is already {new_status!s}!'
 
     # update sql & cache based on scope
     # XXX: not sure if getting md5s from sql
@@ -264,29 +326,45 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         await glob.db.execute(
             'UPDATE maps SET status = %s, '
             'frozen = 1 WHERE set_id = %s',
-            [new_status, p.last_np.set_id]
+            [new_status, bmap.set_id]
         )
+
+        # select all map ids for clearing map requests.
+        map_ids = [x[0] for x in await glob.db.fetchall(
+            'SELECT id FROM maps '
+            'WHERE set_id = %s',
+            [bmap.set_id], _dict=False
+        )]
 
         for cached in glob.cache['beatmap'].values():
             # not going to bother checking timeout
-            if cached['map'].set_id == p.last_np.set_id:
-                cached['map'].status = RankedStatus(new_status)
+            if cached['map'].set_id == bmap.set_id:
+                cached['map'].status = new_status
 
     else:
         # update only map
         await glob.db.execute(
             'UPDATE maps SET status = %s, '
             'frozen = 1 WHERE id = %s',
-            [new_status, p.last_np.id]
+            [new_status, bmap.id]
         )
+
+        map_ids = [bmap.id]
 
         for cached in glob.cache['beatmap'].values():
             # not going to bother checking timeout
-            if cached['map'] is p.last_np:
-                cached['map'].status = RankedStatus(new_status)
+            if cached['map'] is bmap:
+                cached['map'].status = new_status
                 break
 
-    return 'Map updated!'
+    # deactivate rank requests for all ids
+    for map_id in map_ids:
+        await glob.db.execute(
+            'UPDATE map_requests SET active = 0 '
+            'WHERE map_id = %s', [map_id]
+        )
+
+    return f'{bmap.embed} updated to {new_status!s}.'
 
 """ Mod commands
 # The commands below are somewhat dangerous,
@@ -579,7 +657,7 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     # add the option to their menu opts & send them a button
     opt_id = await p.add_to_menu(callback)
-    return f'[osu://dl/{opt_id} option]'
+    return f'[osump://{opt_id}/dn option]'
 
 """ Advanced commands (only allowed with `advanced = True` in config) """
 
@@ -597,7 +675,7 @@ if glob.config.advanced:
 
     @command(Privileges.Dangerous)
     async def py(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-        """Allow for access to the python interpreter, in an asynchronous context."""
+        """Allow for (async) access to the python interpreter."""
         # This can be very good for getting used to gulag's API; just look
         # around the codebase and find things to play with in your server.
         # Ex: !py return (await glob.players.get(name='cmyui')).status.action
@@ -735,7 +813,7 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1 or not ~len(msg[0]) & 1:
         return 'Invalid syntax: !mp mods <mods>'
 
-    mods = Mods.from_str(msg[0])
+    mods = Mods.from_modstr(msg[0])
 
     if m.freemods:
         if p is m.host:
@@ -1086,7 +1164,7 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1113,7 +1191,7 @@ async def mp_unban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1140,7 +1218,7 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if (mods, slot) not in m.pool.maps:
@@ -1247,7 +1325,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not ~len(rgx[1]) & 1:
         return 'Invalid mods.'
 
-    mods = int(Mods.from_str(rgx[1]))
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
@@ -1265,7 +1343,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     )
 
     # add to cache
-    pool.maps[(Mods(mods), slot)] = p.last_np
+    pool.maps[(mods, slot)] = p.last_np
 
     return f'{p.last_np.embed} added to {name}.'
 
@@ -1281,7 +1359,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    mods = Mods.from_str(rgx[1])
+    mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
@@ -1294,7 +1372,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     await glob.db.execute(
         'DELETE FROM tourney_pool_maps '
         'WHERE mods = %s AND slot = %s',
-        [int(mods), slot]
+        [mods, slot]
     )
 
     # remove from cache

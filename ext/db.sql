@@ -135,6 +135,16 @@ create table maps
 		unique (md5)
 );
 
+create table map_requests
+(
+	id int auto_increment
+		primary key,
+	map_id int not null,
+	player_id int not null,
+	datetime datetime not null,
+	active tinyint(1) not null
+);
+
 create table performance_reports
 (
 	scoreid bigint(20) unsigned not null,

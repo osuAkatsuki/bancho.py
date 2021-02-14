@@ -2,4 +2,4 @@
 __pycache__/
 /config.py
 /.data
-test.py
+_testing/

@@ -256,3 +256,14 @@ prepare stmt from @s;
 execute stmt;
 deallocate PREPARE stmt;
 alter table performance_reports modify scoreid bigint(20) unsigned auto_increment;
+
+# v3.2.0
+create table map_requests
+(
+	id int auto_increment
+		primary key,
+	map_id int not null,
+	player_id int not null,
+	datetime datetime not null,
+	active tinyint(1) not null
+);

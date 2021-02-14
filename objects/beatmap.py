@@ -12,6 +12,8 @@ from cmyui import log
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
+from utils.misc import escape_enum
+from utils.misc import pymysql_encode
 from utils.recalculator import PPCalculator
 
 __all__ = ('RankedStatus', 'Beatmap')
@@ -22,6 +24,7 @@ __all__ = ('RankedStatus', 'Beatmap')
 # but we have nothing to do but deal with it B).
 
 @unique
+@pymysql_encode(escape_enum)
 class RankedStatus(IntEnum):
     """Server side osu! beatmap ranked statuses.
        Same as used in osu!'s /web/getscores.php.
@@ -33,6 +36,17 @@ class RankedStatus(IntEnum):
     Approved = 3
     Qualified = 4
     Loved = 5
+
+    def __str__(self) -> str:
+        return {
+            self.NotSubmitted: 'Unsubmitted',
+            self.Pending: 'Unranked',
+            self.UpdateAvailable: 'Outdated',
+            self.Ranked: 'Ranked',
+            self.Approved: 'Approved',
+            self.Qualified: 'Qualified',
+            self.Loved: 'Loved'
+        }[self.value]
 
     @property
     def osu_api(self):
@@ -182,7 +196,7 @@ class Beatmap:
         return f'[{self.url} {self.full}]'
 
     @classmethod
-    async def from_bid(cls, bid: int):
+    async def from_bid(cls, bid: int) -> 'Beatmap':
         """Create a `Beatmap` from sql using a beatmap id."""
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
@@ -319,6 +333,7 @@ class Beatmap:
         m.ar = float(bmap['diff_approach'])
         m.hp = float(bmap['diff_drain'])
 
+        m.total_length = int(bmap['total_length'])
         m.diff = float(bmap['difficultyrating'])
 
         res = await glob.db.fetch(
@@ -377,6 +392,9 @@ class Beatmap:
                         for r in res}
 
         for bmap in apidata:
+            if bmap['file_md5'] is None:
+                continue # ded
+
             # convert the map's last_update time to datetime.
             bmap['last_update'] = datetime.strptime(
                 bmap['last_update'], '%Y-%m-%d %H:%M:%S')
@@ -436,6 +454,7 @@ class Beatmap:
             m.ar = float(bmap['diff_approach'])
             m.hp = float(bmap['diff_drain'])
 
+            m.total_length = int(bmap['total_length'])
             m.diff = float(bmap['difficultyrating'])
 
             # save our map to the cache.
@@ -466,25 +485,16 @@ class Beatmap:
 
     async def save_to_sql(self) -> None:
         """Save the the object into sql."""
-        params = [
-            self.md5, self.id, self.set_id, self.status,
-            self.artist, self.title, self.version, self.creator,
-            self.last_update, self.total_length, self.frozen,
-            self.mode, self.bpm, self.cs, self.od, self.ar,
-            self.hp, self.diff
-        ]
-
-        if any(map(lambda x: x is None, params)):
-            log('Tried to save invalid beatmap to SQL!', Ansi.LRED)
-            return
-
-        params[3] = int(params[3]) # status
-        params[11] = int(params[11]) # mode
-
         await glob.db.execute(
             'REPLACE INTO maps (server, md5, id, set_id, status, '
             'artist, title, version, creator, last_update, '
             'total_length, frozen, mode, bpm, cs, od, ar, hp, diff) '
             'VALUES ("osu!", %s, %s, %s, %s, %s, %s, %s, %s, %s, '
-            '%s, %s, %s, %s, %s, %s, %s, %s, %s)', params
+            '%s, %s, %s, %s, %s, %s, %s, %s, %s)', [
+                self.md5, self.id, self.set_id, self.status,
+                self.artist, self.title, self.version, self.creator,
+                self.last_update, self.total_length, self.frozen,
+                self.mode, self.bpm, self.cs, self.od, self.ar,
+                self.hp, self.diff
+            ]
         )

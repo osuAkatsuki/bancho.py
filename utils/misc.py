@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import inspect
+import pymysql
 from pathlib import Path
+from typing import Callable
 from typing import Sequence
 
-import cmyui
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
-
-from objects import glob
 
 __all__ = (
     'point_of_interest',
@@ -23,8 +22,9 @@ def point_of_interest():
     """Leave a pseudo-breakpoint somewhere to ask the user if
        they could pls submit their stacktrace to cmyui <3."""
 
-    ver_str = f'Running gulag v{glob.version!r} | cmyui_pkg v{cmyui.__version__}'
-    printc(ver_str, Ansi.LBLUE)
+    # TODO: fix this, circular import thing
+    #ver_str = f'Running gulag v{glob.version!r} | cmyui_pkg v{cmyui.__version__}'
+    #printc(ver_str, Ansi.LBLUE)
 
     for fi in inspect.stack()[1:]:
         if fi.function == '_run':
@@ -84,3 +84,13 @@ def get_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(' ', '_')
+
+def pymysql_encode(conv: Callable):
+    """Decorator to allow for adding to pymysql's encoders."""
+    def wrapper(cls):
+        pymysql.converters.encoders |= {cls: conv}
+        return cls
+    return wrapper
+
+def escape_enum(val, mapping=None) -> str: # used for ^
+    return str(int(val))
