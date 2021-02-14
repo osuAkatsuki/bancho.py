@@ -166,8 +166,15 @@ async def recent(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         rank = s.rank if s.status == SubmissionStatus.BEST else 'NA'
         l.append(f'PASS {{{s.pp:.2f}pp #{rank}}}')
     else:
-        completion = s.time_elapsed / (s.bmap.total_length * 1000)
-        l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
+        # XXX: prior to v3.2.0, gulag didn't parse total_length from
+        # the osu!api, and thus this can do some zerodivision moments.
+        # this can probably be removed in the future, or better yet
+        # replaced with a better system to fix the maps.
+        if s.bmap.total_length != 0:
+            completion = s.time_elapsed / (s.bmap.total_length * 1000)
+            l.append(f'FAIL {{{completion * 100:.2f}% complete}})')
+        else:
+            l.append('FAIL')
 
     return ' | '.join(l)
 

@@ -6,6 +6,7 @@
 # like this, but we'll see B) massive speed gains tho
 
 import struct
+import random
 from collections import namedtuple
 from enum import IntEnum
 from enum import unique
@@ -643,17 +644,28 @@ def changeUsername(old: str, new: str) -> bytes:
         (f'{old}>>>>{new}', osuTypes.string)
     )
 
+BOT_STATUSES = (
+    (3, 'the source code..'), # editing
+    (6, 'geohot livestreams..'), # watching
+    (6, 'over the server..'), # watching
+    (8, 'out new features..'), # testing
+    (9, 'a pull request..'), # submitting
+)
+
 # since the bot is always online and is
 # also automatically added to all player's
 # friends list, their stats are requested
 # *very* frequently; only build it once.
 @cache
 def botStats():
+    # pick at random from list of potential statuses.
+    status_id, status_txt = random.choice(BOT_STATUSES)
+
     return write(
         Packets.CHO_USER_STATS,
         (glob.bot.id, osuTypes.i32),
-        (8, osuTypes.u8), # testing
-        ('out new code..', osuTypes.string),
+        (status_id, osuTypes.u8),
+        (status_txt, osuTypes.string),
         ('', osuTypes.string),
         (0, osuTypes.i32),
         (0, osuTypes.u8),

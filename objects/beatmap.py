@@ -392,6 +392,9 @@ class Beatmap:
                         for r in res}
 
         for bmap in apidata:
+            if bmap['file_md5'] is None:
+                continue # ded
+
             # convert the map's last_update time to datetime.
             bmap['last_update'] = datetime.strptime(
                 bmap['last_update'], '%Y-%m-%d %H:%M:%S')
