@@ -228,6 +228,8 @@ class Player:
         else:
             return self.name
 
+    # TODO: chat embed with clan tag hyperlinked?
+
     @property
     def remaining_silence(self) -> int:
         """The remaining time of the players silence."""

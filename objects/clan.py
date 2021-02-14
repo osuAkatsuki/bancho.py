@@ -42,8 +42,7 @@ class Clan:
         # be a good idea to sort people into
         # different roles.
         res = await glob.db.fetchall(
-            'SELECT id FROM users '
-            'WHERE clan_id = %s',
+            'SELECT id FROM users WHERE clan_id = %s',
             [self.id], _dict=False
         )
 

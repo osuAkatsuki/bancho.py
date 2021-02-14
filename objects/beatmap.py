@@ -196,7 +196,7 @@ class Beatmap:
         return f'[{self.url} {self.full}]'
 
     @classmethod
-    async def from_bid(cls, bid: int):
+    async def from_bid(cls, bid: int) -> 'Beatmap':
         """Create a `Beatmap` from sql using a beatmap id."""
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
@@ -333,6 +333,7 @@ class Beatmap:
         m.ar = float(bmap['diff_approach'])
         m.hp = float(bmap['diff_drain'])
 
+        m.total_length = int(bmap['total_length'])
         m.diff = float(bmap['difficultyrating'])
 
         res = await glob.db.fetch(
@@ -450,6 +451,7 @@ class Beatmap:
             m.ar = float(bmap['diff_approach'])
             m.hp = float(bmap['diff_drain'])
 
+            m.total_length = int(bmap['total_length'])
             m.diff = float(bmap['difficultyrating'])
 
             # save our map to the cache.
