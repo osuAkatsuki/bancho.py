@@ -37,6 +37,17 @@ class RankedStatus(IntEnum):
     Qualified = 4
     Loved = 5
 
+    def __str__(self) -> str:
+        return {
+            self.NotSubmitted: 'Unsubmitted',
+            self.Pending: 'Unranked',
+            self.UpdateAvailable: 'Outdated',
+            self.Ranked: 'Ranked',
+            self.Approved: 'Approved',
+            self.Qualified: 'Qualified',
+            self.Loved: 'Loved'
+        }[self.value]
+
     @property
     def osu_api(self):
         """Convert the value to osu!api status."""
