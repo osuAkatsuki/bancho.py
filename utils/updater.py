@@ -74,7 +74,7 @@ class Updater:
                 return self.version
 
             # return most recent release version
-            return Version.from_str(list(json['releases'])[-1])
+            return Version.from_str(json['info']['version'])
 
     async def _update_cmyui(self) -> None:
         """Check if cmyui_pkg has a newer release; update if available."""
@@ -96,26 +96,38 @@ class Updater:
         # version changed; there may be sql changes.
         content = SQL_UPDATES_FILE.read_text()
 
-        updates = []
+        queries = []
+        q_lines = []
+
         current_ver = None
+
 
         for line in content.splitlines():
             if not line:
                 continue
 
-            if line.startswith('#') or not current_ver:
+            if line.startswith('#'):
                 # may be normal comment or new version
                 if rgx := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):
                     current_ver = Version.from_str(rgx['ver'])
 
                 continue
+            elif not current_ver:
+                continue
 
             # we only need the updates between the
             # previous and new version of the server.
             if prev_version < current_ver <= self.version:
-                updates.append(line)
+                if line.endswith(';'):
+                    if q_lines:
+                        queries.append(' '.join(q_lines))
+                        q_lines = []
+                    else:
+                        queries.append(line)
+                else:
+                    q_lines.append(line)
 
-        if not updates:
+        if not queries:
             return
 
         log(f'Updating sql (v{prev_version!r} -> '
@@ -125,7 +137,7 @@ class Updater:
 
         # TODO: sql transaction? for rollback
         async with sql_lock:
-            for query in updates:
+            for query in queries:
                 try:
                     await glob.db.execute(query)
                 except aiomysql.MySQLError:
