@@ -659,6 +659,28 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osump://{opt_id}/dn option]'
 
+@command(Privileges.Dangerous)
+async def reload(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Reload a Python module."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !reload <module>'
+
+    parent, *children = msg[0].split('.')
+
+    try:
+        mod = __import__(parent)
+    except ModuleNotFoundError:
+        return 'Module not found.'
+
+    try:
+        for child in children:
+            mod = getattr(mod, child)
+    except AttributeError:
+        return f'Failed at {child}.'
+
+    mod = importlib.reload(mod)
+    return f'Reloaded {mod.__name__}'
+
 """ Advanced commands (only allowed with `advanced = True` in config) """
 
 # NOTE: some of these commands are potentially dangerous, and only
