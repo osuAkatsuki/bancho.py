@@ -777,17 +777,14 @@ async def mp_start(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
             if not 0 < duration <= 300:
                 return 'Timer range is 1-300 seconds.'
 
-            async def delayed_start(wait: int):
-                await asyncio.sleep(wait)
+            def _start():
+                # make sure player didn't leave the
+                # match since queueing this start lol..
+                if p in m:
+                    m.start()
 
-                if p not in m:
-                    # player left match since :monkaS:
-                    return
-
-                await m.chat.send(glob.bot, 'Good luck!')
-                m.start()
-
-            asyncio.create_task(delayed_start(duration))
+            loop = asyncio.get_event_loop()
+            loop.call_later(duration, _start)
             return f'Match will start in {duration} seconds.'
         elif msg[0] not in ('force', 'f'):
             return 'Invalid syntax: !mp start <force/seconds>'
@@ -926,6 +923,9 @@ async def mp_invite(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     if not (t := await glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
+    elif t is glob.bot:
+        await p.send(glob.bot, "I'm too busy!")
+        return
 
     if p is t:
         return "You can't invite yourself!"
@@ -1634,7 +1634,7 @@ async def process_commands(p: 'Player', t: Messageable,
     start_time = clock_ns()
     trigger, *args = msg[len(glob.config.command_prefix):].strip().split(' ')
 
-    for cmd_set in glob.commands['sets']:
+    for cmd_set in command_sets:
         # check if any command sets match.
         if trigger == cmd_set.trigger:
             # matching set found;
