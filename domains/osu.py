@@ -1980,6 +1980,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
 """ ingame registration """
 
+"""
 @domain.route('/users', methods=['POST'])
 async def register_account(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
@@ -2071,3 +2072,4 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success
+"""
