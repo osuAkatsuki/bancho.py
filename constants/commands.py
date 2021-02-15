@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import importlib
 import random
 import re
 from collections import defaultdict
@@ -48,10 +49,12 @@ class Command(NamedTuple):
     doc: str
 
 class CommandSet:
-    __slots__ = ('commands', 'trigger')
+    __slots__ = ('trigger', 'doc', 'commands')
 
-    def __init__(self, trigger: str) -> None:
+    def __init__(self, trigger: str, doc: str) -> None:
         self.trigger = trigger
+        self.doc = doc
+
         self.commands: list[Command] = []
 
     def add(self, priv: Privileges, aliases: list[str] = [],
@@ -75,14 +78,15 @@ class CommandSet:
 # not sure if this should be in glob or not,
 # trying to think of some use cases lol..
 regular_commands = []
-mp_commands = CommandSet('mp')
-pool_commands = CommandSet('pool')
-clan_commands = CommandSet('clan')
+command_sets = [
+    mp_commands := CommandSet('mp', 'Multiplayer commands.'),
+    pool_commands := CommandSet('pool', 'Mappool commands.'),
+    clan_commands := CommandSet('clan', 'Clan commands.')
+]
 
 glob.commands = {
     'regular': regular_commands,
-    'sets': [mp_commands, pool_commands,
-             clan_commands]
+    'sets': command_sets
 }
 
 def command(priv: Privileges, aliases: list[str] = [],
@@ -108,16 +112,24 @@ def command(priv: Privileges, aliases: list[str] = [],
 async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Show information of all documented commands the player can access."""
     prefix = glob.config.command_prefix
-    cmds = []
+    l = ['Individual commands',
+         '-----------']
 
     for cmd in regular_commands:
         if not cmd.doc or not p.priv & cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f'{prefix}{cmd.triggers[0]}: {cmd.doc}')
+        l.append(f'{prefix}{cmd.triggers[0]}: {cmd.doc}')
 
-    return '\n'.join(cmds)
+    l.append('') # newline
+    l.extend(['Command sets',
+              '-----------'])
+
+    for cmd_set in command_sets:
+        l.append(f'{prefix}{cmd_set.trigger}: {cmd_set.doc}')
+
+    return '\n'.join(l)
 
 @command(Privileges.Normal)
 async def roll(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -257,7 +269,7 @@ async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     return 'Request submitted.'
 
-""" Nominators commands
+""" Nominator commands
 # The commands below allow users to
 # manage  the server's state of beatmaps.
 """
@@ -692,7 +704,8 @@ if glob.config.advanced:
     __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
         'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
-        'cmyui',  'datetime', 'time', 'inspect', 'math'
+        'cmyui',  'datetime', 'time', 'inspect', 'math',
+        'importlib'
     )}
 
     @command(Privileges.Dangerous)
