@@ -627,22 +627,22 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             return
 
         msg = self.msg.msg
-        target = self.msg.target
+        t_name = self.msg.target
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await glob.players.get(name=target, sql=True)):
-            log(f'{p} tried to write to non-existent user {target}.', Ansi.YELLOW)
+        if not (t := await glob.players.get(name=t_name, sql=True)):
+            log(f'{p} tried to write to non-existent user {t_name}.', Ansi.YELLOW)
             return
 
         if t.pm_private and p.id not in t.friends:
-            p.enqueue(packets.userDMBlocked(target))
+            p.enqueue(packets.userDMBlocked(t_name))
             log(f'{p} tried to message {t}, but they are blocking dms.')
             return
 
         if t.silenced:
             # if target is silenced, inform player.
-            p.enqueue(packets.targetSilenced(target))
+            p.enqueue(packets.targetSilenced(t_name))
             log(f'{p} tried to message {t}, but they are silenced.')
             return
 
@@ -650,7 +650,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            await p.send(p.name, t.away_msg)
+            await p.send(t, t.away_msg)
 
         if t is glob.bot:
             # may have a command in the message.
