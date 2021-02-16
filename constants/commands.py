@@ -249,6 +249,7 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 @command(Privileges.Normal, aliases=['req'])
 async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Request a beatmap for nomination."""
     if msg:
         return 'Invalid syntax: !request'
 
@@ -276,6 +277,7 @@ async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 @command(Privileges.Nominator, aliases=['reqs'], hidden=True)
 async def requests(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Check the nomination request queue."""
     if msg:
         return 'Invalid syntax: !requests'
 
