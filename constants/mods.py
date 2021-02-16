@@ -72,22 +72,23 @@ class Mods(IntFlag):
             Mods.SPUNOUT: 'SO',
             Mods.AUTOPILOT: 'AP',
             Mods.PERFECT: 'PF',
-            Mods.KEY4: 'K4',
-            Mods.KEY5: 'K5',
-            Mods.KEY6: 'K6',
-            Mods.KEY7: 'K7',
-            Mods.KEY8: 'K8',
             Mods.FADEIN: 'FI',
             Mods.RANDOM: 'RN',
             Mods.CINEMA: 'CN',
             Mods.TARGET: 'TP',
-            Mods.KEY9: 'K9',
-            Mods.KEYCOOP: 'CO',
-            Mods.KEY1: 'K1',
-            Mods.KEY3: 'K3',
-            Mods.KEY2: 'K2',
             Mods.SCOREV2: 'V2',
-            Mods.MIRROR: 'MR'
+            Mods.MIRROR: 'MR',
+
+            Mods.KEY1: '1K',
+            Mods.KEY2: '2K',
+            Mods.KEY3: '3K',
+            Mods.KEY4: '4K',
+            Mods.KEY5: '5K',
+            Mods.KEY6: '6K',
+            Mods.KEY7: '7K',
+            Mods.KEY8: '8K',
+            Mods.KEY9: '9K',
+            Mods.KEYCOOP: 'CO'
         }
 
         mod_str = []
@@ -126,8 +127,22 @@ class Mods(IntFlag):
             'HT': cls.HALFTIME,
             'FL': cls.FLASHLIGHT,
             'SO': cls.SPUNOUT,
+            'CN': cls.CINEMA,
+            'AU': cls.AUTOPLAY,
+            'TP': cls.TARGET,
             'RX': cls.RELAX,
-            'AP': cls.AUTOPILOT
+            'AP': cls.AUTOPILOT,
+
+            '1K': cls.KEY1,
+            '2K': cls.KEY2,
+            '3K': cls.KEY3,
+            '4K': cls.KEY4,
+            '5K': cls.KEY5,
+            '6K': cls.KEY6,
+            '7K': cls.KEY7,
+            '8K': cls.KEY8,
+            '9K': cls.KEY9,
+            'CO': cls.KEYCOOP
         }
 
         mods = cls.NOMOD
@@ -142,7 +157,6 @@ class Mods(IntFlag):
 
     @classmethod
     def from_np(cls, s: str):
-        # from fmt: `-DiffDown +DiffUp ~Special~`
         mod_dict = {
             '-Easy': cls.EASY,
             '-NoFail': cls.NOFAIL,
@@ -155,8 +169,36 @@ class Mods(IntFlag):
             '-HalfTime': cls.HALFTIME,
             '+Flashlight': cls.FLASHLIGHT,
             '-SpunOut': cls.SPUNOUT,
+
+            '|Cinema|': cls.CINEMA,
+            '|Autoplay|': cls.AUTOPLAY,
+
+            '~Target~': cls.TARGET,
             '~Relax~': cls.RELAX,
-            '~Autopilot~': cls.AUTOPILOT
+            '~Autopilot~': cls.AUTOPILOT,
+
+            # perhaps could modify regex
+            # to only allow these once,
+            # and only at the end of str?
+            '|1K|': cls.KEY1,
+            '|2K|': cls.KEY2,
+            '|3K|': cls.KEY3,
+            '|4K|': cls.KEY4,
+            '|5K|': cls.KEY5,
+            '|6K|': cls.KEY6,
+            '|7K|': cls.KEY7,
+            '|8K|': cls.KEY8,
+            '|9K|': cls.KEY9,
+
+            # XXX: kinda mood that there's no way
+            # to tell K1-K4 co-op from /np, but
+            # scores won't submit or anything so
+            # it's not ultimately a problem.
+            '|10K|': cls.KEY5 | cls.KEYCOOP,
+            '|12K|': cls.KEY6 | cls.KEYCOOP,
+            '|14K|': cls.KEY7 | cls.KEYCOOP,
+            '|16K|': cls.KEY8 | cls.KEYCOOP,
+            '|18K|': cls.KEY9 | cls.KEYCOOP
         }
 
         mods = cls.NOMOD
