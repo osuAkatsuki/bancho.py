@@ -672,7 +672,7 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osump://{opt_id}/dn option]'
 
-@command(Privileges.Dangerous)
+@command(Privileges.Dangerous, aliases=['r'])
 async def reload(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Reload a Python module."""
     if len(msg) != 1:
