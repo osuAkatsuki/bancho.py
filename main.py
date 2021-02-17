@@ -64,10 +64,7 @@ async def setup_globals() -> None:
             id = res['id'],
             name = res['name'],
             created_at = res['created_at'],
-            created_by = await glob.players.get(
-                id = res['created_by'],
-                sql = True # fetch even if offline
-            )
+            created_by = await glob.players.get_ensure(id=res['created_by'])
         )
 
         await pool.maps_from_sql()

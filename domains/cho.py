@@ -74,7 +74,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         return resp
 
     # get the player from the specified osu token.
-    player = await glob.players.get(token=conn.headers['osu-token'])
+    player = glob.players.get(token=conn.headers['osu-token'])
 
     if not player:
         # token was not found; changes are, we just restarted
@@ -261,7 +261,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     username = s[0]
     login_time = time.time()
 
-    if p := await glob.players.get(name=username):
+    if p := glob.players.get(name=username):
         if (login_time - p.last_recv_time) > 10:
             # if the current player obj online hasn't
             # pinged the server in > 10 seconds, log
@@ -566,7 +566,7 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
     target_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
-        if not (host := await glob.players.get(id=self.target_id)):
+        if not (host := glob.players.get(id=self.target_id)):
             log(f'{p} tried to spectate nonexistant id {self.target_id}.', Ansi.YELLOW)
             return
 
@@ -631,7 +631,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await glob.players.get(name=t_name, sql=True)):
+        if not (t := await glob.players.get_ensure(name=t_name)):
             log(f'{p} tried to write to non-existent user {t_name}.', Ansi.YELLOW)
             return
 
@@ -1145,7 +1145,7 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
     user_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
-        if not (t := await glob.players.get(id=self.user_id)):
+        if not (t := glob.players.get(id=self.user_id)):
             log(f'{p} tried to add a user who is not online! ({self.user_id})')
             return
 
@@ -1164,7 +1164,7 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
     user_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
-        if not (t := await glob.players.get(id=self.user_id)):
+        if not (t := glob.players.get(id=self.user_id)):
             log(f'{p} tried to remove a user who is not online! ({self.user_id})')
             return
 
@@ -1238,7 +1238,7 @@ class StatsRequest(BanchoPacket, type=Packets.OSU_USER_STATS_REQUEST):
         is_online = lambda o: o in glob.players.ids and o != p.id
 
         for online in filter(is_online, self.user_ids):
-            if t := await glob.players.get(id=online):
+            if t := glob.players.get(id=online):
                 p.enqueue(packets.userStats(t))
 
 @register
@@ -1249,7 +1249,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
         if not p.match:
             return
 
-        if not (t := await glob.players.get(id=self.user_id)):
+        if not (t := glob.players.get(id=self.user_id)):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
         elif t is glob.bot:
@@ -1278,7 +1278,7 @@ class UserPresenceRequest(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST):
 
     async def handle(self, p: Player) -> None:
         for pid in self.user_ids:
-            if t := await glob.players.get(id=pid):
+            if t := glob.players.get(id=pid):
                 p.enqueue(packets.userPresence(t))
 
 @register

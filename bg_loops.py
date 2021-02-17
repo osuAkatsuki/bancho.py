@@ -33,7 +33,7 @@ async def donor_expiry() -> None:
         if (delta := when - time.time()) >= 0:
             await asyncio.sleep(delta)
 
-        p = await glob.players.get(id=userid, sql=True)
+        p = await glob.players.get_ensure(id=userid)
 
         # TODO: perhaps make a `revoke_donor` method?
         await p.remove_privs(Privileges.Donator)

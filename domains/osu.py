@@ -1274,7 +1274,7 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if not (t := await glob.players.get(name=t_name, sql=True)):
+    if not (t := await glob.players.get_ensure(name=t_name)):
         return
 
     # mark any unread mail from this user as read.

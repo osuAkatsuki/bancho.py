@@ -223,7 +223,7 @@ class Score:
 
         s.id = res[0]
         s.bmap = await Beatmap.from_md5(res[1])
-        s.player = await glob.players.get(id=res[2], sql=True)
+        s.player = await glob.players.get_ensure(id=res[2])
 
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,

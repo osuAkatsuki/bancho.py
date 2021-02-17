@@ -293,7 +293,7 @@ async def requests(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     for (map_id, player_id, dt) in res:
         # find player & map for each row, and add to output.
-        if not (p := await glob.players.get(id=player_id, sql=True)):
+        if not (p := await glob.players.get_ensure(id=player_id)):
             l.append(f'Failed to find requesting player ({player_id})?')
             continue
 
@@ -390,7 +390,7 @@ async def notes(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 2 or not msg[1].isdecimal():
         return 'Invalid syntax: !notes <name> <days_back>'
 
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     if (days := int(msg[1])) > 365:
@@ -412,7 +412,7 @@ async def addnote(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !addnote <name> <note ...>'
 
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     log_msg = f'{p} added note: {" ".join(msg[1:])}'
@@ -431,7 +431,7 @@ async def silence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 3:
         return 'Invalid syntax: !silence <name> <duration> <reason>'
 
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -457,7 +457,7 @@ async def unsilence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !unsilence <name>'
 
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     if not t.silenced:
@@ -481,7 +481,7 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !ban <name> <reason>'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -499,7 +499,7 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !ban <name> <reason>'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
@@ -525,7 +525,7 @@ async def alertu(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 2:
         return 'Invalid syntax: !alertu <name> <msg>'
 
-    if not (t := await glob.players.get(name=msg[0])):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     t.enqueue(packets.notification(' '.join(msg[1:])))
@@ -614,7 +614,7 @@ async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 #    if len(msg) != 2:
 #        return 'Invalid syntax: !rtx <name> <msg>'
 #
-#    if not (t := await glob.players.get(name=msg[0])):
+#    if not (t := glob.players.get(name=msg[0])):
 #        return 'Could not find a user by that name.'
 #
 #    t.enqueue(packets.RTX(msg[1]))
@@ -654,7 +654,7 @@ async def setpriv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
         priv |= _priv
 
-    if not (t := await glob.players.get(name=msg[0], sql=True)):
+    if not (t := await glob.players.get_ensure(name=msg[0])):
         return 'Could not find user.'
 
     await t.update_privs(priv)
@@ -904,7 +904,7 @@ async def mp_host(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp host <name>'
 
-    if not (t := await glob.players.get(name=' '.join(msg))):
+    if not (t := glob.players.get(name=' '.join(msg))):
         return 'Could not find a user by that name.'
 
     if t is m.host:
@@ -930,7 +930,7 @@ async def mp_invite(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp invite <name>'
 
-    if not (t := await glob.players.get(name=msg[0])):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
     elif t is glob.bot:
         await p.send(glob.bot, "I'm too busy!")
@@ -948,7 +948,7 @@ async def mp_addref(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp addref <name>'
 
-    if not (t := await glob.players.get(name=msg[0])):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if t not in m:
@@ -966,7 +966,7 @@ async def mp_rmref(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp addref <name>'
 
-    if not (t := await glob.players.get(name=msg[0])):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if t not in m.refs:
@@ -1162,7 +1162,7 @@ async def mp_force(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp force <name>'
 
-    if not (t := await glob.players.get(name=' '.join(msg))):
+    if not (t := glob.players.get(name=' '.join(msg))):
         return 'Could not find a user by that name.'
 
     await t.join_match(m, m.passwd)
@@ -1576,7 +1576,7 @@ async def clan_disband(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     # remove all members from the clan,
     # reset their clan rank (cache & sql).
     # NOTE: only online players need be to be uncached.
-    for m in [await glob.players.get(id=p_id) for p_id in clan.members]:
+    for m in [glob.players.get(id=p_id) for p_id in clan.members]:
         m.clan = m.clan_rank = None
 
     await glob.db.execute(
@@ -1606,7 +1606,7 @@ async def clan_info(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (clan := glob.clans.get(tag=' '.join(msg).upper())):
         return 'Could not find a clan by that tag.'
 
-    owner = await glob.players.get(id=clan.owner, sql=True)
+    owner = await glob.players.get_ensure(id=clan.owner)
 
     _time = clan.created_at.strftime('%H:%M:%S%p')
     _date = clan.created_at.strftime('%Y-%m-%d')
