@@ -187,8 +187,9 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} wrote to {target} with insufficient privileges.')
             return
 
-        # limit message length to 2048 characters
-        msg = f'{msg[:2045]}...' if msg[2048:] else msg
+        # limit message length to 2k chars
+        if len(msg) > 2000:
+            msg = f'{msg[:2000]}... (truncated)'
 
         cmd = (msg.startswith(glob.config.command_prefix) and
                await commands.process_commands(p, t, msg))
@@ -403,9 +404,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
         else:
             # player is verified
-            # TODO: add discord webhooks to cmyui_pkg, it would be a
-            # perfect addition here.. will have to think about how
-            # to organize it in config tho :o
+            # TODO: discord webhook?
+            log(f'{username} logged in with HWID matches!', Ansi.LRED)
             pass
 
     if first_login := not user_info['priv'] & Privileges.Verified:
@@ -646,7 +646,9 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             log(f'{p} tried to message {t}, but they are silenced.')
             return
 
-        msg = f'{msg[:2045]}...' if msg[2048:] else msg
+        # limit message length to 2k chars
+        if len(msg) > 2000:
+            msg = f'{msg[:2000]}... (truncated)'
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
@@ -681,8 +683,6 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
                         # since this is a DM to the bot, we should
                         # send back a list of general PP values.
-                        # TODO: !acc and !mods in commands to
-                        #       modify these values :P
                         _msg = [p.last_np.embed]
                         if mods:
                             _msg.append(f'+{mods!r}')
@@ -1211,8 +1211,6 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
 
         # leave the chan server-side.
         await p.leave_channel(c)
-
-        # enqueue new playercount to all players.
 
 @register
 class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):

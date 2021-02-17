@@ -461,9 +461,8 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         # TODO: get from osu!
         return
 
-    # TODO: rating
     return ('{set_id}.osz|{artist}|{title}|{creator}|'
-            '{status}|10.0|{last_update}|{set_id}|'
+            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
