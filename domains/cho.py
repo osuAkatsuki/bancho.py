@@ -899,6 +899,10 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 m.mods &= Mods.SPEED_CHANGING
                 m.mods |= host.mods
 
+                for s in m.slots:
+                    if s.status & SlotStatus.has_player:
+                        s.mods = Mods.NOMOD
+
         if self.new.map_id == -1:
             # map being changed, unready players.
             m.unready_players(expected=SlotStatus.ready)

@@ -889,11 +889,16 @@ async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     else:
         # host mods -> central mods.
         m.freemods = False
+
         host = m.get_host_slot() # should always exist
         # the match keeps any speed-changing mods,
         # and also takes any mods the host has enabled.
         m.mods &= Mods.SPEED_CHANGING
         m.mods |= host.mods
+
+        for s in m.slots:
+            if s.status & SlotStatus.has_player:
+                s.mods = Mods.NOMOD
 
     m.enqueue_state()
     return 'Match freemod status updated.'
@@ -1288,6 +1293,20 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.map_md5 = bmap.md5
     m.map_id = bmap.id
     m.map_name = bmap.full
+
+    # TODO: some kind of abstraction allowing
+    # for something like !mp pick fm.
+    if m.freemods:
+        # if freemods are enabled, disable them.
+        m.freemods = False
+
+        for s in m.slots:
+            if s.status & SlotStatus.has_player:
+                s.mods = Mods.NOMOD
+
+    # update match mods to the picked map.
+    m.mods = mods
+
     m.enqueue_state()
 
     return f'Picked {bmap.embed}. ({mods_slot})'
