@@ -297,8 +297,6 @@ class Match:
             ):
                 return s
 
-        return
-
     def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
 

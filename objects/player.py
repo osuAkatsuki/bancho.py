@@ -393,7 +393,7 @@ class Player:
                 'using the appeal form on the website.'
             ))
 
-        log(f'Banned {self}.', Ansi.CYAN)
+        log(f'Banned {self}.', Ansi.LCYAN)
 
     async def unban(self, admin: 'Player', reason: str) -> None:
         """Unban `self` for `reason`, and log to sql."""
@@ -406,7 +406,7 @@ class Player:
             [admin.id, self.id, log_msg]
         )
 
-        log(f'Unbanned {self}.', Ansi.CYAN)
+        log(f'Unbanned {self}.', Ansi.LCYAN)
 
     async def silence(self, admin: 'Player', duration: int,
                       reason: str) -> None:
@@ -431,7 +431,7 @@ class Player:
         # wipe their messages from any channels.
         glob.players.enqueue(packets.userSilenced(self.id))
 
-        log(f'Silenced {self}.', Ansi.CYAN)
+        log(f'Silenced {self}.', Ansi.LCYAN)
 
     async def unsilence(self, admin: 'Player') -> None:
         """Unsilence `self`, and log to sql."""
@@ -452,7 +452,7 @@ class Player:
         # inform the user's client
         self.enqueue(packets.silenceEnd(0))
 
-        log(f'Unsilenced {self}.', Ansi.CYAN)
+        log(f'Unsilenced {self}.', Ansi.LCYAN)
 
     async def join_match(self, m: Match, passwd: str) -> bool:
         """Attempt to add `self` to `m`."""
@@ -464,11 +464,11 @@ class Player:
         if self is not m.host:
             # match already exists, we're simply joining.
             if self not in glob.players.staff and passwd != m.passwd:
-                log(f'{self} tried to join {m} with incorrect passwd.')
+                log(f'{self} tried to join {m} w/ incorrect pw.', Ansi.LYELLOW)
                 self.enqueue(packets.matchJoinFail())
                 return False
             if (slotID := m.get_free()) is None:
-                log(f'{self} tried to join a full match.')
+                log(f'{self} tried to join a full match.', Ansi.LYELLOW)
                 self.enqueue(packets.matchJoinFail())
                 return False
 
@@ -477,7 +477,7 @@ class Player:
             slotID = 0
 
         if not await self.join_channel(m.chat):
-            log(f'{self} failed to join {m.chat}.')
+            log(f'{self} failed to join {m.chat}.', Ansi.LYELLOW)
             return False
 
         if (lobby := glob.channels['#lobby']) in self.channels:
@@ -503,7 +503,7 @@ class Player:
         """Attempt to remove `self` from their match."""
         if not self.match:
             if glob.config.debug:
-                log(f"{self} tried leaving a match they're not in?")
+                log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
         for s in self.match.slots:
@@ -538,15 +538,12 @@ class Player:
 
     async def join_channel(self, c: Channel) -> bool:
         """Attempt to add `self` to `c`."""
+        # ensure they're not already in chan.
         if self in c:
-            # user already in the channel.
-            if glob.config.debug:
-                log(f'{self} was double-added to {c}.')
-
             return False
 
+        # ensure they have read privs.
         if not self.priv & c.read_priv:
-            log(f'{self} tried to join {c} but lacks privs.')
             return False
 
         # lobby can only be interacted with while in mp lobby.
@@ -571,8 +568,8 @@ class Player:
 
     async def leave_channel(self, c: Channel) -> None:
         """Attempt to remove `self` from `c`."""
+        # ensure they're in the chan.
         if self not in c:
-            log(f'{self} tried to leave {c} but is not in it.')
             return
 
         await c.remove(self) # remove from channels
@@ -609,7 +606,8 @@ class Player:
 
         # attempt to join their spectator channel.
         if not await p.join_channel(spec_chan):
-            return log(f'{self} failed to join {spec_chan}?')
+            log(f'{self} failed to join {spec_chan}?', Ansi.LYELLOW)
+            return
 
         #p.enqueue(packets.channelJoin(c.name))
         p_joined = packets.fellowSpectatorJoined(p.id)
@@ -650,7 +648,7 @@ class Player:
     async def add_friend(self, p: 'Player') -> None:
         """Attempt to add `p` to `self`'s friends."""
         if p.id in self.friends:
-            log(f'{self} tried to add {p}, who is already their friend!')
+            log(f'{self} tried to add {p}, who is already their friend!', Ansi.LYELLOW)
             return
 
         self.friends.add(p.id)
@@ -665,7 +663,7 @@ class Player:
     async def remove_friend(self, p: 'Player') -> None:
         """Attempt to remove `p` from `self`'s friends."""
         if not p.id in self.friends:
-            log(f'{self} tried to remove {p}, who is not their friend!')
+            log(f'{self} tried to remove {p}, who is not their friend!', Ansi.LYELLOW)
             return
 
         self.friends.remove(p.id)

@@ -553,7 +553,7 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         if not ppcalc:
             return 'Could not retrieve map file.'
 
-        await c.send(glob.bot, f'Performing full recalc on {p.last_np.embed}.')
+        await c.send_bot(f'Performing full recalc on {p.last_np.embed}.')
 
         for table in ('scores_vn', 'scores_rx', 'scores_ap'):
             # fetch all scores from the table on this map

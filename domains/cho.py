@@ -153,7 +153,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            log(f'{p} sent a message while silenced.', Ansi.YELLOW)
+            log(f'{p} sent a message while silenced.', Ansi.LYELLOW)
             return
 
         msg = self.msg.msg
@@ -169,21 +169,21 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             else:
                 return
 
-            t = glob.channels[f'#spec_{spec_id}']
+            t_chan = glob.channels[f'#spec_{spec_id}']
         elif target == '#multiplayer':
             if not p.match:
                 # they're not in a match?
                 return
 
-            t = p.match.chat
+            t_chan = p.match.chat
         else:
-            t = glob.channels[target]
+            t_chan = glob.channels[target]
 
-        if not t:
-            log(f'{p} wrote to non-existent {target}.', Ansi.YELLOW)
+        if not t_chan:
+            log(f'{p} wrote to non-existent {target}.', Ansi.LYELLOW)
             return
 
-        if not p.priv & t.write_priv:
+        if not p.priv & t_chan.write_priv:
             log(f'{p} wrote to {target} with insufficient privileges.')
             return
 
@@ -192,19 +192,19 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             msg = f'{msg[:2000]}... (truncated)'
 
         cmd = (msg.startswith(glob.config.command_prefix) and
-               await commands.process_commands(p, t, msg))
+               await commands.process_commands(p, t_chan, msg))
 
         if cmd:
             # a command was triggered.
             if not cmd['hidden']:
-                await t.send(p, msg)
+                await t_chan.send(p, msg)
                 if 'resp' in cmd:
-                    await t.send(glob.bot, cmd['resp'])
+                    await t_chan.send_bot(cmd['resp'])
             else:
                 staff = glob.players.staff
-                await t.send_selective(p, msg, staff - {p})
+                await t_chan.send_selective(p, msg, staff - {p})
                 if 'resp' in cmd:
-                    await t.send_selective(glob.bot, cmd['resp'], staff | {p})
+                    await t_chan.send_selective(glob.bot, cmd['resp'], staff | {p})
 
         else:
             # no commands were triggered
@@ -218,10 +218,10 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                 # so we can use this elsewhere owo..
                 p.last_np = await Beatmap.from_bid(int(_match['bid']))
 
-            await t.send(p, msg)
+            await t_chan.send(p, msg)
 
         await p.update_latest_activity()
-        log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
+        log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register
 class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
@@ -567,7 +567,7 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
 
     async def handle(self, p: Player) -> None:
         if not (host := glob.players.get(id=self.target_id)):
-            log(f'{p} tried to spectate nonexistant id {self.target_id}.', Ansi.YELLOW)
+            log(f'{p} tried to spectate nonexistant id {self.target_id}.', Ansi.LYELLOW)
             return
 
         if c_host := p.spectating:
@@ -623,7 +623,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            log(f'{p} tried to send a dm while silenced.', Ansi.YELLOW)
+            log(f'{p} tried to send a dm while silenced.', Ansi.LYELLOW)
             return
 
         msg = self.msg.msg
@@ -632,7 +632,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
         if not (t := await glob.players.get_ensure(name=t_name)):
-            log(f'{p} tried to write to non-existent user {t_name}.', Ansi.YELLOW)
+            log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
             return
 
         if t.pm_private and p.id not in t.friends:
@@ -720,7 +720,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             )
 
         await p.update_latest_activity()
-        log(f'{p} @ {t}: {msg}', Ansi.CYAN, fd='.data/logs/chat.log')
+        log(f'{p} @ {t}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register
 class LobbyPart(BanchoPacket, type=Packets.OSU_PART_LOBBY):
@@ -904,7 +904,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
             m.unready_players(expected=SlotStatus.ready)
         elif m.map_id == -1:
             # new map has been chosen, send to match chat.
-            await m.chat.send(glob.bot, f'Map selected: {self.new.map_embed}.')
+            await m.chat.send_bot(f'Map selected: {self.new.map_embed}.')
 
         # copy map & basic match info
         m.map_id = self.new.map_id
@@ -925,7 +925,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 msg = ('Changing team type while scrimming will reset '
                        'the overall score - to do so, please use the '
                        f'!mp teams {_team} command.')
-                await m.chat.send(glob.bot, msg)
+                await m.chat.send_bot(msg)
             else:
                 # find the new appropriate default team.
                 # defaults are (ffa: neutral, teams: red).
@@ -1123,7 +1123,7 @@ class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
         c = glob.channels[self.name]
 
         if not c or not await p.join_channel(c):
-            log(f'{p} failed to join {self.name}.', Ansi.YELLOW)
+            log(f'{p} failed to join {self.name}.', Ansi.LYELLOW)
             return
 
         # enqueue channelJoin to our player.
@@ -1214,7 +1214,7 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
         c = glob.channels[self.name]
 
         if not c:
-            log(f'{p} failed to leave {self.name}.', Ansi.YELLOW)
+            log(f'{p} failed to leave {self.name}.', Ansi.LYELLOW)
             return
 
         if p not in c:

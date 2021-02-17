@@ -47,7 +47,7 @@ async def donor_expiry() -> None:
         if p.online:
             p.enqueue(packets.notification('Your supporter status has expired.'))
 
-        log(f"{p}'s supporter status has expired.", Ansi.MAGENTA)
+        log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
 
     # enqueue rm_donor for any supporter
     # expiring in the next 30 days.

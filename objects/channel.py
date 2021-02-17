@@ -47,9 +47,12 @@ class Channel:
 
     @property
     def name(self) -> str:
-        return ('#spectator' if self._name.startswith('#spec_')
-           else '#multiplayer' if self._name.startswith('#multi_')
-           else self._name)
+        if self._name.startswith('#spec_'):
+            return '#spectator'
+        elif self._name.startswith('#multi_'):
+            return '#multiplayer'
+        else:
+            return self._name
 
     @property
     def basic_info(self) -> tuple[str, str, int]:
@@ -63,7 +66,7 @@ class Channel:
 
     async def send(self, client: 'Player', msg: str,
                    to_self: bool = False) -> None:
-        """Enqueue `client`'s `msg` to all connected clients."""
+        """Enqueue `msg` to all connected clients from `client`."""
         self.enqueue(
             packets.sendMessage(
                 client = client.name,
@@ -72,6 +75,19 @@ class Channel:
                 client_id = client.id
             ),
             immune = () if to_self else (client.id,)
+        )
+
+    async def send_bot(self, msg: str) -> None:
+        """Enqueue `msg` to all connected clients from bot."""
+        bot = glob.bot
+
+        self.enqueue(
+            packets.sendMessage(
+                client = bot.name,
+                msg = msg,
+                target = self.name,
+                client_id = bot.id
+            )
         )
 
     async def send_selective(self, client: 'Player', msg: str,

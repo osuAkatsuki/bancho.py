@@ -8,14 +8,18 @@ from objects.collections import *
 
 if TYPE_CHECKING:
     from aiohttp.client import ClientSession
-    from cmyui import AsyncSQLPool, Version
+    from cmyui import AsyncSQLPool
+    from cmyui import Version
+    from datadog import ThreadStats
+
     from objects.player import Player
     from objects.score import Score
-    from datadog import ThreadStats
+    from packets import BanchoPacket
+    from packets import Packets
 
 __all__ = ('players', 'channels', 'matches',
            'pools', 'clans', 'achievements',
-           #'gulag_maps',
+           'bancho_packets', #'gulag_maps',
            'db', 'http', 'version', 'bot',
            'cache', 'sketchy_queue', 'datadog')
 
@@ -39,6 +43,7 @@ gulag_maps: dict[str, int] = {
 }
 """
 
+bancho_packets: dict['Packets', 'BanchoPacket']
 db: 'AsyncSQLPool'
 http: 'ClientSession'
 version: 'Version'

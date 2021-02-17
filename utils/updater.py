@@ -84,7 +84,7 @@ class Updater:
         if module_ver < latest_ver:
             # package is not up to date; update it.
             log(f'Updating cmyui_pkg (v{module_ver!r} -> '
-                                    f'v{latest_ver!r}).', Ansi.MAGENTA)
+                                    f'v{latest_ver!r}).', Ansi.LMAGENTA)
             pip_main(['install', '-Uq', 'cmyui']) # Update quiet
 
     async def _update_sql(self, prev_version: Version) -> None:
@@ -132,7 +132,7 @@ class Updater:
             return
 
         log(f'Updating sql (v{prev_version!r} -> '
-                          f'v{self.version!r}).', Ansi.MAGENTA)
+                          f'v{self.version!r}).', Ansi.LMAGENTA)
 
         sql_lock = asyncio.Lock()
 
