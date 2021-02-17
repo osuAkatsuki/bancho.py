@@ -120,6 +120,7 @@ class Updater:
             if prev_version < current_ver <= self.version:
                 if line.endswith(';'):
                     if q_lines:
+                        q_lines.append(line)
                         queries.append(' '.join(q_lines))
                         q_lines = []
                     else:
