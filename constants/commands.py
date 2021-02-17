@@ -142,8 +142,7 @@ async def roll(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-# TODO: prolly beatconnect/chimu.moe
-@command(Privileges.Normal, aliases=['bloodcat', 'beatconnect', 'q'])
+@command(Privileges.Normal, aliases=['bloodcat', 'beatconnect', 'chimu', 'q'])
 async def maplink(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Return a download link to the user's current map (situation dependant)."""
     bmap = None
@@ -747,8 +746,8 @@ if glob.config.advanced:
             return 'Success'
 
 """ Multiplayer commands
-# The commands below are specifically for
-# multiplayer match management.
+# The commands below for multiplayer match management.
+# Most commands are open to player usage.
 """
 
 @mp_commands.add(Privileges.Normal, aliases=['h'])
@@ -813,18 +812,6 @@ async def mp_abort(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.enqueue_state()
     return 'Match aborted.'
 
-@mp_commands.add(Privileges.Admin, hidden=True)
-async def mp_force(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
-    """Force a player into the current match by name."""
-    if len(msg) != 1:
-        return 'Invalid syntax: !mp force <name>'
-
-    if not (t := await glob.players.get(name=' '.join(msg))):
-        return 'Could not find a user by that name.'
-
-    await t.join_match(m, m.passwd)
-    return 'Welcome.'
-
 @mp_commands.add(Privileges.Normal)
 async def mp_map(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Set the current match's current map by id."""
@@ -863,8 +850,28 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.enqueue_state()
     return 'Match mods updated.'
 
+@mp_commands.add(Privileges.Normal, aliases=['pmods'])
+async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Set the current players freemods, if permitted."""
+    if len(msg) != 1 or not ~len(msg[0]) & 1:
+        return 'Invalid syntax: !mp playermods <mods>'
+
+    if not m.freemods:
+        return 'Freemods must be enabled to use this command!'
+
+    mods = Mods.from_modstr(msg[0])
+
+    # speed-changing mods may
+    # only be applied to match.
+    mods &= ~Mods.SPEED_CHANGING
+
+    m.get_slot(p).mods = mods
+    m.enqueue_state()
+    return f'Mods updated to {mods!r}.'
+
 @mp_commands.add(Privileges.Normal, aliases=['fm'])
 async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Toggle freemods status for the match."""
     if len(msg) != 1 or msg[0] not in ('on', 'off'):
         return 'Invalid syntax: !mp freemods <on/off>'
 
@@ -1149,7 +1156,19 @@ async def mp_rematch(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     return msg
 
-# Mappool commands
+@mp_commands.add(Privileges.Admin, hidden=True)
+async def mp_force(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
+    """Force a player into the current match by name."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !mp force <name>'
+
+    if not (t := await glob.players.get(name=' '.join(msg))):
+        return 'Could not find a user by that name.'
+
+    await t.join_match(m, m.passwd)
+    return 'Welcome.'
+
+# mappool-related mp commands
 
 @mp_commands.add(Privileges.Normal, aliases=['lp'])
 async def mp_loadpool(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
