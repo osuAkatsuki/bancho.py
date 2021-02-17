@@ -50,9 +50,11 @@ Generic
 
 !help: Show information of all documented commands the player can access.
 !roll: Roll an n-sided die where n is the number you write (100 default).
-!bloodcat: Return a bloodcat link of the user's current map (situation dependant).
-!last: Show information about your most recent score.
+!maplink: Return a download link to the user's current map (situation dependant).
+!recent: Show information about your most recent score.
 !with: Specify custom accuracy & mod combinations with `/np`.
+!request: Request a beatmap for nomination.
+!requests: Check the nomination request queue.
 !map: Changes the ranked status of the most recently /np'ed map.
 !notes: Retrieve the logs of a specified player by name.
 !addnote: Add a note to a specified player by name.
@@ -67,7 +69,8 @@ Generic
 !debug: Toggle the console's debug setting.
 !setpriv: Set privileges for a specified player (by name).
 !menu_preview: Temporary command to illustrate cmyui's menu option idea.
-
+!reload: Reload a Python module.
+!py: Allow for (async) access to the python interpreter.
 
 Multiplayer Management
 ------
@@ -75,9 +78,10 @@ Multiplayer Management
 !mp help: Show information of all documented mp commands the player can access.
 !mp start: Start the current multiplayer match, with any players ready.
 !mp abort: Abort the current in-progress multiplayer match.
-!mp force: Force a player into the current match by name.
 !mp map: Set the current match's current map by id.
 !mp mods: Set the current match's mods, from string form.
+!mp playermods: Set the current players freemods, if permitted.
+!mp freemods: Toggle freemods status for the match.
 !mp host: Set the current match's current host by id.
 !mp randpw: Randomize the current match's password.
 !mp invite: Invite a player to the current match by name.
@@ -91,6 +95,7 @@ Multiplayer Management
 !mp scrim: Start a scrim in the current match.
 !mp endscrim: End the current matches ongoing scrim.
 !mp rematch: Restart a scrim with the previous match points, or roll back the most recent match point.
+!mp force: Force a player into the current match by name.
 !mp loadpool: Load a mappool into the current match.
 !mp unloadpool: Unload the current matches mappool.
 !mp ban: Ban a pick in the currently loaded mappool.
