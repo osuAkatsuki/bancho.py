@@ -12,6 +12,8 @@ from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
 
+from cmyui import log, Ansi
+
 import packets
 from constants import regexes
 from constants.gamemodes import GameMode
@@ -129,11 +131,25 @@ class MapPool:
                  'WHERE pool_id = %s')
 
         async for row in glob.db.iterall(query, [self.id]):
-            key = (Mods(row['mods']), row['slot'])
-            bmap = await Beatmap.from_bid(row['map_id'])
+            map_id = row['map_id']
+            bmap = await Beatmap.from_bid(map_id)
 
-            # TODO: should prolly delete the map from pool and
-            # inform eventually webhook to disc if not found?
+            if not bmap:
+                # map not found? remove it from the
+                # pool and log this incident to console.
+                # NOTE: it's intentional that this removes
+                # it from not only this pool, but all pools.
+                # TODO: perhaps discord webhook?
+                log(f'Removing {map_id} from pool {self.name} (not found).', Ansi.LRED)
+
+                await glob.db.execute(
+                    'DELETE FROM tourney_pool_maps '
+                    'WHERE map_id = %s',
+                    [map_id]
+                )
+                continue
+
+            key = (Mods(row['mods']), row['slot'])
             self.maps[key] = bmap
 
 class Slot:
