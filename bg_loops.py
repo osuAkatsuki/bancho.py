@@ -11,7 +11,6 @@ from cmyui.discord import Webhook
 from cmyui.discord import Embed
 from cmyui import log, Ansi
 
-
 import packets
 from constants.gamemodes import GameMode
 from constants.privileges import Privileges
@@ -21,7 +20,8 @@ from utils.misc import get_press_times
 if TYPE_CHECKING:
     from objects.score import Score
 
-__all__ = ('donor_expiry', 'disconnect_ghosts', 'replay_detections')
+__all__ = ('donor_expiry', 'disconnect_ghosts',
+           'replay_detections', 'reroll_bot_status')
 
 async def donor_expiry() -> None:
     """Add new donation ranks & enqueue tasks to remove current ones."""
@@ -151,3 +151,9 @@ async def replay_detections() -> None:
 
     while score := await queue.get():
         loop.create_task(analyze_score(score))
+
+async def reroll_bot_status(interval: int) -> None:
+    """Reroll the bot's status, every `interval`."""
+    while True:
+        await asyncio.sleep(interval)
+        packets.botStats.cache_clear()

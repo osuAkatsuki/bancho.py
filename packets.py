@@ -655,10 +655,10 @@ BOT_STATUSES = (
 # since the bot is always online and is
 # also automatically added to all player's
 # friends list, their stats are requested
-# *very* frequently; only build it once.
-# TODO: perhaps clear the cache every once
-# in a while so it doesn't require a restart
-# to pick another status? lol
+# *very* frequently, and should be cached.
+# NOTE: this is cleared once in a while by
+# `bg_loops.reroll_bot_status` to keep fresh.
+
 @cache
 def botStats():
     # pick at random from list of potential statuses.

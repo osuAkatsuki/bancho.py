@@ -131,6 +131,9 @@ async def on_start() -> None:
     if glob.config.webhooks['surveillance']:
         loop.create_task(bg_loops.replay_detections())
 
+    # reroll the bot's random status every `interval` sec.
+    loop.create_task(bg_loops.reroll_bot_status(interval=300))
+
 if __name__ == '__main__':
     # set cwd to /gulag.
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
