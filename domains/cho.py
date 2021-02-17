@@ -861,6 +861,10 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
             slot.status = SlotStatus.open
         else:
             if slot.player:
+                # XXX: this is kinda weird, here we kick
+                # the player, but assume that their client
+                # will leave the match themselves..
+                # TODO: perhaps.. don't do this?
                 slot.reset()
             slot.status = SlotStatus.locked
 

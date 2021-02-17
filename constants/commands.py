@@ -160,7 +160,7 @@ async def maplink(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     return f'[https://chimu.moe/d/{bmap.set_id} {bmap.full}]'
 
-@command(Privileges.Normal, aliases=['last'])
+@command(Privileges.Normal, aliases=['last', 'r'])
 async def recent(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
     if not (s := p.recent_score):
@@ -403,6 +403,9 @@ async def notes(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         'ORDER BY `time` ASC',
         [t.id, days * 86400]
     )
+
+    if not res:
+        return f'No notes found on {t} in the past {days} days.'
 
     return '\n'.join(map(lambda row: '[{time}] {msg}'.format(**row), res))
 
@@ -672,7 +675,7 @@ async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     opt_id = await p.add_to_menu(callback)
     return f'[osump://{opt_id}/dn option]'
 
-@command(Privileges.Dangerous, aliases=['r'])
+@command(Privileges.Dangerous, aliases=['re'])
 async def reload(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Reload a Python module."""
     if len(msg) != 1:
@@ -1142,10 +1145,13 @@ async def mp_rematch(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         return 'Only available to the host.'
 
     if not m.is_scrimming:
-        # re-start scrimming with old points
-        m.is_scrimming = True
-        msg = (f'A rematch has been started by {p.name}; '
-               f'first to {m.winning_pts} points wins. Best of luck!')
+        if m.winning_pts == 0:
+            msg = 'No scrim to rematch; to start one, use !mp scrim.'
+        else:
+            # re-start scrimming with old points
+            m.is_scrimming = True
+            msg = (f'A rematch has been started by {p.name}; '
+                f'first to {m.winning_pts} points wins. Best of luck!')
     else:
         # reset the last match point awarded
         if not m.winners:
