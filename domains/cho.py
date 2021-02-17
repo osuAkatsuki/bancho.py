@@ -820,12 +820,8 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
         if not 0 <= self.slot_id < 16:
             return
 
-        if m.slots[self.slot_id].status & SlotStatus.has_player:
-            log(f'{p} tried to move into a slot with another player.')
-            return
-
-        if m.slots[self.slot_id].status == SlotStatus.locked:
-            log(f'{p} tried to move to into locked slot.')
+        if m.slots[self.slot_id].status != SlotStatus.open:
+            log(f'{p} tried to move into non-open slot.', Ansi.LYELLOW)
             return
 
         # swap with current slot.
@@ -851,6 +847,10 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
         if not (m := p.match):
             return
 
+        if p is not m.host:
+            log(f'{p} attempted to lock match as non-host.', Ansi.LYELLOW)
+            return
+
         # read new slot ID
         if not 0 <= self.slot_id < 16:
             return
@@ -872,6 +872,10 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
+            return
+
+        if p is not m.host:
+            log(f'{p} attempted to change settings as non-host.', Ansi.LYELLOW)
             return
 
         if self.new.freemods != m.freemods:
@@ -958,6 +962,10 @@ class MatchStart(BanchoPacket, type=Packets.OSU_MATCH_START):
         if not (m := p.match):
             return
 
+        if p is not m.host:
+            log(f'{p} attempted to start match as non-host.', Ansi.LYELLOW)
+            return
+
         m.start()
 
 @register
@@ -1028,6 +1036,10 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
             # set slot mods
             m.get_slot(p).mods = self.mods & ~Mods.SPEED_CHANGING
         else:
+            if p is not m.host:
+                log(f'{p} attempted to change mods as non-host.', Ansi.LYELLOW)
+                return
+
             # not freemods, set match mods.
             m.mods = self.mods
 
@@ -1126,6 +1138,7 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
             return
 
         if p is not m.host:
+            log(f'{p} attempted to transfer host as non-host.', Ansi.LYELLOW)
             return
 
         # read new slot ID
@@ -1184,13 +1197,12 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
         if not (m := p.match):
             return
 
-        for s in m.slots:
-            if p is s.player:
-                s.team = MatchTeams.blue if s.team != MatchTeams.blue else MatchTeams.red
-                break
+        # toggle team
+        s = m.get_slot(p)
+        if s.team == MatchTeams.blue:
+            s.team = MatchTeams.red
         else:
-            log(f'{p} tried changing team outside of a match? (2)')
-            return
+            s.team = MatchTeams.blue
 
         m.enqueue_state(lobby=False)
 
@@ -1267,6 +1279,10 @@ class MatchChangePassword(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_PASSWORD):
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
+            return
+
+        if p is not m.host:
+            log(f'{p} attempted to change pw as non-host.', Ansi.LYELLOW)
             return
 
         m.passwd = self.match.passwd
