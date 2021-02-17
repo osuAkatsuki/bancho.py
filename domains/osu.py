@@ -682,7 +682,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'SELECT u.id, name FROM users u '
             f'LEFT JOIN {table} s ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
-            'AND s.status = 2 ORDER BY pp DESC LIMIT 1, 1',
+            'AND s.status = 2 AND u.priv & 1 '
+            'ORDER BY pp DESC LIMIT 1, 1',
             [s.bmap.md5, s.mode.as_vanilla]
         )
 
@@ -1097,10 +1098,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         f"FROM {table} s "
         "LEFT JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s"
+        "WHERE s.map_md5 = %s AND s.status = 2 "
+        "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
     ]
 
-    params = [map_md5, conn.args['m']]
+    params = [map_md5, p.id, conn.args['m']]
 
     if rank_type == RankingType.Mods:
         query.append('AND s.mods = %s')
@@ -1151,9 +1153,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     if p_best:
         # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
-            f'SELECT COUNT(*) AS count FROM {table} '
-            'WHERE map_md5 = %s AND mode = %s '
-            f'AND status = 2 AND {scoring} > %s', [
+            f'SELECT COUNT(*) AS count FROM {table} s '
+            'LEFT JOIN users u ON u.id = s.userid '
+            'WHERE s.map_md5 = %s AND s.mode = %s '
+            'AND s.status = 2 AND u.priv & 1 '
+            f'AND s.{scoring} > %s', [
                 map_md5, conn.args['m'],
                 p_best['_score']
             ]

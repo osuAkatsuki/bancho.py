@@ -747,10 +747,10 @@ class Player:
 
         # calculate rank.
         res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats '
-            'LEFT JOIN users USING(id) '
-            f'WHERE pp_{mode:sql} > %s '
-            'AND priv & 1',
+            'SELECT COUNT(*) AS c FROM stats s '
+            'LEFT JOIN users u USING(id) '
+            f'WHERE s.pp_{mode:sql} > %s '
+            'AND u.priv & 1',
             [stats.pp]
         )
 

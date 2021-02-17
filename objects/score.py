@@ -328,9 +328,10 @@ class Score:
             score = self.score
 
         res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM {t} '
+            f'SELECT COUNT(*) AS c FROM {table} '
             'WHERE map_md5 = %s AND mode = %s '
-            'AND status = 2 AND {s} > %s'.format(t=table, s=scoring),
+            'AND status = 2 AND u.priv & 1 '
+            f'AND {scoring} > %s',
             [self.bmap.md5, self.mode.as_vanilla, score]
         )
 
