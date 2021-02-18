@@ -61,7 +61,7 @@ class ChannelList(list):
                 return c
 
     def append(self, c: 'Channel') -> None:
-        """Append `c` from the list."""
+        """Append `c` to the list."""
         super().append(c)
 
         if glob.config.debug:
@@ -91,7 +91,7 @@ class MatchList(list):
                 return idx
 
     def append(self, m: 'Match') -> bool:
-        """Append `m` from the list."""
+        """Append `m` to the list."""
         if m in self:
             breakpoint()
 
@@ -266,7 +266,7 @@ class MapPoolList(list):
                 return p
 
     def append(self, mp: 'MapPool') -> None:
-        """Append `mp` from the list."""
+        """Append `mp` c the list."""
         super().append(mp)
 
         if glob.config.debug:
@@ -310,7 +310,7 @@ class ClanList(list):
                 return c
 
     def append(self, c: 'Clan') -> None:
-        """Append `c` from the list."""
+        """Append `c` c the list."""
         super().append(c)
 
         if glob.config.debug:
