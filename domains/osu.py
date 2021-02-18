@@ -2047,7 +2047,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
-        async with glob.players._lock():
+        async with glob.players._lock:
             pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
             pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
             glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login
