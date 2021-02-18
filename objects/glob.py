@@ -4,7 +4,6 @@ from asyncio import Queue
 from typing import Optional, TYPE_CHECKING
 
 import config # imported for indirect use
-from objects.collections import *
 
 if TYPE_CHECKING:
     from aiohttp.client import ClientSession
@@ -12,6 +11,8 @@ if TYPE_CHECKING:
     from cmyui import Version
     from datadog import ThreadStats
 
+    from objects.achievement import Achievement
+    from objects.collections import *
     from objects.player import Player
     from objects.score import Score
     from packets import BanchoPacket
@@ -23,25 +24,13 @@ __all__ = ('players', 'channels', 'matches',
            'db', 'http', 'version', 'bot',
            'cache', 'sketchy_queue', 'datadog')
 
-players = PlayerList()
-channels = ChannelList()
-matches = MatchList()
-pools = MapPoolList()
-clans = ClanList()
-
-# store achievements per-gamemode (vn only)
-achievements = {0: [], 1: [],
-                2: [], 3: []}
-
-""" bmsubmit stuff, released soonTM
-# store the current available ids
-# for users submitting custom maps.
-# updated from sql on gulag startup.
-gulag_maps: dict[str, int] = {
-    'set_id': (1 << 30) - 1,
-    'id': (1 << 30) - 1
-}
-"""
+# global lists
+players: 'PlayerList'
+channels: 'ChannelList'
+matches: 'MatchList'
+clans: 'ClanList'
+pools: 'MapPoolList'
+achievements: dict[int, list['Achievement']] # per vn gamemode
 
 bancho_packets: dict['Packets', 'BanchoPacket']
 db: 'AsyncSQLPool'
@@ -76,7 +65,9 @@ cache = {
     'unsubmitted': set() # {md5, ...}
 }
 
-""" disabled (unused) for now
+# ==- Currently unused features below -==
+
+""" performance reports (osu-session.php)
 # when a score is submitted, the osu! client will submit a
 # performance report of the user's pc along with some technical
 # details about the score. the performance report is submitted
@@ -89,4 +80,14 @@ cache = {
 # recevied our score yet, so we'll give it some time, this
 # way our report always gets submitted.
 'performance_reports': set() # {scoreid, ...}
+"""
+
+""" beatmap submission stuff
+# store the current available ids
+# for users submitting custom maps.
+# updated from sql on gulag startup.
+gulag_maps: dict[str, int] = {
+    'set_id': (1 << 30) - 1,
+    'id': (1 << 30) - 1
+}
 """

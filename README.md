@@ -72,6 +72,7 @@ Generic
 !reload: Reload a Python module.
 !py: Allow for (async) access to the python interpreter.
 
+
 Multiplayer Management
 ------
 
@@ -194,7 +195,7 @@ Directory Structure
     ├── ext        # External files from gulag's primary operation.
     ├── objects    # Code for representing players, scores, maps, and more.
     ├── utils      # Utility functions used throughout the codebase for general purposes.
-    └── domains    # The web routes available to the players.
-        ├── cho    # (ce|c4|c5|c6).ppy.sh/* domains
-        ├── osu    # osu.ppy.sh/* domains
-        └── ava    # a.ppy.sh/* domains
+    └── domains    # The route-continaing domains accessible to the public web.
+        ├── cho    # (ce|c4|c5|c6).ppy.sh/* routes
+        ├── osu    # osu.ppy.sh/* routes
+        └── ava    # a.ppy.sh/* routes

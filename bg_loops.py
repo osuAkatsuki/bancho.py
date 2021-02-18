@@ -66,12 +66,10 @@ PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def disconnect_ghosts() -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
-    players_lock = asyncio.Lock()
-
     while True:
         ctime = time.time()
 
-        async with players_lock:
+        async with glob.players._lock:
             for p in glob.players:
                 if ctime - p.last_recv_time > PING_TIMEOUT:
                     await p.logout()

@@ -3,6 +3,7 @@
 # TODO: there is still a lot of inconsistency
 # in a lot of these classes; needs refactor.
 
+import asyncio
 from typing import Any, Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -117,7 +118,11 @@ class MatchList(list):
 
 class PlayerList(list):
     """The currently active players on the server."""
-    __slots__ = ('players',)
+    __slots__ = ('_lock',)
+
+    def __init__(self, *args, **kwargs):
+        self._lock = asyncio.Lock()
+        super().__init__(*args, **kwargs)
 
     def __contains__(self, p: Union[Player, str]) -> bool:
         # allow us to either pass in the player

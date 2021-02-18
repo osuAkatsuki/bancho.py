@@ -65,7 +65,7 @@ async def bancho_handler(conn: Connection) -> bytes:
     if 'osu-token' not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        async with asyncio.Lock():
+        async with glob.players._lock:
             resp, token = await login(
                 conn.body, conn.headers['X-Real-IP']
             )

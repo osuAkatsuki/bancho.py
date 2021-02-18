@@ -179,7 +179,7 @@ class Player:
         self.in_lobby = False
 
         self.login_time = 0.0
-        self.last_recv_time = 0.0
+        self.last_recv_time = kwargs.get('last_recv_time', 0.0)
 
         self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
@@ -314,28 +314,29 @@ class Player:
     async def logout(self) -> None:
         """Log `self` out of the server."""
 
-        # invalidate the user's token.
-        self.token = ''
+        async with glob.players._lock:
+            # invalidate the user's token.
+            self.token = ''
 
-        # leave multiplayer.
-        if self.match:
-            await self.leave_match()
+            # leave multiplayer.
+            if self.match:
+                await self.leave_match()
 
-        # stop spectating.
-        if h := self.spectating:
-            await h.remove_spectator(self)
+            # stop spectating.
+            if h := self.spectating:
+                await h.remove_spectator(self)
 
-        # leave channels
-        while self.channels:
-            await self.leave_channel(self.channels[0])
+            # leave channels
+            while self.channels:
+                await self.leave_channel(self.channels[0])
 
-        if glob.datadog:
-            glob.datadog.decrement('gulag.online_players')
+            if glob.datadog:
+                glob.datadog.decrement('gulag.online_players')
 
-        # remove from playerlist and
-        # enqueue logout to all users.
-        glob.players.remove(self)
-        glob.players.enqueue(packets.logout(self.id))
+            # remove from playerlist and
+            # enqueue logout to all users.
+            glob.players.remove(self)
+            glob.players.enqueue(packets.logout(self.id))
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
