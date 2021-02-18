@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from asyncio import Queue
-from typing import Optional, TYPE_CHECKING
-
 import config # imported for indirect use
 
-if TYPE_CHECKING:
+if __import__('typing').TYPE_CHECKING:
+    from asyncio import Queue
     from aiohttp.client import ClientSession
     from cmyui import AsyncSQLPool
     from cmyui import Version
     from datadog import ThreadStats
+    from typing import Optional
 
     from objects.achievement import Achievement
     from objects.collections import *
@@ -37,8 +36,8 @@ db: 'AsyncSQLPool'
 http: 'ClientSession'
 version: 'Version'
 bot: 'Player'
-sketchy_queue: Queue['Score']
-datadog: Optional['ThreadStats']
+sketchy_queue: 'Queue[Score]'
+datadog: 'Optional[ThreadStats]'
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or

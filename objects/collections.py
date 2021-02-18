@@ -61,14 +61,14 @@ class ChannelList(list):
                 return c
 
     def append(self, c: 'Channel') -> None:
-        """Append `c` to internal list."""
+        """Append `c` from the list."""
         super().append(c)
 
         if glob.config.debug:
             log(f'{c} added to channels list.')
 
     def remove(self, c: 'Channel') -> None:
-        """Remove `c` from internal list."""
+        """Remove `c` from the list."""
         super().remove(c)
 
         if glob.config.debug:
@@ -91,6 +91,7 @@ class MatchList(list):
                 return idx
 
     def append(self, m: 'Match') -> bool:
+        """Append `m` from the list."""
         if m in self:
             breakpoint()
 
@@ -108,6 +109,7 @@ class MatchList(list):
             return False
 
     def remove(self, m: 'Match') -> None:
+        """Remove `m` from the list."""
         for i, _m in enumerate(self):
             if m is _m:
                 self[i] = None
@@ -136,14 +138,17 @@ class PlayerList(list):
         return f'[{", ".join(map(repr, self))}]'
 
     @property
-    def ids(self) -> tuple[int, ...]:
-        return (p.id for p in self)
+    def ids(self) -> set[int]:
+        """Return a set of the current ids in the list."""
+        return {p.id for p in self}
 
     @property
     def staff(self) -> set[Player]:
+        """Return a set of the current staff online."""
         return {p for p in self if p.priv & Privileges.Staff}
 
-    def enqueue(self, data: bytes, immune: tuple[Player, ...] = ()) -> None:
+    def enqueue(self, data: bytes, immune: list[Player] = []) -> None:
+        """Enqueue `data` to all players, except for those in `immune`."""
         for p in self:
             if p not in immune:
                 p.enqueue(data)
@@ -203,11 +208,9 @@ class PlayerList(list):
         elif p := await self.get_sql(**kwargs):
             return p
 
-    async def get_login(self, name: str, pw_md5: str, sql: bool = False) -> Optional[Player]:
-        # only used cached results - the user should have
-        # logged into bancho at least once. (This does not
-        # mean they're logged in now).
-
+    async def get_login(self, name: str, pw_md5: str,
+                        sql: bool = False) -> Optional[Player]:
+        """Return a player with a given name & pw_md5, from cache or sql."""
         if not (p := self.get(name=name)):
             if not sql: # not to fetch from sql.
                 return
@@ -220,7 +223,7 @@ class PlayerList(list):
             return p
 
     def append(self, p: Player) -> None:
-        """Attempt to add `p` to the list."""
+        """Append `p` to the list."""
         if p in self:
             if glob.config.debug:
                 log(f'{p} double-added to global player list?')
@@ -232,7 +235,7 @@ class PlayerList(list):
             log(f'{p} added to global player list.')
 
     def remove(self, p: Player) -> None:
-        """Attempt to remove `p` from the list."""
+        """Remove `p` from the list."""
         super().remove(p)
 
         if glob.config.debug:
@@ -262,19 +265,19 @@ class MapPoolList(list):
             if p.name == name:
                 return p
 
-    def append(self, p: 'MapPool') -> None:
-        """Attempt to add `p` to the list."""
-        super().append(p)
+    def append(self, mp: 'MapPool') -> None:
+        """Append `mp` from the list."""
+        super().append(mp)
 
         if glob.config.debug:
-            log(f'{p} added to mappools list.')
+            log(f'{mp} added to mappools list.')
 
-    def remove(self, p: 'MapPool') -> None:
-        """Attempt to remove `p` from the list."""
-        super().remove(p)
+    def remove(self, mp: 'MapPool') -> None:
+        """Remove `mp` from the list."""
+        super().remove(mp)
 
         if glob.config.debug:
-            log(f'{p} removed from mappools list.')
+            log(f'{mp} removed from mappools list.')
 
 class ClanList(list):
     """The currently active clans on the server."""
@@ -307,14 +310,14 @@ class ClanList(list):
                 return c
 
     def append(self, c: 'Clan') -> None:
-        """Attempt to add `c` to the list."""
+        """Append `c` from the list."""
         super().append(c)
 
         if glob.config.debug:
             log(f'{c} added to clans list.')
 
     def remove(self, c: 'Clan') -> None:
-        """Attempt to remove `c` from the list."""
+        """Remove `m` from the list."""
         super().remove(c)
 
         if glob.config.debug:
