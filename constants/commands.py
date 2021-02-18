@@ -212,7 +212,7 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
             if not 0 <= (acc := float(param)) <= 100:
                 return 'Invalid accuracy.'
 
-        elif ~len(param) & 1: # len(param) % 2 == 0
+        elif len(param) % 2 == 0:
             mods = Mods.from_modstr(param)
         else:
             return 'Invalid syntax: !with <mods/acc> ...'
@@ -834,7 +834,7 @@ async def mp_map(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 @mp_commands.add(Privileges.Normal)
 async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Set the current match's mods, from string form."""
-    if len(msg) != 1 or not ~len(msg[0]) & 1:
+    if len(msg) != 1 or len(msg[0]) % 2 != 0:
         return 'Invalid syntax: !mp mods <mods>'
 
     mods = Mods.from_modstr(msg[0])
@@ -856,7 +856,7 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 @mp_commands.add(Privileges.Normal, aliases=['pmods'])
 async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Set the current players freemods, if permitted."""
-    if len(msg) != 1 or not ~len(msg[0]) & 1:
+    if len(msg) != 1 or len(msg[0]) % 2 != 0:
         return 'Invalid syntax: !mp playermods <mods>'
 
     if not m.freemods:
@@ -1106,7 +1106,7 @@ async def mp_scrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         if m.is_scrimming:
             return 'Already scrimming!'
 
-        if ~best_of & 1:
+        if best_of % 2 == 0:
             return 'Best of must be an odd number!'
 
         m.is_scrimming = True
@@ -1403,7 +1403,7 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
-    if not ~len(rgx[1]) & 1:
+    if len(rgx[1]) % 2 != 0:
         return 'Invalid mods.'
 
     mods = Mods.from_modstr(rgx[1])

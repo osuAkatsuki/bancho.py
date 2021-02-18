@@ -428,10 +428,7 @@ class BanchoPacketReader:
                 self.view = self.view[4:]
 
         host_id = self.read_i32()
-        for p in glob.players:
-            if p.id == host_id:
-                m.host = p
-                break
+        m.host = glob.players.get(id=host_id)
 
         m.mode = GameMode(self.read_i8())
         m.win_condition = MatchWinConditions(self.read_i8())
@@ -544,7 +541,7 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     ret += passwd
 
     ret += write_string(m.map_name)
-    ret += m.map_id.to_bytes(4, 'little', signed=True)
+    ret += (m.map_id).to_bytes(4, 'little', signed=True)
     ret += write_string(m.map_md5)
 
     ret.extend([s.status for s in m.slots])
@@ -552,17 +549,17 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
 
     for s in m.slots:
         if s.status & SlotStatus.has_player:
-            ret += s.player.id.to_bytes(4, 'little')
+            ret += (s.player.id).to_bytes(4, 'little')
 
-    ret += m.host.id.to_bytes(4, 'little')
+    ret += (m.host.id).to_bytes(4, 'little')
     ret.extend((m.mode, m.win_condition,
                 m.team_type, m.freemods))
 
     if m.freemods:
         for s in m.slots:
-            ret += s.mods.to_bytes(4, 'little')
+            ret += (s.mods).to_bytes(4, 'little')
 
-    ret += m.seed.to_bytes(4, 'little')
+    ret += (m.seed).to_bytes(4, 'little')
     return ret
 
 def write_scoreframe(s: ScoreFrame) -> bytearray:
@@ -666,19 +663,19 @@ def botStats():
 
     return write(
         Packets.CHO_USER_STATS,
-        (glob.bot.id, osuTypes.i32),
-        (status_id, osuTypes.u8),
-        (status_txt, osuTypes.string),
-        ('', osuTypes.string),
-        (0, osuTypes.i32),
-        (0, osuTypes.u8),
-        (0, osuTypes.i32),
-        (0, osuTypes.i64),
-        (0.0, osuTypes.f32),
-        (0, osuTypes.i32),
-        (0, osuTypes.i64),
-        (0, osuTypes.i32),
-        (0, osuTypes.i16)
+        (glob.bot.id, osuTypes.i32), # id
+        (status_id, osuTypes.u8), # action
+        (status_txt, osuTypes.string), # info_text
+        ('', osuTypes.string), # map_md5
+        (0, osuTypes.i32), # mods
+        (0, osuTypes.u8), # mode
+        (0, osuTypes.i32), # map_id
+        (0, osuTypes.i64), # rscore
+        (0.0, osuTypes.f32), # acc
+        (0, osuTypes.i32), # plays
+        (0, osuTypes.i64), # tscore
+        (0, osuTypes.i32), # rank
+        (0, osuTypes.i16) # pp
     )
 
 # packet id: 11

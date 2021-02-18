@@ -255,11 +255,13 @@ welcome_msg = '\n'.join((
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # login is a bit special, we return the response bytes
     # and token in a tuple - we need both for our response.
-    if len(s := origin.decode().split('\n')[:-1]) != 3:
+    if len(split := origin.decode().split('\n')[:-1]) != 3:
         return # invalid request
 
-    username = s[0]
     login_time = time.time()
+
+    username = split[0]
+    pw_md5 = split[1].encode()
 
     if p := glob.players.get(name=username):
         if (login_time - p.last_recv_time) > 10:
@@ -274,14 +276,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
             return data, 'no'
 
-    del p
-
-    pw_md5 = s[1].encode()
-
-    if len(s := s[2].split('|')) != 5:
+    if len(split := split[2].split('|')) != 5:
         return packets.userID(-2), 'no'
 
-    if not (r := regexes.osu_ver.match(s[0])):
+    if not (r := regexes.osu_ver.match(split[0])):
         # invalid client version?
         return packets.userID(-2), 'no'
 
@@ -300,12 +298,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
-    if not _isdecimal(s[1], _negative=True):
+    if not _isdecimal(split[1], _negative=True):
         # utc-offset isn't a number (negative inclusive).
         return packets.userID(-1), 'no'
 
-    utc_offset = int(s[1])
-    #display_city = s[2] == '1'
+    utc_offset = int(split[1])
+    #display_city = split[2] == '1'
 
     # Client hashes contain a few values useful to us.
     # [0]: md5(osu path)
@@ -313,12 +311,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # [2]: md5(adapters)
     # [3]: md5(uniqueid) (osu! uninstall id)
     # [4]: md5(uniqueid2) (disk signature/serial num)
-    if len(client_hashes := s[3].split(':')[:-1]) != 5:
+    if len(client_hashes := split[3].split(':')[:-1]) != 5:
         return # invalid request
 
     client_hashes.pop(1) # no need for non-md5 adapters
 
-    pm_private = s[4] == '1'
+    pm_private = split[4] == '1'
 
     user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, '
