@@ -25,6 +25,7 @@ from cmyui import Ansi
 from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
+from cmyui import ratelimit
 from cmyui import rstring
 
 import packets
@@ -1983,8 +1984,8 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
 """ ingame registration """
 
-"""
 @domain.route('/users', methods=['POST'])
+@ratelimit(period=300, max_count=15) # 15 registrations / 5mins
 async def register_account(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
@@ -2075,4 +2076,3 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success
-"""
