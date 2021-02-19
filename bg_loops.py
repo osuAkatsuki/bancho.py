@@ -123,9 +123,7 @@ async def analyze_score(score: 'Score') -> None:
                 icon_url = player.avatar_url
             )
 
-            # TODO: think of a way to organize a thumbnail into config?
-            thumb_url = 'https://akatsuki.pw/static/logos/logo.png'
-            embed.set_thumbnail(url=thumb_url)
+            embed.set_thumbnail(url=glob.config.webhooks['thumbnail'])
 
             for key, pt in press_times.items():
                 embed.add_field(

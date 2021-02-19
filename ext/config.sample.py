@@ -98,6 +98,9 @@ webhooks = {
     # & unusual activity auto-detected;
     # described in more detail below.
     'surveillance': '',
+
+    # XXX: not a webhook, but the thumbnail used in them.
+    'thumbnail': 'https://akatsuki.pw/static/logos/logo.png'
 }
 
 # gulag has begun to develop systems for detecting scores
