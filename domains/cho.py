@@ -236,60 +236,57 @@ welcome_msg = '\n'.join((
     "Enjoy the server!"
 ))
 
-# no specific packet id, triggered when the
-# client sends a request without an osu-token.
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
-    # login is a bit special, we return the response bytes
-    # and token in a tuple - we need both for our response.
+    """\
+    Login has no specific packet, but happens when the osu!
+    client sends a request without an 'osu-token' header.
+
+    Some notes:
+      this must be called with glob.players._lock held.
+      we return a tuple of (response_bytes, user_token) on success.
+
+    Request format:
+      username
+      password_md5
+      osu_ver|utc_offset|display_city|client_hashes|pm_private
+    """
+
+    """ Parse data and verify the request is legitimate. """
+
     if len(split := origin.decode().split('\n')[:-1]) != 3:
         return # invalid request
-
-    login_time = time.time()
 
     username = split[0]
     pw_md5 = split[1].encode()
 
-    if p := glob.players.get(name=username):
-        if (login_time - p.last_recv_time) > 10:
-            # if the current player obj online hasn't
-            # pinged the server in > 10 seconds, log
-            # them out and login the new user.
-            await p.logout()
-        else:
-            # the user is currently online, send back failure.
-            data = packets.userID(-1) + \
-                   packets.notification('User already logged in.')
+    if len(client_info := split[2].split('|')) != 5:
+        return # invalid request
 
-            return data, 'no'
+    if not (r := regexes.osu_ver.match(client_info[0])):
+        return # invalid request
 
-    if len(split := split[2].split('|')) != 5:
-        return packets.userID(-2), 'no'
-
-    if not (r := regexes.osu_ver.match(split[0])):
-        # invalid client version?
-        return packets.userID(-2), 'no'
-
-    # quite a bit faster
-    # than using strptime
+    # quite a bit faster than using dt.strptime.
     osu_ver = dt(
         year = int(r['ver'][0:4]),
         month = int(r['ver'][4:6]),
         day = int(r['ver'][6:8])
     )
 
+    # disallow the login if their osu! client is older
+    # than two months old, forcing an update re-check.
+    # NOTE: this is disabled on debug since older clients
+    #       can sometimes be quite useful when testing.
     if not glob.config.debug:
-        # disallow the login if their osu! client is older
-        # than two months old, forcing an update re-check.
         if osu_ver < (dt.now() - td(60)):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
-    if not _isdecimal(split[1], _negative=True):
-        # utc-offset isn't a number (negative inclusive).
-        return packets.userID(-1), 'no'
+    # ensure utc_offset is a number (negative inclusive).
+    if not _isdecimal(client_info[1], _negative=True):
+        return # invalid request
 
-    utc_offset = int(split[1])
-    #display_city = split[2] == '1'
+    utc_offset = int(client_info[1])
+    #display_city = client_info[2] == '1'
 
     # Client hashes contain a few values useful to us.
     # [0]: md5(osu path)
@@ -297,12 +294,30 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # [2]: md5(adapters)
     # [3]: md5(uniqueid) (osu! uninstall id)
     # [4]: md5(uniqueid2) (disk signature/serial num)
-    if len(client_hashes := split[3].split(':')[:-1]) != 5:
+    if len(client_hashes := client_info[3].split(':')[:-1]) != 5:
         return # invalid request
 
     client_hashes.pop(1) # no need for non-md5 adapters
 
-    pm_private = split[4] == '1'
+    pm_private = client_info[4] == '1'
+
+    """ Parsing complete, now check the given data. """
+
+    login_time = time.time()
+
+    # Check if the player is already online
+    if p := glob.players.get(name=username):
+        if (login_time - p.last_recv_time) > 10:
+            # if the current player obj online hasn't
+            # pinged the server in > 10 seconds, log
+            # them out and login the new user.
+            p.logout()
+        else:
+            # the user is currently online, send back failure.
+            data = packets.userID(-1) + \
+                   packets.notification('User already logged in.')
+
+            return data, 'no'
 
     user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, '
