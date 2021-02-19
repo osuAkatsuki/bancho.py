@@ -3,10 +3,14 @@
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from typing import TYPE_CHECKING
 
 from objects import glob
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
+
+if TYPE_CHECKING:
+    from objects.player import Player
 
 __all__ = ('Clan', 'ClanPrivileges')
 
@@ -34,6 +38,61 @@ class Clan:
 
         self.owner = owner # userid
         self.members = members # userids
+
+    async def add_member(self, p: 'Player') -> None:
+        """Add a given player to the clan's members."""
+        self.members.add(p.id)
+
+        await glob.db.execute(
+            'UPDATE users '
+            'SET clan_id = %s, clan_rank = 1 '
+            'WHERE id = %s',
+            [self.id, p.id]
+        )
+
+        p.clan = self
+        p.clan_rank = ClanPrivileges.Member
+
+    async def remove_member(self, p: 'Player') -> None:
+        """Remove a given player from the clan's members."""
+        self.members.remove(p.id)
+
+        await glob.db.execute(
+            'UPDATE users '
+            'SET clan_id = 0, clan_rank = 0 '
+            'WHERE id = %s',
+            [p.id]
+        )
+
+        if not self.members:
+            # no members left, disband clan.
+            await glob.db.execute(
+                'DELETE FROM clans '
+                'WHERE id = %s',
+                [self.id]
+            )
+        elif p.id == self.owner:
+            # owner leaving and members left,
+            # transfer the ownership.
+            # TODO: prefer officers
+            self.owner = next(iter(self.members))
+
+            await glob.db.execute(
+                'UPDATE clans '
+                'SET owner = %s '
+                'WHERE id = %s',
+                [self.owner, self.id]
+            )
+
+            await glob.db.execute(
+                'UPDATE users '
+                'SET clan_priv = 3 '
+                'WHERE id = %s',
+                [self.owner]
+            )
+
+        p.clan = None
+        p.clan_rank = None
 
     async def members_from_sql(self) -> None:
         """Fetch all members from sql."""

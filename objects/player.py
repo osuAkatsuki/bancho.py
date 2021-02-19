@@ -535,6 +535,22 @@ class Player:
 
         self.match = None
 
+    async def join_clan(self, c: 'Clan') -> bool:
+        if self.id in c.members:
+            return False
+
+        if not 'invited': # TODO
+            return False
+
+        await c.add_member(self)
+        return True
+
+    async def leave_clan(self) -> None:
+        if not self.clan:
+            return
+
+        await self.clan.remove_member(self)
+
     def join_channel(self, c: Channel) -> bool:
         """Attempt to add `self` to `c`."""
         # ensure they're not already in chan.
