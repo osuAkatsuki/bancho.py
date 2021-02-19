@@ -64,7 +64,7 @@ class Channel:
     def __contains__(self, p: 'Player') -> bool:
         return p in self.players
 
-    async def send(self, client: 'Player', msg: str,
+    def send(self, client: 'Player', msg: str,
                    to_self: bool = False) -> None:
         """Enqueue `msg` to all connected clients from `client`."""
         self.enqueue(
@@ -77,7 +77,7 @@ class Channel:
             immune = () if to_self else (client.id,)
         )
 
-    async def send_bot(self, msg: str) -> None:
+    def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to all connected clients from bot."""
         bot = glob.bot
 
@@ -90,17 +90,17 @@ class Channel:
             )
         )
 
-    async def send_selective(self, client: 'Player', msg: str,
+    def send_selective(self, client: 'Player', msg: str,
                              targets: list['Player']) -> None:
         """Enqueue `client`'s `msg` to `targets`."""
         for p in [t for t in targets if t in self]:
-            await p.send(client, msg, chan=self)
+            p.send(client, msg, chan=self)
 
     def append(self, p: 'Player') -> None:
         """Add `p` to the channel's players."""
         self.players.append(p)
 
-    async def remove(self, p: 'Player') -> None:
+    def remove(self, p: 'Player') -> None:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
 

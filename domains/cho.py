@@ -94,6 +94,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         if glob.config.debug:
             log(f'{packet.type!r}', Ansi.LMAGENTA)
 
+    player.last_recv_time = time.time()
     conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
     return player.dequeue() or b''
 
@@ -183,14 +184,14 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         if cmd:
             # a command was triggered.
             if not cmd['hidden']:
-                await t_chan.send(p, msg)
+                t_chan.send(p, msg)
                 if 'resp' in cmd:
-                    await t_chan.send_bot(cmd['resp'])
+                    t_chan.send_bot(cmd['resp'])
             else:
                 staff = glob.players.staff
-                await t_chan.send_selective(p, msg, staff - {p})
+                t_chan.send_selective(p, msg, staff - {p})
                 if 'resp' in cmd:
-                    await t_chan.send_selective(glob.bot, cmd['resp'], staff | {p})
+                    t_chan.send_selective(glob.bot, cmd['resp'], staff | {p})
 
         else:
             # no commands were triggered
@@ -204,7 +205,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                 # so we can use this elsewhere owo..
                 p.last_np = await Beatmap.from_bid(int(_match['bid']))
 
-            await t_chan.send(p, msg)
+            t_chan.send(p, msg)
 
         await p.update_latest_activity()
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
@@ -219,7 +220,8 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
             # it logs in, then reconnects? not sure why..?
             return
 
-        await p.logout()
+        p.logout()
+
         await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
 
@@ -454,7 +456,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             continue # no priv to read
 
         # autojoinable channels
-        if c.auto_join and await p.join_channel(c):
+        if c.auto_join and p.join_channel(c):
             # NOTE: p.join_channel enqueues channelJoin, but
             # if we don't send this back in this specific request,
             # the client will attempt to join the channel again.
@@ -524,7 +526,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 Privileges.Donator | Privileges.Alumni
             )
 
-        await p.send(glob.bot, welcome_msg)
+        p.send(glob.bot, welcome_msg)
 
     # TODO: enqueue ingame admin panel to staff members.
     """
@@ -543,7 +545,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             f'[osu://dl/{server_stats} server_stats]',
         )
 
-        await p.send(glob.bot, ' '.join(admin_panel))
+        p.send(glob.bot, ' '.join(admin_panel))
     """
 
     # add `p` to the global player list,
@@ -570,11 +572,9 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
             return
 
         if current_host := p.spectating:
-            async with current_host._spec_lock:
-                await current_host.remove_spectator(p)
+            current_host.remove_spectator(p)
 
-        async with new_host._spec_lock:
-            await new_host.add_spectator(p)
+        new_host.add_spectator(p)
 
 @register
 class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
@@ -585,8 +585,7 @@ class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
             log(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
             return
 
-        async with host._spec_lock:
-            await host.remove_spectator(p)
+        host.remove_spectator(p)
 
 @register
 class SpectateFrames(BanchoPacket, type=Packets.OSU_SPECTATE_FRAMES):
@@ -654,7 +653,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            await p.send(t, t.away_msg)
+            p.send(t, t.away_msg)
 
         if t is glob.bot:
             # may have a command in the message.
@@ -664,7 +663,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             if cmd:
                 # command triggered, send response if any.
                 if 'resp' in cmd:
-                    await p.send(t, cmd['resp'])
+                    p.send(t, cmd['resp'])
             else:
                 # no commands triggered.
                 if match := regexes.now_playing.match(msg):
@@ -699,12 +698,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                     else:
                         msg = 'Could not find map.'
 
-                    await p.send(t, msg)
+                    p.send(t, msg)
 
         else:
             # target is not aika, send the message normally if online
             if t.online:
-                await t.send(p, msg)
+                t.send(p, msg)
             else:
                 # inform user they're offline, but
                 # will receive the mail @ next login.
@@ -754,7 +753,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
-            await p.send(glob.bot, 'Failed to create match (no slots available).')
+            p.send(glob.bot, 'Failed to create match (no slots available).')
             p.enqueue(packets.matchJoinFail())
             return
 
@@ -772,7 +771,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         self.match.chat = chan
 
         await p.update_latest_activity()
-        await p.join_match(self.match, self.match.passwd)
+        p.join_match(self.match, self.match.passwd)
         log(f'{p} created a new multiplayer match.')
 
 async def check_menu_option(p: Player, key: int):
@@ -821,13 +820,13 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
             return
 
         await p.update_latest_activity()
-        await p.join_match(m, self.match_passwd)
+        p.join_match(m, self.match_passwd)
 
 @register
 class MatchPart(BanchoPacket, type=Packets.OSU_PART_MATCH):
     async def handle(self, p: Player) -> None:
         await p.update_latest_activity()
-        await p.leave_match()
+        p.leave_match()
 
 @register
 class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
@@ -847,8 +846,9 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
 
         # swap with current slot.
         s = m.get_slot(p)
-        m.slots[self.slot_id].copy(s)
+        m.slots[self.slot_id].copy_from(s)
         s.reset()
+
         m.enqueue_state() # technically not needed for host?
 
 @register
@@ -933,7 +933,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
             m.unready_players(expected=SlotStatus.ready)
         elif m.map_id == -1:
             # new map has been chosen, send to match chat.
-            await m.chat.send_bot(f'Selected: {self.new.map_embed}.')
+            m.chat.send_bot(f'Selected: {self.new.map_embed}.')
 
         # copy map & basic match info
         m.map_id = self.new.map_id
@@ -954,7 +954,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 msg = ('Changing team type while scrimming will reset '
                        'the overall score - to do so, please use the '
                        f'!mp teams {_team} command.')
-                await m.chat.send_bot(msg)
+                m.chat.send_bot(msg)
             else:
                 # find the new appropriate default team.
                 # defaults are (ffa: neutral, teams: red).
@@ -1151,7 +1151,7 @@ class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
     async def handle(self, p: Player) -> None:
         c = glob.channels[self.name]
 
-        if not c or not await p.join_channel(c):
+        if not c or not p.join_channel(c):
             log(f'{p} failed to join {self.name}.', Ansi.LYELLOW)
             return
 
@@ -1251,7 +1251,7 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
             return
 
         # leave the chan server-side.
-        await p.leave_channel(c)
+        p.leave_channel(c)
 
 @register
 class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):
@@ -1294,7 +1294,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
         elif t is glob.bot:
-            await p.send(glob.bot, "I'm too busy!")
+            p.send(glob.bot, "I'm too busy!")
             return
 
         t.enqueue(packets.matchInvite(p, t.name))

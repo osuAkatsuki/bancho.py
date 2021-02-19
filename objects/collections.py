@@ -266,7 +266,7 @@ class MapPoolList(list):
                 return p
 
     def append(self, mp: 'MapPool') -> None:
-        """Append `mp` c the list."""
+        """Append `mp` to the list."""
         super().append(mp)
 
         if glob.config.debug:
@@ -310,7 +310,7 @@ class ClanList(list):
                 return c
 
     def append(self, c: 'Clan') -> None:
-        """Append `c` c the list."""
+        """Append `c` to the list."""
         super().append(c)
 
         if glob.config.debug:

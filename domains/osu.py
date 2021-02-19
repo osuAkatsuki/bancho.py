@@ -296,7 +296,8 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
             "Please re-install relife and disable the program to avoid any restrictions."
         ])))
 
-        await p.logout()
+        p.logout()
+
         return b'-3'
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
@@ -698,7 +699,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
-        await announce_chan.send(s.player, ' '.join(ann), to_self=True)
+        announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s

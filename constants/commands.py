@@ -564,7 +564,7 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         if not ppcalc:
             return 'Could not retrieve map file.'
 
-        await c.send_bot(f'Performing full recalc on {p.last_np.embed}.')
+        c.send_bot(f'Performing full recalc on {p.last_np.embed}.')
 
         for table in ('scores_vn', 'scores_rx', 'scores_ap'):
             # fetch all scores from the table on this map
@@ -953,7 +953,7 @@ async def mp_invite(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
     elif t is glob.bot:
-        await p.send(glob.bot, "I'm too busy!")
+        p.send(glob.bot, "I'm too busy!")
         return
 
     if p is t:
@@ -1189,7 +1189,7 @@ async def mp_force(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
-    await t.join_match(m, m.passwd)
+    t.join_match(m, m.passwd)
     return 'Welcome.'
 
 # mappool-related mp commands
@@ -1585,7 +1585,7 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     # announce clan creation
     if announce_chan := glob.channels['#announce']:
         msg = f'\x01ACTION founded {clan!r}.'
-        await announce_chan.send(p, msg, to_self=True)
+        announce_chan.send(p, msg, to_self=True)
 
     return f'{clan!r} created.'
 
@@ -1631,7 +1631,7 @@ async def clan_disband(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     # announce clan disbanding
     if announce_chan := glob.channels['#announce']:
         msg = f'\x01ACTION disbanded {clan!r}.'
-        await announce_chan.send(p, msg, to_self=True)
+        announce_chan.send(p, msg, to_self=True)
 
     return f'{clan!r} disbanded.'
 

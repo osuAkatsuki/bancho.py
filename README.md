@@ -69,7 +69,7 @@ Generic
 !debug: Toggle the console's debug setting.
 !setpriv: Set privileges for a specified player (by name).
 !menu_preview: Temporary command to illustrate cmyui's menu option idea.
-!reload: Reload a Python module.
+!reload: Reload a python module.
 !py: Allow for (async) access to the python interpreter.
 
 
