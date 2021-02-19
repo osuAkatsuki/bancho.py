@@ -742,6 +742,16 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
     match: osuTypes.match
 
     async def handle(self, p: Player) -> None:
+        # TODO: match validation..?
+        if p.silenced:
+            p.enqueue(
+                packets.matchJoinFail() +
+                packets.notification(
+                    'Multiplayer is not available while silenced.'
+                )
+            )
+            return
+
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
             await p.send(glob.bot, 'Failed to create match (no slots available).')
@@ -799,6 +809,15 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
         if not (m := glob.matches[self.match_id]):
             log(f'{p} tried to join a non-existant mp lobby?')
             p.enqueue(packets.matchJoinFail())
+            return
+
+        if p.silenced:
+            p.enqueue(
+                packets.matchJoinFail() +
+                packets.notification(
+                    'Multiplayer is not available while silenced.'
+                )
+            )
             return
 
         await p.update_latest_activity()

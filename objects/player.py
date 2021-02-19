@@ -436,6 +436,10 @@ class Player:
         # wipe their messages from any channels.
         glob.players.enqueue(packets.userSilenced(self.id))
 
+        # remove them from multiplayer match (if any).
+        if self.match:
+            self.leave_match()
+
         log(f'Silenced {self}.', Ansi.LCYAN)
 
     async def unsilence(self, admin: 'Player') -> None:
