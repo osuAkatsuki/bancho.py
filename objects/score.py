@@ -320,7 +320,7 @@ class Score:
     async def calc_lb_placement(self) -> int:
         table = self.mode.sql_table
 
-        if self.mode <= GameMode.rx_std:
+        if self.mode >= GameMode.rx_std:
             scoring = 'pp'
             score = self.pp
         else:

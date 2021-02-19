@@ -689,7 +689,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
         performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
 
-        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed}',
+        ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
                f'with {s.acc:.2f}% for {performance}.']
 
         if s.mods:
