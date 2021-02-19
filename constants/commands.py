@@ -1477,7 +1477,6 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 @pool_commands.add(Privileges.Tournament, aliases=['l'], hidden=True)
 async def pool_list(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """List all existing mappools information."""
-
     if not (pools := glob.pools):
         return 'There are currently no pools!'
 
@@ -1532,9 +1531,6 @@ async def clan_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 @clan_commands.add(Privileges.Normal, aliases=['c'])
 async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Create a clan with a given tag & name."""
-    if p.clan:
-        return f"You're already a member of {p.clan}!"
-
     if len(msg) < 2:
         return 'Invalid syntax: !clan create <tag> <name>'
 
@@ -1543,6 +1539,12 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     if not 2 <= len(name := ' '.join(msg[1:])) <= 16:
         return 'Clan name may be 2-16 characters long.'
+
+    if p.clan:
+        return f"You're already a member of {p.clan}!"
+
+    if not p.priv & Privileges.Donator:
+        return 'Creation of clans is a supporter-only feature.'
 
     if glob.clans.get(name=name):
         return 'That name has already been claimed by another clan.'
