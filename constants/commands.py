@@ -393,8 +393,12 @@ async def notes(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (t := await glob.players.get_ensure(name=msg[0])):
         return f'"{msg[0]}" not found.'
 
-    if (days := int(msg[1])) > 365:
+    days = int(msg[1])
+
+    if days > 365:
         return 'Please contact a developer to fetch >365 day old information.'
+    elif days <= 0:
+        return 'Invalid syntax: !notes <name> <days_back>'
 
     res = await glob.db.fetchall(
         'SELECT `msg`, `time` '
