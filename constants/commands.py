@@ -512,7 +512,7 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    reason = ' '.join(msg[2:]) if len_msg > 2 else None
+    reason = ' '.join(msg[1:])
 
     await t.unban(p, reason)
     return f'{t} was unbanned.'
@@ -523,11 +523,13 @@ async def alert(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) < 1:
         return 'Invalid syntax: !alert <msg>'
 
-    glob.players.enqueue(packets.notification(' '.join(msg)))
+    notif_txt = ' '.join(msg)
+
+    glob.players.enqueue(packets.notification(notif_txt))
     return 'Alert sent.'
 
-@command(Privileges.Admin, hidden=True)
-async def alertu(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+@command(Privileges.Admin, aliases=['alertu'], hidden=True)
+async def alertuser(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Send a notification to a specified player by name."""
     if len(msg) < 2:
         return 'Invalid syntax: !alertu <name> <msg>'
@@ -535,7 +537,9 @@ async def alertu(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
-    t.enqueue(packets.notification(' '.join(msg[1:])))
+    notif_txt = ' '.join(msg[1:])
+
+    t.enqueue(packets.notification(notif_txt))
     return 'Alert sent.'
 
 """ Developer commands
@@ -611,7 +615,9 @@ async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !switch <endpoint>'
 
-    p.enqueue(packets.switchTournamentServer(msg[0]))
+    new_bancho_ip = msg[0]
+
+    p.enqueue(packets.switchTournamentServer(new_bancho_ip))
     return 'Have a nice journey..'
 
 # rest in peace rtx - oct 2020 :candle:
@@ -635,18 +641,19 @@ async def debug(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
 # TODO: this command is rly bad, it probably
 # shouldn't really be a command to begin with..
-str_priv_dict = defaultdict(lambda: None, {
+str_priv_dict = {
     'normal': Privileges.Normal,
     'verified': Privileges.Verified,
     'whitelisted': Privileges.Whitelisted,
     'supporter': Privileges.Supporter,
     'premium': Privileges.Premium,
+    'alumni': Privileges.Alumni,
     'tournament': Privileges.Tournament,
     'nominator': Privileges.Nominator,
     'mod': Privileges.Mod,
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
-})
+}
 @command(Privileges.Dangerous, hidden=True)
 async def setpriv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Set privileges for a specified player (by name)."""
@@ -655,11 +662,11 @@ async def setpriv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     priv = Privileges(0)
 
-    for m in msg[1:]:
-        if not (_priv := str_priv_dict[m]):
+    for m in [m.lower() for m in msg[1:]]:
+        if m not in str_priv_dict:
             return f'Not found: {m}.'
 
-        priv |= _priv
+        priv |= str_priv_dict[m]
 
     if not (t := await glob.players.get_ensure(name=msg[0])):
         return 'Could not find user.'
@@ -667,21 +674,20 @@ async def setpriv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     await t.update_privs(priv)
     return f"Updated {t}'s privileges."
 
-# TODO: figure out better way :(
-@command(Privileges.Dangerous, aliases=['men'], hidden=True)
-async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Temporary command to illustrate cmyui's menu option idea."""
-    async def callback():
-        # this is called when the menu item is clicked
-        p.enqueue(packets.notification('clicked!'))
-
-    # add the option to their menu opts & send them a button
-    opt_id = await p.add_to_menu(callback)
-    return f'[osump://{opt_id}/dn option]'
+#@command(Privileges.Dangerous, aliases=['men'], hidden=True)
+#async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+#    """Temporary command to illustrate the menu option idea."""
+#    async def callback():
+#        # this is called when the menu item is clicked
+#        p.enqueue(packets.notification('clicked!'))
+#
+#    # add the option to their menu opts & send them a button
+#    opt_id = await p.add_to_menu(callback)
+#    return f'[osump://{opt_id}/dn option]'
 
 @command(Privileges.Dangerous, aliases=['re'])
 async def reload(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Reload a Python module."""
+    """Reload a python module."""
     if len(msg) != 1:
         return 'Invalid syntax: !reload <module>'
 
@@ -722,6 +728,8 @@ if glob.config.advanced:
         # This can be very good for getting used to gulag's API; just look
         # around the codebase and find things to play with in your server.
         # Ex: !py return (await glob.players.get(name='cmyui')).status.action
+        if not msg:
+            return 'owo'
 
         # create the new coroutine definition as a string
         # with the lines from our message (split by '\n').
@@ -916,7 +924,7 @@ async def mp_host(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if len(msg) != 1:
         return 'Invalid syntax: !mp host <name>'
 
-    if not (t := glob.players.get(name=' '.join(msg))):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     if t is m.host:
@@ -1128,7 +1136,7 @@ async def mp_scrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.winning_pts = winning_pts
     return msg
 
-@mp_commands.add(Privileges.Normal)
+@mp_commands.add(Privileges.Normal, aliases=['end'])
 async def mp_endscrim(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """End the current matches ongoing scrim."""
     if not m.is_scrimming:
@@ -1171,13 +1179,14 @@ async def mp_rematch(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     return msg
 
-@mp_commands.add(Privileges.Admin, hidden=True)
+@mp_commands.add(Privileges.Admin, aliases=['f'], hidden=True)
 async def mp_force(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Force a player into the current match by name."""
+    # NOTE: this overrides any limits such as silences or passwd.
     if len(msg) != 1:
         return 'Invalid syntax: !mp force <name>'
 
-    if not (t := glob.players.get(name=' '.join(msg))):
+    if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
 
     await t.join_match(m, m.passwd)
