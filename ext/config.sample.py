@@ -18,6 +18,7 @@ max_conns = 16
 
 # displays additional information in the
 # console, generally for debugging purposes.
+# NOTE: devs can also toggle ingame w/ !debug.
 debug = False
 
 # whether the server is running in 'production mode'.
@@ -25,12 +26,15 @@ debug = False
 # aren't used during testing.
 production = False
 
-# allow for use of advanced (and
-# potentially dangerous) commands.
+# allow for use of advanced (and potentially dangerous)
+# commands. i recommend checking where this config value
+# is used throughout the code before enabling it.. :P
 advanced = False
 
 # your mysql authentication info.
-# XXX: we may switch to postgres in the future..
+# NOTE: there is a decent chance we will switch to postgres
+# (asyncpg) in the future for better speeds and features in
+# the future.. stay tuned.
 mysql = {
     'db': 'cmyui',
     'host': 'localhost',
@@ -38,8 +42,8 @@ mysql = {
     'user': 'cmyui'
 }
 
-# your osu!api key. this is required for fetching
-# many things, such as beatmap information!
+# your osu!api key, required for
+# fetching beatmap information.
 osu_api_key = ''
 
 # the level of gzip compression to use for different tasks.
@@ -53,19 +57,17 @@ osu_api_key = ''
 # https://www.rootusers.com/gzip-vs-bzip2-vs-xz-performance-comparison/
 gzip = {'web': 4, 'disk': 9}
 
-""" osu!direct """
 # the external mirror url to use.
 mirror = 'https://storage.ripple.moe'
 
-""" customization """
 # the menu icon displayed on
 # the main menu of osu! in-game.
 menu_icon = (
-    'https://akatsuki.pw/static/logos/logo_ingame.png', # image URL
-    'https://akatsuki.pw' # onclick URL
+    'https://akatsuki.pw/static/logos/logo_ingame.png', # image url
+    'https://akatsuki.pw' # onclick url
 )
 
-# seasonal backgrounds to be displayed
+# seasonal backgrounds to be displayed ingame.
 seasonal_bgs = (
     'https://akatsuki.pw/static/flower.png',
 )
@@ -73,11 +75,9 @@ seasonal_bgs = (
 # in-game bot command prefix.
 command_prefix = '!'
 
-# you can hardcode usernames & passwords here to be blocked
-# from usage at registration and other vectors to chage them.
-# TODO: retrieve the names of the top ~100 (configurable)
+# hardcoded names & passwords users will not be able to use.
+# TODO: retrieve the names of the top ~100 (configurable)?
 # TODO: add more defaults; servers deserve better than this lol..
-# players on bancho, and auto-add them to this set on startup?
 disallowed_names = {
     'cookiezi', 'rrtyui',
     'hvick225', 'qsc20010'
@@ -87,7 +87,6 @@ disallowed_passwords = {
     'password', 'minilamp'
 }
 
-""" discord webhooks """
 # gulag provides connectivity to
 # discord via a few simple webhooks.
 # simply add urls to start receiving.
@@ -101,7 +100,6 @@ webhooks = {
     'surveillance': '',
 }
 
-""" gulag score surveillance """
 # gulag has begun to develop systems for detecting scores
 # which the server deems as suspicious for any number of reasons.
 # while some features may have a confidence threshold high enough
@@ -117,7 +115,6 @@ surveillance = {
     },
 }
 
-""" caching settings """
 # the max duration to
 # cache a beatmap for.
 # recommended: ~1 hour.
@@ -128,8 +125,27 @@ map_cache_timeout = 3600
 # recommended: ~1 hour.
 updates_cache_timeout = 3600
 
-""" 3rd party support """
+# https://datadoghq.com
+# support (stats tracking)
 datadog = {
     'api_key': '',
     'app_key': ''
 }
+
+# high ceiling values for autoban as a very simple form
+# of "anticheat", simply ban a user if they are not
+# whitelisted, and submit a score of too high caliber.
+# Values below are in form (non_fl, fl), as fl has custom
+# vals as it finds quite a few additional cheaters on the side.
+autoban_pp = (
+    (700,   600),   # vn!std
+    (9999, 9999), # vn!taiko
+    (9999, 9999), # vn!catch
+    (9999, 9999), # vn!mania
+
+    (1200,  800),   # rx!std
+    (9999, 9999), # rx!taiko
+    (9999, 9999), # rx!catch
+
+    (9999, 9999)  # ap!std
+)

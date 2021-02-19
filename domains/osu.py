@@ -468,26 +468,6 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
-UNDEF = 9999
-autoban_pp = (
-    # high ceiling values for autoban as a very simple form
-    # of "anticheat", simply ban a user if they are not
-    # whitelisted, and submit a score of too high caliber.
-    # Values below are in form (non_fl, fl), as fl has custom
-    # vals as it finds quite a few additional cheaters on the side.
-    (700,   600),   # vn!std
-    (UNDEF, UNDEF), # vn!taiko
-    (UNDEF, UNDEF), # vn!catch
-    (UNDEF, UNDEF), # vn!mania
-
-    (1200,  800),   # rx!std
-    (UNDEF, UNDEF), # rx!taiko
-    (UNDEF, UNDEF), # rx!catch
-
-    (UNDEF, UNDEF)  # ap!std
-)
-del UNDEF
-
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
@@ -557,7 +537,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
-        pp_cap = autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = glob.config.autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
             log(f'{s.player} banned for submitting '
