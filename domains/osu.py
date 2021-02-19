@@ -942,7 +942,7 @@ async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
         if map_md5 not in glob.cache['beatmap']:
             return b'no exist'
 
-        cached = glob.cache['beatmap'][map_md5]['map']
+        cached = glob.cache['beatmap'][map_md5].bmp
 
         # only allow rating on maps with a leaderboard.
         if cached.status < RankedStatus.Ranked:
@@ -1073,12 +1073,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
                     return b'-1|false'
         else:
             # found in sql - add to cache
-            glob.cache['beatmap'][bmap.md5] = {
-                'timeout': (glob.config.map_cache_timeout +
-                            time.time()),
-                'map': bmap
-            }
-
+            glob.cache['beatmap'].store(bmap)
     # we have found a beatmap for the request.
     if glob.datadog:
         glob.datadog.increment('gulag.leaderboards_served')

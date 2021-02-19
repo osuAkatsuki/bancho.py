@@ -162,6 +162,7 @@ class BeatmapCache:
 
 
     def load(self, key: Union[str, int]) -> '_Cachelet':
+        print("here")
         """ Load cachelet via md5 or bid (infered implicitly through type) """
 
         clet: '_Cachelet' = (self._md5_dict if isinstance(key, str) else self._bid_dict).get(key)
@@ -272,22 +273,17 @@ class Beatmap:
     @classmethod
     async def from_bid(cls, bid: int) -> 'Beatmap':
         """Create a `Beatmap` from sql using a beatmap id."""
-        # TODO: perhaps some better caching solution that allows
+        # DONE: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
 
-        # O(n) cache hmmm
-        for cached in glob.cache['beatmap'].values():
-            if bid == cached['map'].id:
-                return cached['map']
+        if (cached := glob.cache['beatmap'][bid]):
+            return cached.bmap
 
         # try to get from sql.
         if (m := await cls.from_bid_sql(bid)):
             # add the map to our cache.
             if m.md5 not in glob.cache['beatmap']:
-                glob.cache['beatmap'][m.md5] = {
-                    'timeout': time.time() + glob.config.map_cache_timeout,
-                    'map': m
-                }
+                glob.cache['beatmap'].store(m)
 
             return m
 
@@ -337,25 +333,14 @@ class Beatmap:
                 return
 
         # save our map to the cache.
-        glob.cache['beatmap'][md5] = {
-            'timeout': (glob.config.map_cache_timeout +
-                        time.time()),
-            'map': m
-        }
+        glob.cache['beatmap'].store(m)
+
         return m
 
     @staticmethod
     def from_md5_cache(md5: str):
         if md5 in glob.cache['beatmap']:
-            # check if our cached result is within timeout.
-            cached = glob.cache['beatmap'][md5]
-
-            if (time.time() - cached['timeout']) <= 0:
-                # cache is within timeout.
-                return cached['map']
-
-            # cache is outdated and should be deleted.
-            del glob.cache['beatmap'][md5]
+            glob.cache[Beatmap][md5].bmap
 
     @classmethod
     async def from_md5_sql(cls, md5: str):
@@ -532,11 +517,7 @@ class Beatmap:
             m.diff = float(bmap['difficultyrating'])
 
             # save our map to the cache.
-            glob.cache['beatmap'][m.md5] = {
-                'timeout': (glob.config.map_cache_timeout +
-                            time.time()),
-                'map': m
-            }
+            glob.cache['beatmap'].store(m)
 
             await m.save_to_sql()
 

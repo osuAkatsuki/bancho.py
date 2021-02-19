@@ -349,10 +349,9 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
             [bmap.set_id], _dict=False
         )]
 
-        for cached in glob.cache['beatmap'].values():
-            # not going to bother checking timeout
-            if cached['map'].set_id == bmap.set_id:
-                cached['map'].status = new_status
+        for cached in glob.cache['beatmap'].all():
+            if cached.bmap.set_id == bmap.set_id:
+                cached.bmap.status = new_status
 
     else:
         # update only map
@@ -364,11 +363,9 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
         map_ids = [bmap.id]
 
-        for cached in glob.cache['beatmap'].values():
-            # not going to bother checking timeout
-            if cached['map'] is bmap:
-                cached['map'].status = new_status
-                break
+
+        if (cached := glob.cache['beatmap'][bmap.md5]):
+            cached.bmap.status = new_status
 
     # deactivate rank requests for all ids
     for map_id in map_ids:

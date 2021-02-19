@@ -2,6 +2,7 @@
 
 import config # imported for indirect use
 
+from objects.beatmap import BeatmapCache
 if __import__('typing').TYPE_CHECKING:
     from asyncio import Queue
     from aiohttp.client import ClientSession
@@ -47,7 +48,7 @@ datadog: 'Optional[ThreadStats]'
 cache = {
     # algorithms like brypt these are intentionally designed to be
     # slow; we'll cache the results to speed up subsequent logins.
-    'bcrypt': {}, # {bcrypt: md5, ...}
+    'bcrypt': {},
     # we'll cache results for osu! client update requests since they
     # are relatively frequently and won't change very frequently.
     'update': { # default timeout is 1h, set on request.
@@ -58,7 +59,7 @@ cache = {
     },
     # cache all beatmap data calculated while online. this way,
     # the most requested maps will inevitably always end up cached.
-    'beatmap': {}, # {md5: {timeout, map}, ...}
+    'beatmap': BeatmapCache(config.map_cache_timeout), # {md5: {timeout, map}, ...}
     # cache all beatmaps which we failed to get from the osuapi,
     # so that we do not have to perform this request multiple times.
     'unsubmitted': set() # {md5, ...}
