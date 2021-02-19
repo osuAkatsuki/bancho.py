@@ -829,7 +829,7 @@ async def mp_map(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.map_name = bmap.full
 
     m.enqueue_state()
-    return f'Map selected: {bmap.embed}.'
+    return f'Selected: {bmap.embed}.'
 
 @mp_commands.add(Privileges.Normal)
 async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:

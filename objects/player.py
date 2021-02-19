@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import queue
+import asyncio
 import random
 import time
 import uuid
@@ -124,10 +124,14 @@ class Player:
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
-    _queue: `queue.SimpleQueue`
-        A `SimpleQueue` obj representing our packet queue.
+    _queue: `bytearray`
+        Bytes enqueued to the player which will be transmitted
+        at the tail end of their next connection to the server.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
+
+    _spec_lock: `asyncio.Lock`
+        A lock for managing spectators joining/leaving.
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
@@ -136,9 +140,9 @@ class Player:
         'clan', 'clan_rank', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
-        'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'last_recv_time', 'osu_ver',
-        'pres_filter', 'menu_options', '_queue'
+        'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
+        'pres_filter', 'login_time', 'last_recv_time',
+        'menu_options', '_queue', '_spec_lock'
     )
 
     def __init__(self, **kwargs) -> None:
@@ -173,16 +177,14 @@ class Player:
 
         self.utc_offset = kwargs.get('utc_offset', 0)
         self.pm_private = kwargs.get('pm_private', False)
-
         self.away_msg: Optional[str] = None
         self.silence_end = kwargs.get('silence_end', 0)
         self.in_lobby = False
+        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
+        self.pres_filter = PresenceFilter.Nil
 
         self.login_time = 0.0
         self.last_recv_time = kwargs.get('last_recv_time', 0.0)
-
-        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
-        self.pres_filter = PresenceFilter.Nil
 
         # XXX: below is mostly gulag-specific & internal stuff
 
@@ -196,7 +198,8 @@ class Player:
         self.menu_options: dict[int, dict[str, Any]] = {}
 
         # packet queue
-        self._queue = queue.SimpleQueue()
+        self._queue = bytearray()
+        self._spec_lock = asyncio.Lock()
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -323,8 +326,9 @@ class Player:
                 await self.leave_match()
 
             # stop spectating.
-            if h := self.spectating:
-                await h.remove_spectator(self)
+            if host := self.spectating:
+                async with host._spec_lock:
+                    await host.remove_spectator(self)
 
             # leave channels
             while self.channels:
@@ -869,20 +873,16 @@ class Player:
             [self.id]
         )
 
-    def queue_empty(self) -> bool:
-        """Whether or not `self`'s packet queue is empty."""
-        return self._queue.empty()
-
     def enqueue(self, b: bytes) -> None:
         """Add data to be sent to the client."""
-        self._queue.put_nowait(b)
+        self._queue += b
 
     def dequeue(self) -> Optional[bytes]:
         """Get data from the queue to send to the client."""
-        try:
-            return self._queue.get_nowait()
-        except queue.Empty:
-            pass
+        if self._queue:
+            data = bytes(self._queue)
+            self._queue.clear()
+            return data
 
     async def send(self, client: 'Player', msg: str,
                    chan: Optional[Channel] = None) -> None:

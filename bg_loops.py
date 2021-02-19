@@ -72,6 +72,7 @@ async def disconnect_ghosts() -> None:
         async with glob.players._lock:
             for p in glob.players:
                 if ctime - p.last_recv_time > PING_TIMEOUT:
+                    log(f'Auto-dced {p}.', Ansi.LMAGENTA)
                     await p.logout()
 
         # run this indefinitely

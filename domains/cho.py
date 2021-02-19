@@ -94,22 +94,8 @@ async def bancho_handler(conn: Connection) -> bytes:
         if glob.config.debug:
             log(f'{packet.type!r}', Ansi.LMAGENTA)
 
-    player.last_recv_time = time.time()
-
-    # TODO: this could probably be done better?
-    resp = bytearray()
-
-    while not player.queue_empty():
-        # read all queued packets into stream
-        resp += player.dequeue()
-
     conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
-    resp = bytes(resp)
-
-    # even if the packet is empty, we have to
-    # send back an empty response so the client
-    # knows it was successfully delivered.
-    return resp
+    return player.dequeue() or b''
 
 """ Packet logic """
 
@@ -564,14 +550,16 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
     target_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
-        if not (host := glob.players.get(id=self.target_id)):
+        if not (new_host := glob.players.get(id=self.target_id)):
             log(f'{p} tried to spectate nonexistant id {self.target_id}.', Ansi.LYELLOW)
             return
 
-        if c_host := p.spectating:
-            await c_host.remove_spectator(p)
+        if current_host := p.spectating:
+            async with current_host._spec_lock:
+                await current_host.remove_spectator(p)
 
-        await host.add_spectator(p)
+        async with new_host._spec_lock:
+            await new_host.add_spectator(p)
 
 @register
 class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
@@ -582,7 +570,8 @@ class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
             log(f"{p} tried to stop spectating when they're not..?", Ansi.LRED)
             return
 
-        await host.remove_spectator(p)
+        async with host._spec_lock:
+            await host.remove_spectator(p)
 
 @register
 class SpectateFrames(BanchoPacket, type=Packets.OSU_SPECTATE_FRAMES):
@@ -910,7 +899,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
             m.unready_players(expected=SlotStatus.ready)
         elif m.map_id == -1:
             # new map has been chosen, send to match chat.
-            await m.chat.send_bot(f'Map selected: {self.new.map_embed}.')
+            await m.chat.send_bot(f'Selected: {self.new.map_embed}.')
 
         # copy map & basic match info
         m.map_id = self.new.map_id
