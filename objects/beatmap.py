@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from typing import Union
 
 from cmyui import Ansi
 from cmyui import log
@@ -16,7 +17,7 @@ from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 from utils.recalculator import PPCalculator
 
-__all__ = ('RankedStatus', 'Beatmap')
+__all__ = ('RankedStatus', 'Beatmap', 'BeatmapCache')
 
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
@@ -120,6 +121,79 @@ class RankedStatus(IntEnum):
 #    taiko_rank: int # u8
 #    mania_rank: int # u8
 #    map_md5: str
+
+
+class BeatmapCache:   
+    """ Beatmap Cache v2
+    
+    The original cache system used a dictionary design ({md5: {timeout, map}, ...}). 
+    While fast, this meant that syntax was clunky and redunant. This class aims to streamline
+    the caching process. 
+
+    
+    Features
+        - beatmap id & md5 indexing
+        - cache abstraction
+        - global timeout
+        - attribute design
+
+    """
+    class _Cachelet:
+        """ Stores a beatmap timeout pair """
+        def __init__(self, bmap: 'Beatmap', timeout: int) -> None:
+            self.bmap = bmap
+            self.timeout = timeout
+            
+
+    def __init__(self, timeout: int) -> None:
+        # _md5_dict is the primary dictionary
+
+        self._md5_dict = {} # {md5 : Cachelet}
+        self._bid_dict = {} # {beatmap_id : Cachelet}
+        # self.loop = asyncio.get_event_loop()
+        self.timeout = timeout # global timeouts
+
+    def store(self, bmap: 'Beatmap', timeout: int = None) -> None:
+        """ Store a beatmap, reference it's cachelet through bid and md5 """
+
+        to = timeout or self.timeout
+        c = BeatmapCache._Cachelet(bmap, time.time() + to)
+        self._md5_dict[bmap.md5] = self._bid_dict[bmap.id] = c
+
+
+    def load(self, key: Union[str, int]) -> '_Cachelet':
+        """ Load cachelet via md5 or bid (infered implicitly through type) """
+
+        clet: '_Cachelet' = (self._md5_dict if isinstance(key, str) else self._bid_dict).get(key)
+
+        if clet is not None and clet.timeout <= time.time():
+            clet = self._delete(clet.bmap) # return null if timeout
+
+        return clet
+
+    def all(self):
+        """ Return list of cachelets in cache"""
+        return self._md5_dict.values()
+
+    # no touchy this outside of this class
+    def _delete(self, bmap: 'Beatmap'):
+        try:
+            del self._md5_dict[bmap.md5]
+            del self._bid_dict[bmap.id]
+        except:
+            pass # if it's already deleted why bother (yes, if _md5_dict errors out then _bid_dict
+                    # will never be reached, but it'll be overwritten if need be)
+
+    # cymui freaked out when this functionality was gone so I put it in lol
+    def __getitem__(self, key: Union[str, int]):
+        return self.load(key)
+
+    def __len__(self):
+        return len(self._md5_dict)
+
+    def __contains__(self, m: Union[str, int]):
+        return m in self._md5_dict if isinstance(m, str) else m in self._bid_dict
+
 
 class Beatmap:
     """A class representing an osu! beatmap.
