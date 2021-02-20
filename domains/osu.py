@@ -80,8 +80,6 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         # object before calling the handler itself.
         @wraps(f)
         async def handler(conn: Connection) -> Optional[bytes]:
-            name = passwd = None
-
             argset = conn.args or conn.multipart_args
 
             if not (name_p in argset and pass_p in argset):
@@ -211,7 +209,8 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
             [res['md5'], p.id]
-        ): ranks[score['mode']] = score['grade']
+        ):
+            ranks[score['mode']] = score['grade']
 
         ret.append('{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
             i = idx, ranks = '|'.join(ranks), **res
@@ -249,7 +248,8 @@ async def osuAddFavourite(p: 'Player', conn: Connection) -> Optional[bytes]:
         'SELECT 1 FROM favourites '
         'WHERE userid = %s AND setid = %s',
         [p.id, conn.args['a']]
-    ): return b"You've already favourited this beatmap!"
+    ):
+        return b"You've already favourited this beatmap!"
 
     # add favourite
     await glob.db.execute(
@@ -395,7 +395,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 #            # Order difficulties by mode > star rating > ar.
 #            'ORDER BY mode ASC, diff ASC, ar ASC',
 #            [bmapset['set_id']]
-#        )): continue
+#        )):
+#            continue
 #
 #        # Construct difficulty-specific information.
 #        diffs = ','.join(
@@ -1941,7 +1942,8 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
             re['artist'], re['title'],
             re['creator'], re['version']
         ]
-    )): return (404, b'Map not found.')
+    )):
+        return (404, b'Map not found.')
 
     path = BEATMAPS_PATH / f'{res["id"]}.osu'
 

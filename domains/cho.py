@@ -248,9 +248,19 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
       we return a tuple of (response_bytes, user_token) on success.
 
     Request format:
-      username
-      password_md5
-      osu_ver|utc_offset|display_city|client_hashes|pm_private
+      username\npasswd_md5\nosu_ver|utc_offset|display_city|client_hashes|pm_private\n
+
+    Response format:
+      Packet 5 (userid), with ID:
+      -1: authentication failed
+      -2: old client
+      -3: banned
+      -4: banned
+      -5: error occurred
+      -6: needs supporter
+      -7: password reset
+      -8: requires verification
+      other: valid id, logged in
     """
 
     """ Parse data and verify the request is legitimate. """
@@ -447,10 +457,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     data += packets.notification('Welcome back to the gulag!\n'
                                 f'Current build: v{glob.version}')
 
-    # tells osu! to load channels from config, i believe?
-    data += packets.channelInfoEnd()
-
-    # channels
+    # send all channel info.
     for c in glob.channels:
         if not p.priv & c.read_priv:
             continue # no priv to read
@@ -463,6 +470,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             data += packets.channelJoin(c.name)
 
         data += packets.channelInfo(*c.basic_info)
+
+    # tells osu! to reorder channels based on config.
+    data += packets.channelInfoEnd()
 
     # fetch some of the player's
     # information from sql to be cached.
@@ -557,6 +567,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
         time_taken = time.time() - login_time
         glob.datadog.histogram('gulag.login_time', time_taken)
+
+    p._queue.clear() # TODO: this is pretty suboptimal
 
     log(f'{p} logged in.', Ansi.LCYAN)
     await p.update_latest_activity()

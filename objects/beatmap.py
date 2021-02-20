@@ -231,7 +231,8 @@ class Beatmap:
             'ar, hp, diff '
             'FROM maps WHERE id = %s',
             [bid]
-        )): return
+        )):
+            return
 
         return cls(**res, id=bid)
 
@@ -293,7 +294,8 @@ class Beatmap:
             'ar, hp, diff '
             'FROM maps WHERE md5 = %s',
             [md5]
-        )): return
+        )):
+            return
 
         return cls(**res, md5=md5)
 
