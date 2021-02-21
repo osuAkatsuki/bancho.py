@@ -905,7 +905,7 @@ async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.enqueue_state()
     return f'Mods updated to {mods!r}.'
 
-@mp_commands.add(Privileges.Normal, aliases=['fm'])
+@mp_commands.add(Privileges.Normal, aliases=['fm', 'fmods'])
 async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Toggle freemods status for the match."""
     if len(msg) != 1 or msg[0] not in ('on', 'off'):

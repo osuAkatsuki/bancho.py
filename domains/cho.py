@@ -729,7 +729,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         else:
                             if match['mods'] is not None:
                                 # [1:] to remove leading whitespace
-                                mods = Mods.from_np(match['mods'][1:])
+                                mods = Mods.from_np(match['mods'][1:], mode_vn)
                             else:
                                 mods = Mods.NOMOD
 

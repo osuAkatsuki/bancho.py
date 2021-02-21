@@ -3,15 +3,15 @@
 from enum import IntFlag
 from enum import unique
 
-#from utils.misc import pymysql_encode
-#from utils.misc import escape_enum
+from utils.misc import pymysql_encode
+from utils.misc import escape_enum
 
 __all__ = ('Mods',)
 
 # NOTE: the order of some of these = stupid
 
 @unique
-#@pymysql_encode(escape_enum)
+@pymysql_encode(escape_enum)
 class Mods(IntFlag):
     NOMOD       = 0
     NOFAIL      = 1 << 0
