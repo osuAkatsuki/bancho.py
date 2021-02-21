@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import queue
+import asyncio
 import random
 import time
 import uuid
@@ -124,8 +124,9 @@ class Player:
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
-    _queue: `queue.SimpleQueue`
-        A `SimpleQueue` obj representing our packet queue.
+    _queue: `bytearray`
+        Bytes enqueued to the player which will be transmitted
+        at the tail end of their next connection to the server.
         XXX: cls.enqueue() will add data to this queue, and
              cls.dequeue() will return the data, and remove it.
     """
@@ -136,9 +137,9 @@ class Player:
         'clan', 'clan_rank', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
-        'away_msg', 'silence_end', 'in_lobby',
-        'login_time', 'last_recv_time', 'osu_ver',
-        'pres_filter', 'menu_options', '_queue'
+        'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
+        'pres_filter', 'login_time', 'last_recv_time',
+        'menu_options', '_queue'
     )
 
     def __init__(self, **kwargs) -> None:
@@ -173,16 +174,14 @@ class Player:
 
         self.utc_offset = kwargs.get('utc_offset', 0)
         self.pm_private = kwargs.get('pm_private', False)
-
         self.away_msg: Optional[str] = None
         self.silence_end = kwargs.get('silence_end', 0)
         self.in_lobby = False
-
-        self.login_time = 0.0
-        self.last_recv_time = 0.0
-
         self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
+
+        self.login_time = 0.0
+        self.last_recv_time = kwargs.get('last_recv_time', 0.0)
 
         # XXX: below is mostly gulag-specific & internal stuff
 
@@ -190,13 +189,17 @@ class Player:
         self.recent_scores: dict[GameMode, Score] = {}
 
         # store the last beatmap /np'ed by the user.
-        self.last_np: Optional[Beatmap] = None
+        self.last_np = {
+            'bmap': None,
+            'mode_vn': None,
+            'timeout': 0
+        }
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
         self.menu_options: dict[int, dict[str, Any]] = {}
 
         # packet queue
-        self._queue = queue.SimpleQueue()
+        self._queue = bytearray()
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -311,23 +314,22 @@ class Player:
         p.login_time = p.last_recv_time = login_time
         return p
 
-    async def logout(self) -> None:
+    def logout(self) -> None:
         """Log `self` out of the server."""
-
         # invalidate the user's token.
         self.token = ''
 
         # leave multiplayer.
         if self.match:
-            await self.leave_match()
+            self.leave_match()
 
         # stop spectating.
-        if h := self.spectating:
-            await h.remove_spectator(self)
+        if host := self.spectating:
+            host.remove_spectator(self)
 
         # leave channels
         while self.channels:
-            await self.leave_channel(self.channels[0])
+            self.leave_channel(self.channels[0])
 
         if glob.datadog:
             glob.datadog.decrement('gulag.online_players')
@@ -393,7 +395,7 @@ class Player:
                 'using the appeal form on the website.'
             ))
 
-        log(f'Banned {self}.', Ansi.CYAN)
+        log(f'Banned {self}.', Ansi.LCYAN)
 
     async def unban(self, admin: 'Player', reason: str) -> None:
         """Unban `self` for `reason`, and log to sql."""
@@ -406,7 +408,7 @@ class Player:
             [admin.id, self.id, log_msg]
         )
 
-        log(f'Unbanned {self}.', Ansi.CYAN)
+        log(f'Unbanned {self}.', Ansi.LCYAN)
 
     async def silence(self, admin: 'Player', duration: int,
                       reason: str) -> None:
@@ -425,13 +427,17 @@ class Player:
             [admin.id, self.id, log_msg]
         )
 
-        # inform the user's client
+        # inform the user's client.
         self.enqueue(packets.silenceEnd(duration))
 
         # wipe their messages from any channels.
         glob.players.enqueue(packets.userSilenced(self.id))
 
-        log(f'Silenced {self}.', Ansi.CYAN)
+        # remove them from multiplayer match (if any).
+        if self.match:
+            self.leave_match()
+
+        log(f'Silenced {self}.', Ansi.LCYAN)
 
     async def unsilence(self, admin: 'Player') -> None:
         """Unsilence `self`, and log to sql."""
@@ -452,9 +458,9 @@ class Player:
         # inform the user's client
         self.enqueue(packets.silenceEnd(0))
 
-        log(f'Unsilenced {self}.', Ansi.CYAN)
+        log(f'Unsilenced {self}.', Ansi.LCYAN)
 
-    async def join_match(self, m: Match, passwd: str) -> bool:
+    def join_match(self, m: Match, passwd: str) -> bool:
         """Attempt to add `self` to `m`."""
         if self.match:
             log(f'{self} tried to join multiple matches?')
@@ -464,11 +470,11 @@ class Player:
         if self is not m.host:
             # match already exists, we're simply joining.
             if self not in glob.players.staff and passwd != m.passwd:
-                log(f'{self} tried to join {m} with incorrect passwd.')
+                log(f'{self} tried to join {m} w/ incorrect pw.', Ansi.LYELLOW)
                 self.enqueue(packets.matchJoinFail())
                 return False
             if (slotID := m.get_free()) is None:
-                log(f'{self} tried to join a full match.')
+                log(f'{self} tried to join a full match.', Ansi.LYELLOW)
                 self.enqueue(packets.matchJoinFail())
                 return False
 
@@ -476,12 +482,12 @@ class Player:
             # match is being created
             slotID = 0
 
-        if not await self.join_channel(m.chat):
-            log(f'{self} failed to join {m.chat}.')
+        if not self.join_channel(m.chat):
+            log(f'{self} failed to join {m.chat}.', Ansi.LYELLOW)
             return False
 
         if (lobby := glob.channels['#lobby']) in self.channels:
-            await self.leave_channel(lobby)
+            self.leave_channel(lobby)
 
         slot = m.slots[0 if slotID == -1 else slotID]
 
@@ -499,19 +505,16 @@ class Player:
 
         return True
 
-    async def leave_match(self) -> None:
+    def leave_match(self) -> None:
         """Attempt to remove `self` from their match."""
         if not self.match:
             if glob.config.debug:
-                log(f"{self} tried leaving a match they're not in?")
+                log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
-        for s in self.match.slots:
-            if self == s.player:
-                s.reset()
-                break
+        self.match.get_slot(self).reset()
 
-        await self.leave_channel(self.match.chat)
+        self.leave_channel(self.match.chat)
 
         if all(map(lambda s: s.empty(), self.match.slots)):
             # multi is now empty, chat has been removed.
@@ -536,25 +539,38 @@ class Player:
 
         self.match = None
 
-    async def join_channel(self, c: Channel) -> bool:
-        """Attempt to add `self` to `c`."""
-        if self in c:
-            # user already in the channel.
-            if glob.config.debug:
-                log(f'{self} was double-added to {c}.')
-
+    async def join_clan(self, c: 'Clan') -> bool:
+        if self.id in c.members:
             return False
 
+        if not 'invited': # TODO
+            return False
+
+        await c.add_member(self)
+        return True
+
+    async def leave_clan(self) -> None:
+        if not self.clan:
+            return
+
+        await self.clan.remove_member(self)
+
+    def join_channel(self, c: Channel) -> bool:
+        """Attempt to add `self` to `c`."""
+        # ensure they're not already in chan.
+        if self in c:
+            return False
+
+        # ensure they have read privs.
         if not self.priv & c.read_priv:
-            log(f'{self} tried to join {c} but lacks privs.')
             return False
 
         # lobby can only be interacted with while in mp lobby.
         if c._name == '#lobby' and not self.in_lobby:
             return False
 
-        c.append(self) # Add to channels
-        self.channels.append(c) # Add to player
+        c.append(self) # add to c.players
+        self.channels.append(c) # add to p.channels
 
         self.enqueue(packets.channelJoin(c.name))
 
@@ -569,14 +585,14 @@ class Player:
 
         return True
 
-    async def leave_channel(self, c: Channel) -> None:
+    def leave_channel(self, c: Channel) -> None:
         """Attempt to remove `self` from `c`."""
+        # ensure they're in the chan.
         if self not in c:
-            log(f'{self} tried to leave {c} but is not in it.')
             return
 
-        await c.remove(self) # remove from channels
-        self.channels.remove(c) # remove from player
+        c.remove(self) # remove from c.players
+        self.channels.remove(c) # remove from p.channels
 
         self.enqueue(packets.channelKick(c.name))
 
@@ -591,7 +607,7 @@ class Player:
         if glob.config.debug:
             log(f'{self} left {c}.')
 
-    async def add_spectator(self, p: 'Player') -> None:
+    def add_spectator(self, p: 'Player') -> None:
         """Attempt to add `p` to `self`'s spectators."""
         chan_name = f'#spec_{self.id}'
 
@@ -604,12 +620,13 @@ class Player:
                 instance = True
             )
 
-            await self.join_channel(spec_chan)
+            self.join_channel(spec_chan)
             glob.channels.append(spec_chan)
 
         # attempt to join their spectator channel.
-        if not await p.join_channel(spec_chan):
-            return log(f'{self} failed to join {spec_chan}?')
+        if not p.join_channel(spec_chan):
+            log(f'{self} failed to join {spec_chan}?', Ansi.LYELLOW)
+            return
 
         #p.enqueue(packets.channelJoin(c.name))
         p_joined = packets.fellowSpectatorJoined(p.id)
@@ -624,17 +641,17 @@ class Player:
         self.enqueue(packets.spectatorJoined(p.id))
         log(f'{p} is now spectating {self}.')
 
-    async def remove_spectator(self, p: 'Player') -> None:
+    def remove_spectator(self, p: 'Player') -> None:
         """Attempt to remove `p` from `self`'s spectators."""
         self.spectators.remove(p)
         p.spectating = None
 
         c = glob.channels[f'#spec_{self.id}']
-        await p.leave_channel(c)
+        p.leave_channel(c)
 
         if not self.spectators:
             # remove host from channel, deleting it.
-            await self.leave_channel(c)
+            self.leave_channel(c)
         else:
             fellow = packets.fellowSpectatorLeft(p.id)
             c_info = packets.channelInfo(*c.basic_info) # new playercount
@@ -650,7 +667,7 @@ class Player:
     async def add_friend(self, p: 'Player') -> None:
         """Attempt to add `p` to `self`'s friends."""
         if p.id in self.friends:
-            log(f'{self} tried to add {p}, who is already their friend!')
+            log(f'{self} tried to add {p}, who is already their friend!', Ansi.LYELLOW)
             return
 
         self.friends.add(p.id)
@@ -665,7 +682,7 @@ class Player:
     async def remove_friend(self, p: 'Player') -> None:
         """Attempt to remove `p` from `self`'s friends."""
         if not p.id in self.friends:
-            log(f'{self} tried to remove {p}, who is not their friend!')
+            log(f'{self} tried to remove {p}, who is not their friend!', Ansi.LYELLOW)
             return
 
         self.friends.remove(p.id)
@@ -747,10 +764,10 @@ class Player:
 
         # calculate rank.
         res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats '
-            'LEFT JOIN users USING(id) '
-            f'WHERE pp_{mode:sql} > %s '
-            'AND priv & 1',
+            'SELECT COUNT(*) AS c FROM stats s '
+            'LEFT JOIN users u USING(id) '
+            f'WHERE s.pp_{mode:sql} > %s '
+            'AND u.priv & 1',
             [stats.pp]
         )
 
@@ -870,22 +887,18 @@ class Player:
             [self.id]
         )
 
-    def queue_empty(self) -> bool:
-        """Whether or not `self`'s packet queue is empty."""
-        return self._queue.empty()
-
     def enqueue(self, b: bytes) -> None:
         """Add data to be sent to the client."""
-        self._queue.put_nowait(b)
+        self._queue += b
 
     def dequeue(self) -> Optional[bytes]:
         """Get data from the queue to send to the client."""
-        try:
-            return self._queue.get_nowait()
-        except queue.Empty:
-            pass
+        if self._queue:
+            data = bytes(self._queue)
+            self._queue.clear()
+            return data
 
-    async def send(self, client: 'Player', msg: str,
+    def send(self, client: 'Player', msg: str,
                    chan: Optional[Channel] = None) -> None:
         """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(

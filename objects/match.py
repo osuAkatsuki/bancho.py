@@ -12,6 +12,8 @@ from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
 
+from cmyui import log, Ansi
+
 import packets
 from constants import regexes
 from constants.gamemodes import GameMode
@@ -129,11 +131,25 @@ class MapPool:
                  'WHERE pool_id = %s')
 
         async for row in glob.db.iterall(query, [self.id]):
-            key = (Mods(row['mods']), row['slot'])
-            bmap = await Beatmap.from_bid(row['map_id'])
+            map_id = row['map_id']
+            bmap = await Beatmap.from_bid(map_id)
 
-            # TODO: should prolly delete the map from pool and
-            # inform eventually webhook to disc if not found?
+            if not bmap:
+                # map not found? remove it from the
+                # pool and log this incident to console.
+                # NOTE: it's intentional that this removes
+                # it from not only this pool, but all pools.
+                # TODO: perhaps discord webhook?
+                log(f'Removing {map_id} from pool {self.name} (not found).', Ansi.LRED)
+
+                await glob.db.execute(
+                    'DELETE FROM tourney_pool_maps '
+                    'WHERE map_id = %s',
+                    [map_id]
+                )
+                continue
+
+            key = (Mods(row['mods']), row['slot'])
             self.maps[key] = bmap
 
 class Slot:
@@ -152,7 +168,7 @@ class Slot:
     def empty(self) -> bool:
         return self.player is None
 
-    def copy(self, s) -> None:
+    def copy_from(self, s) -> None:
         self.player = s.player
         self.status = s.status
         self.team = s.team
@@ -272,24 +288,25 @@ class Match:
         return f'<{self.name} ({self.id})>'
 
     def get_slot(self, p: 'Player') -> Optional[Slot]:
-        # get the slot containing a given player.
+        """Return the slot containing a given player."""
         for s in self.slots:
             if p is s.player:
                 return s
 
     def get_slot_id(self, p: 'Player') -> Optional[int]:
-        # get the slot index containing a given player.
+        """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
             if p is s.player:
                 return idx
 
     def get_free(self) -> Optional[Slot]:
-        # get the first free slot index.
+        """Return the first unoccupied slot in multi, if any."""
         for idx, s in enumerate(self.slots):
             if s.status == SlotStatus.open:
                 return idx
 
     def get_host_slot(self) -> Optional[Slot]:
+        """Return the slot containing the host."""
         for s in self.slots:
             if (
                 s.status & SlotStatus.has_player and
@@ -297,11 +314,8 @@ class Match:
             ):
                 return s
 
-        return
-
     def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
-
         self.map_id = m.map_id
         self.map_md5 = m.map_md5
         self.map_name = m.map_name
@@ -440,7 +454,7 @@ class Match:
         scores, didnt_submit = await self.await_submissions(was_playing)
 
         for p in didnt_submit:
-            await self.chat.send(glob.bot, f"{p} didn't submit a score (timeout: 10s).")
+            self.chat.send(glob.bot, f"{p} didn't submit a score (timeout: 10s).")
 
         if scores:
             ffa = self.team_type in (MatchTeamTypes.head_to_head,
@@ -535,11 +549,11 @@ class Match:
                     msg.append(f'Total Score: {wname} | {wmp} - {lmp} | {lname}')
 
             if didnt_submit:
-                await self.chat.send(glob.bot, "If you'd like to perform a rematch, "
+                self.chat.send(glob.bot, "If you'd like to perform a rematch, "
                                                "please use the `!mp rematch` command.")
 
             for line in msg:
-                await self.chat.send(glob.bot, line)
+                self.chat.send(glob.bot, line)
 
         else:
-            await self.chat.send(glob.bot, 'Scores could not be calculated.')
+            self.chat.send(glob.bot, 'Scores could not be calculated.')

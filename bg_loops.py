@@ -11,7 +11,6 @@ from cmyui.discord import Webhook
 from cmyui.discord import Embed
 from cmyui import log, Ansi
 
-
 import packets
 from constants.gamemodes import GameMode
 from constants.privileges import Privileges
@@ -21,7 +20,8 @@ from utils.misc import get_press_times
 if TYPE_CHECKING:
     from objects.score import Score
 
-__all__ = ('donor_expiry', 'disconnect_ghosts', 'replay_detections')
+__all__ = ('donor_expiry', 'disconnect_ghosts',
+           'replay_detections', 'reroll_bot_status')
 
 async def donor_expiry() -> None:
     """Add new donation ranks & enqueue tasks to remove current ones."""
@@ -33,7 +33,7 @@ async def donor_expiry() -> None:
         if (delta := when - time.time()) >= 0:
             await asyncio.sleep(delta)
 
-        p = await glob.players.get(id=userid, sql=True)
+        p = await glob.players.get_ensure(id=userid)
 
         # TODO: perhaps make a `revoke_donor` method?
         await p.remove_privs(Privileges.Donator)
@@ -47,7 +47,7 @@ async def donor_expiry() -> None:
         if p.online:
             p.enqueue(packets.notification('Your supporter status has expired.'))
 
-        log(f"{p}'s supporter status has expired.", Ansi.MAGENTA)
+        log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
 
     # enqueue rm_donor for any supporter
     # expiring in the next 30 days.
@@ -66,15 +66,13 @@ PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def disconnect_ghosts() -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
-    players_lock = asyncio.Lock()
-
     while True:
         ctime = time.time()
 
-        async with players_lock:
-            for p in glob.players:
-                if ctime - p.last_recv_time > PING_TIMEOUT:
-                    await p.logout()
+        for p in glob.players:
+            if ctime - p.last_recv_time > PING_TIMEOUT:
+                log(f'Auto-dced {p}.', Ansi.LMAGENTA)
+                p.logout()
 
         # run this indefinitely
         await asyncio.sleep(PING_TIMEOUT // 3)
@@ -125,9 +123,7 @@ async def analyze_score(score: 'Score') -> None:
                 icon_url = player.avatar_url
             )
 
-            # TODO: think of a way to organize a thumbnail into config?
-            thumb_url = 'https://akatsuki.pw/static/logos/logo.png'
-            embed.set_thumbnail(url=thumb_url)
+            embed.set_thumbnail(url=glob.config.webhooks['thumbnail'])
 
             for key, pt in press_times.items():
                 embed.add_field(
@@ -151,3 +147,9 @@ async def replay_detections() -> None:
 
     while score := await queue.get():
         loop.create_task(analyze_score(score))
+
+async def reroll_bot_status(interval: int) -> None:
+    """Reroll the bot's status, every `interval`."""
+    while True:
+        await asyncio.sleep(interval)
+        packets.botStats.cache_clear()

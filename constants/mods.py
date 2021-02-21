@@ -8,6 +8,8 @@ from utils.misc import escape_enum
 
 __all__ = ('Mods',)
 
+# NOTE: the order of some of these = stupid
+
 @unique
 @pymysql_encode(escape_enum)
 class Mods(IntFlag):
@@ -44,14 +46,6 @@ class Mods(IntFlag):
     SCOREV2     = 1 << 29
     MIRROR      = 1 << 30
 
-    # XXX: needs some modification to work..
-    #KEY_MOD = KEY1 | KEY2 | KEY3 | KEY4 | KEY5 | KEY6 | KEY7 | KEY8 | KEY9 | KEYCOOP
-    #FREE_MOD_ALLOWED = NOFAIL | EASY | HIDDEN | HARDROCK | \
-    #                 SUDDENDEATH | FLASHLIGHT | FADEIN | \
-    #                 RELAX | AUTOPILOT | SPUNOUT | KEY_MOD
-    #SCORE_INCREASE_MODS = HIDDEN | HARDROCK | DOUBLETIME | FLASHLIGHT | FADEIN
-    SPEED_CHANGING = DOUBLETIME | NIGHTCORE | HALFTIME
-
     def __repr__(self) -> str:
         if self.value == Mods.NOMOD:
             return ''
@@ -72,97 +66,219 @@ class Mods(IntFlag):
             Mods.SPUNOUT: 'SO',
             Mods.AUTOPILOT: 'AP',
             Mods.PERFECT: 'PF',
-            Mods.KEY4: 'K4',
-            Mods.KEY5: 'K5',
-            Mods.KEY6: 'K6',
-            Mods.KEY7: 'K7',
-            Mods.KEY8: 'K8',
             Mods.FADEIN: 'FI',
             Mods.RANDOM: 'RN',
             Mods.CINEMA: 'CN',
             Mods.TARGET: 'TP',
-            Mods.KEY9: 'K9',
-            Mods.KEYCOOP: 'CO',
-            Mods.KEY1: 'K1',
-            Mods.KEY3: 'K3',
-            Mods.KEY2: 'K2',
             Mods.SCOREV2: 'V2',
-            Mods.MIRROR: 'MR'
+            Mods.MIRROR: 'MR',
+
+            Mods.KEY1: '1K',
+            Mods.KEY2: '2K',
+            Mods.KEY3: '3K',
+            Mods.KEY4: '4K',
+            Mods.KEY5: '5K',
+            Mods.KEY6: '6K',
+            Mods.KEY7: '7K',
+            Mods.KEY8: '8K',
+            Mods.KEY9: '9K',
+            Mods.KEYCOOP: 'CO'
         }
 
         mod_str = []
 
         for m in [_m for _m in Mods if self.value & _m and
-                                       _m != Mods.SPEED_CHANGING]:
+                                       _m != SPEED_CHANGING_MODS]:
             mod_str.append(mod_dict[m])
         return ''.join(mod_str)
 
-    @staticmethod
-    def filter_invalid_combos(m: 'Mods') -> 'Mods':
-        """Remove any invalid mod combinations from and return `m`."""
-        if m & (Mods.DOUBLETIME | Mods.NIGHTCORE) and m & Mods.HALFTIME:
-            m &= ~Mods.HALFTIME
-        if m & Mods.EASY and m & Mods.HARDROCK:
-            m &= ~Mods.HARDROCK
-        if m & Mods.RELAX and m & Mods.AUTOPILOT:
-            m &= ~Mods.AUTOPILOT
-        if m & Mods.PERFECT and m & Mods.SUDDENDEATH:
-            m &= ~Mods.SUDDENDEATH
+    def filter_invalid_combos(self, mode_vn: int) -> 'Mods':
+        """Remove any invalid mod combinations."""
 
-        return m
+        # 1. mode-inspecific mod conflictions
+        if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
+            self &= ~Mods.HALFTIME # (DT|NC)HT
+
+        if self & Mods.EASY and self & Mods.HARDROCK:
+            self &= ~Mods.HARDROCK # EZHR
+
+        if self & (Mods.NOFAIL | Mods.RELAX | Mods.AUTOPILOT):
+            if self & Mods.SUDDENDEATH:
+                self &= ~Mods.SUDDENDEATH # (NF|RX|AP)SD
+            if self & Mods.PERFECT:
+                self &= ~Mods.PERFECT # (NF|RX|AP)PF
+
+        if self & (Mods.RELAX | Mods.AUTOPILOT):
+            if self & Mods.NOFAIL:
+                self &= ~Mods.NOFAIL # (RX|AP)NF
+
+        if self & Mods.PERFECT and self & Mods.SUDDENDEATH:
+            self &= ~Mods.SUDDENDEATH # PFSD
+
+        # 2. remove mode-unique mods from incorrect gamemodes
+        if mode_vn != 0: # osu! specific
+            self &= ~OSU_SPECIFIC_MODS
+
+        # ctb & taiko have no unique mods
+
+        if mode_vn != 3: # mania specific
+            self &= ~MANIA_SPECIFIC_MODS
+
+        # 3. mode-specific mod conflictions
+        if mode_vn == 0:
+            if self & Mods.AUTOPILOT:
+                if self & (Mods.SPUNOUT | Mods.RELAX):
+                    self &= ~Mods.AUTOPILOT # (SO|RX)AP
+
+        if mode_vn == 3:
+            self &= ~Mods.RELAX # rx is std/taiko/ctb common
+            if self & Mods.HIDDEN and self & Mods.FADEIN:
+                self &= ~Mods.FADEIN # HDFI
+
+        # 4 remove multiple keymods
+        # TODO: do this better
+        keymods_used = self & KEY_MODS
+
+        if bin(keymods_used).count('1') > 1:
+            # keep only the first
+            first_keymod = None
+            for mod in KEY_MODS:
+                if keymods_used & mod:
+                    first_keymod = mod
+                    break
+
+            # remove all but the first keymod.
+            self &= ~(keymods_used & ~first_keymod)
+
+        return self
 
     @classmethod
     def from_modstr(cls, s: str):
         # from fmt: `HDDTRX`
         mod_dict = {
-            'EZ': cls.EASY,
             'NF': cls.NOFAIL,
+            'EZ': cls.EASY,
+            'TD': cls.TOUCHSCREEN,
             'HD': cls.HIDDEN,
-            'PF': cls.PERFECT,
-            'SD': cls.SUDDENDEATH,
             'HR': cls.HARDROCK,
-            'NC': cls.NIGHTCORE,
+            'SD': cls.SUDDENDEATH,
             'DT': cls.DOUBLETIME,
-            'HT': cls.HALFTIME,
-            'FL': cls.FLASHLIGHT,
-            'SO': cls.SPUNOUT,
             'RX': cls.RELAX,
-            'AP': cls.AUTOPILOT
+            'HT': cls.HALFTIME,
+            'NC': cls.NIGHTCORE,
+            'FL': cls.FLASHLIGHT,
+            'AU': cls.AUTOPLAY,
+            'SO': cls.SPUNOUT,
+            'AP': cls.AUTOPILOT,
+            'PF': cls.PERFECT,
+            'FI': cls.FADEIN,
+            'RN': cls.RANDOM,
+            'CN': cls.CINEMA,
+            'TP': cls.TARGET,
+            'V2': cls.SCOREV2,
+            'MR': cls.MIRROR,
+
+            '1K': cls.KEY1,
+            '2K': cls.KEY2,
+            '3K': cls.KEY3,
+            '4K': cls.KEY4,
+            '5K': cls.KEY5,
+            '6K': cls.KEY6,
+            '7K': cls.KEY7,
+            '8K': cls.KEY8,
+            '9K': cls.KEY9,
+            'CO': cls.KEYCOOP
         }
 
         mods = cls.NOMOD
 
-        for m in map(lambda i: s[i:i+2].upper(), range(0, len(s), 2)):
+        def get_mod(idx: int) -> str:
+            return s[idx:idx + 2].upper()
+
+        for m in map(get_mod, range(0, len(s), 2)):
             if m not in mod_dict:
                 continue
 
             mods |= mod_dict[m]
 
-        return cls.filter_invalid_combos(mods)
+        return mods
 
     @classmethod
-    def from_np(cls, s: str):
-        # from fmt: `-DiffDown +DiffUp ~Special~`
+    def from_np(cls, s: str, mode_vn: int):
         mod_dict = {
-            '-Easy': cls.EASY,
             '-NoFail': cls.NOFAIL,
+            '-Easy': cls.EASY,
             '+Hidden': cls.HIDDEN,
-            '+Perfect': cls.PERFECT,
-            '+SuddenDeath': cls.SUDDENDEATH,
             '+HardRock': cls.HARDROCK,
-            '+Nightcore': cls.NIGHTCORE,
+            '+SuddenDeath': cls.SUDDENDEATH,
             '+DoubleTime': cls.DOUBLETIME,
-            '-HalfTime': cls.HALFTIME,
-            '+Flashlight': cls.FLASHLIGHT,
-            '-SpunOut': cls.SPUNOUT,
             '~Relax~': cls.RELAX,
-            '~Autopilot~': cls.AUTOPILOT
+            '-HalfTime': cls.HALFTIME,
+            '+Nightcore': cls.NIGHTCORE,
+            '+Flashlight': cls.FLASHLIGHT,
+            '|Autoplay|': cls.AUTOPLAY,
+            '-SpunOut': cls.SPUNOUT,
+            '~Autopilot~': cls.AUTOPILOT,
+            '+Perfect': cls.PERFECT,
+            '|Cinema|': cls.CINEMA,
+            '~Target~': cls.TARGET,
+
+            # perhaps could modify regex
+            # to only allow these once,
+            # and only at the end of str?
+            '|1K|': cls.KEY1,
+            '|2K|': cls.KEY2,
+            '|3K|': cls.KEY3,
+            '|4K|': cls.KEY4,
+            '|5K|': cls.KEY5,
+            '|6K|': cls.KEY6,
+            '|7K|': cls.KEY7,
+            '|8K|': cls.KEY8,
+            '|9K|': cls.KEY9,
+
+            # XXX: kinda mood that there's no way
+            # to tell K1-K4 co-op from /np, but
+            # scores won't submit or anything so
+            # it's not ultimately a problem.
+            '|10K|': cls.KEY5 | cls.KEYCOOP,
+            '|12K|': cls.KEY6 | cls.KEYCOOP,
+            '|14K|': cls.KEY7 | cls.KEYCOOP,
+            '|16K|': cls.KEY8 | cls.KEYCOOP,
+            '|18K|': cls.KEY9 | cls.KEYCOOP
         }
 
         mods = cls.NOMOD
 
         for mod in s.split(' '):
-            # a bit unsafe.. perhaps defaultdict?
+            if mod not in mod_dict:
+                continue
+
             mods |= mod_dict[mod]
 
-        return cls.filter_invalid_combos(mods)
+        # NOTE: for fetching from /np, we automatically
+        # call cls.filter_invalid_combos as we assume
+        # the input string is from user input.
+        return mods.filter_invalid_combos(mode_vn)
+
+KEY_MODS = (
+    Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
+    Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
+    Mods.KEY7 | Mods.KEY8 | Mods.KEY9
+)
+
+#FREE_MOD_ALLOWED = (
+#    Mods.NOFAIL | Mods.EASY | Mods.HIDDEN | Mods.HARDROCK |
+#    Mods.SUDDENDEATH | Mods.FLASHLIGHT | Mods.FADEIN |
+#    Mods.RELAX | Mods.AUTOPILOT | Mods.SPUNOUT | KEY_MODS
+#)
+
+SCORE_INCREASE_MODS = (
+    Mods.HIDDEN | Mods.HARDROCK | Mods.FADEIN |
+    Mods.DOUBLETIME | Mods.FLASHLIGHT
+)
+
+SPEED_CHANGING_MODS = Mods.DOUBLETIME | Mods.NIGHTCORE | Mods.HALFTIME
+
+OSU_SPECIFIC_MODS = Mods.AUTOPILOT | Mods.SPUNOUT | Mods.TARGET
+# taiko & catch have no specific mods
+MANIA_SPECIFIC_MODS = Mods.MIRROR | Mods.RANDOM | Mods.FADEIN | KEY_MODS

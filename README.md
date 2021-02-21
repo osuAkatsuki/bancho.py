@@ -50,9 +50,11 @@ Generic
 
 !help: Show information of all documented commands the player can access.
 !roll: Roll an n-sided die where n is the number you write (100 default).
-!bloodcat: Return a bloodcat link of the user's current map (situation dependant).
-!last: Show information about your most recent score.
+!maplink: Return a download link to the user's current map (situation dependant).
+!recent: Show information about your most recent score.
 !with: Specify custom accuracy & mod combinations with `/np`.
+!request: Request a beatmap for nomination.
+!requests: Check the nomination request queue.
 !map: Changes the ranked status of the most recently /np'ed map.
 !notes: Retrieve the logs of a specified player by name.
 !addnote: Add a note to a specified player by name.
@@ -61,12 +63,13 @@ Generic
 !ban: Ban a specified player's account, with a reason.
 !unban: Unban a specified player's account, with a reason.
 !alert: Send a notification to all players.
-!alertu: Send a notification to a specified player by name.
+!alertuser: Send a notification to a specified player by name.
 !recalc: Performs a full PP recalc on a specified map, or all maps.
 !switchserv: Switch your client's internal endpoints to a specified IP address.
 !debug: Toggle the console's debug setting.
 !setpriv: Set privileges for a specified player (by name).
-!menu_preview: Temporary command to illustrate cmyui's menu option idea.
+!reload: Reload a python module.
+!py: Allow for (async) access to the python interpreter.
 
 
 Multiplayer Management
@@ -75,9 +78,9 @@ Multiplayer Management
 !mp help: Show information of all documented mp commands the player can access.
 !mp start: Start the current multiplayer match, with any players ready.
 !mp abort: Abort the current in-progress multiplayer match.
-!mp force: Force a player into the current match by name.
 !mp map: Set the current match's current map by id.
-!mp mods: Set the current match's mods, from string form.
+!mp mods: Set the current match or player's mods (depending on freemods).
+!mp freemods: Toggle freemods status for the match.
 !mp host: Set the current match's current host by id.
 !mp randpw: Randomize the current match's password.
 !mp invite: Invite a player to the current match by name.
@@ -91,6 +94,7 @@ Multiplayer Management
 !mp scrim: Start a scrim in the current match.
 !mp endscrim: End the current matches ongoing scrim.
 !mp rematch: Restart a scrim with the previous match points, or roll back the most recent match point.
+!mp force: Force a player into the current match by name.
 !mp loadpool: Load a mappool into the current match.
 !mp unloadpool: Unload the current matches mappool.
 !mp ban: Ban a pick in the currently loaded mappool.
@@ -189,7 +193,7 @@ Directory Structure
     ├── ext        # External files from gulag's primary operation.
     ├── objects    # Code for representing players, scores, maps, and more.
     ├── utils      # Utility functions used throughout the codebase for general purposes.
-    └── domains    # The web routes available to the players.
-        ├── cho    # (ce|c4|c5|c6).ppy.sh/* domains
-        ├── osu    # osu.ppy.sh/* domains
-        └── ava    # a.ppy.sh/* domains
+    └── domains    # The route-continaing domains accessible to the public web.
+        ├── cho    # (ce|c4|c5|c6).ppy.sh/* routes
+        ├── osu    # osu.ppy.sh/* routes
+        └── ava    # a.ppy.sh/* routes

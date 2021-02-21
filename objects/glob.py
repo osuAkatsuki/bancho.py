@@ -1,50 +1,43 @@
 # -*- coding: utf-8 -*-
 
-from asyncio import Queue
-from typing import Optional, TYPE_CHECKING
-
 import config # imported for indirect use
-from objects.collections import *
 
-if TYPE_CHECKING:
+if __import__('typing').TYPE_CHECKING:
+    from asyncio import Queue
     from aiohttp.client import ClientSession
-    from cmyui import AsyncSQLPool, Version
+    from cmyui import AsyncSQLPool
+    from cmyui import Version
+    from datadog import ThreadStats
+    from typing import Optional
+
+    from objects.achievement import Achievement
+    from objects.collections import *
     from objects.player import Player
     from objects.score import Score
-    from datadog import ThreadStats
+    from packets import BanchoPacket
+    from packets import Packets
 
 __all__ = ('players', 'channels', 'matches',
            'pools', 'clans', 'achievements',
-           #'gulag_maps',
+           'bancho_packets', #'gulag_maps',
            'db', 'http', 'version', 'bot',
            'cache', 'sketchy_queue', 'datadog')
 
-players = PlayerList()
-channels = ChannelList()
-matches = MatchList()
-pools = MapPoolList()
-clans = ClanList()
+# global lists
+players: 'PlayerList'
+channels: 'ChannelList'
+matches: 'MatchList'
+clans: 'ClanList'
+pools: 'MapPoolList'
+achievements: dict[int, list['Achievement']] # per vn gamemode
 
-# store achievements per-gamemode (vn only)
-achievements = {0: [], 1: [],
-                2: [], 3: []}
-
-""" bmsubmit stuff, released soonTM
-# store the current available ids
-# for users submitting custom maps.
-# updated from sql on gulag startup.
-gulag_maps: dict[str, int] = {
-    'set_id': (1 << 30) - 1,
-    'id': (1 << 30) - 1
-}
-"""
-
+bancho_packets: dict['Packets', 'BanchoPacket']
 db: 'AsyncSQLPool'
 http: 'ClientSession'
 version: 'Version'
 bot: 'Player'
-sketchy_queue: Queue['Score']
-datadog: Optional['ThreadStats']
+sketchy_queue: 'Queue[Score]'
+datadog: 'Optional[ThreadStats]'
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or
@@ -71,7 +64,9 @@ cache = {
     'unsubmitted': set() # {md5, ...}
 }
 
-""" disabled (unused) for now
+# ==- Currently unused features below -==
+
+""" performance reports (osu-session.php)
 # when a score is submitted, the osu! client will submit a
 # performance report of the user's pc along with some technical
 # details about the score. the performance report is submitted
@@ -84,4 +79,14 @@ cache = {
 # recevied our score yet, so we'll give it some time, this
 # way our report always gets submitted.
 'performance_reports': set() # {scoreid, ...}
+"""
+
+""" beatmap submission stuff
+# store the current available ids
+# for users submitting custom maps.
+# updated from sql on gulag startup.
+gulag_maps: dict[str, int] = {
+    'set_id': (1 << 30) - 1,
+    'id': (1 << 30) - 1
+}
 """

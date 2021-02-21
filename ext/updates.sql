@@ -267,3 +267,7 @@ create table map_requests
 	datetime datetime not null,
 	active tinyint(1) not null
 );
+
+# v3.2.1
+update scores_rx set id = id - 3074457345618258603;
+update scores_ap set id = id - 6148914691236517206;

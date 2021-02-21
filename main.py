@@ -21,6 +21,7 @@ import bg_loops
 from constants.privileges import Privileges
 from objects import glob
 from objects.achievement import Achievement
+from objects.collections import *
 from objects.channel import Channel
 from objects.clan import Clan
 from objects.match import MapPool
@@ -32,21 +33,24 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 0)
+glob.version = cmyui.Version(3, 2, 1)
 
-async def setup_globals() -> None:
-    """Setup & cache many global variables from sql."""
+async def setup_collections() -> None:
+    """Setup & cache many global collections (mostly from sql)."""
     # create our bot & append it to the global player list.
     res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
 
-    glob.bot = Player(id=1, name=res['name'], priv=Privileges.Normal)
-    glob.bot.last_recv_time = float(0x7fffffff) # never auto-dc the bot
+    # global players list
+    glob.players = PlayerList()
 
+    glob.bot = Player(
+        id = 1, name = res['name'], priv = Privileges.Normal,
+        last_recv_time = float(0x7fffffff) # never auto-dc
+    )
     glob.players.append(glob.bot)
 
-    # cache from common data public data structures from sql.
-
-    # channels.
+    # global channels list
+    glob.channels = ChannelList()
     async for res in glob.db.iterall('SELECT * FROM channels'):
         chan = Channel(
             name = res['name'],
@@ -58,29 +62,32 @@ async def setup_globals() -> None:
 
         glob.channels.append(chan)
 
-    # map pools.
-    async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
-        pool = MapPool(
-            id = res['id'],
-            name = res['name'],
-            created_at = res['created_at'],
-            created_by = await glob.players.get(
-                id = res['created_by'],
-                sql = True # fetch even if offline
-            )
-        )
+    # global matches list
+    glob.matches = MatchList()
 
-        await pool.maps_from_sql()
-        glob.pools.append(pool)
-
-    # clans.
+    # global clans list
+    glob.clans = ClanList()
     async for res in glob.db.iterall('SELECT * FROM clans'):
         clan = Clan(**res)
 
         await clan.members_from_sql()
         glob.clans.append(clan)
 
-    # achievements.
+    # global mappools list
+    glob.pools = MapPoolList()
+    async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
+        pool = MapPool(
+            id = res['id'],
+            name = res['name'],
+            created_at = res['created_at'],
+            created_by = await glob.players.get_ensure(id=res['created_by'])
+        )
+
+        await pool.maps_from_sql()
+        glob.pools.append(pool)
+
+    # global achievements (sorted by vn gamemodes)
+    glob.achievements = {0: [], 1: [], 2: [], 3: []}
     async for res in glob.db.iterall('SELECT * FROM achievements'):
         # NOTE: achievement conditions are stored as
         # stringified python expressions in the database
@@ -103,8 +110,8 @@ async def setup_globals() -> None:
         glob.gulag_maps = maps_res
     """
 
-async def on_start() -> None:
-    """Called when the server begins serving connections."""
+async def before_serving() -> None:
+    """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
     glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
 
@@ -117,9 +124,9 @@ async def on_start() -> None:
     await updater.run()
     await updater.log_startup()
 
-    # cache many global objects from sql,
-    # such as channels, mappools, clans, etc.
-    await setup_globals()
+    # cache many global collections/objects from sql,
+    # such as channels, mappools, clans, bot, etc.
+    await setup_collections()
 
     # setup tasks for upcoming donor expiry dates.
     await bg_loops.donor_expiry()
@@ -133,6 +140,9 @@ async def on_start() -> None:
     # replays deemed by the server's configurable values.
     if glob.config.webhooks['surveillance']:
         loop.create_task(bg_loops.replay_detections())
+
+    # reroll the bot's random status every `interval` sec.
+    loop.create_task(bg_loops.reroll_bot_status(interval=300))
 
 if __name__ == '__main__':
     # set cwd to /gulag.
@@ -159,7 +169,7 @@ if __name__ == '__main__':
 
     # enqueue a task to run once the
     # server begins serving connections.
-    app.add_task(on_start())
+    app.before_serving = before_serving
 
     # support for https://datadoghq.com
     if all(glob.config.datadog.values()):

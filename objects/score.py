@@ -223,7 +223,7 @@ class Score:
 
         s.id = res[0]
         s.bmap = await Beatmap.from_md5(res[1])
-        s.player = await glob.players.get(id=res[2], sql=True)
+        s.player = await glob.players.get_ensure(id=res[2])
 
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
@@ -320,7 +320,7 @@ class Score:
     async def calc_lb_placement(self) -> int:
         table = self.mode.sql_table
 
-        if self.mode <= GameMode.rx_std:
+        if self.mode >= GameMode.rx_std:
             scoring = 'pp'
             score = self.pp
         else:
@@ -328,9 +328,11 @@ class Score:
             score = self.score
 
         res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM {t} '
-            'WHERE map_md5 = %s AND mode = %s '
-            'AND status = 2 AND {s} > %s'.format(t=table, s=scoring),
+            f'SELECT COUNT(*) AS c FROM {table} s '
+            'LEFT JOIN users u ON u.id = s.userid '
+            'WHERE s.map_md5 = %s AND s.mode = %s '
+            'AND s.status = 2 AND u.priv & 1 '
+            f'AND s.{scoring} > %s',
             [self.bmap.md5, self.mode.as_vanilla, score]
         )
 
@@ -347,8 +349,9 @@ class Score:
             return (0.0, 0.0)
 
         ppcalc = await PPCalculator.from_id(
-            self.bmap.id, mods=self.mods, combo=self.max_combo,
-            nmiss=self.nmiss, mode=self.mode, acc=self.acc
+            map_id=self.bmap.id, mods=self.mods,
+            combo=self.max_combo, nmiss=self.nmiss,
+            mode_vn=self.mode.as_vanilla, acc=self.acc
         )
 
         if not ppcalc:

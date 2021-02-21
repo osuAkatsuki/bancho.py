@@ -231,7 +231,8 @@ class Beatmap:
             'ar, hp, diff '
             'FROM maps WHERE id = %s',
             [bid]
-        )): return
+        )):
+            return
 
         return cls(**res, id=bid)
 
@@ -293,7 +294,8 @@ class Beatmap:
             'ar, hp, diff '
             'FROM maps WHERE md5 = %s',
             [md5]
-        )): return
+        )):
+            return
 
         return cls(**res, md5=md5)
 
@@ -474,7 +476,8 @@ class Beatmap:
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         ppcalc = await PPCalculator.from_id(
-            self.id, mode=self.mode, mods=mods
+            map_id=self.id, mods=mods,
+            mode_vn=self.mode.as_vanilla
         )
 
         for idx, acc in enumerate((90, 95, 98, 99, 100)):

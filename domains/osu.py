@@ -25,6 +25,7 @@ from cmyui import Ansi
 from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
+from cmyui import ratelimit
 from cmyui import rstring
 
 import packets
@@ -79,8 +80,6 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         # object before calling the handler itself.
         @wraps(f)
         async def handler(conn: Connection) -> Optional[bytes]:
-            name = passwd = None
-
             argset = conn.args or conn.multipart_args
 
             if not (name_p in argset and pass_p in argset):
@@ -210,7 +209,8 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
             [res['md5'], p.id]
-        ): ranks[score['mode']] = score['grade']
+        ):
+            ranks[score['mode']] = score['grade']
 
         ret.append('{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
             i = idx, ranks = '|'.join(ranks), **res
@@ -248,7 +248,8 @@ async def osuAddFavourite(p: 'Player', conn: Connection) -> Optional[bytes]:
         'SELECT 1 FROM favourites '
         'WHERE userid = %s AND setid = %s',
         [p.id, conn.args['a']]
-    ): return b"You've already favourited this beatmap!"
+    ):
+        return b"You've already favourited this beatmap!"
 
     # add favourite
     await glob.db.execute(
@@ -295,7 +296,8 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
             "Please re-install relife and disable the program to avoid any restrictions."
         ])))
 
-        await p.logout()
+        p.logout()
+
         return b'-3'
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
@@ -393,7 +395,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 #            # Order difficulties by mode > star rating > ar.
 #            'ORDER BY mode ASC, diff ASC, ar ASC',
 #            [bmapset['set_id']]
-#        )): continue
+#        )):
+#            continue
 #
 #        # Construct difficulty-specific information.
 #        diffs = ','.join(
@@ -461,31 +464,10 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         # TODO: get from osu!
         return
 
-    # TODO: rating
     return ('{set_id}.osz|{artist}|{title}|{creator}|'
-            '{status}|10.0|{last_update}|{set_id}|'
+            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
-
-UNDEF = 9999
-autoban_pp = (
-    # high ceiling values for autoban as a very simple form
-    # of "anticheat", simply ban a user if they are not
-    # whitelisted, and submit a score of too high caliber.
-    # Values below are in form (non_fl, fl), as fl has custom
-    # vals as it finds quite a few additional cheaters on the side.
-    (700,   600),   # vn!std
-    (UNDEF, UNDEF), # vn!taiko
-    (UNDEF, UNDEF), # vn!catch
-    (UNDEF, UNDEF), # vn!mania
-
-    (1200,  800),   # rx!std
-    (UNDEF, UNDEF), # rx!taiko
-    (UNDEF, UNDEF), # rx!catch
-
-    (UNDEF, UNDEF)  # ap!std
-)
-del UNDEF
 
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
@@ -556,7 +538,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     if not s.player.priv & Privileges.Whitelisted:
         # Get the PP cap for the current context.
-        pp_cap = autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = glob.config.autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
             log(f'{s.player} banned for submitting '
@@ -682,13 +664,14 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'SELECT u.id, name FROM users u '
             f'LEFT JOIN {table} s ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
-            'AND s.status = 2 ORDER BY pp DESC LIMIT 1, 1',
+            'AND s.status = 2 AND u.priv & 1 '
+            'ORDER BY pp DESC LIMIT 1, 1',
             [s.bmap.md5, s.mode.as_vanilla]
         )
 
         performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
 
-        ann = [f'\x01ACTION achieved #1 on {s.bmap.embed}',
+        ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
                f'with {s.acc:.2f}% for {performance}.']
 
         if s.mods:
@@ -697,7 +680,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
-        await announce_chan.send(s.player, ' '.join(ann), to_self=True)
+        announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
@@ -1097,10 +1080,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         f"FROM {table} s "
         "LEFT JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = %s AND s.status = 2 AND mode = %s"
+        "WHERE s.map_md5 = %s AND s.status = 2 "
+        "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
     ]
 
-    params = [map_md5, conn.args['m']]
+    params = [map_md5, p.id, conn.args['m']]
 
     if rank_type == RankingType.Mods:
         query.append('AND s.mods = %s')
@@ -1151,9 +1135,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     if p_best:
         # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
-            f'SELECT COUNT(*) AS count FROM {table} '
-            'WHERE map_md5 = %s AND mode = %s '
-            f'AND status = 2 AND {scoring} > %s', [
+            f'SELECT COUNT(*) AS count FROM {table} s '
+            'LEFT JOIN users u ON u.id = s.userid '
+            'WHERE s.map_md5 = %s AND s.mode = %s '
+            'AND s.status = 2 AND u.priv & 1 '
+            f'AND s.{scoring} > %s', [
                 map_md5, conn.args['m'],
                 p_best['_score']
             ]
@@ -1271,7 +1257,7 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if not (t := await glob.players.get(name=t_name, sql=True)):
+    if not (t := await glob.players.get_ensure(name=t_name)):
         return
 
     # mark any unread mail from this user as read.
@@ -1956,7 +1942,8 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
             re['artist'], re['title'],
             re['creator'], re['version']
         ]
-    )): return (404, b'Map not found.')
+    )):
+        return (404, b'Map not found.')
 
     path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
@@ -1981,6 +1968,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 """ ingame registration """
 
 @domain.route('/users', methods=['POST'])
+@ratelimit(period=300, max_count=15) # 15 registrations / 5mins
 async def register_account(conn: Connection) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
@@ -2043,7 +2031,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
-        async with asyncio.Lock():
+        async with glob.players._lock:
             pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
             pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
             glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login

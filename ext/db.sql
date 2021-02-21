@@ -399,8 +399,8 @@ values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
 insert into stats (id) values (1);
 
 # offset score ids to avoid replay file collisions.
-alter table scores_rx auto_increment = 6148914691236517205;
-alter table scores_ap auto_increment = 12297829382473034410;
+alter table scores_rx auto_increment = 3074457345618258602;
+alter table scores_ap auto_increment = 6148914691236517204;
 
 # userid 2 is reserved for ppy in osu!, and the
 # client will not allow users to pm this id.

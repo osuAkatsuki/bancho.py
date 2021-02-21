@@ -12,6 +12,7 @@ email = rcomp(r'^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{2,24}$')
 now_playing = rcomp(
     r'^\x01ACTION is (?:playing|editing|watching|listening to) '
     r'\[https://osu.ppy.sh/b/(?P<bid>\d{1,7}) .+\]'
+    r'(?: <(?P<mode_vn>Taiko|CatchTheBeat|osu!mania)>)?'
     r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
 )
 silence_duration = rcomp(
