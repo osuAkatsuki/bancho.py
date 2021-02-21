@@ -3,15 +3,15 @@
 from enum import IntFlag
 from enum import unique
 
-from utils.misc import pymysql_encode
-from utils.misc import escape_enum
+#from utils.misc import pymysql_encode
+#from utils.misc import escape_enum
 
 __all__ = ('Mods',)
 
 # NOTE: the order of some of these = stupid
 
 @unique
-@pymysql_encode(escape_enum)
+#@pymysql_encode(escape_enum)
 class Mods(IntFlag):
     NOMOD       = 0
     NOFAIL      = 1 << 0
@@ -102,19 +102,21 @@ class Mods(IntFlag):
 
     def filter_invalid_combos(self, mode_vn: int) -> 'Mods':
         """Remove any invalid mod combinations."""
-        if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
-            self &= ~Mods.HALFTIME
-        if self & Mods.EASY and self & Mods.HARDROCK:
-            self &= ~Mods.HARDROCK
-        if self & Mods.PERFECT and self & Mods.SUDDENDEATH:
-            self &= ~Mods.SUDDENDEATH
 
+        # 1. remove global (mode-inspecific) mod conflictions
+
+        if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
+            self &= ~Mods.HALFTIME # (DT|NC)HT
+        if self & Mods.EASY and self & Mods.HARDROCK:
+            self &= ~Mods.HARDROCK # EZHR
+        if self & Mods.PERFECT and self & Mods.SUDDENDEATH:
+            self &= ~Mods.SUDDENDEATH # PFSD
+
+        # 2. remove mode-unique mods from incorrect gamemodes
         if mode_vn != 0: # osu! specific
             self &= ~(Mods.AUTOPILOT | Mods.SPUNOUT | Mods.TARGET)
-
         # ctb & taiko have no unique mods
-
-        if mode_vn != 4: # mania specific
+        if mode_vn != 3: # mania specific
             self &= ~(
                 Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
                 Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
@@ -123,15 +125,23 @@ class Mods(IntFlag):
                 Mods.RANDOM | Mods.FADEIN
             )
 
-        # make sure they only have a
-        # single keymod enabled.
+        # 3. mania-specific stuff
+        if mode_vn == 3:
+            # relax is a std/taiko/ctb common mod
+            self &= ~Mods.RELAX
+
+            # some mod conflictions
+            if self & Mods.HIDDEN and self & Mods.FADEIN:
+                self &= ~Mods.FADEIN
+
+        # 3. remove multiple keymods
+        # TODO: do this better
         keymods_used = self & (
             Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
             Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
             Mods.KEY7 | Mods.KEY8 | Mods.KEY9
         )
 
-        # TODO: probably can be faster
         if bin(keymods_used).count('1') > 1:
             # keep only the first
             first_keymod = None
@@ -202,21 +212,19 @@ class Mods(IntFlag):
             '-NoFail': cls.NOFAIL,
             '-Easy': cls.EASY,
             '+Hidden': cls.HIDDEN,
-            '+Perfect': cls.PERFECT,
-            '+SuddenDeath': cls.SUDDENDEATH,
             '+HardRock': cls.HARDROCK,
-            '+Nightcore': cls.NIGHTCORE,
+            '+SuddenDeath': cls.SUDDENDEATH,
             '+DoubleTime': cls.DOUBLETIME,
-            '-HalfTime': cls.HALFTIME,
-            '+Flashlight': cls.FLASHLIGHT,
-            '-SpunOut': cls.SPUNOUT,
-
-            '|Cinema|': cls.CINEMA,
-            '|Autoplay|': cls.AUTOPLAY,
-
-            '~Target~': cls.TARGET,
             '~Relax~': cls.RELAX,
+            '-HalfTime': cls.HALFTIME,
+            '+Nightcore': cls.NIGHTCORE,
+            '+Flashlight': cls.FLASHLIGHT,
+            '|Autoplay|': cls.AUTOPLAY,
+            '-SpunOut': cls.SPUNOUT,
             '~Autopilot~': cls.AUTOPILOT,
+            '+Perfect': cls.PERFECT,
+            '|Cinema|': cls.CINEMA,
+            '~Target~': cls.TARGET,
 
             # perhaps could modify regex
             # to only allow these once,
