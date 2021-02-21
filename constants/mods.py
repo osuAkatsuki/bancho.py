@@ -50,46 +50,13 @@ class Mods(IntFlag):
         if self.value == Mods.NOMOD:
             return 'NM'
 
-        mod_dict = {
-            Mods.NOFAIL: 'NF',
-            Mods.EASY: 'EZ',
-            Mods.TOUCHSCREEN: 'TD',
-            Mods.HIDDEN: 'HD',
-            Mods.HARDROCK: 'HR',
-            Mods.SUDDENDEATH: 'SD',
-            Mods.DOUBLETIME: 'DT',
-            Mods.RELAX: 'RX',
-            Mods.HALFTIME: 'HT',
-            Mods.NIGHTCORE: 'NC',
-            Mods.FLASHLIGHT: 'FL',
-            Mods.AUTOPLAY: 'AU',
-            Mods.SPUNOUT: 'SO',
-            Mods.AUTOPILOT: 'AP',
-            Mods.PERFECT: 'PF',
-            Mods.FADEIN: 'FI',
-            Mods.RANDOM: 'RN',
-            Mods.CINEMA: 'CN',
-            Mods.TARGET: 'TP',
-            Mods.SCOREV2: 'V2',
-            Mods.MIRROR: 'MR',
-
-            Mods.KEY1: '1K',
-            Mods.KEY2: '2K',
-            Mods.KEY3: '3K',
-            Mods.KEY4: '4K',
-            Mods.KEY5: '5K',
-            Mods.KEY6: '6K',
-            Mods.KEY7: '7K',
-            Mods.KEY8: '8K',
-            Mods.KEY9: '9K',
-            Mods.KEYCOOP: 'CO'
-        }
-
         mod_str = []
+        _dict = mod2modstr_dict # global
 
-        for m in [_m for _m in Mods if self.value & _m and
-                                       _m != SPEED_CHANGING_MODS]:
-            mod_str.append(mod_dict[m])
+        for mod in Mods:
+            if self.value & mod:
+                mod_str.append(_dict[mod])
+
         return ''.join(mod_str)
 
     def filter_invalid_combos(self, mode_vn: int) -> 'Mods':
@@ -155,110 +122,148 @@ class Mods(IntFlag):
     @classmethod
     def from_modstr(cls, s: str):
         # from fmt: `HDDTRX`
-        mod_dict = {
-            'NF': cls.NOFAIL,
-            'EZ': cls.EASY,
-            'TD': cls.TOUCHSCREEN,
-            'HD': cls.HIDDEN,
-            'HR': cls.HARDROCK,
-            'SD': cls.SUDDENDEATH,
-            'DT': cls.DOUBLETIME,
-            'RX': cls.RELAX,
-            'HT': cls.HALFTIME,
-            'NC': cls.NIGHTCORE,
-            'FL': cls.FLASHLIGHT,
-            'AU': cls.AUTOPLAY,
-            'SO': cls.SPUNOUT,
-            'AP': cls.AUTOPILOT,
-            'PF': cls.PERFECT,
-            'FI': cls.FADEIN,
-            'RN': cls.RANDOM,
-            'CN': cls.CINEMA,
-            'TP': cls.TARGET,
-            'V2': cls.SCOREV2,
-            'MR': cls.MIRROR,
-
-            '1K': cls.KEY1,
-            '2K': cls.KEY2,
-            '3K': cls.KEY3,
-            '4K': cls.KEY4,
-            '5K': cls.KEY5,
-            '6K': cls.KEY6,
-            '7K': cls.KEY7,
-            '8K': cls.KEY8,
-            '9K': cls.KEY9,
-            'CO': cls.KEYCOOP
-        }
-
-        mods = cls.NOMOD
-
         def get_mod(idx: int) -> str:
             return s[idx:idx + 2].upper()
 
+        mods = cls.NOMOD
+        _dict = modstr2mod_dict # global
+
         for m in map(get_mod, range(0, len(s), 2)):
-            if m not in mod_dict:
+            if m not in _dict:
                 continue
 
-            mods |= mod_dict[m]
+            mods |= _dict[m]
 
         return mods
 
     @classmethod
     def from_np(cls, s: str, mode_vn: int):
-        mod_dict = {
-            '-NoFail': cls.NOFAIL,
-            '-Easy': cls.EASY,
-            '+Hidden': cls.HIDDEN,
-            '+HardRock': cls.HARDROCK,
-            '+SuddenDeath': cls.SUDDENDEATH,
-            '+DoubleTime': cls.DOUBLETIME,
-            '~Relax~': cls.RELAX,
-            '-HalfTime': cls.HALFTIME,
-            '+Nightcore': cls.NIGHTCORE,
-            '+Flashlight': cls.FLASHLIGHT,
-            '|Autoplay|': cls.AUTOPLAY,
-            '-SpunOut': cls.SPUNOUT,
-            '~Autopilot~': cls.AUTOPILOT,
-            '+Perfect': cls.PERFECT,
-            '|Cinema|': cls.CINEMA,
-            '~Target~': cls.TARGET,
-
-            # perhaps could modify regex
-            # to only allow these once,
-            # and only at the end of str?
-            '|1K|': cls.KEY1,
-            '|2K|': cls.KEY2,
-            '|3K|': cls.KEY3,
-            '|4K|': cls.KEY4,
-            '|5K|': cls.KEY5,
-            '|6K|': cls.KEY6,
-            '|7K|': cls.KEY7,
-            '|8K|': cls.KEY8,
-            '|9K|': cls.KEY9,
-
-            # XXX: kinda mood that there's no way
-            # to tell K1-K4 co-op from /np, but
-            # scores won't submit or anything so
-            # it's not ultimately a problem.
-            '|10K|': cls.KEY5 | cls.KEYCOOP,
-            '|12K|': cls.KEY6 | cls.KEYCOOP,
-            '|14K|': cls.KEY7 | cls.KEYCOOP,
-            '|16K|': cls.KEY8 | cls.KEYCOOP,
-            '|18K|': cls.KEY9 | cls.KEYCOOP
-        }
-
         mods = cls.NOMOD
+        _dict = npstr2mod_dict # global
 
+        # TODO: dis
         for mod in s.split(' '):
-            if mod not in mod_dict:
+            if mod not in _dict:
                 continue
 
-            mods |= mod_dict[mod]
+            mods |= _dict[mod]
 
         # NOTE: for fetching from /np, we automatically
         # call cls.filter_invalid_combos as we assume
         # the input string is from user input.
         return mods.filter_invalid_combos(mode_vn)
+
+modstr2mod_dict = {
+    'NF': Mods.NOFAIL,
+    'EZ': Mods.EASY,
+    'TD': Mods.TOUCHSCREEN,
+    'HD': Mods.HIDDEN,
+    'HR': Mods.HARDROCK,
+    'SD': Mods.SUDDENDEATH,
+    'DT': Mods.DOUBLETIME,
+    'RX': Mods.RELAX,
+    'HT': Mods.HALFTIME,
+    'NC': Mods.NIGHTCORE,
+    'FL': Mods.FLASHLIGHT,
+    'AU': Mods.AUTOPLAY,
+    'SO': Mods.SPUNOUT,
+    'AP': Mods.AUTOPILOT,
+    'PF': Mods.PERFECT,
+    'FI': Mods.FADEIN,
+    'RN': Mods.RANDOM,
+    'CN': Mods.CINEMA,
+    'TP': Mods.TARGET,
+    'V2': Mods.SCOREV2,
+    'MR': Mods.MIRROR,
+
+    '1K': Mods.KEY1,
+    '2K': Mods.KEY2,
+    '3K': Mods.KEY3,
+    '4K': Mods.KEY4,
+    '5K': Mods.KEY5,
+    '6K': Mods.KEY6,
+    '7K': Mods.KEY7,
+    '8K': Mods.KEY8,
+    '9K': Mods.KEY9,
+    'CO': Mods.KEYCOOP
+}
+
+npstr2mod_dict = {
+    '-NoFail': Mods.NOFAIL,
+    '-Easy': Mods.EASY,
+    '+Hidden': Mods.HIDDEN,
+    '+HardRock': Mods.HARDROCK,
+    '+SuddenDeath': Mods.SUDDENDEATH,
+    '+DoubleTime': Mods.DOUBLETIME,
+    '~Relax~': Mods.RELAX,
+    '-HalfTime': Mods.HALFTIME,
+    '+Nightcore': Mods.NIGHTCORE,
+    '+Flashlight': Mods.FLASHLIGHT,
+    '|Autoplay|': Mods.AUTOPLAY,
+    '-SpunOut': Mods.SPUNOUT,
+    '~Autopilot~': Mods.AUTOPILOT,
+    '+Perfect': Mods.PERFECT,
+    '|Cinema|': Mods.CINEMA,
+    '~Target~': Mods.TARGET,
+
+    # perhaps could modify regex
+    # to only allow these once,
+    # and only at the end of str?
+    '|1K|': Mods.KEY1,
+    '|2K|': Mods.KEY2,
+    '|3K|': Mods.KEY3,
+    '|4K|': Mods.KEY4,
+    '|5K|': Mods.KEY5,
+    '|6K|': Mods.KEY6,
+    '|7K|': Mods.KEY7,
+    '|8K|': Mods.KEY8,
+    '|9K|': Mods.KEY9,
+
+    # XXX: kinda mood that there's no way
+    # to tell K1-K4 co-op from /np, but
+    # scores won't submit or anything so
+    # it's not ultimately a problem.
+    '|10K|': Mods.KEY5 | Mods.KEYCOOP,
+    '|12K|': Mods.KEY6 | Mods.KEYCOOP,
+    '|14K|': Mods.KEY7 | Mods.KEYCOOP,
+    '|16K|': Mods.KEY8 | Mods.KEYCOOP,
+    '|18K|': Mods.KEY9 | Mods.KEYCOOP
+}
+
+mod2modstr_dict = {
+    Mods.NOFAIL: 'NF',
+    Mods.EASY: 'EZ',
+    Mods.TOUCHSCREEN: 'TD',
+    Mods.HIDDEN: 'HD',
+    Mods.HARDROCK: 'HR',
+    Mods.SUDDENDEATH: 'SD',
+    Mods.DOUBLETIME: 'DT',
+    Mods.RELAX: 'RX',
+    Mods.HALFTIME: 'HT',
+    Mods.NIGHTCORE: 'NC',
+    Mods.FLASHLIGHT: 'FL',
+    Mods.AUTOPLAY: 'AU',
+    Mods.SPUNOUT: 'SO',
+    Mods.AUTOPILOT: 'AP',
+    Mods.PERFECT: 'PF',
+    Mods.FADEIN: 'FI',
+    Mods.RANDOM: 'RN',
+    Mods.CINEMA: 'CN',
+    Mods.TARGET: 'TP',
+    Mods.SCOREV2: 'V2',
+    Mods.MIRROR: 'MR',
+
+    Mods.KEY1: '1K',
+    Mods.KEY2: '2K',
+    Mods.KEY3: '3K',
+    Mods.KEY4: '4K',
+    Mods.KEY5: '5K',
+    Mods.KEY6: '6K',
+    Mods.KEY7: '7K',
+    Mods.KEY8: '8K',
+    Mods.KEY9: '9K',
+    Mods.KEYCOOP: 'CO'
+}
 
 KEY_MODS = (
     Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |

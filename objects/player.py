@@ -117,9 +117,6 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    # XXX: below is mostly custom gulag,
-           or internal player class stuff.
-
     menu_options: `dict[int, dict[str, Any]]`
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
