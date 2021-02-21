@@ -95,30 +95,45 @@ class Mods(IntFlag):
     def filter_invalid_combos(self, mode_vn: int) -> 'Mods':
         """Remove any invalid mod combinations."""
 
-        # 1. remove global (mode-inspecific) mod conflictions
-
+        # 1. mode-inspecific mod conflictions
         if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
             self &= ~Mods.HALFTIME # (DT|NC)HT
+
         if self & Mods.EASY and self & Mods.HARDROCK:
             self &= ~Mods.HARDROCK # EZHR
+
+        if self & (Mods.NOFAIL | Mods.RELAX | Mods.AUTOPILOT):
+            if self & Mods.SUDDENDEATH:
+                self &= ~Mods.SUDDENDEATH # (NF|RX|AP)SD
+            if self & Mods.PERFECT:
+                self &= ~Mods.PERFECT # (NF|RX|AP)PF
+
+        if self & (Mods.RELAX | Mods.AUTOPILOT):
+            if self & Mods.NOFAIL:
+                self &= ~Mods.NOFAIL # (RX|AP)NF
+
         if self & Mods.PERFECT and self & Mods.SUDDENDEATH:
             self &= ~Mods.SUDDENDEATH # PFSD
 
         # 2. remove mode-unique mods from incorrect gamemodes
         if mode_vn != 0: # osu! specific
             self &= ~OSU_SPECIFIC_MODS
+
         # ctb & taiko have no unique mods
+
         if mode_vn != 3: # mania specific
             self &= ~MANIA_SPECIFIC_MODS
 
-        # 3. mania-specific stuff
-        if mode_vn == 3:
-            # relax is a std/taiko/ctb common mod
-            self &= ~Mods.RELAX
+        # 3. mode-specific mod conflictions
+        if mode_vn == 0:
+            if self & Mods.AUTOPILOT:
+                if self & (Mods.SPUNOUT | Mods.RELAX):
+                    self &= ~Mods.AUTOPILOT # (SO|RX)AP
 
-            # some mod conflictions
+        if mode_vn == 3:
+            self &= ~Mods.RELAX # rx is std/taiko/ctb common
             if self & Mods.HIDDEN and self & Mods.FADEIN:
-                self &= ~Mods.FADEIN
+                self &= ~Mods.FADEIN # HDFI
 
         # 4 remove multiple keymods
         # TODO: do this better
