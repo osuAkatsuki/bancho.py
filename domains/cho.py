@@ -176,8 +176,13 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             return
 
         # limit message length to 2k chars
+        # perhaps this could be dangerous with !py..?
         if len(msg) > 2000:
             msg = f'{msg[:2000]}... (truncated)'
+            p.enqueue(packets.notification(
+                'Your message was truncated\n'
+                '(exceeded 2000 characters).'
+            ))
 
         cmd = (msg.startswith(glob.config.command_prefix) and
                await commands.process_commands(p, t_chan, msg))
@@ -682,8 +687,13 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             return
 
         # limit message length to 2k chars
+        # perhaps this could be dangerous with !py..?
         if len(msg) > 2000:
             msg = f'{msg[:2000]}... (truncated)'
+            p.enqueue(packets.notification(
+                'Your message was truncated\n'
+                '(exceeded 2000 characters).'
+            ))
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
