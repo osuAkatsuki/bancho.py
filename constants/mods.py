@@ -8,6 +8,8 @@ from utils.misc import escape_enum
 
 __all__ = ('Mods',)
 
+# NOTE: the order of some of these = stupid
+
 @unique
 @pymysql_encode(escape_enum)
 class Mods(IntFlag):
@@ -147,22 +149,27 @@ class Mods(IntFlag):
     def from_modstr(cls, s: str):
         # from fmt: `HDDTRX`
         mod_dict = {
-            'EZ': cls.EASY,
             'NF': cls.NOFAIL,
+            'EZ': cls.EASY,
+            'TD': cls.TOUCHSCREEN,
             'HD': cls.HIDDEN,
-            'PF': cls.PERFECT,
-            'SD': cls.SUDDENDEATH,
             'HR': cls.HARDROCK,
-            'NC': cls.NIGHTCORE,
+            'SD': cls.SUDDENDEATH,
             'DT': cls.DOUBLETIME,
-            'HT': cls.HALFTIME,
-            'FL': cls.FLASHLIGHT,
-            'SO': cls.SPUNOUT,
-            'CN': cls.CINEMA,
-            'AU': cls.AUTOPLAY,
-            'TP': cls.TARGET,
             'RX': cls.RELAX,
+            'HT': cls.HALFTIME,
+            'NC': cls.NIGHTCORE,
+            'FL': cls.FLASHLIGHT,
+            'AU': cls.AUTOPLAY,
+            'SO': cls.SPUNOUT,
             'AP': cls.AUTOPILOT,
+            'PF': cls.PERFECT,
+            'FI': cls.FADEIN,
+            'RN': cls.RANDOM,
+            'CN': cls.CINEMA,
+            'TP': cls.TARGET,
+            'V2': cls.SCOREV2,
+            'MR': cls.MIRROR,
 
             '1K': cls.KEY1,
             '2K': cls.KEY2,
@@ -192,8 +199,8 @@ class Mods(IntFlag):
     @classmethod
     def from_np(cls, s: str, mode_vn: int):
         mod_dict = {
-            '-Easy': cls.EASY,
             '-NoFail': cls.NOFAIL,
+            '-Easy': cls.EASY,
             '+Hidden': cls.HIDDEN,
             '+Perfect': cls.PERFECT,
             '+SuddenDeath': cls.SUDDENDEATH,
