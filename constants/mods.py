@@ -127,7 +127,7 @@ class Mods(IntFlag):
         if bin(keymods_used).count('1') > 1:
             # keep only the first
             first_keymod = None
-            for mod in Mods.KEY_MOD:
+            for mod in KEY_MODS:
                 if keymods_used & mod:
                     first_keymod = mod
                     break

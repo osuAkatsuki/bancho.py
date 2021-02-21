@@ -886,26 +886,6 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.enqueue_state()
     return 'Match mods updated.'
 
-@mp_commands.add(Privileges.Normal, aliases=['pmods'])
-async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
-    """Set the current players freemods, if permitted."""
-    if len(msg) != 1 or len(msg[0]) % 2 != 0:
-        return 'Invalid syntax: !mp playermods <mods>'
-
-    if not m.freemods:
-        return 'Freemods must be enabled to use this command!'
-
-    mods = Mods.from_modstr(msg[0])
-    mods = mods.filter_invalid_combos(m.mode.as_vanilla)
-
-    # speed-changing mods may
-    # only be applied to match.
-    mods &= ~SPEED_CHANGING_MODS
-
-    m.get_slot(p).mods = mods
-    m.enqueue_state()
-    return f'Mods updated to {mods!r}.'
-
 @mp_commands.add(Privileges.Normal, aliases=['fm', 'fmods'])
 async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     """Toggle freemods status for the match."""

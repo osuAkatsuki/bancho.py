@@ -79,8 +79,7 @@ Multiplayer Management
 !mp start: Start the current multiplayer match, with any players ready.
 !mp abort: Abort the current in-progress multiplayer match.
 !mp map: Set the current match's current map by id.
-!mp mods: Set the current match's mods, from string form.
-!mp playermods: Set the current players freemods, if permitted.
+!mp mods: Set the current match or player's mods (depending on freemods).
 !mp freemods: Toggle freemods status for the match.
 !mp host: Set the current match's current host by id.
 !mp randpw: Randomize the current match's password.
