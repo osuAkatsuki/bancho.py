@@ -1710,6 +1710,9 @@ async def process_commands(p: 'Player', t: Messageable,
     start_time = clock_ns()
     trigger, *args = msg[len(glob.config.command_prefix):].strip().split(' ')
 
+    # case-insensitive triggers
+    trigger = trigger.lower()
+
     for cmd_set in command_sets:
         # check if any command sets match.
         if trigger == cmd_set.trigger:
@@ -1736,6 +1739,10 @@ async def process_commands(p: 'Player', t: Messageable,
                 t = m # send match for mp commands instead of chan
 
             trigger, *args = args # get subcommand
+
+            # case-insensitive triggers
+            trigger = trigger.lower()
+
             commands = cmd_set.commands
             break
     else:
