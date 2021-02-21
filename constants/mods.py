@@ -46,14 +46,6 @@ class Mods(IntFlag):
     SCOREV2     = 1 << 29
     MIRROR      = 1 << 30
 
-    # XXX: needs some modification to work..
-    #KEY_MOD = KEY1 | KEY2 | KEY3 | KEY4 | KEY5 | KEY6 | KEY7 | KEY8 | KEY9 | KEYCOOP
-    #FREE_MOD_ALLOWED = NOFAIL | EASY | HIDDEN | HARDROCK | \
-    #                 SUDDENDEATH | FLASHLIGHT | FADEIN | \
-    #                 RELAX | AUTOPILOT | SPUNOUT | KEY_MOD
-    #SCORE_INCREASE_MODS = HIDDEN | HARDROCK | DOUBLETIME | FLASHLIGHT | FADEIN
-    SPEED_CHANGING = DOUBLETIME | NIGHTCORE | HALFTIME
-
     def __repr__(self) -> str:
         if self.value == Mods.NOMOD:
             return ''
@@ -96,7 +88,7 @@ class Mods(IntFlag):
         mod_str = []
 
         for m in [_m for _m in Mods if self.value & _m and
-                                       _m != Mods.SPEED_CHANGING]:
+                                       _m != SPEED_CHANGING_MODS]:
             mod_str.append(mod_dict[m])
         return ''.join(mod_str)
 
@@ -114,16 +106,10 @@ class Mods(IntFlag):
 
         # 2. remove mode-unique mods from incorrect gamemodes
         if mode_vn != 0: # osu! specific
-            self &= ~(Mods.AUTOPILOT | Mods.SPUNOUT | Mods.TARGET)
+            self &= ~OSU_SPECIFIC_MODS
         # ctb & taiko have no unique mods
         if mode_vn != 3: # mania specific
-            self &= ~(
-                Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
-                Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
-                Mods.KEY7 | Mods.KEY8 | Mods.KEY9 |
-                Mods.KEYCOOP | Mods.MIRROR |
-                Mods.RANDOM | Mods.FADEIN
-            )
+            self &= ~MANIA_SPECIFIC_MODS
 
         # 3. mania-specific stuff
         if mode_vn == 3:
@@ -134,18 +120,14 @@ class Mods(IntFlag):
             if self & Mods.HIDDEN and self & Mods.FADEIN:
                 self &= ~Mods.FADEIN
 
-        # 3. remove multiple keymods
+        # 4 remove multiple keymods
         # TODO: do this better
-        keymods_used = self & (
-            Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
-            Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
-            Mods.KEY7 | Mods.KEY8 | Mods.KEY9
-        )
+        keymods_used = self & KEY_MODS
 
         if bin(keymods_used).count('1') > 1:
             # keep only the first
             first_keymod = None
-            for mod in Mods:
+            for mod in Mods.KEY_MOD:
                 if keymods_used & mod:
                     first_keymod = mod
                     break
@@ -262,3 +244,26 @@ class Mods(IntFlag):
         # call cls.filter_invalid_combos as we assume
         # the input string is from user input.
         return mods.filter_invalid_combos(mode_vn)
+
+KEY_MODS = (
+    Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
+    Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
+    Mods.KEY7 | Mods.KEY8 | Mods.KEY9
+)
+
+#FREE_MOD_ALLOWED = (
+#    Mods.NOFAIL | Mods.EASY | Mods.HIDDEN | Mods.HARDROCK |
+#    Mods.SUDDENDEATH | Mods.FLASHLIGHT | Mods.FADEIN |
+#    Mods.RELAX | Mods.AUTOPILOT | Mods.SPUNOUT | KEY_MODS
+#)
+
+SCORE_INCREASE_MODS = (
+    Mods.HIDDEN | Mods.HARDROCK | Mods.FADEIN |
+    Mods.DOUBLETIME | Mods.FLASHLIGHT
+)
+
+SPEED_CHANGING_MODS = Mods.DOUBLETIME | Mods.NIGHTCORE | Mods.HALFTIME
+
+OSU_SPECIFIC_MODS = Mods.AUTOPILOT | Mods.SPUNOUT | Mods.TARGET
+# taiko & catch have no specific mods
+MANIA_SPECIFIC_MODS = Mods.MIRROR | Mods.RANDOM | Mods.FADEIN | KEY_MODS

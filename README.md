@@ -63,12 +63,11 @@ Generic
 !ban: Ban a specified player's account, with a reason.
 !unban: Unban a specified player's account, with a reason.
 !alert: Send a notification to all players.
-!alertu: Send a notification to a specified player by name.
+!alertuser: Send a notification to a specified player by name.
 !recalc: Performs a full PP recalc on a specified map, or all maps.
 !switchserv: Switch your client's internal endpoints to a specified IP address.
 !debug: Toggle the console's debug setting.
 !setpriv: Set privileges for a specified player (by name).
-!menu_preview: Temporary command to illustrate cmyui's menu option idea.
 !reload: Reload a python module.
 !py: Allow for (async) access to the python interpreter.
 

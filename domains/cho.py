@@ -18,6 +18,7 @@ from constants import commands
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import Privileges
 from constants.types import osuTypes
 from objects import glob
@@ -970,16 +971,16 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                     if s.status & SlotStatus.has_player:
                         # the slot takes any non-speed
                         # changing mods from the match.
-                        s.mods = m.mods & ~Mods.SPEED_CHANGING
+                        s.mods = m.mods & ~SPEED_CHANGING_MODS
 
                 # keep only speed-changing mods.
-                m.mods &= Mods.SPEED_CHANGING
+                m.mods &= SPEED_CHANGING_MODS
             else:
                 # host mods -> match mods.
                 host = m.get_host_slot() # should always exist
                 # the match keeps any speed-changing mods,
                 # and also takes any mods the host has enabled.
-                m.mods &= Mods.SPEED_CHANGING
+                m.mods &= SPEED_CHANGING_MODS
                 m.mods |= host.mods
 
                 for s in m.slots:
@@ -1127,10 +1128,10 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
         if m.freemods:
             if p is m.host:
                 # allow host to set speed-changing mods.
-                m.mods = self.mods & Mods.SPEED_CHANGING
+                m.mods = self.mods & SPEED_CHANGING_MODS
 
             # set slot mods
-            m.get_slot(p).mods = self.mods & ~Mods.SPEED_CHANGING
+            m.get_slot(p).mods = self.mods & ~SPEED_CHANGING_MODS
         else:
             if p is not m.host:
                 log(f'{p} attempted to change mods as non-host.', Ansi.LYELLOW)

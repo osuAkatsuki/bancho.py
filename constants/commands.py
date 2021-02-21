@@ -19,6 +19,7 @@ import cmyui
 import packets
 from constants import regexes
 from constants.mods import Mods
+from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import Privileges
 from objects import glob
 from objects.beatmap import Beatmap
@@ -874,10 +875,10 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if m.freemods:
         if p is m.host:
             # allow host to set speed-changing mods.
-            m.mods = mods & Mods.SPEED_CHANGING
+            m.mods = mods & SPEED_CHANGING_MODS
 
         # set slot mods
-        m.get_slot(p).mods = mods & ~Mods.SPEED_CHANGING
+        m.get_slot(p).mods = mods & ~SPEED_CHANGING_MODS
     else:
         # not freemods, set match mods.
         m.mods = mods
@@ -899,7 +900,7 @@ async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # speed-changing mods may
     # only be applied to match.
-    mods &= ~Mods.SPEED_CHANGING
+    mods &= ~SPEED_CHANGING_MODS
 
     m.get_slot(p).mods = mods
     m.enqueue_state()
@@ -919,9 +920,9 @@ async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
             if s.status & SlotStatus.has_player:
                 # the slot takes any non-speed
                 # changing mods from the match.
-                s.mods = m.mods & ~Mods.SPEED_CHANGING
+                s.mods = m.mods & ~SPEED_CHANGING_MODS
 
-        m.mods &= Mods.SPEED_CHANGING
+        m.mods &= SPEED_CHANGING_MODS
     else:
         # host mods -> central mods.
         m.freemods = False
@@ -929,7 +930,7 @@ async def mp_freemods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         host = m.get_host_slot() # should always exist
         # the match keeps any speed-changing mods,
         # and also takes any mods the host has enabled.
-        m.mods &= Mods.SPEED_CHANGING
+        m.mods &= SPEED_CHANGING_MODS
         m.mods |= host.mods
 
         for s in m.slots:
