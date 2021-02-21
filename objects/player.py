@@ -189,7 +189,11 @@ class Player:
         self.recent_scores: dict[GameMode, Score] = {}
 
         # store the last beatmap /np'ed by the user.
-        self.last_np: Optional[Beatmap] = None
+        self.last_np = {
+            'bmap': None,
+            'mode_vn': None,
+            'timeout': 0
+        }
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
         self.menu_options: dict[int, dict[str, Any]] = {}

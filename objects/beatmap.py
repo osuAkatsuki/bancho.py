@@ -476,7 +476,8 @@ class Beatmap:
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         ppcalc = await PPCalculator.from_id(
-            self.id, mode=self.mode, mods=mods
+            map_id=self.id, mods=mods,
+            mode_vn=self.mode.as_vanilla
         )
 
         for idx, acc in enumerate((90, 95, 98, 99, 100)):

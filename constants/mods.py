@@ -98,19 +98,50 @@ class Mods(IntFlag):
             mod_str.append(mod_dict[m])
         return ''.join(mod_str)
 
-    @staticmethod
-    def filter_invalid_combos(m: 'Mods') -> 'Mods':
-        """Remove any invalid mod combinations from and return `m`."""
-        if m & (Mods.DOUBLETIME | Mods.NIGHTCORE) and m & Mods.HALFTIME:
-            m &= ~Mods.HALFTIME
-        if m & Mods.EASY and m & Mods.HARDROCK:
-            m &= ~Mods.HARDROCK
-        if m & Mods.RELAX and m & Mods.AUTOPILOT:
-            m &= ~Mods.AUTOPILOT
-        if m & Mods.PERFECT and m & Mods.SUDDENDEATH:
-            m &= ~Mods.SUDDENDEATH
+    def filter_invalid_combos(self, mode_vn: int) -> 'Mods':
+        """Remove any invalid mod combinations."""
+        if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
+            self &= ~Mods.HALFTIME
+        if self & Mods.EASY and self & Mods.HARDROCK:
+            self &= ~Mods.HARDROCK
+        if self & Mods.PERFECT and self & Mods.SUDDENDEATH:
+            self &= ~Mods.SUDDENDEATH
 
-        return m
+        if mode_vn != 0: # osu! specific
+            self &= ~(Mods.AUTOPILOT | Mods.SPUNOUT | Mods.TARGET)
+
+        # ctb & taiko have no unique mods
+
+        if mode_vn != 4: # mania specific
+            self &= ~(
+                Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
+                Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
+                Mods.KEY7 | Mods.KEY8 | Mods.KEY9 |
+                Mods.KEYCOOP | Mods.MIRROR |
+                Mods.RANDOM | Mods.FADEIN
+            )
+
+        # make sure they only have a
+        # single keymod enabled.
+        keymods_used = self & (
+            Mods.KEY1 | Mods.KEY2 | Mods.KEY3 |
+            Mods.KEY4 | Mods.KEY5 | Mods.KEY6 |
+            Mods.KEY7 | Mods.KEY8 | Mods.KEY9
+        )
+
+        # TODO: probably can be faster
+        if bin(keymods_used).count('1') > 1:
+            # keep only the first
+            first_keymod = None
+            for mod in Mods:
+                if keymods_used & mod:
+                    first_keymod = mod
+                    break
+
+            # remove all but the first keymod.
+            self &= ~(keymods_used & ~first_keymod)
+
+        return self
 
     @classmethod
     def from_modstr(cls, s: str):
@@ -147,16 +178,19 @@ class Mods(IntFlag):
 
         mods = cls.NOMOD
 
-        for m in map(lambda i: s[i:i+2].upper(), range(0, len(s), 2)):
+        def get_mod(idx: int) -> str:
+            return s[idx:idx + 2].upper()
+
+        for m in map(get_mod, range(0, len(s), 2)):
             if m not in mod_dict:
                 continue
 
             mods |= mod_dict[m]
 
-        return cls.filter_invalid_combos(mods)
+        return mods
 
     @classmethod
-    def from_np(cls, s: str):
+    def from_np(cls, s: str, mode_vn: int):
         mod_dict = {
             '-Easy': cls.EASY,
             '-NoFail': cls.NOFAIL,
@@ -204,7 +238,12 @@ class Mods(IntFlag):
         mods = cls.NOMOD
 
         for mod in s.split(' '):
-            # a bit unsafe.. perhaps defaultdict?
+            if mod not in mod_dict:
+                continue
+
             mods |= mod_dict[mod]
 
-        return cls.filter_invalid_combos(mods)
+        # NOTE: for fetching from /np, we automatically
+        # call cls.filter_invalid_combos as we assume
+        # the input string is from user input.
+        return mods.filter_invalid_combos(mode_vn)

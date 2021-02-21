@@ -4,7 +4,7 @@ import asyncio
 import importlib
 import random
 import re
-from collections import defaultdict
+import time
 from datetime import datetime
 from time import perf_counter_ns as clock_ns
 from typing import Callable
@@ -153,8 +153,8 @@ async def maplink(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         bmap = await Beatmap.from_md5(p.match.map_md5)
     elif p.spectating and p.spectating.status.map_id:
         bmap = await Beatmap.from_md5(p.spectating.status.map_md5)
-    elif p.last_np:
-        bmap = p.last_np
+    elif time.time() < p.last_np['timeout']:
+        bmap = p.last_np['bmap']
     else:
         return 'No map found!'
 
@@ -198,8 +198,11 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if c is not glob.bot:
         return 'This command can only be used in DM with Aika.'
 
-    if not p.last_np:
+    if time.time() >= p.last_np['timeout']:
         return 'Please /np a map first!'
+
+    if (mode_vn := p.last_np['mode_vn']) not in (0, 1):
+        return 'PP not yet supported for that mode.'
 
     # +?<mods> <acc>%?
     if 1 < len(msg) > 2:
@@ -214,10 +217,13 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
         elif len(param) % 2 == 0:
             mods = Mods.from_modstr(param)
+            mods = mods.filter_invalid_combos(mode_vn)
         else:
             return 'Invalid syntax: !with <mods/acc> ...'
 
-    _msg = [p.last_np.embed]
+    bmap = p.last_np['bmap']
+    _msg = [bmap.embed]
+
     if not mods:
         mods = Mods.NOMOD
 
@@ -225,7 +231,10 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     if acc:
         # custom accuracy specified, calculate it on the fly.
-        ppcalc = await PPCalculator.from_id(p.last_np.id, acc=acc, mods=mods)
+        ppcalc = await PPCalculator.from_id(
+            map_id=bmap.id, acc=acc,
+            mods=mods, mode_vn=mode_vn
+        )
         if not ppcalc:
             return 'Could not retrieve map file.'
 
@@ -233,13 +242,13 @@ async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         pp_values = [(acc, pp)]
     else:
         # general accuracy values requested.
-        if mods not in p.last_np.pp_cache:
+        if mods not in bmap.pp_cache:
             # cache
-            await p.last_np.cache_pp(mods)
+            await bmap.cache_pp(mods)
 
         pp_values = zip(
             (90, 95, 98, 99, 100),
-            p.last_np.pp_cache[mods]
+            bmap.pp_cache[mods]
         )
 
     pp_msg = ' | '.join([f'{acc:.2f}%: {pp:.2f}pp'
@@ -252,10 +261,10 @@ async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if msg:
         return 'Invalid syntax: !request'
 
-    if not p.last_np:
+    if time.time() >= p.last_np['timeout']:
         return 'You must /np a map first!'
 
-    bmap = p.last_np
+    bmap = p.last_np['bmap']
 
     if bmap.status != RankedStatus.Pending:
         return 'Only pending maps may be requested for status change.'
@@ -320,12 +329,12 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     ):
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
-    if not p.last_np:
+    if time.time() >= p.last_np['timeout']:
         return 'You must /np a map first!'
 
+    bmap = p.last_np['bmap']
     new_status = RankedStatus(status_to_id(msg[0]))
 
-    bmap = p.last_np
     if bmap.status == new_status:
         return f'{bmap.embed} is already {new_status!s}!'
 
@@ -557,14 +566,22 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     if msg[0] == 'map':
         # recalculate all scores on their last /np'ed map.
-        if not p.last_np:
+        if time.time() >= p.last_np['timeout']:
             return 'You must /np a map first!'
 
-        ppcalc = await PPCalculator.from_id(p.last_np.id)
+        if (mode_vn := p.last_np['mode_vn']) not in (0, 1):
+            return 'PP not yet supported for that mode.'
+
+        bmap = p.last_np['bmap']
+
+        ppcalc = await PPCalculator.from_id(
+            map_id=bmap.id, mode_vn=mode_vn
+        )
+
         if not ppcalc:
             return 'Could not retrieve map file.'
 
-        c.send_bot(f'Performing full recalc on {p.last_np.embed}.')
+        c.send_bot(f'Performing full recalc on {bmap.embed}.')
 
         for table in ('scores_vn', 'scores_rx', 'scores_ap'):
             # fetch all scores from the table on this map
@@ -572,8 +589,8 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
                 'SELECT id, acc, mods, max_combo, '
                 'n300, n100, n50, nmiss, ngeki, nkatu '
                 f'FROM {table} WHERE map_md5 = %s '
-                'AND status = 2 AND mode = 0',
-                [p.last_np.md5]
+                'AND status = 2 AND mode = %s',
+                [bmap.md5, mode_vn]
             )
 
             score_counts.append(len(scores))
@@ -850,6 +867,7 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         return 'Invalid syntax: !mp mods <mods>'
 
     mods = Mods.from_modstr(msg[0])
+    mods.filter_invalid_combos(m.mode.as_vanilla)
 
     if m.freemods:
         if p is m.host:
@@ -875,6 +893,7 @@ async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         return 'Freemods must be enabled to use this command!'
 
     mods = Mods.from_modstr(msg[0])
+    mods.filter_invalid_combos(m.mode.as_vanilla)
 
     # speed-changing mods may
     # only be applied to match.
@@ -1244,6 +1263,7 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
+    # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
@@ -1271,6 +1291,7 @@ async def mp_unban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
+    # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
@@ -1298,6 +1319,7 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
+    # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
@@ -1407,10 +1429,11 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(msg) != 2:
         return 'Invalid syntax: !pool add <name> <pick>'
 
-    if not p.last_np:
+    if time.time() >= p.last_np['timeout']:
         return 'Please /np a map first!'
 
     name, mods_slot = msg
+    bmap = p.last_np['bmap']
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
@@ -1419,13 +1442,14 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if len(rgx[1]) % 2 != 0:
         return 'Invalid mods.'
 
+    # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
     if not (pool := glob.pools.get(name)):
         return 'Could not find a pool by that name!'
 
-    if p.last_np in pool.maps:
+    if bmap in pool.maps:
         return f'Map is already in the pool!'
 
     # insert into db
@@ -1433,13 +1457,13 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         'INSERT INTO tourney_pool_maps '
         '(map_id, pool_id, mods, slot) '
         'VALUES (%s, %s, %s, %s)',
-        [p.last_np.id, pool.id, mods, slot]
+        [bmap.id, pool.id, mods, slot]
     )
 
     # add to cache
-    pool.maps[(mods, slot)] = p.last_np
+    pool.maps[(mods, slot)] = bmap
 
-    return f'{p.last_np.embed} added to {name}.'
+    return f'{bmap.embed} added to {name}.'
 
 @pool_commands.add(Privileges.Tournament, aliases=['r'], hidden=True)
 async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -1453,6 +1477,7 @@ async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: "HD2".'
 
+    # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
     slot = int(rgx[2])
 
@@ -1666,6 +1691,8 @@ async def clan_info(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         msg.append(f'[{rank_str}] {name}')
 
     return '\n'.join(msg)
+
+# TODO: !clan inv, !clan join, !clan leave
 
 @clan_commands.add(Privileges.Normal, aliases=['l'])
 async def clan_list(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:

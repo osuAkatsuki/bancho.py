@@ -349,8 +349,9 @@ class Score:
             return (0.0, 0.0)
 
         ppcalc = await PPCalculator.from_id(
-            self.bmap.id, mods=self.mods, combo=self.max_combo,
-            nmiss=self.nmiss, mode=self.mode, acc=self.acc
+            map_id=self.bmap.id, mods=self.mods,
+            combo=self.max_combo, nmiss=self.nmiss,
+            mode_vn=self.mode.as_vanilla, acc=self.acc
         )
 
         if not ppcalc:

@@ -199,11 +199,32 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             # check if the user is /np'ing a map.
             # even though this is a public channel,
             # we'll update the player's last np stored.
-            if _match := regexes.now_playing.match(msg):
+            if match := regexes.now_playing.match(msg):
                 # the player is /np'ing a map.
                 # save it to their player instance
                 # so we can use this elsewhere owo..
-                p.last_np = await Beatmap.from_bid(int(_match['bid']))
+                bmap = await Beatmap.from_bid(int(match['bid']))
+
+                if bmap:
+                    # parse mode_vn int from regex
+                    if match['mode_vn'] is not None:
+                        mode_vn = {
+                            'Taiko': 1,
+                            'CatchTheBeat': 2,
+                            'osu!mania': 3
+                        }[match['mode_vn']]
+                    else:
+                        # use beatmap mode if not specified
+                        mode_vn = bmap.mode.as_vanilla
+
+                    p.last_np = {
+                        'bmap': bmap,
+                        'mode_vn': mode_vn,
+                        'timeout': time.time() + 300 # 5mins
+                    }
+                else:
+                    # time out their previous /np
+                    p.last_np['timeout'] = 0
 
             t_chan.send(p, msg)
 
@@ -682,33 +703,57 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                     # user is /np'ing a map.
                     # save it to their player instance
                     # so we can use this elsewhere owo..
-                    p.last_np = await Beatmap.from_bid(int(match['bid']))
+                    bmap = await Beatmap.from_bid(int(match['bid']))
 
-                    if p.last_np:
-                        if match['mods']:
-                            # [1:] to remove leading whitespace
-                            mods = Mods.from_np(match['mods'][1:])
+                    if bmap:
+                        # parse mode_vn int from regex
+                        if match['mode_vn'] is not None:
+                            mode_vn = {
+                                'Taiko': 1,
+                                'CatchTheBeat': 2,
+                                'osu!mania': 3
+                            }[match['mode_vn']]
                         else:
-                            mods = Mods.NOMOD
+                            # use beatmap mode if not specified
+                            mode_vn = bmap.mode.as_vanilla
 
-                        if mods not in p.last_np.pp_cache:
-                            await p.last_np.cache_pp(mods)
+                        p.last_np = {
+                            'bmap': bmap,
+                            'mode_vn': mode_vn,
+                            'timeout': time.time() + 300 # 5mins
+                        }
 
-                        # since this is a DM to the bot, we should
-                        # send back a list of general PP values.
-                        _msg = [p.last_np.embed]
-                        if mods:
-                            _msg.append(f'+{mods!r}')
+                        # calc pp if mode is supported
+                        if mode_vn not in (0, 1):
+                            msg = 'PP not yet supported for that mode.'
+                        else:
+                            if match['mods'] is not None:
+                                # [1:] to remove leading whitespace
+                                mods = Mods.from_np(match['mods'][1:])
+                            else:
+                                mods = Mods.NOMOD
 
-                        msg = f"{' '.join(_msg)}: " + ' | '.join([
-                            f'{acc}%: {pp:.2f}pp'
-                            for acc, pp in zip(
-                                (90, 95, 98, 99, 100),
-                                p.last_np.pp_cache[mods]
-                            )])
+                            if mods not in bmap.pp_cache:
+                                await bmap.cache_pp(mods)
+
+                            # since this is a DM to the bot, we should
+                            # send back a list of general PP values.
+                            _msg = [bmap.embed]
+                            if mods:
+                                _msg.append(f'+{mods!r}')
+
+                            msg = f"{' '.join(_msg)}: " + ' | '.join([
+                                f'{acc}%: {pp:.2f}pp'
+                                for acc, pp in zip(
+                                    (90, 95, 98, 99, 100),
+                                    bmap.pp_cache[mods]
+                                )])
 
                     else:
                         msg = 'Could not find map.'
+
+                        # time out their previous /np
+                        p.last_np['timeout'] = 0
 
                     p.send(t, msg)
 
