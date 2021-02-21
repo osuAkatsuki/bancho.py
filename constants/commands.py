@@ -867,7 +867,7 @@ async def mp_mods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         return 'Invalid syntax: !mp mods <mods>'
 
     mods = Mods.from_modstr(msg[0])
-    mods.filter_invalid_combos(m.mode.as_vanilla)
+    mods = mods.filter_invalid_combos(m.mode.as_vanilla)
 
     if m.freemods:
         if p is m.host:
@@ -893,7 +893,7 @@ async def mp_playermods(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
         return 'Freemods must be enabled to use this command!'
 
     mods = Mods.from_modstr(msg[0])
-    mods.filter_invalid_combos(m.mode.as_vanilla)
+    mods = mods.filter_invalid_combos(m.mode.as_vanilla)
 
     # speed-changing mods may
     # only be applied to match.
