@@ -48,7 +48,7 @@ class Mods(IntFlag):
 
     def __repr__(self) -> str:
         if self.value == Mods.NOMOD:
-            return ''
+            return 'NM'
 
         mod_dict = {
             Mods.NOFAIL: 'NF',

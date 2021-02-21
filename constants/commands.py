@@ -1244,7 +1244,7 @@ async def mp_ban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
-        return 'Invalid pick syntax; correct example: "HD2".'
+        return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
@@ -1272,7 +1272,7 @@ async def mp_unban(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
-        return 'Invalid pick syntax; correct example: "HD2".'
+        return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
@@ -1300,7 +1300,7 @@ async def mp_pick(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
-        return 'Invalid pick syntax; correct example: "HD2".'
+        return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
@@ -1383,7 +1383,7 @@ async def pool_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     return f'{name} created.'
 
-@pool_commands.add(Privileges.Tournament, aliases=['d'], hidden=True)
+@pool_commands.add(Privileges.Tournament, aliases=['del', 'd'], hidden=True)
 async def pool_delete(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Remove a mappool from the database."""
     if len(msg) != 1:
@@ -1416,11 +1416,12 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return 'Please /np a map first!'
 
     name, mods_slot = msg
+    mods_slot = mods_slot.upper() # ocd
     bmap = p.last_np['bmap']
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
-        return 'Invalid pick syntax; correct example: "HD2".'
+        return 'Invalid pick syntax; correct example: HD2'
 
     if len(rgx[1]) % 2 != 0:
         return 'Invalid mods.'
@@ -1432,7 +1433,10 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if not (pool := glob.pools.get(name)):
         return 'Could not find a pool by that name!'
 
-    if bmap in pool.maps:
+    if (mods, slot) in pool.maps:
+        return f'{mods_slot} is already {pool.maps[(mods, slot)].embed}!'
+
+    if bmap in pool.maps.values():
         return f'Map is already in the pool!'
 
     # insert into db
@@ -1448,17 +1452,18 @@ async def pool_add(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     return f'{bmap.embed} added to {name}.'
 
-@pool_commands.add(Privileges.Tournament, aliases=['r'], hidden=True)
+@pool_commands.add(Privileges.Tournament, aliases=['rm', 'r'], hidden=True)
 async def pool_remove(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Remove a map from a mappool in the database."""
     if len(msg) != 2:
         return 'Invalid syntax: !pool remove <name> <pick>'
 
     name, mods_slot = msg
+    mods_slot = mods_slot.upper() # ocd
 
     # separate mods & slot
     if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
-        return 'Invalid pick syntax; correct example: "HD2".'
+        return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
     mods = Mods.from_modstr(rgx[1])
