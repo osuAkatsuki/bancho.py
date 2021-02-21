@@ -857,6 +857,8 @@ async def mp_map(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     m.map_md5 = bmap.md5
     m.map_name = bmap.full
 
+    m.mode = bmap.mode
+
     m.enqueue_state()
     return f'Selected: {bmap.embed}.'
 

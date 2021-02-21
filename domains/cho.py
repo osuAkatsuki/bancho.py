@@ -962,6 +962,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
 
         if self.new.freemods != m.freemods:
             # freemods status has been changed.
+            m.freemods = self.new.freemods
 
             if self.new.freemods:
                 # match mods -> active slot mods.
@@ -993,11 +994,20 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
             m.chat.send_bot(f'Selected: {self.new.map_embed}.')
 
         # copy map & basic match info
-        m.map_id = self.new.map_id
-        m.map_md5 = self.new.map_md5
-        m.map_name = self.new.map_name
-        m.freemods = self.new.freemods
-        m.mode = self.new.mode
+        if self.new.map_md5 != m.map_md5:
+            # map changed, check if we have it server-side.
+            bmap = await Beatmap.from_md5(self.new.map_md5)
+
+            if bmap:
+                m.map_id = bmap.id
+                m.map_md5 = bmap.md5
+                m.map_name = bmap.full
+                m.mode = bmap.mode
+            else:
+                m.map_id = self.new.map_id
+                m.map_md5 = self.new.map_md5
+                m.map_name = self.new.map_name
+                m.mode = self.new.mode
 
         if m.team_type != self.new.team_type:
             # if theres currently a scrim going on, only allow
