@@ -566,7 +566,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 performance = f'{s.pp:.2f}pp'
             else:
                 scoring = 'score'
-                performance = s.score
+                performance = f'{s.score:,} score'
 
             # Announce the user's #1 score.
             ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
