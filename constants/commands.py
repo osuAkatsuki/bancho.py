@@ -504,6 +504,9 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
+    if not t.priv & Privileges.Normal:
+        return f'{t} is already banned!'
+
     reason = ' '.join(msg[1:])
 
     await t.ban(p, reason)
@@ -521,6 +524,9 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
+
+    if t.priv & Privileges.Normal:
+        return f'{t} is not banned!'
 
     reason = ' '.join(msg[1:])
 
