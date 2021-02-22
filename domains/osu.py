@@ -554,16 +554,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         glob.datadog.increment('gulag.submitted_scores')
 
     if s.status == SubmissionStatus.BEST:
-        # Our score is our best score.
-        # Update any preexisting personal best
-        # records with SubmissionStatus.SUBMITTED.
-        await glob.db.execute(
-            f'UPDATE {table} SET status = 1 '
-            'WHERE status = 2 AND map_md5 = %s '
-            'AND userid = %s AND mode = %s',
-            [s.bmap.md5, s.player.id, s.mode.as_vanilla]
-        )
-
         if glob.datadog:
             glob.datadog.increment('gulag.submitted_scores_best')
 
@@ -600,6 +590,16 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
             s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
             announce_chan.send(s.player, ' '.join(ann), to_self=True)
+
+        # Our score is our best score.
+        # Update any preexisting personal best
+        # records with SubmissionStatus.SUBMITTED.
+        await glob.db.execute(
+            f'UPDATE {table} SET status = 1 '
+            'WHERE status = 2 AND map_md5 = %s '
+            'AND userid = %s AND mode = %s',
+            [s.bmap.md5, s.player.id, s.mode.as_vanilla]
+        )
 
     s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
