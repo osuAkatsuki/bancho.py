@@ -680,6 +680,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if prev_n1: # If there was previously a score on the map, add old #1.
             ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
+        s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
         announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.

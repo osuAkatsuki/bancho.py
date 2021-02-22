@@ -1753,10 +1753,10 @@ async def process_commands(p: 'Player', t: Messageable,
         if trigger in cmd.triggers and p.priv & cmd.priv:
             # command found & we have privileges, run it.
             if res := await cmd.callback(p, t, args):
-                time_taken = (clock_ns() - start_time) / 1e6
+                ms_taken = (clock_ns() - start_time) / 1e6
 
                 return {
-                    'resp': f'{res} | Elapsed: {time_taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
                     'hidden': cmd.hidden
                 }
 
