@@ -571,8 +571,14 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # this is the new #1, post the play to #announce.
             announce_chan = glob.channels['#announce']
 
+            if s.mode >= GameMode.rx_std:
+                scoring = 'pp'
+                performance = f'{s.pp:.2f}pp'
+            else:
+                scoring = 'score'
+                performance = s.score
+
             # Announce the user's #1 score.
-            performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
             ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
                    f'with {s.acc:.2f}% for {performance}.']
 
@@ -585,7 +591,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 f'LEFT JOIN {table} s ON u.id = s.userid '
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
-                'ORDER BY pp DESC LIMIT 1',
+                f'ORDER BY s.{scoring} DESC LIMIT 1',
                 [s.bmap.md5, s.mode.as_vanilla]
             )
 
