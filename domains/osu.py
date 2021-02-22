@@ -567,6 +567,34 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if glob.datadog:
             glob.datadog.increment('gulag.submitted_scores_best')
 
+        if s.rank == 1:
+            # this is the new #1, post the play to #announce.
+            announce_chan = glob.channels['#announce']
+
+            # Announce the user's #1 score.
+            performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
+            ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
+                   f'with {s.acc:.2f}% for {performance}.']
+
+            if s.mods:
+                ann.insert(1, f'+{s.mods!r}')
+
+            # If there was previously a score on the map, add old #1.
+            prev_n1 = await glob.db.fetch(
+                'SELECT u.id, name FROM users u '
+                f'LEFT JOIN {table} s ON u.id = s.userid '
+                'WHERE s.map_md5 = %s AND s.mode = %s '
+                'AND s.status = 2 AND u.priv & 1 '
+                'ORDER BY pp DESC LIMIT 1',
+                [s.bmap.md5, s.mode.as_vanilla]
+            )
+
+            if prev_n1 and s.player.id != prev_n1['id']:
+                ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+
+            s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
+            announce_chan.send(s.player, ' '.join(ann), to_self=True)
+
     s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
         '%s, %s, %s, %s, %s, %s, '
@@ -653,35 +681,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         'passes = %s WHERE md5 = %s',
         [s.bmap.plays, s.bmap.passes, s.bmap.md5]
     )
-
-    if (
-        s.status == SubmissionStatus.BEST and
-        s.rank == 1 and
-        (announce_chan := glob.channels['#announce'])
-    ):
-        # Announce the user's #1 score.
-        prev_n1 = await glob.db.fetch(
-            'SELECT u.id, name FROM users u '
-            f'LEFT JOIN {table} s ON u.id = s.userid '
-            'WHERE s.map_md5 = %s AND s.mode = %s '
-            'AND s.status = 2 AND u.priv & 1 '
-            'ORDER BY pp DESC LIMIT 1, 1',
-            [s.bmap.md5, s.mode.as_vanilla]
-        )
-
-        performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
-
-        ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
-               f'with {s.acc:.2f}% for {performance}.']
-
-        if s.mods:
-            ann.insert(1, f'+{s.mods!r}')
-
-        if prev_n1: # If there was previously a score on the map, add old #1.
-            ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
-
-        s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
-        announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
