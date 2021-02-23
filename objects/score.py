@@ -343,6 +343,10 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
+        if not glob.oppai_built:
+            # oppai-ng not compiled
+            return (0.0, 0.0)
+
         if self.mode.as_vanilla not in (0, 1):
             # currently only std and taiko are supported,
             # since we are simply using oppai-ng alone.

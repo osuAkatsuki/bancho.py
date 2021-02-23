@@ -16,6 +16,8 @@ import aiohttp
 import cmyui
 import datadog
 import orjson # go zoom
+from cmyui import Ansi
+from cmyui import log
 
 import bg_loops
 from constants.privileges import Privileges
@@ -155,6 +157,13 @@ if __name__ == '__main__':
     for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
         subdir = data_path / sub_dir
         subdir.mkdir(exist_ok=True)
+
+    # make sure oppai-ng is built and ready.
+    if not (Path.cwd() / 'oppai-ng/oppai').exists():
+        glob.oppai_built = False
+        log('no oppai-ng binary found! please compile (setup instructions in README).', Ansi.LRED)
+    else:
+        glob.oppai_built = True
 
     # create a server object, which serves as a map of domains.
     app = cmyui.Server(name=f'gulag v{glob.version}',

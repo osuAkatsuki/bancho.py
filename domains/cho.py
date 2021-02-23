@@ -734,8 +734,10 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                             'timeout': time.time() + 300 # 5mins
                         }
 
-                        # calc pp if mode is supported
-                        if mode_vn not in (0, 1):
+                        # calc pp if possible
+                        if not glob.oppai_built:
+                            msg = 'No oppai-ng binary was found at startup.'
+                        elif mode_vn not in (0, 1):
                             msg = 'PP not yet supported for that mode.'
                         else:
                             if match['mods'] is not None:

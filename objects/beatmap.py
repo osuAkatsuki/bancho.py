@@ -470,7 +470,6 @@ class Beatmap:
 
             log(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
 
-
     async def cache_pp(self, mods: Mods) -> None:
         """Cache some common acc pp values for specified mods."""
         self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]

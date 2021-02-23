@@ -196,6 +196,9 @@ async def recent(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 @command(Privileges.Normal, aliases=['w'], hidden=True)
 async def _with(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
+    if not glob.oppai_built:
+        return 'No oppai-ng binary was found at startup.'
+
     if c is not glob.bot:
         return 'This command can only be used in DM with Aika.'
 
@@ -587,6 +590,9 @@ async def alertuser(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 @command(Privileges.Dangerous)
 async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Performs a full PP recalc on a specified map, or all maps."""
+    if not glob.oppai_built:
+        return 'No oppai-ng binary was found at startup.'
+
     if len(msg) != 1 or msg[0] not in ('map', 'all'):
         return 'Invalid syntax: !recalc <map/all>'
 
