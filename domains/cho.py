@@ -478,8 +478,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                      login_time=login_time, clan=clan,
                      clan_rank=clan_rank)
 
-    data = bytearray(packets.userID(p.id))
-    data += packets.protocolVersion(19)
+    data = bytearray(packets.protocolVersion(19))
+    data += packets.userID(p.id)
     data += packets.banchoPrivileges(p.bancho_priv)
     data += packets.notification('Welcome back to the gulag!\n'
                                 f'Current build: v{glob.version}')

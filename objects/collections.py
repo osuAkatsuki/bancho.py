@@ -4,7 +4,9 @@
 # in a lot of these classes; needs refactor.
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
+from typing import Optional
+from typing import Iterator
 from typing import TYPE_CHECKING
 from typing import Union
 
@@ -31,6 +33,9 @@ __all__ = (
 
 class ChannelList(list):
     """The currently active chat channels on the server."""
+
+    def __iter__(self) -> Iterator['Channel']:
+        return super().__iter__()
 
     def __contains__(self, o: Union['Channel', str]) -> bool:
         """Check whether internal list contains `o`."""
@@ -81,6 +86,9 @@ class MatchList(list):
         super().__init__()
         self.extend([None] * 32)
 
+    def __iter__(self) -> Iterator['Match']:
+        return super().__iter__()
+
     def __repr__(self) -> str:
         return f'[{", ".join(m.name for m in self if m)}]'
 
@@ -125,6 +133,9 @@ class PlayerList(list):
     def __init__(self, *args, **kwargs):
         self._lock = asyncio.Lock()
         super().__init__(*args, **kwargs)
+
+    def __iter__(self) -> Iterator[Player]:
+        return super().__iter__()
 
     def __contains__(self, p: Union[Player, str]) -> bool:
         # allow us to either pass in the player
@@ -244,6 +255,9 @@ class PlayerList(list):
 class MapPoolList(list):
     """The currently active mappools on the server."""
 
+    def __iter__(self) -> Iterator['MapPool']:
+        return super().__iter__()
+
     def __getitem__(self, index: Union[int, slice, str]) -> 'MapPool':
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
@@ -281,6 +295,9 @@ class MapPoolList(list):
 
 class ClanList(list):
     """The currently active clans on the server."""
+
+    def __iter__(self) -> Iterator['Clan']:
+        return super().__iter__()
 
     def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
         """Allow slicing by either a string (for name), or slice."""
