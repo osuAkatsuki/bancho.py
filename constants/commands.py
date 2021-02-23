@@ -442,6 +442,18 @@ async def addnote(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     return f'Added note to {p}.'
 
+# some shorthands that can be used as
+# reasons in many moderative commands.
+SHORTHAND_REASONS = {
+    'aa': 'having their appeal accepted',
+    'cc': 'using a modified osu! client',
+    '3p': 'using 3rd party programs',
+    'rx': 'using 3rd party programs (relax)',
+    'tw': 'using 3rd party programs (timewarp)',
+    'au': 'using 3rd party programs (auto play)',
+    'dn': 'deez nuts'
+}
+
 @command(Privileges.Mod, hidden=True)
 async def silence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Silence a specified player with a specified duration & reason."""
@@ -464,6 +476,9 @@ async def silence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     duration = int(rgx['duration']) * multiplier
     reason = ' '.join(msg[2:])
+
+    if reason in SHORTHAND_REASONS:
+        reason = SHORTHAND_REASONS[reason]
 
     await t.silence(p, duration, reason)
     return f'{t} was silenced.'
@@ -509,13 +524,16 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     reason = ' '.join(msg[1:])
 
+    if reason in SHORTHAND_REASONS:
+        reason = SHORTHAND_REASONS[reason]
+
     await t.ban(p, reason)
     return f'{t} was banned.'
 
 @command(Privileges.Admin, hidden=True)
 async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Unban a specified player's account, with a reason."""
-    if (len_msg := len(msg)) < 2:
+    if len(msg) < 2:
         return 'Invalid syntax: !ban <name> <reason>'
 
     # find any user matching (including offline).
@@ -529,6 +547,9 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return f'{t} is not banned!'
 
     reason = ' '.join(msg[1:])
+
+    if reason in SHORTHAND_REASONS:
+        reason = SHORTHAND_REASONS[reason]
 
     await t.unban(p, reason)
     return f'{t} was unbanned.'
