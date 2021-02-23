@@ -195,6 +195,12 @@ class Beatmap:
         """An osu! chat embed to `self`'s osu! beatmap page."""
         return f'[{self.url} {self.full}]'
 
+    @property
+    def awards_pp(self) -> bool:
+        """Return whether the map's status awards pp for scores."""
+        return self.status in (RankedStatus.Ranked,
+                               RankedStatus.Approved)
+
     @classmethod
     async def from_bid(cls, bid: int) -> 'Beatmap':
         """Create a `Beatmap` from sql using a beatmap id."""

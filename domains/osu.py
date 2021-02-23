@@ -478,8 +478,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     # Parse our score data into a score obj.
     s = await Score.from_submission(
-        mp_args['score'], mp_args['iv'],
-        mp_args['osuver'], mp_args['pass']
+        data_b64=mp_args['score'], iv_b64=mp_args['iv'],
+        osu_ver=mp_args['osuver'], pw_md5=mp_args['pass']
     )
 
     if not s:
@@ -561,11 +561,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # this is the new #1, post the play to #announce.
             announce_chan = glob.channels['#announce']
 
-            if s.mode >= GameMode.rx_std:
-                scoring = 'pp'
-                performance = f'{s.pp:.2f}pp'
+            if s.bmap.awards_pp:
+                performance = f'{s.pp:,.2f}pp'
             else:
-                scoring = 'score'
                 performance = f'{s.score:,} score'
 
             # Announce the user's #1 score.
@@ -574,6 +572,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
             if s.mods:
                 ann.insert(1, f'+{s.mods!r}')
+
+            scoring = 'pp' if s.mode >= GameMode.rx_std else 'score'
 
             # If there was previously a score on the map, add old #1.
             prev_n1 = await glob.db.fetch(
@@ -655,10 +655,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     # if this is our (new) best play on
     # the map, update our ranked score.
-    if (
-        s.status == SubmissionStatus.BEST and
-        s.bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
-    ):
+    if s.status == SubmissionStatus.BEST and s.bmap.awards_pp:
         # add our new ranked score.
         additive = s.score
 
@@ -708,8 +705,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # prepare to send the user charts & achievements.
         achievements = []
 
-        if s.bmap.status in (RankedStatus.Ranked,
-                             RankedStatus.Approved):
+        if s.bmap.awards_pp:
             mode_vn = s.mode.as_vanilla
             player_achs = s.player.achievements[mode_vn]
 
