@@ -266,7 +266,7 @@ async def request(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !request'
 
     if time.time() >= p.last_np['timeout']:
-        return 'You must /np a map first!'
+        return 'Please /np a map first!'
 
     bmap = p.last_np['bmap']
 
@@ -334,7 +334,7 @@ async def _map(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
         return 'Invalid syntax: !map <rank/unrank/love> <map/set>'
 
     if time.time() >= p.last_np['timeout']:
-        return 'You must /np a map first!'
+        return 'Please /np a map first!'
 
     bmap = p.last_np['bmap']
     new_status = RankedStatus(status_to_id(msg[0]))
@@ -582,6 +582,20 @@ async def alertuser(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     t.enqueue(packets.notification(notif_txt))
     return 'Alert sent.'
 
+# NOTE: this is pretty useless since it doesn't switch anything other
+# than the c[e4-6].ppy.sh domains; it exists on bancho as a tournament
+# server switch mechanism, perhaps we could leverage this in the future.
+@command(Privileges.Admin, hidden=True)
+async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Switch your client's internal endpoints to a specified IP address."""
+    if len(msg) != 1:
+        return 'Invalid syntax: !switch <endpoint>'
+
+    new_bancho_ip = msg[0]
+
+    p.enqueue(packets.switchTournamentServer(new_bancho_ip))
+    return 'Have a nice journey..'
+
 """ Developer commands
 # The commands below are either dangerous or
 # simply not useful for any other roles.
@@ -601,7 +615,7 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if msg[0] == 'map':
         # recalculate all scores on their last /np'ed map.
         if time.time() >= p.last_np['timeout']:
-            return 'You must /np a map first!'
+            return 'Please /np a map first!'
 
         if (mode_vn := p.last_np['mode_vn']) not in (0, 1):
             return 'PP not yet supported for that mode.'
@@ -657,33 +671,6 @@ async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     recap = '{0} vn | {1} rx | {2} ap'.format(*score_counts)
     return f'Recalculated {sum(score_counts)} ({recap}) scores.'
 
-# NOTE: this is pretty useless since it doesn't switch anything other
-# than the c[e4-6].ppy.sh domains; it exists on bancho as a tournament
-# server switch mechanism, perhaps we could leverage this in the future.
-@command(Privileges.Dangerous, hidden=True)
-async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Switch your client's internal endpoints to a specified IP address."""
-    if len(msg) != 1:
-        return 'Invalid syntax: !switch <endpoint>'
-
-    new_bancho_ip = msg[0]
-
-    p.enqueue(packets.switchTournamentServer(new_bancho_ip))
-    return 'Have a nice journey..'
-
-# rest in peace rtx - oct 2020 :candle:
-#@command(Privileges.Dangerous, hidden=True)
-#async def rtx(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-#    """Send an RTX packet with a message to a user."""
-#    if len(msg) != 2:
-#        return 'Invalid syntax: !rtx <name> <msg>'
-#
-#    if not (t := glob.players.get(name=msg[0])):
-#        return 'Could not find a user by that name.'
-#
-#    t.enqueue(packets.RTX(msg[1]))
-#    return 'pong'
-
 @command(Privileges.Dangerous, hidden=True)
 async def debug(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Toggle the console's debug setting."""
@@ -724,6 +711,26 @@ async def setpriv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     await t.update_privs(priv)
     return f"Updated {t}'s privileges."
+
+@command(Privileges.Dangerous)
+async def wipemap(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    if msg:
+        return 'Invalid syntax: !wipemap'
+
+    if time.time() >= p.last_np['timeout']:
+        return 'Please /np a map first!'
+
+    map_md5 = p.last_np['bmap'].md5
+
+    # delete scores from all tables
+    for t in ('vn', 'rx', 'ap'):
+        await glob.db.execute(
+            f'DELETE FROM scores_{t} '
+            'WHERE map_md5 = %s',
+            [map_md5]
+        )
+
+    return 'Scores wiped.'
 
 #@command(Privileges.Dangerous, aliases=['men'], hidden=True)
 #async def menu_preview(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
