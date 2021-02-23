@@ -17,6 +17,7 @@ from typing import Callable
 from typing import Optional
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
+from utils.recalculator import PPCalculator
 
 import bcrypt
 import orjson
@@ -1790,11 +1791,57 @@ async def osuBMSubmitGetID(conn: Connection) -> Optional[bytes]:
 # also, give me ideas for api things
 # POST /api/set_avatar
 
+JSON = orjson.dumps
+
 @domain.route('/api/get_online')
 async def api_get_online(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
-    return f'{{"online":{len(glob.players) - 1}}}'.encode()
+    return JSON({'online': len(glob.players) - 1})
+
+@domain.route('/api/check_online')
+async def api_check_online(conn: Connection) -> Optional[bytes]:
+    """Return a players current status, if they are online."""
+    if 'id' in conn.args:
+        pid = conn.args['id']
+        if not pid.decimal():
+            return (400, b'Invalid player id.')
+        # get player by id
+        p = glob.players.get(id=int(pid))
+    elif 'name' in conn.args:
+        name = unquote(conn.args['name'])
+        if not 2 <= len(name) < 16:
+            return (400, b'Invalid player name.')
+
+        # get player by name
+        p = glob.players.get(name=name)
+    else:
+        return (400, b'Must provide either id or name!')
+
+    if not p:
+        # no such player online
+        return JSON({'online': False})
+
+    # varkaria wants set_id for gulag-web
+    bmap = await Beatmap.from_md5(p.status.map_md5)
+    if bmap:
+        set_id = bmap.set_id
+    else:
+        set_id = 0
+
+    return JSON({
+        'online': True,
+        'login_time': p.login_time,
+        'status': {
+            'action': int(p.status.action),
+            'info_text': p.status.info_text,
+            'map_id': p.status.map_id,
+            'map_set_id': set_id,
+            'map_md5': p.status.map_md5,
+            'mode': int(p.status.mode),
+            'mods': int(p.status.mods)
+        }
+    })
 
 @domain.route('/api/get_user')
 async def api_get_user(conn: Connection) -> Optional[bytes]:
@@ -1840,6 +1887,66 @@ async def api_get_user(conn: Connection) -> Optional[bytes]:
 
     res = await glob.db.fetch(query, [pid])
     return orjson.dumps(res) if res else b'User not found.'
+
+@domain.route('/api/calc_pp')
+async def api_calc_pp(conn: Connection) -> Optional[bytes]:
+    """Calculate pp with a given map id/md5 & pp params."""
+    if not glob.oppai_built:
+        return (503, JSON({'status': 'Failed: oppai-ng not built'}))
+
+    if 'md5' in conn.args:
+        # get id from md5
+        res = await glob.db.fetch(
+            'SELECT id FROM maps '
+            'WHERE md5 = %s',
+            [conn.args.pop('md5')]
+        )
+        if not res:
+            return JSON({'status': 'Failed: no map found'})
+
+        map_id = res['id']
+    elif 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, JSON({'status': 'Failed: invalid map id'}))
+
+        map_id = int(conn.args.pop('id'))
+    else:
+        return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
+
+    pp_kwargs = {}
+    valid_kwargs = (
+        ('mods', int),
+        ('combo', int),
+        ('nmiss', int),
+        ('mode_vn', int),
+        ('acc', float)
+    )
+
+    # ignore any invalid args
+    for n, t in valid_kwargs:
+        if n in conn.args:
+            val = conn.args[n]
+
+            if not _isdecimal(val, _float=t is float):
+                continue
+
+            pp_kwargs |= {n: t(val)}
+
+    if pp_kwargs.get('mode_vn', 0) not in (0, 1):
+        return (503, JSON({'status': 'Failed: unsupported mode'}))
+
+    ppcalc = await PPCalculator.from_id(map_id, **pp_kwargs)
+
+    if not ppcalc:
+        return JSON({'status': 'Failed: could not retrieve map'})
+
+    pp, sr = await ppcalc.perform()
+
+    return JSON({
+        'status': 'Success',
+        'pp': pp,
+        'sr': sr
+    })
 
 @domain.route('/api/get_scores')
 async def api_get_scores(conn: Connection) -> Optional[bytes]:
