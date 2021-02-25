@@ -179,7 +179,8 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} sent a message while silenced.', Ansi.LYELLOW)
             return
 
-        msg = self.msg.msg
+        # remove leading/trailing whitespace
+        msg = self.msg.msg.strip()
         target = self.msg.target
 
         if target == '#spectator':
@@ -292,13 +293,20 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
-# a message to send to players new to the server
-welcome_msg = '\n'.join((
+# Some messages to send on welcome/restricted/etc.
+# TODO: these should probably be moved to the config.
+WELCOME_MSG = '\n'.join((
     f"Welcome to {glob.config.domain}.",
     "To see a list of commands, use !help.",
     "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
     "Enjoy the server!"
 ))
+
+RESTRICTED_MSG = (
+    'Your account is currently in restricted mode. '
+    'If you believe this is a mistake, or have waited a period '
+    'greater than 3 months, you may appeal via the form on the site.'
+)
 
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     """\
@@ -564,8 +572,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             o.enqueue(user_data)
 
             # enqueue them to us.
-            data += packets.userPresence(o)
-            data += packets.userStats(o)
+            if not o.restricted:
+                data += packets.userPresence(o)
+                data += packets.userStats(o)
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
@@ -598,27 +607,21 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 )
 
             data += packets.sendMessage(
-                client=glob.bot.name, msg=msg,
+                client=glob.bot.name, msg=WELCOME_MSG,
                 target=p.name, client_id=glob.bot.id
             )
 
     else:
         # player is restricted, one way data
-        for o in glob.players:
+        for o in glob.players.unrestricted:
             # enqueue them to us.
             data += packets.userPresence(o)
             data += packets.userStats(o)
 
-        restricted_msg = ( # TODO: probably config
-            'Your account is currently in restricted mode. '
-            'If you believe this is a mistake, or have waited a period '
-            'greater than 3 months, you may appeal via the form on the site.'
-        )
-
         data += packets.accountRestricted()
         data += packets.sendMessage(
             client = glob.bot.name,
-            msg = restricted_msg,
+            msg = RESTRICTED_MSG,
             target = p.name,
             client_id = glob.bot.id
         )
@@ -725,7 +728,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             log(f'{p} tried to send a dm while silenced.', Ansi.LYELLOW)
             return
 
-        msg = self.msg.msg
+        # remove leading/trailing whitespace
+        msg = self.msg.msg.strip()
         t_name = self.msg.target
 
         # allow this to get from sql - players can receive
@@ -1416,7 +1420,8 @@ class StatsRequest(BanchoPacket, type=Packets.OSU_USER_STATS_REQUEST):
     user_ids: osuTypes.i32_list
 
     async def handle(self, p: Player) -> None:
-        is_online = lambda o: o in glob.players.ids and o != p.id
+        unrestrcted_ids = [p.id for p in glob.players.unrestricted]
+        is_online = lambda o: o in unrestrcted_ids and o != p.id
 
         for online in filter(is_online, self.user_ids):
             if t := glob.players.get(id=online):
@@ -1475,7 +1480,7 @@ class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUES
         # NOTE: i'm not exactly sure how bancho implements this and whether
         # i'm supposed to filter the users presences to send back with the
         # player's presence filter; i can add it in the future perhaps.
-        for t in glob.players:
+        for t in glob.players.unrestricted:
             if p is not t:
                 p.enqueue(packets.userPresence(t))
 

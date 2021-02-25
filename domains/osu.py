@@ -2119,6 +2119,13 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
     return content
 
+@domain.route('/p/doyoureallywanttoaskpeppy')
+async def peppyDMHandler(conn: Connection) -> Optional[bytes]:
+    return (
+        b"This user's ID is usually peppy's (when on bancho), "
+        b"and is blocked from being messaged by the osu! client."
+    )
+
 """ ingame registration """
 
 @domain.route('/users', methods=['POST'])
