@@ -10,6 +10,7 @@ from typing import Callable
 import bcrypt
 from cmyui import _isdecimal
 from cmyui import Ansi
+from cmyui import AnsiRGB
 from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
@@ -105,7 +106,7 @@ async def bancho_handler(conn: Connection) -> bytes:
 
     if glob.config.debug:
         packets_str = ', '.join([p.name for p in packets_read]) or 'None'
-        log(f'[BANCHO] {player} | {packets_str}.', Ansi.LMAGENTA)
+        log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
     player.last_recv_time = time.time()
     conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
