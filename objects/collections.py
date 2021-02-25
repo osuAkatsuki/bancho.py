@@ -158,6 +158,16 @@ class PlayerList(list):
         """Return a set of the current staff online."""
         return {p for p in self if p.priv & Privileges.Staff}
 
+    @property
+    def restricted(self) -> set[Player]:
+        """Return a set of the current restricted players."""
+        return {p for p in self if not p.priv & Privileges.Normal}
+
+    @property
+    def unrestricted(self) -> set[Player]:
+        """Return a set of the current unrestricted players."""
+        return {p for p in self if p.priv & Privileges.Normal}
+
     def enqueue(self, data: bytes, immune: list[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
         for p in self:

@@ -159,7 +159,7 @@ class Packets(IntEnum):
     OSU_TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
     def __repr__(self) -> str:
-        return f'<Bancho Packet: {self.name} ({self.value})>'
+        return f'<{self.name} ({self.value})>'
 
 class BanchoPacket:
     """Abstract base class for bancho packets."""
@@ -191,6 +191,9 @@ class BanchoPacketReader:
     view: `memoryview`
         A low-level view to the underlying buffer passed in.
 
+    packet_map: `dict[Packets (packet id), BanchoPacket (handler)]`
+        The map of packets the packet reader will handle.
+
     _current: Optional[`BanchoPacket`]
         The current packet being read by the reader, if any.
 
@@ -202,9 +205,11 @@ class BanchoPacketReader:
           await packet.handle()
     ```
     """
-    __slots__ = ('view', '_current')
-    def __init__(self, data: bytes) -> None:
+    __slots__ = ('view', 'packet_map', '_current')
+    def __init__(self, data: bytes, packet_map: dict) -> None:
         self.view = memoryview(data)
+        self.packet_map = packet_map
+
         self._current: Optional[BanchoPacket] = None
 
     def __iter__(self):
@@ -216,16 +221,9 @@ class BanchoPacketReader:
         while True:
             p_type, p_len = self.read_header()
 
-            if p_type == Packets.OSU_PING:
-                # the client is simply informing us that it's
-                # still active; we don't have to handle anything.
-                continue
-
-            if p_type not in glob.bancho_packets:
-                # cannot handle - remove from
-                # internal buffer and continue.
-                log(f'Unhandled: {p_type!r}', Ansi.LYELLOW)
-
+            if p_type not in self.packet_map:
+                # packet type not handled, remove
+                # from internal buffer and continue.
                 if p_len != 0:
                     self.view = self.view[p_len:]
             else:
@@ -233,7 +231,7 @@ class BanchoPacketReader:
                 break
 
         # we have a packet handler for this.
-        self._current = glob.bancho_packets[p_type]()
+        self._current = self.packet_map[p_type]()
         self._current.length = p_len
 
         if self._current.args:

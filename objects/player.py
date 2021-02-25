@@ -130,7 +130,7 @@ class Player:
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
         'priv', 'stats', 'status', 'friends', 'channels',
-        'spectators', 'spectating', 'match',
+        'spectators', 'spectating', 'match', 'stealth',
         'clan', 'clan_rank', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
@@ -156,6 +156,7 @@ class Player:
         self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
         self.match: Optional[Match] = None
+        self.stealth = False
 
         self.clan: Optional['Clan'] = kwargs.get('clan', None)
         self.clan_rank: Optional['ClanPrivileges'] = kwargs.get('clan_rank', None)
@@ -258,6 +259,11 @@ class Player:
         return ret
 
     @property
+    def restricted(self) -> bool:
+        """Return whether the player is restricted."""
+        return not self.priv & Privileges.Normal
+
+    @property
     def gm_stats(self) -> ModeData:
         """The player's stats in their currently selected mode."""
         return self.stats[self.status.mode]
@@ -328,13 +334,15 @@ class Player:
         while self.channels:
             self.leave_channel(self.channels[0])
 
-        if glob.datadog:
-            glob.datadog.decrement('gulag.online_players')
-
         # remove from playerlist and
         # enqueue logout to all users.
         glob.players.remove(self)
-        glob.players.enqueue(packets.logout(self.id))
+
+        if not self.restricted:
+            if glob.datadog:
+                glob.datadog.decrement('gulag.online_players')
+
+            glob.players.enqueue(packets.logout(self.id))
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
@@ -369,43 +377,43 @@ class Player:
             [self.priv, self.id]
         )
 
-    async def ban(self, admin: 'Player', reason: str) -> None:
-        """Ban `self` for `reason`, and log to sql."""
+    async def restrict(self, admin: 'Player', reason: str) -> None:
+        """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.Normal)
 
-        log_msg = f'{admin} banned for "{reason}".'
+        log_msg = f'{admin} restricted for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
 
-        if self in glob.players:
-            # if user is online, notify and log them out.
-            # XXX: if you want to lock the player's
-            # client, you can send -3 rather than -1.
-            self.enqueue(packets.userID(-1))
-            self.enqueue(packets.notification(
-                'Your account has been banned.\n\n'
-                'If you believe this was a mistake or '
-                'have waited >= 2 months, you can appeal '
-                'using the appeal form on the website.'
-            ))
+        if self.online:
+            # log the user out if they're offline, this
+            # will simply relog them and refresh their state.
+            self.logout()
 
-        log(f'Banned {self}.', Ansi.LCYAN)
+        log(f'Restrict {self}.', Ansi.LCYAN)
 
-    async def unban(self, admin: 'Player', reason: str) -> None:
-        """Unban `self` for `reason`, and log to sql."""
+    async def unrestrict(self, admin: 'Player', reason: str) -> None:
+        """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.Normal)
 
-        log_msg = f'{admin} unbanned for "{reason}".'
+        log_msg = f'{admin} unrestricted for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
 
-        log(f'Unbanned {self}.', Ansi.LCYAN)
+        if self.online:
+            # log the user out if they're offline, this
+            # will simply relog them and refresh their state.
+            self.logout()
+
+        log(f'Unrestricted {self}.', Ansi.LCYAN)
 
     async def silence(self, admin: 'Player', duration: int,
                       reason: str) -> None:
@@ -419,7 +427,8 @@ class Player:
 
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
@@ -447,7 +456,8 @@ class Player:
 
         log_msg = f'{admin} unsilenced.'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
@@ -559,8 +569,8 @@ class Player:
             return False
 
         # ensure they have read privs.
-        if not self.priv & c.read_priv:
-            return False
+        if self.priv & c.read_priv != c.read_priv:
+             return False
 
         # lobby can only be interacted with while in mp lobby.
         if c._name == '#lobby' and not self.in_lobby:
@@ -626,16 +636,22 @@ class Player:
             return
 
         #p.enqueue(packets.channelJoin(c.name))
-        p_joined = packets.fellowSpectatorJoined(p.id)
+        if not p.stealth:
+            p_joined = packets.fellowSpectatorJoined(p.id)
+            for s in self.spectators:
+                s.enqueue(p_joined)
+                p.enqueue(packets.fellowSpectatorJoined(s.id))
 
-        for s in self.spectators:
-            s.enqueue(p_joined)
-            p.enqueue(packets.fellowSpectatorJoined(s.id))
+            self.enqueue(packets.spectatorJoined(p.id))
+        else:
+            # player is admin in stealth, only give other
+            # players data to us, not vice-versa.
+            for s in self.spectators:
+                p.enqueue(packets.fellowSpectatorJoined(s.id))
 
         self.spectators.append(p)
         p.spectating = self
 
-        self.enqueue(packets.spectatorJoined(p.id))
         log(f'{p} is now spectating {self}.')
 
     def remove_spectator(self, p: 'Player') -> None:
@@ -717,7 +733,8 @@ class Player:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await glob.db.execute(
             'INSERT INTO user_achievements '
-            '(userid, achid) VALUES (%s, %s)',
+            '(userid, achid) '
+            'VALUES (%s, %s)',
             [self.id, a.id]
         )
 

@@ -117,7 +117,7 @@ async def _help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
          '-----------']
 
     for cmd in regular_commands:
-        if not cmd.doc or not p.priv & cmd.priv:
+        if not cmd.doc or p.priv & cmd.priv != cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
@@ -438,7 +438,8 @@ async def addnote(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     log_msg = f'{p} added note: {" ".join(msg[1:])}'
 
     await glob.db.execute(
-        'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+        'INSERT INTO logs '
+        '(`from`, `to`, `msg`, `time`) '
         'VALUES (%s, %s, %s, NOW())',
         [p.id, t.id, log_msg]
     )
@@ -510,10 +511,10 @@ async def unsilence(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 """
 
 @command(Privileges.Admin, hidden=True)
-async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Ban a specified player's account, with a reason."""
+async def restrict(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Restrict a specified player's account, with a reason."""
     if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+        return 'Invalid syntax: !restrict <name> <reason>'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get_ensure(name=msg[0])):
@@ -522,22 +523,23 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    if not t.priv & Privileges.Normal:
-        return f'{t} is already banned!'
+    if t.restricted:
+        return f'{t} is already restricted!'
 
     reason = ' '.join(msg[1:])
 
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await t.ban(p, reason)
-    return f'{t} was banned.'
+    await t.restrict(admin=p, reason=reason)
+
+    return f'{t} was restricted.'
 
 @command(Privileges.Admin, hidden=True)
-async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
-    """Unban a specified player's account, with a reason."""
+async def unrestrict(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Unrestrict a specified player's account, with a reason."""
     if len(msg) < 2:
-        return 'Invalid syntax: !ban <name> <reason>'
+        return 'Invalid syntax: !restrict <name> <reason>'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get_ensure(name=msg[0])):
@@ -546,16 +548,17 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
-    if t.priv & Privileges.Normal:
-        return f'{t} is not banned!'
+    if not t.restricted:
+        return f'{t} is not restricted!'
 
     reason = ' '.join(msg[1:])
 
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await t.unban(p, reason)
-    return f'{t} was unbanned.'
+    await t.unrestrict(p, reason)
+
+    return f'{t} was unrestricted.'
 
 @command(Privileges.Admin, hidden=True)
 async def alert(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -600,6 +603,15 @@ async def switchserv(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 # The commands below are either dangerous or
 # simply not useful for any other roles.
 """
+
+@command(Privileges.Dangerous)
+async def stealth(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
+    """Toggle the developer's stealth, allowing them to be hidden."""
+    # NOTE: this command is a large work in progress and currently
+    # half works; eventually it will be moved to the Admin level.
+    p.stealth = not p.stealth
+
+    return f'Stealth {"enabled" if p.stealth else "disabled"}.'
 
 @command(Privileges.Dangerous)
 async def recalc(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
@@ -830,7 +842,7 @@ async def mp_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     cmds = []
 
     for cmd in mp_commands.commands:
-        if not cmd.doc or not p.priv & cmd.priv:
+        if not cmd.doc or p.priv & cmd.priv != cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
@@ -1388,7 +1400,7 @@ async def pool_help(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     cmds = []
 
     for cmd in pool_commands.commands:
-        if not cmd.doc or not p.priv & cmd.priv:
+        if not cmd.doc or p.priv & cmd.priv != cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
@@ -1573,7 +1585,7 @@ async def clan_help(p: 'Player', m: 'Match', msg: Sequence[str]) -> str:
     cmds = []
 
     for cmd in clan_commands.commands:
-        if not cmd.doc or not p.priv & cmd.priv:
+        if not cmd.doc or p.priv & cmd.priv != cmd.priv:
             # no doc, or insufficient permissions.
             continue
 
@@ -1596,8 +1608,6 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if p.clan:
         return f"You're already a member of {p.clan}!"
 
-    if not p.priv & Privileges.Donator:
-        return 'Creation of clans is a supporter-only feature.'
 
     if glob.clans.get(name=name):
         return 'That name has already been claimed by another clan.'
@@ -1790,7 +1800,7 @@ async def process_commands(p: 'Player', t: Messageable,
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and p.priv & cmd.priv:
+        if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
             # command found & we have privileges, run it.
             if res := await cmd.callback(p, t, args):
                 ms_taken = (clock_ns() - start_time) / 1e6
