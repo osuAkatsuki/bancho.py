@@ -118,6 +118,7 @@ create table maps
 	creator varchar(19) charset utf8 not null comment 'not 100% certain on len',
 	last_update datetime not null,
 	total_length int not null,
+	max_combo int not null,
 	frozen tinyint(1) default 0 not null,
 	plays int default 0 not null,
 	passes int default 0 not null,
