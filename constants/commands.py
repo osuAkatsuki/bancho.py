@@ -504,6 +504,9 @@ async def ban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
 
+    if not t.priv & Privileges.Normal:
+        return f'{t} is already banned!'
+
     reason = ' '.join(msg[1:])
 
     await t.ban(p, reason)
@@ -521,6 +524,9 @@ async def unban(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     if t.priv & Privileges.Staff and not p.priv & Privileges.Dangerous:
         return 'Only developers can manage staff members.'
+
+    if t.priv & Privileges.Normal:
+        return f'{t} is not banned!'
 
     reason = ' '.join(msg[1:])
 
@@ -1753,10 +1759,10 @@ async def process_commands(p: 'Player', t: Messageable,
         if trigger in cmd.triggers and p.priv & cmd.priv:
             # command found & we have privileges, run it.
             if res := await cmd.callback(p, t, args):
-                time_taken = (clock_ns() - start_time) / 1e6
+                ms_taken = (clock_ns() - start_time) / 1e6
 
                 return {
-                    'resp': f'{res} | Elapsed: {time_taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
                     'hidden': cmd.hidden
                 }
 
