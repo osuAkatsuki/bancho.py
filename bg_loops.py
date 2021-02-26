@@ -30,7 +30,7 @@ async def donor_expiry() -> None:
     # a different tier, enqueued after their current perks).
 
     async def rm_donor(userid: int, when: int):
-        if (delta := when - time.time()) >= 0:
+        if (delta := when - time.time()) <= 0:
             await asyncio.sleep(delta)
 
         p = await glob.players.get_ensure(id=userid)
