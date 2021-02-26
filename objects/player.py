@@ -246,10 +246,9 @@ class Player:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
         if self.priv & Privileges.Normal:
-            # all players have in-game "supporter".
-            # this enables stuff like osu!direct,
-            # multiplayer in cutting edge, etc.
-            ret |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
+            ret |= ClientPrivileges.Player
+        if self.priv & Privileges.Donator:
+            ret |= ClientPrivileges.Supporter
         if self.priv & Privileges.Mod:
             ret |= ClientPrivileges.Moderator
         if self.priv & Privileges.Admin:

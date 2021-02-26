@@ -21,6 +21,7 @@ from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.mods import SPEED_CHANGING_MODS
+from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from constants.types import osuTypes
 from objects import glob
@@ -521,7 +522,18 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     data = bytearray(packets.protocolVersion(19))
     data += packets.userID(p.id)
-    data += packets.banchoPrivileges(p.bancho_priv)
+
+    # *real* client privileges are sent with this packet,
+    # then the user's apparent privileges are sent in the
+    # userPresence packets to other players. we'll send
+    # supporter along with the user's privileges here,
+    # but not in userPresence (so that only donators
+    # show up with the yellow name in-game, but everyone
+    # gets osu!direct & other in-game perks).
+    data += packets.banchoPrivileges(
+        p.bancho_priv | ClientPrivileges.Supporter
+    )
+
     data += packets.notification('Welcome back to the gulag!\n'
                                 f'Current build: v{glob.version}')
 
