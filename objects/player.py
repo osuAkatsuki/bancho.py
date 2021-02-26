@@ -706,11 +706,13 @@ class Player:
                 log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
                 return
 
-        country = lines[1]
+        country = await glob.db.fetch (
+            f'SELECT country FROM users WHERE safe_name = "{self.safe_name}";'
+        )
 
         # store their country as a 2-letter code, and as a number.
         # the players location is stored for the ingame world map.
-        self.country = (country_codes[country], country)
+        self.country = (country_codes[country['country'].upper()], country['country'].upper())
         self.location = (float(lines[6]), float(lines[7])) # lat, long
 
     async def unlock_achievement(self, a: 'Achievement') -> None:
@@ -767,8 +769,27 @@ class Player:
             'AND u.priv & 1',
             [stats.pp]
         )
+        res1 = await glob.db.fetch(
+            'SELECT COUNT(*) AS c FROM stats s '
+            'LEFT JOIN users u USING(id) '
+            f'WHERE s.pp_{mode:sql} > %s '
+            'AND u.priv & 1 AND u.country = %s',
+            [stats.pp, self.country[1]]
+        )
 
         stats.rank = res['c'] + 1
+        crank = res1['c'] + 1
+        await glob.db.execute(
+            'UPDATE stats SET rank_{0:sql} = %s '
+            'WHERE id = %s'.format(mode),
+            [stats.rank, self.id]
+        )
+        await glob.db.execute(
+            'UPDATE stats SET crank_{0:sql} = %s '
+            'WHERE id = %s'.format(mode),
+            [crank, self.id]
+        )
+
         self.enqueue(packets.userStats(self))
 
     async def friends_from_sql(self) -> None:

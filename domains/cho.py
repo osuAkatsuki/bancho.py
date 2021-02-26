@@ -25,6 +25,7 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.channel import Channel
 from objects.clan import ClanPrivileges
+
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import SlotStatus
@@ -46,7 +47,6 @@ async def bancho_http_handler(conn: Connection) -> bytes:
     return b'<!DOCTYPE html>' + '<br>'.join((
         f'Running gulag v{glob.version}',
         f'Players online: {len(glob.players) - 1}',
-        '<a href="https://github.com/cmyui/gulag">Source code</a>',
         '',
         f'<b>Packets handled ({len(glob.bancho_packets)})</b>',
         '<br>'.join([f'{p.name} ({p.value})' for p in glob.bancho_packets])
@@ -261,7 +261,7 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
 welcome_msg = '\n'.join((
     f"Welcome to {glob.config.domain}.",
     "To see a list of commands, use !help.",
-    "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
+    "We have a public (Discord)[https://discord.gg/3wWVEGrW]!",
     "Enjoy the server!"
 ))
 
@@ -481,7 +481,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     data = bytearray(packets.userID(p.id))
     data += packets.protocolVersion(19)
     data += packets.banchoPrivileges(p.bancho_priv)
-    data += packets.notification('Welcome back to the gulag!\n'
+    data += packets.notification('Welcome back to the Sakuru.pw!\n'
                                 f'Current build: v{glob.version}')
 
     # send all channel info.

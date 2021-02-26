@@ -21,7 +21,8 @@ __all__ = ('players', 'channels', 'matches',
            'pools', 'clans', 'achievements',
            'bancho_packets', #'gulag_maps',
            'db', 'http', 'version', 'bot',
-           'cache', 'sketchy_queue', 'datadog')
+           'cache', 'sketchy_queue', 'datadog',
+           'oppai_built')
 
 # global lists
 players: 'PlayerList'
@@ -38,6 +39,7 @@ version: 'Version'
 bot: 'Player'
 sketchy_queue: 'Queue[Score]'
 datadog: 'Optional[ThreadStats]'
+oppai_built: bool
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or

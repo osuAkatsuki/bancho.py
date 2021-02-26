@@ -123,7 +123,9 @@ async def analyze_score(score: 'Score') -> None:
                 icon_url = player.avatar_url
             )
 
-            embed.set_thumbnail(url=glob.config.webhooks['thumbnail'])
+            # TODO: think of a way to organize a thumbnail into config?
+            thumb_url = 'https://osu.magicflare.fun/static/banner.png'
+            embed.set_thumbnail(url=thumb_url)
 
             for key, pt in press_times.items():
                 embed.add_field(

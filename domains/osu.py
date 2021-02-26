@@ -17,6 +17,7 @@ from typing import Callable
 from typing import Optional
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
+from utils.recalculator import PPCalculator
 
 import bcrypt
 import orjson
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain('osu.ppy.sh')
+domain = Domain({'osu.ppy.sh', 'i.sakuru.pw'})
 
 
 """ Some helper decorators (used for /web/ connections) """
@@ -548,12 +549,52 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             await s.player.ban(glob.bot, f'[{s.mode!r}] autoban @ {s.pp:.2f}')
             return b'error: ban'
 
+    if s.mods & Mods.SCOREV2:
+        return b'error: no'
+
     """ Score submission checks completed; submit the score. """
 
     if glob.datadog:
         glob.datadog.increment('gulag.submitted_scores')
 
     if s.status == SubmissionStatus.BEST:
+        if glob.datadog:
+            glob.datadog.increment('gulag.submitted_scores_best')
+
+        if s.rank == 1:
+            # this is the new #1, post the play to #announce.
+            announce_chan = glob.channels['#announce']
+
+            if s.mode >= GameMode.rx_std:
+                scoring = 'pp'
+                performance = f'{s.pp:.2f}pp'
+            else:
+                scoring = 'score'
+                performance = s.score
+
+            # Announce the user's #1 score.
+            ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
+                   f'with {s.acc:.2f}% for {performance}.']
+
+            if s.mods:
+                ann.insert(1, f'+{s.mods!r}')
+
+            # If there was previously a score on the map, add old #1.
+            prev_n1 = await glob.db.fetch(
+                'SELECT u.id, name FROM users u '
+                f'LEFT JOIN {table} s ON u.id = s.userid '
+                'WHERE s.map_md5 = %s AND s.mode = %s '
+                'AND s.status = 2 AND u.priv & 1 '
+                f'ORDER BY s.{scoring} DESC LIMIT 1',
+                [s.bmap.md5, s.mode.as_vanilla]
+            )
+
+            if prev_n1 and s.player.id != prev_n1['id']:
+                ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+
+            s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
+            announce_chan.send(s.player, ' '.join(ann), to_self=True)
+
         # Our score is our best score.
         # Update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
@@ -563,9 +604,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'AND userid = %s AND mode = %s',
             [s.bmap.md5, s.player.id, s.mode.as_vanilla]
         )
-
-        if glob.datadog:
-            glob.datadog.increment('gulag.submitted_scores_best')
 
     s.id = await glob.db.execute(
         f'INSERT INTO {table} VALUES (NULL, '
@@ -653,34 +691,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         'passes = %s WHERE md5 = %s',
         [s.bmap.plays, s.bmap.passes, s.bmap.md5]
     )
-
-    if (
-        s.status == SubmissionStatus.BEST and
-        s.rank == 1 and
-        (announce_chan := glob.channels['#announce'])
-    ):
-        # Announce the user's #1 score.
-        prev_n1 = await glob.db.fetch(
-            'SELECT u.id, name FROM users u '
-            f'LEFT JOIN {table} s ON u.id = s.userid '
-            'WHERE s.map_md5 = %s AND s.mode = %s '
-            'AND s.status = 2 AND u.priv & 1 '
-            'ORDER BY pp DESC LIMIT 1, 1',
-            [s.bmap.md5, s.mode.as_vanilla]
-        )
-
-        performance = f'{s.pp:.2f}pp' if s.pp else f'{s.score}'
-
-        ann = [f'\x01ACTION has achieved #1 on {s.bmap.embed}',
-               f'with {s.acc:.2f}% for {performance}.']
-
-        if s.mods:
-            ann.insert(1, f'+{s.mods!r}')
-
-        if prev_n1: # If there was previously a score on the map, add old #1.
-            ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
-
-        announce_chan.send(s.player, ' '.join(ann), to_self=True)
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
@@ -1000,9 +1010,15 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         p.status.mode = mode
         glob.players.enqueue(packets.userStats(p))
 
-    table = mode.sql_table
-    scoring = 'pp' if mode >= GameMode.rx_std else 'score'
 
+
+    if(p.priv & Privileges.Donator and mods & Mods.AUTOPLAY):
+        scoring = 'pp'
+    else:
+        scoring = 'pp' if mode >= GameMode.rx_std else 'score'
+
+    table = mode.sql_table
+    
     if not (bmap := Beatmap.from_md5_cache(map_md5)):
         # if not found in memory, get from sql.
         if not (bmap := await Beatmap.from_md5_sql(map_md5)):
@@ -1090,10 +1106,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         query.append('AND s.mods = %s')
         params.append(mods)
     elif rank_type == RankingType.Friends:
-        # a little cursed, but my wrapper doesn't like being
-        # passed iterables yet, and nor does the lower lv api xd
-        friends_str = ','.join(map(str, p.friends))
-        query.append(f'AND s.userid IN ({friends_str}, {p.id})')
+        if p.priv & Privileges.Donator:
+            friends_str = ','.join(map(str, p.friends))
+            query.append(f'AND s.userid IN ({friends_str}, {p.id})')
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
         params.append(p.country[1]) # letters, not id
@@ -1782,6 +1797,7 @@ async def osuBMSubmitGetID(conn: Connection) -> Optional[bytes]:
         '1' if full_submit else '0' # watchlist
     ]).encode()
 """
+JSON = orjson.dumps
 
 """ /api/ Handlers """
 # TODO: add oauth so we can do more stuff owo..
@@ -1793,6 +1809,50 @@ async def api_get_online(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     return f'{{"online":{len(glob.players) - 1}}}'.encode()
+
+@domain.route('/api/check_online')
+async def api_check_online(conn: Connection) -> Optional[bytes]:
+    """Return a players current status, if they are online."""
+    if 'id' in conn.args:
+        pid = conn.args['id']
+        if not pid.isdecimal():
+            return (400, b'Invalid player id.')
+        # get player by id
+        p = glob.players.get(id=int(pid))
+    elif 'name' in conn.args:
+        name = unquote(conn.args['name'])
+        if not 2 <= len(name) < 16:
+            return (400, b'Invalid player name.')
+
+        # get player by name
+        p = glob.players.get(name=name)
+    else:
+        return (400, b'Must provide either id or name!')
+
+    if not p:
+        # no such player online
+        return JSON({'online': False})
+
+    # varkaria wants set_id for gulag-web
+    bmap = await Beatmap.from_md5(p.status.map_md5)
+    if bmap:
+        set_id = bmap.set_id
+    else:
+        set_id = 0
+
+    return JSON({
+        'online': True,
+        'login_time': p.login_time,
+        'status': {
+            'action': int(p.status.action),
+            'info_text': p.status.info_text,
+            'map_id': p.status.map_id,
+            'map_set_id': set_id,
+            'map_md5': p.status.map_md5,
+            'mode': int(p.status.mode),
+            'mods': int(p.status.mods)
+        }
+    })
 
 @domain.route('/api/get_user')
 async def api_get_user(conn: Connection) -> Optional[bytes]:
@@ -1838,6 +1898,66 @@ async def api_get_user(conn: Connection) -> Optional[bytes]:
 
     res = await glob.db.fetch(query, [pid])
     return orjson.dumps(res) if res else b'User not found.'
+
+@domain.route('/api/calc_pp')
+async def api_calc_pp(conn: Connection) -> Optional[bytes]:
+    """Calculate pp with a given map id/md5 & pp params."""
+    if not glob.oppai_built:
+        return (503, JSON({'status': 'Failed: oppai-ng not built'}))
+
+    if 'md5' in conn.args:
+        # get id from md5
+        res = await glob.db.fetch(
+            'SELECT id FROM maps '
+            'WHERE md5 = %s',
+            [conn.args.pop('md5')]
+        )
+        if not res:
+            return JSON({'status': 'Failed: no map found'})
+
+        map_id = res['id']
+    elif 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, JSON({'status': 'Failed: invalid map id'}))
+
+        map_id = int(conn.args.pop('id'))
+    else:
+        return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
+
+    pp_kwargs = {}
+    valid_kwargs = (
+        ('mods', int),
+        ('combo', int),
+        ('nmiss', int),
+        ('mode_vn', int),
+        ('acc', float)
+    )
+
+    # ignore any invalid args
+    for n, t in valid_kwargs:
+        if n in conn.args:
+            val = conn.args[n]
+
+            if not _isdecimal(val, _float=t is float):
+                continue
+
+            pp_kwargs |= {n: t(val)}
+
+    if pp_kwargs.get('mode_vn', 0) not in (0, 1):
+        return (503, JSON({'status': 'Failed: unsupported mode'}))
+
+    ppcalc = await PPCalculator.from_id(map_id, **pp_kwargs)
+
+    if not ppcalc:
+        return JSON({'status': 'Failed: could not retrieve map'})
+
+    pp, sr = await ppcalc.perform()
+
+    return JSON({
+        'status': 'Success',
+        'pp': pp,
+        'sr': sr
+    })
 
 @domain.route('/api/get_scores')
 async def api_get_scores(conn: Connection) -> Optional[bytes]:
@@ -1970,6 +2090,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 @domain.route('/users', methods=['POST'])
 @ratelimit(period=300, max_count=15) # 15 registrations / 5mins
 async def register_account(conn: Connection) -> Optional[bytes]:
+    return (400, b'In-Game Registration is DISABLED Register FROM SITE! ^_^')
     mp_args = conn.multipart_args
 
     name = mp_args['user[username]']

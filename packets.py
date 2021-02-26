@@ -26,6 +26,8 @@ from constants.types import osuTypes
 from objects import glob
 from objects.match import Match
 from objects.match import MatchTeams
+from constants.privileges import ClientPrivileges
+from constants.privileges import Privileges
 from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
@@ -642,11 +644,11 @@ def changeUsername(old: str, new: str) -> bytes:
     )
 
 BOT_STATUSES = (
-    (3, 'the source code..'), # editing
-    (6, 'geohot livestreams..'), # watching
-    (6, 'over the server..'), # watching
+    (3, 'your bugs'), # editing
+    (6, 'for new updates'), # watching
+    (6, 'how to make comutercino'), # watching
     (8, 'out new features..'), # testing
-    (9, 'a pull request..'), # submitting
+    (9, 'shitty beatmap'), # submitting
 )
 
 # since the bot is always online and is
@@ -976,7 +978,7 @@ def botPresence():
         (glob.bot.id, osuTypes.i32),
         (glob.bot.name, osuTypes.string),
         (-5 + 24, osuTypes.u8),
-        (245, osuTypes.u8), # satellite provider
+        (222, osuTypes.u8), # satellite provider
         (31, osuTypes.u8),
         (1234.0, osuTypes.f32), # send coordinates waaay
         (4321.0, osuTypes.f32), # off the map for the bot
@@ -987,6 +989,9 @@ def botPresence():
 def userPresence(p: 'Player') -> bytes:
     if p is glob.bot:
         return botPresence()
+    mod_priv = p.bancho_priv
+    if not p.priv & Privileges.Donator:
+        mod_priv &= ~ClientPrivileges.Supporter
 
     return write(
         Packets.CHO_USER_PRESENCE,
@@ -994,7 +999,7 @@ def userPresence(p: 'Player') -> bytes:
         (p.name, osuTypes.string),
         (p.utc_offset + 24, osuTypes.u8),
         (p.country[0], osuTypes.u8),
-        (p.bancho_priv | (p.status.mode.as_vanilla << 5), osuTypes.u8),
+        (mod_priv | (p.status.mode.as_vanilla << 5), osuTypes.u8),
         (p.location[1], osuTypes.f32), # long
         (p.location[0], osuTypes.f32), # lat
         (p.gm_stats.rank, osuTypes.i32)
