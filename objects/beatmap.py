@@ -461,7 +461,9 @@ class Beatmap:
 
             m.last_update = bmap['last_update']
             m.total_length = int(bmap['total_length'])
-            m.max_combo = int(bmap['max_combo'])
+
+            if bmap['max_combo'] is not None: # ??? osu api
+                m.max_combo = int(bmap['max_combo'])
 
             m.status = bmap['approved']
             m.frozen = bmap['frozen']
