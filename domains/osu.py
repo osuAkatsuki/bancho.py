@@ -1874,7 +1874,11 @@ async def api_check_online(conn: Connection) -> Optional[bytes]:
         return JSON({'online': False})
 
     # varkaria wants set_id for gulag-web
-    bmap = await Beatmap.from_md5(p.status.map_md5)
+    if p.status.map_md5:
+        bmap = await Beatmap.from_md5(p.status.map_md5)
+    else:
+        bmap = None
+
     set_id = bmap.set_id if bmap else 0
 
     return JSON({
