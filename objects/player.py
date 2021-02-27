@@ -546,6 +546,7 @@ class Player:
         self.match = None
 
     async def join_clan(self, c: 'Clan') -> bool:
+        """Attempt to add `self` to `c`."""
         if self.id in c.members:
             return False
 
@@ -556,6 +557,7 @@ class Player:
         return True
 
     async def leave_clan(self) -> None:
+        """Attempt to remove `self` from `c`."""
         if not self.clan:
             return
 
@@ -569,7 +571,7 @@ class Player:
 
         # ensure they have read privs.
         if self.priv & c.read_priv != c.read_priv:
-             return False
+            return False
 
         # lobby can only be interacted with while in mp lobby.
         if c._name == '#lobby' and not self.in_lobby:
