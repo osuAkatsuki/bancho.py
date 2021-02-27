@@ -514,11 +514,24 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         del user_info['clan_rank']
         clan = clan_rank = None
 
-    # user_info: {id, name, priv, pw_bcrypt, silence_end}
-    p = Player.login(user_info, utc_offset=utc_offset,
-                     osu_ver=osu_ver, pm_private=pm_private,
-                     login_time=login_time, clan=clan,
-                     clan_rank=clan_rank)
+    extras = {
+        'utc_offset': utc_offset,
+        'osu_ver': osu_ver,
+        'pm_private': pm_private,
+        'login_time': login_time,
+        'clan': clan,
+        'clan_rank': clan_rank
+    }
+
+    p = Player(
+        **user_info, # {id, name, priv, pw_bcrypt, silence_end}
+        **extras     # {utc_offset, osu_ver, pm_private,
+                     #  login_time, clan, clan_rank}
+    )
+
+    for mode in GameMode:
+        p.recent_scores[mode] = None # TODO: sql?
+        p.stats[mode] = None
 
     data = bytearray(packets.protocolVersion(19))
     data += packets.userID(p.id)

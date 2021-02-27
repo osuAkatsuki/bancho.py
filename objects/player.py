@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import asyncio
 import random
 import time
 import uuid
@@ -14,6 +13,7 @@ from typing import Any
 from typing import Coroutine
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Union
 
 from cmyui import Ansi
 from cmyui import log
@@ -25,7 +25,6 @@ from constants.mods import Mods
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from objects import glob
-from objects.beatmap import Beatmap
 from objects.channel import Channel
 from objects.match import Match
 from objects.match import MatchTeams
@@ -140,14 +139,21 @@ class Player:
         'menu_options', '_queue', '__dict__'
     )
 
-    def __init__(self, **kwargs) -> None:
-        self.id = kwargs.get('id', 0)
-        self.name = kwargs.get('name', '')
-        self.priv = kwargs.get('priv', Privileges(0))
+    def __init__(self, id: int, name: str,
+                 priv: Union[Privileges, int], **extras) -> None:
+        self.id = id
+        self.name = name
+        self.safe_name = self.make_safe(self.name)
 
-        self.token = kwargs.get('token', '')
-        self.safe_name = self.make_safe(self.name) if self.name else ''
-        self.pw_bcrypt = kwargs.get('pw_bcrypt', b'')
+        self.pw_bcrypt = extras.get('pw_bcrypt', None)
+
+        # generate a token if not given
+        self.token = (extras.get('token', None) or
+                      self.generate_token())
+
+        # ensure priv is of type Privileges
+        self.priv = (priv if isinstance(priv, Privileges) else
+                     Privileges(priv))
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
@@ -159,8 +165,8 @@ class Player:
         self.match: Optional[Match] = None
         self.stealth = False
 
-        self.clan: Optional['Clan'] = kwargs.get('clan', None)
-        self.clan_rank: Optional['ClanPrivileges'] = kwargs.get('clan_rank', None)
+        self.clan: Optional['Clan'] = extras.get('clan', None)
+        self.clan_rank: Optional['ClanPrivileges'] = extras.get('clan_rank', None)
 
         # store achievements per-gamemode
         self.achievements: dict[int, set['Achievement']] = {
@@ -171,16 +177,17 @@ class Player:
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset = kwargs.get('utc_offset', 0)
-        self.pm_private = kwargs.get('pm_private', False)
+        self.utc_offset = extras.get('utc_offset', 0)
+        self.pm_private = extras.get('pm_private', False)
         self.away_msg: Optional[str] = None
-        self.silence_end = kwargs.get('silence_end', 0)
+        self.silence_end = extras.get('silence_end', 0)
         self.in_lobby = False
-        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
+        self.osu_ver: Optional[datetime] = extras.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
-        self.login_time = 0.0
-        self.last_recv_time = kwargs.get('last_recv_time', 0.0)
+        login_time = extras.get('login_time', 0.0)
+        self.login_time = login_time
+        self.last_recv_time = login_time
 
         # XXX: below is mostly gulag-specific & internal stuff
 
@@ -306,28 +313,6 @@ class Player:
     def make_safe(name: str) -> str:
         """Return a name safe for usage in sql."""
         return name.lower().replace(' ', '_')
-
-    @classmethod
-    def login(cls, user_info, utc_offset: int,
-              pm_private: bool, osu_ver: datetime,
-              login_time: float, clan: 'Clan',
-              clan_rank: 'ClanPrivileges') -> 'Player':
-        """Log a player into the server, with all info required."""
-        # user_info: {id, name, priv, pw_bcrypt, silence_end}
-        token = cls.generate_token()
-        priv = Privileges(user_info.pop('priv'))
-        p = cls(**user_info, pm_private=pm_private,
-                priv=priv, utc_offset=utc_offset,
-                token=token, osu_ver=osu_ver,
-                clan=clan, clan_rank=clan_rank
-        )
-
-        for mode in GameMode: # start empty
-            p.recent_scores[mode] = None
-            p.stats[mode] = None
-
-        p.login_time = p.last_recv_time = login_time
-        return p
 
     def logout(self) -> None:
         """Log `self` out of the server."""

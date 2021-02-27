@@ -47,7 +47,7 @@ async def setup_collections() -> None:
 
     glob.bot = Player(
         id = 1, name = res['name'], priv = Privileges.Normal,
-        last_recv_time = float(0x7fffffff) # never auto-dc
+        login_time = float(0x7fffffff) # never auto-dc
     )
     glob.players.append(glob.bot)
 
