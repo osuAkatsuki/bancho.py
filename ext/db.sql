@@ -384,7 +384,7 @@ create table users
 	creation_time int default 0 not null,
 	latest_activity int default 0 not null,
 	clan_id int default 0 not null,
-	clan_rank tinyint(1) default 0 not null,
+	clan_priv tinyint(1) default 0 not null,
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_uindex

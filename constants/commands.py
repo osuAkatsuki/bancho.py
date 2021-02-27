@@ -627,7 +627,7 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             'pm_private': False,
             'login_time': 0,
             'clan': None,
-            'clan_rank': None
+            'clan_priv': None
         }
 
         import copy # XXX
@@ -1703,7 +1703,7 @@ async def clan_create(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     # set owner's clan & clan rank (cache & sql)
     p.clan = clan
-    p.clan_rank = ClanPrivileges.Owner
+    p.clan_priv = ClanPrivileges.Owner
 
     clan.owner = p.id
     clan.members.add(p.id)
@@ -1714,7 +1714,7 @@ async def clan_create(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     await glob.db.execute(
         'UPDATE users '
         'SET clan_id = %s, '
-        'clan_rank = 3 ' # ClanPrivileges.Owner
+        'clan_priv = 3 ' # ClanPrivileges.Owner
         'WHERE id = %s',
         [id, p.id]
     )
@@ -1757,12 +1757,12 @@ async def clan_disband(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         if 'full_name' in m.__dict__:
             del m.full_name # wipe cached_property
 
-        m.clan = m.clan_rank = None
+        m.clan = m.clan_priv = None
 
     await glob.db.execute(
         'UPDATE users '
         'SET clan_id = 0, '
-        'clan_rank = 0 '
+        'clan_priv = 0 '
         'WHERE clan_id = %s',
         [clan.id]
     )
@@ -1795,14 +1795,14 @@ async def clan_info(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     # get members ranking from sql
     res = await glob.db.fetchall(
-        'SELECT name, clan_rank '
+        'SELECT name, clan_priv '
         'FROM users '
         'WHERE clan_id = %s',
         [clan.id], _dict=False
     )
 
-    for name, clan_rank in sorted(res, key=lambda row: row[1]):
-        rank_str = ('Member', 'Officer', 'Owner')[clan_rank - 1]
+    for name, clan_priv in sorted(res, key=lambda row: row[1]):
+        rank_str = ('Member', 'Officer', 'Owner')[clan_priv - 1]
         msg.append(f'[{rank_str}] {name}')
 
     return '\n'.join(msg)

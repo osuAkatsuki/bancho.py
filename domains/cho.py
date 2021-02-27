@@ -404,7 +404,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, '
-        'silence_end, clan_id, clan_rank '
+        'silence_end, clan_id, clan_priv '
         'FROM users WHERE safe_name = %s',
         [make_safe_name(username)]
     )
@@ -508,11 +508,11 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # get clan & clan rank if we're in a clan
     if user_info['clan_id'] != 0:
         clan = glob.clans.get(id=user_info.pop('clan_id'))
-        clan_rank = ClanPrivileges(user_info.pop('clan_rank'))
+        clan_priv = ClanPrivileges(user_info.pop('clan_priv'))
     else:
         del user_info['clan_id']
-        del user_info['clan_rank']
-        clan = clan_rank = None
+        del user_info['clan_priv']
+        clan = clan_priv = None
 
     extras = {
         'utc_offset': utc_offset,
@@ -520,13 +520,13 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         'pm_private': pm_private,
         'login_time': login_time,
         'clan': clan,
-        'clan_rank': clan_rank
+        'clan_priv': clan_priv
     }
 
     p = Player(
         **user_info, # {id, name, priv, pw_bcrypt, silence_end}
         **extras     # {utc_offset, osu_ver, pm_private,
-                     #  login_time, clan, clan_rank}
+                     #  login_time, clan, clan_priv}
     )
 
     for mode in GameMode:

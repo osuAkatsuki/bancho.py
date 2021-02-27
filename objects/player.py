@@ -131,7 +131,7 @@ class Player:
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
         'priv', 'stats', 'status', 'friends', 'channels',
         'spectators', 'spectating', 'match', 'stealth',
-        'clan', 'clan_rank', 'achievements',
+        'clan', 'clan_priv', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
@@ -166,7 +166,7 @@ class Player:
         self.stealth = False
 
         self.clan: Optional['Clan'] = extras.get('clan', None)
-        self.clan_rank: Optional['ClanPrivileges'] = extras.get('clan_rank', None)
+        self.clan_priv: Optional['ClanPrivileges'] = extras.get('clan_priv', None)
 
         # store achievements per-gamemode
         self.achievements: dict[int, set['Achievement']] = {

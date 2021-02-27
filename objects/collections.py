@@ -202,7 +202,7 @@ class PlayerList(list):
         # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_rank '
+            'silence_end, clan_id, clan_priv '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
@@ -216,9 +216,9 @@ class PlayerList(list):
 
         if res['clan_id'] != 0:
             res['clan'] = glob.clans.get(id=res['clan_id'])
-            res['clan_rank'] = ClanPrivileges(res['clan_rank'])
+            res['clan_priv'] = ClanPrivileges(res['clan_priv'])
         else:
-            res['clan'] = res['clan_rank'] = None
+            res['clan'] = res['clan_priv'] = None
 
         return Player(**res)
 
