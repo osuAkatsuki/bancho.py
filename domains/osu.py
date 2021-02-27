@@ -709,6 +709,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     # Update the user.
     s.player.recent_scores[s.mode] = s
+    if 'recent_score' in s.player.__dict__:
+        del s.player.recent_score # wipe cached_property
+
     await s.player.update_stats(s.mode)
 
     """ score submission charts """

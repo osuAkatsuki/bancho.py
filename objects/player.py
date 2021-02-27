@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from functools import cached_property
 from functools import partial
 from typing import Any
 from typing import Coroutine
@@ -136,7 +137,7 @@ class Player:
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options', '_queue'
+        'menu_options', '_queue', '__dict__'
     )
 
     def __init__(self, **kwargs) -> None:
@@ -202,28 +203,40 @@ class Player:
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
 
-    @property
+    @cached_property
     def online(self) -> bool:
         return self.token != ''
 
-    @property
+    @cached_property
     def url(self) -> str:
         """The url to the player's profile."""
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'https://{glob.config.domain}/u/{self.id}'
 
-    @property
+    @cached_property
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
+        # NOTE: this is currently never wiped because
+        # url & name cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'[{self.url} {self.name}]'
 
-    @property
+    @cached_property
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'https://a.{glob.config.domain}/{self.id}'
 
-    @property
+    @cached_property
     def full_name(self) -> str:
         """The user's "full" name; including their clan tag."""
+        # NOTE: this is currently only wiped when the
+        # user leaves their clan; if name/clantag ever
+        # become changeable, it will need to be wiped.
         if self.clan:
             return f'[{self.clan.tag}] {self.name}'
         else:
@@ -241,7 +254,7 @@ class Player:
         """Whether or not the player is silenced."""
         return self.remaining_silence != 0
 
-    @property
+    @cached_property
     def bancho_priv(self) -> int:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
@@ -257,7 +270,7 @@ class Player:
             ret |= ClientPrivileges.Owner
         return ret
 
-    @property
+    @cached_property
     def restricted(self) -> bool:
         """Return whether the player is restricted."""
         return not self.priv & Privileges.Normal
@@ -267,7 +280,7 @@ class Player:
         """The player's stats in their currently selected mode."""
         return self.stats[self.status.mode]
 
-    @property
+    @cached_property
     def recent_score(self) -> 'Score':
         """The player's most recently submitted score."""
         score = None
@@ -321,6 +334,9 @@ class Player:
         # invalidate the user's token.
         self.token = ''
 
+        if 'online' in self.__dict__:
+            del self.online # wipe cached_property
+
         # leave multiplayer.
         if self.match:
             self.leave_match()
@@ -354,6 +370,9 @@ class Player:
             [self.priv, self.id]
         )
 
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
     async def add_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, adding `bits`."""
         self.priv |= bits
@@ -365,6 +384,9 @@ class Player:
             [self.priv, self.id]
         )
 
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
@@ -375,6 +397,9 @@ class Player:
             'WHERE id = %s',
             [self.priv, self.id]
         )
+
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
 
     async def restrict(self, admin: 'Player', reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
@@ -392,6 +417,9 @@ class Player:
             # log the user out if they're offline, this
             # will simply relog them and refresh their state.
             self.logout()
+
+        if 'restricted' in self.__dict__:
+            del self.restricted # wipe cached_property
 
         log(f'Restrict {self}.', Ansi.LCYAN)
 
@@ -411,6 +439,9 @@ class Player:
             # log the user out if they're offline, this
             # will simply relog them and refresh their state.
             self.logout()
+
+        if 'restricted' in self.__dict__:
+            del self.restricted # wipe cached_property
 
         log(f'Unrestricted {self}.', Ansi.LCYAN)
 

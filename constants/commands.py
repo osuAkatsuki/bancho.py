@@ -1608,7 +1608,6 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     if p.clan:
         return f"You're already a member of {p.clan}!"
 
-
     if glob.clans.get(name=name):
         return 'That name has already been claimed by another clan.'
 
@@ -1636,6 +1635,9 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     clan.owner = p.id
     clan.members.add(p.id)
+
+    if 'full_name' in p.__dict__:
+        del p.full_name # wipe cached_property
 
     await glob.db.execute(
         'UPDATE users '
@@ -1680,6 +1682,9 @@ async def clan_disband(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     # reset their clan rank (cache & sql).
     # NOTE: only online players need be to be uncached.
     for m in [glob.players.get(id=p_id) for p_id in clan.members]:
+        if 'full_name' in m.__dict__:
+            del m.full_name # wipe cached_property
+
         m.clan = m.clan_rank = None
 
     await glob.db.execute(
