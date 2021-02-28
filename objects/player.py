@@ -494,7 +494,12 @@ class Player:
 
         if self is not m.host:
             # match already exists, we're simply joining.
-            if self not in glob.players.staff and passwd != m.passwd:
+            # NOTE: staff members have override to pw and can
+            # simply use any to join a pw protected match.
+            if (
+                passwd != m.passwd and
+                self not in glob.players.staff
+            ):
                 log(f'{self} tried to join {m} w/ incorrect pw.', Ansi.LYELLOW)
                 self.enqueue(packets.matchJoinFail())
                 return False

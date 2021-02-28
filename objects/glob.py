@@ -19,9 +19,9 @@ if __import__('typing').TYPE_CHECKING:
 
 __all__ = ('players', 'channels', 'matches',
            'pools', 'clans', 'achievements',
-           'bancho_packets', #'gulag_maps',
-           'db', 'http', 'version', 'bot',
-           'cache', 'sketchy_queue', 'datadog',
+           'bancho_packets', 'db', 'http',
+           'version', 'bot', 'cache',
+           'sketchy_queue', 'datadog',
            'oppai_built')
 
 # global lists
@@ -65,30 +65,3 @@ cache = {
     # so that we do not have to perform this request multiple times.
     'unsubmitted': set() # {md5, ...}
 }
-
-# ==- Currently unused features below -==
-
-""" performance reports (osu-session.php)
-# when a score is submitted, the osu! client will submit a
-# performance report of the user's pc along with some technical
-# details about the score. the performance report is submitted
-# in a separate request from the score, so the order we receive
-# them is somewhat arbitrary. we'll use this cache to track the
-# scoreids we've already received, so that when we receive a
-# performance report, we can check sql for the latest score
-# (probably will have some cache of it's own in the future) and
-# check if it's id is in the cache; if so, then we haven't
-# recevied our score yet, so we'll give it some time, this
-# way our report always gets submitted.
-'performance_reports': set() # {scoreid, ...}
-"""
-
-""" beatmap submission stuff
-# store the current available ids
-# for users submitting custom maps.
-# updated from sql on gulag startup.
-gulag_maps: dict[str, int] = {
-    'set_id': (1 << 30) - 1,
-    'id': (1 << 30) - 1
-}
-"""

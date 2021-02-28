@@ -111,6 +111,14 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 
 """ /web/ handlers """
 
+# TODO
+# POST /web/osu-error.php
+# POsT /web/osu-session.php
+# POST /web/osu-osz2-bmsubmit-post.php
+# POST /web/osu-osz2-bmsubmit-upload.php
+# GET /web/osu-osz2-bmsubmit-getid.php
+# GET /web/osu-get-beatmap-topic.php
+
 SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
@@ -364,58 +372,6 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
-#    # XXX: some work on gulag's possible future mirror
-#    query = conn.args['q'].replace('+', ' ') # TODO: allow empty
-#    offset = int(conn.args['p']) * 100
-#
-#    sql_query = [
-#        'SELECT DISTINCT set_id, artist, title,',
-#        'status, creator, last_update FROM maps',
-#        'LIMIT %s, 100'
-#    ]
-#
-#    sql_params = [offset]
-#
-#    # TODO: actually support the buttons lol
-#    if query not in ('Newest', 'Top Rated', 'Most Played'):
-#        # They're searching something specifically.
-#        sql_query.insert(2, 'WHERE title LIKE %s')
-#        sql_params.insert(0, f'%{query}%')
-#
-#    if not (res := await glob.db.fetchall(' '.join(sql_query), sql_params)):
-#        return b'-1\nNo matches found.'
-#
-#    # We'll construct the response as a list of
-#    # strings, then join and encode when returning.
-#    ret = [f'{len(res)}']
-#
-#    # For each beatmap set
-#    for bmapset in res:
-#        # retrieve the data for each difficulty
-#        if not (bmaps := await glob.db.fetchall(
-#            # Remove ',' from diffname since it's our split char.
-#            "SELECT REPLACE(version, ',', '') AS version, "
-#            'mode, cs, od, ar, hp, diff '
-#            'FROM maps WHERE set_id = %s '
-#            # Order difficulties by mode > star rating > ar.
-#            'ORDER BY mode ASC, diff ASC, ar ASC',
-#            [bmapset['set_id']]
-#        )):
-#            continue
-#
-#        # Construct difficulty-specific information.
-#        diffs = ','.join(
-#            '[{diff:.2f}⭐] {version} {{CS{cs} OD{od} AR{ar} HP{hp}}}@{mode}'.format(**row)
-#            for row in bmaps
-#        )
-#
-#        ret.append(
-#            '{set_id}.osz|{artist}|{title}|{creator}|'
-#            '{status}|10.0|{last_update}|{set_id}|' # TODO: rating
-#            '0|0|0|0|0|{diffs}'.format(**bmapset, diffs=diffs)
-#        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
-#
-#    return '\n'.join(ret).encode()
 
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
@@ -842,109 +798,6 @@ async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
     if replay_file.exists():
         return replay_file.read_bytes()
 
-# XXX: going to be slightly more annoying than expected to set this up :P
-#@domain.route('/web/osu-session.php', methods=['POST'])
-#@required_mpargs({'u', 'h', 'action'})
-#@get_login(name_p='u', pass_p='h')
-#async def osuSession(p: 'Player', conn: Connection) -> Optional[bytes]:
-#    mp_args = conn.multipart_args
-#
-#    if mp_args['action'] not in ('check', 'submit'):
-#        return # invalid action
-#
-#    if mp_args['action'] == 'submit':
-#        # client is submitting a performance session after a score
-#        # we'll save some basic information, and do some basic checks,
-#        # could surely be useful for anticheat and debugging purposes.
-#        data = orjson.loads(mp_args['content'])
-#
-#        if data['Tags']['Replay'] == 'True':
-#            # the user was viewing a replay,
-#            # no need to save to sql.
-#            return
-#
-#        # so, osu! sends a 'Fullscreen' param and a 'Beatmap'
-#        # param, but both of them are the fullscreen value? lol
-#
-#        op_sys = data['Tags']['OS']
-#        fullscreen = data['Tags']['Fullscreen'] == 'True'
-#        fps_cap = data['Tags']['FrameSync']
-#        compatibility = data['Tags']['Compatibility'] == 'True'
-#        version = data['Tags']['Version'] # osu! version
-#        start_time = data['StartTime']
-#        end_time = data['EndTime']
-#        frame_count = data['ProcessedFrameCount']
-#        spike_frames = data['SpikeFrameCount']
-#
-#        aim_rate = data['AimFrameRate']
-#        if aim_rate == 'Infinity':
-#            aim_rate = 0
-#
-#        completion = data['Completion']
-#        identifier = data['Identifier']
-#        average_frametime = data['AverageFrameTime'] * 1000
-#
-#        if identifier:
-#            point_of_interest()
-#
-#        # chances are, if we can't find a very
-#        # recent score by a user, it just hasn't
-#        # submitted yet.. we'll allow 5 seconds
-#
-#        rscore: Optional[Score] = None
-#        retries = 0
-#        ctime = time.time()
-#
-#        cache = glob.cache['performance_reports']
-#
-#        while retries < 5:
-#            if (rscore := p.recent_score) and rscore.id not in cache:
-#                # only accept scores submitted
-#                # within the last 5 seconds.
-#
-#                if ((ctime + retries) - (rscore.play_time - 5)) > 0:
-#                    break
-#
-#            retries += 1
-#            await asyncio.sleep(1)
-#        else:
-#            # STILL no score found..
-#            # this can happen if they submit a duplicate score,
-#            # perhaps i should add some kind of system to prevent
-#            # this from happening or re-think this overall.. i'd
-#            # imagine this can be useful for old client det. tho :o
-#            log('Received performance report but found no score', Ansi.LRED)
-#            return
-#
-#        # TODO: timing checks
-#
-#        #if version != p.osu_ver:
-#        #    point_of_interest()
-#
-#        # remember that we've already received a report
-#        # for this score, so that we don't overwrite it.
-#        glob.cache['performance_reports'].add(rscore.id)
-#
-#        await glob.db.execute(
-#            'INSERT INTO performance_reports VALUES '
-#            '(%s, %s, %s, %s, %s, %s, %s,'
-#            ' %s, %s, %s, %s, %s, %s, %s)', [
-#                rscore.id,
-#                op_sys, fullscreen, fps_cap,
-#                compatibility, version,
-#                start_time, end_time,
-#                frame_count, spike_frames,
-#                aim_rate, completion,
-#                identifier, average_frametime
-#            ]
-#        )
-#
-#    else:
-#        # TODO: figure out what this wants?
-#        # seems like it adds the response from server
-#        # to some kind of internal buffer, dunno why tho
-#        return
-
 @domain.route('/web/osu-rate.php')
 @required_args({'u', 'p', 'c'})
 @get_login(name_p='u', pass_p='p', auth_error=b'auth fail')
@@ -1310,10 +1163,6 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
 async def osuSeasonal(conn: Connection) -> Optional[bytes]:
     return orjson.dumps(glob.config.seasonal_bgs)
 
-@domain.route('/web/osu-error.php', methods=['POST'])
-async def osuError(conn: Connection) -> Optional[bytes]:
-    ...
-
 @domain.route('/web/bancho_connect.php')
 async def banchoConnect(conn: Connection) -> Optional[bytes]:
     if 'v' in conn.args:
@@ -1364,483 +1213,53 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 
     return result
 
-""" TODO: beatmap submission system
-@domain.route('/web/osu-osz2-bmsubmit-post.php', methods=['POST'])
-async def osuBMSubmitPost(conn: Connection) -> Optional[bytes]:
-    ...
-
-required_params_bmsubmit_upload = frozenset({
-    'u', 'h', 't', 'vv', 'z', 's'
-})
-@domain.route('/web/osu-osz2-bmsubmit-upload.php', methods='POST')
-async def osuBMSubmitUpload(conn: Connection) -> Optional[bytes]:
-    mp_args = conn.multipart_args
-
-    if not all([x in mp_args for x in required_params_bmsubmit_upload]):
-        log(f'bmsubmit-upload req missing params.', Ansi.LRED)
-        return b'-1'
-
-    # from:
-    # t: is_full_submit (1/0)
-    # vv: version (2)
-    # z: string.Empty
-    # s: mapset_id
-    # osz (file): osu beatmap
-
-    #'u':'cmyui'
-    #'h':'hasdasd'
-    #'t':'1'
-    #'vv':'2'
-    #'z':''
-    #'s':'1073741823'
-
-    # to:
-    # err: -1, 0: fine
-
-    if not 'osz2' in conn.files:
-        log(f'bmsubmit-upload sent without an osz2.', Ansi.LRED)
-        return b'-1'
-
-    if not _isdecimal(mp_args['s'], _negative=True):
-        return b'-1\nInvalid submission.'
-
-    full_submit = mp_args['t'] == '1'
-    map_set_id = int(mp_args['s'])
-
-    map_info = await glob.db.fetch(
-        'SELECT creator, status '
-        'FROM maps WHERE set_id = %s '
-        'AND server = "gulag"',
-        [map_set_id]
-    )
-
-    if full_submit and map_info is not None:
-        point_of_interest()
-        return b'-1' # already exists?
-
-    # TODO: move all this stuff out of here lol
-
-    import io, struct
-
-    class BytesIOWrapper(io.BytesIO):
-        def read_uleb128(self) -> int:
-            val = shift = 0
-
-            while True:
-                b = self.read(1)[0]
-
-                val |= (b & 0b01111111) << shift
-                if (b & 0b10000000) == 0:
-                    break
-
-                shift += 7
-
-            return val
-
-        def read_string(self) -> str:
-            s_len = self.read_uleb128()
-            return self.read(s_len).decode()
-
-        def write_uleb128(self, num: int) -> None:
-            if num == 0:
-                return bytearray(b'\x00')
-
-            data = bytearray()
-            length = 0
-
-            while num > 0:
-                data.append(num & 0b01111111)
-                num >>= 7
-                if num != 0:
-                    data[length] |= 0b10000000
-                length += 1
-
-            self.write(data)
-
-        def write_string(self, s: str) -> None:
-            s_encoded = s.encode()
-            self.write_uleb128(len(s_encoded))
-            self.write(s_encoded)
-
-    def get_osz_hash(buf: bytes, pos: int, swap: int) -> bytes:
-        _buf = bytearray(buf)
-
-        _buf[pos] ^= swap
-        hash = bytearray(hashlib.md5(buf).digest())
-        _buf[pos] ^= swap
-
-        for i in range(8):
-            tmp = hash[i]
-            hash[i] = hash[i + 8]
-            hash[i + 8] = tmp
-
-        hash[5] ^= 0x2d
-        return bytes(hash)
-
-    from enum import IntEnum, unique
-    @unique
-    @pymysql_encode(escape_enum)
-    class MapMetaType(IntEnum):
-        Title = 0,
-        Artist = 1,
-        Creator = 2,
-        Version = 3,
-        Source = 4,
-        Tags = 5,
-        VideoDataOffset = 6,
-        VideoDataLength = 7,
-        VideoHash = 8,
-        BeatmapSetID = 9,
-        Genre = 10,
-        Language = 11,
-        TitleUnicode = 12,
-        ArtistUnicode = 13,
-        Unknown = 9999,
-        Difficulty = 10000,
-        PreviewTime = 10001,
-        ArtistFullName = 10002,
-        ArtistTwitter = 10003,
-        SourceUnicode = 10004,
-        ArtistUrl = 10005,
-        Revision = 10006,
-        PackId = 10007
-
-    class MapPackage:
-        def __init__(self) -> None:
-            ...
-            #self._data = b''
-            #self._offs = 0
-            self.key = b''
-            self.offset_fileinfo = -1
-            self.offset_data = -1
-
-        @classmethod
-        def decompress(cls, data: bytes):
-            package = cls()
-
-            # read & check header
-            reader = BytesIOWrapper(data)
-
-            if reader.read(3) != b'\xecHO':
-                raise Exception
-
-            writer = BytesIOWrapper()
-
-            # TODO: f.read1? unsure but we
-            #       already have full content
-
-            version = reader.read(1)
-
-            iv = bytearray(reader.read(16))
-            hash_meta = reader.read(16)
-            hash_info = reader.read(16)
-            hash_body = reader.read(16)
-
-            MapMetaType_values = MapMetaType._value2member_map_
-
-            metadata = {}
-
-            count = struct.unpack('<i', reader.read(4))[0]
-            writer.write(struct.pack('<i', count)) # lol
-
-            for _ in range(count):
-                k = struct.unpack('<h', reader.read(2))[0]
-                v = reader.read_string()
-
-                if k in MapMetaType_values:
-                    metadata |= {MapMetaType(k): v}
-
-                writer.write(struct.pack('<h', k))
-                writer.write_string(v)
-
-            # TODO: compare writer byte sequence w/ oszhash, MapPackage:220
-            writer.flush()
-
-            writer.seek(0, io.SEEK_SET)
-            osz_hash = get_osz_hash(writer.read(), count * 3, 0xa7)
-
-            # TODO: figure this out lol..
-            #if osz_hash != hash_meta:
-            #    raise Exception
-
-            writer.close()
-
-            map_ids_files = {}
-            num3 = struct.unpack('<i', reader.read(4))[0]
-            for _ in range(num3):
-                # yes, i know osu! stores them
-                # the opposite way around..
-                filename = reader.read_string()
-                map_id = struct.unpack('<i', reader.read(4))[0]
-                map_ids_files |= {map_id: filename}
-
-            if not package.key:
-                seed = f'{metadata[MapMetaType.Creator]}yhxyfjo5{metadata[MapMetaType.BeatmapSetID]}'
-                package.key = hashlib.md5(seed.encode()).digest()
-
-            # TODO: metadataonly?
-            # else:
-            #  vvv doPostProcessing vvv
-
-            import xtea, xxtea
-            # ROUNDS = 32, DELTA = 0x9e3779b9
-
-            # check whether we have the correct key
-            # TODO: figure this out (knownPlain random wtf?? proly dont understand)
-            x = xtea.new(package.key, rounds=32, mode=xtea.MODE_ECB)
-            text = x.decrypt(reader.read(64))
-
-            package.offset_fileinfo = reader.tell()
-
-            # read & 'decode' fileinfo length
-            length = struct.unpack('<i', reader.read(4))[0]
-            for i in range(0, 16, 2):
-                length -= hash_info[i] | (hash_info[i + 1] << 17)
-
-            # read fileinfo
-            fileinfo = reader.read(length)
-            package.offset_data = reader.tell()
-
-            # 'decode' iv
-            for i in range(16):
-                iv[i] ^= hash_body[i % 16]
-
-            # aes decrypt fileinfo
-            # BlockSizeValue: 128
-            # FeedbackSizeValue: 8
-            # KeySizeValue: 256
-            # ModeValue: CipherMode.CBC
-            # s_legalBlockSizes: 128, 128, 0
-            # s_legalKeySizes: 128, 256, 64
-            if len(fileinfo) % 8 != 0:
-                fileinfo=fileinfo.zfill(len(fileinfo) & ~0b0111)
-            print(len(fileinfo))
-            fi_reader = BytesIOWrapper(xxtea.decrypt(fileinfo, package.key, padding=True))
-
-            from py3rijndael import RijndaelCbc, Pkcs7Padding
-            aes = RijndaelCbc(package.key, iv, Pkcs7Padding(32), 16)
-
-            count = struct.unpack('<i', fi_reader.read(4))[0]
-
-            osz_hash = get_osz_hash(fileinfo, count * 4, 0xd1)
-            if osz_hash != hash_info:
-                ...
-
-            offset_cur = struct.unpack('<i', fi_reader.read(4))[0]
-            for i in range(count):
-                name = fi_reader.read_string()
-                file_hash = fi_reader.read(16)
-                from datetime import datetime
-                file_created = datetime.fromtimestamp(float(struct.unpack('<q', reader.read(8))[0]))
-                ...
-
-            reader.close()
-            ...
-
-    # parse beatmap, add to sql & save to disk.
-    from cmyui.osu import Beatmap
-    import gzip
-    package = MapPackage.decompress(conn.files['osz2'])
-
-    #bmap._data = gzip.decompress(conn.files['osz2']).decode()
-    #bmap._offset = 0
-    #bmap._parse()
-
-    return b'0'
-
-required_params_bmsubmit_gettopic = frozenset({
-    'u', 'h', 's', 'vv'
-})
-@domain.route('/web/osu-get-beatmap-topic.php')
-async def osuGetBeatmapTopic(conn: Connection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_bmsubmit_gettopic):
-        log(f'bmsubmit-getid req missing params.', Ansi.LRED)
-        return
-
-    # from:
-    # s: mapset_id
-    # vv: version (2)
-
-    # to:
-    # b'\x03'.join('0', thread_id, '', old_forum_msg)
-
-    thread_id = 0x69
-    old_forum_msg = 'TODO'
-
-    # TODO: find out when to not return 0?
-    # BeatmapSubmissionSystem:271
-    return '\x03'.join([
-        '0',
-        str(thread_id),
-        '', # ??
-        old_forum_msg
-    ]).encode()
-
-required_params_bmsubmit_getid = frozenset({
-    'u', 'h', 's', 'b', 'z', 'vv'
-})
-@domain.route('/web/osu-osz2-bmsubmit-getid.php')
-async def osuBMSubmitGetID(conn: Connection) -> Optional[bytes]:
-    if not all(x in conn.args for x in required_params_bmsubmit_getid):
-        log(f'bmsubmit-getid req missing params.', Ansi.LRED)
-        return
-
-    # from:
-    # s: mapset_id
-    # b: ','.join(map_ids)
-    # z: map md5 hash
-    # vv: version (2)
-
-    # to:
-    #resultSplit = responseString.split('\n')
-
-    # idx 0:
-    #    case 0: no err
-    #    case 1: ownership err
-    #    case 2: no longer available
-    #    case 3: already ranked
-    #    case 4: in graveyard - should ungraveyard?
-    #    default: err = idx 1
-    # ^^ all errs simply end the request
-
-    # idx 1: new_set_id
-    # idx 2: ','.join(new_map_ids)
-    # idx 3: flag (TODO)
-    # idx 4: submission quota left
-    # --- optional params ----
-    # idx 5: bubble pop (1/0)
-    # idx 6: approved
-    # idx 7: (if not flag): watchlist [else watchlist = notifysubmittedthread.Value]
-
-    # idx 3:
-    #   flag (watchlist)
-    #
-    # TODO: look into watchlist
-    #       and loadSubmittedThread
-    #       and notifySubmittedThread
-
-    ## new map
-    # 'u':'cmyui'
-    # 'h':'yeah'
-    # 's':'-1'
-    # 'b':'0,0,0,0'
-    # 'z':''
-    # 'vv':'2'
-
-    # 0
-    # 1346942 (set_id)
-    # 2789326,2789327,2789328,2789329 (bmap_ids)
-    # 1 (flag)
-    # 8 (quota)
-    # 0 (bubble pop)
-    #   (approved)
-    # 1 (watchlist)
-
-
-    ## pre-existing map
-    # 'u':'cmyui'
-    # 'h':'yeah'
-    # 's':'517402'
-    # 'b':'1099369'
-    # 'z':''
-    # 'vv':'2'
-
-    ## (update)
-    # 0
-    # 1346968 (set_id)
-    # 2789389 (bmap_ids)
-    # 2 (flag)
-    # 7 (quota)
-    # 0 bubble pop)
-    # -1 (approved)
-    # 0 (watchlist)
-
-    pname = unquote(conn.args['u'])
-    phash = conn.args['h']
-
-    if not (p := await glob.players.get_login(pname, phash)):
-        return
-
-    map_ids = conn.args['b'].split(',')
-
-    if (
-        not _isdecimal(conn.args['s'], _negative=True) or
-        not all([x.isdecimal() for x in map_ids])
-    ):
-        return b'-1\nInvalid submission.'
-
-    map_ids = [int(x) for x in map_ids]
-    map_set_id = int(conn.args['s'])
-
-    if map_set_id > 0:
-        map_info = await glob.db.fetch(
-            'SELECT creator, status '
-            'FROM maps WHERE set_id = %s '
-            'AND server = "gulag"',
-            [map_set_id]
-        )
-    elif map_set_id == -1:
-        map_info = None
-    else:
-        return b'-1\nInvalid submission.'
-
-    # TODO: quota/ratelimit?
-    # does quota only apply for new maps?
-
-    if full_submit := map_info is None:
-        # new submission, generate set & map ids.
-        # TODO: store these changes in sql somewhere
-
-        # take & consume a set id
-        _maps = glob.gulag_maps
-        map_set_id = _maps['set_id']
-        _maps['set_id'] += 1
-
-        # take & consume a map id for each diff
-        for idx in range(len(map_ids)):
-            map_ids[idx] = _maps['id']
-            _maps['id'] += 1
-
-        # no need to return any ranked status.
-        status = None
-    else:
-        # NOTE: gulag ids start halfway through the 4 bytes,
-        # avoiding data collision with osu! for a looong time.
-        if map_set_id < (1 << 30) - 1:
-            return b'-1\nNon-gulag mapset; cannot update.'
-
-        if p.name != map_info['creator']:
-            return b'1\n' # auth err
-
-        # disallow updates on maps with leaderboards.
-        # TODO: perhaps allow for loved & qualified maps?
-        status = RankedStatus(map_info['status'])
-        if status >= RankedStatus.Ranked:
-            return b'3\n' # ranked err
-
-        # TODO: maybe implement graveyard/wip maps..? probably not
-        ...
-
-    # TODO: at the moment to not make the table any uglier than I have to,
-    # creator will be stored in `maps` as a string.. This isn't great ://
-    return '\n'.join([
-        '0', # no error
-        str(map_set_id),
-        ','.join(map(str, map_ids)),
-        '1' if full_submit else '2', # flag
-        '5', # TODO: quota
-        '0', # bubble pop
-        str(status.osu_api) if status else '',
-        '1' if full_submit else '0' # watchlist
-    ]).encode()
-"""
-
 """ /api/ Handlers """
 # TODO: add oauth so we can do more stuff owo..
 # also, give me ideas for api things
 # POST /api/set_avatar
 
 JSON = orjson.dumps
+
+@domain.route('/api/get_map_info')
+async def api_get_map_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given beatmap."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid map id.')
+        bmap = await Beatmap.from_bid(int(conn.args['id']))
+    elif 'md5' in conn.args:
+        if len(conn.args['md5']) != 32:
+            return (400, b'Invalid map md5.')
+        bmap = await Beatmap.from_md5(conn.args['md5'])
+    else:
+        return (400, b'Must provide either id or md5!')
+
+
+    if not bmap:
+        return (404, b'Map not found.')
+
+    return JSON({ # really?
+        'md5': bmap.md5,
+        'id': bmap.id,
+        'set_id': bmap.set_id,
+        'artist': bmap.artist,
+        'title': bmap.title,
+        'version': bmap.version,
+        'creator': bmap.creator,
+        'last_update': bmap.last_update,
+        'total_length': bmap.total_length,
+        'max_combo': bmap.max_combo,
+        'status': bmap.status,
+        'plays': bmap.plays,
+        'passes': bmap.passes,
+        'mode': bmap.mode,
+        'bpm': bmap.bpm,
+        'cs': bmap.cs,
+        'od': bmap.od,
+        'ar': bmap.ar,
+        'hp': bmap.hp,
+        'diff': bmap.diff
+    })
 
 @domain.route('/api/get_online')
 async def api_get_online(conn: Connection) -> Optional[bytes]:
@@ -2002,71 +1421,63 @@ async def api_calc_pp(conn: Connection) -> Optional[bytes]:
 
 @domain.route('/api/get_scores')
 async def api_get_scores(conn: Connection) -> Optional[bytes]:
-    if 'name' not in conn.args and 'id' not in conn.args:
-        return (400, b'Must provide either player id or name!')
+    if (
+        'relation' not in conn.args or
+        conn.args['relation'] not in ('recent', 'best')
+    ):
+        return (400, b'Must provide valid relation (recent/best).')
+
+    relation = conn.args['relation']
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, b'Invalid player id.')
-
-        pid = conn.args['id']
-    else:
-        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+        p = await glob.players.get_ensure(id=int(conn.args['id']))
+    elif 'name' in conn.args:
+        if not 0 < len(conn.args['name']) <= 16:
             return (400, b'Invalid player name.')
-
-        # get their id from username.
-        pid = await glob.db.fetch(
-            'SELECT id FROM users '
-            'WHERE safe_name = %s',
-            [name]
-        )
-
-        if not pid:
-            return (404, b'User not found.')
-
-        pid = pid['id']
-
-    if 'mods' in conn.args:
-        if not conn.args['mods'].isdecimal():
-            return (400, b'Invalid mods.')
-
-        mods = Mods(int(conn.args['mods']))
-
-        if mods & Mods.RELAX:
-            mods &= ~Mods.RELAX
-            table = 'scores_rx'
-        elif mods & Mods.AUTOPILOT:
-            mods &= ~Mods.AUTOPILOT
-            table = 'scores_ap'
-        else:
-            table = 'scores_vn'
+        p = await glob.players.get_ensure(name=conn.args['name'])
     else:
-        mods = Mods.NOMOD
-        table = 'scores_vn'
+        return (400, b'Must provide either id or name.')
+
+    if not p:
+        return (404, b'Player not found.')
+
+    if 'mode' in conn.args:
+        if (
+            not conn.args['mode'].isdecimal() or
+            not 0 <= (mode := int(conn.args['mode'])) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
 
     if 'limit' in conn.args:
-        if not conn.args['limit'].isdecimal():
+        if (
+            not conn.args['limit'].isdecimal() or
+            not 0 < (limit := int(conn.args['limit'])) <= 100
+        ):
             return (400, b'Invalid limit.')
-
-        limit = min(int(conn.args['limit']), 100)
     else:
-        limit = 100
+        limit = 25
 
-    query = ['SELECT id, map_md5, score, pp, acc, max_combo, mods, '
-             'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
-             'mode, play_time, time_elapsed, userid, perfect '
-             f'FROM {table} WHERE userid = %s']
-    params = [pid]
+    table = mode.sql_table
+    sort = 'pp' if relation == 'best' else 'play_time'
 
-    if mods:
-        query.append('WHERE mods & %s > 0')
-        params.append(mods)
+    res = await glob.db.fetchall(
+        'SELECT id, map_md5, score, pp, acc, max_combo, '
+        'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
+        'status, mode, play_time, time_elapsed, perfect '
+        f'FROM {table} '
+        'WHERE userid = %s '
+        f'ORDER BY {sort} DESC '
+        'LIMIT %s',
+        [p.id, limit]
+    )
 
-    query.append('ORDER BY id DESC LIMIT %s')
-    params.append(limit)
-
-    res = await glob.db.fetchall(' '.join(query), params)
-    return orjson.dumps(res) if res else b'No scores found.'
+    return JSON(res)
 
 """ Misc handlers """
 

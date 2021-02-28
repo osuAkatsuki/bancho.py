@@ -100,18 +100,6 @@ async def setup_collections() -> None:
         # NOTE: achievements are grouped by modes internally.
         glob.achievements[res['mode']].append(achievement)
 
-    """ XXX: Unfinished code for beatmap submission.
-    # get the latest set & map id offsets for custom maps.
-    maps_res = await glob.db.fetch(
-        'SELECT id, set_id FROM maps '
-        'WHERE server = "gulag" '
-        'ORDER BY id ASC LIMIT 1'
-    )
-
-    if maps_res:
-        glob.gulag_maps = maps_res
-    """
-
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
@@ -161,7 +149,9 @@ if __name__ == '__main__':
     # make sure oppai-ng is built and ready.
     if not (Path.cwd() / 'oppai-ng/oppai').exists():
         glob.oppai_built = False
-        log('no oppai-ng binary found! please compile (setup instructions in README).', Ansi.LRED)
+        log('No oppai-ng compiled binary found. PP for all '
+            'scores will be set to 0; instructions can be '
+            'found in the README file.', Ansi.LRED)
     else:
         glob.oppai_built = True
 
