@@ -1234,7 +1234,6 @@ async def api_get_map_info(conn: Connection) -> Optional[bytes]:
     else:
         return (400, b'Must provide either id or md5!')
 
-
     if not bmap:
         return (404, b'Map not found.')
 
