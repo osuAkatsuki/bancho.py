@@ -653,10 +653,7 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             )
 
             for o in glob.players:
-                if not o.restricted:
-                    o.enqueue(user_data)
-
-                o.achievements
+                o.enqueue(user_data)
 
             glob.players.append(fake)
             _fake_users.append(fake)
@@ -1079,7 +1076,7 @@ async def mp_invite(p: Player, m: 'Match', msg: Sequence[str]) -> str:
     if not (t := glob.players.get(name=msg[0])):
         return 'Could not find a user by that name.'
     elif t is glob.bot:
-        p.send(glob.bot, "I'm too busy!")
+        p.send("I'm too busy!", sender=glob.bot)
         return
 
     if p is t:
@@ -1724,7 +1721,7 @@ async def clan_create(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # announce clan creation
     if announce_chan := glob.channels['#announce']:
         msg = f'\x01ACTION founded {clan!r}.'
-        announce_chan.send(p, msg, to_self=True)
+        announce_chan.send(msg, sender=p, to_self=True)
 
     return f'{clan!r} created.'
 
@@ -1773,7 +1770,7 @@ async def clan_disband(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # announce clan disbanding
     if announce_chan := glob.channels['#announce']:
         msg = f'\x01ACTION disbanded {clan!r}.'
-        announce_chan.send(p, msg, to_self=True)
+        announce_chan.send(msg, sender=p, to_self=True)
 
     return f'{clan!r} disbanded.'
 

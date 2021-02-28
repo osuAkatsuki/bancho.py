@@ -210,9 +210,8 @@ class PlayerList(list):
         if not res:
             return
 
-        # overwrite some things with classes
-        res['priv'] = Privileges(res['priv'])
-        res['pw_bcrypt'] = bytes(res['pw_bcrypt'], encoding='utf-8')
+        # encode pw_bcrypt from str -> bytes.
+        res['pw_bcrypt'] = res['pw_bcrypt'].encode()
 
         if res['clan_id'] != 0:
             res['clan'] = glob.clans.get(id=res['clan_id'])
@@ -220,7 +219,7 @@ class PlayerList(list):
         else:
             res['clan'] = res['clan_priv'] = None
 
-        return Player(**res)
+        return Player(**res, token='')
 
     async def get_ensure(self, **kwargs) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""

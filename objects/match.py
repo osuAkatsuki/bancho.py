@@ -454,7 +454,7 @@ class Match:
         scores, didnt_submit = await self.await_submissions(was_playing)
 
         for p in didnt_submit:
-            self.chat.send(glob.bot, f"{p} didn't submit a score (timeout: 10s).")
+            self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
 
         if scores:
             ffa = self.team_type in (MatchTeamTypes.head_to_head,
@@ -549,11 +549,13 @@ class Match:
                     msg.append(f'Total Score: {wname} | {wmp} - {lmp} | {lname}')
 
             if didnt_submit:
-                self.chat.send(glob.bot, "If you'd like to perform a rematch, "
-                                               "please use the `!mp rematch` command.")
+                self.chat.send_bot(
+                    "If you'd like to perform a rematch, "
+                    "please use the `!mp rematch` command."
+                )
 
             for line in msg:
-                self.chat.send(glob.bot, line)
+                self.chat.send_bot(line)
 
         else:
-            self.chat.send(glob.bot, 'Scores could not be calculated.')
+            self.chat.send_bot('Scores could not be calculated.')

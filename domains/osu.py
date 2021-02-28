@@ -602,7 +602,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
 
             s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
-            announce_chan.send(s.player, ' '.join(ann), to_self=True)
+            announce_chan.send(' '.join(ann), sender=s.player, to_self=True)
 
         # Our score is our best score.
         # Update any preexisting personal best

@@ -148,8 +148,11 @@ class Player:
         self.pw_bcrypt = extras.get('pw_bcrypt', None)
 
         # generate a token if not given
-        self.token = (extras.get('token', None) or
-                      self.generate_token())
+        token = extras.get('token', None)
+        if token is not None:
+            self.token = token
+        else:
+            self.token = self.generate_token()
 
         # ensure priv is of type Privileges
         self.priv = (priv if isinstance(priv, Privileges) else
@@ -929,14 +932,14 @@ class Player:
             self._queue.clear()
             return data
 
-    def send(self, client: 'Player', msg: str,
-                   chan: Optional[Channel] = None) -> None:
-        """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
+    def send(self, msg: str, sender: 'Player',
+             chan: Optional[Channel] = None) -> None:
+        """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             packets.sendMessage(
-                client = client.name,
+                client = sender.name,
                 msg = msg,
                 target = (chan or self).name,
-                client_id = client.id
+                client_id = sender.id
             )
         )

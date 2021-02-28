@@ -227,14 +227,22 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         if cmd:
             # a command was triggered.
             if not cmd['hidden']:
-                t_chan.send(p, msg)
+                t_chan.send(msg, sender=p)
                 if 'resp' in cmd:
                     t_chan.send_bot(cmd['resp'])
             else:
                 staff = glob.players.staff
-                t_chan.send_selective(p, msg, staff - {p})
+                t_chan.send_selective(
+                    msg = msg,
+                    sender = p,
+                    targets = staff - {p}
+                )
                 if 'resp' in cmd:
-                    t_chan.send_selective(glob.bot, cmd['resp'], staff | {p})
+                    t_chan.send_selective(
+                        msg = cmd['resp'],
+                        sender = glob.bot,
+                        targets = staff | {p}
+                    )
 
         else:
             # no commands were triggered
@@ -269,7 +277,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                     # time out their previous /np
                     p.last_np['timeout'] = 0
 
-            t_chan.send(p, msg)
+            t_chan.send(msg, sender=p)
 
         await p.update_latest_activity()
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
@@ -668,7 +676,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             f'[osu://dl/{server_stats} server_stats]',
         )
 
-        p.send(glob.bot, ' '.join(admin_panel))
+        p.send(' '.join(admin_panel), sender=glob.bot)
     """
 
     # add `p` to the global player list,
@@ -785,7 +793,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            p.send(t, t.away_msg)
+            p.send(t.away_msg, sender=t)
 
         if t is glob.bot:
             # may have a command in the message.
@@ -795,7 +803,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             if cmd:
                 # command triggered, send response if any.
                 if 'resp' in cmd:
-                    p.send(t, cmd['resp'])
+                    p.send(cmd['resp'], sender=t)
             else:
                 # no commands triggered.
                 if match := regexes.now_playing.match(msg):
@@ -856,12 +864,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         # time out their previous /np
                         p.last_np['timeout'] = 0
 
-                    p.send(t, msg)
+                    p.send(msg, sender=t)
 
         else:
             # target is not aika, send the message normally if online
             if t.online:
-                t.send(p, msg)
+                t.send(msg, sender=p)
             else:
                 # inform user they're offline, but
                 # will receive the mail @ next login.
@@ -912,7 +920,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
-            p.send(glob.bot, 'Failed to create match (no slots available).')
+            p.send('Failed to create match (no slots available).', sender=glob.bot)
             p.enqueue(packets.matchJoinFail())
             return
 
@@ -1464,7 +1472,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
         elif t is glob.bot:
-            p.send(glob.bot, "I'm too busy!")
+            p.send("I'm too busy!", sender=glob.bot)
             return
 
         t.enqueue(packets.matchInvite(p, t.name))
