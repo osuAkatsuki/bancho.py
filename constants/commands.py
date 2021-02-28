@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import copy
 import importlib
 import random
 import re
@@ -606,10 +607,11 @@ async def switchserv(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 """
 
 _fake_users = []
-@command(Privileges.Dangerous)
+@command(Privileges.Dangerous, aliases=['fu'])
 async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Add a specified number of fake presences to the online player list."""
     # NOTE: this is mostly just for speedtesting things regarding presences/stats.
+    # it's implementation is indeed quite cursed (for speed).
     if (
         len(msg) != 2 or
         msg[0] not in ('add', 'rm') or
@@ -619,6 +621,11 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     action = msg[0]
     amount = int(msg[1])
+
+    # data to send to clients (all new user info)
+    data = bytearray()
+
+    MID_ID = 0x7fffffff >> 1
 
     if action == 'add':
         extras = { # non important stuff
@@ -630,48 +637,68 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             'clan_priv': None
         }
 
-        import copy # XXX
+        data = bytearray()
+        _stats = packets.userStats(p)
+
+        if _fake_users:
+            _max_used = max([x.id for x in _fake_users]) - MID_ID
+        else:
+            _max_used = 0
+
+        _start = MID_ID + _max_used
+        _end = _start + amount
 
         # {id, name, priv, pw_bcrypt, silence_end}
-        start_id = 0x7fffffff >> 1
-        for i in range(amount):
+        for i in range(_start, _end):
             fake = Player(
-                id = start_id + i,
-                name = str(start_id + i),
+                id = i,
+                name = f'fake #{i}',
                 priv = Privileges.Normal | Privileges.Verified,
                 silence_end = 0,
                 **extras
             )
 
-            for mode in GameMode:
-                fake.recent_scores[mode] = copy.copy(p.recent_scores[mode])
-                fake.stats[mode] = copy.copy(p.stats[mode])
+            mode = GameMode.vn_std
+            fake.stats[mode] = copy.copy(p.stats[mode])
 
-            user_data = (
-                packets.userPresence(fake) +
-                packets.userStats(fake)
-            )
-
-            for o in glob.players:
-                o.enqueue(user_data)
+            data += packets.userPresence(fake) + _stats
 
             glob.players.append(fake)
             _fake_users.append(fake)
-        return 'Added.'
+
+        data = bytes(data)
+        for o in [x for x in glob.players if x.id < MID_ID]:
+            o.enqueue(data)
+
+        msg = 'Added.'
     else: # remove
         len_fake_users = len(_fake_users)
         if amount > len_fake_users:
             return f'Too many! only {len_fake_users} remaining.'
 
         to_remove = _fake_users[:amount]
+        data = bytearray()
+        _data = b'\x0c\x00\x00\x05\x00\x00\x00'
+
         for fake in to_remove:
-            user_data = packets.logout(fake.id)
-            for o in glob.players:
-                o.enqueue(user_data)
+            if not fake.online:
+                # already auto-dced
+                _fake_users.remove(fake)
+                continue
+
+            data += _data + fake.id.to_bytes(4, 'little') + b'\x00'
 
             glob.players.remove(fake)
             _fake_users.remove(fake)
-        return 'Removed.'
+
+        data = bytes(data)
+        msg = 'Removed.'
+
+    # only enqueue data to real users.
+    for o in [x for x in glob.players if x.id < MID_ID]:
+        o.enqueue(data)
+
+    return msg
 
 @command(Privileges.Dangerous)
 async def stealth(p: Player, c: Messageable, msg: Sequence[str]) -> str:
