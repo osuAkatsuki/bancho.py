@@ -621,54 +621,53 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
     action = msg[0]
     amount = int(msg[1])
+    if not 0 < amount <= 5000:
+        return 'Amount must be in range 0-5000.'
+
+    # we start at half way through
+    # the i32 space for fake user ids.
+    FAKE_ID_START = 0x7fffffff >> 1
 
     # data to send to clients (all new user info)
     data = bytearray()
 
-    MID_ID = 0x7fffffff >> 1
-
     if action == 'add':
-        extras = { # non important stuff
+        const_uinfo = { # non important stuff
             'utc_offset': 0,
             'osu_ver': 'dn',
             'pm_private': False,
             'login_time': 0,
             'clan': None,
-            'clan_priv': None
+            'clan_priv': None,
+            'priv': Privileges.Normal | Privileges.Verified,
+            'silence_end': 0,
+            'login_time': 0x7fffffff # never auto-dc
         }
 
         data = bytearray()
         _stats = packets.userStats(p)
 
         if _fake_users:
-            _max_used = max([x.id for x in _fake_users]) - MID_ID
+            current_fakes = max([x.id for x in _fake_users]) - (FAKE_ID_START - 1)
         else:
-            _max_used = 0
+            current_fakes = 0
 
-        _start = MID_ID + _max_used
-        _end = _start + amount
+        start_id = FAKE_ID_START + current_fakes
+        end_id = start_id + amount
+        vn_std = GameMode.vn_std
 
-        # {id, name, priv, pw_bcrypt, silence_end}
-        for i in range(_start, _end):
-            fake = Player(
-                id = i,
-                name = f'fake #{i}',
-                priv = Privileges.Normal | Privileges.Verified,
-                silence_end = 0,
-                **extras
-            )
+        for i in range(start_id, end_id):
+            name = f'fake #{i - (FAKE_ID_START - 1)}'
+            fake = Player(id=i, name=name, **const_uinfo)
 
-            mode = GameMode.vn_std
-            fake.stats[mode] = copy.copy(p.stats[mode])
+            # copy vn_std stats (just for rank lol, could optim)
+            fake.stats[vn_std] = copy.copy(p.stats[vn_std])
 
-            data += packets.userPresence(fake) + _stats
+            data += packets.userPresence(fake) # <- uses rank
+            data += _stats
 
             glob.players.append(fake)
             _fake_users.append(fake)
-
-        data = bytes(data)
-        for o in [x for x in glob.players if x.id < MID_ID]:
-            o.enqueue(data)
 
         msg = 'Added.'
     else: # remove
@@ -676,7 +675,7 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         if amount > len_fake_users:
             return f'Too many! only {len_fake_users} remaining.'
 
-        to_remove = _fake_users[:amount]
+        to_remove = _fake_users[len_fake_users - amount:]
         data = bytearray()
         _data = b'\x0c\x00\x00\x05\x00\x00\x00'
 
@@ -686,16 +685,19 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
                 _fake_users.remove(fake)
                 continue
 
-            data += _data + fake.id.to_bytes(4, 'little') + b'\x00'
+            data += _data
+            data += fake.id.to_bytes(4, 'little')
+            data += b'\x00'
 
             glob.players.remove(fake)
             _fake_users.remove(fake)
 
-        data = bytes(data)
         msg = 'Removed.'
 
+    data = bytes(data)
+
     # only enqueue data to real users.
-    for o in [x for x in glob.players if x.id < MID_ID]:
+    for o in [x for x in glob.players if x.id < FAKE_ID_START]:
         o.enqueue(data)
 
     return msg
