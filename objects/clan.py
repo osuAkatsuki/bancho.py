@@ -45,13 +45,13 @@ class Clan:
 
         await glob.db.execute(
             'UPDATE users '
-            'SET clan_id = %s, clan_rank = 1 '
+            'SET clan_id = %s, clan_priv = 1 '
             'WHERE id = %s',
             [self.id, p.id]
         )
 
         p.clan = self
-        p.clan_rank = ClanPrivileges.Member
+        p.clan_priv = ClanPrivileges.Member
 
     async def remove_member(self, p: 'Player') -> None:
         """Remove a given player from the clan's members."""
@@ -59,7 +59,7 @@ class Clan:
 
         await glob.db.execute(
             'UPDATE users '
-            'SET clan_id = 0, clan_rank = 0 '
+            'SET clan_id = 0, clan_priv = 0 '
             'WHERE id = %s',
             [p.id]
         )
@@ -92,7 +92,7 @@ class Clan:
             )
 
         p.clan = None
-        p.clan_rank = None
+        p.clan_priv = None
 
     async def members_from_sql(self) -> None:
         """Fetch all members from sql."""

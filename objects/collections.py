@@ -4,7 +4,9 @@
 # in a lot of these classes; needs refactor.
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
+from typing import Optional
+from typing import Iterator
 from typing import TYPE_CHECKING
 from typing import Union
 
@@ -31,6 +33,9 @@ __all__ = (
 
 class ChannelList(list):
     """The currently active chat channels on the server."""
+
+    def __iter__(self) -> Iterator['Channel']:
+        return super().__iter__()
 
     def __contains__(self, o: Union['Channel', str]) -> bool:
         """Check whether internal list contains `o`."""
@@ -81,6 +86,9 @@ class MatchList(list):
         super().__init__()
         self.extend([None] * 32)
 
+    def __iter__(self) -> Iterator['Match']:
+        return super().__iter__()
+
     def __repr__(self) -> str:
         return f'[{", ".join(m.name for m in self if m)}]'
 
@@ -126,6 +134,9 @@ class PlayerList(list):
         self._lock = asyncio.Lock()
         super().__init__(*args, **kwargs)
 
+    def __iter__(self) -> Iterator[Player]:
+        return super().__iter__()
+
     def __contains__(self, p: Union[Player, str]) -> bool:
         # allow us to either pass in the player
         # obj, or the player name as a string.
@@ -146,6 +157,16 @@ class PlayerList(list):
     def staff(self) -> set[Player]:
         """Return a set of the current staff online."""
         return {p for p in self if p.priv & Privileges.Staff}
+
+    @property
+    def restricted(self) -> set[Player]:
+        """Return a set of the current restricted players."""
+        return {p for p in self if not p.priv & Privileges.Normal}
+
+    @property
+    def unrestricted(self) -> set[Player]:
+        """Return a set of the current unrestricted players."""
+        return {p for p in self if p.priv & Privileges.Normal}
 
     def enqueue(self, data: bytes, immune: list[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
@@ -181,7 +202,7 @@ class PlayerList(list):
         # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_rank '
+            'silence_end, clan_id, clan_priv '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
@@ -189,17 +210,16 @@ class PlayerList(list):
         if not res:
             return
 
-        # overwrite some things with classes
-        res['priv'] = Privileges(res['priv'])
-        res['pw_bcrypt'] = bytes(res['pw_bcrypt'], encoding='utf-8')
+        # encode pw_bcrypt from str -> bytes.
+        res['pw_bcrypt'] = res['pw_bcrypt'].encode()
 
         if res['clan_id'] != 0:
             res['clan'] = glob.clans.get(id=res['clan_id'])
-            res['clan_rank'] = ClanPrivileges(res['clan_rank'])
+            res['clan_priv'] = ClanPrivileges(res['clan_priv'])
         else:
-            res['clan'] = res['clan_rank'] = None
+            res['clan'] = res['clan_priv'] = None
 
-        return Player(**res)
+        return Player(**res, token='')
 
     async def get_ensure(self, **kwargs) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
@@ -244,6 +264,9 @@ class PlayerList(list):
 class MapPoolList(list):
     """The currently active mappools on the server."""
 
+    def __iter__(self) -> Iterator['MapPool']:
+        return super().__iter__()
+
     def __getitem__(self, index: Union[int, slice, str]) -> 'MapPool':
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
@@ -281,6 +304,9 @@ class MapPoolList(list):
 
 class ClanList(list):
     """The currently active clans on the server."""
+
+    def __iter__(self) -> Iterator['Clan']:
+        return super().__iter__()
 
     def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
         """Allow slicing by either a string (for name), or slice."""

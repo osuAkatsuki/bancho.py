@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import asyncio
 import random
 import time
 import uuid
@@ -8,11 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from functools import cached_property
 from functools import partial
 from typing import Any
 from typing import Coroutine
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Union
 
 from cmyui import Ansi
 from cmyui import log
@@ -24,7 +25,6 @@ from constants.mods import Mods
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from objects import glob
-from objects.beatmap import Beatmap
 from objects.channel import Channel
 from objects.match import Match
 from objects.match import MatchTeams
@@ -130,23 +130,33 @@ class Player:
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
         'priv', 'stats', 'status', 'friends', 'channels',
-        'spectators', 'spectating', 'match',
-        'clan', 'clan_rank', 'achievements',
+        'spectators', 'spectating', 'match', 'stealth',
+        'clan', 'clan_priv', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options', '_queue'
+        'menu_options', '_queue', '__dict__'
     )
 
-    def __init__(self, **kwargs) -> None:
-        self.id = kwargs.get('id', 0)
-        self.name = kwargs.get('name', '')
-        self.priv = kwargs.get('priv', Privileges(0))
+    def __init__(self, id: int, name: str,
+                 priv: Union[Privileges, int], **extras) -> None:
+        self.id = id
+        self.name = name
+        self.safe_name = self.make_safe(self.name)
 
-        self.token = kwargs.get('token', '')
-        self.safe_name = self.make_safe(self.name) if self.name else ''
-        self.pw_bcrypt = kwargs.get('pw_bcrypt', b'')
+        self.pw_bcrypt = extras.get('pw_bcrypt', None)
+
+        # generate a token if not given
+        token = extras.get('token', None)
+        if token is not None:
+            self.token = token
+        else:
+            self.token = self.generate_token()
+
+        # ensure priv is of type Privileges
+        self.priv = (priv if isinstance(priv, Privileges) else
+                     Privileges(priv))
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
@@ -156,9 +166,10 @@ class Player:
         self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
         self.match: Optional[Match] = None
+        self.stealth = False
 
-        self.clan: Optional['Clan'] = kwargs.get('clan', None)
-        self.clan_rank: Optional['ClanPrivileges'] = kwargs.get('clan_rank', None)
+        self.clan: Optional['Clan'] = extras.get('clan', None)
+        self.clan_priv: Optional['ClanPrivileges'] = extras.get('clan_priv', None)
 
         # store achievements per-gamemode
         self.achievements: dict[int, set['Achievement']] = {
@@ -169,16 +180,17 @@ class Player:
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
 
-        self.utc_offset = kwargs.get('utc_offset', 0)
-        self.pm_private = kwargs.get('pm_private', False)
+        self.utc_offset = extras.get('utc_offset', 0)
+        self.pm_private = extras.get('pm_private', False)
         self.away_msg: Optional[str] = None
-        self.silence_end = kwargs.get('silence_end', 0)
+        self.silence_end = extras.get('silence_end', 0)
         self.in_lobby = False
-        self.osu_ver: Optional[datetime] = kwargs.get('osu_ver', None)
+        self.osu_ver: Optional[datetime] = extras.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
-        self.login_time = 0.0
-        self.last_recv_time = kwargs.get('last_recv_time', 0.0)
+        login_time = extras.get('login_time', 0.0)
+        self.login_time = login_time
+        self.last_recv_time = login_time
 
         # XXX: below is mostly gulag-specific & internal stuff
 
@@ -201,28 +213,40 @@ class Player:
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
 
-    @property
+    @cached_property
     def online(self) -> bool:
         return self.token != ''
 
-    @property
+    @cached_property
     def url(self) -> str:
         """The url to the player's profile."""
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'https://{glob.config.domain}/u/{self.id}'
 
-    @property
+    @cached_property
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
+        # NOTE: this is currently never wiped because
+        # url & name cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'[{self.url} {self.name}]'
 
-    @property
+    @cached_property
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'https://a.{glob.config.domain}/{self.id}'
 
-    @property
+    @cached_property
     def full_name(self) -> str:
         """The user's "full" name; including their clan tag."""
+        # NOTE: this is currently only wiped when the
+        # user leaves their clan; if name/clantag ever
+        # become changeable, it will need to be wiped.
         if self.clan:
             return f'[{self.clan.tag}] {self.name}'
         else:
@@ -240,15 +264,14 @@ class Player:
         """Whether or not the player is silenced."""
         return self.remaining_silence != 0
 
-    @property
+    @cached_property
     def bancho_priv(self) -> int:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
         if self.priv & Privileges.Normal:
-            # all players have in-game "supporter".
-            # this enables stuff like osu!direct,
-            # multiplayer in cutting edge, etc.
-            ret |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
+            ret |= ClientPrivileges.Player
+        if self.priv & Privileges.Donator:
+            ret |= ClientPrivileges.Supporter
         if self.priv & Privileges.Mod:
             ret |= ClientPrivileges.Moderator
         if self.priv & Privileges.Admin:
@@ -257,12 +280,17 @@ class Player:
             ret |= ClientPrivileges.Owner
         return ret
 
+    @cached_property
+    def restricted(self) -> bool:
+        """Return whether the player is restricted."""
+        return not self.priv & Privileges.Normal
+
     @property
     def gm_stats(self) -> ModeData:
         """The player's stats in their currently selected mode."""
         return self.stats[self.status.mode]
 
-    @property
+    @cached_property
     def recent_score(self) -> 'Score':
         """The player's most recently submitted score."""
         score = None
@@ -289,32 +317,13 @@ class Player:
         """Return a name safe for usage in sql."""
         return name.lower().replace(' ', '_')
 
-    @classmethod
-    def login(cls, user_info, utc_offset: int,
-              pm_private: bool, osu_ver: datetime,
-              login_time: float, clan: 'Clan',
-              clan_rank: 'ClanPrivileges') -> 'Player':
-        """Log a player into the server, with all info required."""
-        # user_info: {id, name, priv, pw_bcrypt, silence_end}
-        token = cls.generate_token()
-        priv = Privileges(user_info.pop('priv'))
-        p = cls(**user_info, pm_private=pm_private,
-                priv=priv, utc_offset=utc_offset,
-                token=token, osu_ver=osu_ver,
-                clan=clan, clan_rank=clan_rank
-        )
-
-        for mode in GameMode: # start empty
-            p.recent_scores[mode] = None
-            p.stats[mode] = None
-
-        p.login_time = p.last_recv_time = login_time
-        return p
-
     def logout(self) -> None:
         """Log `self` out of the server."""
         # invalidate the user's token.
         self.token = ''
+
+        if 'online' in self.__dict__:
+            del self.online # wipe cached_property
 
         # leave multiplayer.
         if self.match:
@@ -328,13 +337,15 @@ class Player:
         while self.channels:
             self.leave_channel(self.channels[0])
 
-        if glob.datadog:
-            glob.datadog.decrement('gulag.online_players')
-
         # remove from playerlist and
         # enqueue logout to all users.
         glob.players.remove(self)
-        glob.players.enqueue(packets.logout(self.id))
+
+        if not self.restricted:
+            if glob.datadog:
+                glob.datadog.decrement('gulag.online_players')
+
+            glob.players.enqueue(packets.logout(self.id))
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
@@ -347,6 +358,9 @@ class Player:
             [self.priv, self.id]
         )
 
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
     async def add_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, adding `bits`."""
         self.priv |= bits
@@ -357,6 +371,9 @@ class Player:
             'WHERE id = %s',
             [self.priv, self.id]
         )
+
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
 
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
@@ -369,43 +386,52 @@ class Player:
             [self.priv, self.id]
         )
 
-    async def ban(self, admin: 'Player', reason: str) -> None:
-        """Ban `self` for `reason`, and log to sql."""
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
+    async def restrict(self, admin: 'Player', reason: str) -> None:
+        """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.Normal)
 
-        log_msg = f'{admin} banned for "{reason}".'
+        log_msg = f'{admin} restricted for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
 
-        if self in glob.players:
-            # if user is online, notify and log them out.
-            # XXX: if you want to lock the player's
-            # client, you can send -3 rather than -1.
-            self.enqueue(packets.userID(-1))
-            self.enqueue(packets.notification(
-                'Your account has been banned.\n\n'
-                'If you believe this was a mistake or '
-                'have waited >= 2 months, you can appeal '
-                'using the appeal form on the website.'
-            ))
+        if self.online:
+            # log the user out if they're offline, this
+            # will simply relog them and refresh their state.
+            self.logout()
 
-        log(f'Banned {self}.', Ansi.LCYAN)
+        if 'restricted' in self.__dict__:
+            del self.restricted # wipe cached_property
 
-    async def unban(self, admin: 'Player', reason: str) -> None:
-        """Unban `self` for `reason`, and log to sql."""
+        log(f'Restrict {self}.', Ansi.LCYAN)
+
+    async def unrestrict(self, admin: 'Player', reason: str) -> None:
+        """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.Normal)
 
-        log_msg = f'{admin} unbanned for "{reason}".'
+        log_msg = f'{admin} unrestricted for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
 
-        log(f'Unbanned {self}.', Ansi.LCYAN)
+        if self.online:
+            # log the user out if they're offline, this
+            # will simply relog them and refresh their state.
+            self.logout()
+
+        if 'restricted' in self.__dict__:
+            del self.restricted # wipe cached_property
+
+        log(f'Unrestricted {self}.', Ansi.LCYAN)
 
     async def silence(self, admin: 'Player', duration: int,
                       reason: str) -> None:
@@ -419,7 +445,8 @@ class Player:
 
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
@@ -447,7 +474,8 @@ class Player:
 
         log_msg = f'{admin} unsilenced.'
         await glob.db.execute(
-            'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
+            'INSERT INTO logs '
+            '(`from`, `to`, `msg`, `time`) '
             'VALUES (%s, %s, %s, NOW())',
             [admin.id, self.id, log_msg]
         )
@@ -537,6 +565,7 @@ class Player:
         self.match = None
 
     async def join_clan(self, c: 'Clan') -> bool:
+        """Attempt to add `self` to `c`."""
         if self.id in c.members:
             return False
 
@@ -547,6 +576,7 @@ class Player:
         return True
 
     async def leave_clan(self) -> None:
+        """Attempt to remove `self` from `c`."""
         if not self.clan:
             return
 
@@ -559,7 +589,7 @@ class Player:
             return False
 
         # ensure they have read privs.
-        if not self.priv & c.read_priv:
+        if self.priv & c.read_priv != c.read_priv:
             return False
 
         # lobby can only be interacted with while in mp lobby.
@@ -626,16 +656,22 @@ class Player:
             return
 
         #p.enqueue(packets.channelJoin(c.name))
-        p_joined = packets.fellowSpectatorJoined(p.id)
+        if not p.stealth:
+            p_joined = packets.fellowSpectatorJoined(p.id)
+            for s in self.spectators:
+                s.enqueue(p_joined)
+                p.enqueue(packets.fellowSpectatorJoined(s.id))
 
-        for s in self.spectators:
-            s.enqueue(p_joined)
-            p.enqueue(packets.fellowSpectatorJoined(s.id))
+            self.enqueue(packets.spectatorJoined(p.id))
+        else:
+            # player is admin in stealth, only give other
+            # players data to us, not vice-versa.
+            for s in self.spectators:
+                p.enqueue(packets.fellowSpectatorJoined(s.id))
 
         self.spectators.append(p)
         p.spectating = self
 
-        self.enqueue(packets.spectatorJoined(p.id))
         log(f'{p} is now spectating {self}.')
 
     def remove_spectator(self, p: 'Player') -> None:
@@ -717,7 +753,8 @@ class Player:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await glob.db.execute(
             'INSERT INTO user_achievements '
-            '(userid, achid) VALUES (%s, %s)',
+            '(userid, achid) '
+            'VALUES (%s, %s)',
             [self.id, a.id]
         )
 
@@ -895,14 +932,14 @@ class Player:
             self._queue.clear()
             return data
 
-    def send(self, client: 'Player', msg: str,
-                   chan: Optional[Channel] = None) -> None:
-        """Enqueue `client`'s `msg` to `self`. Sent in `chan`, or dm."""
+    def send(self, msg: str, sender: 'Player',
+             chan: Optional[Channel] = None) -> None:
+        """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             packets.sendMessage(
-                client = client.name,
+                client = sender.name,
                 msg = msg,
                 target = (chan or self).name,
-                client_id = client.id
+                client_id = sender.id
             )
         )
