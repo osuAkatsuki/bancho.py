@@ -629,6 +629,7 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     FAKE_ID_START = 0x7fffffff >> 1
 
     # data to send to clients (all new user info)
+    # we'll send all the packets together at end (more efficient)
     data = bytearray()
 
     if action == 'add':
@@ -677,7 +678,7 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 
         to_remove = _fake_users[len_fake_users - amount:]
         data = bytearray()
-        _data = b'\x0c\x00\x00\x05\x00\x00\x00'
+        logout_packet_header = b'\x0c\x00\x00\x05\x00\x00\x00'
 
         for fake in to_remove:
             if not fake.online:
@@ -685,16 +686,16 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
                 _fake_users.remove(fake)
                 continue
 
-            data += _data
-            data += fake.id.to_bytes(4, 'little')
-            data += b'\x00'
+            data += logout_packet_header
+            data += fake.id.to_bytes(4, 'little') # 4 bytes pid
+            data += b'\x00' # 1 byte 0
 
             glob.players.remove(fake)
             _fake_users.remove(fake)
 
         msg = 'Removed.'
 
-    data = bytes(data)
+    data = bytes(data) # bytearray -> bytes
 
     # only enqueue data to real users.
     for o in [x for x in glob.players if x.id < FAKE_ID_START]:
