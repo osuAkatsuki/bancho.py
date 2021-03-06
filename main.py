@@ -16,6 +16,8 @@ import aiohttp
 import cmyui
 import datadog
 import orjson # go zoom
+from cmyui import Ansi
+from cmyui import log
 
 import bg_loops
 from constants.privileges import Privileges
@@ -33,7 +35,7 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 1)
+glob.version = cmyui.Version(3, 2, 2)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
@@ -45,7 +47,7 @@ async def setup_collections() -> None:
 
     glob.bot = Player(
         id = 1, name = res['name'], priv = Privileges.Normal,
-        last_recv_time = float(0x7fffffff) # never auto-dc
+        login_time = float(0x7fffffff) # never auto-dc
     )
     glob.players.append(glob.bot)
 
@@ -98,18 +100,6 @@ async def setup_collections() -> None:
         # NOTE: achievements are grouped by modes internally.
         glob.achievements[res['mode']].append(achievement)
 
-    """ XXX: Unfinished code for beatmap submission.
-    # get the latest set & map id offsets for custom maps.
-    maps_res = await glob.db.fetch(
-        'SELECT id, set_id FROM maps '
-        'WHERE server = "gulag" '
-        'ORDER BY id ASC LIMIT 1'
-    )
-
-    if maps_res:
-        glob.gulag_maps = maps_res
-    """
-
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
@@ -155,6 +145,15 @@ if __name__ == '__main__':
     for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
         subdir = data_path / sub_dir
         subdir.mkdir(exist_ok=True)
+
+    # make sure oppai-ng is built and ready.
+    if not (Path.cwd() / 'oppai-ng/oppai').exists():
+        glob.oppai_built = False
+        log('No oppai-ng compiled binary found. PP for all '
+            'scores will be set to 0; instructions can be '
+            'found in the README file.', Ansi.LRED)
+    else:
+        glob.oppai_built = True
 
     # create a server object, which serves as a map of domains.
     app = cmyui.Server(name=f'gulag v{glob.version}',

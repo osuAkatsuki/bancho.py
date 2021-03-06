@@ -83,7 +83,7 @@ class PPCalculator:
             if self.mode_vn not in (0, 1):
                 # oppai-ng only supports std & taiko
                 # TODO: osu!catch & mania support
-                return
+                return (0.0, 0.0)
 
             cmd.append(f'-m{self.mode_vn}')
             if self.mode_vn == 1:
