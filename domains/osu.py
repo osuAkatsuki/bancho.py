@@ -4,6 +4,7 @@ import copy
 import hashlib
 import random
 import re
+import struct
 import time
 from collections import defaultdict
 from enum import IntEnum
@@ -49,6 +50,9 @@ if TYPE_CHECKING:
 
 domain = Domain('osu.ppy.sh')
 
+REPLAYS_PATH = Path.cwd() / '.data/osr'
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 
 """ Some helper decorators (used for /web/ connections) """
 
@@ -119,7 +123,6 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
-SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login(name_p='u', pass_p='p')
@@ -430,7 +433,6 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
-REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
@@ -1478,6 +1480,99 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
 
     return JSON(res)
 
+DATETIME_OFFSET = 0x89F7FF5F7B58000
+SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
+@domain.route('/api/get_replay')
+async def api_get_replay(conn: Connection) -> Optional[bytes]:
+    if 'id' not in conn.args:
+        return (400, b'Must provide replay id.')
+
+    score_id = int(conn.args['id'])
+
+    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+        scores_table = 'scores_vn'
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = 'scores_rx'
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = 'scores_ap'
+    else:
+        return # invalid score id
+
+    # fetch replay file & make sure it exists
+    replay_file = REPLAYS_PATH / f'{score_id}.osr'
+    if not replay_file.exists():
+        return (404, b'Replay not found.')
+
+    # read replay frames from file
+    raw_replay = replay_file.read_bytes()
+
+    # add replay headers from sql
+    # TODO: osu_version & life graph in scores tables?
+    res = await glob.db.fetch(
+        'SELECT s.mode, m.md5 map_md5, u.name username, '
+        's.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, '
+        's.score, s.max_combo, s.perfect, s.mods, s.play_time '
+        f'FROM {scores_table} s '
+        'LEFT JOIN users u ON u.id = s.userid '
+        'LEFT JOIN maps m ON m.md5 = s.map_md5 '
+        'WHERE s.id = %s',
+        [score_id]
+    )
+
+    if not res:
+        # score not found in sql
+        return (404, b'Score not found.') # but replay was? lol
+
+    # generate the replay's hash
+    replay_md5 = hashlib.md5(
+        '{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}'.format(
+            int(res['n100']) + int(res['n300']),
+            res['n50'], res['ngeki'],
+            res['nkatu'], res['nmiss'],
+            res['map_md5'], res['max_combo'],
+            str(res['perfect'] == 1),
+            res['username'], res['score'], 0, # TODO: rank
+            res['mods'], 'True' # TODO: ??
+        ).encode()
+    ).hexdigest()
+
+    # create a buffer to construct the replay output
+    buf = bytearray()
+
+    # pack first section of headers.
+    buf += struct.pack('<Bi', res['mode'], 20200207) # TODO: osuver
+    buf += packets.write_string(res['map_md5'])
+    buf += packets.write_string(res['username'])
+    buf += packets.write_string(replay_md5)
+    buf += struct.pack(
+        '<hhhhhhihBi',
+        res['n300'], res['n100'], res['n50'],
+        res['ngeki'], res['nkatu'], res['nmiss'],
+        res['score'], res['max_combo'], res['perfect'],
+        res['mods']
+    )
+    buf += b'\x00' # TODO: hp graph
+
+    timestamp = int(res['play_time'].timestamp() * 1e7)
+    buf += struct.pack('<q', timestamp + DATETIME_OFFSET)
+
+    # pack the raw replay data into the buffer
+    buf += struct.pack('<i', len(raw_replay))
+    buf += raw_replay
+
+    # pack additional info info buffer.
+    buf += struct.pack('<q', score_id)
+
+    # NOTE: target practice sends extra mods, but
+    # can't submit scores so should not be a problem.
+
+    # send data back to the client
+    conn.add_resp_header('Content-Type: application/octet-stream')
+    conn.add_resp_header('Content-Description: File Transfer')
+    conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
+
+    return bytes(buf)
+
 """ Misc handlers """
 
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.(png|jpeg)$'))
@@ -1499,7 +1594,6 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Location: {mirror_url}')
     return (301, b'')
 
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
