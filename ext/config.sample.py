@@ -4,7 +4,7 @@
 # the domain you'd like gulag to be hosted on.
 # XXX: don't include the 'http(s)' prefix, it will be
 #      handled automatically situationally by gulag.
-domain = 'cmyui.codes' # cmyui.codes
+domain = 'cmyui.xyz' # cmyui.xyz
 
 # the address which the server runs on.
 # the server supports both inet4 and unix sockets.

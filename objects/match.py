@@ -214,7 +214,9 @@ class Match:
 
         # scrimmage stuff
         'is_scrimming', 'match_points', 'bans',
-        'winners', 'winning_pts', 'use_pp_scoring'
+        'winners', 'winning_pts', 'use_pp_scoring',
+
+        'tourney_clients'
     )
 
     def __init__(self) -> None:
@@ -252,6 +254,8 @@ class Match:
         self.winners: list[Union[Player, MatchTeams, None]] = [] # none = tie
         self.winning_pts = 0
         self.use_pp_scoring = False # only for scrims
+
+        self.tourney_clients: set[int] = set() # player ids
 
     @property
     def url(self) -> str:
