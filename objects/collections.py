@@ -57,12 +57,12 @@ class ChannelList(list):
         # XXX: we use the "real" name, aka
         # #multi_1 instead of #multiplayer
         # #spect_1 instead of #spectator.
-        return f'[{", ".join(c._name for c in self)}]'
+        return f'[{", ".join(c.id_name for c in self)}]'
 
     def get(self, name: str) -> Optional['Channel']:
-        """Get a channel from the list by `name`."""
+        """Get a channel from the list by `id_name`."""
         for c in self:
-            if c._name == name:
+            if c.id_name == name:
                 return c
 
     def append(self, c: 'Channel') -> None:

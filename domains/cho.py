@@ -6,6 +6,7 @@ import time
 from datetime import datetime as dt
 from datetime import timedelta as td
 from typing import Callable
+import random as r
 
 import bcrypt
 from cmyui import _isdecimal
@@ -928,7 +929,8 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         # to the global channel list as
         # an instanced channel.
         chan = Channel(
-            name = f'#multi_{self.match.id}',
+            name="#multiplayer",
+            id_name = f'#multi_{self.match.id}',
             topic = f"MID {self.match.id}'s multiplayer channel.",
             auto_join = False,
             instance = True
@@ -1133,19 +1135,15 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                        f'!mp teams {_team} command.')
                 m.chat.send_bot(msg)
             else:
-                # find the new appropriate default team.
-                # defaults are (ffa: neutral, teams: red).
-                if self.new.team_type in (MatchTeamTypes.head_to_head,
-                                          MatchTeamTypes.tag_coop):
-                    new_t = MatchTeams.neutral
-                else:
-                    new_t = MatchTeams.red
+                isSolo = self.new.team_type  in (MatchTeamTypes.head_to_head,
+                                          MatchTeamTypes.tag_coop)
 
                 # change each active slots team to
                 # fit the correspoding team type.
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
-                        s.team = new_t
+                        s.team = MatchTeams.neutral if isSolo else \
+                        MatchTeams.red if r.random() > 0.5 else MatchTeams.blue
 
                 # change the matches'.
                 m.team_type = self.new.team_type

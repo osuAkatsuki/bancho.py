@@ -598,7 +598,7 @@ class Player:
             return False
 
         # lobby can only be interacted with while in mp lobby.
-        if c._name == '#lobby' and not self.in_lobby:
+        if c.name == '#lobby' and not self.in_lobby:
             return False
 
         c.append(self) # add to c.players
@@ -646,7 +646,8 @@ class Player:
         if not (spec_chan := glob.channels[chan_name]):
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
-                name = chan_name,
+                name = "#spectator",
+                id_name = chan_name,
                 topic = f"{self.name}'s spectator channel.'",
                 auto_join = False,
                 instance = True

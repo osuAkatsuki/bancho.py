@@ -205,7 +205,7 @@ class Match:
         'id', 'name', 'passwd', 'host', '_refs',
         'map_id', 'map_md5', 'map_name',
         'mods', 'freemods', 'mode',
-        'chat', 'slots',
+        'chat', 'red_chat', 'blue_chat', 'slots',
         #'type',
         'team_type', 'win_condition',
         'in_progress', 'seed',
@@ -233,7 +233,11 @@ class Match:
         self.mode = GameMode.vn_std
         self.freemods = False
 
-        self.chat: Optional['Channel'] = None #multiplayer
+        self.chat: Optional['Channel'] = None # multiplayer
+        self.red_chat: Optional['Channel'] = None # red team
+        self.blue_chat: Optional['Channel'] = None # blue team
+
+
         self.slots = [Slot() for _ in range(16)]
 
         #self.type = MatchTypes.standard
