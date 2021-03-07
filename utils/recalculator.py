@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import math
+import struct
 from pathlib import Path
 
 import aiohttp
-import orjson
 from cmyui import Ansi
 from cmyui import log
 
@@ -72,7 +73,7 @@ class PPCalculator:
 
         # for now, we'll generate a bash command and
         # use subprocess to do the calculations (yikes).
-        cmd = [f'./oppai-ng/oppai {self.file}']
+        cmd = [f'oppai-ng/oppai', self.file]
 
         if self.mods:  cmd.append(f'+{self.mods!r}')
         if self.combo: cmd.append(f'{self.combo}x')
@@ -89,23 +90,31 @@ class PPCalculator:
             if self.mode_vn == 1:
                 cmd.append('-otaiko')
 
-        # XXX: could probably use binary to save a bit
-        # of time.. but in reality i should just write
-        # some bindings lmao this is so cursed overall
-        cmd.append('-ojson')
+        cmd.append('-obinary')
 
-        # join & run the command
-        pipe = asyncio.subprocess.PIPE
-
-        proc = await asyncio.create_subprocess_shell(
-            ' '.join(cmd), stdout=pipe, stderr=pipe
+        # run the oppai-ng binary & read stdout.
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout = asyncio.subprocess.PIPE
         )
-
         stdout, _ = await proc.communicate() # stderr not needed
-        output = orjson.loads(stdout.decode())
 
-        if 'code' not in output or output['code'] != 200:
-            log(f"oppai-ng: {output['errstr']}", Ansi.LRED)
+        if stdout[:8] != b'binoppai':
+            # invalid output from oppai-ng
+            log(f'oppai-ng err: {stdout}', Ansi.LRED)
+            return (0.0, 0.0)
 
-        await proc.wait() # wait for exit
-        return output['pp'], output['stars']
+        err_code = struct.unpack('<i', stdout[11:15])[0]
+
+        if err_code < 0:
+            log(f'oppai-ng: err code {err_code}.', Ansi.LRED)
+            return (0.0, 0.0)
+
+        pp = struct.unpack('<f', stdout[-4:])[0]
+
+        if math.isinf(pp):
+            log(f'oppai-ng: broken map: {self.file} (inf pp).', Ansi.LYELLOW)
+            return (0.0, 0.0)
+
+        sr = struct.unpack('<f', stdout[-32:-28])[0]
+
+        return pp, sr
