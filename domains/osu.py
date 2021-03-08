@@ -1216,62 +1216,91 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
     return result
 
 """ /api/ Handlers """
-# TODO: add oauth so we can do more stuff owo..
-# also, give me ideas for api things
-# POST /api/set_avatar
+
+# Current API:
+# GET /api/get_player_count: returns total & online playercounts.
+# GET /api/get_player_info: returns info/stats for a given player.
+# GET /api/get_player_status: returns a player's current status, if online.
+# GET /api/get_player_scores: returns a list of a players best/recent scores.
+# GET /api/get_player_most_played: returns a list of maps most played by a given player.
+# GET /api/get_map_info: returns information about a given beatmap.
+# GET /api/get_replay: returns a replay file (with headers).
+# GET /api/calculate_pp: calculate & return pp for a given beatmap.
+
+# TODO: more GET handlers
+# GET /api/get_match: return information for a given multiplayer match.
+# GET /api/get_map_scores: the best n scores for a given beatmap.
+
+# TODO: authenticated api handlers (oauth)
+# GET /api/get_friends: returns a list of the player's friends.
+# POST/PUT /api/set_avatar: update the player's avatar to a specified file.
+# POST/PUT /api/set_player_info: update user information (updates whatever received).
 
 JSON = orjson.dumps
 
-@domain.route('/api/get_map_info')
-async def api_get_map_info(conn: Connection) -> Optional[bytes]:
-    """Return information about a given beatmap."""
-    if 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, b'Invalid map id.')
-        bmap = await Beatmap.from_bid(int(conn.args['id']))
-    elif 'md5' in conn.args:
-        if len(conn.args['md5']) != 32:
-            return (400, b'Invalid map md5.')
-        bmap = await Beatmap.from_md5(conn.args['md5'])
-    else:
-        return (400, b'Must provide either id or md5!')
-
-    if not bmap:
-        return (404, b'Map not found.')
-
-    return JSON({ # really?
-        'md5': bmap.md5,
-        'id': bmap.id,
-        'set_id': bmap.set_id,
-        'artist': bmap.artist,
-        'title': bmap.title,
-        'version': bmap.version,
-        'creator': bmap.creator,
-        'last_update': bmap.last_update,
-        'total_length': bmap.total_length,
-        'max_combo': bmap.max_combo,
-        'status': bmap.status,
-        'plays': bmap.plays,
-        'passes': bmap.passes,
-        'mode': bmap.mode,
-        'bpm': bmap.bpm,
-        'cs': bmap.cs,
-        'od': bmap.od,
-        'ar': bmap.ar,
-        'hp': bmap.hp,
-        'diff': bmap.diff
-    })
-
-@domain.route('/api/get_online')
-async def api_get_online(conn: Connection) -> Optional[bytes]:
+@domain.route('/api/get_player_count')
+async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
-    return JSON({'online': len(glob.players.unrestricted) - 1})
+    return JSON({
+        'online': len(glob.players.unrestricted) - 1,
+        'total': (
+            await glob.db.fetch(
+                'SELECT COUNT(*) FROM users',
+                _dict=False
+            )
+        )[0]
+    })
 
-@domain.route('/api/check_online')
-async def api_check_online(conn: Connection) -> Optional[bytes]:
+@domain.route('/api/get_player_info')
+async def api_get_player_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given player."""
+    if 'name' not in conn.args and 'id' not in conn.args:
+        return (400, b'Must provide either id or name!')
+
+    if (
+        'scope' not in conn.args or
+        conn.args['scope'] not in ('info', 'stats')
+    ):
+        return (400, b'Must provide scope (info/stats).')
+
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+
+        pid = conn.args['id']
+    else:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+            return (400, b'Invalid player name.')
+
+        # get their id from username.
+        pid = await glob.db.fetch(
+            'SELECT id FROM users '
+            'WHERE safe_name = %s',
+            [name]
+        )
+
+        if not pid:
+            return (404, b'User not found.')
+
+        pid = pid['id']
+
+    if conn.args['scope'] == 'info':
+        # return user info
+        query = ('SELECT id, name, safe_name, '
+                 'priv, country, silence_end ' # silence_end public?
+                 'FROM users WHERE id = %s')
+    else:
+        # return user stats
+        query = 'SELECT * FROM stats WHERE id = %s'
+
+    res = await glob.db.fetch(query, [pid])
+    return orjson.dumps(res) if res else b'User not found.'
+
+@domain.route('/api/get_player_status')
+async def api_get_player_status(conn: Connection) -> Optional[bytes]:
     """Return a players current status, if they are online."""
     if 'id' in conn.args:
         pid = conn.args['id']
@@ -1315,113 +1344,9 @@ async def api_check_online(conn: Connection) -> Optional[bytes]:
         }
     })
 
-@domain.route('/api/get_user')
-async def api_get_user(conn: Connection) -> Optional[bytes]:
-    """Get user info/stats from a specified name or id."""
-    if 'name' not in conn.args and 'id' not in conn.args:
-        return (400, b'Must provide either id or name!')
-
-    if (
-        'scope' not in conn.args or
-        conn.args['scope'] not in ('info', 'stats')
-    ):
-        return (400, b'Must provide scope (info/stats).')
-
-    if 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, b'Invalid player id.')
-
-        pid = conn.args['id']
-    else:
-        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
-            return (400, b'Invalid player name.')
-
-        # get their id from username.
-        pid = await glob.db.fetch(
-            'SELECT id FROM users '
-            'WHERE safe_name = %s',
-            [name]
-        )
-
-        if not pid:
-            return (404, b'User not found.')
-
-        pid = pid['id']
-
-    if conn.args['scope'] == 'info':
-        # return user info
-        query = ('SELECT id, name, safe_name, '
-                 'priv, country, silence_end ' # silence_end public?
-                 'FROM users WHERE id = %s')
-    else:
-        # return user stats
-        query = 'SELECT * FROM stats WHERE id = %s'
-
-    res = await glob.db.fetch(query, [pid])
-    return orjson.dumps(res) if res else b'User not found.'
-
-@domain.route('/api/calc_pp')
-async def api_calc_pp(conn: Connection) -> Optional[bytes]:
-    """Calculate pp with a given map id/md5 & pp params."""
-    if not glob.oppai_built:
-        return (503, JSON({'status': 'Failed: oppai-ng not built'}))
-
-    if 'md5' in conn.args:
-        # get id from md5
-        res = await glob.db.fetch(
-            'SELECT id FROM maps '
-            'WHERE md5 = %s',
-            [conn.args.pop('md5')]
-        )
-        if not res:
-            return JSON({'status': 'Failed: no map found'})
-
-        map_id = res['id']
-    elif 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, JSON({'status': 'Failed: invalid map id'}))
-
-        map_id = int(conn.args.pop('id'))
-    else:
-        return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
-
-    pp_kwargs = {}
-    valid_kwargs = (
-        ('mods', int),
-        ('combo', int),
-        ('nmiss', int),
-        ('mode_vn', int),
-        ('acc', float)
-    )
-
-    # ignore any invalid args
-    for n, t in valid_kwargs:
-        if n in conn.args:
-            val = conn.args[n]
-
-            if not _isdecimal(val, _float=t is float):
-                continue
-
-            pp_kwargs |= {n: t(val)}
-
-    if pp_kwargs.get('mode_vn', 0) not in (0, 1):
-        return (503, JSON({'status': 'Failed: unsupported mode'}))
-
-    ppcalc = await PPCalculator.from_id(map_id, **pp_kwargs)
-
-    if not ppcalc:
-        return JSON({'status': 'Failed: could not retrieve map'})
-
-    pp, sr = await ppcalc.perform()
-
-    return JSON({
-        'status': 'Success',
-        'pp': pp,
-        'sr': sr
-    })
-
-@domain.route('/api/get_scores')
-async def api_get_scores(conn: Connection) -> Optional[bytes]:
+@domain.route('/api/get_player_scores')
+async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
+    """Return a list of a given user's recent/best scores."""
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, b'Invalid player id.')
@@ -1507,14 +1432,111 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
     query.append(f'ORDER BY {sort} DESC LIMIT %s')
     params.append(limit)
 
-    # fetch from db & return in JSON form
+    # fetch & return info from sql
     res = await glob.db.fetchall(' '.join(query), params)
     return JSON(res)
+
+@domain.route('/api/get_player_most_played')
+async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
+    """Return the most played beatmaps of a given player."""
+    # NOTE: this will almost certainly not scale well, lol.
+
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+        p = await glob.players.get_ensure(id=int(conn.args['id']))
+    elif 'name' in conn.args:
+        if not 0 < len(conn.args['name']) <= 16:
+            return (400, b'Invalid player name.')
+        p = await glob.players.get_ensure(name=conn.args['name'])
+    else:
+        return (400, b'Must provide either id or name.')
+
+    if not p:
+        return (404, b'Player not found.')
+
+    # parse args (mode, limit)
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 25
+
+    # fetch & return info from sql
+    res = await glob.db.fetchall(
+        'SELECT m.md5, m.id, m.set_id, m.status, '
+        'm.artist, m.title, m.version, m.creator, COUNT(*) plays '
+        f'FROM {mode.sql_table} s '
+        'INNER JOIN maps m ON m.md5 = s.map_md5 '
+        'WHERE s.userid = %s '
+        'GROUP BY s.map_md5 '
+        'ORDER BY plays DESC '
+        'LIMIT %s',
+        [p.id, limit]
+    )
+
+    return JSON(res)
+
+@domain.route('/api/get_map_info')
+async def api_get_map_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given beatmap."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid map id.')
+        bmap = await Beatmap.from_bid(int(conn.args['id']))
+    elif 'md5' in conn.args:
+        if len(conn.args['md5']) != 32:
+            return (400, b'Invalid map md5.')
+        bmap = await Beatmap.from_md5(conn.args['md5'])
+    else:
+        return (400, b'Must provide either id or md5!')
+
+    if not bmap:
+        return (404, b'Map not found.')
+
+    return JSON({ # really?
+        'md5': bmap.md5,
+        'id': bmap.id,
+        'set_id': bmap.set_id,
+        'artist': bmap.artist,
+        'title': bmap.title,
+        'version': bmap.version,
+        'creator': bmap.creator,
+        'last_update': bmap.last_update,
+        'total_length': bmap.total_length,
+        'max_combo': bmap.max_combo,
+        'status': bmap.status,
+        'plays': bmap.plays,
+        'passes': bmap.passes,
+        'mode': bmap.mode,
+        'bpm': bmap.bpm,
+        'cs': bmap.cs,
+        'od': bmap.od,
+        'ar': bmap.ar,
+        'hp': bmap.hp,
+        'diff': bmap.diff
+    })
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
 @domain.route('/api/get_replay')
 async def api_get_replay(conn: Connection) -> Optional[bytes]:
+    """Return a given replay (including headers)."""
     if 'id' not in conn.args:
         return (400, b'Must provide replay id.')
 
@@ -1603,6 +1625,66 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
 
     return bytes(buf)
+
+@domain.route('/api/calculate_pp')
+async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
+    """Calculate and return pp & sr for a given map."""
+    if not glob.oppai_built:
+        return (503, JSON({'status': 'Failed: oppai-ng not built'}))
+
+    if 'md5' in conn.args:
+        # get id from md5
+        res = await glob.db.fetch(
+            'SELECT id FROM maps '
+            'WHERE md5 = %s',
+            [conn.args.pop('md5')]
+        )
+        if not res:
+            return JSON({'status': 'Failed: no map found'})
+
+        map_id = res['id']
+    elif 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, JSON({'status': 'Failed: invalid map id'}))
+
+        map_id = int(conn.args.pop('id'))
+    else:
+        return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
+
+    pp_kwargs = {}
+    valid_kwargs = (
+        ('mods', int),
+        ('combo', int),
+        ('nmiss', int),
+        ('mode_vn', int),
+        ('acc', float)
+    )
+
+    # ignore any invalid args
+    for n, t in valid_kwargs:
+        if n in conn.args:
+            val = conn.args[n]
+
+            if not _isdecimal(val, _float=t is float):
+                continue
+
+            pp_kwargs |= {n: t(val)}
+
+    if pp_kwargs.get('mode_vn', 0) not in (0, 1):
+        return (503, JSON({'status': 'Failed: unsupported mode'}))
+
+    ppcalc = await PPCalculator.from_id(map_id, **pp_kwargs)
+
+    if not ppcalc:
+        return JSON({'status': 'Failed: could not retrieve map'})
+
+    pp, sr = await ppcalc.perform()
+
+    return JSON({
+        'status': 'Success',
+        'pp': pp,
+        'sr': sr
+    })
 
 """ Misc handlers """
 
