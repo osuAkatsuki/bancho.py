@@ -35,7 +35,7 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 2)
+glob.version = cmyui.Version(3, 2, 3)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
@@ -53,13 +53,13 @@ async def setup_collections() -> None:
 
     # global channels list
     glob.channels = ChannelList()
-    async for res in glob.db.iterall('SELECT * FROM channels'):
+    async for row in glob.db.iterall('SELECT * FROM channels'):
         chan = Channel(
-            name = res['name'],
-            topic = res['topic'],
-            read_priv = Privileges(res['read_priv']),
-            write_priv = Privileges(res['write_priv']),
-            auto_join = res['auto_join'] == 1
+            name = row['name'],
+            topic = row['topic'],
+            read_priv = Privileges(row['read_priv']),
+            write_priv = Privileges(row['write_priv']),
+            auto_join = row['auto_join'] == 1
         )
 
         glob.channels.append(chan)
@@ -69,20 +69,20 @@ async def setup_collections() -> None:
 
     # global clans list
     glob.clans = ClanList()
-    async for res in glob.db.iterall('SELECT * FROM clans'):
-        clan = Clan(**res)
+    async for row in glob.db.iterall('SELECT * FROM clans'):
+        clan = Clan(**row)
 
         await clan.members_from_sql()
         glob.clans.append(clan)
 
     # global mappools list
     glob.pools = MapPoolList()
-    async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
+    async for row in glob.db.iterall('SELECT * FROM tourney_pools'):
         pool = MapPool(
-            id = res['id'],
-            name = res['name'],
-            created_at = res['created_at'],
-            created_by = await glob.players.get_ensure(id=res['created_by'])
+            id = row['id'],
+            name = row['name'],
+            created_at = row['created_at'],
+            created_by = await glob.players.get_ensure(id=row['created_by'])
         )
 
         await pool.maps_from_sql()
@@ -90,15 +90,23 @@ async def setup_collections() -> None:
 
     # global achievements (sorted by vn gamemodes)
     glob.achievements = {0: [], 1: [], 2: [], 3: []}
-    async for res in glob.db.iterall('SELECT * FROM achievements'):
+    async for row in glob.db.iterall('SELECT * FROM achievements'):
         # NOTE: achievement conditions are stored as
         # stringified python expressions in the database
         # to allow for easy custom achievements.
-        condition = eval(f'lambda score: {res.pop("cond")}')
-        achievement = Achievement(**res, cond=condition)
+        condition = eval(f'lambda score: {row.pop("cond")}')
+        achievement = Achievement(**row, cond=condition)
 
         # NOTE: achievements are grouped by modes internally.
-        glob.achievements[res['mode']].append(achievement)
+        glob.achievements[row['mode']].append(achievement)
+
+    glob.api_tokens = {
+        row['api_token']: row['id']
+        for row in await glob.db.fetchall(
+            'SELECT id, api_token FROM users '
+            'WHERE api_token IS NOT NULL'
+        )
+    }
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""

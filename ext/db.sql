@@ -385,6 +385,9 @@ create table users
 	latest_activity int default 0 not null,
 	clan_id int default 0 not null,
 	clan_priv tinyint(1) default 0 not null,
+	api_token char(36) null,
+	constraint users_api_token_uindex
+		unique (api_token),
 	constraint users_email_uindex
 		unique (email),
 	constraint users_name_uindex

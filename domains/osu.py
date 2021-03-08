@@ -53,6 +53,7 @@ domain = Domain('osu.ppy.sh')
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
+AVATARS_PATH = Path.cwd() / '.data/avatars'
 
 """ Some helper decorators (used for /web/ connections) """
 
@@ -1217,7 +1218,7 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 
 """ /api/ Handlers """
 
-# Current API:
+# Unauthorized (no api key required)
 # GET /api/get_player_count: return total registered & online player counts.
 # GET /api/get_player_info: return info or stats for a given player.
 # GET /api/get_player_status: return a player's current status, if online.
@@ -1230,9 +1231,12 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 # GET /api/get_match: return information for a given multiplayer match.
 # GET /api/calculate_pp: calculate & return pp for a given beatmap.
 
-# TODO: authenticated api handlers (oauth)
+# Authorized (requires valid api key)
+# NOTE: api key should be passed as 'Authorization' http header.
+# POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
+
+# TODO: authenticated api handlers
 # GET /api/get_friends: return a list of the player's friends.
-# POST/PUT /api/set_avatar: update the player's avatar to a specified file.
 # POST/PUT /api/set_player_info: update user information (updates whatever received).
 
 JSON = orjson.dumps
@@ -1864,6 +1868,48 @@ async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
         'pp': pp,
         'sr': sr
     })
+
+def requires_api_token(f: Callable) -> Callable:
+    @wraps(f)
+    async def wrapper(conn: Connection) -> Optional[bytes]:
+        if 'Authorization' not in conn.headers:
+            return (400, b'Must provide authorization token.')
+
+        api_token = conn.headers['Authorization']
+
+        if api_token not in glob.api_tokens:
+            return (401, b'Unknown authorization token.')
+
+        # get player from api token
+        player_id = glob.api_tokens[api_token]
+        p = await glob.players.get_ensure(id=player_id)
+
+        return await f(conn, p)
+    return wrapper
+
+@domain.route('/api/set_avatar', methods=['POST', 'PUT'])
+@requires_api_token
+async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
+    """Update the tokenholder's avatar to a given file."""
+    if 'avatar' not in conn.files:
+        return (400, b'Must provide avatar file.')
+
+    ava_file = conn.files['avatar']
+
+    # block files over 4MB
+    if len(ava_file) > (4 * 1024 * 1024):
+        return (400, b'Avatar file too large (max 4MB).')
+
+    if ava_file[6:10] in (b'JFIF', b'Exif'):
+        ext = 'jpeg'
+    elif ava_file.startswith(b'\211PNG\r\n\032\n'):
+        ext = 'png'
+    else:
+        return (400, b'Invalid file type.')
+
+    # write to the avatar file
+    (AVATARS_PATH / f'{p.id}.{ext}').write_bytes(ava_file)
+    return b'Success.'
 
 """ Misc handlers """
 

@@ -275,3 +275,7 @@ update scores_ap set id = id - 6148914691236517206;
 # v3.2.2
 alter table maps add max_combo int not null after total_length;
 alter table users change clan_rank clan_priv tinyint(1) default 0 not null;
+
+# v3.2.3
+alter table users add api_token char(36) default NULL null;
+create unique index users_api_token_uindex on users (api_token);
