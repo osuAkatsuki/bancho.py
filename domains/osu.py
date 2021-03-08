@@ -1422,14 +1422,6 @@ async def api_calc_pp(conn: Connection) -> Optional[bytes]:
 
 @domain.route('/api/get_scores')
 async def api_get_scores(conn: Connection) -> Optional[bytes]:
-    if (
-        'relation' not in conn.args or
-        conn.args['relation'] not in ('recent', 'best')
-    ):
-        return (400, b'Must provide valid relation (recent/best).')
-
-    relation = conn.args['relation']
-
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, b'Invalid player id.')
@@ -1444,10 +1436,20 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
     if not p:
         return (404, b'Player not found.')
 
-    if 'mode' in conn.args:
-        if (
-            not conn.args['mode'].isdecimal() or
-            not 0 <= (mode := int(conn.args['mode'])) <= 7
+    if (
+        'relation' not in conn.args or
+        conn.args['relation'] not in ('recent', 'best')
+    ):
+        return (400, b'Must provide valid relation (recent/best).')
+
+    relation = conn.args['relation']
+
+    # parse args (mode, mods, limit)
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
         ):
             return (400, b'Invalid mode.')
 
@@ -1455,29 +1457,58 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
     else:
         mode = GameMode.vn_std
 
-    if 'limit' in conn.args:
-        if (
-            not conn.args['limit'].isdecimal() or
-            not 0 < (limit := int(conn.args['limit'])) <= 100
+    if (mods_arg := conn.args.get('mods', None)) is not None:
+        if mods_arg[0] in ('~', '='): # weak/strong equality
+            strong_equality = mods_arg[0] == '='
+            mods_arg = mods_arg[1:]
+        else: # use strong as default
+            strong_equality = True
+
+        if mods_arg.isdecimal():
+            # parse from int form
+            mods = Mods(int(conn.args['mods']))
+        else:
+            # parse from string form
+            mods = Mods.from_modstr(conn.args['mods'])
+    else:
+        mods = None
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
         ):
             return (400, b'Invalid limit.')
     else:
         limit = 25
 
+    # build sql query & fetch info
+
     table = mode.sql_table
     sort = 'pp' if relation == 'best' else 'play_time'
 
-    res = await glob.db.fetchall(
+    query = [
         'SELECT id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
         'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {table} '
-        'WHERE userid = %s '
-        f'ORDER BY {sort} DESC '
-        'LIMIT %s',
-        [p.id, limit]
-    )
+        f'FROM {table} WHERE userid = %s'
+    ]
 
+    params = [p.id]
+
+    if mods is not None:
+        if strong_equality:
+            query.append('AND mods & %s = %s')
+            params.extend((mods, mods))
+        else:
+            query.append('AND mods & %s != 0')
+            params.append(mods)
+
+    query.append(f'ORDER BY {sort} DESC LIMIT %s')
+    params.append(limit)
+
+    # fetch from db & return in JSON form
+    res = await glob.db.fetchall(' '.join(query), params)
     return JSON(res)
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
