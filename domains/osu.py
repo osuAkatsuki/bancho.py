@@ -1178,6 +1178,7 @@ async def banchoConnect(conn: Connection) -> Optional[bytes]:
     # TODO: perhaps handle this..?
     NotImplemented
 
+# NOTE: this will only be triggered when using a server switcher.
 @domain.route('/web/check-updates.php')
 @required_args({'action', 'stream'})
 async def checkUpdates(conn: Connection) -> Optional[bytes]:
@@ -1217,22 +1218,20 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 """ /api/ Handlers """
 
 # Current API:
-# GET /api/get_player_count: returns total registered & online player counts.
-# GET /api/get_player_info: returns info or stats for a given player.
-# GET /api/get_player_status: returns a player's current status, if online.
-# GET /api/get_player_scores: returns a list of best or recent scores for a given player.
-# GET /api/get_player_most_played: returns a list of maps most played by a given player.
-# GET /api/get_map_info: returns information about a given beatmap.
+# GET /api/get_player_count: return total registered & online player counts.
+# GET /api/get_player_info: return info or stats for a given player.
+# GET /api/get_player_status: return a player's current status, if online.
+# GET /api/get_player_scores: return a list of best or recent scores for a given player.
+# GET /api/get_player_most_played: return a list of maps most played by a given player.
+# GET /api/get_map_info: return information about a given beatmap.
 # GET /api/get_map_scores: return the best scores for a given beatmap & mode.
-# GET /api/get_score_info: returns information about a given score.
-# GET /api/get_replay: returns the file for a given replay (with or without headers).
-# GET /api/calculate_pp: calculate & returns pp for a given beatmap.
-
-# TODO: more GET handlers
+# GET /api/get_score_info: return information about a given score.
+# GET /api/get_replay: return the file for a given replay (with or without headers).
 # GET /api/get_match: return information for a given multiplayer match.
+# GET /api/calculate_pp: calculate & return pp for a given beatmap.
 
 # TODO: authenticated api handlers (oauth)
-# GET /api/get_friends: returns a list of the player's friends.
+# GET /api/get_friends: return a list of the player's friends.
 # POST/PUT /api/set_avatar: update the player's avatar to a specified file.
 # POST/PUT /api/set_player_info: update user information (updates whatever received).
 
@@ -1760,6 +1759,51 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
 
     return bytes(buf)
+
+@domain.route('/api/get_match')
+async def api_get_match(conn: Connection) -> Optional[bytes]:
+    """Return information of a given multiplayer match."""
+    # TODO: eventually, this should contain recent score info.
+    if not (
+        'id' in conn.args and
+        0 <= (match_id := int(conn.args['id'])) < 64
+    ):
+        return (400, b'Must provide valid match id.')
+
+    if not (match := glob.matches[match_id]):
+        return (404, b'Match not found.')
+
+    return JSON({
+        'name': match.name,
+        'mode': match.mode.as_vanilla,
+        'mods': int(match.mods),
+        'seed': match.seed,
+        'host': {
+            'id': match.host.id,
+            'name': match.host.name
+        },
+        'refs': [{'id': p.id, 'name': p.name} for p in match.refs],
+        'in_progress': match.in_progress,
+        'is_scrimming': match.is_scrimming,
+        'map': {
+            'id': match.map_id,
+            'md5': match.map_md5,
+            'name': match.map_name
+        },
+        'active_slots': {
+            str(idx): {
+                'loaded': slot.loaded,
+                'mods': int(slot.mods),
+                'player': {
+                    'id': slot.player.id,
+                    'name': slot.player.name
+                },
+                'skipped': slot.skipped,
+                'status': int(slot.status),
+                'team': int(slot.team)
+            } for idx, slot in enumerate(match.slots) if slot.player
+        }
+    })
 
 @domain.route('/api/calculate_pp')
 async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
