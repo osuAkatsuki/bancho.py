@@ -688,7 +688,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         ret = b'error: no'
 
     else:
-        #
         # prepare to send the user charts & achievements.
         achievements = []
 
@@ -1218,18 +1217,19 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 """ /api/ Handlers """
 
 # Current API:
-# GET /api/get_player_count: returns total & online playercounts.
-# GET /api/get_player_info: returns info/stats for a given player.
+# GET /api/get_player_count: returns total registered & online player counts.
+# GET /api/get_player_info: returns info or stats for a given player.
 # GET /api/get_player_status: returns a player's current status, if online.
-# GET /api/get_player_scores: returns a list of a players best/recent scores.
+# GET /api/get_player_scores: returns a list of best or recent scores for a given player.
 # GET /api/get_player_most_played: returns a list of maps most played by a given player.
 # GET /api/get_map_info: returns information about a given beatmap.
-# GET /api/get_replay: returns a replay file (with headers).
-# GET /api/calculate_pp: calculate & return pp for a given beatmap.
+# GET /api/get_map_scores: return the best scores for a given beatmap & mode.
+# GET /api/get_score_info: returns information about a given score.
+# GET /api/get_replay: returns the file for a given replay (with or without headers).
+# GET /api/calculate_pp: calculate & returns pp for a given beatmap.
 
 # TODO: more GET handlers
 # GET /api/get_match: return information for a given multiplayer match.
-# GET /api/get_map_scores: the best n scores for a given beatmap.
 
 # TODO: authenticated api handlers (oauth)
 # GET /api/get_friends: returns a list of the player's friends.
@@ -1238,20 +1238,22 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 
 JSON = orjson.dumps
 
+DATETIME_OFFSET = 0x89F7FF5F7B58000
+SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
+
 @domain.route('/api/get_player_count')
 async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
+    total_users = (await glob.db.fetch(
+        'SELECT COUNT(*) FROM users', _dict=False
+    ))[0]
+
     return JSON({
         'online': len(glob.players.unrestricted) - 1,
-        'total': (
-            await glob.db.fetch(
-                'SELECT COUNT(*) FROM users',
-                _dict=False
-            )
-        )[0]
+        'total': total_users
     })
 
 @domain.route('/api/get_player_info')
@@ -1283,7 +1285,7 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
         )
 
         if not pid:
-            return (404, b'User not found.')
+            return (404, b'Player not found.')
 
         pid = pid['id']
 
@@ -1297,7 +1299,7 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
         query = 'SELECT * FROM stats WHERE id = %s'
 
     res = await glob.db.fetch(query, [pid])
-    return orjson.dumps(res) if res else b'User not found.'
+    return orjson.dumps(res) if res else b'Player not found.'
 
 @domain.route('/api/get_player_status')
 async def api_get_player_status(conn: Connection) -> Optional[bytes]:
@@ -1361,15 +1363,15 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
     if not p:
         return (404, b'Player not found.')
 
-    if (
-        'relation' not in conn.args or
-        conn.args['relation'] not in ('recent', 'best')
+    # parse args (scope, mode, mods, limit)
+
+    if not (
+        'scope' in conn.args and
+        conn.args['scope'] in ('recent', 'best')
     ):
-        return (400, b'Must provide valid relation (recent/best).')
+        return (400, b'Must provide valid scope (recent/best).')
 
-    relation = conn.args['relation']
-
-    # parse args (mode, mods, limit)
+    scope = conn.args['scope']
 
     if (mode_arg := conn.args.get('mode', None)) is not None:
         if not (
@@ -1409,14 +1411,11 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
 
     # build sql query & fetch info
 
-    table = mode.sql_table
-    sort = 'pp' if relation == 'best' else 'play_time'
-
     query = [
         'SELECT id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
         'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {table} WHERE userid = %s'
+        f'FROM {mode.sql_table} WHERE userid = %s'
     ]
 
     params = [p.id]
@@ -1428,6 +1427,8 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
         else:
             query.append('AND mods & %s != 0')
             params.append(mods)
+
+    sort = 'pp' if scope == 'best' else 'play_time'
 
     query.append(f'ORDER BY {sort} DESC LIMIT %s')
     params.append(limit)
@@ -1532,13 +1533,107 @@ async def api_get_map_info(conn: Connection) -> Optional[bytes]:
         'diff': bmap.diff
     })
 
-DATETIME_OFFSET = 0x89F7FF5F7B58000
-SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
-@domain.route('/api/get_replay')
-async def api_get_replay(conn: Connection) -> Optional[bytes]:
-    """Return a given replay (including headers)."""
-    if 'id' not in conn.args:
-        return (400, b'Must provide replay id.')
+@domain.route('/api/get_map_scores')
+async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
+    """Return the top n scores on a given beatmap."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid map id.')
+        bmap = await Beatmap.from_bid(int(conn.args['id']))
+    elif 'md5' in conn.args:
+        if len(conn.args['md5']) != 32:
+            return (400, b'Invalid map md5.')
+        bmap = await Beatmap.from_md5(conn.args['md5'])
+    else:
+        return (400, b'Must provide either id or md5!')
+
+    if not bmap:
+        return (404, b'Map not found.')
+
+    # parse args (scope, mode, mods, limit)
+
+    if (
+        'scope' not in conn.args or
+        conn.args['scope'] not in ('recent', 'best')
+    ):
+        return (400, b'Must provide valid scope (recent/best).')
+
+    scope = conn.args['scope']
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (mods_arg := conn.args.get('mods', None)) is not None:
+        if mods_arg[0] in ('~', '='): # weak/strong equality
+            strong_equality = mods_arg[0] == '='
+            mods_arg = mods_arg[1:]
+        else: # use strong as default
+            strong_equality = True
+
+        if mods_arg.isdecimal():
+            # parse from int form
+            mods = Mods(int(conn.args['mods']))
+        else:
+            # parse from string form
+            mods = Mods.from_modstr(conn.args['mods'])
+    else:
+        mods = None
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 50
+
+    query = [
+        'SELECT map_md5, score, pp, acc, max_combo, mods, '
+        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+        'mode, play_time, time_elapsed, userid, perfect '
+        f'FROM {mode.sql_table} '
+        'WHERE map_md5 = %s AND mode = %s AND status = 2'
+    ]
+    params = [bmap.md5, mode.as_vanilla]
+
+    if mods is not None:
+        if strong_equality:
+            query.append('AND mods & %s = %s')
+            params.extend((mods, mods))
+        else:
+            query.append('AND mods & %s != 0')
+            params.append(mods)
+
+    # unlike /api/get_player_scores, we'll sort by score/pp depending
+    # on the mode played, since we want to replicated leaderboards.
+    if scope == 'best':
+        sort = 'pp' if mode >= GameMode.rx_std else 'score'
+    else: # recent
+        sort = 'play_time'
+
+    query.append(f'ORDER BY {sort} DESC LIMIT %s')
+    params.append(limit)
+
+    res = await glob.db.fetchall(' '.join(query), params)
+    return JSON(res)
+
+@domain.route('/api/get_score_info')
+async def api_get_score_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given score."""
+    if not (
+        'id' in conn.args and
+        conn.args['id'].isdecimal()
+    ):
+        return (400, b'Must provide score id.')
 
     score_id = int(conn.args['id'])
 
@@ -1549,7 +1644,41 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
         scores_table = 'scores_ap'
     else:
-        return # invalid score id
+        return (400, b'Invalid score id.')
+
+    res = await glob.db.fetch(
+        'SELECT map_md5, score, pp, acc, max_combo, mods, '
+        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+        'mode, play_time, time_elapsed, perfect '
+        f'FROM {scores_table} '
+        'WHERE id = %s',
+        [score_id]
+    )
+
+    if not res:
+        return (404, b'Score not found.')
+
+    return JSON(res)
+
+@domain.route('/api/get_replay')
+async def api_get_replay(conn: Connection) -> Optional[bytes]:
+    """Return a given replay (including headers)."""
+    if not (
+        'id' in conn.args and
+        conn.args['id'].isdecimal()
+    ):
+        return (400, b'Must provide score id.')
+
+    score_id = int(conn.args['id'])
+
+    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+        scores_table = 'scores_vn'
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = 'scores_rx'
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = 'scores_ap'
+    else:
+        return (400, b'Invalid score id.')
 
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f'{score_id}.osr'
@@ -1558,6 +1687,12 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
 
     # read replay frames from file
     raw_replay = replay_file.read_bytes()
+
+    if (
+        'include_headers' in conn.args and
+        conn.args['include_headers'].lower() == 'false'
+    ):
+        return raw_replay
 
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
