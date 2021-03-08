@@ -1869,26 +1869,26 @@ async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
         'sr': sr
     })
 
-def requires_api_token(f: Callable) -> Callable:
+def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
     async def wrapper(conn: Connection) -> Optional[bytes]:
         if 'Authorization' not in conn.headers:
             return (400, b'Must provide authorization token.')
 
-        api_token = conn.headers['Authorization']
+        api_key = conn.headers['Authorization']
 
-        if api_token not in glob.api_tokens:
+        if api_key not in glob.api_keys:
             return (401, b'Unknown authorization token.')
 
         # get player from api token
-        player_id = glob.api_tokens[api_token]
+        player_id = glob.api_keys[api_key]
         p = await glob.players.get_ensure(id=player_id)
 
         return await f(conn, p)
     return wrapper
 
 @domain.route('/api/set_avatar', methods=['POST', 'PUT'])
-@requires_api_token
+@requires_api_key
 async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
     """Update the tokenholder's avatar to a given file."""
     if 'avatar' not in conn.files:

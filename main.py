@@ -100,11 +100,11 @@ async def setup_collections() -> None:
         # NOTE: achievements are grouped by modes internally.
         glob.achievements[row['mode']].append(achievement)
 
-    glob.api_tokens = {
-        row['api_token']: row['id']
+    glob.api_keys = {
+        row['api_key']: row['id']
         for row in await glob.db.fetchall(
-            'SELECT id, api_token FROM users '
-            'WHERE api_token IS NOT NULL'
+            'SELECT id, api_key FROM users '
+            'WHERE api_key IS NOT NULL'
         )
     }
 

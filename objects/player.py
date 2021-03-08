@@ -136,7 +136,8 @@ class Player:
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options', 'tourney_client', '_queue', '__dict__'
+        'menu_options', 'tourney_client', 'api_key',
+        '_queue', '__dict__'
     )
 
     def __init__(self, id: int, name: str,
@@ -208,6 +209,8 @@ class Player:
         self.menu_options: dict[int, dict[str, Any]] = {}
 
         self.tourney_client = extras.get('tourney_client', False)
+
+        self.api_key = extras.get('api_key', None)
 
         # packet queue
         self._queue = bytearray()

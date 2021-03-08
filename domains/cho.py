@@ -418,7 +418,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, '
-        'silence_end, clan_id, clan_priv '
+        'silence_end, clan_id, clan_priv, api_key '
         'FROM users WHERE safe_name = %s',
         [make_safe_name(username)]
     )
@@ -525,7 +525,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     }
 
     p = Player(
-        **user_info, # {id, name, priv, pw_bcrypt, silence_end}
+        **user_info, # {id, name, priv, pw_bcrypt,
+                     #  silence_end, api_key}
         **extras     # {utc_offset, osu_ver, pm_private,
                      #  login_time, clan, clan_priv}
     )

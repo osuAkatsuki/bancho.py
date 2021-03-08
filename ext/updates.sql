@@ -277,5 +277,5 @@ alter table maps add max_combo int not null after total_length;
 alter table users change clan_rank clan_priv tinyint(1) default 0 not null;
 
 # v3.2.3
-alter table users add api_token char(36) default NULL null;
-create unique index users_api_token_uindex on users (api_token);
+alter table users add api_key char(36) default NULL null;
+create unique index users_api_key_uindex on users (api_key);

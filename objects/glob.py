@@ -21,7 +21,7 @@ __all__ = (
     # current server state
     'players', 'channels', 'matches',
     'pools', 'clans', 'achievements',
-    'version', 'bot', 'api_tokens',
+    'version', 'bot', 'api_keys',
     'bancho_packets', 'db', 'http',
     'datadog', 'sketchy_queue',
     'oppai_built', 'cache'
@@ -39,7 +39,7 @@ bot: 'Player'
 version: 'Version'
 
 # currently registered api tokens
-api_tokens: dict[str, int] # {api_token: player_id}
+api_keys: dict[str, int] # {api_key: player_id}
 
 # list of registered packets
 bancho_packets: dict['Packets', 'BanchoPacket']

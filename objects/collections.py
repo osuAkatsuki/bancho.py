@@ -202,7 +202,7 @@ class PlayerList(list):
         # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_priv '
+            'silence_end, clan_id, clan_priv, api_key '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
