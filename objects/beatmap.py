@@ -338,7 +338,9 @@ class Beatmap:
         m.last_update = datetime.strptime(
             bmap['last_update'], '%Y-%m-%d %H:%M:%S')
         m.total_length = int(bmap['total_length'])
-        m.max_combo = int(bmap['max_combo'])
+
+        if bmap['max_combo'] is not None:
+            m.max_combo = int(bmap['max_combo'])
 
         m.status = RankedStatus.from_osuapi(int(bmap['approved']))
 
@@ -462,7 +464,7 @@ class Beatmap:
             m.last_update = bmap['last_update']
             m.total_length = int(bmap['total_length'])
 
-            if bmap['max_combo'] is not None: # ??? osu api
+            if bmap['max_combo'] is not None:
                 m.max_combo = int(bmap['max_combo'])
 
             m.status = bmap['approved']
