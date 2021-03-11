@@ -109,6 +109,14 @@ async def setup_collections() -> None:
         )
     }
 
+async def after_serving() -> None:
+    """Called after the server stops serving connections."""
+    await glob.http.close()
+    await glob.db.close()
+
+    if glob.datadog:
+        glob.datadog.stop()
+
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
@@ -184,6 +192,7 @@ if __name__ == '__main__':
     # enqueue a task to run once the
     # server begins serving connections.
     app.before_serving = before_serving
+    app.after_serving = after_serving
 
     # support for https://datadoghq.com
     if all(glob.config.datadog.values()):
