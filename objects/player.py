@@ -959,3 +959,16 @@ class Player:
                 sender_id = sender.id
             )
         )
+
+    def send_bot(self, msg: str) -> None:
+        """Enqueue `msg` to `self` from bot."""
+        bot = glob.bot
+
+        self.enqueue(
+            packets.sendMessage(
+                sender = bot.name,
+                msg = msg,
+                recipient = self.name,
+                sender_id = bot.id
+            )
+        )
