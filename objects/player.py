@@ -45,6 +45,8 @@ __all__ = (
     'Player'
 )
 
+BASE_DOMAIN = glob.config.domain
+
 @unique
 @pymysql_encode(escape_enum)
 class PresenceFilter(IntEnum):
@@ -228,7 +230,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f'https://{glob.config.domain}/u/{self.id}'
+        return f'https://{BASE_DOMAIN}/u/{self.id}'
 
     @cached_property
     def embed(self) -> str:
@@ -244,7 +246,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f'https://a.{glob.config.domain}/{self.id}'
+        return f'https://a.{BASE_DOMAIN}/{self.id}'
 
     @cached_property
     def full_name(self) -> str:

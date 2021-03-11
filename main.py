@@ -28,6 +28,7 @@ from objects.channel import Channel
 from objects.clan import Clan
 from objects.match import MapPool
 from objects.player import Player
+from utils.misc import download_achievement_pngs
 from utils.updater import Updater
 
 __all__ = ()
@@ -35,7 +36,7 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 3)
+glob.version = cmyui.Version(3, 2, 4)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
@@ -153,6 +154,12 @@ if __name__ == '__main__':
     for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
         subdir = data_path / sub_dir
         subdir.mkdir(exist_ok=True)
+
+    achievements_path = data_path / 'assets/medals/client'
+    if not achievements_path.exists():
+        # create directory & download achievement pngs
+        achievements_path.mkdir(parents=True)
+        download_achievement_pngs(achievements_path)
 
     # make sure oppai-ng is built and ready.
     if not (Path.cwd() / 'oppai-ng/oppai').exists():

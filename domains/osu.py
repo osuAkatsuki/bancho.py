@@ -48,7 +48,8 @@ if TYPE_CHECKING:
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain('osu.ppy.sh')
+BASE_DOMAIN = glob.config.domain
+domain = Domain(f'osu.{BASE_DOMAIN}')
 
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
@@ -359,7 +360,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     # but it mostly depends on the mirror.
     if conn.args['q'] not in ('Newest', 'Top+Rated', 'Most+Played'):
         params['query'] = conn.args['q']
- 
+
     if conn.args['m'] != '-1':
         params |= {'mode': conn.args['m']}
 
@@ -585,11 +586,12 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
                 f'ORDER BY s.{scoring} DESC LIMIT 1',
-                [s.bmap.md5, s.mode.as_vanilla]
+                [s.bmap.md5, s.mode.as_vanilla], _dict=False
             )
 
-            if prev_n1 and s.player.id != prev_n1['id']:
-                ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+            if prev_n1 and s.player.id != prev_n1[0]:
+                pid, pname = prev_n1
+                ann.append(f'(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])')
 
             s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
             announce_chan.send(' '.join(ann), sender=s.player, to_self=True)
@@ -761,7 +763,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # append beatmap ranking chart (#2)
         charts.append('|'.join((
             'chartId:beatmap',
-            f'chartUrl:https://{glob.config.domain}/b/{s.bmap.id}',
+            f'chartUrl:https://{BASE_DOMAIN}/b/{s.bmap.id}',
             'chartName:Beatmap Ranking',
 
             *((
@@ -786,7 +788,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # append overall ranking chart (#3)
         charts.append('|'.join((
             'chartId:overall',
-            f'chartUrl:https://{glob.config.domain}/u/{s.player.id}',
+            f'chartUrl:https://{BASE_DOMAIN}/u/{s.player.id}',
             'chartName:Overall Ranking',
 
             *((

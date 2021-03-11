@@ -40,6 +40,8 @@ __all__ = (
     'Match'
 )
 
+BASE_DOMAIN = glob.config.domain
+
 @unique
 @pymysql_encode(escape_enum)
 class SlotStatus(IntEnum):
@@ -265,7 +267,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f'https://osu.ppy.sh/b/{self.map_id}'
+        return f'https://{BASE_DOMAIN}/b/{self.map_id}'
 
     @property
     def embed(self) -> str:

@@ -41,7 +41,9 @@ from utils.misc import make_safe_name
 
 """ Bancho: handle connections from the osu! client """
 
-domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
+BASE_DOMAIN = glob.config.domain
+_domain_escaped = BASE_DOMAIN.replace('.', r'\.')
+domain = Domain(re.compile(rf'^c[e4-6]?\.{_domain_escaped}$'))
 
 @domain.route('/')
 async def bancho_http_handler(conn: Connection) -> bytes:
@@ -305,7 +307,7 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
 # Some messages to send on welcome/restricted/etc.
 # TODO: these should probably be moved to the config.
 WELCOME_MSG = '\n'.join((
-    f"Welcome to {glob.config.domain}.",
+    f"Welcome to {BASE_DOMAIN}.",
     "To see a list of commands, use !help.",
     "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
     "Enjoy the server!"
