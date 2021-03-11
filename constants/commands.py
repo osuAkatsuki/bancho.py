@@ -909,12 +909,13 @@ async def reload(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 # harmful tasks to the underlying machine, so use at your own risk.
 
 if glob.config.advanced:
+    from sys import modules as installed_mods
     __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
         'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
         'cmyui',  'datetime', 'time', 'inspect', 'math',
         'importlib'
-    )}
+    ) if mod in installed_mods}
 
     @command(Privileges.Dangerous)
     async def py(p: Player, c: Messageable, msg: Sequence[str]) -> str:

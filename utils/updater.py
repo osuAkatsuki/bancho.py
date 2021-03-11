@@ -150,9 +150,9 @@ class Updater:
 
                     input('Press enter to exit')
 
-                    loop = asyncio.get_running_loop()
-                    loop.stop()
-                    loop.close()
-                    exit(1)
+                    await glob.http.close()
+                    await glob.db.close()
+
+                    raise
 
     # TODO _update_config?
