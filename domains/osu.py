@@ -324,6 +324,23 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
         pass
     """
 
+# gulag supports both cheesegull mirrors & chimu.moe.
+# chimu.moe handles things a bit differently than cheesegull,
+# and has some extra features we'll eventually use more of.
+USING_CHIMU = 'chimu.moe' in glob.config.mirror
+
+DIRECT_SET_INFO_FMTSTR = (
+    '{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|'
+    '{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|'
+    '0|0|0|0|0|{{diffs}}'# 0s are threadid, has_vid, has_story,
+                         #        filesize, filesize_novid.
+).format(setid_spelling='SetId' if USING_CHIMU else 'SetID')
+
+DIRECT_MAP_INFO_FMTSTR = (
+    '[{DifficultyRating:.2f}⭐] {DiffName} '
+    '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'
+)
+
 @domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login(name_p='u', pass_p='h')
@@ -331,13 +348,18 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
-    url = f'{glob.config.mirror}/api/search'
+    search_url = f'{glob.config.mirror}/search'
+
     params = {
         'amount': 100,
-        'offset': conn.args['p'],
-        'query': conn.args['q']
+        'offset': conn.args['p']
     }
 
+    # eventually we could try supporting these,
+    # but it mostly depends on the mirror.
+    if conn.args['q'] not in ('Newest', 'Top+Rated', 'Most+Played'):
+        params['query'] = conn.args['q']
+ 
     if conn.args['m'] != '-1':
         params |= {'mode': conn.args['m']}
 
@@ -346,11 +368,27 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         status = RankedStatus.from_osudirect(int(conn.args['r']))
         params |= {'status': status.osu_api}
 
-    async with glob.http.get(url, params = params) as resp:
-        if not resp or resp.status != 200:
-            return b'Failed to retrieve data from mirror!'
+    async with glob.http.get(search_url, params=params) as resp:
+        if not resp:
+            from utils.misc import point_of_interest
+            point_of_interest()
+
+        if USING_CHIMU: # error handling varies
+            if resp.status == 404:
+                return b'0' # no maps found
+            elif resp.status != 200:
+                breakpoint()
+        else: # cheesegull
+            if resp.status != 200:
+                return b'Failed to retrieve data from mirror!'
 
         result = await resp.json()
+
+        if USING_CHIMU:
+            if result['code'] != 0:
+                breakpoint()
+                return b'Failed to retrieve data from mirror!'
+            result = result['data']
 
     lresult = len(result) # send over 100 if we receive
                           # 100 matches, so the client
@@ -362,20 +400,13 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         if bmap['ChildrenBeatmaps'] is None:
             continue
 
-        diffs = ','.join([
-            '[{DifficultyRating:.2f}⭐] {DiffName} '
-            '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
-            for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
-        ])
+        diff_sorted_maps = sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
+                              for row in diff_sorted_maps])
 
-        ret.append(
-            '{SetID}.osz|{Artist}|{Title}|{Creator}|'
-            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
-            '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
-        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
 
     return '\n'.join(ret).encode()
-
 
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})

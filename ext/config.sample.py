@@ -58,7 +58,7 @@ osu_api_key = ''
 gzip = {'web': 4, 'disk': 9}
 
 # the external mirror url to use.
-mirror = 'https://storage.ripple.moe'
+mirror = 'https://api.chimu.moe/v1'
 
 # the menu icon displayed on
 # the main menu of osu! in-game.
