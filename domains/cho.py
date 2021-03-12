@@ -1104,16 +1104,20 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                        f'!mp teams {_team} command.')
                 m.chat.send_bot(msg)
             else:
-                is_solo = self.new.team_type  in (MatchTeamTypes.head_to_head,
-                                          MatchTeamTypes.tag_coop)
+                # find the new appropriate default team.
+                # defaults are (ffa: neutral, teams: red).
+                if m.team_type in (MatchTeamTypes.head_to_head,
+                                MatchTeamTypes.tag_coop):
+                    new_t = MatchTeams.neutral
+                else:
+                    new_t = MatchTeams.red
 
                 # change each active slots team to
                 # fit the correspoding team type.
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
-                        # randomize new team placement (could be used as a mechanic)
-                        s.team = MatchTeams.neutral if is_solo else MatchTeams.red
-
+                        s.team = new_t
+                
                 # change the matches'.
                 m.team_type = self.new.team_type
 
