@@ -32,14 +32,15 @@ Installation Guide
 -------------
 important notes:
 - ubuntu 20.04 & nginx have unknown issues? i recommend using 18.04
-- i will not help with the creation of a fake ssl cert for switcher support.
+- i will not help with the creation of a fake *.ppy.sh cert for switcher support.
 
 ```sh
 # add ppa for py3.9 (required since it's new)
 sudo add-apt-repository ppa:deadsnakes/ppa
 
-# install requirements (py3.9, mysql, nginx, build tools)
-sudo apt install python3.9 python3.9-dev python3.9-distutils mysql-server nginx build-essential
+# install requirements (py3.9, mysql, nginx, build tools, certbot)
+sudo apt install python3.9 python3.9-dev python3.9-distutils \
+                 mysql-server nginx build-essential certbot
 
 # install pip for py3.9
 wget https://bootstrap.pypa.io/get-pip.py
@@ -63,18 +64,35 @@ cd oppai-ng && ./build && cd ..
 # import gulag's mysql structure
 mysql -u your_sql_username -p your_db_name < ext/db.sql
 
-########################################################
-# NOTE: before continuing, generate an ssl cert & edit #
-# the certificate paths nginx config (ext/nginx.conf)  #
-########################################################
+# generate an ssl certificate for your domain (change email & domain)
+sudo certbot certonly \
+    --manual \
+    --preferred-challenges=dns \
+    --email your@email.com \
+    --server https://acme-v02.api.letsencrypt.org/directory \
+    --agree-tos \
+    -d *.your.domain
 
-# symlink our nginx config to /etc/nginx/sites-enabled
-sudo ln ext/nginx.conf /etc/nginx/sites-enabled/gulag.conf
+# copy our nginx config to `sites-enabled` & open for editing
+sudo cp ext/nginx.conf /etc/nginx/sites-enabled/gulag.conf
+sudo nano /etc/nginx/sites-enabled/gulag.conf
+
+##########################################
+# NOTE: before continuing, make sure you #
+# have completely configured the file.   #
+##########################################
+
+# reload the reverse proxy's config
 sudo nginx -s reload
 
-# copy configuration file from /ext/ & configure it
+# copy our gulag config to cwd & open for editing
 cp ext/config.sample.py config.py
 nano config.py
+
+##########################################
+# NOTE: before continuing, make sure you #
+# have completely configured the file.   #
+##########################################
 
 # start the server
 ./main.py
