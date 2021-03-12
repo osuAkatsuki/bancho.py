@@ -625,12 +625,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         if not p.priv & Privileges.Verified:
             # this is the player's first login, verify their
             # account & send info about the server/its usage.
-            p.add_privs(Privileges.Verified)
+            await p.add_privs(Privileges.Verified)
 
             if p.id == 3:
                 # this is the first player registering on
                 # the server, grant them full privileges.
-                p.add_privs(
+                await p.add_privs(
                     Privileges.Staff | Privileges.Nominator |
                     Privileges.Whitelisted | Privileges.Tournament |
                     Privileges.Donator | Privileges.Alumni

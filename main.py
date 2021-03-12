@@ -112,7 +112,9 @@ async def setup_collections() -> None:
 async def after_serving() -> None:
     """Called after the server stops serving connections."""
     await glob.http.close()
-    await glob.db.close()
+
+    if glob.db.pool is not None:
+        await glob.db.close()
 
     if glob.datadog:
         glob.datadog.stop()
