@@ -43,7 +43,7 @@ from utils.misc import make_safe_name
 
 BASE_DOMAIN = glob.config.domain
 _domain_escaped = BASE_DOMAIN.replace('.', r'\.')
-domain = Domain(re.compile(rf'^c[e4-6]?\.{_domain_escaped}$'))
+domain = Domain(re.compile(rf'^c[e4-6]?\.(?:{_domain_escaped}|ppy\.sh)$'))
 
 @domain.route('/')
 async def bancho_http_handler(conn: Connection) -> bytes:

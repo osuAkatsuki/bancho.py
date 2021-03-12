@@ -12,7 +12,7 @@ from objects import glob
 """ ava: avatar server (for both ingame & external) """
 
 BASE_DOMAIN = glob.config.domain
-domain = Domain(f'a.{BASE_DOMAIN}')
+domain = Domain({f'a.{BASE_DOMAIN}', 'a.ppy.sh'})
 
 AVATARS_PATH = Path.cwd() / '.data/avatars'
 DEFAULT_AVATAR = AVATARS_PATH / 'default.jpg'

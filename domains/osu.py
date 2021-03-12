@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 """ osu: handle connections from web, api, and beyond? """
 
 BASE_DOMAIN = glob.config.domain
-domain = Domain(f'osu.{BASE_DOMAIN}')
+domain = Domain({f'osu.{BASE_DOMAIN}', 'osu.ppy.sh'})
 
 REPLAYS_PATH = Path.cwd() / '.data/osr'
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
