@@ -181,29 +181,19 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} sent a message while silenced.', Ansi.LYELLOW)
             return
 
+
         # remove leading/trailing whitespace
         msg = self.msg.msg.strip()
         target = self.msg.target
 
-        if target == '#spectator':
-            if p.spectating:
-                # we are spectating someone
-                spec_id = p.spectating.id
-            elif p.spectators:
-                # we are being spectated
-                spec_id = p.id
-            else:
-                return
+        t_chan = None
 
-            t_chan = glob.channels[f'#spec_{spec_id}']
-        elif target == '#multiplayer':
-            if not p.match:
-                # they're not in a match?
-                return
+        for chan in p.channels:
+            if chan.name == target:
+                t_chan = chan
 
-            t_chan = p.match.chat
-        else:
-            t_chan = glob.channels[target]
+        if not t_chan and (t_chan := glob.channels[target]):
+            log(f"{p} is not part of {target} and yet sent message to {target}????", Ansi.LYELLOW)
 
         if not t_chan:
             log(f'{p} wrote to non-existent {target}.', Ansi.LYELLOW)
@@ -1142,6 +1132,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 # fit the correspoding team type.
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
+                        # randomize new team placement (could be used as a mechanic)
                         s.team = MatchTeams.neutral if isSolo else \
                         MatchTeams.red if r.random() > 0.5 else MatchTeams.blue
 
