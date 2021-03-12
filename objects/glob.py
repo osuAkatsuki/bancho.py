@@ -17,14 +17,17 @@ if __import__('typing').TYPE_CHECKING:
     from packets import BanchoPacket
     from packets import Packets
 
-__all__ = ('players', 'channels', 'matches',
-           'pools', 'clans', 'achievements',
-           'bancho_packets', 'db', 'http',
-           'version', 'bot', 'cache',
-           'sketchy_queue', 'datadog',
-           'oppai_built')
+__all__ = (
+    # current server state
+    'players', 'channels', 'matches',
+    'pools', 'clans', 'achievements',
+    'version', 'bot', 'api_keys',
+    'bancho_packets', 'db', 'http',
+    'datadog', 'sketchy_queue',
+    'oppai_built', 'cache'
+)
 
-# global lists
+# current server state
 players: 'PlayerList'
 channels: 'ChannelList'
 matches: 'MatchList'
@@ -32,13 +35,24 @@ clans: 'ClanList'
 pools: 'MapPoolList'
 achievements: dict[int, list['Achievement']] # per vn gamemode
 
+bot: 'Player'
+version: 'Version'
+
+# currently registered api tokens
+api_keys: dict[str, int] # {api_key: player_id}
+
+# list of registered packets
 bancho_packets: dict['Packets', 'BanchoPacket']
+
+# active connections
 db: 'AsyncSQLPool'
 http: 'ClientSession'
-version: 'Version'
-bot: 'Player'
-sketchy_queue: 'Queue[Score]'
 datadog: 'Optional[ThreadStats]'
+
+# queue of submitted scores deemed 'sketchy'; to be analyzed.
+sketchy_queue: 'Queue[Score]'
+
+# whether or not the oppai-ng binary was located at startup.
 oppai_built: bool
 
 # gulag's main cache.

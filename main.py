@@ -28,6 +28,7 @@ from objects.channel import Channel
 from objects.clan import Clan
 from objects.match import MapPool
 from objects.player import Player
+from utils.misc import download_achievement_pngs
 from utils.updater import Updater
 
 __all__ = ()
@@ -35,7 +36,7 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 2)
+glob.version = cmyui.Version(3, 2, 4)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
@@ -53,13 +54,13 @@ async def setup_collections() -> None:
 
     # global channels list
     glob.channels = ChannelList()
-    async for res in glob.db.iterall('SELECT * FROM channels'):
+    async for row in glob.db.iterall('SELECT * FROM channels'):
         chan = Channel(
-            name = res['name'],
-            topic = res['topic'],
-            read_priv = Privileges(res['read_priv']),
-            write_priv = Privileges(res['write_priv']),
-            auto_join = res['auto_join'] == 1
+            name = row['name'],
+            topic = row['topic'],
+            read_priv = Privileges(row['read_priv']),
+            write_priv = Privileges(row['write_priv']),
+            auto_join = row['auto_join'] == 1
         )
 
         glob.channels.append(chan)
@@ -69,20 +70,20 @@ async def setup_collections() -> None:
 
     # global clans list
     glob.clans = ClanList()
-    async for res in glob.db.iterall('SELECT * FROM clans'):
-        clan = Clan(**res)
+    async for row in glob.db.iterall('SELECT * FROM clans'):
+        clan = Clan(**row)
 
         await clan.members_from_sql()
         glob.clans.append(clan)
 
     # global mappools list
     glob.pools = MapPoolList()
-    async for res in glob.db.iterall('SELECT * FROM tourney_pools'):
+    async for row in glob.db.iterall('SELECT * FROM tourney_pools'):
         pool = MapPool(
-            id = res['id'],
-            name = res['name'],
-            created_at = res['created_at'],
-            created_by = await glob.players.get_ensure(id=res['created_by'])
+            id = row['id'],
+            name = row['name'],
+            created_at = row['created_at'],
+            created_by = await glob.players.get_ensure(id=row['created_by'])
         )
 
         await pool.maps_from_sql()
@@ -90,15 +91,33 @@ async def setup_collections() -> None:
 
     # global achievements (sorted by vn gamemodes)
     glob.achievements = {0: [], 1: [], 2: [], 3: []}
-    async for res in glob.db.iterall('SELECT * FROM achievements'):
+    async for row in glob.db.iterall('SELECT * FROM achievements'):
         # NOTE: achievement conditions are stored as
         # stringified python expressions in the database
         # to allow for easy custom achievements.
-        condition = eval(f'lambda score: {res.pop("cond")}')
-        achievement = Achievement(**res, cond=condition)
+        condition = eval(f'lambda score: {row.pop("cond")}')
+        achievement = Achievement(**row, cond=condition)
 
         # NOTE: achievements are grouped by modes internally.
-        glob.achievements[res['mode']].append(achievement)
+        glob.achievements[row['mode']].append(achievement)
+
+    glob.api_keys = {
+        row['api_key']: row['id']
+        for row in await glob.db.fetchall(
+            'SELECT id, api_key FROM users '
+            'WHERE api_key IS NOT NULL'
+        )
+    }
+
+async def after_serving() -> None:
+    """Called after the server stops serving connections."""
+    await glob.http.close()
+
+    if glob.db.pool is not None:
+        await glob.db.close()
+
+    if glob.datadog:
+        glob.datadog.stop()
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
@@ -146,6 +165,12 @@ if __name__ == '__main__':
         subdir = data_path / sub_dir
         subdir.mkdir(exist_ok=True)
 
+    achievements_path = data_path / 'assets/medals/client'
+    if not achievements_path.exists():
+        # create directory & download achievement pngs
+        achievements_path.mkdir(parents=True)
+        download_achievement_pngs(achievements_path)
+
     # make sure oppai-ng is built and ready.
     if not (Path.cwd() / 'oppai-ng/oppai').exists():
         glob.oppai_built = False
@@ -169,6 +194,7 @@ if __name__ == '__main__':
     # enqueue a task to run once the
     # server begins serving connections.
     app.before_serving = before_serving
+    app.after_serving = after_serving
 
     # support for https://datadoghq.com
     if all(glob.config.datadog.values()):

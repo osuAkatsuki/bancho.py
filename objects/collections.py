@@ -84,7 +84,7 @@ class MatchList(list):
 
     def __init__(self) -> None:
         super().__init__()
-        self.extend([None] * 32)
+        self.extend([None] * 64)
 
     def __iter__(self) -> Iterator['Match']:
         return super().__iter__()
@@ -202,7 +202,7 @@ class PlayerList(list):
         # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_priv '
+            'silence_end, clan_id, clan_priv, api_key '
             f'FROM users WHERE {attr} = %s',
             [val]
         )

@@ -179,7 +179,7 @@ class BanchoPacket:
 
     async def handle(self, p: 'Player') -> None: ...
 
-Message = namedtuple('Message', ['client', 'msg', 'target', 'client_id'])
+Message = namedtuple('Message', ['sender', 'msg', 'recipient', 'sender_id'])
 Channel = namedtuple('Channel', ['name', 'topic', 'players'])
 
 class BanchoPacketReader:
@@ -380,10 +380,10 @@ class BanchoPacketReader:
     def read_message(self) -> Message: # namedtuple
         """Read an osu! message from the internal buffer."""
         return Message(
-            client = self.read_string(),
+            sender = self.read_string(),
             msg = self.read_string(),
-            target = self.read_string(),
-            client_id = self.read_i32()
+            recipient = self.read_string(),
+            sender_id = self.read_i32()
         )
 
     def read_channel(self) -> Channel: # namedtuple
@@ -493,13 +493,13 @@ def write_i32_list(l: tuple[int, ...]) -> bytearray:
 
     return ret
 
-def write_message(client: str, msg: str, target: str,
-                  client_id: int) -> bytearray:
+def write_message(sender: str, msg: str, recipient: str,
+                  sender_id: int) -> bytearray:
     """ Write params into bytes (osu! message). """
-    ret = bytearray(write_string(client))
+    ret = bytearray(write_string(sender))
     ret += write_string(msg)
-    ret += write_string(target)
-    ret += client_id.to_bytes(4, 'little', signed=True)
+    ret += write_string(recipient)
+    ret += sender_id.to_bytes(4, 'little', signed=True)
     return ret
 
 def write_channel(name: str, topic: str,
@@ -620,11 +620,11 @@ def userID(id: int) -> bytes:
     )
 
 # packet id: 7
-def sendMessage(client: str, msg: str, target: str,
-                client_id: int) -> bytes:
+def sendMessage(sender: str, msg: str, recipient: str,
+                sender_id: int) -> bytes:
     return write(
         Packets.CHO_SEND_MESSAGE,
-        ((client, msg, target, client_id), osuTypes.message)
+        ((sender, msg, recipient, sender_id), osuTypes.message)
     )
 
 # packet id: 8

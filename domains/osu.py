@@ -4,6 +4,7 @@ import copy
 import hashlib
 import random
 import re
+import struct
 import time
 from collections import defaultdict
 from enum import IntEnum
@@ -47,8 +48,13 @@ if TYPE_CHECKING:
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain('osu.ppy.sh')
+BASE_DOMAIN = glob.config.domain
+domain = Domain({f'osu.{BASE_DOMAIN}', 'osu.ppy.sh'})
 
+REPLAYS_PATH = Path.cwd() / '.data/osr'
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
+AVATARS_PATH = Path.cwd() / '.data/avatars'
 
 """ Some helper decorators (used for /web/ connections) """
 
@@ -119,7 +125,6 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
-SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login(name_p='u', pass_p='p')
@@ -320,6 +325,23 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
         pass
     """
 
+# gulag supports both cheesegull mirrors & chimu.moe.
+# chimu.moe handles things a bit differently than cheesegull,
+# and has some extra features we'll eventually use more of.
+USING_CHIMU = 'chimu.moe' in glob.config.mirror
+
+DIRECT_SET_INFO_FMTSTR = (
+    '{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|'
+    '{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|'
+    '0|0|0|0|0|{{diffs}}'# 0s are threadid, has_vid, has_story,
+                         #        filesize, filesize_novid.
+).format(setid_spelling='SetId' if USING_CHIMU else 'SetID')
+
+DIRECT_MAP_INFO_FMTSTR = (
+    '[{DifficultyRating:.2f}⭐] {DiffName} '
+    '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'
+)
+
 @domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login(name_p='u', pass_p='h')
@@ -327,12 +349,17 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
-    url = f'{glob.config.mirror}/api/search'
+    search_url = f'{glob.config.mirror}/search'
+
     params = {
         'amount': 100,
-        'offset': conn.args['p'],
-        'query': conn.args['q']
+        'offset': conn.args['p']
     }
+
+    # eventually we could try supporting these,
+    # but it mostly depends on the mirror.
+    if conn.args['q'] not in ('Newest', 'Top+Rated', 'Most+Played'):
+        params['query'] = conn.args['q']
 
     if conn.args['m'] != '-1':
         params |= {'mode': conn.args['m']}
@@ -342,11 +369,27 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         status = RankedStatus.from_osudirect(int(conn.args['r']))
         params |= {'status': status.osu_api}
 
-    async with glob.http.get(url, params = params) as resp:
-        if not resp or resp.status != 200:
-            return b'Failed to retrieve data from mirror!'
+    async with glob.http.get(search_url, params=params) as resp:
+        if not resp:
+            from utils.misc import point_of_interest
+            point_of_interest()
+
+        if USING_CHIMU: # error handling varies
+            if resp.status == 404:
+                return b'0' # no maps found
+            elif resp.status != 200:
+                breakpoint()
+        else: # cheesegull
+            if resp.status != 200:
+                return b'Failed to retrieve data from mirror!'
 
         result = await resp.json()
+
+        if USING_CHIMU:
+            if result['code'] != 0:
+                breakpoint()
+                return b'Failed to retrieve data from mirror!'
+            result = result['data']
 
     lresult = len(result) # send over 100 if we receive
                           # 100 matches, so the client
@@ -358,20 +401,13 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         if bmap['ChildrenBeatmaps'] is None:
             continue
 
-        diffs = ','.join([
-            '[{DifficultyRating:.2f}⭐] {DiffName} '
-            '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
-            for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
-        ])
+        diff_sorted_maps = sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
+                              for row in diff_sorted_maps])
 
-        ret.append(
-            '{SetID}.osz|{Artist}|{Title}|{Creator}|'
-            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
-            '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
-        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
 
     return '\n'.join(ret).encode()
-
 
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
@@ -430,7 +466,6 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
-REPLAYS_PATH = Path.cwd() / '.data/osr'
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
@@ -551,11 +586,12 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
                 f'ORDER BY s.{scoring} DESC LIMIT 1',
-                [s.bmap.md5, s.mode.as_vanilla]
+                [s.bmap.md5, s.mode.as_vanilla], _dict=False
             )
 
-            if prev_n1 and s.player.id != prev_n1['id']:
-                ann.append('(Previous #1: [https://osu.ppy.sh/u/{id} {name}])'.format(**prev_n1))
+            if prev_n1 and s.player.id != prev_n1[0]:
+                pid, pname = prev_n1
+                ann.append(f'(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])')
 
             s.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
             announce_chan.send(' '.join(ann), sender=s.player, to_self=True)
@@ -686,7 +722,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         ret = b'error: no'
 
     else:
-        #
         # prepare to send the user charts & achievements.
         achievements = []
 
@@ -728,7 +763,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # append beatmap ranking chart (#2)
         charts.append('|'.join((
             'chartId:beatmap',
-            f'chartUrl:https://{glob.config.domain}/b/{s.bmap.id}',
+            f'chartUrl:https://{BASE_DOMAIN}/b/{s.bmap.id}',
             'chartName:Beatmap Ranking',
 
             *((
@@ -753,7 +788,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # append overall ranking chart (#3)
         charts.append('|'.join((
             'chartId:overall',
-            f'chartUrl:https://{glob.config.domain}/u/{s.player.id}',
+            f'chartUrl:https://{BASE_DOMAIN}/u/{s.player.id}',
             'chartName:Overall Ranking',
 
             *((
@@ -990,18 +1025,32 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     scores = await glob.db.fetchall(' '.join(query), params)
 
-    res: list[str] = []
+    l: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
-    res.append(f'{int(bmap.status)}|false|{bmap.id}|'
-               f'{bmap.set_id}|{len(scores) if scores else 0}')
+    l.append(f'{int(bmap.status)}|false|{bmap.id}|'
+             f'{bmap.set_id}|{len(scores) if scores else 0}')
 
-    # offset, name, rating
-    res.append(f'0\n{bmap.full}\n10.0')
+    # fetch beatmap rating from sql
+    rating = (await glob.db.fetch(
+        'SELECT AVG(rating) rating '
+        'FROM ratings '
+        'WHERE map_md5 = %s',
+        [bmap.md5]
+    ))['rating']
+
+    if rating is not None:
+        rating = f'{rating:.1f}'
+    else:
+        rating = '10.0'
+
+    # TODO: we could have server-specific offsets for
+    # maps that mods could set for incorrectly timed maps.
+    l.append(f'0\n{bmap.full}\n{rating}') # offset, name, rating
 
     if not scores:
         # simply return an empty set.
-        return '\n'.join(res + ['', '']).encode()
+        return '\n'.join(l + ['', '']).encode()
 
     p_best = await glob.db.fetch(
         f'SELECT id, {scoring} AS _score, '
@@ -1033,7 +1082,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
             ]
         ))['count']
 
-        res.append(
+        l.append(
             score_fmt.format(
                 **p_best,
                 name = p.full_name, userid = p.id,
@@ -1042,16 +1091,16 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
             )
         )
     else:
-        res.append('')
+        l.append('')
 
-    res.extend([
+    l.extend([
         score_fmt.format(
             **s, score = int(s['_score']),
             has_replay = '1', rank = idx + 1
         ) for idx, s in enumerate(scores)
     ])
 
-    return '\n'.join(res).encode()
+    return '\n'.join(l).encode()
 
 @domain.route('/web/osu-comment.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'b', 's',
@@ -1076,21 +1125,21 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         ret: list[str] = []
 
-        async for com in comments:
+        async for cmt in comments:
             # TODO: maybe support player/creator colours?
             # pretty expensive for very low gain, but completion :D
-            if com['priv'] & Privileges.Nominator:
+            if cmt['priv'] & Privileges.Nominator:
                 fmt = 'bat'
-            elif com['priv'] & Privileges.Donator:
+            elif cmt['priv'] & Privileges.Donator:
                 fmt = 'supporter'
             else:
                 fmt = ''
 
-            if com['colour']:
-                fmt += f'|{com["colour"]}'
+            if cmt['colour']:
+                fmt += f'|{cmt["colour"]}'
 
             ret.append('{time}\t{target_type}\t'
-                       '{fmt}\t{comment}'.format(fmt=fmt, **com))
+                       '{fmt}\t{comment}'.format(fmt=fmt, **cmt))
 
         await p.update_latest_activity()
         return '\n'.join(ret).encode()
@@ -1177,6 +1226,7 @@ async def banchoConnect(conn: Connection) -> Optional[bytes]:
     # TODO: perhaps handle this..?
     NotImplemented
 
+# NOTE: this will only be triggered when using a server switcher.
 @domain.route('/web/check-updates.php')
 @required_args({'action', 'stream'})
 async def checkUpdates(conn: Connection) -> Optional[bytes]:
@@ -1214,62 +1264,95 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
     return result
 
 """ /api/ Handlers """
-# TODO: add oauth so we can do more stuff owo..
-# also, give me ideas for api things
-# POST /api/set_avatar
+
+# Unauthorized (no api key required)
+# GET /api/get_player_count: return total registered & online player counts.
+# GET /api/get_player_info: return info or stats for a given player.
+# GET /api/get_player_status: return a player's current status, if online.
+# GET /api/get_player_scores: return a list of best or recent scores for a given player.
+# GET /api/get_player_most_played: return a list of maps most played by a given player.
+# GET /api/get_map_info: return information about a given beatmap.
+# GET /api/get_map_scores: return the best scores for a given beatmap & mode.
+# GET /api/get_score_info: return information about a given score.
+# GET /api/get_replay: return the file for a given replay (with or without headers).
+# GET /api/get_match: return information for a given multiplayer match.
+# GET /api/calculate_pp: calculate & return pp for a given beatmap.
+
+# Authorized (requires valid api key)
+# NOTE: api key should be passed as 'Authorization' http header.
+# POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
+
+# TODO: authenticated api handlers
+# GET /api/get_friends: return a list of the player's friends.
+# POST/PUT /api/set_player_info: update user information (updates whatever received).
 
 JSON = orjson.dumps
 
-@domain.route('/api/get_map_info')
-async def api_get_map_info(conn: Connection) -> Optional[bytes]:
-    """Return information about a given beatmap."""
-    if 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, b'Invalid map id.')
-        bmap = await Beatmap.from_bid(int(conn.args['id']))
-    elif 'md5' in conn.args:
-        if len(conn.args['md5']) != 32:
-            return (400, b'Invalid map md5.')
-        bmap = await Beatmap.from_md5(conn.args['md5'])
-    else:
-        return (400, b'Must provide either id or md5!')
+DATETIME_OFFSET = 0x89F7FF5F7B58000
+SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
 
-    if not bmap:
-        return (404, b'Map not found.')
-
-    return JSON({ # really?
-        'md5': bmap.md5,
-        'id': bmap.id,
-        'set_id': bmap.set_id,
-        'artist': bmap.artist,
-        'title': bmap.title,
-        'version': bmap.version,
-        'creator': bmap.creator,
-        'last_update': bmap.last_update,
-        'total_length': bmap.total_length,
-        'max_combo': bmap.max_combo,
-        'status': bmap.status,
-        'plays': bmap.plays,
-        'passes': bmap.passes,
-        'mode': bmap.mode,
-        'bpm': bmap.bpm,
-        'cs': bmap.cs,
-        'od': bmap.od,
-        'ar': bmap.ar,
-        'hp': bmap.hp,
-        'diff': bmap.diff
-    })
-
-@domain.route('/api/get_online')
-async def api_get_online(conn: Connection) -> Optional[bytes]:
+@domain.route('/api/get_player_count')
+async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
-    return JSON({'online': len(glob.players.unrestricted) - 1})
+    total_users = (await glob.db.fetch(
+        'SELECT COUNT(*) FROM users', _dict=False
+    ))[0]
 
-@domain.route('/api/check_online')
-async def api_check_online(conn: Connection) -> Optional[bytes]:
+    return JSON({
+        'online': len(glob.players.unrestricted) - 1,
+        'total': total_users
+    })
+
+@domain.route('/api/get_player_info')
+async def api_get_player_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given player."""
+    if 'name' not in conn.args and 'id' not in conn.args:
+        return (400, b'Must provide either id or name!')
+
+    if (
+        'scope' not in conn.args or
+        conn.args['scope'] not in ('info', 'stats')
+    ):
+        return (400, b'Must provide scope (info/stats).')
+
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+
+        pid = conn.args['id']
+    else:
+        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+            return (400, b'Invalid player name.')
+
+        # get their id from username.
+        pid = await glob.db.fetch(
+            'SELECT id FROM users '
+            'WHERE safe_name = %s',
+            [name]
+        )
+
+        if not pid:
+            return (404, b'Player not found.')
+
+        pid = pid['id']
+
+    if conn.args['scope'] == 'info':
+        # return user info
+        query = ('SELECT id, name, safe_name, '
+                 'priv, country, silence_end ' # silence_end public?
+                 'FROM users WHERE id = %s')
+    else:
+        # return user stats
+        query = 'SELECT * FROM stats WHERE id = %s'
+
+    res = await glob.db.fetch(query, [pid])
+    return orjson.dumps(res) if res else b'Player not found.'
+
+@domain.route('/api/get_player_status')
+async def api_get_player_status(conn: Connection) -> Optional[bytes]:
     """Return a players current status, if they are online."""
     if 'id' in conn.args:
         pid = conn.args['id']
@@ -1313,54 +1396,469 @@ async def api_check_online(conn: Connection) -> Optional[bytes]:
         }
     })
 
-@domain.route('/api/get_user')
-async def api_get_user(conn: Connection) -> Optional[bytes]:
-    """Get user info/stats from a specified name or id."""
-    if 'name' not in conn.args and 'id' not in conn.args:
-        return (400, b'Must provide either id or name!')
+@domain.route('/api/get_player_scores')
+async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
+    """Return a list of a given user's recent/best scores."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid player id.')
+        p = await glob.players.get_ensure(id=int(conn.args['id']))
+    elif 'name' in conn.args:
+        if not 0 < len(conn.args['name']) <= 16:
+            return (400, b'Invalid player name.')
+        p = await glob.players.get_ensure(name=conn.args['name'])
+    else:
+        return (400, b'Must provide either id or name.')
 
-    if (
-        'scope' not in conn.args or
-        conn.args['scope'] not in ('info', 'stats')
+    if not p:
+        return (404, b'Player not found.')
+
+    # parse args (scope, mode, mods, limit)
+
+    if not (
+        'scope' in conn.args and
+        conn.args['scope'] in ('recent', 'best')
     ):
-        return (400, b'Must provide scope (info/stats).')
+        return (400, b'Must provide valid scope (recent/best).')
+
+    scope = conn.args['scope']
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (mods_arg := conn.args.get('mods', None)) is not None:
+        if mods_arg[0] in ('~', '='): # weak/strong equality
+            strong_equality = mods_arg[0] == '='
+            mods_arg = mods_arg[1:]
+        else: # use strong as default
+            strong_equality = True
+
+        if mods_arg.isdecimal():
+            # parse from int form
+            mods = Mods(int(conn.args['mods']))
+        else:
+            # parse from string form
+            mods = Mods.from_modstr(conn.args['mods'])
+    else:
+        mods = None
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 25
+
+    # build sql query & fetch info
+
+    query = [
+        'SELECT id, map_md5, score, pp, acc, max_combo, '
+        'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
+        'status, mode, play_time, time_elapsed, perfect '
+        f'FROM {mode.sql_table} WHERE userid = %s'
+    ]
+
+    params = [p.id]
+
+    if mods is not None:
+        if strong_equality:
+            query.append('AND mods & %s = %s')
+            params.extend((mods, mods))
+        else:
+            query.append('AND mods & %s != 0')
+            params.append(mods)
+
+    sort = 'pp' if scope == 'best' else 'play_time'
+
+    query.append(f'ORDER BY {sort} DESC LIMIT %s')
+    params.append(limit)
+
+    # fetch & return info from sql
+    res = await glob.db.fetchall(' '.join(query), params)
+    return JSON(res)
+
+@domain.route('/api/get_player_most_played')
+async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
+    """Return the most played beatmaps of a given player."""
+    # NOTE: this will almost certainly not scale well, lol.
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, b'Invalid player id.')
-
-        pid = conn.args['id']
-    else:
-        if not 2 <= len(name := unquote(conn.args['name'])) < 16:
+        p = await glob.players.get_ensure(id=int(conn.args['id']))
+    elif 'name' in conn.args:
+        if not 0 < len(conn.args['name']) <= 16:
             return (400, b'Invalid player name.')
-
-        # get their id from username.
-        pid = await glob.db.fetch(
-            'SELECT id FROM users '
-            'WHERE safe_name = %s',
-            [name]
-        )
-
-        if not pid:
-            return (404, b'User not found.')
-
-        pid = pid['id']
-
-    if conn.args['scope'] == 'info':
-        # return user info
-        query = ('SELECT id, name, safe_name, '
-                 'priv, country, silence_end ' # silence_end public?
-                 'FROM users WHERE id = %s')
+        p = await glob.players.get_ensure(name=conn.args['name'])
     else:
-        # return user stats
-        query = 'SELECT * FROM stats WHERE id = %s'
+        return (400, b'Must provide either id or name.')
 
-    res = await glob.db.fetch(query, [pid])
-    return orjson.dumps(res) if res else b'User not found.'
+    if not p:
+        return (404, b'Player not found.')
 
-@domain.route('/api/calc_pp')
-async def api_calc_pp(conn: Connection) -> Optional[bytes]:
-    """Calculate pp with a given map id/md5 & pp params."""
+    # parse args (mode, limit)
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 25
+
+    # fetch & return info from sql
+    res = await glob.db.fetchall(
+        'SELECT m.md5, m.id, m.set_id, m.status, '
+        'm.artist, m.title, m.version, m.creator, COUNT(*) plays '
+        f'FROM {mode.sql_table} s '
+        'INNER JOIN maps m ON m.md5 = s.map_md5 '
+        'WHERE s.userid = %s '
+        'GROUP BY s.map_md5 '
+        'ORDER BY plays DESC '
+        'LIMIT %s',
+        [p.id, limit]
+    )
+
+    return JSON(res)
+
+@domain.route('/api/get_map_info')
+async def api_get_map_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given beatmap."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid map id.')
+        bmap = await Beatmap.from_bid(int(conn.args['id']))
+    elif 'md5' in conn.args:
+        if len(conn.args['md5']) != 32:
+            return (400, b'Invalid map md5.')
+        bmap = await Beatmap.from_md5(conn.args['md5'])
+    else:
+        return (400, b'Must provide either id or md5!')
+
+    if not bmap:
+        return (404, b'Map not found.')
+
+    return JSON({ # really?
+        'md5': bmap.md5,
+        'id': bmap.id,
+        'set_id': bmap.set_id,
+        'artist': bmap.artist,
+        'title': bmap.title,
+        'version': bmap.version,
+        'creator': bmap.creator,
+        'last_update': bmap.last_update,
+        'total_length': bmap.total_length,
+        'max_combo': bmap.max_combo,
+        'status': bmap.status,
+        'plays': bmap.plays,
+        'passes': bmap.passes,
+        'mode': bmap.mode,
+        'bpm': bmap.bpm,
+        'cs': bmap.cs,
+        'od': bmap.od,
+        'ar': bmap.ar,
+        'hp': bmap.hp,
+        'diff': bmap.diff
+    })
+
+@domain.route('/api/get_map_scores')
+async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
+    """Return the top n scores on a given beatmap."""
+    if 'id' in conn.args:
+        if not conn.args['id'].isdecimal():
+            return (400, b'Invalid map id.')
+        bmap = await Beatmap.from_bid(int(conn.args['id']))
+    elif 'md5' in conn.args:
+        if len(conn.args['md5']) != 32:
+            return (400, b'Invalid map md5.')
+        bmap = await Beatmap.from_md5(conn.args['md5'])
+    else:
+        return (400, b'Must provide either id or md5!')
+
+    if not bmap:
+        return (404, b'Map not found.')
+
+    # parse args (scope, mode, mods, limit)
+
+    if (
+        'scope' not in conn.args or
+        conn.args['scope'] not in ('recent', 'best')
+    ):
+        return (400, b'Must provide valid scope (recent/best).')
+
+    scope = conn.args['scope']
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (mods_arg := conn.args.get('mods', None)) is not None:
+        if mods_arg[0] in ('~', '='): # weak/strong equality
+            strong_equality = mods_arg[0] == '='
+            mods_arg = mods_arg[1:]
+        else: # use strong as default
+            strong_equality = True
+
+        if mods_arg.isdecimal():
+            # parse from int form
+            mods = Mods(int(conn.args['mods']))
+        else:
+            # parse from string form
+            mods = Mods.from_modstr(conn.args['mods'])
+    else:
+        mods = None
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 50
+
+    query = [
+        'SELECT map_md5, score, pp, acc, max_combo, mods, '
+        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+        'mode, play_time, time_elapsed, userid, perfect '
+        f'FROM {mode.sql_table} '
+        'WHERE map_md5 = %s AND mode = %s AND status = 2'
+    ]
+    params = [bmap.md5, mode.as_vanilla]
+
+    if mods is not None:
+        if strong_equality:
+            query.append('AND mods & %s = %s')
+            params.extend((mods, mods))
+        else:
+            query.append('AND mods & %s != 0')
+            params.append(mods)
+
+    # unlike /api/get_player_scores, we'll sort by score/pp depending
+    # on the mode played, since we want to replicated leaderboards.
+    if scope == 'best':
+        sort = 'pp' if mode >= GameMode.rx_std else 'score'
+    else: # recent
+        sort = 'play_time'
+
+    query.append(f'ORDER BY {sort} DESC LIMIT %s')
+    params.append(limit)
+
+    res = await glob.db.fetchall(' '.join(query), params)
+    return JSON(res)
+
+@domain.route('/api/get_score_info')
+async def api_get_score_info(conn: Connection) -> Optional[bytes]:
+    """Return information about a given score."""
+    if not (
+        'id' in conn.args and
+        conn.args['id'].isdecimal()
+    ):
+        return (400, b'Must provide score id.')
+
+    score_id = int(conn.args['id'])
+
+    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+        scores_table = 'scores_vn'
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = 'scores_rx'
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = 'scores_ap'
+    else:
+        return (400, b'Invalid score id.')
+
+    res = await glob.db.fetch(
+        'SELECT map_md5, score, pp, acc, max_combo, mods, '
+        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
+        'mode, play_time, time_elapsed, perfect '
+        f'FROM {scores_table} '
+        'WHERE id = %s',
+        [score_id]
+    )
+
+    if not res:
+        return (404, b'Score not found.')
+
+    return JSON(res)
+
+@domain.route('/api/get_replay')
+async def api_get_replay(conn: Connection) -> Optional[bytes]:
+    """Return a given replay (including headers)."""
+    if not (
+        'id' in conn.args and
+        conn.args['id'].isdecimal()
+    ):
+        return (400, b'Must provide score id.')
+
+    score_id = int(conn.args['id'])
+
+    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+        scores_table = 'scores_vn'
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = 'scores_rx'
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = 'scores_ap'
+    else:
+        return (400, b'Invalid score id.')
+
+    # fetch replay file & make sure it exists
+    replay_file = REPLAYS_PATH / f'{score_id}.osr'
+    if not replay_file.exists():
+        return (404, b'Replay not found.')
+
+    # read replay frames from file
+    raw_replay = replay_file.read_bytes()
+
+    if (
+        'include_headers' in conn.args and
+        conn.args['include_headers'].lower() == 'false'
+    ):
+        return raw_replay
+
+    # add replay headers from sql
+    # TODO: osu_version & life graph in scores tables?
+    res = await glob.db.fetch(
+        'SELECT s.mode, m.md5 map_md5, u.name username, '
+        's.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, '
+        's.score, s.max_combo, s.perfect, s.mods, s.play_time '
+        f'FROM {scores_table} s '
+        'LEFT JOIN users u ON u.id = s.userid '
+        'LEFT JOIN maps m ON m.md5 = s.map_md5 '
+        'WHERE s.id = %s',
+        [score_id]
+    )
+
+    if not res:
+        # score not found in sql
+        return (404, b'Score not found.') # but replay was? lol
+
+    # generate the replay's hash
+    replay_md5 = hashlib.md5(
+        '{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}'.format(
+            int(res['n100']) + int(res['n300']),
+            res['n50'], res['ngeki'],
+            res['nkatu'], res['nmiss'],
+            res['map_md5'], res['max_combo'],
+            str(res['perfect'] == 1),
+            res['username'], res['score'], 0, # TODO: rank
+            res['mods'], 'True' # TODO: ??
+        ).encode()
+    ).hexdigest()
+
+    # create a buffer to construct the replay output
+    buf = bytearray()
+
+    # pack first section of headers.
+    buf += struct.pack('<Bi', res['mode'], 20200207) # TODO: osuver
+    buf += packets.write_string(res['map_md5'])
+    buf += packets.write_string(res['username'])
+    buf += packets.write_string(replay_md5)
+    buf += struct.pack(
+        '<hhhhhhihBi',
+        res['n300'], res['n100'], res['n50'],
+        res['ngeki'], res['nkatu'], res['nmiss'],
+        res['score'], res['max_combo'], res['perfect'],
+        res['mods']
+    )
+    buf += b'\x00' # TODO: hp graph
+
+    timestamp = int(res['play_time'].timestamp() * 1e7)
+    buf += struct.pack('<q', timestamp + DATETIME_OFFSET)
+
+    # pack the raw replay data into the buffer
+    buf += struct.pack('<i', len(raw_replay))
+    buf += raw_replay
+
+    # pack additional info info buffer.
+    buf += struct.pack('<q', score_id)
+
+    # NOTE: target practice sends extra mods, but
+    # can't submit scores so should not be a problem.
+
+    # send data back to the client
+    conn.add_resp_header('Content-Type: application/octet-stream')
+    conn.add_resp_header('Content-Description: File Transfer')
+    conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
+
+    return bytes(buf)
+
+@domain.route('/api/get_match')
+async def api_get_match(conn: Connection) -> Optional[bytes]:
+    """Return information of a given multiplayer match."""
+    # TODO: eventually, this should contain recent score info.
+    if not (
+        'id' in conn.args and
+        0 <= (match_id := int(conn.args['id'])) < 64
+    ):
+        return (400, b'Must provide valid match id.')
+
+    if not (match := glob.matches[match_id]):
+        return (404, b'Match not found.')
+
+    return JSON({
+        'name': match.name,
+        'mode': match.mode.as_vanilla,
+        'mods': int(match.mods),
+        'seed': match.seed,
+        'host': {
+            'id': match.host.id,
+            'name': match.host.name
+        },
+        'refs': [{'id': p.id, 'name': p.name} for p in match.refs],
+        'in_progress': match.in_progress,
+        'is_scrimming': match.is_scrimming,
+        'map': {
+            'id': match.map_id,
+            'md5': match.map_md5,
+            'name': match.map_name
+        },
+        'active_slots': {
+            str(idx): {
+                'loaded': slot.loaded,
+                'mods': int(slot.mods),
+                'player': {
+                    'id': slot.player.id,
+                    'name': slot.player.name
+                },
+                'skipped': slot.skipped,
+                'status': int(slot.status),
+                'team': int(slot.team)
+            } for idx, slot in enumerate(match.slots) if slot.player
+        }
+    })
+
+@domain.route('/api/calculate_pp')
+async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
+    """Calculate and return pp & sr for a given map."""
     if not glob.oppai_built:
         return (503, JSON({'status': 'Failed: oppai-ng not built'}))
 
@@ -1418,65 +1916,47 @@ async def api_calc_pp(conn: Connection) -> Optional[bytes]:
         'sr': sr
     })
 
-@domain.route('/api/get_scores')
-async def api_get_scores(conn: Connection) -> Optional[bytes]:
-    if (
-        'relation' not in conn.args or
-        conn.args['relation'] not in ('recent', 'best')
-    ):
-        return (400, b'Must provide valid relation (recent/best).')
+def requires_api_key(f: Callable) -> Callable:
+    @wraps(f)
+    async def wrapper(conn: Connection) -> Optional[bytes]:
+        if 'Authorization' not in conn.headers:
+            return (400, b'Must provide authorization token.')
 
-    relation = conn.args['relation']
+        api_key = conn.headers['Authorization']
 
-    if 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, b'Invalid player id.')
-        p = await glob.players.get_ensure(id=int(conn.args['id']))
-    elif 'name' in conn.args:
-        if not 0 < len(conn.args['name']) <= 16:
-            return (400, b'Invalid player name.')
-        p = await glob.players.get_ensure(name=conn.args['name'])
+        if api_key not in glob.api_keys:
+            return (401, b'Unknown authorization token.')
+
+        # get player from api token
+        player_id = glob.api_keys[api_key]
+        p = await glob.players.get_ensure(id=player_id)
+
+        return await f(conn, p)
+    return wrapper
+
+@domain.route('/api/set_avatar', methods=['POST', 'PUT'])
+@requires_api_key
+async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
+    """Update the tokenholder's avatar to a given file."""
+    if 'avatar' not in conn.files:
+        return (400, b'Must provide avatar file.')
+
+    ava_file = conn.files['avatar']
+
+    # block files over 4MB
+    if len(ava_file) > (4 * 1024 * 1024):
+        return (400, b'Avatar file too large (max 4MB).')
+
+    if ava_file[6:10] in (b'JFIF', b'Exif'):
+        ext = 'jpeg'
+    elif ava_file.startswith(b'\211PNG\r\n\032\n'):
+        ext = 'png'
     else:
-        return (400, b'Must provide either id or name.')
+        return (400, b'Invalid file type.')
 
-    if not p:
-        return (404, b'Player not found.')
-
-    if 'mode' in conn.args:
-        if (
-            not conn.args['mode'].isdecimal() or
-            not 0 <= (mode := int(conn.args['mode'])) <= 7
-        ):
-            return (400, b'Invalid mode.')
-
-        mode = GameMode(mode)
-    else:
-        mode = GameMode.vn_std
-
-    if 'limit' in conn.args:
-        if (
-            not conn.args['limit'].isdecimal() or
-            not 0 < (limit := int(conn.args['limit'])) <= 100
-        ):
-            return (400, b'Invalid limit.')
-    else:
-        limit = 25
-
-    table = mode.sql_table
-    sort = 'pp' if relation == 'best' else 'play_time'
-
-    res = await glob.db.fetchall(
-        'SELECT id, map_md5, score, pp, acc, max_combo, '
-        'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
-        'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {table} '
-        'WHERE userid = %s '
-        f'ORDER BY {sort} DESC '
-        'LIMIT %s',
-        [p.id, limit]
-    )
-
-    return JSON(res)
+    # write to the avatar file
+    (AVATARS_PATH / f'{p.id}.{ext}').write_bytes(ava_file)
+    return b'Success.'
 
 """ Misc handlers """
 
@@ -1499,7 +1979,6 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Location: {mirror_url}')
     return (301, b'')
 
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):

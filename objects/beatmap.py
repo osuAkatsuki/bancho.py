@@ -18,6 +18,8 @@ from utils.recalculator import PPCalculator
 
 __all__ = ('RankedStatus', 'Beatmap')
 
+BASE_DOMAIN = glob.config.domain
+
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
 # This drives me and probably everyone else pretty insane,
@@ -185,12 +187,12 @@ class Beatmap:
     @property
     def url(self):
         """The osu! beatmap url for `self`."""
-        return f'https://osu.ppy.sh/b/{self.id}'
+        return f'https://{BASE_DOMAIN}/b/{self.id}'
 
     @property
     def set_url(self) -> str:
         """The osu! beatmap set url for `self`."""
-        return f'https://osu.ppy.sh/s/{self.set_id}'
+        return f'https://{BASE_DOMAIN}/s/{self.set_id}'
 
     @property
     def embed(self) -> str:
@@ -338,7 +340,9 @@ class Beatmap:
         m.last_update = datetime.strptime(
             bmap['last_update'], '%Y-%m-%d %H:%M:%S')
         m.total_length = int(bmap['total_length'])
-        m.max_combo = int(bmap['max_combo'])
+
+        if bmap['max_combo'] is not None:
+            m.max_combo = int(bmap['max_combo'])
 
         m.status = RankedStatus.from_osuapi(int(bmap['approved']))
 
@@ -462,7 +466,7 @@ class Beatmap:
             m.last_update = bmap['last_update']
             m.total_length = int(bmap['total_length'])
 
-            if bmap['max_combo'] is not None: # ??? osu api
+            if bmap['max_combo'] is not None:
                 m.max_combo = int(bmap['max_combo'])
 
             m.status = bmap['approved']

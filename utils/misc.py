@@ -94,3 +94,28 @@ def pymysql_encode(conv: Callable):
 
 def escape_enum(val, mapping=None) -> str: # used for ^
     return str(int(val))
+
+# TODO: async? lol
+def download_achievement_pngs(medals_path: Path) -> None:
+    achs = []
+
+    for res in ('', '@2x'):
+        for gm in ('osu', 'taiko', 'fruits', 'mania'):
+            # only osu!std has 9 & 10 star pass/fc medals.
+            for n in range(1, 1 + (10 if gm == 'osu' else 8)):
+                achs.append(f'{gm}-skill-pass-{n}{res}.png')
+                achs.append(f'{gm}-skill-fc-{n}{res}.png')
+
+        for n in (500, 750, 1000, 2000):
+            achs.append(f'osu-combo-{n}{res}.png')
+
+    import requests
+
+    for ach in achs:
+        r = requests.get(f'https://assets.ppy.sh/medals/client/{ach}')
+        if r.status_code != 200:
+            log(f'Failed to download achievement: {ach}', Ansi.LRED)
+            continue
+
+        log(f'Saving achievement: {ach}', Ansi.LCYAN)
+        (medals_path / f'{ach}').write_bytes(r.content)
