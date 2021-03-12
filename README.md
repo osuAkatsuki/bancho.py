@@ -1,27 +1,27 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-DISCLAIMER: gulag is an unfinished project; there is still a ways to go. i work on
-this mostly for fun in my spare time; if you're planning on using this for your
-live server, that's great, but remember i'm not working for you lol. development
-will continue at whatever pace depending on how much time & effort i wish to allocate.
+DISCLAIMER: gulag is still in a beta stage - the server is certainly getting quite
+stable & useable now, but don't let it fool you too much.. there are still large
+portions of the underlying systems that have yet to be implemented completely correctly.
 
-gulag is my implementation of an osu! server's backend (bancho protocol, avatars &
-/web/* endpoints, and a dev rest api). it's designed with the experienced developer
-in mind; whether you're a current server owner or an experienced developer coming into
-the community, programming gulag should be about the ideas rather than the code, and
-the codebase should reflect that. try it out for yourself and see what you think!
+gulag is my implementation of an osu! server's backend (bancho protocol, /web endpoints,
+avatars/assets, and a devevloper rest api). it's designed for relatively experienced devs
+looking for an osu! server with more bells and whistles than many other implementations.
 
-note that in it's current stage, gulag is not nescessarily user-friendly; please
-remember that this is not my primary goal with the project - making the 'best'
-server does not nescessarily mean making the most user friendly one :PP. perhaps
-eventually the focus will shift, but not in the near future.
+note that in it's current stage, gulag is not nescessarily user-friendly..
+dev-friendly is much better wording; please remember that this is not one of my
+current goals with the project. perhaps eventually the focus will shift, but not
+in the foreseeable future. making small prs to try to fix this is also not a great
+idea, i'm not in the business of trying to make people think it's made to be
+user-friendly when it's not really lol. the time may come eventually.
 
 please don't feel like you need to contribute. this is mostly a one man project and
-this is the way i like it; bugs and small improvements are welcome but the chances
-of you coming into the community and being able to write a whole system better than
-i could (with my >10k lines of exp and years of osu! server development) is unlikely..
-if you're making large scale changes, do it for learning rather than clout, and the long
-term game will treat you nicely :)
+this is the way i like it; gulag is my baby and i can probably tell you about any
+portion of code off the top of my head. bugfixes and small improvements are welcome,
+but i think with the average osu developer age being quite low, there will be lots
+more newer devs than older devs :P (i myself am still quite new in the grand scheme).
+if you're making large scale changes, do it for learning rather than clout, and
+i promise the long-term game will this kind of behaviour nicely :)
 
 there is currently no official frontend project for gulag, but members of the community
 have made significant headway with [gulag-web](https://github.com/Yo-ru/gulag-web).

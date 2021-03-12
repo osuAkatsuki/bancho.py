@@ -1025,18 +1025,32 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     scores = await glob.db.fetchall(' '.join(query), params)
 
-    res: list[str] = []
+    l: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
-    res.append(f'{int(bmap.status)}|false|{bmap.id}|'
-               f'{bmap.set_id}|{len(scores) if scores else 0}')
+    l.append(f'{int(bmap.status)}|false|{bmap.id}|'
+             f'{bmap.set_id}|{len(scores) if scores else 0}')
 
-    # offset, name, rating
-    res.append(f'0\n{bmap.full}\n10.0')
+    # fetch beatmap rating from sql
+    rating = (await glob.db.fetch(
+        'SELECT AVG(rating) rating '
+        'FROM ratings '
+        'WHERE map_md5 = %s',
+        [bmap.md5]
+    ))['rating']
+
+    if rating is not None:
+        rating = f'{rating:.1f}'
+    else:
+        rating = '10.0'
+
+    # TODO: we could have server-specific offsets for
+    # maps that mods could set for incorrectly timed maps.
+    l.append(f'0\n{bmap.full}\n{rating}') # offset, name, rating
 
     if not scores:
         # simply return an empty set.
-        return '\n'.join(res + ['', '']).encode()
+        return '\n'.join(l + ['', '']).encode()
 
     p_best = await glob.db.fetch(
         f'SELECT id, {scoring} AS _score, '
@@ -1068,7 +1082,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
             ]
         ))['count']
 
-        res.append(
+        l.append(
             score_fmt.format(
                 **p_best,
                 name = p.full_name, userid = p.id,
@@ -1077,16 +1091,16 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
             )
         )
     else:
-        res.append('')
+        l.append('')
 
-    res.extend([
+    l.extend([
         score_fmt.format(
             **s, score = int(s['_score']),
             has_replay = '1', rank = idx + 1
         ) for idx, s in enumerate(scores)
     ])
 
-    return '\n'.join(res).encode()
+    return '\n'.join(l).encode()
 
 @domain.route('/web/osu-comment.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'b', 's',
@@ -1111,21 +1125,21 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         ret: list[str] = []
 
-        async for com in comments:
+        async for cmt in comments:
             # TODO: maybe support player/creator colours?
             # pretty expensive for very low gain, but completion :D
-            if com['priv'] & Privileges.Nominator:
+            if cmt['priv'] & Privileges.Nominator:
                 fmt = 'bat'
-            elif com['priv'] & Privileges.Donator:
+            elif cmt['priv'] & Privileges.Donator:
                 fmt = 'supporter'
             else:
                 fmt = ''
 
-            if com['colour']:
-                fmt += f'|{com["colour"]}'
+            if cmt['colour']:
+                fmt += f'|{cmt["colour"]}'
 
             ret.append('{time}\t{target_type}\t'
-                       '{fmt}\t{comment}'.format(fmt=fmt, **com))
+                       '{fmt}\t{comment}'.format(fmt=fmt, **cmt))
 
         await p.update_latest_activity()
         return '\n'.join(ret).encode()
