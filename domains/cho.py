@@ -810,10 +810,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         }
 
                         # calc pp if possible
-                        if not glob.oppai_built:
+                        if mode_vn in (0, 1) and not glob.oppai_built:
                             msg = 'No oppai-ng binary was found at startup.'
-                        elif mode_vn not in (0, 1):
+                        elif mode_vn == 2: # TODO: catch
                             msg = 'PP not yet supported for that mode.'
+                        elif mode_vn == 3 and bmap.mode.as_vanilla != 3:
+                            msg = 'Mania converts not yet supported.'
                         else:
                             if match['mods'] is not None:
                                 # [1:] to remove leading whitespace
@@ -821,22 +823,27 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                             else:
                                 mods = Mods.NOMOD
 
-                            if mods not in bmap.pp_cache:
+                            if mods not in bmap.pp_cache[mode_vn]:
                                 await bmap.cache_pp(mods)
 
                             # since this is a DM to the bot, we should
                             # send back a list of general PP values.
-                            _msg = [bmap.embed]
-                            if mods:
-                                _msg.append(f'+{mods!r}')
+                            if mode_vn in (0, 1): # use acc
+                                _keys = (
+                                    f'{acc:.2f}%'
+                                    for acc in glob.config.pp_cached_accs
+                                )
+                            elif mode_vn == 3: # use score
+                                _keys = (
+                                    f'{int(score // 1000)}k'
+                                    for score in glob.config.pp_cached_scores
+                                )
 
-                            msg = f"{' '.join(_msg)}: " + ' | '.join([
-                                f'{acc}%: {pp:.2f}pp'
-                                for acc, pp in zip(
-                                    (90, 95, 98, 99, 100),
-                                    bmap.pp_cache[mods]
-                                )])
-
+                            pp_cache = bmap.pp_cache[mode_vn][mods]
+                            msg = ' | '.join([
+                                f'{k}: {pp:,.2f}pp'
+                                for k, pp in zip(_keys, pp_cache)
+                            ])
                     else:
                         msg = 'Could not find map.'
 

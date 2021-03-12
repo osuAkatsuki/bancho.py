@@ -32,7 +32,7 @@ Installation Guide
 -------------
 important notes:
 - ubuntu 20.04 & nginx have unknown issues? i recommend using 18.04
-- i will not help with the creation of a fake ssl cert; -devserver support coming soon.
+- i will not help with the creation of a fake ssl cert for switcher support.
 
 ```sh
 # add ppa for py3.9 (required since it's new)

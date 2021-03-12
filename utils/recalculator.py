@@ -17,17 +17,19 @@ BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 class PPCalculator:
     """Asynchronously wraps the process of calculating difficulty in osu!."""
-    def __init__(self, map_id: int, **kwargs) -> None:
+    __slots__ = ('file', 'mode_vn', 'pp_attrs')
+    def __init__(self, map_id: int, **pp_attrs) -> None:
         # NOTE: this constructor should not be called
         # unless you are CERTAIN the map is on disk
         # for normal usage, use the classmethods
         self.file = f'.data/osu/{map_id}.osu'
 
-        self.mods = kwargs.get('mods', Mods.NOMOD)
-        self.combo = kwargs.get('combo', 0)
-        self.nmiss = kwargs.get('nmiss', 0)
-        self.mode_vn = kwargs.get('mode_vn', 0)
-        self.acc = kwargs.get('acc', 100.00)
+        if 'mode_vn' in pp_attrs:
+            self.mode_vn = pp_attrs['mode_vn']
+        else:
+            self.mode_vn = 0
+
+        self.pp_attrs = pp_attrs
 
     @staticmethod
     async def get_from_osuapi(map_id: int, dest_path: Path) -> bool:
@@ -59,62 +61,79 @@ class PPCalculator:
         return path
 
     @classmethod
-    async def from_id(cls, map_id: int, **kwargs):
+    async def from_id(cls, map_id: int, **pp_attrs):
         # ensure we have the file on disk for recalc
         if not await cls.get_file(map_id):
             return
 
-        return cls(map_id, **kwargs)
+        return cls(map_id, **pp_attrs)
 
     async def perform(self) -> tuple[float, float]:
         """Perform the calculations with the current state, returning (pp, sr)."""
-        # TODO: PLEASE rewrite this with c bindings,
-        # add ways to get specific stuff like aim pp
+        if self.mode_vn in (0, 1): # oppai-ng for std & taiko
+            # TODO: PLEASE rewrite this with c/py bindings,
+            # add ways to get specific stuff like aim pp
 
-        # for now, we'll generate a bash command and
-        # use subprocess to do the calculations (yikes).
-        cmd = [f'oppai-ng/oppai', self.file]
+            # for now, we'll generate a bash command and
+            # use subprocess to do the calculations (yikes).
+            cmd = [f'oppai-ng/oppai', self.file]
 
-        if self.mods:  cmd.append(f'+{self.mods!r}')
-        if self.combo: cmd.append(f'{self.combo}x')
-        if self.nmiss: cmd.append(f'{self.nmiss}xM')
-        if self.acc:   cmd.append(f'{self.acc:.4f}%')
+            if 'mods' in self.pp_attrs:
+                cmd.append(f'+{self.pp_attrs["mods"]!r}')
+            if 'combo' in self.pp_attrs:
+                cmd.append(f'{self.pp_attrs["combo"]}x')
+            if 'nmiss' in self.pp_attrs:
+                cmd.append(f'{self.pp_attrs["nmiss"]}xM')
+            if 'acc' in self.pp_attrs:
+                cmd.append(f'{self.pp_attrs["acc"]:.4f}%')
 
-        if self.mode_vn:
-            if self.mode_vn not in (0, 1):
-                # oppai-ng only supports std & taiko
-                # TODO: osu!catch & mania support
+            if self.mode_vn != 0:
+                cmd.append(f'-m{self.mode_vn}')
+                if self.mode_vn == 1:
+                    cmd.append('-otaiko')
+
+            cmd.append('-obinary')
+
+            # run the oppai-ng binary & read stdout.
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout = asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate() # stderr not needed
+
+            if stdout[:8] != b'binoppai':
+                # invalid output from oppai-ng
+                log(f'oppai-ng err: {stdout}', Ansi.LRED)
                 return (0.0, 0.0)
 
-            cmd.append(f'-m{self.mode_vn}')
-            if self.mode_vn == 1:
-                cmd.append('-otaiko')
+            err_code = struct.unpack('<i', stdout[11:15])[0]
 
-        cmd.append('-obinary')
+            if err_code < 0:
+                log(f'oppai-ng: err code {err_code}.', Ansi.LRED)
+                return (0.0, 0.0)
 
-        # run the oppai-ng binary & read stdout.
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout = asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate() # stderr not needed
+            pp = struct.unpack('<f', stdout[-4:])[0]
 
-        if stdout[:8] != b'binoppai':
-            # invalid output from oppai-ng
-            log(f'oppai-ng err: {stdout}', Ansi.LRED)
+            if math.isinf(pp):
+                log(f'oppai-ng: broken map: {self.file} (inf pp).', Ansi.LYELLOW)
+                return (0.0, 0.0)
+
+            sr = struct.unpack('<f', stdout[-32:-28])[0]
+
+            return (pp, sr)
+        elif self.mode_vn == 2:
+            # TODO: ctb support
             return (0.0, 0.0)
+        elif self.mode_vn == 3: # use maniera for mania
+            from maniera.calculator import Maniera
+            if 'score' not in self.pp_attrs:
+                log('Err: pp calculator needs score for mania.', Ansi.LRED)
+                return (0.0, 0.0)
 
-        err_code = struct.unpack('<i', stdout[11:15])[0]
+            if 'mods' in self.pp_attrs:
+                mods = int(self.pp_attrs['mods'])
+            else:
+                mods = 0
 
-        if err_code < 0:
-            log(f'oppai-ng: err code {err_code}.', Ansi.LRED)
-            return (0.0, 0.0)
-
-        pp = struct.unpack('<f', stdout[-4:])[0]
-
-        if math.isinf(pp):
-            log(f'oppai-ng: broken map: {self.file} (inf pp).', Ansi.LYELLOW)
-            return (0.0, 0.0)
-
-        sr = struct.unpack('<f', stdout[-32:-28])[0]
-
-        return pp, sr
+            calc = Maniera(self.file, mods, self.pp_attrs['score'])
+            calc.calculate()
+            return (calc.pp, calc.sr)

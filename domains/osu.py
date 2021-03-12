@@ -1276,10 +1276,10 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 # GET /api/get_score_info: return information about a given score.
 # GET /api/get_replay: return the file for a given replay (with or without headers).
 # GET /api/get_match: return information for a given multiplayer match.
-# GET /api/calculate_pp: calculate & return pp for a given beatmap.
 
 # Authorized (requires valid api key)
 # NOTE: api key should be passed as 'Authorization' http header.
+# GET /api/calculate_pp: calculate & return pp for a given beatmap.
 # POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
 
 # TODO: authenticated api handlers
@@ -1856,8 +1856,28 @@ async def api_get_match(conn: Connection) -> Optional[bytes]:
         }
     })
 
+def requires_api_key(f: Callable) -> Callable:
+    @wraps(f)
+    async def wrapper(conn: Connection) -> Optional[bytes]:
+        if 'Authorization' not in conn.headers:
+            return (400, b'Must provide authorization token.')
+
+        api_key = conn.headers['Authorization']
+
+        if api_key not in glob.api_keys:
+            return (401, b'Unknown authorization token.')
+
+        # get player from api token
+        player_id = glob.api_keys[api_key]
+        p = await glob.players.get_ensure(id=player_id)
+
+        return await f(conn, p)
+    return wrapper
+
+# TODO: mania support (and ctb later)
 @domain.route('/api/calculate_pp')
-async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
+@requires_api_key
+async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
     """Calculate and return pp & sr for a given map."""
     if not glob.oppai_built:
         return (503, JSON({'status': 'Failed: oppai-ng not built'}))
@@ -1915,24 +1935,6 @@ async def api_calculate_pp(conn: Connection) -> Optional[bytes]:
         'pp': pp,
         'sr': sr
     })
-
-def requires_api_key(f: Callable) -> Callable:
-    @wraps(f)
-    async def wrapper(conn: Connection) -> Optional[bytes]:
-        if 'Authorization' not in conn.headers:
-            return (400, b'Must provide authorization token.')
-
-        api_key = conn.headers['Authorization']
-
-        if api_key not in glob.api_keys:
-            return (401, b'Unknown authorization token.')
-
-        # get player from api token
-        player_id = glob.api_keys[api_key]
-        p = await glob.players.get_ensure(id=player_id)
-
-        return await f(conn, p)
-    return wrapper
 
 @domain.route('/api/set_avatar', methods=['POST', 'PUT'])
 @requires_api_key

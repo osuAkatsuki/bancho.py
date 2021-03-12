@@ -205,68 +205,100 @@ async def recent(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 @command(Privileges.Normal, aliases=['w'], hidden=True)
 async def _with(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
-    if not glob.oppai_built:
-        return 'No oppai-ng binary was found at startup.'
-
     if c is not glob.bot:
         return 'This command can only be used in DM with Aika.'
 
     if time.time() >= p.last_np['timeout']:
         return 'Please /np a map first!'
 
-    if (mode_vn := p.last_np['mode_vn']) not in (0, 1):
-        return 'PP not yet supported for that mode.'
+    bmap: Beatmap = p.last_np['bmap']
+    mode_vn = p.last_np['mode_vn']
 
-    # +?<mods> <acc>%?
-    if 1 < len(msg) > 2:
-        return 'Invalid syntax: !with <mods/acc> ...'
+    pp_attrs = {'mode_vn': mode_vn}
+    mods = key_value = None # key_value is acc when std, score when mania
 
-    mods = acc = None
+    if mode_vn in (0, 1): # oppai-ng
+        if not glob.oppai_built:
+            return 'No oppai-ng binary was found at startup.'
 
-    for param in (p.strip('+%') for p in msg):
-        if cmyui._isdecimal(param, _float=True):
-            if not 0 <= (acc := float(param)) <= 100:
-                return 'Invalid accuracy.'
-
-        elif len(param) % 2 == 0:
-            mods = Mods.from_modstr(param)
-            mods = mods.filter_invalid_combos(mode_vn)
-        else:
+        # +?<mods> <acc>%?
+        if 1 < len(msg) > 2:
             return 'Invalid syntax: !with <mods/acc> ...'
 
-    bmap = p.last_np['bmap']
-    _msg = [bmap.embed]
+        mods = key_value = None
 
-    if not mods:
-        mods = Mods.NOMOD
+        for param in (p.strip('+%') for p in msg):
+            if cmyui._isdecimal(param, _float=True): # acc
+                if not 0 <= (key_value := float(param)) <= 100:
+                    return 'Invalid accuracy.'
+                pp_attrs.update({'acc': key_value})
+            elif len(param) % 2 == 0: # mods
+                mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
+                pp_attrs.update({'mods': mods})
+            else:
+                return 'Invalid syntax: !with <mods/acc> ...'
 
-    _msg.append(f'{mods!r}')
+    elif mode_vn == 2: # TODO: catch support
+        return 'PP not yet supported for that mode.'
+    elif mode_vn == 3: # maniera
+        if bmap.mode.as_vanilla != 3:
+            return 'Mania converts not yet supported.'
 
-    if acc:
-        # custom accuracy specified, calculate it on the fly.
+        # +?<mods> <score>
+        if 1 < len(msg) > 2:
+            return 'Invalid syntax: !with <mods/score> ...'
+
+        mods = key_value = None
+
+        for param in (p.lstrip('+') for p in msg):
+            if param.isdecimal(): # score
+                if not 0 <= (key_value := int(param)) <= 1000000:
+                    return 'Invalid score.'
+
+                pp_attrs.update({'score': key_value})
+            elif len(param) % 2 == 0: # mods
+                mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
+                pp_attrs.update({'mods': mods})
+            else:
+                return 'Invalid syntax: !with <mods/score> ...'
+
+    if key_value is not None:
+        # custom param specified, calculate it on the fly.
         ppcalc = await PPCalculator.from_id(
-            map_id=bmap.id, acc=acc,
-            mods=mods, mode_vn=mode_vn
+            map_id=bmap.id, **pp_attrs
         )
         if not ppcalc:
             return 'Could not retrieve map file.'
 
         pp, _ = await ppcalc.perform() # don't need sr
-        pp_values = [(acc, pp)]
+
+        if mode_vn in (0, 1): # acc
+            _key = f'{key_value:.2f}%'
+        elif mode_vn == 3: # score
+            _key = f'{key_value // 1000}k'
+        pp_values = [(_key, pp)]
     else:
         # general accuracy values requested.
-        if mods not in bmap.pp_cache:
-            # cache
+        if mods not in bmap.pp_cache[mode_vn]:
             await bmap.cache_pp(mods)
 
-        pp_values = zip(
-            (90, 95, 98, 99, 100),
-            bmap.pp_cache[mods]
-        )
+        pp_cache = bmap.pp_cache[mode_vn][mods]
 
-    pp_msg = ' | '.join([f'{acc:.2f}%: {pp:.2f}pp'
-                         for acc, pp in pp_values])
-    return f"{' '.join(_msg)}: {pp_msg}"
+        if mode_vn in (0, 1): # use acc
+            _keys = (
+                f'{acc:.2f}%'
+                for acc in glob.config.pp_cached_accs
+            )
+        elif mode_vn == 3: # use score
+            _keys = (
+                f'{int(score // 1000)}k'
+                for score in glob.config.pp_cached_scores
+            )
+
+        pp_values = zip(_keys, pp_cache)
+
+    return ' | '.join([f'{k}: {pp:,.2f}pp'
+                       for k, pp in pp_values])
 
 @command(Privileges.Normal, aliases=['req'])
 async def request(p: Player, c: Messageable, msg: Sequence[str]) -> str:
@@ -477,7 +509,7 @@ async def addnote(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         [p.id, t.id, log_msg]
     )
 
-    return f'Added note to {p}.'
+    return f'Added note to {t}.'
 
 # some shorthands that can be used as
 # reasons in many moderative commands.
@@ -487,8 +519,7 @@ SHORTHAND_REASONS = {
     '3p': 'using 3rd party programs',
     'rx': 'using 3rd party programs (relax)',
     'tw': 'using 3rd party programs (timewarp)',
-    'au': 'using 3rd party programs (auto play)',
-    'dn': 'deez nuts'
+    'au': 'using 3rd party programs (auto play)'
 }
 
 @command(Privileges.Mod, hidden=True)
@@ -676,7 +707,6 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             'login_time': 0x7fffffff # never auto-dc
         }
 
-        data = bytearray()
         _stats = packets.userStats(p)
 
         if _fake_users:
@@ -708,7 +738,6 @@ async def fakeusers(p: Player, c: Messageable, msg: Sequence[str]) -> str:
             return f'Too many! only {len_fake_users} remaining.'
 
         to_remove = _fake_users[len_fake_users - amount:]
-        data = bytearray()
         logout_packet_header = b'\x0c\x00\x00\x05\x00\x00\x00'
 
         for fake in to_remove:
@@ -759,6 +788,7 @@ async def recalc(p: Player, c: Messageable, msg: Sequence[str]) -> str:
         if time.time() >= p.last_np['timeout']:
             return 'Please /np a map first!'
 
+        # TODO: mania support (and ctb later)
         if (mode_vn := p.last_np['mode_vn']) not in (0, 1):
             return 'PP not yet supported for that mode.'
 
@@ -1561,6 +1591,8 @@ async def pool_create(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     # add to cache (get from sql for id & time)
     res = await glob.db.fetch('SELECT * FROM tourney_pools '
                               'WHERE name = %s', [name])
+
+    res['created_by'] = await glob.players.get_ensure(id=res['created_by'])
 
     glob.pools.append(MapPool(**res))
 

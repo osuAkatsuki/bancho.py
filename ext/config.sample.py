@@ -128,6 +128,11 @@ map_cache_timeout = 3600
 # recommended: ~1 hour.
 updates_cache_timeout = 3600
 
+# the pp values which should be cached & displayed when
+# a user requests the general pp values for a beatmap.
+pp_cached_accs = (90, 95, 98, 99, 100) # std & taiko
+pp_cached_scores = (8e5, 8.5e5, 9e5, 9.5e5, 10e5) # mania
+
 # https://datadoghq.com
 # support (stats tracking)
 datadog = {

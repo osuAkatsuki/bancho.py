@@ -40,11 +40,11 @@ glob.version = cmyui.Version(3, 2, 4)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
-    # create our bot & append it to the global player list.
-    res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
-
     # global players list
     glob.players = PlayerList()
+
+    # create our bot & append it to the global player list.
+    res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
 
     glob.bot = Player(
         id = 1, name = res['name'], priv = Privileges.Normal,
@@ -101,6 +101,7 @@ async def setup_collections() -> None:
         # NOTE: achievements are grouped by modes internally.
         glob.achievements[row['mode']].append(achievement)
 
+    # static api keys
     glob.api_keys = {
         row['api_key']: row['id']
         for row in await glob.db.fetchall(
@@ -172,13 +173,12 @@ if __name__ == '__main__':
         download_achievement_pngs(achievements_path)
 
     # make sure oppai-ng is built and ready.
-    if not (Path.cwd() / 'oppai-ng/oppai').exists():
-        glob.oppai_built = False
+    glob.oppai_built = (Path.cwd() / 'oppai-ng/oppai').exists()
+
+    if not glob.oppai_built:
         log('No oppai-ng compiled binary found. PP for all '
-            'scores will be set to 0; instructions can be '
-            'found in the README file.', Ansi.LRED)
-    else:
-        glob.oppai_built = True
+            'std & taiko scores will be set to 0; instructions '
+            'can be found in the README file.', Ansi.LRED)
 
     # create a server object, which serves as a map of domains.
     app = cmyui.Server(name=f'gulag v{glob.version}',
