@@ -5,10 +5,12 @@ import re
 import time
 from datetime import datetime as dt
 from datetime import timedelta as td
+from typing import Callable
 
 import bcrypt
 from cmyui import _isdecimal
 from cmyui import Ansi
+from cmyui import AnsiRGB
 from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
@@ -19,6 +21,7 @@ from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.mods import SPEED_CHANGING_MODS
+from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from constants.types import osuTypes
 from objects import glob
@@ -42,14 +45,16 @@ domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
 
 @domain.route('/')
 async def bancho_http_handler(conn: Connection) -> bytes:
-    # Handle requests from browser by returning html
+    """Handle a request from a web browser."""
+    packets = glob.bancho_packets['all']
+
     return b'<!DOCTYPE html>' + '<br>'.join((
         f'Running gulag v{glob.version}',
         f'Players online: {len(glob.players) - 1}',
         '<a href="https://github.com/cmyui/gulag">Source code</a>',
         '',
-        f'<b>Packets handled ({len(glob.bancho_packets)})</b>',
-        '<br>'.join([f'{p.name} ({p.value})' for p in glob.bancho_packets])
+        f'<b>Packets handled ({len(packets)})</b>',
+        '<br>'.join([f'{p.name} ({p.value})' for p in packets])
     )).encode()
 
 @domain.route('/', methods=['POST'])
@@ -83,17 +88,26 @@ async def bancho_handler(conn: Connection) -> bytes:
         return packets.notification('Server is restarting') + \
                packets.restartServer(0) # send 0ms since server is up
 
+    # restricted users may only use certain packet handlers.
+    if not player.restricted:
+        packet_map = glob.bancho_packets['all']
+    else:
+        packet_map = glob.bancho_packets['restricted']
+
     # bancho connections can be comprised of multiple packets;
     # our reader is designed to iterate through them individually,
     # allowing logic to be implemented around the actual handler.
 
     # NOTE: the reader will internally discard any
     # packets whose logic has not been defined.
-    for packet in BanchoPacketReader(conn.body):
+    packets_read = []
+    for packet in BanchoPacketReader(conn.body, packet_map):
         await packet.handle(player)
+        packets_read.append(packet.type)
 
-        if glob.config.debug:
-            log(f'{packet.type!r}', Ansi.LMAGENTA)
+    if glob.config.debug:
+        packets_str = ', '.join([p.name for p in packets_read]) or 'None'
+        log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
     player.last_recv_time = time.time()
     conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
@@ -101,14 +115,35 @@ async def bancho_handler(conn: Connection) -> bytes:
 
 """ Packet logic """
 
-glob.bancho_packets = {}
+# restricted users are able to
+# access many less packet handlers.
+glob.bancho_packets = {
+    'all': {},
+    'restricted': {}
+}
 
-def register(cls: BanchoPacket):
+def register(restricted: bool = False) -> Callable:
     """Register a handler in `glob.bancho_packets`."""
-    glob.bancho_packets |= {cls.type: cls}
-    return cls
+    def wrapper(cls: BanchoPacket) -> Callable:
+        new_entry = {cls.type: cls}
 
-@register
+        if restricted:
+            glob.bancho_packets['restricted'] |= new_entry
+        glob.bancho_packets['all'] |= new_entry
+        return cls
+
+    if callable(restricted):
+        _cls, restricted = restricted, False
+        # packet class passed right in
+        return wrapper(_cls)
+    return wrapper
+
+@register(restricted=True)
+class Ping(BanchoPacket, type=Packets.OSU_PING):
+    async def handle(self, p: Player) -> None:
+        pass # ping be like
+
+@register(restricted=True)
 class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
     action: osuTypes.u8
     info_text: osuTypes.string
@@ -133,7 +168,8 @@ class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
         p.status.map_id = self.map_id
 
         # broadcast it to all online players.
-        glob.players.enqueue(packets.userStats(p))
+        if not p.restricted:
+            glob.players.enqueue(packets.userStats(p))
 
 @register
 class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
@@ -144,7 +180,8 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} sent a message while silenced.', Ansi.LYELLOW)
             return
 
-        msg = self.msg.msg
+        # remove leading/trailing whitespace
+        msg = self.msg.msg.strip()
         target = self.msg.target
 
         if target == '#spectator':
@@ -171,7 +208,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             log(f'{p} wrote to non-existent {target}.', Ansi.LYELLOW)
             return
 
-        if not p.priv & t_chan.write_priv:
+        if p.priv & t_chan.write_priv != t_chan.write_priv:
             log(f'{p} wrote to {target} with insufficient privileges.')
             return
 
@@ -190,14 +227,22 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         if cmd:
             # a command was triggered.
             if not cmd['hidden']:
-                t_chan.send(p, msg)
+                t_chan.send(msg, sender=p)
                 if 'resp' in cmd:
                     t_chan.send_bot(cmd['resp'])
             else:
                 staff = glob.players.staff
-                t_chan.send_selective(p, msg, staff - {p})
+                t_chan.send_selective(
+                    msg = msg,
+                    sender = p,
+                    targets = staff - {p}
+                )
                 if 'resp' in cmd:
-                    t_chan.send_selective(glob.bot, cmd['resp'], staff | {p})
+                    t_chan.send_selective(
+                        msg = cmd['resp'],
+                        sender = glob.bot,
+                        targets = staff | {p}
+                    )
 
         else:
             # no commands were triggered
@@ -232,12 +277,12 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                     # time out their previous /np
                     p.last_np['timeout'] = 0
 
-            t_chan.send(p, msg)
+            t_chan.send(msg, sender=p)
 
         await p.update_latest_activity()
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
-@register
+@register(restricted=True)
 class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
     _: osuTypes.i32 # pretty awesome design on osu!'s end :P
 
@@ -252,18 +297,25 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
         await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
 
-@register
+@register(restricted=True)
 class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
-# a message to send to players new to the server
-welcome_msg = '\n'.join((
+# Some messages to send on welcome/restricted/etc.
+# TODO: these should probably be moved to the config.
+WELCOME_MSG = '\n'.join((
     f"Welcome to {glob.config.domain}.",
     "To see a list of commands, use !help.",
     "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
     "Enjoy the server!"
 ))
+
+RESTRICTED_MSG = (
+    'Your account is currently in restricted mode. '
+    'If you believe this is a mistake, or have waited a period '
+    'greater than 3 months, you may appeal via the form on the site.'
+)
 
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     """\
@@ -360,7 +412,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     user_info = await glob.db.fetch(
         'SELECT id, name, priv, pw_bcrypt, '
-        'silence_end, clan_id, clan_rank '
+        'silence_end, clan_id, clan_priv '
         'FROM users WHERE safe_name = %s',
         [make_safe_name(username)]
     )
@@ -386,10 +438,6 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             return packets.userID(-1), 'no'
 
         bcrypt_cache[pw_bcrypt] = pw_md5
-
-    # check if the user is banned.
-    if not user_info['priv'] & Privileges.Normal:
-        return packets.userID(-3), 'no'
 
     """ handle client hashes """
 
@@ -454,7 +502,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         # grant them all gulag privileges.
         if user_info['id'] == 3:
             user_info['priv'] |= (
-                Privileges.Staff | Privileges.Donator |
+                Privileges.Nominator | Privileges.Mod |
+                Privileges.Admin | Privileges.Dangerous |
+                Privileges.Supporter | Privileges.Premium |
                 Privileges.Tournament | Privileges.Whitelisted
             )
 
@@ -466,27 +516,51 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # get clan & clan rank if we're in a clan
     if user_info['clan_id'] != 0:
         clan = glob.clans.get(id=user_info.pop('clan_id'))
-        clan_rank = ClanPrivileges(user_info.pop('clan_rank'))
+        clan_priv = ClanPrivileges(user_info.pop('clan_priv'))
     else:
         del user_info['clan_id']
-        del user_info['clan_rank']
-        clan = clan_rank = None
+        del user_info['clan_priv']
+        clan = clan_priv = None
 
-    # user_info: {id, name, priv, pw_bcrypt, silence_end}
-    p = Player.login(user_info, utc_offset=utc_offset,
-                     osu_ver=osu_ver, pm_private=pm_private,
-                     login_time=login_time, clan=clan,
-                     clan_rank=clan_rank)
+    extras = {
+        'utc_offset': utc_offset,
+        'osu_ver': osu_ver,
+        'pm_private': pm_private,
+        'login_time': login_time,
+        'clan': clan,
+        'clan_priv': clan_priv
+    }
 
-    data = bytearray(packets.userID(p.id))
-    data += packets.protocolVersion(19)
-    data += packets.banchoPrivileges(p.bancho_priv)
+    p = Player(
+        **user_info, # {id, name, priv, pw_bcrypt, silence_end}
+        **extras     # {utc_offset, osu_ver, pm_private,
+                     #  login_time, clan, clan_priv}
+    )
+
+    for mode in GameMode:
+        p.recent_scores[mode] = None # TODO: sql?
+        p.stats[mode] = None
+
+    data = bytearray(packets.protocolVersion(19))
+    data += packets.userID(p.id)
+
+    # *real* client privileges are sent with this packet,
+    # then the user's apparent privileges are sent in the
+    # userPresence packets to other players. we'll send
+    # supporter along with the user's privileges here,
+    # but not in userPresence (so that only donators
+    # show up with the yellow name in-game, but everyone
+    # gets osu!direct & other in-game perks).
+    data += packets.banchoPrivileges(
+        p.bancho_priv | ClientPrivileges.Supporter
+    )
+
     data += packets.notification('Welcome back to the gulag!\n'
                                 f'Current build: v{glob.version}')
 
     # send all channel info.
     for c in glob.channels:
-        if not p.priv & c.read_priv:
+        if p.priv & c.read_priv != c.read_priv:
             continue # no priv to read
 
         # autojoinable channels
@@ -512,6 +586,10 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         # the IP from the login request.
         await p.fetch_geoloc(ip)
 
+    data += packets.mainMenuIcon()
+    data += packets.friendsList(*p.friends)
+    data += packets.silenceEnd(p.remaining_silence)
+
     # update our new player's stats, and broadcast them.
     user_data = (
         packets.userPresence(p) +
@@ -520,50 +598,66 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     data += user_data
 
-    # o for online, or other
-    for o in glob.players:
-        # enqueue us to them
-        o.enqueue(user_data)
+    if not p.restricted:
+        # player is unrestricted, two way data
+        for o in glob.players:
+            # enqueue us to them
+            o.enqueue(user_data)
 
-        # enqueue them to us.
-        data += packets.userPresence(o)
-        data += packets.userStats(o)
+            # enqueue them to us.
+            if not o.restricted:
+                data += packets.userPresence(o)
+                data += packets.userStats(o)
 
-    data += packets.mainMenuIcon()
-    data += packets.friendsList(*p.friends)
-    data += packets.silenceEnd(p.remaining_silence)
+        # the player may have been sent mail while offline,
+        # enqueue any messages from their respective authors.
+        # (thanks osu for doing this by name rather than id very cool)
+        query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
+                '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
+                '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
+                'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
 
-    # thank u osu for doing this by username rather than id
-    query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
-             '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
-             '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
-             'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
+        async for msg in glob.db.iterall(query, [p.id]):
+            msg_time = dt.fromtimestamp(msg['time'])
+            msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
-    # the player may have been sent mail while offline,
-    # enqueue any messages from their respective authors.
-    async for msg in glob.db.iterall(query, [p.id]):
-        msg_time = dt.fromtimestamp(msg['time'])
-        msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
-
-        data += packets.sendMessage(
-            msg['from'], msg_ts,
-            msg['to'], msg['from_id']
-        )
-
-    if first_login:
-        # this is the player's first login, send them
-        # some basic info about the server and its usage.
-
-        if p.id == 3:
-            # this is the first player registering on
-            # the server, grant them full privileges.
-            p.add_privs(
-                Privileges.Staff | Privileges.Nominator |
-                Privileges.Whitelisted | Privileges.Tournament |
-                Privileges.Donator | Privileges.Alumni
+            data += packets.sendMessage(
+                client=msg['from'], msg=msg_ts,
+                target=msg['to'], client_id=msg['from_id']
             )
 
-        p.send(glob.bot, welcome_msg)
+        if first_login:
+            # this is the player's first login, send them
+            # some basic info about the server and its usage.
+
+            if p.id == 3:
+                # this is the first player registering on
+                # the server, grant them full privileges.
+                p.add_privs(
+                    Privileges.Staff | Privileges.Nominator |
+                    Privileges.Whitelisted | Privileges.Tournament |
+                    Privileges.Donator | Privileges.Alumni
+                )
+
+            data += packets.sendMessage(
+                client=glob.bot.name, msg=WELCOME_MSG,
+                target=p.name, client_id=glob.bot.id
+            )
+
+    else:
+        # player is restricted, one way data
+        for o in glob.players.unrestricted:
+            # enqueue them to us.
+            data += packets.userPresence(o)
+            data += packets.userStats(o)
+
+        data += packets.accountRestricted()
+        data += packets.sendMessage(
+            client = glob.bot.name,
+            msg = RESTRICTED_MSG,
+            target = p.name,
+            client_id = glob.bot.id
+        )
 
     # TODO: enqueue ingame admin panel to staff members.
     """
@@ -582,7 +676,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
             f'[osu://dl/{server_stats} server_stats]',
         )
 
-        p.send(glob.bot, ' '.join(admin_panel))
+        p.send(' '.join(admin_panel), sender=glob.bot)
     """
 
     # add `p` to the global player list,
@@ -590,7 +684,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     glob.players.append(p)
 
     if glob.datadog:
-        glob.datadog.increment('gulag.online_players')
+        if not p.restricted:
+            glob.datadog.increment('gulag.online_players')
 
         time_taken = time.time() - login_time
         glob.datadog.histogram('gulag.login_time', time_taken)
@@ -666,7 +761,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             log(f'{p} tried to send a dm while silenced.', Ansi.LYELLOW)
             return
 
-        msg = self.msg.msg
+        # remove leading/trailing whitespace
+        msg = self.msg.msg.strip()
         t_name = self.msg.target
 
         # allow this to get from sql - players can receive
@@ -697,7 +793,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
         if t.status.action == Action.Afk and t.away_msg:
             # send away message if target is afk and has one set.
-            p.send(t, t.away_msg)
+            p.send(t.away_msg, sender=t)
 
         if t is glob.bot:
             # may have a command in the message.
@@ -707,7 +803,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             if cmd:
                 # command triggered, send response if any.
                 if 'resp' in cmd:
-                    p.send(t, cmd['resp'])
+                    p.send(cmd['resp'], sender=t)
             else:
                 # no commands triggered.
                 if match := regexes.now_playing.match(msg):
@@ -734,8 +830,10 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                             'timeout': time.time() + 300 # 5mins
                         }
 
-                        # calc pp if mode is supported
-                        if mode_vn not in (0, 1):
+                        # calc pp if possible
+                        if not glob.oppai_built:
+                            msg = 'No oppai-ng binary was found at startup.'
+                        elif mode_vn not in (0, 1):
                             msg = 'PP not yet supported for that mode.'
                         else:
                             if match['mods'] is not None:
@@ -766,12 +864,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         # time out their previous /np
                         p.last_np['timeout'] = 0
 
-                    p.send(t, msg)
+                    p.send(msg, sender=t)
 
         else:
             # target is not aika, send the message normally if online
             if t.online:
-                t.send(p, msg)
+                t.send(msg, sender=p)
             else:
                 # inform user they're offline, but
                 # will receive the mail @ next login.
@@ -783,7 +881,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
             # insert mail into db,
             # marked as unread.
             await glob.db.execute(
-                'INSERT INTO `mail` (`from_id`, `to_id`, `msg`, `time`) '
+                'INSERT INTO `mail` '
+                '(`from_id`, `to_id`, `msg`, `time`) '
                 'VALUES (%s, %s, %s, UNIX_TIMESTAMP())',
                 [p.id, t.id, msg]
             )
@@ -821,7 +920,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
-            p.send(glob.bot, 'Failed to create match (no slots available).')
+            p.send('Failed to create match (no slots available).', sender=glob.bot)
             p.enqueue(packets.matchJoinFail())
             return
 
@@ -1222,7 +1321,7 @@ class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
         # all users have skipped, enqueue a skip.
         m.enqueue(packets.matchSkip(), lobby=False)
 
-@register
+@register(restricted=True)
 class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
     name: osuTypes.string
 
@@ -1313,7 +1412,7 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
 
         m.enqueue_state(lobby=False)
 
-@register
+@register(restricted=True)
 class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
     name: osuTypes.string
 
@@ -1331,7 +1430,7 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
         # leave the chan server-side.
         p.leave_channel(c)
 
-@register
+@register(restricted=True)
 class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):
     value: osuTypes.i32
 
@@ -1349,12 +1448,13 @@ class SetAwayMessage(BanchoPacket, type=Packets.OSU_SET_AWAY_MESSAGE):
     async def handle(self, p: Player) -> None:
         p.away_msg = self.msg.msg
 
-@register
+@register(restricted=True)
 class StatsRequest(BanchoPacket, type=Packets.OSU_USER_STATS_REQUEST):
     user_ids: osuTypes.i32_list
 
     async def handle(self, p: Player) -> None:
-        is_online = lambda o: o in glob.players.ids and o != p.id
+        unrestrcted_ids = [p.id for p in glob.players.unrestricted]
+        is_online = lambda o: o in unrestrcted_ids and o != p.id
 
         for online in filter(is_online, self.user_ids):
             if t := glob.players.get(id=online):
@@ -1372,7 +1472,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
         elif t is glob.bot:
-            p.send(glob.bot, "I'm too busy!")
+            p.send("I'm too busy!", sender=glob.bot)
             return
 
         t.enqueue(packets.matchInvite(p, t.name))
@@ -1413,7 +1513,7 @@ class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUES
         # NOTE: i'm not exactly sure how bancho implements this and whether
         # i'm supposed to filter the users presences to send back with the
         # player's presence filter; i can add it in the future perhaps.
-        for t in glob.players:
+        for t in glob.players.unrestricted:
             if p is not t:
                 p.enqueue(packets.userPresence(t))
 

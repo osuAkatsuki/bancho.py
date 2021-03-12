@@ -64,17 +64,17 @@ class Channel:
     def __contains__(self, p: 'Player') -> bool:
         return p in self.players
 
-    def send(self, client: 'Player', msg: str,
-                   to_self: bool = False) -> None:
-        """Enqueue `msg` to all connected clients from `client`."""
+    def send(self, msg: str, sender: 'Player',
+             to_self: bool = False) -> None:
+        """Enqueue `msg` to all connected clients from `sender`."""
         self.enqueue(
             packets.sendMessage(
-                client = client.name,
+                client = sender.name,
                 msg = msg,
                 target = self.name,
-                client_id = client.id
+                client_id = sender.id
             ),
-            immune = () if to_self else (client.id,)
+            immune = () if to_self else (sender.id,)
         )
 
     def send_bot(self, msg: str) -> None:
@@ -90,11 +90,11 @@ class Channel:
             )
         )
 
-    def send_selective(self, client: 'Player', msg: str,
-                             targets: list['Player']) -> None:
+    def send_selective(self, msg: str, sender: 'Player',
+                       targets: list['Player']) -> None:
         """Enqueue `client`'s `msg` to `targets`."""
         for p in [t for t in targets if t in self]:
-            p.send(client, msg, chan=self)
+            p.send(msg, sender=sender, chan=self)
 
     def append(self, p: 'Player') -> None:
         """Add `p` to the channel's players."""

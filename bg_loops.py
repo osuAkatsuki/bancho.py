@@ -51,9 +51,11 @@ async def donor_expiry() -> None:
 
     # enqueue rm_donor for any supporter
     # expiring in the next 30 days.
+    # TODO: perhaps donor_end datetime?
     query = (
         'SELECT id, donor_end FROM users '
-        'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
+        'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
+        #'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
         'AND priv & 48' # 48 = Supporter | Premium
     )
 
