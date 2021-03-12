@@ -191,15 +191,15 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         t_chan = None
 
         for chan in p.channels:
-            if chan.name == target:
+            if chan.name == recipient:
                 t_chan = chan
-
-        if not t_chan and (t_chan := glob.channels[target]):
-            log(f"{p} is not part of {target} and yet sent message to {target}????", Ansi.LYELLOW)
-
-        if not t_chan:
-            log(f'{p} wrote to non-existent {recipient}.', Ansi.LYELLOW)
+        else:
+            log(f"{p} sent a message to a channel they're not a part of.", Ansi.LRED)
             return
+
+        # if not t_chan:
+        #     log(f'{p} wrote to non-existent {recipient}.', Ansi.LYELLOW)
+        #     return
 
         if p.priv & t_chan.write_priv != t_chan.write_priv:
             log(f'{p} wrote to {recipient} with insufficient privileges.')
@@ -898,7 +898,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
         # to the global channel list as
         # an instanced channel.
         chan = Channel(
-            name="#multiplayer",
+            name = "#multiplayer",
             id_name = f'#multi_{self.match.id}',
             topic = f"MID {self.match.id}'s multiplayer channel.",
             auto_join = False,
@@ -1104,7 +1104,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                        f'!mp teams {_team} command.')
                 m.chat.send_bot(msg)
             else:
-                isSolo = self.new.team_type  in (MatchTeamTypes.head_to_head,
+                is_solo = self.new.team_type  in (MatchTeamTypes.head_to_head,
                                           MatchTeamTypes.tag_coop)
 
                 # change each active slots team to
@@ -1112,8 +1112,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
                 for s in m.slots:
                     if s.status & SlotStatus.has_player:
                         # randomize new team placement (could be used as a mechanic)
-                        s.team = MatchTeams.neutral if isSolo else \
-                        MatchTeams.red if r.random() > 0.5 else MatchTeams.blue
+                        s.team = MatchTeams.neutral if is_solo else MatchTeams.red
 
                 # change the matches'.
                 m.team_type = self.new.team_type
