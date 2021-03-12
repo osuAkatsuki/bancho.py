@@ -167,7 +167,13 @@ async def maplink(p: Player, c: Messageable, msg: Sequence[str]) -> str:
 @command(Privileges.Normal, aliases=['last', 'r'])
 async def recent(p: Player, c: Messageable, msg: Sequence[str]) -> str:
     """Show information about your most recent score."""
-    if not (s := p.recent_score):
+    if msg:
+        if not (target := glob.players.get(name=' '.join(msg))):
+            return 'Player not found.'
+    else:
+        target = p
+
+    if not (s := target.recent_score):
         return 'No scores found :o (only saves per play session)'
 
     l = [f'[{s.mode!r}] {s.bmap.embed}', f'{s.acc:.2f}%']
