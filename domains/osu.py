@@ -1822,7 +1822,7 @@ async def api_get_leaderboard(conn: Connection) -> Optional[bytes]:
 
     if (mods_arg := conn.args.get('mods', None)) is not None:
         if mods_arg not in valid_mods:
-            return b'invalid mods! (vn, rx, ap)'
+            return (400, b'invalid mods! (vn, rx, ap)')
         else:
             mods = mods_arg
     else:
