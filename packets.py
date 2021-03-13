@@ -16,6 +16,7 @@ from functools import partialmethod
 from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
+from abc import ABC, abstractmethod
 
 from cmyui import Ansi
 from cmyui import log
@@ -161,7 +162,7 @@ class Packets(IntEnum):
     def __repr__(self) -> str:
         return f'<{self.name} ({self.value})>'
 
-class BanchoPacket:
+class BanchoPacket(ABC):
     """Abstract base class for bancho packets."""
     type: Optional[Packets] = None
     args: Optional[tuple[osuTypes]] = None
@@ -177,6 +178,7 @@ class BanchoPacket:
             if x in cls.args:
                 del cls.args[x]
 
+    @abstractmethod
     async def handle(self, p: 'Player') -> None: ...
 
 Message = namedtuple('Message', ['sender', 'msg', 'recipient', 'sender_id'])
