@@ -1275,6 +1275,7 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 # GET /api/get_map_scores: return the best scores for a given beatmap & mode.
 # GET /api/get_score_info: return information about a given score.
 # GET /api/get_replay: return the file for a given replay (with or without headers).
+# GET /api/get_leaderboard: return the best players for a given mode & mods.
 # GET /api/get_match: return information for a given multiplayer match.
 
 # Authorized (requires valid api key)
@@ -1810,6 +1811,64 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
 
     return bytes(buf)
+
+
+valid_mods = frozenset({'vn', 'rx', 'ap'})
+
+@domain.route('/api/get_leaderboard')
+async def api_get_leaderboard(conn: Connection) -> Optional[bytes]:
+    """Return the leaderboard of a given mode and mods."""
+    # NOTE: needs cmyui for chceking because i'm not backend developer : (
+
+    if (mods_arg := conn.args.get('mods', None)) is not None:
+        if mods_arg not in valid_mods:
+            return b'invalid mods! (vn, rx, ap)'
+        else:
+            mods = mods_arg
+    else:
+        return (400, b'Must provide either mods (vn,rx,ap)')
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, b'Invalid mode.')
+
+        mode = GameMode(mode)
+    else:
+        return (400, b'Must provide either mode (0,1,2,3)')
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, b'Invalid limit.')
+    else:
+        limit = 50
+
+    if mode == 0:
+        mode = "std"
+    elif mode == 1:
+        mode = "taiko"
+    elif mode == 2:
+        mode = "catch"
+    elif mode == 3:
+        mode = "mania"
+
+    # fetch & return info from sql
+    res = await glob.db.fetchall(
+        'SELECT u.id user_id, u.name username, '
+        'u.country, tscore_{0}_{1} tscore, '
+        'rscore_{0}_{1} rscore, pp_{0}_{1} pp, '
+        'plays_{0}_{1} plays, playtime_{0}_{1} playtime, '
+        'acc_{0}_{1} acc, maxcombo_{0}_{1} maxcombo FROM stats '
+        'JOIN users u ON stats.id = u.id '
+        'WHERE pp_{0}_{1} > 0 AND u.priv >= 3'.format(mods, mode)
+    )
+
+    return JSON(res)
 
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> Optional[bytes]:
