@@ -24,9 +24,6 @@ from constants.privileges import Privileges
 from objects import glob
 from objects.achievement import Achievement
 from objects.collections import *
-from objects.channel import Channel
-from objects.clan import Clan
-from objects.match import MapPool
 from objects.player import Player
 from utils.misc import download_achievement_pngs
 from utils.updater import Updater
@@ -40,8 +37,12 @@ glob.version = cmyui.Version(3, 2, 4)
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
-    # global players list
-    glob.players = PlayerList()
+    glob.players = PlayerList() # online players
+    glob.matches = MatchList() # active multiplayer matches
+
+    glob.channels = await ChannelList.prepare() # active channels
+    glob.pools = await MapPoolList.prepare() # active mappools
+    glob.clans = await ClanList.prepare() # active clans
 
     # create our bot & append it to the global player list.
     res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
@@ -51,43 +52,6 @@ async def setup_collections() -> None:
         login_time = float(0x7fffffff) # never auto-dc
     )
     glob.players.append(glob.bot)
-
-    # global channels list
-    glob.channels = ChannelList()
-    async for row in glob.db.iterall('SELECT * FROM channels'):
-        chan = Channel(
-            name = row['name'],
-            topic = row['topic'],
-            read_priv = Privileges(row['read_priv']),
-            write_priv = Privileges(row['write_priv']),
-            auto_join = row['auto_join'] == 1
-        )
-
-        glob.channels.append(chan)
-
-    # global matches list
-    glob.matches = MatchList()
-
-    # global clans list
-    glob.clans = ClanList()
-    async for row in glob.db.iterall('SELECT * FROM clans'):
-        clan = Clan(**row)
-
-        await clan.members_from_sql()
-        glob.clans.append(clan)
-
-    # global mappools list
-    glob.pools = MapPoolList()
-    async for row in glob.db.iterall('SELECT * FROM tourney_pools'):
-        pool = MapPool(
-            id = row['id'],
-            name = row['name'],
-            created_at = row['created_at'],
-            created_by = await glob.players.get_ensure(id=row['created_by'])
-        )
-
-        await pool.maps_from_sql()
-        glob.pools.append(pool)
 
     # global achievements (sorted by vn gamemodes)
     glob.achievements = {0: [], 1: [], 2: [], 3: []}
@@ -213,4 +177,4 @@ if __name__ == '__main__':
     # start up the server; this starts
     # an event loop internally, using
     # uvloop if it's installed.
-    app.run(glob.config.server_addr)
+    app.run(glob.config.server_addr, sigusr1_restart=True)
