@@ -40,6 +40,8 @@ __all__ = (
     'Match'
 )
 
+BASE_DOMAIN = glob.config.domain
+
 @unique
 @pymysql_encode(escape_enum)
 class SlotStatus(IntEnum):
@@ -214,7 +216,9 @@ class Match:
 
         # scrimmage stuff
         'is_scrimming', 'match_points', 'bans',
-        'winners', 'winning_pts', 'use_pp_scoring'
+        'winners', 'winning_pts', 'use_pp_scoring',
+
+        'tourney_clients'
     )
 
     def __init__(self) -> None:
@@ -253,6 +257,8 @@ class Match:
         self.winning_pts = 0
         self.use_pp_scoring = False # only for scrims
 
+        self.tourney_clients: set[int] = set() # player ids
+
     @property
     def url(self) -> str:
         """The match's invitation url."""
@@ -261,7 +267,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f'https://osu.ppy.sh/b/{self.map_id}'
+        return f'https://{BASE_DOMAIN}/b/{self.map_id}'
 
     @property
     def embed(self) -> str:

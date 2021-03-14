@@ -18,6 +18,8 @@ from utils.recalculator import PPCalculator
 
 __all__ = ('RankedStatus', 'Beatmap')
 
+BASE_DOMAIN = glob.config.domain
+
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
 # This drives me and probably everyone else pretty insane,
@@ -170,7 +172,7 @@ class Beatmap:
         self.hp = kwargs.get('hp', 0.0)
 
         self.diff = kwargs.get('diff', 0.00)
-        self.pp_cache = {} # {mods: (acc: pp, ...), ...}
+        self.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}} # {mode_vn: {mods: (acc/score: pp, ...), ...}}
 
     @property
     def filename(self) -> str:
@@ -185,12 +187,12 @@ class Beatmap:
     @property
     def url(self):
         """The osu! beatmap url for `self`."""
-        return f'https://osu.ppy.sh/b/{self.id}'
+        return f'https://{BASE_DOMAIN}/b/{self.id}'
 
     @property
     def set_url(self) -> str:
         """The osu! beatmap set url for `self`."""
-        return f'https://osu.ppy.sh/s/{self.set_id}'
+        return f'https://{BASE_DOMAIN}/s/{self.set_id}'
 
     @property
     def embed(self) -> str:
@@ -338,7 +340,9 @@ class Beatmap:
         m.last_update = datetime.strptime(
             bmap['last_update'], '%Y-%m-%d %H:%M:%S')
         m.total_length = int(bmap['total_length'])
-        m.max_combo = int(bmap['max_combo'])
+
+        if bmap['max_combo'] is not None:
+            m.max_combo = int(bmap['max_combo'])
 
         m.status = RankedStatus.from_osuapi(int(bmap['approved']))
 
@@ -462,7 +466,7 @@ class Beatmap:
             m.last_update = bmap['last_update']
             m.total_length = int(bmap['total_length'])
 
-            if bmap['max_combo'] is not None: # ??? osu api
+            if bmap['max_combo'] is not None:
                 m.max_combo = int(bmap['max_combo'])
 
             m.status = bmap['approved']
@@ -490,18 +494,31 @@ class Beatmap:
 
     async def cache_pp(self, mods: Mods) -> None:
         """Cache some common acc pp values for specified mods."""
-        self.pp_cache[mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
+        mode_vn = self.mode.as_vanilla
+        self.pp_cache[mode_vn][mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         ppcalc = await PPCalculator.from_id(
             map_id=self.id, mods=mods,
-            mode_vn=self.mode.as_vanilla
+            mode_vn=mode_vn
         )
 
-        for idx, acc in enumerate((90, 95, 98, 99, 100)):
-            ppcalc.acc = acc
+        if not ppcalc:
+            return
 
-            pp, _ = await ppcalc.perform() # don't need sr
-            self.pp_cache[mods][idx] = pp
+        if mode_vn in (0, 1): # std/taiko, use acc
+            for idx, acc in enumerate(glob.config.pp_cached_accs):
+                ppcalc.pp_attrs['acc'] = acc
+
+                pp, _ = await ppcalc.perform() # don't need sr
+                self.pp_cache[mode_vn][mods][idx] = pp
+        elif mode_vn == 2:
+            return # unsupported gm
+        elif mode_vn == 3: # mania, use score
+            for idx, score in enumerate(glob.config.pp_cached_scores):
+                ppcalc.pp_attrs['score'] = score
+
+                pp, _ = await ppcalc.perform()
+                self.pp_cache[mode_vn][mods][idx] = pp
 
     async def save_to_sql(self) -> None:
         """Save the the object into sql."""

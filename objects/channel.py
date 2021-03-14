@@ -69,10 +69,10 @@ class Channel:
         """Enqueue `msg` to all connected clients from `sender`."""
         self.enqueue(
             packets.sendMessage(
-                client = sender.name,
+                sender = sender.name,
                 msg = msg,
-                target = self.name,
-                client_id = sender.id
+                recipient = self.name,
+                sender_id = sender.id
             ),
             immune = () if to_self else (sender.id,)
         )
@@ -83,17 +83,17 @@ class Channel:
 
         self.enqueue(
             packets.sendMessage(
-                client = bot.name,
+                sender = bot.name,
                 msg = msg,
-                target = self.name,
-                client_id = bot.id
+                recipient = self.name,
+                sender_id = bot.id
             )
         )
 
     def send_selective(self, msg: str, sender: 'Player',
-                       targets: list['Player']) -> None:
-        """Enqueue `client`'s `msg` to `targets`."""
-        for p in [t for t in targets if t in self]:
+                       recipients: list['Player']) -> None:
+        """Enqueue `sender`'s `msg` to `recipients`."""
+        for p in [t for t in recipients if t in self]:
             p.send(msg, sender=sender, chan=self)
 
     def append(self, p: 'Player') -> None:
