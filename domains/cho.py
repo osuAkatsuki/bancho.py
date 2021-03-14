@@ -87,7 +87,7 @@ async def bancho_handler(conn: Connection) -> bytes:
     if not player:
         # token not found; chances are that we just restarted
         # the server - tell their client to reconnect immediately.
-        return packets.notification('Server is restarting') + \
+        return packets.notification('Server has restarted.') + \
                packets.restartServer(0) # send 0ms since server is up
 
     # restricted users may only use certain packet handlers.

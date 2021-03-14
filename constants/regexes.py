@@ -19,7 +19,7 @@ now_playing = rcomp(
     r'(?: <(?P<mode_vn>Taiko|CatchTheBeat|osu!mania)>)?'
     r'(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$'
 )
-silence_duration = rcomp(
+scaled_duration = rcomp(
     r'^(?P<duration>\d{1,6})'
     r'(?P<scale>s|m|h|d|w)$'
 )

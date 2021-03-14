@@ -15,7 +15,12 @@ from cmyui.osu.replay import ReplayFrame
 __all__ = (
     'point_of_interest',
     'get_average_press_times',
-    'make_safe_name'
+    'make_safe_name',
+
+    'pymysql_encode',
+    'escape_enum',
+
+    'download_achievement_pngs'
 )
 
 def point_of_interest():
@@ -119,3 +124,21 @@ def download_achievement_pngs(medals_path: Path) -> None:
 
         log(f'Saving achievement: {ach}', Ansi.LCYAN)
         (medals_path / f'{ach}').write_bytes(r.content)
+
+def seconds_readable(seconds: int) -> str:
+    """Turn seconds as an int into 'DD:HH:MM:SS'."""
+    r: list[str] = []
+
+    days, seconds = divmod(seconds, 60 * 60 * 24)
+    if days:
+        r.append(f'{days:02d}')
+
+    hours, seconds = divmod(seconds, 60 * 60)
+    if hours:
+        r.append(f'{hours:02d}')
+
+    minutes, seconds = divmod(seconds, 60)
+    r.append(f'{minutes:02d}')
+
+    r.append(f'{seconds % 60:02d}')
+    return ':'.join(r)

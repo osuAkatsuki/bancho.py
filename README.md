@@ -46,12 +46,12 @@ sudo apt install python3.9 python3.9-dev python3.9-distutils \
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
-# install gulag requirements w/ pip
-python3.9 -m pip install -r ext/requirements.txt
-
 # clone the repo & init submodules
 git clone https://github.com/cmyui/gulag.git && cd gulag
 git submodule init && git submodule update
+
+# install gulag requirements w/ pip
+python3.9 -m pip install -r ext/requirements.txt
 
 # build oppai-ng's binary
 cd oppai-ng && ./build && cd ..
