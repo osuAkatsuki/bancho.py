@@ -349,7 +349,10 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
-    search_url = f'{glob.config.mirror}/search'
+    if USING_CHIMU:
+        search_url = f'{glob.config.mirror}/search'
+    else:
+        search_url = f'{glob.config.mirror}/api/search'
 
     params = {
         'amount': 100,
