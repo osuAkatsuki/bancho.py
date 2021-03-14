@@ -1388,11 +1388,30 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
         'status': {
             'action': int(p.status.action),
             'info_text': p.status.info_text,
-            'map_id': p.status.map_id,
-            'map_set_id': set_id,
-            'map_md5': p.status.map_md5,
             'mode': int(p.status.mode),
-            'mods': int(p.status.mods)
+            'mods': int(p.status.mods),
+            'beatmap': {
+                'md5': bmap.md5,
+                'id': bmap.id,
+                'set_id': bmap.set_id,
+                'artist': bmap.artist,
+                'title': bmap.title,
+                'version': bmap.version,
+                'creator': bmap.creator,
+                'last_update': bmap.last_update,
+                'total_length': bmap.total_length,
+                'max_combo': bmap.max_combo,
+                'status': bmap.status,
+                'plays': bmap.plays,
+                'passes': bmap.passes,
+                'mode': bmap.mode,
+                'bpm': bmap.bpm,
+                'cs': bmap.cs,
+                'od': bmap.od,
+                'ar': bmap.ar,
+                'hp': bmap.hp,
+                'diff': bmap.diff
+            } if bmap else None
         }
     })
 
@@ -1485,6 +1504,32 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
 
     # fetch & return info from sql
     res = await glob.db.fetchall(' '.join(query), params)
+
+    for row in res:
+        bmap = await Beatmap.from_md5(row.pop('map_md5'))
+        row['beatmap'] = {
+            'md5': bmap.md5,
+            'id': bmap.id,
+            'set_id': bmap.set_id,
+            'artist': bmap.artist,
+            'title': bmap.title,
+            'version': bmap.version,
+            'creator': bmap.creator,
+            'last_update': bmap.last_update,
+            'total_length': bmap.total_length,
+            'max_combo': bmap.max_combo,
+            'status': bmap.status,
+            'plays': bmap.plays,
+            'passes': bmap.passes,
+            'mode': bmap.mode,
+            'bpm': bmap.bpm,
+            'cs': bmap.cs,
+            'od': bmap.od,
+            'ar': bmap.ar,
+            'hp': bmap.hp,
+            'diff': bmap.diff
+        }
+
     return JSON(res)
 
 @domain.route('/api/get_player_most_played')
