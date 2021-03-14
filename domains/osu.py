@@ -381,7 +381,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             if resp.status == 404:
                 return b'0' # no maps found
             elif resp.status != 200:
-                breakpoint()
+                return b'0'
         else: # cheesegull
             if resp.status != 200:
                 return b'Failed to retrieve data from mirror!'
@@ -390,7 +390,6 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         if USING_CHIMU:
             if result['code'] != 0:
-                breakpoint()
                 return b'Failed to retrieve data from mirror!'
             result = result['data']
 
