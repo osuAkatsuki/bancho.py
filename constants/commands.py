@@ -4,7 +4,6 @@ import asyncio
 import copy
 import importlib
 import os
-import psutil
 import random
 import re
 import time
@@ -23,6 +22,7 @@ from typing import Union
 from pathlib import Path
 
 import cmyui
+import psutil
 
 import packets
 from constants import regexes

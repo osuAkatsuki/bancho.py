@@ -6,5 +6,6 @@ cmyui
 datadog
 mysql-connector-python
 orjson
+psutil
 py3rijndael
 uvloop
