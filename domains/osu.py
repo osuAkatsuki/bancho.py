@@ -1314,9 +1314,9 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
 
     if (
         'scope' not in conn.args or
-        conn.args['scope'] not in ('info', 'stats')
+        conn.args['scope'] not in ('info', 'stats', 'all')
     ):
-        return (400, b'Must provide scope (info/stats).')
+        return (400, b'Must provide scope (info/stats/all).')
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
@@ -1339,17 +1339,34 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
 
         pid = pid['id']
 
-    if conn.args['scope'] == 'info':
-        # return user info
-        query = ('SELECT id, name, safe_name, '
-                 'priv, country, silence_end ' # silence_end public?
-                 'FROM users WHERE id = %s')
-    else:
-        # return user stats
-        query = 'SELECT * FROM stats WHERE id = %s'
+    api_data = {}
 
-    res = await glob.db.fetch(query, [pid])
-    return orjson.dumps(res) if res else b'Player not found.'
+    if conn.args['scope'] in ('info', 'all'): # user info
+        res = await glob.db.fetch(
+            'SELECT id, name, safe_name, '
+            'priv, country, silence_end ' # silence_end public?
+            'FROM users WHERE id = %s',
+            [pid]
+        )
+
+        if not res:
+            return (404, b'Player not found')
+
+        api_data |= res
+
+    if conn.args['scope'] in ('stats', 'all'): # user stats
+        # get all regular stats
+        res = await glob.db.fetch(
+            'SELECT * FROM stats '
+            'WHERE id = %s', [pid]
+        )
+
+        if not res:
+            return (404, b'Player not found')
+
+        api_data |= res
+
+    return orjson.dumps(api_data)
 
 @domain.route('/api/get_player_status')
 async def api_get_player_status(conn: Connection) -> Optional[bytes]:
