@@ -14,14 +14,11 @@ from cmyui import log
 
 from constants.privileges import Privileges
 from objects import glob
-from objects.clan import ClanPrivileges
+from objects.clan import Clan, ClanPrivileges
 from objects.channel import Channel
 from objects.match import Match, MapPool
 from objects.player import Player
 from utils.misc import make_safe_name
-
-if TYPE_CHECKING:
-    from objects.clan import Clan
 
 __all__ = (
     'ChannelList',

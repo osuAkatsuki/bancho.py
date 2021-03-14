@@ -41,8 +41,8 @@ async def setup_collections() -> None:
     glob.matches = MatchList() # active multiplayer matches
 
     glob.channels = await ChannelList.prepare() # active channels
-    glob.pools = await MapPoolList.prepare() # active mappools
     glob.clans = await ClanList.prepare() # active clans
+    glob.pools = await MapPoolList.prepare() # active mappools
 
     # create our bot & append it to the global player list.
     res = await glob.db.fetch('SELECT name FROM users WHERE id = 1')
