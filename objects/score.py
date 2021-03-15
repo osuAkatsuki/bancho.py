@@ -343,20 +343,33 @@ class Score:
     # whether it's beneficial or not.
     async def calc_diff(self) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
-        if not glob.oppai_built:
-            # oppai-ng not compiled
-            return (0.0, 0.0)
+        mode_vn = self.mode.as_vanilla
 
-        if self.mode.as_vanilla not in (0, 1):
-            # currently only std and taiko are supported,
-            # since we are simply using oppai-ng alone.
-            return (0.0, 0.0)
+        if mode_vn in (0, 1):
+            if not glob.oppai_built:
+                # oppai-ng not compiled
+                return (0.0, 0.0)
 
-        ppcalc = await PPCalculator.from_id(
-            map_id=self.bmap.id, mods=self.mods,
-            combo=self.max_combo, nmiss=self.nmiss,
-            mode_vn=self.mode.as_vanilla, acc=self.acc
-        )
+            pp_attrs = {
+                'mods': self.mods,
+                'combo': self.max_combo,
+                'nmiss': self.nmiss,
+                'mode_vn': mode_vn,
+                'acc': self.acc
+            }
+        elif mode_vn == 2:
+            return (0.0, 0.0)
+        elif mode_vn == 3:
+            if self.bmap.mode.as_vanilla != 3:
+                return (0.0, 0.0) # maniera has no convert support
+
+            pp_attrs = {
+                'mods': self.mods,
+                'score': self.score,
+                'mode_vn': mode_vn
+            }
+
+        ppcalc = await PPCalculator.from_id(map_id=self.bmap.id, **pp_attrs)
 
         if not ppcalc:
             return (0.0, 0.0)

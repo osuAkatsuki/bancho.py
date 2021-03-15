@@ -14,14 +14,11 @@ from cmyui import log
 
 from constants.privileges import Privileges
 from objects import glob
-from objects.clan import ClanPrivileges
+from objects.clan import Clan, ClanPrivileges
+from objects.channel import Channel
+from objects.match import Match, MapPool
 from objects.player import Player
 from utils.misc import make_safe_name
-
-if TYPE_CHECKING:
-    from objects.channel import Channel
-    from objects.match import Match, MapPool
-    from objects.clan import Clan
 
 __all__ = (
     'ChannelList',
@@ -79,12 +76,25 @@ class ChannelList(list):
         if glob.config.debug:
             log(f'{c} removed from channels list.')
 
+    @classmethod
+    async def prepare(cls) -> None:
+        """Fetch data from sql & return; preparing to run the server."""
+        return cls(
+            Channel(
+                name = row['name'],
+                topic = row['topic'],
+                read_priv = Privileges(row['read_priv']),
+                write_priv = Privileges(row['write_priv']),
+                auto_join = row['auto_join'] == 1
+            ) for row in await glob.db.fetchall('SELECT * FROM channels')
+        )
+
 class MatchList(list):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.extend([None] * 32)
+        self.extend([None] * 64)
 
     def __iter__(self) -> Iterator['Match']:
         return super().__iter__()
@@ -202,7 +212,7 @@ class PlayerList(list):
         # try to get from sql.
         res = await glob.db.fetch(
             'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_priv '
+            'silence_end, clan_id, clan_priv, api_key '
             f'FROM users WHERE {attr} = %s',
             [val]
         )
@@ -302,6 +312,18 @@ class MapPoolList(list):
         if glob.config.debug:
             log(f'{mp} removed from mappools list.')
 
+    @classmethod
+    async def prepare(cls) -> None:
+        """Fetch data from sql & return; preparing to run the server."""
+        return cls([
+            MapPool(
+                id = row['id'],
+                name = row['name'],
+                created_at = row['created_at'],
+                created_by = await glob.players.get_ensure(id=row['created_by'])
+            ) for row in await glob.db.fetchall('SELECT * FROM tourney_pools')
+        ])
+
 class ClanList(list):
     """The currently active clans on the server."""
 
@@ -348,3 +370,16 @@ class ClanList(list):
 
         if glob.config.debug:
             log(f'{c} removed from clans list.')
+
+    @classmethod
+    async def prepare(cls) -> None:
+        """Fetch data from sql & return; preparing to run the server."""
+        obj = cls()
+
+        async for row in glob.db.iterall('SELECT * FROM clans'):
+            clan = Clan(**row)
+
+            await clan.members_from_sql()
+            obj.append(clan)
+
+        return obj

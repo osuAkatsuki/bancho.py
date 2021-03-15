@@ -7,6 +7,8 @@
 
 import asyncio
 import re
+import os
+import signal
 from datetime import datetime as dt
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -149,10 +151,6 @@ class Updater:
                         "know what caused this, please please contact cmyui#0425.", Ansi.LRED)
 
                     input('Press enter to exit')
-
-                    loop = asyncio.get_running_loop()
-                    loop.stop()
-                    loop.close()
-                    exit(1)
+                    os.kill(os.getpid(), signal.SIGTERM)
 
     # TODO _update_config?
