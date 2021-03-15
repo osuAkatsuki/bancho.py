@@ -1492,10 +1492,10 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
 
         if mods_arg.isdecimal():
             # parse from int form
-            mods = Mods(int(conn.args['mods']))
+            mods = Mods(int(mods_arg))
         else:
             # parse from string form
-            mods = Mods.from_modstr(conn.args['mods'])
+            mods = Mods.from_modstr(mods_arg)
     else:
         mods = None
 
@@ -1705,10 +1705,10 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
 
         if mods_arg.isdecimal():
             # parse from int form
-            mods = Mods(int(conn.args['mods']))
+            mods = Mods(int(mods_arg))
         else:
             # parse from string form
-            mods = Mods.from_modstr(conn.args['mods'])
+            mods = Mods.from_modstr(mods_arg)
     else:
         mods = None
 
