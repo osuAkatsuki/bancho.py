@@ -27,6 +27,7 @@ from cmyui import Domain
 from cmyui import log
 from cmyui import ratelimit
 from cmyui import rstring
+from cmyui.discord import Webhook
 
 import packets
 from constants import regexes
@@ -130,7 +131,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 @get_login(name_p='u', pass_p='p')
 async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
     if 'ss' not in conn.files:
-        log(f'screenshot req missing file.', Ansi.LRED)
+        log('Screenshot req missing file.', Ansi.LRED)
         return (400, b'Missing file.')
 
     ss_file = conn.files['ss']
@@ -298,7 +299,7 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
             # Random chance (1/32) for a ban.
             await p.restrict(
                 admin = glob.bot,
-                reason = f'hq!osu relife 1/32'
+                reason = 'hq!osu relife 1/32'
             )
             return b'-3'
 
@@ -545,9 +546,18 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         pp_cap = glob.config.autoban_pp[s.mode][s.mods & Mods.FLASHLIGHT != 0]
 
         if s.pp > pp_cap:
-            log(f'{s.player} banned for submitting '
-                f'{s.pp:.2f} score on gm {s.mode!r}.',
-                Ansi.LRED)
+            msg_content = (
+                f'{s.player} banned for submitting '
+                f'{s.pp:.2f}pp score on gm {s.mode!r}.',
+            )
+
+            if webhook_url := glob.config.webhooks['audit-log']:
+                # TODO: make it look nicer lol.. very basic
+                webhook = Webhook(url=webhook_url)
+                webhook.content = msg_content
+                await webhook.post(glob.http)
+
+            log(msg_content, Ansi.LRED)
 
             await s.player.restrict(
                 admin = glob.bot,
@@ -634,7 +644,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             log(f'{s.player} submitted a score without a replay!', Ansi.LRED)
             await s.player.restrict(
                 admin = glob.bot,
-                reason = f'submitted score with no replay'
+                reason = 'submitted score with no replay'
             )
         else:
             # TODO: the replay is currently sent from the osu!
@@ -815,7 +825,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
         ret = '\n'.join(charts).encode()
 
-    log(f'[{s.mode!r}] {s.player} submitted a score! ({s.status!r})', Ansi.LGREEN)
+    log(f'[{s.mode!r}] {s.player} submitted a score! '
+        f'({s.status!r}, {s.pp:,.2f}pp / {stats.pp:,}pp)', Ansi.LGREEN)
     return ret
 
 @domain.route('/web/osu-getreplay.php')
@@ -1024,7 +1035,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         query.append('AND u.country = %s')
         params.append(p.country[1]) # letters, not id
 
-    query.append(f'ORDER BY _score DESC LIMIT 50')
+    query.append('ORDER BY _score DESC LIMIT 50')
 
     scores = await glob.db.fetchall(' '.join(query), params)
 
@@ -1280,12 +1291,14 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 # GET /api/get_replay: return the file for a given replay (with or without headers).
 # GET /api/get_match: return information for a given multiplayer match.
 
-# Authorized (requires valid api key)
-# NOTE: api key should be passed as 'Authorization' http header.
+# Authorized (requires valid api key, passed as 'Authorization' header)
+# NOTE: authenticated handlers may have privilege requirements.
+
+# [Normal]
 # GET /api/calculate_pp: calculate & return pp for a given beatmap.
 # POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
 
-# TODO: authenticated api handlers
+# TODO handlers
 # GET /api/get_friends: return a list of the player's friends.
 # POST/PUT /api/set_player_info: update user information (updates whatever received).
 
@@ -1394,13 +1407,10 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
         # no such player online
         return JSON({'online': False})
 
-    # varkaria wants set_id for gulag-web
     if p.status.map_md5:
         bmap = await Beatmap.from_md5(p.status.map_md5)
     else:
         bmap = None
-
-    set_id = bmap.set_id if bmap else 0
 
     return JSON({
         'online': True,

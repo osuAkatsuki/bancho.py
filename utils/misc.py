@@ -14,7 +14,7 @@ from cmyui.osu.replay import ReplayFrame
 
 __all__ = (
     'point_of_interest',
-    'get_average_press_times',
+    'get_press_times',
     'make_safe_name',
 
     'pymysql_encode',

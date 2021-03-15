@@ -7,7 +7,6 @@ import asyncio
 from typing import Any
 from typing import Optional
 from typing import Iterator
-from typing import TYPE_CHECKING
 from typing import Union
 
 from cmyui import log
@@ -27,6 +26,9 @@ __all__ = (
     'MapPoolList',
     'ClanList'
 )
+
+# TODO: decorator for these collections which automatically
+# adds debugging to their append/remove/insert/extend methods.
 
 class ChannelList(list):
     """The currently active chat channels on the server."""
@@ -66,14 +68,14 @@ class ChannelList(list):
         """Append `c` to the list."""
         super().append(c)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{c} added to channels list.')
 
     def remove(self, c: 'Channel') -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{c} removed from channels list.')
 
     @classmethod
@@ -118,7 +120,7 @@ class MatchList(list):
             m.id = free
             self[free] = m
 
-            if glob.config.debug:
+            if glob.app.debug:
                 log(f'{m} added to matches list.')
 
             return True
@@ -133,7 +135,7 @@ class MatchList(list):
                 self[i] = None
                 break
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{m} removed from matches list.')
 
 class PlayerList(list):
@@ -255,20 +257,20 @@ class PlayerList(list):
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
-            if glob.config.debug:
+            if glob.app.debug:
                 log(f'{p} double-added to global player list?')
             return
 
         super().append(p)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{p} added to global player list.')
 
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         super().remove(p)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{p} removed from global player list.')
 
 class MapPoolList(list):
@@ -302,14 +304,14 @@ class MapPoolList(list):
         """Append `mp` to the list."""
         super().append(mp)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{mp} added to mappools list.')
 
     def remove(self, mp: 'MapPool') -> None:
         """Remove `mp` from the list."""
         super().remove(mp)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{mp} removed from mappools list.')
 
     @classmethod
@@ -361,14 +363,14 @@ class ClanList(list):
         """Append `c` to the list."""
         super().append(c)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{c} added to clans list.')
 
     def remove(self, c: 'Clan') -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{c} removed from clans list.')
 
     @classmethod

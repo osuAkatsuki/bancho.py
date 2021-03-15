@@ -23,7 +23,11 @@ import bg_loops
 from constants.privileges import Privileges
 from objects import glob
 from objects.achievement import Achievement
-from objects.collections import *
+from objects.collections import PlayerList
+from objects.collections import MatchList
+from objects.collections import ChannelList
+from objects.collections import ClanList
+from objects.collections import MapPoolList
 from objects.player import Player
 from utils.misc import download_achievement_pngs
 from utils.updater import Updater
@@ -145,8 +149,10 @@ if __name__ == '__main__':
             'can be found in the README file.', Ansi.LRED)
 
     # create a server object, which serves as a map of domains.
-    app = cmyui.Server(name=f'gulag v{glob.version}',
-                       gzip=4, verbose=glob.config.debug)
+    app = glob.app = cmyui.Server(
+        name=f'gulag v{glob.version}',
+        gzip=4, debug=glob.config.debug
+    )
 
     # add our endpoint's domains to the server;
     # each may potentially hold many individual endpoints.
@@ -155,19 +161,19 @@ if __name__ == '__main__':
     from domains.ava import domain as ava_domain # a.ppy.sh
     app.add_domains({cho_domain, osu_domain, ava_domain})
 
-    # enqueue a task to run once the
-    # server begins serving connections.
+    # enqueue tasks to run once the server
+    # begins, and stops serving connections.
+    # these make sure we set everything up
+    # and take it down nice and graceful.
     app.before_serving = before_serving
     app.after_serving = after_serving
 
     # support for https://datadoghq.com
     if all(glob.config.datadog.values()):
         datadog.initialize(**glob.config.datadog)
-
-        # NOTE: this will start datadog's
-        #       client in another thread.
         glob.datadog = datadog.ThreadStats()
-        glob.datadog.start(flush_interval=15)
+        glob.datadog.start(flush_in_thread=True,
+                           flush_interval=15)
 
         # wipe any previous stats from the page.
         glob.datadog.gauge('gulag.online_players', 0)
@@ -177,4 +183,6 @@ if __name__ == '__main__':
     # start up the server; this starts
     # an event loop internally, using
     # uvloop if it's installed.
-    app.run(glob.config.server_addr, sigusr1_restart=True)
+    app.run(glob.config.server_addr,
+            sigusr1_restart=True) # use signal.SIGUSR1
+                                  # for restarts

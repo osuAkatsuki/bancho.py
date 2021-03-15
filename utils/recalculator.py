@@ -9,8 +9,6 @@ import aiohttp
 from cmyui import Ansi
 from cmyui import log
 
-from constants.mods import Mods
-
 __all__ = ('PPCalculator',)
 
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
@@ -76,7 +74,7 @@ class PPCalculator:
 
             # for now, we'll generate a bash command and
             # use subprocess to do the calculations (yikes).
-            cmd = [f'oppai-ng/oppai', self.file]
+            cmd = ['oppai-ng/oppai', self.file]
 
             if 'mods' in self.pp_attrs:
                 cmd.append(f'+{self.pp_attrs["mods"]!r}')

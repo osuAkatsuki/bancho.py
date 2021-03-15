@@ -1,6 +1,6 @@
 # This file contains any sql updates, along with the
 # version they are required from. Touching this without
-# atleast reading utils/updater.py is certainly a bad idea :)
+# at least reading utils/updater.py is certainly a bad idea :)
 
 # v3.0.6
 alter table users change name_safe safe_name varchar(32) not null;

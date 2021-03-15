@@ -551,7 +551,7 @@ class Player:
     def leave_match(self) -> None:
         """Attempt to remove `self` from their match."""
         if not self.match:
-            if glob.config.debug:
+            if glob.app.debug:
                 log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
@@ -625,7 +625,7 @@ class Player:
         for p in (c.players if c.instance else glob.players):
             p.enqueue(packets.channelInfo(*c.basic_info))
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{self} joined {c}.')
 
         return True
@@ -649,7 +649,7 @@ class Player:
         for p in recipients:
             p.enqueue(packets.channelInfo(*c.basic_info))
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{self} left {c}.')
 
     def add_spectator(self, p: 'Player') -> None:

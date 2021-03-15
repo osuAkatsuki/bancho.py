@@ -14,6 +14,7 @@ from cmyui import AnsiRGB
 from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
+from cmyui.discord import Webhook
 
 import packets
 from constants import commands
@@ -107,7 +108,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         await packet.handle(player)
         packets_read.append(packet.type)
 
-    if glob.config.debug:
+    if glob.app.debug:
         packets_str = ', '.join([p.name for p in packets_read]) or 'None'
         log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
@@ -371,7 +372,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # than two months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
-    if not glob.config.debug:
+    if not glob.app.debug:
         if osu_ver < (dt.now() - td(60)):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
@@ -504,8 +505,27 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         else:
             # player is verified
             # TODO: discord webhook?
-            log(f'{username} logged in with HWID matches!', Ansi.LRED)
-            pass
+            # TODO: staff hwid locking & bypass detections.
+            unique_players = set()
+            total_occurrences = 0
+            for match in hwid_matches:
+                if match['name'] not in unique_players:
+                    unique_players.add(match['name'])
+                total_occurrences += match['occurrences']
+
+            msg_content = (
+                f'{username} logged in with HWID matches '
+                f'from {len(unique_players)} other users. '
+                f'({total_occurrences} total occurrences)'
+            )
+
+            if webhook_url := glob.config.webhooks['audit-log']:
+                # TODO: make it look nicer lol.. very basic
+                webhook = Webhook(url=webhook_url)
+                webhook.content = msg_content
+                await webhook.post(glob.http)
+
+            log(msg_content, Ansi.LRED)
 
     # get clan & clan rank if we're in a clan
     if user_info['clan_id'] != 0:

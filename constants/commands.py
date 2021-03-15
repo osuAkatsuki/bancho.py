@@ -751,7 +751,6 @@ async def fakeusers(ctx: Context) -> str:
             'utc_offset': 0,
             'osu_ver': 'dn',
             'pm_private': False,
-            'login_time': 0,
             'clan': None,
             'clan_priv': None,
             'priv': Privileges.Normal | Privileges.Verified,
@@ -898,8 +897,8 @@ async def recalc(ctx: Context) -> str:
 @command(Privileges.Dangerous, hidden=True)
 async def debug(ctx: Context) -> str:
     """Toggle the console's debug setting."""
-    glob.config.debug = not glob.config.debug
-    return f"Toggled {'on' if glob.config.debug else 'off'}."
+    glob.app.debug = not glob.app.debug
+    return f"Toggled {'on' if glob.app.debug else 'off'}."
 
 # TODO: this command is rly bad, it probably
 # shouldn't really be a command to begin with..
@@ -1751,7 +1750,7 @@ async def pool_add(ctx: Context) -> str:
         return f'{mods_slot} is already {pool.maps[(mods, slot)].embed}!'
 
     if bmap in pool.maps.values():
-        return f'Map is already in the pool!'
+        return 'Map is already in the pool!'
 
     # insert into db
     await glob.db.execute(

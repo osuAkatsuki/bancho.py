@@ -17,9 +17,6 @@ from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui import Ansi
-from cmyui import log
-
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.types import osuTypes
