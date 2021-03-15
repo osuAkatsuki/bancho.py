@@ -798,9 +798,17 @@ class Player:
 
         # increment playcount
         stats.plays += 1
+        
+        # calculate avg acc based on top 100 scores
+        tot = div = 0
+        for i, acc in enumerate(res):
+            add = int((0.95 ** i) * 100)
+            tot += row['acc'] * add
+            div += add
 
-        # calculate avg acc based on top 50 scores
-        stats.acc = sum([row['acc'] for row in res[:50]]) / min(50, len(res))
+        stats.acc = tot / div
+
+        # stats.acc = sum([row['acc'] for row in res[:50]]) /  min(50, len(res))
 
         # calculate weighted pp based on top 100 scores
         stats.pp = round(sum([row['pp'] * 0.95 ** i
