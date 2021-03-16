@@ -8,7 +8,17 @@
 # osu!'s built-in registration.
 # certificate: https://akatsuki.pw/static/ca.crt
 
-import asyncio
+import sys
+sys._excepthook = sys.excepthook # backup
+def _excepthook(type, value, traceback):
+    if type is KeyboardInterrupt:
+        print('\33[2K\r', end='Aborted startup.')
+        return
+    print('\x1b[0;31mgulag ran into an issue '
+          'before starting up :(\x1b[0m')
+    sys._excepthook(type, value, traceback)
+sys.excepthook = _excepthook
+
 import os
 from pathlib import Path
 
@@ -106,21 +116,25 @@ async def before_serving() -> None:
     # such as channels, mappools, clans, bot, etc.
     await setup_collections()
 
-    # setup tasks for upcoming donor expiry dates.
-    await bg_loops.donor_expiry()
+    new_coros = []
+
+    # create a task for each donor expiring in 30d.
+    new_coros.extend(await bg_loops.donor_expiry())
 
     # setup a loop to kick inactive ghosted players.
-    loop = asyncio.get_running_loop()
-    loop.create_task(bg_loops.disconnect_ghosts())
+    new_coros.append(bg_loops.disconnect_ghosts())
 
     # if the surveillance webhook has a value, run
     # automatic (still very primitive) detections on
     # replays deemed by the server's configurable values.
     if glob.config.webhooks['surveillance']:
-        loop.create_task(bg_loops.replay_detections())
+        new_coros.append(bg_loops.replay_detections())
 
     # reroll the bot's random status every `interval` sec.
-    loop.create_task(bg_loops.reroll_bot_status(interval=300))
+    new_coros.append(bg_loops.reroll_bot_status(interval=300))
+
+    for coro in new_coros:
+        glob.app.add_pending_task(coro)
 
 if __name__ == '__main__':
     # set cwd to /gulag.

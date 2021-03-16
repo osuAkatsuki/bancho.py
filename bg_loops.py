@@ -4,6 +4,7 @@ import asyncio
 import lzma
 import time
 from pathlib import Path
+from typing import Coroutine
 from typing import TYPE_CHECKING
 
 from cmyui.osu import ReplayFrame
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 __all__ = ('donor_expiry', 'disconnect_ghosts',
            'replay_detections', 'reroll_bot_status')
 
-async def donor_expiry() -> None:
+async def donor_expiry() -> list[Coroutine]:
     """Add new donation ranks & enqueue tasks to remove current ones."""
     # TODO: this system can get quite a bit better; rather than just
     # removing, it should rather update with the new perks (potentially
@@ -59,10 +60,12 @@ async def donor_expiry() -> None:
         'AND priv & 48' # 48 = Supporter | Premium
     )
 
-    loop = asyncio.get_running_loop()
+    coros = []
 
     async for donation in glob.db.iterall(query, _dict=False):
-        loop.create_task(rm_donor(*donation))
+        coros.append(rm_donor(*donation))
+
+    return coros
 
 PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def disconnect_ghosts() -> None:
