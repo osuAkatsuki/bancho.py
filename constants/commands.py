@@ -845,13 +845,6 @@ async def recalc(ctx: Context) -> str:
 
         bmap = ctx.player.last_np['bmap']
 
-        ppcalc = await PPCalculator.from_id(
-            map_id=bmap.id, mode_vn=mode_vn
-        )
-
-        if not ppcalc:
-            return 'Could not retrieve map file.'
-
         ctx.recipient.send_bot(f'Performing full recalc on {bmap.embed}.')
 
         for table in ('scores_vn', 'scores_rx', 'scores_ap'):
@@ -870,10 +863,23 @@ async def recalc(ctx: Context) -> str:
                 continue
 
             for score in scores:
-                ppcalc.mods = Mods(score['mods'])
-                ppcalc.combo = score['max_combo']
-                ppcalc.nmiss = score['nmiss']
-                ppcalc.acc = score['acc']
+                # getting score attributes
+                # only for std cuz other modes
+                # not yet implemented
+                pp_attrs = {
+                    'mods': Mods(score['mods']),
+                    'combo': score['max_combo'],
+                    'nmiss': score['nmiss'],
+                    'mode_vn': mode_vn,
+                    'acc': score['acc']
+                }
+
+                ppcalc = await PPCalculator.from_id(
+                    map_id=bmap.id, **pp_attrs
+                )
+
+                if not ppcalc:
+                    return 'Could not retrieve map file.'
 
                 pp, _ = await ppcalc.perform() # sr not needed
 
