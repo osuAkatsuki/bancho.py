@@ -383,7 +383,7 @@ class Beatmap:
             await m.save_to_sql()
 
         if glob.app.debug:
-            log(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
+            log(f'Retrieved {m.full} from the osu!api.', Ansi.LMAGENTA)
 
         return m
 
@@ -493,7 +493,7 @@ class Beatmap:
             await m.save_to_sql()
 
             if glob.app.debug:
-                log(f'Retrieved {m.full} from the osu!api.', Ansi.LGREEN)
+                log(f'Retrieved {m.full} from the osu!api.', Ansi.LMAGENTA)
 
     async def cache_pp(self, mods: Mods) -> None:
         """Cache some common acc pp values for specified mods."""

@@ -10,6 +10,7 @@ from typing import Iterator
 from typing import Union
 
 from cmyui import log
+from cmyui import Ansi
 
 from constants.privileges import Privileges
 from objects import glob
@@ -81,6 +82,7 @@ class ChannelList(list):
     @classmethod
     async def prepare(cls) -> None:
         """Fetch data from sql & return; preparing to run the server."""
+        log('Fetching channels from sql', Ansi.LCYAN)
         return cls(
             Channel(
                 name = row['name'],
@@ -317,6 +319,7 @@ class MapPoolList(list):
     @classmethod
     async def prepare(cls) -> None:
         """Fetch data from sql & return; preparing to run the server."""
+        log('Fetching mappools from sql', Ansi.LCYAN)
         return cls([
             MapPool(
                 id = row['id'],
@@ -376,12 +379,11 @@ class ClanList(list):
     @classmethod
     async def prepare(cls) -> None:
         """Fetch data from sql & return; preparing to run the server."""
-        obj = cls()
+        log('Fetching clans from sql', Ansi.LCYAN)
+        res = await glob.db.fetchall('SELECT * FROM clans')
+        obj = cls([Clan(**row) for row in res])
 
-        async for row in glob.db.iterall('SELECT * FROM clans'):
-            clan = Clan(**row)
-
+        for clan in obj:
             await clan.members_from_sql()
-            obj.append(clan)
 
         return obj

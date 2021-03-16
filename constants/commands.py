@@ -709,7 +709,7 @@ async def shutdown(ctx: Context) -> str:
 
             glob.players.enqueue(packets.notification(alert_msg))
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f'Enqueued {ctx.trigger}.'
     else: # shutdown immediately
@@ -1128,7 +1128,7 @@ async def mp_start(ctx: Context) -> str:
                 if ctx.player in ctx.match:
                     ctx.match.start()
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             loop.call_later(duration, _start)
             return f'Match will start in {duration} seconds.'
         elif ctx.args[0] not in ('force', 'f'):
