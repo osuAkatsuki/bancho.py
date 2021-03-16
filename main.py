@@ -134,7 +134,8 @@ async def after_serving() -> None:
         await glob.db.close()
 
     if glob.datadog:
-        glob.datadog.stop()
+        glob.datadog.stop() # stop thread
+        glob.datadog.flush() # flush any leftover
 
 if __name__ == '__main__':
     # set cwd to /gulag.
