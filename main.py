@@ -88,16 +88,6 @@ async def setup_collections() -> None:
         )
     }
 
-async def after_serving() -> None:
-    """Called after the server stops serving connections."""
-    await glob.http.close()
-
-    if glob.db.pool is not None:
-        await glob.db.close()
-
-    if glob.datadog:
-        glob.datadog.stop()
-
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
@@ -135,6 +125,16 @@ async def before_serving() -> None:
 
     for coro in new_coros:
         glob.app.add_pending_task(coro)
+
+async def after_serving() -> None:
+    """Called after the server stops serving connections."""
+    await glob.http.close()
+
+    if glob.db.pool is not None:
+        await glob.db.close()
+
+    if glob.datadog:
+        glob.datadog.stop()
 
 if __name__ == '__main__':
     # set cwd to /gulag.
@@ -198,5 +198,5 @@ if __name__ == '__main__':
     # an event loop internally, using
     # uvloop if it's installed.
     app.run(glob.config.server_addr,
-            sigusr1_restart=True) # use signal.SIGUSR1
-                                  # for restarts
+            handle_signals=True, # SIGHUP, SIGTERM, SIGINT
+            sigusr1_restart=True) # use SIGUSR1 for restarts

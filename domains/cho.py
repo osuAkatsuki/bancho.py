@@ -873,7 +873,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                     p.send(msg, sender=t)
 
         else:
-            # target is not aika, send the message normally if online
+            # target is not bot, send the message normally if online
             if t.online:
                 t.send(msg, sender=p)
             else:

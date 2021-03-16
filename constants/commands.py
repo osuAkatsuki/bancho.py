@@ -223,7 +223,7 @@ async def recent(ctx: Context) -> str:
 async def _with(ctx: Context) -> str:
     """Specify custom accuracy & mod combinations with `/np`."""
     if ctx.recipient is not glob.bot:
-        return 'This command can only be used in DM with Aika.'
+        return 'This command can only be used in DM with bot.'
 
     if time.time() >= ctx.player.last_np['timeout']:
         return 'Please /np a map first!'

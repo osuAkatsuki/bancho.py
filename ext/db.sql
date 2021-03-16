@@ -397,7 +397,7 @@ create table users
 );
 
 insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bcrypt, creation_time, latest_activity)
-values (1, 'Aika', 'aika', 1, 'ca', 0, 'aika@gulag.ca',
+values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@gulag.ca',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 insert into stats (id) values (1);
