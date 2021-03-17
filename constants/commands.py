@@ -829,8 +829,8 @@ async def recalc(ctx: Context) -> str:
     if not glob.oppai_built:
         return 'No oppai-ng binary was found at startup.'
 
-    if len(ctx.args) != 1 or ctx.args[0] not in ('map', 'all'):
-        return 'Invalid syntax: !recalc <map/all>'
+    if len(ctx.args) < 1 or ctx.args[0] not in ('map', 'all'):
+        return 'Invalid syntax: !recalc <map/all> (mode)'
 
     score_counts = [] # keep track of # of scores recalced
 
@@ -839,60 +839,160 @@ async def recalc(ctx: Context) -> str:
         if time.time() >= ctx.player.last_np['timeout']:
             return 'Please /np a map first!'
 
-        # TODO: mania support (and ctb later)
-        if (mode_vn := ctx.player.last_np['mode_vn']) not in (0, 1):
+        # TODO: ctb support
+        if (mode_vn := ctx.player.last_np['mode_vn']) not in (0, 1, 3):
             return 'PP not yet supported for that mode.'
 
         bmap = ctx.player.last_np['bmap']
+        
+        # keep scores for task
+        scores = {
+            'scores_vn': [],
+            'scores_rx': [],
+            'scores_ap': []
+        }
+
+        pp_attrs = {
+            'mode_vn': mode_vn
+        }
 
         ppcalc = await PPCalculator.from_id(
-            map_id=bmap.id, mode_vn=mode_vn
-        )
-
+                        map_id=bmap.id, **pp_attrs
+                    )
+        
         if not ppcalc:
             return 'Could not retrieve map file.'
 
-        ctx.recipient.send_bot(f'Performing full recalc on {bmap.embed}.')
-
         for table in ('scores_vn', 'scores_rx', 'scores_ap'):
             # fetch all scores from the table on this map
-            scores = await glob.db.fetchall(
+            req = await glob.db.fetchall(
                 'SELECT id, acc, mods, max_combo, '
                 'n300, n100, n50, nmiss, ngeki, nkatu '
                 f'FROM {table} WHERE map_md5 = %s '
-                'AND status = 2 AND mode = %s',
+                'AND mode = %s',
                 [bmap.md5, mode_vn]
             )
 
-            score_counts.append(len(scores))
+            score_counts.append(len(req))
 
-            if not scores:
+            if not req:
                 continue
 
-            for score in scores:
-                ppcalc.mods = Mods(score['mods'])
-                ppcalc.combo = score['max_combo']
-                ppcalc.nmiss = score['nmiss']
-                ppcalc.acc = score['acc']
+            scores[table] = req
 
-                pp, _ = await ppcalc.perform() # sr not needed
+        async def iterScores(bmap, scores):
+            for table in scores:
+                for score in scores[table]:
+                    # getting score attributes
+                    # only for std cuz other modes
+                    # not yet implemented
+                    ppcalc.pp_attrs.update({
+                        'mods': Mods(score['mods']),
+                        'combo': score['max_combo'],
+                        'nmiss': score['nmiss'],
+                        'acc': score['acc']
+                    })
 
-                await glob.db.execute(
-                    f'UPDATE {table} '
-                    'SET pp = %s '
-                    'WHERE id = %s',
-                    [pp, score['id']]
-                )
+                    pp, _ = await ppcalc.perform() # sr not needed
+
+                    await glob.db.execute(
+                        f'UPDATE {table} '
+                        'SET pp = %s '
+                        'WHERE id = %s',
+                        [pp, score['id']]
+                    )
+
+            ctx.recipient.send_bot(f'Succesfully recalculated scores on {bmap}!')
+
+        asyncio.create_task(iterScores(bmap.embed, scores))
+
+        recap = '{0} vn | {1} rx | {2} ap'.format(*score_counts)
 
     else:
         # recalculate all scores on every map
         if not ctx.player.priv & Privileges.Dangerous:
             return 'This command is limited to developers.'
 
-        return 'TODO'
+        if len(ctx.args) < 2 or ctx.args[1] not in ('vn', 'rx', 'ap'):
+            return 'Invalid mods: (vn, rx, ap)'
+        else:
+            table = ctx.args[1]
 
-    recap = '{0} vn | {1} rx | {2} ap'.format(*score_counts)
-    return f'Recalculated {sum(score_counts)} ({recap}) scores.'
+        scores = await glob.db.fetchall(
+            f'SELECT scores_{table}.id, maps.id AS map_id, map_md5, acc, scores_{table}.mode, '
+            f'mods, scores_{table}.max_combo, n300, n100, n50, nmiss, ngeki, nkatu '
+            f'FROM scores_{table} LEFT JOIN maps ON maps.md5 = scores_{table}.map_md5'
+        )
+
+        score_counts.append(len(scores))
+
+        # Dict with unic maps
+        maps = {}
+
+        async def iterScores(scores, table, ctx):
+            for score in scores:
+                # Check if map is cached
+                # otherwise, cache it and
+                # get id from it
+                if not (bmap_id := score['map_id']):
+                    cached = await Beatmap.from_md5(score['map_md5'])
+                    if cached is not None:                          
+                        bmap_id = cached.id
+                    else:
+                        log(f'Could not cached map from osu!api during recalculation, skipping. ({score["map_md5"]})', Ansi.LRED)
+                        continue
+                else:
+                    bmap_id = score['map_id']
+
+                # Check modes
+                # TODO: ctb support
+                if (mode_vn := score['mode']) not in (0, 1, 3):
+                    continue
+                
+                # Base pp_attrs
+                pp_attrs = {
+                    'mode_vn': mode_vn
+                }
+
+                # Save unic maps
+                if score['map_md5'] not in maps:
+                    # Check if instance retrieve map file
+                    # otherwise log it as error
+                    if (instance := await PPCalculator.from_id(
+                        map_id=bmap_id, **pp_attrs
+                    )) is not None:
+                        maps[score['map_md5']] = instance
+                    else:
+                        log(f'Could not retrieve map file during recalculation, skipping. ({bmap_id})', Ansi.LRED)
+                        continue
+                
+                # getting score attributes
+                # only for std cuz other modes
+                # not yet implemented
+                maps.get(score['map_md5']).pp_attrs.update({
+                    'mods': Mods(score['mods']),
+                    'combo': score['max_combo'],
+                    'nmiss': score['nmiss'],
+                    'acc': score['acc']
+                })
+
+                # Getting ppcalc instance 
+                # with unic map, perform
+                pp, _ = await maps.get(score['map_md5']).perform() # sr not needed
+
+                await glob.db.execute(
+                    f'UPDATE scores_{table} '
+                    'SET pp = %s '
+                    'WHERE id = %s',
+                    [pp, score['id']]
+                )
+            ctx.recipient.send_bot(f'Succesfully recalculated all scores of {table}!std.')
+
+        asyncio.create_task(iterScores(scores, table, ctx))
+        
+        recap = table
+
+    return f'Scheduled task to recalculate {sum(score_counts)} ({recap}) scores.'
 
 @command(Privileges.Dangerous, hidden=True)
 async def debug(ctx: Context) -> str:
