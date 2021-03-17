@@ -88,7 +88,7 @@ class PPCalculator:
             if self.mode_vn != 0:
                 cmd.append(f'-m{self.mode_vn}')
                 if self.mode_vn == 1:
-                    cmd.append('-otaiko')
+                    cmd.append('-taiko')
 
             cmd.append('-obinary')
 
