@@ -123,6 +123,12 @@ class Player:
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
+    bot_client: `bool`
+        Whether this is a bot account.
+
+    tourney_client: `bool`
+        Whether this is a management/spectator tourney client.
+
     _queue: `bytearray`
         Bytes enqueued to the player which will be transmitted
         at the tail end of their next connection to the server.
@@ -138,8 +144,11 @@ class Player:
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options', 'tourney_client', 'api_key',
-        '_queue', '__dict__'
+        'menu_options',
+
+        'bot_client', 'tourney_client',
+        'api_key', '_queue',
+        '__dict__'
     )
 
     def __init__(self, id: int, name: str,
@@ -209,6 +218,13 @@ class Player:
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
         self.menu_options: dict[int, dict[str, Any]] = {}
+
+        # subject to possible change in the future,
+        # although if anything, bot accounts will
+        # probably just use the /api/ routes?
+        self.bot_client = extras.get('bot_client', False)
+        if self.bot_client:
+            self.enqueue = lambda data: None
 
         self.tourney_client = extras.get('tourney_client', False)
 

@@ -17,11 +17,11 @@ if __import__('typing').TYPE_CHECKING:
     from datadog import ThreadStats
 
     from objects.achievement import Achievement
-    from collections import PlayerList
-    from collections import ChannelList
-    from collections import MatchList
-    from collections import ClanList
-    from collections import MapPoolList
+    from objects.collections import PlayerList
+    from objects.collections import ChannelList
+    from objects.collections import MatchList
+    from objects.collections import ClanList
+    from objects.collections import MapPoolList
     from objects.player import Player
     from objects.score import Score
     from packets import BanchoPacket

@@ -9,6 +9,7 @@
 # certificate: https://akatsuki.pw/static/ca.crt
 
 import sys
+
 sys._excepthook = sys.excepthook # backup
 def _excepthook(type, value, traceback):
     if type is KeyboardInterrupt:
@@ -63,7 +64,8 @@ async def setup_collections() -> None:
 
     glob.bot = Player(
         id = 1, name = res['name'], priv = Privileges.Normal,
-        login_time = float(0x7fffffff) # never auto-dc
+        login_time = float(0x7fffffff), # never auto-dc
+        bot_client = True
     )
     glob.players.append(glob.bot)
 
