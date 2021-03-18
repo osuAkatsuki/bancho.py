@@ -268,8 +268,8 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                             'osu!mania': 3
                         }[match['mode_vn']]
                     else:
-                        # use beatmap mode if not specified
-                        mode_vn = bmap.mode.as_vanilla
+                        # use player mode if not specified
+                        mode_vn = p.status.mode.as_vanilla
 
                     p.last_np = {
                         'bmap': bmap,
@@ -820,8 +820,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                                 'osu!mania': 3
                             }[match['mode_vn']]
                         else:
-                            # use beatmap mode if not specified
-                            mode_vn = bmap.mode.as_vanilla
+                            # use player mode if not specified
+                            mode_vn = p.status.mode.as_vanilla
 
                         p.last_np = {
                             'bmap': bmap,
