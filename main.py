@@ -128,16 +128,38 @@ async def before_serving() -> None:
 
 async def after_serving() -> None:
     """Called after the server stops serving connections."""
-    await glob.http.close()
+    if hasattr(glob, 'http'):
+        await glob.http.close()
 
-    if glob.db.pool is not None:
-        await glob.db.close()
+    if hasattr(glob, 'db'):
+        if glob.db.pool is not None:
+            await glob.db.close()
 
-    if glob.datadog:
-        glob.datadog.stop() # stop thread
-        glob.datadog.flush() # flush any leftover
+    if hasattr(glob, 'datadog'):
+        if glob.datadog:
+            glob.datadog.stop() # stop thread
+            glob.datadog.flush() # flush any leftover
 
 if __name__ == '__main__':
+    # attempt to start up gulag.
+    if sys.version_info < (3, 9):
+        sys.exit('The minimum python version for gulag is 3.9')
+
+    if glob.config.production:
+        if os.geteuid() == 0:
+            log('It is not recommended to run gulag as root, '
+                'especially in production..', Ansi.LYELLOW)
+
+            if glob.config.advanced:
+                log('The risk is even greater with features '
+                    'such as config.advanced enabled.', Ansi.LRED)
+
+    # make sure nginx & mysqld are running.
+    if not os.path.exists('/var/run/mysqld/mysqld.pid'):
+        sys.exit('Please start your mysqld server.')
+    if not os.path.exists('/var/run/nginx.pid'):
+        sys.exit('Please start your nginx server.')
+
     # set cwd to /gulag.
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
