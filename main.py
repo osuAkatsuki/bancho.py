@@ -133,19 +133,27 @@ async def after_serving() -> None:
     if hasattr(glob, 'http'):
         await glob.http.close()
 
-    if hasattr(glob, 'db'):
-        if glob.db.pool is not None:
-            await glob.db.close()
+    if hasattr(glob, 'db') and glob.db.pool is not None:
+        await glob.db.close()
 
-    if hasattr(glob, 'datadog'):
-        if glob.datadog:
-            glob.datadog.stop() # stop thread
-            glob.datadog.flush() # flush any leftover
+    if hasattr(glob, 'datadog') and glob.datadog is not None:
+        glob.datadog.stop() # stop thread
+        glob.datadog.flush() # flush any leftover
 
 if __name__ == '__main__':
     # attempt to start up gulag.
     if sys.version_info < (3, 9):
         sys.exit('The minimum python version for gulag is 3.9')
+
+    # make sure nginx & mysqld are running.
+    if (
+        glob.config.mysql['host'] in ('localhost', '127.0.0.1') and
+        not os.path.exists('/var/run/mysqld/mysqld.pid')
+    ):
+        sys.exit('Please start your mysqld server.')
+
+    if not os.path.exists('/var/run/nginx.pid'):
+        sys.exit('Please start your nginx server.')
 
     if glob.config.production:
         if os.geteuid() == 0:
@@ -155,12 +163,6 @@ if __name__ == '__main__':
             if glob.config.advanced:
                 log('The risk is even greater with features '
                     'such as config.advanced enabled.', Ansi.LRED)
-
-    # make sure nginx & mysqld are running.
-    if not os.path.exists('/var/run/mysqld/mysqld.pid'):
-        sys.exit('Please start your mysqld server.')
-    if not os.path.exists('/var/run/nginx.pid'):
-        sys.exit('Please start your nginx server.')
 
     # set cwd to /gulag.
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
