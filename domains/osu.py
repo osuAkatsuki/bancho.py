@@ -2052,7 +2052,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
 @domain.route(re.compile(r'^/d/\d{1,10}$'))
 async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
+    mirror_url = f'{glob.config.mirror}/download/{conn.path[3:]}'
     conn.add_resp_header(f'Location: {mirror_url}')
     return (301, b'')
 
