@@ -854,8 +854,8 @@ class Player:
             'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
         )}
 
-        # always have self & bot added to friends.
-        self.friends = _friends | {1, self.id}
+        # always have bot added to friends.
+        self.friends = _friends | {1}
 
     async def achievements_from_sql(self) -> None:
         """Retrieve `self`'s achievements from sql."""
