@@ -1443,7 +1443,8 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             return
 
         if t.id == 1:
-            # you cannot remove the bot as a friend
+            # you cannot remove the bot as a friend since it's already
+            # your friend :]
             return
 
         await p.update_latest_activity()
