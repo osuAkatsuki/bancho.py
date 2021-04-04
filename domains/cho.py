@@ -1427,7 +1427,8 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             return
 
         if t.id == 1:
-            # you cannot add the bot as a friend
+            # you cannot add the bot as a friend since it's already
+            # your friend :]
             return
 
         await p.update_latest_activity()
@@ -1443,8 +1444,8 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             return
 
         if t.id == 1:
-            # you cannot remove the bot as a friend since it's already
-            # your friend :]
+            # you cannot remove the bot as a friend because it wont
+            # like that >:[
             return
 
         await p.update_latest_activity()
