@@ -1426,11 +1426,8 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             log(f'{p} tried to add a user who is not online! ({self.user_id})')
             return
 
-        if t.id in (1, p.id):
-            # trying to add the bot, or themselves.
-            # these are already appended to the friends list
-            # on login, so disallow the user from *actually*
-            # editing these in sql.
+        if t.id == 1:
+            # you cannot add the bot as a friend
             return
 
         await p.update_latest_activity()
@@ -1445,11 +1442,8 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             log(f'{p} tried to remove a user who is not online! ({self.user_id})')
             return
 
-        if t.id in (1, p.id):
-            # trying to remove the bot, or themselves.
-            # these are already appended to the friends list
-            # on login, so disallow the user from *actually*
-            # editing these in sql.
+        if t.id == 1:
+            # you cannot remove the bot as a friend
             return
 
         await p.update_latest_activity()
