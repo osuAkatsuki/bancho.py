@@ -1,5 +1,3 @@
-create schema cmyui collate latin1_swedish_ci;
-
 create table achievements
 (
 	id int auto_increment
