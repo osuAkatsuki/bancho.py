@@ -120,7 +120,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 
 # TODO
 # POST /web/osu-error.php
-# POsT /web/osu-session.php
+# POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
@@ -923,7 +923,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         return b'-1|false'
 
     mods = Mods(int(conn.args['mods']))
-    mode = GameMode.from_params(int(conn.args['m']), mods)
+    mode_vn = int(conn.args['m'])
+
+    mode = GameMode.from_params(mode_vn, mods)
 
     map_set_id = int(conn.args['i'])
     rank_type = RankingType(int(conn.args['v']))
@@ -963,8 +965,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
                 # search for a match in our db - since we just cached all
                 # versions of the map, a match will mean that the map is
                 # simply out of date, while no match should mean unsubmitted.
-                map_filename = conn.args['f'].replace('+', ' ')
-                if not (re := regexes.mapfile.match(unquote(map_filename))):
+                map_filename = unquote(conn.args['f'].replace('+', ' '))
+
+                if not (re := regexes.mapfile.match(map_filename)):
                     # if a mapfile has invalid syntax, it's almost certainly
                     # some cursed abomination made by the user themself..
                     # NOTE: logging because i'm not sure if im a liar B)
@@ -1021,16 +1024,14 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
     ]
 
-    params = [map_md5, p.id, conn.args['m']]
+    params = [map_md5, p.id, mode_vn]
 
     if rank_type == RankingType.Mods:
         query.append('AND s.mods = %s')
         params.append(mods)
     elif rank_type == RankingType.Friends:
-        # a little cursed, but my wrapper doesn't like being
-        # passed iterables yet, and nor does the lower lv api xd
-        friends_str = ','.join(map(str, p.friends))
-        query.append(f'AND s.userid IN ({friends_str}, {p.id})')
+        query.append('AND s.userid IN %s')
+        params.append(p.friends | {p.id})
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
         params.append(p.country[1]) # letters, not id
@@ -1075,7 +1076,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
-            map_md5, conn.args['m'], p.id
+            map_md5, mode_vn, p.id
         ]
     )
 
@@ -1091,7 +1092,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 AND u.priv & 1 '
             f'AND s.{scoring} > %s', [
-                map_md5, conn.args['m'],
+                map_md5, mode_vn,
                 p_best['_score']
             ]
         ))['count']
@@ -2088,6 +2089,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
             content = await resp.read()
 
+        # save it to disk for future
         path.write_bytes(content)
 
     return content
