@@ -4,6 +4,7 @@ asyncpg
 bcrypt
 cmyui
 datadog
+maniera
 mysql-connector-python
 orjson
 psutil

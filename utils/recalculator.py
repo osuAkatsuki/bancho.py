@@ -8,6 +8,7 @@ from pathlib import Path
 import aiohttp
 from cmyui import Ansi
 from cmyui import log
+from maniera.calculator import Maniera
 
 __all__ = ('PPCalculator',)
 
@@ -122,7 +123,6 @@ class PPCalculator:
             # TODO: ctb support
             return (0.0, 0.0)
         elif self.mode_vn == 3: # use maniera for mania
-            from maniera.calculator import Maniera
             if 'score' not in self.pp_attrs:
                 log('Err: pp calculator needs score for mania.', Ansi.LRED)
                 return (0.0, 0.0)
