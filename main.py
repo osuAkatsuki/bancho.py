@@ -200,7 +200,9 @@ if __name__ == '__main__':
     from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
     from domains.osu import domain as osu_domain # osu.ppy.sh
     from domains.ava import domain as ava_domain # a.ppy.sh
-    app.add_domains({cho_domain, osu_domain, ava_domain})
+    from domains.map import domain as map_domain # b.ppy.sh
+    app.add_domains({cho_domain, osu_domain,
+                     ava_domain, map_domain})
 
     # enqueue tasks to run once the server
     # begins, and stops serving connections.

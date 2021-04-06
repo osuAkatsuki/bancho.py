@@ -334,8 +334,8 @@ USING_CHIMU = 'chimu.moe' in glob.config.mirror
 DIRECT_SET_INFO_FMTSTR = (
     '{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|'
     '{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|'
-    '0|0|0|0|0|{{diffs}}'# 0s are threadid, has_vid, has_story,
-                         #        filesize, filesize_novid.
+    '0|{{HasVideo}}|0|0|0|{{diffs}}' # 0s are threadid, has_story,
+                                     # filesize, filesize_novid.
 ).format(setid_spelling='SetId' if USING_CHIMU else 'SetID')
 
 DIRECT_MAP_INFO_FMTSTR = (
@@ -405,6 +405,12 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         if bmap['ChildrenBeatmaps'] is None:
             continue
 
+        if USING_CHIMU:
+            bmap['HasVideo'] = int(bmap['HasVideo'])
+        else:
+            # cheesegull doesn't support vids
+            bmap['HasVideo'] = '0'
+
         diff_sorted_maps = sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
         diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
                               for row in diff_sorted_maps])
@@ -413,6 +419,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
+# TODO: video support (needs db change)
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
@@ -2050,11 +2057,20 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
 
     return path.read_bytes()
 
-@domain.route(re.compile(r'^/d/\d{1,10}$'))
+@domain.route(re.compile(r'^/d/\d{1,10}n?$'))
 async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
-    conn.resp_headers['Location'] = mirror_url
+    set_id = conn.path[3:]
+
+    if no_video := set_id[-1] == 'n':
+        set_id = set_id[:-1]
+
+    if USING_CHIMU:
+        query_str = f'download/{set_id}?n={int(no_video)}'
+    else:
+        query_str = f'd/{set_id}'
+
+    conn.resp_headers['Location'] = f'{glob.config.mirror}/{query_str}'
     return (301, b'')
 
 @domain.route(re.compile(r'^/web/maps/'))
