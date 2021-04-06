@@ -1881,9 +1881,9 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # can't submit scores so should not be a problem.
 
     # send data back to the client
-    conn.add_resp_header('Content-Type: application/octet-stream')
-    conn.add_resp_header('Content-Description: File Transfer')
-    conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
+    conn.resp_headers['Content-Type'] = 'application/octet-stream'
+    conn.resp_headers['Content-Description'] = 'File Transfer'
+    conn.resp_headers['Content-Disposition'] = f'attachment; filename="{score_id}.osr"'
 
     return bytes(buf)
 
@@ -2054,7 +2054,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
 async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
-    conn.add_resp_header(f'Location: {mirror_url}')
+    conn.resp_headers['Location'] = mirror_url
     return (301, b'')
 
 @domain.route(re.compile(r'^/web/maps/'))

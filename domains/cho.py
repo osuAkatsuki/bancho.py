@@ -79,7 +79,7 @@ async def bancho_handler(conn: Connection) -> bytes:
                 conn.body, conn.headers['X-Real-IP']
             )
 
-        conn.add_resp_header(f'cho-token: {token}')
+        conn.resp_headers['cho-token'] = token
         return resp
 
     # get the player from the specified osu token.
@@ -113,7 +113,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
     player.last_recv_time = time.time()
-    conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+    conn.resp_headers['Content-Type'] = 'text/html; charset=UTF-8'
     return player.dequeue() or b''
 
 """ Packet logic """
