@@ -4,10 +4,11 @@ import asyncio
 import copy
 import importlib
 import os
+import pprint
 import random
 import re
-import time
 import signal
+import time
 import uuid
 from collections import Counter
 from datetime import datetime
@@ -1060,34 +1061,30 @@ if glob.config.advanced:
         if not ctx.args:
             return 'owo'
 
-        # create the new coroutine definition as a string
-        # with the lines from our message (split by '\n').
-        lines = ' '.join(ctx.args).split(r'\n')
-        definition = '\n '.join(['async def __py(ctx):'] + lines)
+        # turn our input args into a coroutine definition string.
+        definition = '\n '.join([
+            'async def __py(ctx):',
+            ' '.join(ctx.args)
+        ])
 
         try: # def __py(ctx)
-            exec(definition, __py_namespace)
-
-            loop = asyncio.get_running_loop()
-
-            try: # __py(ctx)
-                task = loop.create_task(__py_namespace['__py'](ctx))
-                ret = await asyncio.wait_for(asyncio.shield(task), 5.0)
-            except asyncio.TimeoutError:
-                ret = 'Left running (took >=5 sec).'
-
-        except Exception as e:
-            # code was invalid, return
-            # the error in the osu! chat.
+            exec(definition, __py_namespace)  # add to namespace
+            ret = await __py_namespace['__py'](ctx) # await it's return
+        except Exception as e: # return exception in osu! chat
             ret = f'{e.__class__}: {e}'
 
         if '__py' in __py_namespace:
             del __py_namespace['__py']
 
-        if ret is not None:
-            return str(ret)
-        else:
+        if ret is None:
             return 'Success'
+
+        # TODO: perhaps size checks?
+
+        if not isinstance(ret, str):
+            ret = pprint.pformat(ret)
+
+        return ret
 
 """ Multiplayer commands
 # The commands below for multiplayer match management.
