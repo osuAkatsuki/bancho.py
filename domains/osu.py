@@ -1833,12 +1833,14 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
     res = await glob.db.fetch(
-        'SELECT s.mode, m.md5 map_md5, u.name username, '
-        's.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, '
-        's.score, s.max_combo, s.perfect, s.mods, s.play_time '
+        'SELECT u.name username, m.md5 map_md5, '
+        'm.artist, m.title, m.version, '
+        's.mode, s.n300, s.n100, s.n50, s.ngeki, '
+        's.nkatu, s.nmiss, s.score, s.max_combo, '
+        's.perfect, s.mods, s.play_time '
         f'FROM {scores_table} s '
-        'LEFT JOIN users u ON u.id = s.userid '
-        'LEFT JOIN maps m ON m.md5 = s.map_md5 '
+        'INNER JOIN users u ON u.id = s.userid '
+        'INNER JOIN maps m ON m.md5 = s.map_md5 '
         'WHERE s.id = %s',
         [score_id]
     )
@@ -1850,9 +1852,8 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         '{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}'.format(
-            int(res['n100']) + int(res['n300']),
-            res['n50'], res['ngeki'],
-            res['nkatu'], res['nmiss'],
+            res['n100'] + res['n300'], res['n50'],
+            res['ngeki'], res['nkatu'], res['nmiss'],
             res['map_md5'], res['max_combo'],
             str(res['perfect'] == 1),
             res['username'], res['score'], 0, # TODO: rank
@@ -1893,7 +1894,11 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # send data back to the client
     conn.resp_headers['Content-Type'] = 'application/octet-stream'
     conn.resp_headers['Content-Description'] = 'File Transfer'
-    conn.resp_headers['Content-Disposition'] = f'attachment; filename="{score_id}.osr"'
+    conn.resp_headers['Content-Disposition'] = (
+        'attachment; filename="{username} - '
+        '{artist} - {title} [{version}] '
+        '({play_time:%Y-%m-%d}).osr"'
+    ).format(**res)
 
     return bytes(buf)
 
