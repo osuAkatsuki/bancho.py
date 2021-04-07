@@ -8,6 +8,7 @@ import pprint
 import random
 import re
 import signal
+import struct
 import time
 import uuid
 from collections import Counter
@@ -724,9 +725,10 @@ async def shutdown(ctx: Context) -> str:
 _fake_users = []
 @command(Privileges.Dangerous, aliases=['fu'])
 async def fakeusers(ctx: Context) -> str:
-    """Add a specified number of fake presences to the online player list."""
-    # NOTE: this is mostly just for speedtesting things regarding presences/stats.
-    # it's implementation is indeed quite cursed (for speed).
+    """Add fake users to the online player list (for testing)."""
+    # NOTE: this is mostly just for speedtesting things
+    # regarding presences/stats. it's implementation is
+    # indeed quite cursed, but rather efficient.
     if (
         len(ctx.args) != 2 or
         ctx.args[0] not in ('add', 'rm') or
@@ -736,8 +738,8 @@ async def fakeusers(ctx: Context) -> str:
 
     action = ctx.args[0]
     amount = int(ctx.args[1])
-    if not 0 < amount <= 5000:
-        return 'Amount must be in range 0-5000.'
+    if not 0 < amount <= 100_000:
+        return 'Amount must be in range 0-100k.'
 
     # we start at half way through
     # the i32 space for fake user ids.
@@ -770,18 +772,45 @@ async def fakeusers(ctx: Context) -> str:
         end_id = start_id + amount
         vn_std = GameMode.vn_std
 
+        base_player = Player(id=0, name='', **const_uinfo)
+        base_player.stats[vn_std] = copy.copy(ctx.player.stats[vn_std])
+        new_fakes = []
+
+        # static part of the presence packet,
+        # no need to redo this every iteration.
+        static_presence = struct.pack(
+            '<BBBffi',
+            19, # -5 (EST) + 24
+            38, # country (canada)
+            0b11111, # all in-game privs
+            0.0, 0.0, # lat, lon
+            1 # rank #1
+        )
+
         for i in range(start_id, end_id):
+            # create new fake player from base
             name = f'fake #{i - (FAKE_ID_START - 1)}'
-            fake = Player(id=i, name=name, **const_uinfo)
+            fake = copy.copy(base_player)
+            fake.id = i
+            fake.name = name
 
-            # copy vn_std stats (just for rank lol, could optim)
-            fake.stats[vn_std] = copy.copy(ctx.player.stats[vn_std])
-
-            data += packets.userPresence(fake) # <- uses rank
+            # append userpresence packet
+            data += struct.pack(
+                '<HxIi',
+                83, # packetid
+                21 + len(name), # packet len
+                i # userid
+            )
+            data += f'\x0b{chr(len(name))}{name}'.encode()
+            data += static_presence
             data += _stats
 
-            glob.players.append(fake)
-            _fake_users.append(fake)
+            new_fakes.append(fake)
+
+        # extend all added fakes to the real list
+        _fake_users.extend(new_fakes)
+        glob.players.extend(new_fakes)
+        del new_fakes
 
         msg = 'Added.'
     else: # remove
