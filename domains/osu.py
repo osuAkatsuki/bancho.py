@@ -843,9 +843,9 @@ async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
     if 'c' not in conn.args or not conn.args['c'].isdecimal():
         return # invalid connection
 
-    u64_max = (1 << 64) - 1
+    i64_max = (1 << 63) - 1
 
-    if not 0 < (score_id := int(conn.args['c'])) <= u64_max:
+    if not 0 < (score_id := int(conn.args['c'])) <= i64_max:
         return # invalid score id
 
     replay_file = REPLAYS_PATH / f'{score_id}.osr'
@@ -1313,7 +1313,10 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 JSON = orjson.dumps
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
-SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
+SCOREID_BORDERS = tuple(
+    (((1 << 63) - 1) // 3) * i
+    for i in range(1, 4)
+)
 
 @domain.route('/api/get_player_count')
 async def api_get_player_count(conn: Connection) -> Optional[bytes]:
@@ -1770,7 +1773,7 @@ async def api_get_score_info(conn: Connection) -> Optional[bytes]:
 
     score_id = int(conn.args['id'])
 
-    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+    if SCOREID_BORDERS[0] > score_id >= 1:
         scores_table = 'scores_vn'
     elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
         scores_table = 'scores_rx'
@@ -1804,7 +1807,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
 
     score_id = int(conn.args['id'])
 
-    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+    if SCOREID_BORDERS[0] > score_id >= 1:
         scores_table = 'scores_vn'
     elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
         scores_table = 'scores_rx'
