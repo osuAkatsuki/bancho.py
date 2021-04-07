@@ -90,7 +90,7 @@ class Updater:
             pip_main(['install', '-Uq', 'cmyui']) # Update quiet
 
     async def _update_sql(self, prev_version: Version) -> None:
-        """Apply any structural changes to the database since the last startup."""
+        """Apply any structural changes to sql since the last startup."""
         if self.version == prev_version:
             # already up to date.
             return
@@ -102,7 +102,6 @@ class Updater:
         q_lines = []
 
         current_ver = None
-
 
         for line in content.splitlines():
             if not line:
@@ -147,8 +146,11 @@ class Updater:
                     # if anything goes wrong while writing a query,
                     # most likely something is very wrong.
                     log(f'Failed: {query}', Ansi.GRAY)
-                    log("SQL failed to update - unless you've been modifying sql and "
-                        "know what caused this, please please contact cmyui#0425.", Ansi.LRED)
+                    log(
+                        "SQL failed to update - unless you've been modifying "
+                        "sql and know what caused this, please please contact "
+                        "cmyui#0425.", Ansi.LRED
+                    )
 
                     input('Press enter to exit')
                     os.kill(os.getpid(), signal.SIGTERM)

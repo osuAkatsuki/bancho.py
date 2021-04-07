@@ -932,9 +932,11 @@ class Player:
 
         self.stats[mode] = ModeData(**res)
 
-    async def add_to_menu(self, coroutine: Coroutine,
-                          timeout: int = -1, reusable: bool = False
-                         ) -> int:
+    async def add_to_menu(
+        self, coroutine: Coroutine,
+        timeout: int = -1,
+        reusable: bool = False
+    ) -> int:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in int32 space as the key.
         rand = partial(random.randint, 64, 0x7fffffff)

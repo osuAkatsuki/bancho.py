@@ -84,8 +84,10 @@ class CommandSet:
             self.commands.append(Command(
                 # NOTE: this method assumes that functions without any
                 # triggers will be named like '{self.trigger}_{trigger}'.
-                triggers = [f.__name__.removeprefix(f'{self.trigger}_').strip()] \
-                         + aliases,
+                triggers = (
+                    [f.__name__.removeprefix(f'{self.trigger}_').strip()] +
+                    aliases
+                ),
                 callback = f, priv = priv,
                 hidden = hidden, doc = f.__doc__
             ))
@@ -131,7 +133,7 @@ def command(priv: Privileges, aliases: list[str] = [],
 
 @command(Privileges.Normal, aliases=['h'], hidden=True)
 async def _help(ctx: Context) -> str:
-    """Show information of all documented commands the player can access."""
+    """Show all documented commands the play can access."""
     prefix = glob.config.command_prefix
     l = ['Individual commands',
          '-----------']
@@ -628,7 +630,10 @@ async def unrestrict(ctx: Context) -> str:
     if not (t := await glob.players.get_ensure(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
-    if t.priv & Privileges.Staff and not ctx.player.priv & Privileges.Dangerous:
+    if (
+        t.priv & Privileges.Staff and
+        not ctx.player.priv & Privileges.Dangerous
+    ):
         return 'Only developers can manage staff members.'
 
     if not t.restricted:
@@ -1076,10 +1081,11 @@ if glob.config.advanced:
     from sys import modules as installed_mods
     __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
-        'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
-        'cmyui',  'datetime', 'time', 'inspect', 'math',
-        'importlib'
-    ) if mod in installed_mods}
+            'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
+            'cmyui',  'datetime', 'time', 'inspect', 'math',
+            'importlib'
+        ) if mod in installed_mods
+    }
 
     @command(Privileges.Dangerous)
     async def py(ctx: Context) -> str:
@@ -1122,7 +1128,7 @@ if glob.config.advanced:
 
 @mp_commands.add(Privileges.Normal, aliases=['h'])
 async def mp_help(ctx: Context) -> str:
-    """Show information of all documented mp commands the player can access."""
+    """Show all documented multiplayer commands the play can access."""
     prefix = glob.config.command_prefix
     cmds = []
 
@@ -1292,7 +1298,7 @@ async def mp_invite(ctx: Context) -> str:
     if not (t := glob.players.get(name=ctx.args[0])):
         return 'Could not find a user by that name.'
     elif t is glob.bot:
-        ctx.player.send("I'm too busy!", sender=glob.bot)
+        ctx.player.send_bot("I'm too busy!")
         return
 
     if ctx.player is t:
@@ -1383,8 +1389,10 @@ async def mp_teams(ctx: Context) -> str:
 
     # find the new appropriate default team.
     # defaults are (ffa: neutral, teams: red).
-    if ctx.match.team_type in (MatchTeamTypes.head_to_head,
-                       MatchTeamTypes.tag_coop):
+    if ctx.match.team_type in (
+        MatchTeamTypes.head_to_head,
+        MatchTeamTypes.tag_coop
+    ):
         new_t = MatchTeams.neutral
     else:
         new_t = MatchTeams.red
@@ -1487,8 +1495,7 @@ async def mp_endscrim(ctx: Context) -> str:
 
 @mp_commands.add(Privileges.Normal, aliases=['rm'])
 async def mp_rematch(ctx: Context) -> str:
-    """Restart a scrim with the previous match points, """ \
-    """or roll back the most recent match point."""
+    """Restart a scrim, or roll back previous match point."""
     if ctx.args:
         return 'Invalid syntax: !mp rematch'
 
@@ -1501,8 +1508,10 @@ async def mp_rematch(ctx: Context) -> str:
         else:
             # re-start scrimming with old points
             ctx.match.is_scrimming = True
-            msg = (f'A rematch has been started by {ctx.player.name}; '
-                f'first to {ctx.match.winning_pts} points wins. Best of luck!')
+            msg = (
+                f'A rematch has been started by {ctx.player.name}; '
+                f'first to {ctx.match.winning_pts} points wins. Best of luck!'
+            )
     else:
         # reset the last match point awarded
         if not ctx.match.winners:
@@ -1680,7 +1689,7 @@ async def mp_pick(ctx: Context) -> str:
 
 @pool_commands.add(Privileges.Tournament, aliases=['h'], hidden=True)
 async def pool_help(ctx: Context) -> str:
-    """Show information of all documented pool commands the player can access."""
+    """Show all documented mappool commands the play can access."""
     prefix = glob.config.command_prefix
     cmds = []
 
@@ -1835,7 +1844,10 @@ async def pool_list(ctx: Context) -> str:
     l = [f'Mappools ({len(pools)})']
 
     for pool in pools:
-        l.append(f'[{pool.created_at:%Y-%m-%d}] {pool.id}. {pool.name}, by {pool.created_by}.')
+        l.append(
+            f'[{pool.created_at:%Y-%m-%d}] {pool.id}. '
+            f'{pool.name}, by {pool.created_by}.'
+        )
 
     return '\n'.join(l)
 
@@ -1867,7 +1879,7 @@ async def pool_info(ctx: Context) -> str:
 
 @clan_commands.add(Privileges.Normal, aliases=['h'])
 async def clan_help(ctx: Context) -> str:
-    """Show information of all documented clan commands the player can access."""
+    """Show all documented clan commands the play can access."""
     prefix = glob.config.command_prefix
     cmds = []
 

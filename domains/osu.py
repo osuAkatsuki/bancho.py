@@ -602,7 +602,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # If there was previously a score on the map, add old #1.
             prev_n1 = await glob.db.fetch(
                 'SELECT u.id, name FROM users u '
-                f'LEFT JOIN {table} s ON u.id = s.userid '
+                f'INNER JOIN {table} s ON u.id = s.userid '
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
                 f'ORDER BY s.{scoring} DESC LIMIT 1',
