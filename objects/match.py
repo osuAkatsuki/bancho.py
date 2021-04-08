@@ -132,7 +132,7 @@ class MapPool:
                  'FROM tourney_pool_maps '
                  'WHERE pool_id = %s')
 
-        async for row in glob.db.iterall(query, [self.id]):
+        for row in await glob.db.fetchall(query, [self.id]):
             map_id = row['map_id']
             bmap = await Beatmap.from_bid(map_id)
 

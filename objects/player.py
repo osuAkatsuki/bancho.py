@@ -850,7 +850,7 @@ class Player:
 
     async def friends_from_sql(self) -> None:
         """Retrieve `self`'s friends from sql."""
-        _friends = {row['user2'] async for row in glob.db.iterall(
+        _friends = {row['user2'] for row in await glob.db.fetchall(
             'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
         )}
 

@@ -214,7 +214,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
         # XXX: perhaps user-customizable in the future?
         ranks = ['N', 'N', 'N', 'N']
 
-        async for score in glob.db.iterall(
+        for score in await glob.db.fetchall(
             'SELECT grade, mode FROM scores_rx '
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
@@ -898,7 +898,7 @@ async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
             [p.id, map_md5, int(rating)]
         )
 
-    ratings = [x[0] async for x in glob.db.iterall(
+    ratings = [x[0] for x in await glob.db.fetchall(
         'SELECT rating FROM ratings '
         'WHERE map_md5 = %s',
         [map_md5], _dict=False
@@ -1138,7 +1138,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     if action == 'get':
         # client is requesting all comments
-        comments = glob.db.iterall(
+        comments = await glob.db.fetchall(
             "SELECT c.time, c.target_type, c.colour, "
             "c.comment, u.priv FROM comments c "
             "LEFT JOIN users u ON u.id = c.userid "
@@ -1150,7 +1150,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         ret: list[str] = []
 
-        async for cmt in comments:
+        for cmt in comments:
             # TODO: maybe support player/creator colours?
             # pretty expensive for very low gain, but completion :D
             if cmt['priv'] & Privileges.Nominator:

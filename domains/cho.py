@@ -638,7 +638,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
                 'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
 
-        async for msg in glob.db.iterall(query, [p.id]):
+        for msg in await glob.db.fetchall(query, [p.id]):
             msg_time = dt.fromtimestamp(msg['time'])
             msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
