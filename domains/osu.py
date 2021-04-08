@@ -1028,7 +1028,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
         "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
         f"FROM {table} s "
-        "LEFT JOIN users u ON u.id = s.userid "
+        "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = %s AND s.status = 2 "
         "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
@@ -1098,7 +1098,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} s '
-            'LEFT JOIN users u ON u.id = s.userid '
+            'INNER JOIN users u ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 AND u.priv & 1 '
             f'AND s.{scoring} > %s', [
@@ -1141,7 +1141,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
         comments = await glob.db.fetchall(
             "SELECT c.time, c.target_type, c.colour, "
             "c.comment, u.priv FROM comments c "
-            "LEFT JOIN users u ON u.id = c.userid "
+            "INNER JOIN users u ON u.id = c.userid "
             "WHERE (c.target_type = 'replay' AND c.target_id = %s) "
             "OR (c.target_type = 'song' AND c.target_id = %s) "
             "OR (c.target_type = 'map' AND c.target_id = %s) ",
