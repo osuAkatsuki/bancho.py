@@ -165,20 +165,22 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
 async def osuGetFriends(p: 'Player', conn: Connection) -> Optional[bytes]:
     return '\n'.join(map(str, p.friends)).encode()
 
+_gulag_osuapi_status_map = {
+    0: 0,
+    2: 1,
+    3: 2,
+    4: 3,
+    5: 4
+}
+def gulag_to_osuapi_status(s: int) -> int:
+    return _gulag_osuapi_status_map[s]
+
 @domain.route('/web/osu-getbeatmapinfo.php', methods=['POST'])
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
 async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
     data = orjson.loads(conn.body)
     ret = []
-
-    to_osuapi_status = lambda s: {
-        0: 0,
-        2: 1,
-        3: 2,
-        4: 3,
-        5: 4
-    }[s]
 
     for idx, fname in enumerate(data['Filenames']):
         # Attempt to regex pattern match the filename.
@@ -204,7 +206,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             continue
 
         # convert from gulag -> osu!api status
-        res['status'] = to_osuapi_status(res['status'])
+        res['status'] = gulag_to_osuapi_status(res['status'])
 
         # try to get the user's grades on the map osu!
         # only allows us to send back one per gamemode,
@@ -399,7 +401,6 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
                           # 100 matches, so the client
                           # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
-    diff_rating = lambda map: map['DifficultyRating']
 
     for bmap in result:
         if bmap['ChildrenBeatmaps'] is None:
@@ -411,7 +412,10 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             # cheesegull doesn't support vids
             bmap['HasVideo'] = '0'
 
-        diff_sorted_maps = sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        diff_sorted_maps = sorted(
+            bmap['ChildrenBeatmaps'],
+            key = lambda m: m['DifficultyRating']
+        )
         diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
                               for row in diff_sorted_maps])
 
@@ -918,11 +922,10 @@ class RankingType(IntEnum):
                 'i', 'mods', 'h', 'a', 'us', 'ha'})
 @get_login(name_p='us', pass_p='ha')
 async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
-    isdecimal_n = lambda x: _isdecimal(x, _negative=True)
-
-    # make sure all int args are integral
-    if not all([isdecimal_n(conn.args[k])
-                for k in ('mods', 'v', 'm', 'i')]):
+    if not all([ # make sure all int args are integral
+        _isdecimal(conn.args[k], _negative=True)
+        for k in ('mods', 'v', 'm', 'i')
+    ]):
         return b'-1|false'
 
     if (map_md5 := conn.args['c']) in glob.cache['unsubmitted']:

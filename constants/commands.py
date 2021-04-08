@@ -404,11 +404,14 @@ async def requests(ctx: Context) -> str:
 
     return '\n'.join(l)
 
-status_to_id = lambda s: {
+_status_str_to_int_map = {
     'unrank': 0,
     'rank': 2,
     'love': 5
-}[s]
+}
+def status_to_id(s: str) -> int:
+    return _status_str_to_int_map[s]
+
 @command(Privileges.Nominator)
 async def _map(ctx: Context) -> str:
     """Changes the ranked status of the most recently /np'ed map."""
