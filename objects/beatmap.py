@@ -533,14 +533,26 @@ class Beatmap:
                 (api_status := RankedStatus.from_osuapi(int(bmap['approved'])))
             ):
                 if not current_data[map_id]['frozen']:
+                    api_md5 = bmap['file_md5']
                     # update our map
-                    if bmap['file_md5'] == md5:
+                    if api_md5 == md5:
                         self.status = api_status
                     # set scores status on that map to failed for now
                     for table in ('scores_vn', 'scores_rx', 'scores_ap'):
-                        await glob.db.execute(f'UPDATE {table} SET status = 0 WHERE map_md5 = %s', [bmap['file_md5']])
-                    # update map status and last_check
+                        await glob.db.execute(f'UPDATE {table} SET status = 0 WHERE map_md5 = %s', [api_md5])
+                    # update map status and last_check in db
                     await glob.db.execute('UPDATE maps SET status = %s, last_check = %s WHERE id = %s', [api_status, int(time.time()), map_id])
+                    # update status in beatmap cache;
+                    # check if our map in cache
+                    if api_md5 in glob.cache['beatmap']:
+                        cached = glob.cache['beatmap'][api_md5]
+                        # if cache timeout, just delete this
+                        if (time.time() - cached['timeout']) <= 0:
+                            # cache is within timeout.
+                            cached['map'].status = api_status
+                        else:
+                            del glob.cache['beatmap'][api_md5]                    
+                            
                     log(f"Updated map {bmap['artist']} - {bmap['title']} [{bmap['version']}] from {current_status!s} to {api_status!s}", Ansi.GREEN)
             else:
                 # return nothing cuz map 
