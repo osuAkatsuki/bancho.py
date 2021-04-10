@@ -627,7 +627,7 @@ async def restrict(ctx: Context) -> str:
 async def unrestrict(ctx: Context) -> str:
     """Unrestrict a specified player's account, with a reason."""
     if len(ctx.args) < 2:
-        return 'Invalid syntax: !restrict <name> <reason>'
+        return 'Invalid syntax: !unrestrict <name> <reason>'
 
     # find any user matching (including offline).
     if not (t := await glob.players.get_ensure(name=ctx.args[0])):
