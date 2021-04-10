@@ -463,7 +463,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # insert new set/occurrence.
     await glob.db.execute(
         'INSERT INTO client_hashes '
-        'VALUES (%s, %s, %s, %s, %s, NOW(), 0) '
+        '(userid, osupath, adapters, uninstall_id,'
+        ' disk_serial, latest_time, occurrences) '
+        'VALUES (%s, %s, %s, %s, %s, NOW(), 1) '
         'ON DUPLICATE KEY UPDATE '
         'occurrences = occurrences + 1, '
         'latest_time = NOW() ',
@@ -474,11 +476,11 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # find any other users from any of the same hwid values.
     hwid_matches = await glob.db.fetchall(
-        'SELECT u.`name`, u.`priv`, h.`occurrences` '
-        'FROM `client_hashes` h '
-        'INNER JOIN `users` u ON h.`userid` = u.`id` '
-        'WHERE h.`userid` != %s AND (h.`adapters` = %s '
-        'OR h.`uninstall_id` = %s OR h.`disk_serial` = %s)',
+        'SELECT u.name, u.priv, h.occurrences '
+        'FROM client_hashes h '
+        'INNER JOIN users u ON h.userid = u.id '
+        'WHERE h.userid != %s AND (h.adapters = %s '
+        'OR h.uninstall_id = %s OR h.disk_serial = %s)',
         [user_info['id'], *client_hashes[1:]]
     )
 

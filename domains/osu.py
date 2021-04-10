@@ -368,12 +368,12 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         params['query'] = conn.args['q']
 
     if conn.args['m'] != '-1':
-        params |= {'mode': conn.args['m']}
+        params['mode'] = conn.args['m']
 
     if conn.args['r'] != '4': # 4 = all
         # convert to osu!api status
         status = RankedStatus.from_osudirect(int(conn.args['r']))
-        params |= {'status': status.osu_api}
+        params['status'] = status.osu_api
 
     async with glob.http.get(search_url, params=params) as resp:
         if not resp:
@@ -2012,7 +2012,7 @@ async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
             if not _isdecimal(val, _float=t is float):
                 continue
 
-            pp_kwargs |= {n: t(val)}
+            pp_kwargs[n] = t(val)
 
     if pp_kwargs.get('mode_vn', 0) not in (0, 1):
         return (503, JSON({'status': 'Failed: unsupported mode'}))

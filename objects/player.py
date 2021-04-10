@@ -945,12 +945,10 @@ class Player:
             ...
 
         # append the callback to their menu options w/ args.
-        self.menu_options |= {
-            randnum: {
-                'callback': coroutine,
-                'reusable': reusable,
-                'timeout': timeout if timeout != -1 else 0x7fffffff
-            }
+        self.menu_options[randnum] = {
+            'callback': coroutine,
+            'reusable': reusable,
+            'timeout': timeout if timeout != -1 else 0x7fffffff
         }
 
         # return the key.
