@@ -123,6 +123,11 @@ surveillance = {
 # recommended: ~1 hour.
 map_cache_timeout = 3600
 
+# the max duration to
+# cache a beatmap status for
+# recommended: ~3 hours.
+map_status_timeout = 10800
+
 # the max duration to cache
 # osu-checkupdates requests for.
 # recommended: ~1 hour.
