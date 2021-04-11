@@ -1005,7 +1005,12 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
                     return b'-1|false'
         else:
             # try to update bmap status after status timeout
-            if bmap.last_check + glob.config.map_status_timeout <= int(time.time()):
+            # XXX: Also request status update for already
+            # ranked/loved maps pointless imo... 🤔
+            if (
+                bmap.last_check + glob.config.map_status_timeout <= time.time() and
+                bmap.status != RankedStatus.Ranked or RankedStatus.Loved
+            ):
                 # check if map updated then
                 # cache it with new status
                 if (updated := await bmap.update_status(bmap.md5)):
