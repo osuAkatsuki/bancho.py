@@ -528,41 +528,49 @@ class Beatmap:
 
         for bmap in apidata:
             map_id = int(bmap['beatmap_id'])
-            if(
-                (current_status := RankedStatus(current_data[map_id]['status'])) !=
-                (api_status := RankedStatus.from_osuapi(int(bmap['approved'])))
-            ):
-                # check if our map not frozen
-                # and able to change their status
-                if not current_data[map_id]['frozen']:
-                    api_md5 = bmap['file_md5']
-                    # update our map
-                    if api_md5 == md5:
-                        self.status = api_status
-                    # set scores status on that map to failed for now
-                    for table in ('scores_vn', 'scores_rx', 'scores_ap'):
-                        await glob.db.execute(f'UPDATE {table} SET status = 0 WHERE map_md5 = %s', [api_md5])
-                    # update map status in db
-                    await glob.db.execute('UPDATE maps SET status = %s WHERE id = %s', [api_status, map_id])
-                    # update status in beatmap cache;
-                    # check if our map in cache
-                    if api_md5 in glob.cache['beatmap']:
-                        cached = glob.cache['beatmap'][api_md5]
-                        # if cache timeout, just delete this
-                        if (time.time() - cached['timeout']) <= 0:
-                            # cache is within timeout.
-                            cached['map'].status = api_status
-                        else:
-                            del glob.cache['beatmap'][api_md5]
+            # check if we have data in db
+            if current_data[map_id]:
+                if(
+                    (current_status := RankedStatus(current_data[map_id]['status'])) !=
+                    (api_status := RankedStatus.from_osuapi(int(bmap['approved'])))
+                ):
+                    # check if our map not frozen
+                    # and able to change their status
+                    if not current_data[map_id]['frozen']:
+                        api_md5 = bmap['file_md5']
+                        # update our map
+                        if api_md5 == md5:
+                            self.status = api_status
+                        # set scores status on that map to failed for now
+                        for table in ('scores_vn', 'scores_rx', 'scores_ap'):
+                            await glob.db.execute(f'UPDATE {table} SET status = 0 WHERE map_md5 = %s', [api_md5])
+                        # update map status in db
+                        await glob.db.execute('UPDATE maps SET status = %s WHERE id = %s', [api_status, map_id])
+                        # update status in beatmap cache;
+                        # check if our map in cache
+                        if api_md5 in glob.cache['beatmap']:
+                            cached = glob.cache['beatmap'][api_md5]
+                            # if cache timeout, just delete this
+                            if (time.time() - cached['timeout']) <= 0:
+                                # cache is within timeout.
+                                cached['map'].status = api_status
+                            else:
+                                del glob.cache['beatmap'][api_md5]
 
-                    if glob.app.debug:
-                        log(f"Updated map {bmap['artist']} - {bmap['title']} [{bmap['version']}] from {current_status!s} to {api_status!s}", Ansi.GREEN)
+                        if glob.app.debug:
+                            log(f"Updated map {bmap['artist']} - {bmap['title']} [{bmap['version']}] from {current_status!s} to {api_status!s}", Ansi.GREEN)
+                else:
+                    # update our last_check in db
+                    await glob.db.execute('UPDATE maps SET last_check = %s WHERE set_id = %s', [int(time.time()), set_id])
+                    # return nothing cuz map
+                    # doesn't need to update
+                    return # Howdy 🤠
             else:
-                # update set last_check
-                await glob.db.execute('UPDATE maps SET last_check = %s WHERE set_id = %s', [int(time.time()), set_id])
-                # return nothing cuz map
-                # doesn't need to update
-                return # Howdy 🤠
+                # for some reason we not found
+                # current data in db; pass it
+                # XXX: Probably it is not submitted
+                # maps are trying to update status
+                pass
 
         # update our last_check in db
         # we always need to update it
