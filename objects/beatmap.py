@@ -529,7 +529,7 @@ class Beatmap:
         for bmap in apidata:
             map_id = int(bmap['beatmap_id'])
             # check if we have data in db
-            if current_data[map_id]:
+            if map_id in current_data:
                 if(
                     (current_status := RankedStatus(current_data[map_id]['status'])) !=
                     (api_status := RankedStatus.from_osuapi(int(bmap['approved'])))
