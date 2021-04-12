@@ -802,7 +802,7 @@ class Player:
             f'SELECT s.pp, s.acc FROM {table} s '
             'INNER JOIN maps m ON s.map_md5 = m.md5 '
             'WHERE s.userid = %s AND s.mode = %s '
-            'AND s.status = 2 AND m.status IN (1, 2) '
+            'AND s.status = 2 AND m.status IN (2, 3) ' # ranked, approved
             'ORDER BY s.pp DESC LIMIT 100',
             [self.id, mode.as_vanilla]
         )
