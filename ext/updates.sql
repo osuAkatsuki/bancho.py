@@ -282,3 +282,31 @@ create unique index users_api_key_uindex on users (api_key);
 
 # v3.2.4
 update achievements set file = replace(file, 'ctb', 'fruits') where mode = 2;
+
+# v3.2.5
+update achievements set cond = '(score.mods & 1 == 0) and 1 <= score.sr < 2' where file in ('osu-skill-pass-1', 'taiko-skill-pass-1', 'fruits-skill-pass-1', 'mania-skill-pass-1');
+update achievements set cond = '(score.mods & 1 == 0) and 2 <= score.sr < 3' where file in ('osu-skill-pass-2', 'taiko-skill-pass-2', 'fruits-skill-pass-2', 'mania-skill-pass-2');
+update achievements set cond = '(score.mods & 1 == 0) and 3 <= score.sr < 4' where file in ('osu-skill-pass-3', 'taiko-skill-pass-3', 'fruits-skill-pass-3', 'mania-skill-pass-3');
+update achievements set cond = '(score.mods & 1 == 0) and 4 <= score.sr < 5' where file in ('osu-skill-pass-4', 'taiko-skill-pass-4', 'fruits-skill-pass-4', 'mania-skill-pass-4');
+update achievements set cond = '(score.mods & 1 == 0) and 5 <= score.sr < 6' where file in ('osu-skill-pass-5', 'taiko-skill-pass-5', 'fruits-skill-pass-5', 'mania-skill-pass-5');
+update achievements set cond = '(score.mods & 1 == 0) and 6 <= score.sr < 7' where file in ('osu-skill-pass-6', 'taiko-skill-pass-6', 'fruits-skill-pass-6', 'mania-skill-pass-6');
+update achievements set cond = '(score.mods & 1 == 0) and 7 <= score.sr < 8' where file in ('osu-skill-pass-7', 'taiko-skill-pass-7', 'fruits-skill-pass-7', 'mania-skill-pass-7');
+update achievements set cond = '(score.mods & 1 == 0) and 8 <= score.sr < 9' where file in ('osu-skill-pass-8', 'taiko-skill-pass-8', 'fruits-skill-pass-8', 'mania-skill-pass-8');
+update achievements set cond = '(score.mods & 1 == 0) and 9 <= score.sr < 10' where file = 'osu-skill-pass-9';
+update achievements set cond = '(score.mods & 1 == 0) and 10 <= score.sr < 11' where file = 'osu-skill-pass-10';
+
+update achievements set cond = 'score.perfect and 1 <= score.sr < 2' where file in ('osu-skill-fc-1', 'taiko-skill-fc-1', 'fruits-skill-fc-1', 'mania-skill-fc-1');
+update achievements set cond = 'score.perfect and 2 <= score.sr < 3' where file in ('osu-skill-fc-2', 'taiko-skill-fc-2', 'fruits-skill-fc-2', 'mania-skill-fc-2');
+update achievements set cond = 'score.perfect and 3 <= score.sr < 4' where file in ('osu-skill-fc-3', 'taiko-skill-fc-3', 'fruits-skill-fc-3', 'mania-skill-fc-3');
+update achievements set cond = 'score.perfect and 4 <= score.sr < 5' where file in ('osu-skill-fc-4', 'taiko-skill-fc-4', 'fruits-skill-fc-4', 'mania-skill-fc-4');
+update achievements set cond = 'score.perfect and 5 <= score.sr < 6' where file in ('osu-skill-fc-5', 'taiko-skill-fc-5', 'fruits-skill-fc-5', 'mania-skill-fc-5');
+update achievements set cond = 'score.perfect and 6 <= score.sr < 7' where file in ('osu-skill-fc-6', 'taiko-skill-fc-6', 'fruits-skill-fc-6', 'mania-skill-fc-6');
+update achievements set cond = 'score.perfect and 7 <= score.sr < 8' where file in ('osu-skill-fc-7', 'taiko-skill-fc-7', 'fruits-skill-fc-7', 'mania-skill-fc-7');
+update achievements set cond = 'score.perfect and 8 <= score.sr < 9' where file in ('osu-skill-fc-8', 'taiko-skill-fc-8', 'fruits-skill-fc-8', 'mania-skill-fc-8');
+update achievements set cond = 'score.perfect and 9 <= score.sr < 10' where file = 'osu-skill-fc-9';
+update achievements set cond = 'score.perfect and 10 <= score.sr < 11' where file = 'osu-skill-fc-10';
+
+update achievements set cond = '500 <= score.max_combo < 750' where file = 'osu-combo-500';
+update achievements set cond = '750 <= score.max_combo < 1000' where file = 'osu-combo-750';
+update achievements set cond = '1000 <= score.max_combo < 2000' where file = 'osu-combo-1000';
+update achievements set cond = '2000 <= score.max_combo' where file = 'osu-combo-2000';

@@ -31,6 +31,7 @@ from objects.channel import Channel
 from objects.clan import ClanPrivileges
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
+from objects.match import Slot
 from objects.match import SlotStatus
 from objects.player import Action
 from objects.player import Player
@@ -79,7 +80,7 @@ async def bancho_handler(conn: Connection) -> bytes:
                 conn.body, conn.headers['X-Real-IP']
             )
 
-        conn.add_resp_header(f'cho-token: {token}')
+        conn.resp_headers['cho-token'] = token
         return resp
 
     # get the player from the specified osu token.
@@ -113,7 +114,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
     player.last_recv_time = time.time()
-    conn.add_resp_header('Content-Type: text/html; charset=UTF-8')
+    conn.resp_headers['Content-Type'] = 'text/html; charset=UTF-8'
     return player.dequeue() or b''
 
 """ Packet logic """
@@ -431,7 +432,11 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return packets.userID(-1), 'no'
 
     tourney_privs = int(Privileges.Normal | Privileges.Donator)
-    if tourney_client and not user_info['priv'] & tourney_privs == tourney_privs:
+
+    if (
+        tourney_client and
+        not user_info['priv'] & tourney_privs == tourney_privs
+    ):
         # trying to use tourney client with insufficient privileges.
         return packets.userID(-1), 'no'
 
@@ -458,7 +463,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # insert new set/occurrence.
     await glob.db.execute(
         'INSERT INTO client_hashes '
-        'VALUES (%s, %s, %s, %s, %s, NOW(), 0) '
+        '(userid, osupath, adapters, uninstall_id,'
+        ' disk_serial, latest_time, occurrences) '
+        'VALUES (%s, %s, %s, %s, %s, NOW(), 1) '
         'ON DUPLICATE KEY UPDATE '
         'occurrences = occurrences + 1, '
         'latest_time = NOW() ',
@@ -469,11 +476,11 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     # find any other users from any of the same hwid values.
     hwid_matches = await glob.db.fetchall(
-        'SELECT u.`name`, u.`priv`, h.`occurrences` '
-        'FROM `client_hashes` h '
-        'INNER JOIN `users` u ON h.`userid` = u.`id` '
-        'WHERE h.`userid` != %s AND (h.`adapters` = %s '
-        'OR h.`uninstall_id` = %s OR h.`disk_serial` = %s)',
+        'SELECT u.name, u.priv, h.occurrences '
+        'FROM client_hashes h '
+        'INNER JOIN users u ON h.userid = u.id '
+        'WHERE h.userid != %s AND (h.adapters = %s '
+        'OR h.uninstall_id = %s OR h.disk_serial = %s)',
         [user_info['id'], *client_hashes[1:]]
     )
 
@@ -633,7 +640,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
                 '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
                 'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
 
-        async for msg in glob.db.iterall(query, [p.id]):
+        for msg in await glob.db.fetchall(query, [p.id]):
             msg_time = dt.fromtimestamp(msg['time'])
             msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
@@ -926,7 +933,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
-            p.send('Failed to create match (no slots available).', sender=glob.bot)
+            p.send_bot('Failed to create match (no slots available).')
             p.enqueue(packets.matchJoinFail())
             return
 
@@ -1055,11 +1062,10 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
             slot.status = SlotStatus.open
         else:
             if slot.player:
-                # XXX: this is kinda weird, here we kick
-                # the player, but assume that their client
-                # will leave the match themselves..
-                # TODO: perhaps.. don't do this?
-                slot.reset()
+                # uggggggh i hate trusting the osu! client
+                # man why is it designed like this
+                # TODO: probably going to end up changing
+                ... #slot.reset()
             slot.status = SlotStatus.locked
 
         m.enqueue_state()
@@ -1257,6 +1263,12 @@ class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
 
         m.enqueue_state()
 
+def is_playing(slot: Slot) -> bool:
+    return (
+        slot.status == SlotStatus.playing and
+        not slot.loaded
+    )
+
 @register
 class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
     async def handle(self, p: Player) -> None:
@@ -1265,9 +1277,6 @@ class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
 
         # our player has loaded in and is ready to play.
         m.get_slot(p).loaded = True
-
-        is_playing = lambda s: (s.status == SlotStatus.playing and
-                                not s.loaded)
 
         # check if all players are loaded,
         # if so, tell all players to begin.
@@ -1426,11 +1435,9 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             log(f'{p} tried to add a user who is not online! ({self.user_id})')
             return
 
-        if t.id in (1, p.id):
-            # trying to add the bot, or themselves.
-            # these are already appended to the friends list
-            # on login, so disallow the user from *actually*
-            # editing these in sql.
+        if t.id == 1:
+            # you cannot add the bot as a friend since it's already
+            # your friend :]
             return
 
         await p.update_latest_activity()
@@ -1445,11 +1452,9 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             log(f'{p} tried to remove a user who is not online! ({self.user_id})')
             return
 
-        if t.id in (1, p.id):
-            # trying to remove the bot, or themselves.
-            # these are already appended to the friends list
-            # on login, so disallow the user from *actually*
-            # editing these in sql.
+        if t.id == 1:
+            # you cannot remove the bot as a friend because it wont
+            # like that >:[
             return
 
         await p.update_latest_activity()
@@ -1530,7 +1535,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
         elif t is glob.bot:
-            p.send("I'm too busy!", sender=glob.bot)
+            p.send_bot("I'm too busy!")
             return
 
         t.enqueue(packets.matchInvite(p, t.name))

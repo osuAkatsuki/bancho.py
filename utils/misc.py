@@ -93,7 +93,7 @@ def make_safe_name(name: str) -> str:
 def pymysql_encode(conv: Callable):
     """Decorator to allow for adding to pymysql's encoders."""
     def wrapper(cls):
-        pymysql.converters.encoders |= {cls: conv}
+        pymysql.converters.encoders[cls] = conv
         return cls
     return wrapper
 

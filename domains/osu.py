@@ -120,7 +120,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 
 # TODO
 # POST /web/osu-error.php
-# POsT /web/osu-session.php
+# POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
@@ -165,20 +165,22 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
 async def osuGetFriends(p: 'Player', conn: Connection) -> Optional[bytes]:
     return '\n'.join(map(str, p.friends)).encode()
 
+_gulag_osuapi_status_map = {
+    0: 0,
+    2: 1,
+    3: 2,
+    4: 3,
+    5: 4
+}
+def gulag_to_osuapi_status(s: int) -> int:
+    return _gulag_osuapi_status_map[s]
+
 @domain.route('/web/osu-getbeatmapinfo.php', methods=['POST'])
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
 async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
     data = orjson.loads(conn.body)
     ret = []
-
-    to_osuapi_status = lambda s: {
-        0: 0,
-        2: 1,
-        3: 2,
-        4: 3,
-        5: 4
-    }[s]
 
     for idx, fname in enumerate(data['Filenames']):
         # Attempt to regex pattern match the filename.
@@ -204,7 +206,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             continue
 
         # convert from gulag -> osu!api status
-        res['status'] = to_osuapi_status(res['status'])
+        res['status'] = gulag_to_osuapi_status(res['status'])
 
         # try to get the user's grades on the map osu!
         # only allows us to send back one per gamemode,
@@ -212,7 +214,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
         # XXX: perhaps user-customizable in the future?
         ranks = ['N', 'N', 'N', 'N']
 
-        async for score in glob.db.iterall(
+        for score in await glob.db.fetchall(
             'SELECT grade, mode FROM scores_rx '
             'WHERE map_md5 = %s AND userid = %s '
             'AND status = 2',
@@ -334,8 +336,8 @@ USING_CHIMU = 'chimu.moe' in glob.config.mirror
 DIRECT_SET_INFO_FMTSTR = (
     '{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|'
     '{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|'
-    '0|0|0|0|0|{{diffs}}'# 0s are threadid, has_vid, has_story,
-                         #        filesize, filesize_novid.
+    '0|{{HasVideo}}|0|0|0|{{diffs}}' # 0s are threadid, has_story,
+                                     # filesize, filesize_novid.
 ).format(setid_spelling='SetId' if USING_CHIMU else 'SetID')
 
 DIRECT_MAP_INFO_FMTSTR = (
@@ -366,12 +368,12 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
         params['query'] = conn.args['q']
 
     if conn.args['m'] != '-1':
-        params |= {'mode': conn.args['m']}
+        params['mode'] = conn.args['m']
 
     if conn.args['r'] != '4': # 4 = all
         # convert to osu!api status
         status = RankedStatus.from_osudirect(int(conn.args['r']))
-        params |= {'status': status.osu_api}
+        params['status'] = status.osu_api
 
     async with glob.http.get(search_url, params=params) as resp:
         if not resp:
@@ -399,13 +401,21 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
                           # 100 matches, so the client
                           # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
-    diff_rating = lambda map: map['DifficultyRating']
 
     for bmap in result:
         if bmap['ChildrenBeatmaps'] is None:
             continue
 
-        diff_sorted_maps = sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        if USING_CHIMU:
+            bmap['HasVideo'] = int(bmap['HasVideo'])
+        else:
+            # cheesegull doesn't support vids
+            bmap['HasVideo'] = '0'
+
+        diff_sorted_maps = sorted(
+            bmap['ChildrenBeatmaps'],
+            key = lambda m: m['DifficultyRating']
+        )
         diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
                               for row in diff_sorted_maps])
 
@@ -413,6 +423,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     return '\n'.join(ret).encode()
 
+# TODO: video support (needs db change)
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
@@ -595,7 +606,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # If there was previously a score on the map, add old #1.
             prev_n1 = await glob.db.fetch(
                 'SELECT u.id, name FROM users u '
-                f'LEFT JOIN {table} s ON u.id = s.userid '
+                f'INNER JOIN {table} s ON u.id = s.userid '
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
                 f'ORDER BY s.{scoring} DESC LIMIT 1',
@@ -836,9 +847,9 @@ async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
     if 'c' not in conn.args or not conn.args['c'].isdecimal():
         return # invalid connection
 
-    u64_max = (1 << 64) - 1
+    i64_max = (1 << 63) - 1
 
-    if not 0 < (score_id := int(conn.args['c'])) <= u64_max:
+    if not 0 < (score_id := int(conn.args['c'])) <= i64_max:
         return # invalid score id
 
     replay_file = REPLAYS_PATH / f'{score_id}.osr'
@@ -887,7 +898,7 @@ async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
             [p.id, map_md5, int(rating)]
         )
 
-    ratings = [x[0] async for x in glob.db.iterall(
+    ratings = [x[0] for x in await glob.db.fetchall(
         'SELECT rating FROM ratings '
         'WHERE map_md5 = %s',
         [map_md5], _dict=False
@@ -911,11 +922,10 @@ class RankingType(IntEnum):
                 'i', 'mods', 'h', 'a', 'us', 'ha'})
 @get_login(name_p='us', pass_p='ha')
 async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
-    isdecimal_n = lambda x: _isdecimal(x, _negative=True)
-
-    # make sure all int args are integral
-    if not all([isdecimal_n(conn.args[k])
-                for k in ('mods', 'v', 'm', 'i')]):
+    if not all([ # make sure all int args are integral
+        _isdecimal(conn.args[k], _negative=True)
+        for k in ('mods', 'v', 'm', 'i')
+    ]):
         return b'-1|false'
 
     if (map_md5 := conn.args['c']) in glob.cache['unsubmitted']:
@@ -923,7 +933,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         return b'-1|false'
 
     mods = Mods(int(conn.args['mods']))
-    mode = GameMode.from_params(int(conn.args['m']), mods)
+    mode_vn = int(conn.args['m'])
+
+    mode = GameMode.from_params(mode_vn, mods)
 
     map_set_id = int(conn.args['i'])
     rank_type = RankingType(int(conn.args['v']))
@@ -963,8 +975,9 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
                 # search for a match in our db - since we just cached all
                 # versions of the map, a match will mean that the map is
                 # simply out of date, while no match should mean unsubmitted.
-                map_filename = conn.args['f'].replace('+', ' ')
-                if not (re := regexes.mapfile.match(unquote(map_filename))):
+                map_filename = unquote(conn.args['f'].replace('+', ' '))
+
+                if not (re := regexes.mapfile.match(map_filename)):
                     # if a mapfile has invalid syntax, it's almost certainly
                     # some cursed abomination made by the user themself..
                     # NOTE: logging because i'm not sure if im a liar B)
@@ -1015,22 +1028,20 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
         "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
         f"FROM {table} s "
-        "LEFT JOIN users u ON u.id = s.userid "
+        "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = %s AND s.status = 2 "
         "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
     ]
 
-    params = [map_md5, p.id, conn.args['m']]
+    params = [map_md5, p.id, mode_vn]
 
     if rank_type == RankingType.Mods:
         query.append('AND s.mods = %s')
         params.append(mods)
     elif rank_type == RankingType.Friends:
-        # a little cursed, but my wrapper doesn't like being
-        # passed iterables yet, and nor does the lower lv api xd
-        friends_str = ','.join(map(str, p.friends))
-        query.append(f'AND s.userid IN ({friends_str}, {p.id})')
+        query.append('AND s.userid IN %s')
+        params.append(p.friends | {p.id})
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
         params.append(p.country[1]) # letters, not id
@@ -1075,7 +1086,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
-            map_md5, conn.args['m'], p.id
+            map_md5, mode_vn, p.id
         ]
     )
 
@@ -1087,11 +1098,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
             f'SELECT COUNT(*) AS count FROM {table} s '
-            'LEFT JOIN users u ON u.id = s.userid '
+            'INNER JOIN users u ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 AND u.priv & 1 '
             f'AND s.{scoring} > %s', [
-                map_md5, conn.args['m'],
+                map_md5, mode_vn,
                 p_best['_score']
             ]
         ))['count']
@@ -1127,10 +1138,10 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     if action == 'get':
         # client is requesting all comments
-        comments = glob.db.iterall(
+        comments = await glob.db.fetchall(
             "SELECT c.time, c.target_type, c.colour, "
             "c.comment, u.priv FROM comments c "
-            "LEFT JOIN users u ON u.id = c.userid "
+            "INNER JOIN users u ON u.id = c.userid "
             "WHERE (c.target_type = 'replay' AND c.target_id = %s) "
             "OR (c.target_type = 'song' AND c.target_id = %s) "
             "OR (c.target_type = 'map' AND c.target_id = %s) ",
@@ -1139,7 +1150,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         ret: list[str] = []
 
-        async for cmt in comments:
+        for cmt in comments:
             # TODO: maybe support player/creator colours?
             # pretty expensive for very low gain, but completion :D
             if cmt['priv'] & Privileges.Nominator:
@@ -1305,7 +1316,10 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
 JSON = orjson.dumps
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
-SCOREID_BORDERS = tuple((((1 << 64) - 1) // 3) * i for i in range(1, 4))
+SCOREID_BORDERS = tuple(
+    (((1 << 63) - 1) // 3) * i
+    for i in range(1, 4)
+)
 
 @domain.route('/api/get_player_count')
 async def api_get_player_count(conn: Connection) -> Optional[bytes]:
@@ -1762,7 +1776,7 @@ async def api_get_score_info(conn: Connection) -> Optional[bytes]:
 
     score_id = int(conn.args['id'])
 
-    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+    if SCOREID_BORDERS[0] > score_id >= 1:
         scores_table = 'scores_vn'
     elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
         scores_table = 'scores_rx'
@@ -1796,7 +1810,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
 
     score_id = int(conn.args['id'])
 
-    if SCOREID_BORDERS[0] > score_id and score_id >= 1:
+    if SCOREID_BORDERS[0] > score_id >= 1:
         scores_table = 'scores_vn'
     elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
         scores_table = 'scores_rx'
@@ -1822,12 +1836,14 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
     res = await glob.db.fetch(
-        'SELECT s.mode, m.md5 map_md5, u.name username, '
-        's.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, '
-        's.score, s.max_combo, s.perfect, s.mods, s.play_time '
+        'SELECT u.name username, m.md5 map_md5, '
+        'm.artist, m.title, m.version, '
+        's.mode, s.n300, s.n100, s.n50, s.ngeki, '
+        's.nkatu, s.nmiss, s.score, s.max_combo, '
+        's.perfect, s.mods, s.play_time '
         f'FROM {scores_table} s '
-        'LEFT JOIN users u ON u.id = s.userid '
-        'LEFT JOIN maps m ON m.md5 = s.map_md5 '
+        'INNER JOIN users u ON u.id = s.userid '
+        'INNER JOIN maps m ON m.md5 = s.map_md5 '
         'WHERE s.id = %s',
         [score_id]
     )
@@ -1839,9 +1855,8 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         '{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}'.format(
-            int(res['n100']) + int(res['n300']),
-            res['n50'], res['ngeki'],
-            res['nkatu'], res['nmiss'],
+            res['n100'] + res['n300'], res['n50'],
+            res['ngeki'], res['nkatu'], res['nmiss'],
             res['map_md5'], res['max_combo'],
             str(res['perfect'] == 1),
             res['username'], res['score'], 0, # TODO: rank
@@ -1880,9 +1895,13 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     # can't submit scores so should not be a problem.
 
     # send data back to the client
-    conn.add_resp_header('Content-Type: application/octet-stream')
-    conn.add_resp_header('Content-Description: File Transfer')
-    conn.add_resp_header(f'Content-Disposition: attachment; filename="{score_id}.osr"')
+    conn.resp_headers['Content-Type'] = 'application/octet-stream'
+    conn.resp_headers['Content-Description'] = 'File Transfer'
+    conn.resp_headers['Content-Disposition'] = (
+        'attachment; filename="{username} - '
+        '{artist} - {title} [{version}] '
+        '({play_time:%Y-%m-%d}).osr"'
+    ).format(**res)
 
     return bytes(buf)
 
@@ -1993,7 +2012,7 @@ async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
             if not _isdecimal(val, _float=t is float):
                 continue
 
-            pp_kwargs |= {n: t(val)}
+            pp_kwargs[n] = t(val)
 
     if pp_kwargs.get('mode_vn', 0) not in (0, 1):
         return (503, JSON({'status': 'Failed: unsupported mode'}))
@@ -2049,11 +2068,20 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
 
     return path.read_bytes()
 
-@domain.route(re.compile(r'^/d/\d{1,10}$'))
+@domain.route(re.compile(r'^/d/\d{1,10}n?$'))
 async def get_osz(conn: Connection) -> Optional[bytes]:
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    mirror_url = f'{glob.config.mirror}/d/{conn.path[3:]}'
-    conn.add_resp_header(f'Location: {mirror_url}')
+    set_id = conn.path[3:]
+
+    if no_video := set_id[-1] == 'n':
+        set_id = set_id[:-1]
+
+    if USING_CHIMU:
+        query_str = f'download/{set_id}?n={int(no_video)}'
+    else:
+        query_str = f'd/{set_id}'
+
+    conn.resp_headers['Location'] = f'{glob.config.mirror}/{query_str}'
     return (301, b'')
 
 @domain.route(re.compile(r'^/web/maps/'))
@@ -2088,6 +2116,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
             content = await resp.read()
 
+        # save it to disk for future
         path.write_bytes(content)
 
     return content

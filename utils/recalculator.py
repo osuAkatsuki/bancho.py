@@ -8,6 +8,7 @@ from pathlib import Path
 import aiohttp
 from cmyui import Ansi
 from cmyui import log
+from maniera.calculator import Maniera
 
 __all__ = ('PPCalculator',)
 
@@ -67,7 +68,7 @@ class PPCalculator:
         return cls(map_id, **pp_attrs)
 
     async def perform(self) -> tuple[float, float]:
-        """Perform the calculations with the current state, returning (pp, sr)."""
+        """Calculate pp & sr using the current state of the recalculator."""
         if self.mode_vn in (0, 1): # oppai-ng for std & taiko
             # TODO: PLEASE rewrite this with c/py bindings,
             # add ways to get specific stuff like aim pp
@@ -94,7 +95,7 @@ class PPCalculator:
 
             # run the oppai-ng binary & read stdout.
             proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout = asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE
             )
             stdout, _ = await proc.communicate() # stderr not needed
 
@@ -122,7 +123,6 @@ class PPCalculator:
             # TODO: ctb support
             return (0.0, 0.0)
         elif self.mode_vn == 3: # use maniera for mania
-            from maniera.calculator import Maniera
             if 'score' not in self.pp_attrs:
                 log('Err: pp calculator needs score for mania.', Ansi.LRED)
                 return (0.0, 0.0)
