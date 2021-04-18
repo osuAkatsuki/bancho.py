@@ -14,18 +14,18 @@ RUN touch /var/run/nginx.pid
 RUN mkdir /gulag
 WORKDIR /gulag
 
-# Copy and build oppai-ng
-COPY ./oppai-ng ./oppai-ng
-RUN cd oppai-ng && chmod +x ./build && ./build && cd ..
+# Create gulag user, chown the workdir and switch to it
+RUN addgroup --system --gid 1000 gulag && adduser --system --uid 1000 --gid 1000 gulag
+RUN chown -R gulag:gulag /gulag
+USER gulag
 
 # Expose port and set entrypoint
 EXPOSE 8080
 CMD [ "python3.9", "./main.py" ]
 
-# Creat gulag user, chown the workdir and switch to it
-RUN addgroup --system --gid 1000 gulag && adduser --system --uid 1000 --gid 1000 gulag
-RUN chown -R gulag:gulag /gulag
-USER gulag
+# Copy and build oppai-ng
+COPY --chown=gulag:gulag ./oppai-ng ./oppai-ng
+RUN cd oppai-ng && chmod +x ./build && ./build && cd ..
 
 # Copy over the rest of gulag
-COPY ./ ./
+COPY --chown=gulag:gulag ./ ./
