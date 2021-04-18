@@ -24,7 +24,7 @@ USER gulag
 
 # Copy and build oppai-ng
 COPY ./oppai-ng ./oppai-ng
-RUN cd oppai-ng && ./build && cd ..
+RUN cd oppai-ng && chmod +x ./build && ./build && cd ..
 
 # Copy over the rest of gulag
 COPY ./ ./
