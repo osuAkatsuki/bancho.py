@@ -1,27 +1,29 @@
-FROM ubuntu:bionic
+FROM python:3.9-buster
 
-# Update system
-RUN apt update
-
-# Add ppa for py3.9 (required since it's new)
-RUN apt-get -y install software-properties-common && add-apt-repository ppa:deadsnakes/ppa
-RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install wget git python3.9 python3.9-dev python3.9-distutils build-essential
-
-# Install pip for py3.9
-RUN wget https://bootstrap.pypa.io/get-pip.py
-RUN python3.9 get-pip.py && rm get-pip.py
-
-# Copy over gulag
-RUN mkdir /gulag
-WORKDIR /gulag
-COPY ./ ./
+# Update and install essentials
+RUN apt update && apt install -y build-essential
 
 # Install dependencies
-RUN pip install -r ext/requirements.txt
+COPY ./ext/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+
+# Create directory for gulag
+RUN mkdir /gulag
+WORKDIR /gulag
+
+# Copy and build oppai-ng
+COPY ./oppai-ng ./oppai-ng
 RUN cd oppai-ng && ./build && cd ..
+
+# Copy over the rest of gulag
+COPY ./ ./
 
 # Temporary workaround
 RUN touch /var/run/nginx.pid
+
+# Create user for gulag and chown
+RUN addgroup --system --gid 1000 gulag && adduser --system --uid 1000 --gid 1000 gulag
+RUN chown -R gulag:gulag /gulag
 
 EXPOSE 8080
 CMD [ "python3.9", "./main.py" ]
