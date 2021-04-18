@@ -1419,7 +1419,8 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
 
     if not p:
         # no such player online
-        return JSON({'online': False})
+        res = await glob.db.fetch('SELECT latest_activity FROM users WHERE id = %s', [pid])
+        return JSON({'online': False, 'last_seen': res['latest_activity']})
 
     if p.status.map_md5:
         bmap = await Beatmap.from_md5(p.status.map_md5)
