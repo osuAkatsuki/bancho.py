@@ -19,7 +19,7 @@ EXPOSE 8080
 CMD [ "python3.9", "./main.py" ]
 
 # Switch to gulag user and directory
-WORKDIR /gulag-web
+WORKDIR /gulag
 USER gulag
 
 # Copy and build oppai-ng
