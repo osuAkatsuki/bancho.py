@@ -7,9 +7,20 @@ RUN apt update && apt install -y build-essential
 COPY ./ext/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-# Create directory for gulag
-RUN mkdir /gulag
-WORKDIR /gulag
+# Temporary workaround
+RUN touch /var/run/nginx.pid
+
+# Create user for gulag and directory
+RUN addgroup --system --gid 1000 gulag && adduser --system --uid 1000 --gid 1000 gulag
+RUN mkdir /gulag && chown -R gulag:gulag /gulag
+
+# Expose port and set entrypoint
+EXPOSE 8080
+CMD [ "python3.9", "./main.py" ]
+
+# Switch to gulag user and directory
+WORKDIR /gulag-web
+USER gulag
 
 # Copy and build oppai-ng
 COPY ./oppai-ng ./oppai-ng
@@ -17,13 +28,3 @@ RUN cd oppai-ng && ./build && cd ..
 
 # Copy over the rest of gulag
 COPY ./ ./
-
-# Temporary workaround
-RUN touch /var/run/nginx.pid
-
-# Create user for gulag and chown
-RUN addgroup --system --gid 1000 gulag && adduser --system --uid 1000 --gid 1000 gulag
-RUN chown -R gulag:gulag /gulag
-
-EXPOSE 8080
-CMD [ "python3.9", "./main.py" ]
