@@ -44,6 +44,8 @@ from utils.misc import escape_enum
 from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 
+from utils.catgirlmoe import sendNewScore
+
 if TYPE_CHECKING:
     from objects.player import Player
 
@@ -583,6 +585,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     if s.status == SubmissionStatus.BEST:
         if glob.datadog:
             glob.datadog.increment('gulag.submitted_scores_best')
+
+        if not s.player.restricted:
+            await sendNewScore(s)
 
         if s.rank == 1 and not s.player.restricted:
             # this is the new #1, post the play to #announce.

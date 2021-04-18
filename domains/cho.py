@@ -41,6 +41,10 @@ from packets import BanchoPacketReader
 from packets import Packets
 from utils.misc import make_safe_name
 
+from utils.catgirlmoe import sendPlayerJoined
+from utils.catgirlmoe import sendPlayerLeft
+from utils.catgirlmoe import sendMessage
+
 """ Bancho: handle connections from the osu! client """
 
 BASE_DOMAIN = glob.config.domain
@@ -188,6 +192,9 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         msg = self.msg.msg.strip()
         recipient = self.msg.recipient
 
+        if recipient == '#osu':
+            await sendMessage(p, msg)
+
         if recipient == '#spectator':
             if p.spectating:
                 # we are spectating someone
@@ -300,6 +307,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
 
         await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
+        await sendPlayerLeft(p)
 
 @register(restricted=True)
 class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
@@ -311,7 +319,7 @@ class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
 WELCOME_MSG = '\n'.join((
     f"Welcome to {BASE_DOMAIN}.",
     "To see a list of commands, use !help.",
-    "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
+    "We have a public (Discord)[https://join.catgirl.moe]!",
     "Enjoy the server!"
 ))
 
@@ -578,8 +586,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         p.bancho_priv | ClientPrivileges.Supporter
     )
 
-    data += packets.notification('Welcome back to the gulag!\n'
-                                f'Current build: v{glob.version}')
+    data += packets.notification('Welcome to the chinese botnet!\n'
+                                'Running a custom fork of gulag\n')
 
     # send all channel info.
     for c in glob.channels:
@@ -700,6 +708,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     log(f'{p} logged in.', Ansi.LCYAN)
     await p.update_latest_activity()
+    await sendPlayerJoined(p)
     return bytes(data), p.token
 
 @register
