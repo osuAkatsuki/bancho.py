@@ -169,14 +169,14 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
 
     wh = Webhook(url=WEBHOOK)
 
-    e = Embed(color=0xF44336)
+    e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=0xF44336)
     for p in submitted.keys():
       s = p.recent_score
       player_names.append(p.name)
       player_accuracy.append(f'{s.acc:.2f}% {GRADE_EMOTES[s.grade]} ({s.pp:,.2f}pp)')
       player_scores.append(f'{s.score:,} ({s.max_combo:,}/{s.bmap.max_combo:,}x)')
 
-    e.set_author(name=f'{m.name} finished a match')
+    e.set_author(name=f'People in lobby "{m.name}" finished a map')
     e.add_field("Players:", '\n'.join(player_names), True)
     e.add_field("Accuracy:", '\n'.join(player_accuracy), True)
     e.add_field("Score:", '\n'.join(player_scores), True)
