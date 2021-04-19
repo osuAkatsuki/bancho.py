@@ -134,8 +134,8 @@ async def sendSendMessage(p: Player, m: str):
 async def sendMatchCreate(p: Player, m: Match):
   wh = Webhook(url=WEBHOOK)
 
-  e = Embed(color=0x8BC34A, title=m.name)
-  e.set_author(name=f'{p.name} created a new lobby', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
+  e = Embed(color=0x8BC34A)
+  e.set_author(name=f'{p.name} created \"{m.name}\"', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
   
   wh.add_embed(e)
   await wh.post(glob.http)
@@ -143,8 +143,8 @@ async def sendMatchCreate(p: Player, m: Match):
 async def sendMatchJoin(p: Player, m: Match):
   wh = Webhook(url=WEBHOOK)
 
-  e = Embed(color=0x8BC34A, title=m.name)
-  e.set_author(name=f'{p.name} joined a lobby', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
+  e = Embed(color=0x8BC34A)
+  e.set_author(name=f'{p.name} joined \"{m.name}\"', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
   
   wh.add_embed(e)
   await wh.post(glob.http)
@@ -152,8 +152,8 @@ async def sendMatchJoin(p: Player, m: Match):
 async def sendMatchPart(p: Player, m: Match):
   wh = Webhook(url=WEBHOOK)
 
-  e = Embed(color=0xF44336, title=m.name)
-  e.set_author(name=f'{p.name} left a lobby', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
+  e = Embed(color=0xF44336)
+  e.set_author(name=f'{p.name} left \"{m.name}\"', url=f'https://osu.catgirl.moe/u/{p.id}', icon_url=f'https://a.osu.catgirl.moe/{p.id}')
   
   wh.add_embed(e)
   await wh.post(glob.http)
