@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from objects.player import Player
     from objects.channel import Channel
 
+from utils.catgirlmoe import sendMatchComplete
+
 __all__ = (
     'SlotStatus',
     'MatchTeams',
@@ -458,6 +460,8 @@ class Match:
         """
 
         scores, didnt_submit = await self.await_submissions(was_playing)
+
+        await sendMatchComplete(was_playing, scores, self)
 
         for p in didnt_submit:
             self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
