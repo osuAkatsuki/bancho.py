@@ -1250,6 +1250,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue_state()
         print(f'bruh moment {p}')
+        print(m.await_submissions(was_playing))
         if m.is_scrimming:
             print(f'bruh moment2 {p}')
             # determine winner, update match points & inform players.
