@@ -24,10 +24,10 @@ GRADE_THUMBNAILS = {
 }
 
 GRADE_COLORS = {
-  "XH": 0xE0F7FA,
-  "SH": 0xFFEB3B,
-  "X":  0xE0F7FA,
-  "S":  0xFFEB3B,
+  "XH": 0xE0F7FA, #Silver SS
+  "SH": 0xE0F7FA, #Silver S
+  "X":  0xFFEB3B, #SS
+  "S":  0xFFEB3B, #S
   "A":  0x8BC34A,
   "B":  0x2196F3,
   "C":  0x9C27B0,
