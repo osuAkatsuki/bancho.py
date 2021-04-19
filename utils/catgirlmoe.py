@@ -169,7 +169,7 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
   e = Embed(color=0xF44336)
   print(m)
   for s in slots:
-    e.add_field(s.player.name, f'played a map {scores[s.player].pp}pp', False)
+    e.add_field(s.player.name, f'played a map', False)
   
   wh.add_embed(e)
   await wh.post(glob.http)
