@@ -41,9 +41,9 @@ from packets import BanchoPacketReader
 from packets import Packets
 from utils.misc import make_safe_name
 
-from utils.catgirlmoe import sendPlayerJoined
-from utils.catgirlmoe import sendPlayerLeft
-from utils.catgirlmoe import sendMessage
+from utils.catgirlmoe import sendLogin
+from utils.catgirlmoe import sendLogout
+from utils.catgirlmoe import sendSendMessage
 
 """ Bancho: handle connections from the osu! client """
 
@@ -289,7 +289,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
 
         await p.update_latest_activity()
         if recipient == '#osu':
-            await sendMessage(p, msg)
+            await sendSendMessage(p, msg)
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register(restricted=True)
@@ -306,7 +306,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
 
         await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
-        await sendPlayerLeft(p)
+        await sendLogout(p)
 
 @register(restricted=True)
 class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
@@ -707,7 +707,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     log(f'{p} logged in.', Ansi.LCYAN)
     await p.update_latest_activity()
-    await sendPlayerJoined(p)
+    await sendLogin(p)
     return bytes(data), p.token
 
 @register

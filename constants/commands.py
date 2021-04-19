@@ -48,7 +48,7 @@ from objects.score import SubmissionStatus
 from utils.misc import seconds_readable
 from utils.recalculator import PPCalculator
 
-from utils.catgirlmoe import sendRankUpdate
+from utils.catgirlmoe import sendRankMap
 
 if TYPE_CHECKING:
     from objects.channel import Channel
@@ -480,7 +480,7 @@ async def _map(ctx: Context) -> str:
             'UPDATE map_requests SET active = 0 '
             'WHERE map_id = %s', [map_id]
         )
-    await sendRankUpdate(ctx.player, bmap, str(new_status).lower())
+    await sendRankMap(ctx.player, bmap, str(new_status).lower())
     return f'{bmap.embed} updated to {new_status!s}.'
 
 """ Mod commands

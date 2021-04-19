@@ -71,7 +71,7 @@ MOD_EMOTES = {
   'CO': "CO",
 }
 
-async def sendNewScore(s: Score):
+async def sendSubmitScore(s: Score):
   wh = Webhook(url=WEBHOOK)
 
   diff=[f'{s.sr:.2f}★']
@@ -88,7 +88,7 @@ async def sendNewScore(s: Score):
   wh.add_embed(e)
   await wh.post(glob.http)
 
-async def sendPlayerJoined(p: Player):
+async def sendLogin(p: Player):
   wh = Webhook(url=WEBHOOK)
 
   s = p.stats[0]  
@@ -102,7 +102,7 @@ async def sendPlayerJoined(p: Player):
   wh.add_embed(e)
   await wh.post(glob.http)
 
-async def sendPlayerLeft(p: Player):
+async def sendLogout(p: Player):
   wh = Webhook(url=WEBHOOK)
 
   s = p.stats[0] 
@@ -116,7 +116,7 @@ async def sendPlayerLeft(p: Player):
   wh.add_embed(e)
   await wh.post(glob.http)
 
-async def sendRankUpdate(p: Player, b: Beatmap, s: str):
+async def sendRankMap(p: Player, b: Beatmap, s: str):
   wh = Webhook(url=WEBHOOK)
 
   e = Embed(title=b.full, url=f'https://osu.ppy.sh/b/{b.id}', color=0xE91E63)
@@ -126,6 +126,6 @@ async def sendRankUpdate(p: Player, b: Beatmap, s: str):
   wh.add_embed(e)
   await wh.post(glob.http)
 
-async def sendMessage(p: Player, m: str):
+async def sendSendMessage(p: Player, m: str):
   wh = Webhook(url=WEBHOOK, username=p.name, avatar_url=f'https://a.osu.catgirl.moe/{p.id}', content=m.replace("@", "[@]"))
   await wh.post(glob.http)
