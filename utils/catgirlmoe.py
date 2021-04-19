@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import re
 from cmyui.discord import Webhook
 from cmyui.discord import Embed
 
@@ -9,19 +9,6 @@ from objects.player import Player
 from objects.beatmap import Beatmap
 
 WEBHOOK = glob.config.webhooks['chat-bridge']
-
-GRADE_EMOTES = {
-  "XH": "<:grade_xh:833673474836660265>",
-  "SH": "<:grade_sh:833673474277900318>",
-  "X":  "<:grade_x:833673474270167060>",
-  "S":  "<:grade_s:833673474022572032>",
-  "A":  "<:grade_a:833673433941934091>",
-  "B":  "<:grade_b:833673434122289172>",
-  "C":  "<:grade_c:833673433656721418>",
-  "D":  "<:grade_d:833673433408733194>",
-  "F":  "",
-  "N":  ""
-}
 
 GRADE_THUMBNAILS = {
   "XH": "https://cdn.discordapp.com/emojis/833673474836660265.png?v=1",
@@ -54,6 +41,8 @@ async def sendNewScore(s: Score):
 
   diff=[f'{s.sr:.2f}★']
   if s.mods:
+    mods = re.findall('..',s.mods.replace("DTNC","NC"))
+    print(mods)
     diff.insert(1, f'({s.mods!r})')
 
   e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=GRADE_COLORS[s.grade])
