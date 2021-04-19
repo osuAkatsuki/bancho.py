@@ -11,29 +11,29 @@ from objects.beatmap import Beatmap
 WEBHOOK = glob.config.webhooks['chat-bridge']
 
 GRADE_EMOTES = {
-  "XH": "<:rank_ssh:764911895803068426>",
-  "SH": "<:rank_sh:764911895772921876>",
-  "X":  "<:rank_ss:764911895882104842>",
-  "S":  "<:rank_s:764911895773052928>",
-  "A":  "<:rank_a:764911895446421516>",
-  "B":  "<:rank_b:764911895727308800>",
-  "C":  "<:rank_c:764911895827185696>",
-  "D":  "<:rank_d:764911895819059260>",
-  "F":  "<:rank_f:764911895429120021>",
+  "XH": "<:grade_xh:833666794732257302>",
+  "SH": "<:grade_sh:833666794061037598>",
+  "X":  "<:grade_x:833666795226660885>",
+  "S":  "<:grade_s:833666795402952737>",
+  "A":  "<:grade_a:833667130100285450>",
+  "B":  "<:grade_b:833666795243175967>",
+  "C":  "<:grade_c:833666794534993940>",
+  "D":  "<:grade_d:833666795180261433>",
+  "F":  "",
   "N":  ""
 }
 
 GRADE_COLORS = {
   "XH": 0xE0E0E0,
   "SH": 0xE0E0E0,
-  "X":  0xFFEB3B,
-  "S":  0xFFEB3B,
+  "X":  0xFFC107,
+  "S":  0xFF9800,
   "A":  0x8BC34A,
-  "B":  0x03A9F4,
+  "B":  0x2196F3,
   "C":  0x9C27B0,
   "D":  0xF44336,
-  "F":  0xFF9800,
-  "N":  0x9E9E9E
+  "F":  0x212121,
+  "N":  0x212121
 }
 
 async def sendNewScore(s: Score):
