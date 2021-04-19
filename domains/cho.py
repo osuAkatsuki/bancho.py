@@ -192,9 +192,6 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         msg = self.msg.msg.strip()
         recipient = self.msg.recipient
 
-        if recipient == '#osu':
-            await sendMessage(p, msg)
-
         if recipient == '#spectator':
             if p.spectating:
                 # we are spectating someone
@@ -291,6 +288,8 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
             t_chan.send(msg, sender=p)
 
         await p.update_latest_activity()
+        if recipient == '#osu':
+            await sendMessage(p, msg)
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register(restricted=True)
