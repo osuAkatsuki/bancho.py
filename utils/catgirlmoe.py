@@ -41,7 +41,7 @@ async def sendNewScore(s: Score):
 
   diff=[f'{s.sr:.2f}★']
   if s.mods:
-    mods = re.findall('..',s.mods.replace("DTNC","NC"))
+    mods = re.findall('..',repr(s.mods).replace("DTNC","NC"))
     print(mods)
     diff.insert(1, f'({s.mods!r})')
 
