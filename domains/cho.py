@@ -47,6 +47,7 @@ from utils.catgirlmoe import sendSendMessage
 from utils.catgirlmoe import sendMatchCreate
 from utils.catgirlmoe import sendMatchJoin
 from utils.catgirlmoe import sendMatchPart
+from utils.catgirlmoe import sendMatchComplete
 
 """ Bancho: handle connections from the osu! client """
 

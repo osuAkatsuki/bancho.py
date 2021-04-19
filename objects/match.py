@@ -28,8 +28,6 @@ if TYPE_CHECKING:
     from objects.player import Player
     from objects.channel import Channel
 
-from utils.catgirlmoe import sendMatchComplete
-
 __all__ = (
     'SlotStatus',
     'MatchTeams',
@@ -437,7 +435,7 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: list['Player']) -> None:
+    async def update_matchpoints(self, was_playing: list['Player']) -> tuple[dict[str, Union[int, float]]:
         """\
         Determine the winner from `scores`, increment & inform players.
 
@@ -460,8 +458,6 @@ class Match:
         """
 
         scores, didnt_submit = await self.await_submissions(was_playing)
-
-        await sendMatchComplete(was_playing, scores, self)
 
         for p in didnt_submit:
             self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
@@ -569,3 +565,5 @@ class Match:
 
         else:
             self.chat.send_bot('Scores could not be calculated.')
+
+        return scores
