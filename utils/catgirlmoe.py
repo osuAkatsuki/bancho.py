@@ -37,9 +37,9 @@ GRADE_THUMBNAILS = {
 }
 
 GRADE_COLORS = {
-  "XH": 0xE0E0E0,
-  "SH": 0xE0E0E0,
-  "X":  0xFFEB3B,
+  "XH": 0xE0F7FA,
+  "SH": 0xFFEB3B,
+  "X":  0xE0F7FA,
   "S":  0xFFEB3B,
   "A":  0x8BC34A,
   "B":  0x2196F3,
