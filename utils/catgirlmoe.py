@@ -162,21 +162,24 @@ async def sendMatchPart(p: Player, m: Match):
 async def sendMatchComplete(slots: list[Slot], m: Match):
   submitted, not_submitted = await m.await_submissions(slots) # Wait untill we receive all scores from the players
   
-  player_names = []
-  player_accuracy = []
-  player_scores = []
+  if submitted:
+    player_names = []
+    player_accuracy = []
+    player_scores = []
 
-  wh = Webhook(url=WEBHOOK)
+    wh = Webhook(url=WEBHOOK)
 
-  e = Embed(color=0xF44336)
-  for p in submitted.keys():
-    s = p.recent_score
-    player_names.append(p.name)
-    player_accuracy.append(f'{s.acc:.2f}% {GRADE_EMOTES[s.grade]} ({s.pp:,.2f}pp)')
-    player_scores.append(f'{s.score:,} ({s.max_combo:,}/{s.bmap.max_combo:,}x)')
+    e = Embed(color=0xF44336)
+    for p in submitted.keys():
+      s = p.recent_score
+      player_names.append(p.name)
+      player_accuracy.append(f'{s.acc:.2f}% {GRADE_EMOTES[s.grade]} ({s.pp:,.2f}pp)')
+      player_scores.append(f'{s.score:,} ({s.max_combo:,}/{s.bmap.max_combo:,}x)')
 
-  e.add_field("Players:", '\n'.join(player_names), True)
-  e.add_field("Accuracy:", '\n'.join(player_accuracy), True)
-  e.add_field("Score:", '\n'.join(player_scores), True)
-  wh.add_embed(e)
-  await wh.post(glob.http)
+    e.set_author(name=f'{m.name} finished a match')
+    e.add_field("Players:", '\n'.join(player_names), True)
+    e.add_field("Accuracy:", '\n'.join(player_accuracy), True)
+    e.add_field("Score:", '\n'.join(player_scores), True)
+    e.set_image(url=f'https://assets.ppy.sh/beatmaps/{submitted.keys()[0].bmap.set_id}/covers/cover.jpg')
+    wh.add_embed(e)
+    await wh.post(glob.http)
