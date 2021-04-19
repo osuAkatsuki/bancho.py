@@ -432,10 +432,11 @@ class Match:
                     didnt_submit.append(s.player)
                     break
 
+        print(f'retrieved scores')
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: list['Player']) -> tuple[dict[str, Union[int, float]], list['Player']]:
+    async def update_matchpoints(self, was_playing: list['Player']) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
 
@@ -458,8 +459,6 @@ class Match:
         """
 
         scores, didnt_submit = await self.await_submissions(was_playing)
-
-        print(f'retrieved scores')
 
         for p in didnt_submit:
             self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
@@ -567,5 +566,3 @@ class Match:
 
         else:
             self.chat.send_bot('Scores could not be calculated.')
-
-        return scores
