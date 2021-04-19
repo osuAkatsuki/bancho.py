@@ -432,7 +432,6 @@ class Match:
                     didnt_submit.append(s.player)
                     break
 
-        print(f'retrieved scores')
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
