@@ -435,7 +435,7 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: list['Player']) -> tuple[dict[str, Union[int, float]]:
+    async def update_matchpoints(self, was_playing: list['Player']) -> dict[str, Union[int, float]]:
         """\
         Determine the winner from `scores`, increment & inform players.
 
