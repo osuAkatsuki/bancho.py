@@ -160,6 +160,7 @@ async def sendMatchPart(p: Player, m: Match):
   await wh.post(glob.http)
 
 async def sendMatchComplete(slots: list[Slot], m: Match):
+  print("bruh moment3")
   scores = await m.update_matchpoints(slots)
 
   wh = Webhook(url=WEBHOOK, content="GAMER MOMENT, SOME BITCHES PLAYED A MATCH")
