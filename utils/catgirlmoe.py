@@ -163,7 +163,7 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
   wh = Webhook(url=WEBHOOK, content="GAMER MOMENT, SOME BITCHES PLAYED A MATCH")
 
   e = Embed(color=0xF44336)
-  e.add_field(m.host.name, f'hosted a game', False)
+  #e.add_field(m.host.name, f'hosted a game', False)
   for s in slots:
     e.add_field(s.player.name, f'played a map', False)
   
