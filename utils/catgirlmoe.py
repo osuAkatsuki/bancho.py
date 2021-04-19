@@ -8,6 +8,7 @@ from objects.score import Score
 from objects.player import Player
 from objects.beatmap import Beatmap
 from objects.match import Match
+from objects.match import Slot
 
 WEBHOOK = glob.config.webhooks['chat-bridge']
 
