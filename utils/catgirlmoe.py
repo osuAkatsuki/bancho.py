@@ -23,6 +23,19 @@ GRADE_EMOTES = {
   "N":  ""
 }
 
+GRADE_THUMBNAILS = {
+  "XH": "https://cdn.discordapp.com/emojis/833666794732257302.png?v=1",
+  "SH": "https://cdn.discordapp.com/emojis/833666794061037598.png?v=1",
+  "X":  "https://cdn.discordapp.com/emojis/833666795226660885.png?v=1",
+  "S":  "https://cdn.discordapp.com/emojis/833666795402952737.png?v=1",
+  "A":  "https://cdn.discordapp.com/emojis/833667130100285450.png?v=1",
+  "B":  "https://cdn.discordapp.com/emojis/833666795243175967.png?v=1",
+  "C":  "https://cdn.discordapp.com/emojis/833666794534993940.png?v=1",
+  "D":  "https://cdn.discordapp.com/emojis/833666795180261433.png?v=1",
+  "F":  "",
+  "N":  ""
+}
+
 GRADE_COLORS = {
   "XH": 0xE0E0E0,
   "SH": 0xE0E0E0,
@@ -45,8 +58,9 @@ async def sendNewScore(s: Score):
 
   e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=GRADE_COLORS[s.grade])
   e.set_author(name=f'{s.player.name} achieved #{s.rank} on', url=f'https://osu.catgirl.moe/u/{s.player.id}', icon_url=f'https://a.osu.catgirl.moe/{s.player.id}')
+  e.set_thumbnail(url=GRADE_THUMBNAILS[s.grade])
   e.add_field("Difficulty:", ' '.join(diff), True)
-  e.add_field("Accuracy:", f'{s.acc:.2f}% {GRADE_EMOTES[s.grade]} ({s.pp:,.2f}pp)', True)
+  e.add_field("Accuracy:", f'{s.acc:.2f}% ({s.pp:,.2f}pp)', True)
   e.add_field("Score:", f'{s.score:,} ({s.max_combo:,}/{s.bmap.max_combo:,}x)', True)
   e.set_image(url=f'https://assets.ppy.sh/beatmaps/{s.bmap.set_id}/covers/cover.jpg')
 
