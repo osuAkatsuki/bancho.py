@@ -1019,10 +1019,9 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
 class MatchPart(BanchoPacket, type=Packets.OSU_PART_MATCH):
     async def handle(self, p: Player) -> None:
         await p.update_latest_activity()
+        if not p.match is None:
+            await sendMatchPart(p, p.match)
         p.leave_match()
-        print(self)
-        if (m := glob.matches[self.match_id]):
-            await sendMatchJoin(p, m)
 
 @register
 class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
