@@ -76,7 +76,7 @@ async def sendNewScore(s: Score):
 
   diff=[f'{s.sr:.2f}★']
   if s.mods:
-    diff.insert(1, f'({''.join(map(lambda mod: MOD_EMOTES[mod], re.findall('..',repr(s.mods).replace("DTNC","NC"))))})')
+    diff.insert(1, f'({"".join(map(lambda mod: MOD_EMOTES[mod], re.findall('..',repr(s.mods).replace("DTNC","NC"))))})')
 
   e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=GRADE_COLORS[s.grade])
   e.set_author(name=f'{s.player.name} achieved #{s.rank} on', url=f'https://osu.catgirl.moe/u/{s.player.id}', icon_url=f'https://a.osu.catgirl.moe/{s.player.id}')
