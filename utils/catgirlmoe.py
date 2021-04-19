@@ -10,7 +10,7 @@ from objects.beatmap import Beatmap
 
 WEBHOOK = glob.config.webhooks['chat-bridge']
 
-RANK_EMOTES = {
+GRADE_EMOTES = {
   "XH": "<:rank_ssh:764911895803068426>",
   "SH": "<:rank_sh:764911895772921876>",
   "X":  "<:rank_ss:764911895882104842>",
@@ -23,6 +23,19 @@ RANK_EMOTES = {
   "N":  ""
 }
 
+GRADE_COLORS = {
+  "XH": 0xE0E0E0,
+  "SH": 0xE0E0E0,
+  "X":  0xFFEB3B,
+  "S":  0xFFEB3B,
+  "A":  0x8BC34A,
+  "B":  0x03A9F4,
+  "C":  0x9C27B0,
+  "D":  0xF44336,
+  "F":  0xFF9800,
+  "N":  0x9E9E9E
+}
+
 async def sendNewScore(s: Score):
   wh = Webhook(url=WEBHOOK)
 
@@ -30,10 +43,10 @@ async def sendNewScore(s: Score):
   if s.mods:
     diff.insert(1, f'({s.mods!r})')
 
-  e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=0xE91E63)
+  e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=GRADE_COLORS[s.grade])
   e.set_author(name=f'{s.player.name} achieved #{s.rank} on', url=f'https://osu.catgirl.moe/u/{s.player.id}', icon_url=f'https://a.osu.catgirl.moe/{s.player.id}')
   e.add_field("Difficulty:", ' '.join(diff), True)
-  e.add_field("Accuracy:", f'{s.acc:.2f}% {RANK_EMOTES[s.grade]} ({s.pp:,.2f}pp)', True)
+  e.add_field("Accuracy:", f'{s.acc:.2f}% {GRADE_EMOTES[s.grade]} ({s.pp:,.2f}pp)', True)
   e.add_field("Score:", f'{s.score:,} ({s.max_combo:,}/{s.bmap.max_combo:,}x)', True)
   e.set_image(url=f'https://assets.ppy.sh/beatmaps/{s.bmap.set_id}/covers/cover.jpg')
 
