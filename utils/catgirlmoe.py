@@ -36,14 +36,47 @@ GRADE_COLORS = {
   "N":  0x212121
 }
 
+MOD_EMOTES = {
+  'NF': "NF",
+  'EZ': "EZ",
+  'TD': "TD",
+  'HD': "HD",
+  'HR': "HR",
+  'SD': "SD",
+  'DT': "DT",
+  'RX': "RX",
+  'HT': "HT",
+  'NC': "NC",
+  'FL': "FL",
+  'AU': "AU",
+  'SO': "SO",
+  'AP': "AP",
+  'PF': "PF",
+  'FI': "FI",
+  'RN': "RN",
+  'CN': "CN",
+  'TP': "TP",
+  'V2': "V2",
+  'MR': "MR",
+
+  '1K': "1K",
+  '2K': "2K",
+  '3K': "3K",
+  '4K': "4K",
+  '5K': "5K",
+  '6K': "6K",
+  '7K': "7K",
+  '8K': "8K",
+  '9K': "9K",
+  'CO': "CO",
+}
+
 async def sendNewScore(s: Score):
   wh = Webhook(url=WEBHOOK)
 
   diff=[f'{s.sr:.2f}★']
   if s.mods:
-    mods = re.findall('..',repr(s.mods).replace("DTNC","NC"))
-    print(mods)
-    diff.insert(1, f'({s.mods!r})')
+    diff.insert(1, f'({''.join(map(lambda mod: MOD_EMOTES[mod], re.findall('..',repr(s.mods).replace("DTNC","NC")))}))')
 
   e = Embed(title=s.bmap.full, url=f'https://osu.ppy.sh/b/{s.bmap.id}',color=GRADE_COLORS[s.grade])
   e.set_author(name=f'{s.player.name} achieved #{s.rank} on', url=f'https://osu.catgirl.moe/u/{s.player.id}', icon_url=f'https://a.osu.catgirl.moe/{s.player.id}')
