@@ -47,6 +47,7 @@ from utils.catgirlmoe import sendSendMessage
 from utils.catgirlmoe import sendMatchCreate
 from utils.catgirlmoe import sendMatchJoin
 from utils.catgirlmoe import sendMatchPart
+from utils.catgirlmoe import sendMatchComplete
 
 """ Bancho: handle connections from the osu! client """
 
@@ -1252,6 +1253,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         if m.is_scrimming:
             # determine winner, update match points & inform players.
             asyncio.create_task(m.update_matchpoints(was_playing))
+            await sendMatchComplete(was_playing, m)
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
