@@ -1249,11 +1249,11 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.in_progress = False
         m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
         m.enqueue_state()
-        print("bruh moment")
+        print(f'bruh moment {p}')
         if m.is_scrimming:
+            print(f'bruh moment2 {p}')
             # determine winner, update match points & inform players.
-            print("bruh moment2")
-            asyncio.create_task(sendMatchComplete(was_playing, m))
+            asyncio.create_task(m.update_matchpoints(was_playing))
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):

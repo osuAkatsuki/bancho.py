@@ -459,6 +459,8 @@ class Match:
 
         scores, didnt_submit = await self.await_submissions(was_playing)
 
+        print(f'retrieved scores')
+
         for p in didnt_submit:
             self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
 
