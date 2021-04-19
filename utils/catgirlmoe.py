@@ -163,8 +163,9 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
   wh = Webhook(url=WEBHOOK, content="GAMER MOMENT, SOME BITCHES PLAYED A MATCH")
 
   e = Embed(color=0xF44336)
+  e.add_field(m.host.name, f'{m.host.recent_scores[0].pp:,.2f}pp play', False)
   for s in slots:
-    e.add_field(s.player.name, f'{s.player.recent_scores[0].pp}pp play', False)
+    e.add_field(s.player.name, f'{s.player.recent_scores[0].pp:,.2f}pp play', False)
   
   wh.add_embed(e)
   await wh.post(glob.http)
