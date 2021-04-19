@@ -1251,7 +1251,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
         m.enqueue_state()
         if m.is_scrimming:
             # determine winner, update match points & inform players.
-            asyncio.create_task(m.update_matchpoints(was_playing))
+            asyncio.create_task(sendMatchComplete(was_playing, m))
 
 @register
 class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
