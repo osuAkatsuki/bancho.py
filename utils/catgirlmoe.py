@@ -163,7 +163,7 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
   print("bruh moment3")
   scores, didnt_submit = await m.await_submissions(slots)
   print(scores)
-  print(slots[0].player.recent_score[0])
+  print(slots[0].player.recent_score)
   wh = Webhook(url=WEBHOOK, content="GAMER MOMENT, SOME BITCHES PLAYED A MATCH")
 
   e = Embed(color=0xF44336)
