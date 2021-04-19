@@ -44,6 +44,9 @@ from utils.misc import make_safe_name
 from utils.catgirlmoe import sendLogin
 from utils.catgirlmoe import sendLogout
 from utils.catgirlmoe import sendSendMessage
+from utils.catgirlmoe import sendMatchCreate
+from utils.catgirlmoe import sendMatchJoin
+from utils.catgirlmoe import sendMatchPart
 
 """ Bancho: handle connections from the osu! client """
 
@@ -960,6 +963,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         await p.update_latest_activity()
         p.join_match(self.match, self.match.passwd)
+        await sendMatchCreate(p, self.match)
         log(f'{p} created a new multiplayer match.')
 
 async def check_menu_option(p: Player, key: int):
@@ -1009,12 +1013,15 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
 
         await p.update_latest_activity()
         p.join_match(m, self.match_passwd)
+        await sendMatchJoin(p, m)
 
 @register
 class MatchPart(BanchoPacket, type=Packets.OSU_PART_MATCH):
     async def handle(self, p: Player) -> None:
         await p.update_latest_activity()
         p.leave_match()
+        if (m := glob.matches[self.match_id]):
+            await sendMatchJoin(p, m)
 
 @register
 class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):

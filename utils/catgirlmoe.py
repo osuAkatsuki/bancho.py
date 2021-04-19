@@ -7,6 +7,7 @@ from objects import glob
 from objects.score import Score
 from objects.player import Player
 from objects.beatmap import Beatmap
+from objects.match import match
 
 WEBHOOK = glob.config.webhooks['chat-bridge']
 
@@ -128,4 +129,16 @@ async def sendRankMap(p: Player, b: Beatmap, s: str):
 
 async def sendSendMessage(p: Player, m: str):
   wh = Webhook(url=WEBHOOK, username=p.name, avatar_url=f'https://a.osu.catgirl.moe/{p.id}', content=m.replace("@", "[@]"))
+  await wh.post(glob.http)
+
+async def sendMatchCreate(p: Player, m: Match):
+  wh = Webhook(url=WEBHOOK, content=f'{p.name} created a new multiplayer match {m.name}.')
+  await wh.post(glob.http)
+
+async def sendMatchJoin(p: Player, m: Match):
+  wh = Webhook(url=WEBHOOK, content=f'{p.name} joined {m.name}.')
+  await wh.post(glob.http)
+
+async def sendMatchPart(p: Player, m: Match):
+  wh = Webhook(url=WEBHOOK, content=f'{p.name} left {m.name}.')
   await wh.post(glob.http)
