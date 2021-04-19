@@ -11,27 +11,27 @@ from objects.beatmap import Beatmap
 WEBHOOK = glob.config.webhooks['chat-bridge']
 
 GRADE_EMOTES = {
-  "XH": "<:grade_xh:833666794732257302>",
-  "SH": "<:grade_sh:833666794061037598>",
-  "X":  "<:grade_x:833666795226660885>",
-  "S":  "<:grade_s:833666795402952737>",
-  "A":  "<:grade_a:833667130100285450>",
-  "B":  "<:grade_b:833666795243175967>",
-  "C":  "<:grade_c:833666794534993940>",
-  "D":  "<:grade_d:833666795180261433>",
+  "XH": "<:grade_xh:833673474836660265>",
+  "SH": "<:grade_sh:833673474277900318>",
+  "X":  "<:grade_x:833673474270167060>",
+  "S":  "<:grade_s:833673474022572032>",
+  "A":  "<:grade_a:833673433941934091>",
+  "B":  "<:grade_b:833673434122289172>",
+  "C":  "<:grade_c:833673433656721418>",
+  "D":  "<:grade_d:833673433408733194>",
   "F":  "",
   "N":  ""
 }
 
 GRADE_THUMBNAILS = {
-  "XH": "https://cdn.discordapp.com/emojis/833666794732257302.png?v=1",
-  "SH": "https://cdn.discordapp.com/emojis/833666794061037598.png?v=1",
-  "X":  "https://cdn.discordapp.com/emojis/833666795226660885.png?v=1",
-  "S":  "https://cdn.discordapp.com/emojis/833666795402952737.png?v=1",
-  "A":  "https://cdn.discordapp.com/emojis/833667130100285450.png?v=1",
-  "B":  "https://cdn.discordapp.com/emojis/833666795243175967.png?v=1",
-  "C":  "https://cdn.discordapp.com/emojis/833666794534993940.png?v=1",
-  "D":  "https://cdn.discordapp.com/emojis/833666795180261433.png?v=1",
+  "XH": "https://cdn.discordapp.com/emojis/833673474836660265.png?v=1",
+  "SH": "https://cdn.discordapp.com/emojis/833673474277900318.png?v=1",
+  "X":  "https://cdn.discordapp.com/emojis/833673474270167060.png?v=1",
+  "S":  "https://cdn.discordapp.com/emojis/833673474022572032.png?v=1",
+  "A":  "https://cdn.discordapp.com/emojis/833673433941934091.png?v=1",
+  "B":  "https://cdn.discordapp.com/emojis/833673434122289172.png?v=1",
+  "C":  "https://cdn.discordapp.com/emojis/833673433656721418.png?v=1",
+  "D":  "https://cdn.discordapp.com/emojis/833673433408733194.png?v=1",
   "F":  "",
   "N":  ""
 }
@@ -39,8 +39,8 @@ GRADE_THUMBNAILS = {
 GRADE_COLORS = {
   "XH": 0xE0E0E0,
   "SH": 0xE0E0E0,
-  "X":  0xFFC107,
-  "S":  0xFF9800,
+  "X":  0xFFEB3B,
+  "S":  0xFFEB3B,
   "A":  0x8BC34A,
   "B":  0x2196F3,
   "C":  0x9C27B0,
