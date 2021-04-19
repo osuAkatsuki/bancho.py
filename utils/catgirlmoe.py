@@ -165,6 +165,7 @@ async def sendMatchComplete(slots: list[Slot], m: Match):
   e = Embed(color=0xF44336)
   #e.add_field(m.host.name, f'hosted a game', False)
   for s in slots:
+    print(s.player.recent_scores)
     e.add_field(s.player.name, f'played a map', False)
   
   wh.add_embed(e)
