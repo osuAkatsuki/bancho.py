@@ -169,11 +169,7 @@ create table ratings
 	userid int not null,
 	map_md5 char(32) not null,
 	rating tinyint(2) not null,
-	primary key (userid, map_md5),
-	constraint ratings_map_md5_uindex
-		unique (map_md5),
-	constraint ratings_userid_uindex
-		unique (userid)
+	primary key (userid, map_md5)
 );
 
 create table scores_ap
