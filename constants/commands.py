@@ -319,7 +319,7 @@ async def _with(ctx: Context) -> str:
         pp_values = zip(_keys, pp_cache)
 
     _mods = f'+{mods!r} ' if mods else ''
-    return ' | '.join([f'{_mods}{k}: {pp:,.2f}pp'
+    return _mods + ' | '.join([f'{k}: {pp:,.2f}pp'
                        for k, pp in pp_values])
 
 @command(Privileges.Normal, aliases=['req'])
