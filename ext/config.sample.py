@@ -28,7 +28,7 @@ mysql = {
 osu_api_key = ''
 
 # the external mirror url to use.
-mirror = 'https://storage.ripple.moe'
+mirror = 'https://api.chimu.moe/v1'
 
 # the max amount of concurrent
 # connections gulag will hold.
