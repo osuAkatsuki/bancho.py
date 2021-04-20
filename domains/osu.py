@@ -376,14 +376,13 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     async with glob.http.get(search_url, params=params) as resp:
         if not resp:
-            from utils.misc import point_of_interest
             point_of_interest()
 
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
                 return b'0' # no maps found
             elif resp.status != 200:
-                breakpoint()
+                point_of_interest()
         else: # cheesegull
             if resp.status != 200:
                 return b'Failed to retrieve data from mirror!'
@@ -392,7 +391,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         if USING_CHIMU:
             if result['code'] != 0:
-                breakpoint()
+                point_of_interest()
                 return b'Failed to retrieve data from mirror!'
             result = result['data']
 
