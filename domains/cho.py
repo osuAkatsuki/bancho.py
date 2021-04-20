@@ -604,7 +604,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     await p.stats_from_sql_full()
     await p.friends_from_sql()
 
-    if glob.config.production:
+    if ip != '127.0.0.1':
         # update their country data with
         # the IP from the login request.
         await p.fetch_geoloc(ip)

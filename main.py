@@ -156,14 +156,14 @@ if __name__ == '__main__':
     if not os.path.exists('/var/run/nginx.pid'):
         sys.exit('Please start your nginx server.')
 
-    if glob.config.production:
-        if os.geteuid() == 0:
-            log('It is not recommended to run gulag as root, '
-                'especially in production..', Ansi.LYELLOW)
+    # warn if gulag is running on root.
+    if os.geteuid() == 0:
+        log('It is not recommended to run gulag as root, '
+            'especially in production..', Ansi.LYELLOW)
 
-            if glob.config.advanced:
-                log('The risk is even greater with features '
-                    'such as config.advanced enabled.', Ansi.LRED)
+        if glob.config.advanced:
+            log('The risk is even greater with features '
+                'such as config.advanced enabled.', Ansi.LRED)
 
     # set cwd to /gulag.
     os.chdir(os.path.dirname(os.path.realpath(__file__)))

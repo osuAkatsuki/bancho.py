@@ -773,7 +773,11 @@ class Player:
             status, *lines = (await resp.text()).split('\n')
 
             if status != 'success':
-                log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
+                err_msg = lines[0]
+                if err_msg == 'invalid query':
+                    err_msg += f' ({url})'
+
+                log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
                 return
 
         country = lines[1]

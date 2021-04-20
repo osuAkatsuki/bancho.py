@@ -12,25 +12,6 @@ domain = 'cmyui.xyz' # cmyui.xyz
 # for unix sockets, set to the path of the socket.
 server_addr = '/tmp/gulag.sock'
 
-# the max amount of concurrent
-# connections gulag will hold.
-max_conns = 16
-
-# displays additional information in the
-# console, generally for debugging purposes.
-# NOTE: devs can also toggle ingame w/ !debug.
-debug = False
-
-# whether the server is running in 'production mode'.
-# having this as false will disable some features that
-# aren't used during testing.
-production = False
-
-# allow for use of advanced (and potentially dangerous)
-# commands. i recommend checking where this config value
-# is used throughout the code before enabling it.. :P
-advanced = False
-
 # your mysql authentication info.
 # NOTE: there is a decent chance we will switch to postgres
 # (asyncpg) in the future for better speeds and features in
@@ -46,6 +27,23 @@ mysql = {
 # fetching beatmap information.
 osu_api_key = ''
 
+# the external mirror url to use.
+mirror = 'https://storage.ripple.moe'
+
+# the max amount of concurrent
+# connections gulag will hold.
+max_conns = 16
+
+# displays additional information in the
+# console, generally for debugging purposes.
+# NOTE: devs can also toggle ingame w/ !debug.
+debug = False
+
+# allow for use of advanced (and potentially dangerous)
+# commands. i recommend checking where this config value
+# is used throughout the code before enabling it.. :P
+advanced = False
+
 # the level of gzip compression to use for different tasks.
 # when we want to quickly compress something and send it to
 # the client immediately, we'd want to focus on optimizing
@@ -56,9 +54,6 @@ osu_api_key = ''
 # levels will result in diminishing returns; more info below.
 # https://www.rootusers.com/gzip-vs-bzip2-vs-xz-performance-comparison/
 gzip = {'web': 4, 'disk': 9}
-
-# the external mirror url to use.
-mirror = 'https://storage.ripple.moe'
 
 # the menu icon displayed on
 # the main menu of osu! in-game.
@@ -103,6 +98,31 @@ webhooks = {
     'thumbnail': 'https://akatsuki.pw/static/logos/logo.png'
 }
 
+# https://datadoghq.com
+# support (stats tracking)
+datadog = {
+    'api_key': '',
+    'app_key': ''
+}
+
+# high ceiling values for autoban as a very simple form
+# of "anticheat", simply ban a user if they are not
+# whitelisted, and submit a score of too high caliber.
+# Values below are in form (non_fl, fl), as fl has custom
+# vals as it finds quite a few additional cheaters on the side.
+autoban_pp = (
+    (700,   600),   # vn!std
+    (9999, 9999), # vn!taiko
+    (9999, 9999), # vn!catch
+    (9999, 9999), # vn!mania
+
+    (1200,  800),   # rx!std
+    (9999, 9999), # rx!taiko
+    (9999, 9999), # rx!catch
+
+    (9999, 9999)  # ap!std
+)
+
 # gulag has begun to develop systems for detecting scores
 # which the server deems as suspicious for any number of reasons.
 # while some features may have a confidence threshold high enough
@@ -132,28 +152,3 @@ updates_cache_timeout = 3600
 # a user requests the general pp values for a beatmap.
 pp_cached_accs = (90, 95, 98, 99, 100) # std & taiko
 pp_cached_scores = (8e5, 8.5e5, 9e5, 9.5e5, 10e5) # mania
-
-# https://datadoghq.com
-# support (stats tracking)
-datadog = {
-    'api_key': '',
-    'app_key': ''
-}
-
-# high ceiling values for autoban as a very simple form
-# of "anticheat", simply ban a user if they are not
-# whitelisted, and submit a score of too high caliber.
-# Values below are in form (non_fl, fl), as fl has custom
-# vals as it finds quite a few additional cheaters on the side.
-autoban_pp = (
-    (700,   600),   # vn!std
-    (9999, 9999), # vn!taiko
-    (9999, 9999), # vn!catch
-    (9999, 9999), # vn!mania
-
-    (1200,  800),   # rx!std
-    (9999, 9999), # rx!taiko
-    (9999, 9999), # rx!catch
-
-    (9999, 9999)  # ap!std
-)
