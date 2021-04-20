@@ -1060,11 +1060,11 @@ async def server(ctx: Context) -> str:
     ram_values = (gulag_ram, sys_ram.used, sys_ram.total)
 
     return '\n'.join([
-        f'gulag v{glob.version!r} | uptime: {seconds_readable(uptime)}',
+        f'gulag v{glob.version!r} ({glob.config.domain}) | uptime: {seconds_readable(uptime)}',
         f'cpu(s): {" | ".join(f"{v}x {k}" for k, v in model_names.most_common())}',
         f'ram: {" / ".join(f"{v // 1024 ** 2}MB" for v in ram_values)}',
-        f'production mode: {glob.config.production} | advanced mode: {glob.config.advanced}',
         f'mirror: {glob.config.mirror} | osu!api connection: {glob.config.osu_api_key != ""}',
+        f'advanced mode: {glob.config.advanced}',
         '',
         'requirements',
         '\n'.join([' | '.join([
