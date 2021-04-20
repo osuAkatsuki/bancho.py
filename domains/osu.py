@@ -212,7 +212,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
         # only allows us to send back one per gamemode,
         # so we'll just send back relax for the time being..
         # XXX: perhaps user-customizable in the future?
-        ranks = ['N', 'N', 'N', 'N']
+        grades = ['N', 'N', 'N', 'N']
 
         for score in await glob.db.fetchall(
             'SELECT grade, mode FROM scores_rx '
@@ -220,11 +220,11 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             'AND status = 2',
             [res['md5'], p.id]
         ):
-            ranks[score['mode']] = score['grade']
+            grades[score['mode']] = score['grade']
 
         ret.append(
-            '{i}|{id}|{set_id}|{md5}|{status}|{ranks}'.format(
-                i = idx, ranks = '|'.join(ranks), **res
+            '{i}|{id}|{set_id}|{md5}|{status}|{grades}'.format(
+                i = idx, grades = '|'.join(grades), **res
             )
         )
 

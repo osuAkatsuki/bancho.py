@@ -25,18 +25,18 @@ if TYPE_CHECKING:
     from objects.player import Player
 
 __all__ = (
-    'Rank',
+    'Grade',
     'SubmissionStatus',
     'Score'
 )
 
 @unique
 @pymysql_encode(escape_enum)
-class Rank(IntEnum):
-    XH = 0
-    SH = 1
-    X  = 2
-    S  = 3
+class Grade(IntEnum):
+    XH = 0 # HD SS
+    X  = 1 # SS
+    SH = 2 # HD S
+    S  = 3 # S
     A  = 4
     B  = 5
     C  = 6
@@ -47,8 +47,8 @@ class Rank(IntEnum):
     def __str__(self) -> str:
         return {
             self.XH: 'SS',
-            self.SH: 'SS',
-            self.X: 'S',
+            self.X: 'SS',
+            self.SH: 'S',
             self.S: 'S',
             self.A: 'A',
             self.B: 'B',
@@ -56,6 +56,19 @@ class Rank(IntEnum):
             self.D: 'D',
             self.F: 'F'
         }[self.value]
+
+    @classmethod
+    def from_str(cls, s: str, hidden: bool = False) -> 'Grade':
+        return {
+            'SS': self.XH if hidden else self.SH,
+            'S': self.SH if hidden else self.S,
+            'A': self.A,
+            'B': self.B,
+            'C': self.C,
+            'D': self.D,
+            'F': self.F,
+            'N': self.N
+        }[s]
 
 @unique
 @pymysql_encode(escape_enum)
@@ -120,7 +133,7 @@ class Score:
     nkatu: `int`
         The number of katus in the score.
 
-    grade: `str`
+    grade: `Grade`
         The letter grade in the score.
 
     rank: `int`
@@ -185,7 +198,7 @@ class Score:
         self.nmiss: Optional[int] = None
         self.ngeki: Optional[int] = None
         self.nkatu: Optional[int] = None
-        self.grade: Optional[Rank] = None
+        self.grade: Optional[Grade] = None
 
         self.rank: Optional[int] = None
         self.passed: Optional[bool] = None

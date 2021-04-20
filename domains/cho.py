@@ -534,7 +534,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
             log(msg_content, Ansi.LRED)
 
-    # get clan & clan rank if we're in a clan
+    # get clan & clan priv if we're in a clan
     if user_info['clan_id'] != 0:
         clan = glob.clans.get(id=user_info.pop('clan_id'))
         clan_priv = ClanPrivileges(user_info.pop('clan_priv'))

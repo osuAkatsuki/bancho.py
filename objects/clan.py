@@ -17,7 +17,7 @@ __all__ = ('Clan', 'ClanPrivileges')
 @unique
 @pymysql_encode(escape_enum)
 class ClanPrivileges(IntEnum):
-    """A class to represent a clan members rank."""
+    """A class to represent a clan members privs."""
     Member = 1
     Officer = 2
     Owner = 3

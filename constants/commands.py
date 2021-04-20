@@ -1919,7 +1919,7 @@ async def clan_create(ctx: Context) -> str:
     created_at = datetime.now()
 
     # add clan to sql (generates id)
-    id = await glob.db.execute(
+    clan_id = await glob.db.execute(
         'INSERT INTO clans '
         '(name, tag, created_at, owner) '
         'VALUES (%s, %s, %s, %s)',
@@ -1927,11 +1927,11 @@ async def clan_create(ctx: Context) -> str:
     )
 
     # add clan to cache
-    clan = Clan(id=id, name=name, tag=tag,
+    clan = Clan(id=clan_id, name=name, tag=tag,
                 created_at=created_at, owner=ctx.player.id)
     glob.clans.append(clan)
 
-    # set owner's clan & clan rank (cache & sql)
+    # set owner's clan & clan priv (cache & sql)
     ctx.player.clan = clan
     ctx.player.clan_priv = ClanPrivileges.Owner
 
@@ -1946,7 +1946,7 @@ async def clan_create(ctx: Context) -> str:
         'SET clan_id = %s, '
         'clan_priv = 3 ' # ClanPrivileges.Owner
         'WHERE id = %s',
-        [id, ctx.player.id]
+        [clan_id, ctx.player.id]
     )
 
     # TODO: take currency from player
@@ -1981,7 +1981,7 @@ async def clan_disband(ctx: Context) -> str:
     )
 
     # remove all members from the clan,
-    # reset their clan rank (cache & sql).
+    # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for m in [glob.players.get(id=p_id) for p_id in clan.members]:
         if 'full_name' in m.__dict__:
@@ -2023,7 +2023,7 @@ async def clan_info(ctx: Context) -> str:
     datetime_fmt = f'Founded at {_time} on {_date}'
     msg = [f"{owner.embed}'s {clan!r} | {datetime_fmt}."]
 
-    # get members ranking from sql
+    # get members privs from sql
     res = await glob.db.fetchall(
         'SELECT name, clan_priv '
         'FROM users '
@@ -2032,8 +2032,8 @@ async def clan_info(ctx: Context) -> str:
     )
 
     for name, clan_priv in sorted(res, key=lambda row: row[1]):
-        rank_str = ('Member', 'Officer', 'Owner')[clan_priv - 1]
-        msg.append(f'[{rank_str}] {name}')
+        priv_str = ('Member', 'Officer', 'Owner')[clan_priv - 1]
+        msg.append(f'[{priv_str}] {name}')
 
     return '\n'.join(msg)
 
