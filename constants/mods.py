@@ -63,7 +63,10 @@ class Mods(IntFlag):
         """Remove any invalid mod combinations."""
 
         # 1. mode-inspecific mod conflictions
-        if self & (Mods.DOUBLETIME | Mods.NIGHTCORE) and self & Mods.HALFTIME:
+        _dtnc = self & (Mods.DOUBLETIME | Mods.NIGHTCORE)
+        if _dtnc == (Mods.DOUBLETIME | Mods.NIGHTCORE):
+            self &= ~Mods.DOUBLETIME # DTNC
+        elif _dtnc and self & Mods.HALFTIME:
             self &= ~Mods.HALFTIME # (DT|NC)HT
 
         if self & Mods.EASY and self & Mods.HARDROCK:
