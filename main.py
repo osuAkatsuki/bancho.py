@@ -8,19 +8,10 @@
 # osu!'s built-in registration.
 # certificate: https://akatsuki.pw/static/ca.crt
 
-import sys
-
-sys._excepthook = sys.excepthook # backup
-def _excepthook(type, value, traceback):
-    if type is KeyboardInterrupt:
-        print('\33[2K\r', end='Aborted startup.')
-        return
-    print('\x1b[0;31mgulag ran into an issue '
-          'before starting up :(\x1b[0m')
-    sys._excepthook(type, value, traceback)
-sys.excepthook = _excepthook
+__import__('utils.misc', fromlist=[None]).install_excepthook()
 
 import os
+import sys
 from pathlib import Path
 
 import aiohttp

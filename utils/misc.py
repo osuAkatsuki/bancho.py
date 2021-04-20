@@ -2,9 +2,12 @@
 
 import inspect
 import pymysql
+import sys
+import types
 from pathlib import Path
 from typing import Callable
 from typing import Sequence
+from typing import Type
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -16,11 +19,12 @@ __all__ = (
     'point_of_interest',
     'get_press_times',
     'make_safe_name',
+    'download_achievement_pngs',
+    'seconds_readable',
+    'install_excepthook',
 
     'pymysql_encode',
-    'escape_enum',
-
-    'download_achievement_pngs'
+    'escape_enum'
 )
 
 def point_of_interest():
@@ -90,16 +94,6 @@ def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(' ', '_')
 
-def pymysql_encode(conv: Callable):
-    """Decorator to allow for adding to pymysql's encoders."""
-    def wrapper(cls):
-        pymysql.converters.encoders[cls] = conv
-        return cls
-    return wrapper
-
-def escape_enum(val, mapping=None) -> str: # used for ^
-    return str(int(val))
-
 # TODO: async? lol
 def download_achievement_pngs(medals_path: Path) -> None:
     achs = []
@@ -142,3 +136,28 @@ def seconds_readable(seconds: int) -> str:
 
     r.append(f'{seconds % 60:02d}')
     return ':'.join(r)
+
+def install_excepthook():
+    sys._excepthook = sys.excepthook # backup
+    def _excepthook(
+        type_: Type[BaseException],
+        value: BaseException,
+        traceback: types.TracebackType
+    ):
+        if type_ is KeyboardInterrupt:
+            print('\33[2K\r', end='Aborted startup.')
+            return
+        print('\x1b[0;31mgulag ran into an issue '
+            'before starting up :(\x1b[0m')
+        sys._excepthook(type_, value, traceback)
+    sys.excepthook = _excepthook
+
+def pymysql_encode(conv: Callable):
+    """Decorator to allow for adding to pymysql's encoders."""
+    def wrapper(cls):
+        pymysql.converters.encoders[cls] = conv
+        return cls
+    return wrapper
+
+def escape_enum(val, mapping=None) -> str: # used for ^
+    return str(int(val))
