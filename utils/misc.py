@@ -2,6 +2,7 @@
 
 import inspect
 import pymysql
+import requests
 import sys
 import types
 from pathlib import Path
@@ -107,8 +108,6 @@ def download_achievement_pngs(medals_path: Path) -> None:
 
         for n in (500, 750, 1000, 2000):
             achs.append(f'osu-combo-{n}{res}.png')
-
-    import requests
 
     for ach in achs:
         r = requests.get(f'https://assets.ppy.sh/medals/client/{ach}')

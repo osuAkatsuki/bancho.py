@@ -131,7 +131,12 @@ class Mods(IntFlag):
         mods = cls.NOMOD
         _dict = modstr2mod_dict # global
 
-        for m in map(get_mod, range(0, len(s), 2)):
+        # split into 2 character chunks
+        mod_strs = [s[idx:idx+2].upper()
+                    for idx in range(0, len(s), 2)]
+
+        # find matching mods
+        for m in mod_strs:
             if m not in _dict:
                 continue
 

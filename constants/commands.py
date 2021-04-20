@@ -318,7 +318,8 @@ async def _with(ctx: Context) -> str:
 
         pp_values = zip(_keys, pp_cache)
 
-    return ' | '.join([f'{k}: {pp:,.2f}pp'
+    _mods = f'+{mods!r} ' if mods else ''
+    return ' | '.join([f'{_mods}{k}: {pp:,.2f}pp'
                        for k, pp in pp_values])
 
 @command(Privileges.Normal, aliases=['req'])
@@ -513,7 +514,7 @@ async def notes(ctx: Context) -> str:
     if not res:
         return f'No notes found on {t} in the past {days} days.'
 
-    return '\n'.join(map(lambda row: '[{time}] {msg}'.format(**row), res))
+    return '\n'.join(['[{time}] {msg}'.format(**row) for row in res])
 
 @command(Privileges.Mod, hidden=True)
 async def addnote(ctx: Context) -> str:

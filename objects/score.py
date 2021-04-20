@@ -296,7 +296,7 @@ class Score:
         # perhaps will use to improve security at some point?
 
         # ensure all ints are safe to cast.
-        if not all(map(lambda x: x.isdecimal(), data[3:11] + [data[13], data[15]])):
+        if not all(map(str.isdecimal, data[3:11] + [data[13], data[15]])):
             log('Invalid parameter passed into submit-modular.', Ansi.LRED)
             return
 

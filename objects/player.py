@@ -28,6 +28,7 @@ from objects.channel import Channel
 from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
+from objects.match import Slot
 from objects.match import SlotStatus
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
@@ -574,7 +575,7 @@ class Player:
 
         self.leave_channel(self.match.chat)
 
-        if all(map(lambda s: s.empty(), self.match.slots)):
+        if all(map(Slot.empty, self.match.slots)):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f'Match {self.match} finished.')
