@@ -525,7 +525,12 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     mode_vn = s.mode.as_vanilla
 
     # Check for score duplicates
-    # TODO: might need to improve?
+    # TODO: this it quite the bandaid fix, not that other
+    # implementations do it better.. still though, perhaps
+    # it would be worth going through a hardcoded number or
+    # percent of the replay's frames to really determine
+    # whether the plays are the same, rather than just
+    # using the score/header data.
     res = await glob.db.fetch(
         f'SELECT 1 FROM {scores_table} '
         'WHERE play_time > DATE_SUB(NOW(), INTERVAL 2 MINUTE) ' # last 2mins
@@ -633,13 +638,16 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         )
 
     s.id = await glob.db.execute(
-        f'INSERT INTO {scores_table} VALUES (NULL, '
-        '%s, %s, %s, %s, %s, %s, '
-        '%s, %s, %s, %s, %s, %s, '
+        f'INSERT INTO {scores_table} '
+        'VALUES (NULL, '
+        '%s, %s, %s, %s, '
+        '%s, %s, %s, %s, '
+        '%s, %s, %s, %s, '
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s)', [
-            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
-            s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
+            s.bmap.md5, s.score, s.pp, s.acc,
+            s.max_combo, s.mods, s.n300, s.n100,
+            s.n50, s.nmiss, s.ngeki, s.nkatu,
             s.grade, s.status, mode_vn, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
@@ -677,90 +685,101 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     stats = s.player.gm_stats
     prev_stats = copy.copy(stats)
 
-    # update playtime & plays
+    # update plays & playtime for all submitted scores
     stats.playtime += s.time_elapsed // 1000
     stats.plays += 1
 
-    if s.passed:
-        # real submitted score, update more stats
+    stats_query = [
+        'UPDATE stats SET ' # no , intentionally
+        'plays_{0:sql} = %s',
+        'playtime_{0:sql} = %s'
+    ]
+    stats_params = [stats.plays, stats.playtime]
+
+    if s.passed and s.bmap.awards_pp:
+        # submitted score on a ranked map,
+        # update max combo and total score.
 
         # update max combo
         if s.max_combo > stats.max_combo:
             stats.max_combo = s.max_combo
+            stats_query.append('max_combo_{0:sql} = %s')
+            stats_params.append(stats.max_combo)
 
-        if s.bmap.awards_pp:
-            # update total score
-            stats.tscore += s.score
+        # update total score
+        stats.tscore += s.score
+        stats_query.append('tscore_{0:sql} = %s')
+        stats_params.append(stats.tscore)
 
-            # update ranked score, weighted pp & acc
-            # if this is our (new) best score on the map
-            if s.status == SubmissionStatus.BEST:
-                # add our new ranked score.
-                additional_rscore = s.score
+        if s.status == SubmissionStatus.BEST:
+            # our (new) best score on the map,
+            # update ranked score, pp, acc, and rank.
 
-                if s.prev_best:
-                    # we previously had a score, so remove
-                    # it's score from our ranked score.
-                    additional_rscore -= s.prev_best.score
+            # update ranked score
+            additional_rscore = s.score
+            if s.prev_best:
+                # we previously had a score, so remove
+                # it's score from our ranked score.
+                additional_rscore -= s.prev_best.score
+            stats.rscore += additional_rscore
+            stats_query.append('rscore_{0:sql} = %s')
+            stats_params.append(stats.rscore)
 
-                stats.rscore += additional_rscore
+            # fetch scores sorted by pp for total acc/pp calc
+            # NOTE: we select all plays (and not just top100)
+            # because bonus pp counts the total amount of ranked
+            # scores. i'm aware this scales horribly and it'll
+            # likely be split into two queries in the future.
+            res = await glob.db.fetchall(
+                f'SELECT s.pp, s.acc FROM {scores_table} s '
+                'INNER JOIN maps m ON s.map_md5 = m.md5 '
+                'WHERE s.userid = %s AND s.mode = %s '
+                'AND s.status = 2 AND m.status IN (2, 3) ' # ranked, approved
+                'ORDER BY s.pp DESC',
+                [s.player.id, mode_vn]
+            )
 
-                # fetch scores sorted by pp for total acc/pp calc
-                res = await glob.db.fetchall(
-                    f'SELECT s.pp, s.acc FROM {scores_table} s '
-                    'INNER JOIN maps m ON s.map_md5 = m.md5 '
-                    'WHERE s.userid = %s AND s.mode = %s '
-                    'AND s.status = 2 AND m.status IN (2, 3) ' # ranked, approved
-                    'ORDER BY s.pp DESC',
-                    [s.player.id, mode_vn]
-                )
+            # calculate total accuracy & pp with top 100 scores
+            top_100_pp = res[:100] # (top 100 by pp)
 
-                # calculate total accuracy & pp with top 100 scores
-                top_100_pp = res[:100] # (top 100 by pp)
+            # update total weighted accuracy
+            tot = div = 0
+            for i, row in enumerate(top_100_pp):
+                add = int((0.95 ** i) * 100)
+                tot += row['acc'] * add
+                div += add
+            stats.acc = tot / div
+            stats_query.append('acc_{0:sql} = %s')
+            stats_params.append(stats.acc)
 
-                # total weighted accuracy
-                tot = div = 0
-                for i, row in enumerate(top_100_pp):
-                    add = int((0.95 ** i) * 100)
-                    tot += row['acc'] * add
-                    div += add
-                stats.acc = tot / div
+            # update total weighted pp
+            weighted_pp = sum([row['pp'] * 0.95 ** i
+                               for i, row in enumerate(top_100_pp)])
+            bonus_pp = 416.6667 * (1 - 0.9994 ** len(res))
+            stats.pp = round(weighted_pp + bonus_pp)
+            stats_query.append('pp_{0:sql} = %s')
+            stats_params.append(stats.pp)
 
-                # total weighted pp
-                weighted_pp = sum([row['pp'] * 0.95 ** i
-                                for i, row in enumerate(top_100_pp)])
-                bonus_pp = 416.6667 * (1 - 0.9994 ** len(res))
-                stats.pp = round(weighted_pp + bonus_pp)
+            # update rank
+            # TODO: adjust any people inbetween we passed,
+            # check whether they're online, and push their
+            # stats to all online players if nescessary.
+            stats.rank = (await glob.db.fetch(
+                'SELECT COUNT(*) AS higher_pp_players '
+                'FROM stats s '
+                'INNER JOIN users u USING(id) '
+                f'WHERE s.pp_{s.mode:sql} > %s '
+                'AND u.priv & 1 and u.id != %s',
+                [stats.pp, s.player.id]
+            ))['higher_pp_players'] + 1
 
-        # keep stats up to date in sql
-        await glob.db.execute(
-            'UPDATE stats SET pp_{0:sql} = %s, '
-            'plays_{0:sql} = plays_{0:sql} + 1, '
-            'acc_{0:sql} = %s, rscore_{0:sql} = %s, '
-            'tscore_{0:sql} = %s, playtime_{0:sql} = %s, '
-            'maxcombo_{0:sql} = %s '
-            'WHERE id = %s'.format(s.mode),
-            [
-                stats.pp, stats.acc, stats.rscore,
-                stats.tscore, stats.playtime,
-                stats.max_combo, s.player.id
-            ]
-        )
+    # construct the sql query of any stat changes
+    stats_query = ','.join(stats_query).format(s.mode) + ' WHERE id = %s'
+    stats_params.append(s.player.id)
 
-        # calculate rank.
-        # TODO: adjust any people inbetween we passed,
-        # check whether they're online, and push their
-        # stats to all online players if nescessary.
-        res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats s '
-            'INNER JOIN users u USING(id) '
-            f'WHERE s.pp_{s.mode:sql} > %s '
-            'AND u.priv & 1',
-            [stats.pp]
-        )
-
-        stats.rank = res['c'] + 1
-        s.player.enqueue(packets.userStats(s.player))
+    # send any stat changes to sql, and other players
+    await glob.db.execute(stats_query, stats_params)
+    glob.players.enqueue(packets.userStats(s.player))
 
     if not s.player.restricted:
         # update beatmap with new stats

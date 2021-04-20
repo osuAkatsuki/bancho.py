@@ -312,14 +312,14 @@ create table stats
 	acc_rx_taiko float(6,3) default 0.000 not null,
 	acc_rx_catch float(6,3) default 0.000 not null,
 	acc_ap_std float(6,3) default 0.000 not null,
-	maxcombo_vn_std int(11) unsigned default 0 not null,
-	maxcombo_vn_taiko int(11) unsigned default 0 not null,
-	maxcombo_vn_catch int(11) unsigned default 0 not null,
-	maxcombo_vn_mania int(11) unsigned default 0 not null,
-	maxcombo_rx_std int(11) unsigned default 0 not null,
-	maxcombo_rx_taiko int(11) unsigned default 0 not null,
-	maxcombo_rx_catch int(11) unsigned default 0 not null,
-	maxcombo_ap_std int(11) unsigned default 0 not null
+	max_combo_vn_std int(11) unsigned default 0 not null,
+	max_combo_vn_taiko int(11) unsigned default 0 not null,
+	max_combo_vn_catch int(11) unsigned default 0 not null,
+	max_combo_vn_mania int(11) unsigned default 0 not null,
+	max_combo_rx_std int(11) unsigned default 0 not null,
+	max_combo_rx_taiko int(11) unsigned default 0 not null,
+	max_combo_rx_catch int(11) unsigned default 0 not null,
+	max_combo_ap_std int(11) unsigned default 0 not null
 );
 
 create table tourney_pool_maps

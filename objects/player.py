@@ -818,7 +818,7 @@ class Player:
             )
 
             if not res:
-                # user has no achievements for this mode.
+                # user has no achievements for this mode
                 continue
 
             # get cached achievements for this mode
@@ -836,7 +836,7 @@ class Player:
             res = await glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-                'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
+                'playtime_{0:sql} playtime, max_combo_{0:sql} max_combo '
                 'FROM stats WHERE id = %s'.format(mode),
                 [self.id]
             )
@@ -847,39 +847,16 @@ class Player:
 
             # calculate rank.
             res['rank'] = (await glob.db.fetch(
-                'SELECT COUNT(*) AS c FROM stats '
-                'INNER JOIN users USING(id) '
-                f'WHERE pp_{mode:sql} > %s '
-                'AND priv & 1', [res['pp']]
-            ))['c'] + 1
+                'SELECT COUNT(*) AS higher_pp_players '
+                'FROM stats s '
+                'INNER JOIN users u USING(id) '
+                f'WHERE s.pp_{mode:sql} > %s '
+                'AND u.priv & 1 and u.id != %s',
+                [res['pp'], self.id]
+            ))['higher_pp_players'] + 1
 
             # update stats
             self.stats[mode] = ModeData(**res)
-
-    async def stats_from_sql(self, mode: GameMode) -> None:
-        """Retrieve `self`'s `mode` stats from sql."""
-        res = await glob.db.fetch(
-            'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
-            'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-            'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-            'FROM stats WHERE id = %s'.format(mode),
-            [self.id]
-        )
-
-        if not res:
-            log(f"Failed to fetch {self}'s {mode!r} stats.", Ansi.LRED)
-            return
-
-        # calculate rank.
-        res['rank'] = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats '
-            'INNER JOIN users USING(id) '
-            f'WHERE pp_{mode:sql} > %s '
-            'AND priv & 1',
-            [res['pp']]
-        )['c']
-
-        self.stats[mode] = ModeData(**res)
 
     async def add_to_menu(
         self, coroutine: Coroutine,

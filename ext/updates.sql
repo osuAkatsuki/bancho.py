@@ -310,3 +310,13 @@ update achievements set cond = '500 <= score.max_combo < 750' where file = 'osu-
 update achievements set cond = '750 <= score.max_combo < 1000' where file = 'osu-combo-750';
 update achievements set cond = '1000 <= score.max_combo < 2000' where file = 'osu-combo-1000';
 update achievements set cond = '2000 <= score.max_combo' where file = 'osu-combo-2000';
+
+# v3.2.6
+alter table stats change maxcombo_vn_std max_combo_vn_std int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_taiko max_combo_vn_taiko int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_catch max_combo_vn_catch int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_mania max_combo_vn_mania int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_std max_combo_rx_std int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_taiko max_combo_rx_taiko int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_catch max_combo_rx_catch int(11) unsigned default 0 not null;
+alter table stats change maxcombo_ap_std max_combo_ap_std int(11) unsigned default 0 not null;
