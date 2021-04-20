@@ -11,12 +11,10 @@ from enum import IntEnum
 from enum import unique
 from functools import wraps
 from pathlib import Path
-from typing import Any
 from typing import Callable
 from typing import Optional
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
-from utils.recalculator import PPCalculator
 
 import bcrypt
 import orjson
@@ -43,6 +41,7 @@ from objects.score import SubmissionStatus
 from utils.misc import escape_enum
 from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
+from utils.recalculator import PPCalculator
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -481,6 +480,9 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
+def chart_entry(name: str, k: Optional[object], v: object) -> str:
+    return f'{name}Before:{k or ""}|{name}After:{v}'
+
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
                   'c1', 'st', 'pass', 'osuver', 's'})
@@ -769,12 +771,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # going to be ugly no matter what i do lol :v
         charts = []
 
-        # these should probably just be abstracted
-        # into a class of some sort so the if/else
-        # part isn't just left in the open like this lol
-        def kv_pair(name: str, k: Optional[Any], v: Any) -> str:
-            return f'{name}Before:{k or ""}|{name}After:{v}'
-
         # append beatmap info chart (#1)
         charts.append(
             f'beatmapId:{s.bmap.id}|'
@@ -791,19 +787,19 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'chartName:Beatmap Ranking',
 
             *((
-                kv_pair('rank', s.prev_best.rank, s.rank),
-                kv_pair('rankedScore', s.prev_best.score, s.score),
-                kv_pair('totalScore', s.prev_best.score, s.score),
-                kv_pair('maxCombo', s.prev_best.max_combo, s.max_combo),
-                kv_pair('accuracy', round(s.prev_best.acc, 2), round(s.acc, 2)),
-                kv_pair('pp', s.prev_best.pp, s.pp)
+                chart_entry('rank', s.prev_best.rank, s.rank),
+                chart_entry('rankedScore', s.prev_best.score, s.score),
+                chart_entry('totalScore', s.prev_best.score, s.score),
+                chart_entry('maxCombo', s.prev_best.max_combo, s.max_combo),
+                chart_entry('accuracy', round(s.prev_best.acc, 2), round(s.acc, 2)),
+                chart_entry('pp', s.prev_best.pp, s.pp)
             ) if s.prev_best else (
-                kv_pair('rank', None, s.rank),
-                kv_pair('rankedScore', None, s.score),
-                kv_pair('totalScore', None, s.score),
-                kv_pair('maxCombo', None, s.max_combo),
-                kv_pair('accuracy', None, round(s.acc, 2)),
-                kv_pair('pp', None, s.pp)
+                chart_entry('rank', None, s.rank),
+                chart_entry('rankedScore', None, s.score),
+                chart_entry('totalScore', None, s.score),
+                chart_entry('maxCombo', None, s.max_combo),
+                chart_entry('accuracy', None, round(s.acc, 2)),
+                chart_entry('pp', None, s.pp)
             )),
 
             f'onlineScoreId:{s.id}'
@@ -816,19 +812,19 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             'chartName:Overall Ranking',
 
             *((
-                kv_pair('rank', prev_stats.rank, stats.rank),
-                kv_pair('rankedScore', prev_stats.rscore, stats.rscore),
-                kv_pair('totalScore', prev_stats.tscore, stats.tscore),
-                kv_pair('maxCombo', prev_stats.max_combo, stats.max_combo),
-                kv_pair('accuracy', round(prev_stats.acc, 2), round(stats.acc, 2)),
-                kv_pair('pp', prev_stats.pp, stats.pp),
+                chart_entry('rank', prev_stats.rank, stats.rank),
+                chart_entry('rankedScore', prev_stats.rscore, stats.rscore),
+                chart_entry('totalScore', prev_stats.tscore, stats.tscore),
+                chart_entry('maxCombo', prev_stats.max_combo, stats.max_combo),
+                chart_entry('accuracy', round(prev_stats.acc, 2), round(stats.acc, 2)),
+                chart_entry('pp', prev_stats.pp, stats.pp),
             ) if prev_stats else (
-                kv_pair('rank', None, stats.rank),
-                kv_pair('rankedScore', None, stats.rscore),
-                kv_pair('totalScore', None, stats.tscore),
-                kv_pair('maxCombo', None, stats.max_combo),
-                kv_pair('accuracy', None, round(stats.acc, 2)),
-                kv_pair('pp', None, stats.pp),
+                chart_entry('rank', None, stats.rank),
+                chart_entry('rankedScore', None, stats.rscore),
+                chart_entry('totalScore', None, stats.tscore),
+                chart_entry('maxCombo', None, stats.max_combo),
+                chart_entry('accuracy', None, round(stats.acc, 2)),
+                chart_entry('pp', None, stats.pp),
             )),
 
             f'achievements-new:{"/".join(map(repr, achievements))}'

@@ -9,7 +9,6 @@ from enum import IntEnum
 from enum import unique
 from functools import cached_property
 from functools import partial
-from typing import Any
 from typing import Coroutine
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -119,7 +118,7 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    menu_options: `dict[int, dict[str, Any]]`
+    menu_options: `dict[int, dict[str, object]]`
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
 
@@ -217,7 +216,7 @@ class Player:
         }
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
-        self.menu_options: dict[int, dict[str, Any]] = {}
+        self.menu_options: dict[int, dict[str, object]] = {}
 
         # subject to possible change in the future,
         # although if anything, bot accounts will

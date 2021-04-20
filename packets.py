@@ -13,7 +13,6 @@ from enum import unique
 from functools import cache
 from functools import lru_cache
 from functools import partialmethod
-from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -240,7 +239,7 @@ class BanchoPacketReader:
         """Read all arguments from the internal buffer."""
         for arg_name, arg_type in self._current.args.items():
             # read value from buffer
-            val: Any = None
+            val: object = None
 
             # non-osu! datatypes
             if arg_type == osuTypes.i8:
@@ -565,7 +564,7 @@ def write_scoreframe(s: ScoreFrame) -> bytearray:
         s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     ))
 
-def write(packid: int, *args: tuple[Any, ...]) -> bytes:
+def write(packid: int, *args: tuple[object, ...]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('<Hx', packid))
 
