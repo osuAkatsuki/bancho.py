@@ -521,17 +521,18 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if not s.player.restricted:
             glob.players.enqueue(packets.userStats(s.player))
 
-    table = s.mode.sql_table
+    scores_table = s.mode.sql_table
+    mode_vn = s.mode.as_vanilla
 
     # Check for score duplicates
     # TODO: might need to improve?
     res = await glob.db.fetch(
-        f'SELECT 1 FROM {table} '
+        f'SELECT 1 FROM {scores_table} '
         'WHERE play_time > DATE_SUB(NOW(), INTERVAL 2 MINUTE) ' # last 2mins
         'AND mode = %s AND map_md5 = %s '
         'AND userid = %s AND mods = %s '
         'AND score = %s AND play_time', [
-            s.mode.as_vanilla, s.bmap.md5,
+            mode_vn, s.bmap.md5,
             s.player.id, s.mods, s.score
         ]
     )
@@ -607,11 +608,11 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             # If there was previously a score on the map, add old #1.
             prev_n1 = await glob.db.fetch(
                 'SELECT u.id, name FROM users u '
-                f'INNER JOIN {table} s ON u.id = s.userid '
+                f'INNER JOIN {scores_table} s ON u.id = s.userid '
                 'WHERE s.map_md5 = %s AND s.mode = %s '
                 'AND s.status = 2 AND u.priv & 1 '
                 f'ORDER BY s.{scoring} DESC LIMIT 1',
-                [s.bmap.md5, s.mode.as_vanilla], _dict=False
+                [s.bmap.md5, mode_vn], _dict=False
             )
 
             if prev_n1 and s.player.id != prev_n1[0]:
@@ -625,26 +626,26 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # Update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
         await glob.db.execute(
-            f'UPDATE {table} SET status = 1 '
+            f'UPDATE {scores_table} SET status = 1 '
             'WHERE status = 2 AND map_md5 = %s '
             'AND userid = %s AND mode = %s',
-            [s.bmap.md5, s.player.id, s.mode.as_vanilla]
+            [s.bmap.md5, s.player.id, mode_vn]
         )
 
     s.id = await glob.db.execute(
-        f'INSERT INTO {table} VALUES (NULL, '
+        f'INSERT INTO {scores_table} VALUES (NULL, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s)', [
             s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            s.grade, s.status, s.mode.as_vanilla, s.play_time,
+            s.grade, s.status, mode_vn, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
 
-    if s.status != SubmissionStatus.FAILED:
+    if s.passed:
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
         replay_missing = (
@@ -677,63 +678,110 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     prev_stats = copy.copy(stats)
 
     # update playtime & plays
-    stats.playtime += s.time_elapsed / 1000
+    stats.playtime += s.time_elapsed // 1000
     stats.plays += 1
 
-    s.bmap.plays += 1
     if s.passed:
-        s.bmap.passes += 1
+        # real submitted score, update more stats
 
-    # update max combo
-    if s.max_combo > stats.max_combo:
-        stats.max_combo = s.max_combo
+        # update max combo
+        if s.max_combo > stats.max_combo:
+            stats.max_combo = s.max_combo
 
-    # update total score
-    stats.tscore += s.score
+        if s.bmap.awards_pp:
+            # update total score
+            stats.tscore += s.score
 
-    # if this is our (new) best play on
-    # the map, update our ranked score.
-    if s.status == SubmissionStatus.BEST and s.bmap.awards_pp:
-        # add our new ranked score.
-        additive = s.score
+            # update ranked score, weighted pp & acc
+            # if this is our (new) best score on the map
+            if s.status == SubmissionStatus.BEST:
+                # add our new ranked score.
+                additional_rscore = s.score
 
-        if s.prev_best:
-            # we previously had a score, so remove
-            # it's score from our ranked score.
-            additive -= s.prev_best.score
+                if s.prev_best:
+                    # we previously had a score, so remove
+                    # it's score from our ranked score.
+                    additional_rscore -= s.prev_best.score
 
-        stats.rscore += additive
+                stats.rscore += additional_rscore
 
-    # update user with new stats
-    await glob.db.execute(
-        'UPDATE stats SET rscore_{0:sql} = %s, '
-        'tscore_{0:sql} = %s, playtime_{0:sql} = %s, '
-        'plays_{0:sql} = %s, maxcombo_{0:sql} = %s '
-        'WHERE id = %s'.format(s.mode), [
-            stats.rscore, stats.tscore,
-            stats.playtime, stats.plays,
-            stats.max_combo, s.player.id
-        ]
-    )
+                # fetch scores sorted by pp for total acc/pp calc
+                res = await glob.db.fetchall(
+                    f'SELECT s.pp, s.acc FROM {scores_table} s '
+                    'INNER JOIN maps m ON s.map_md5 = m.md5 '
+                    'WHERE s.userid = %s AND s.mode = %s '
+                    'AND s.status = 2 AND m.status IN (2, 3) ' # ranked, approved
+                    'ORDER BY s.pp DESC',
+                    [s.player.id, mode_vn]
+                )
+
+                # calculate total accuracy & pp with top 100 scores
+                top_100_pp = res[:100] # (top 100 by pp)
+
+                # total weighted accuracy
+                tot = div = 0
+                for i, row in enumerate(top_100_pp):
+                    add = int((0.95 ** i) * 100)
+                    tot += row['acc'] * add
+                    div += add
+                stats.acc = tot / div
+
+                # total weighted pp
+                weighted_pp = sum([row['pp'] * 0.95 ** i
+                                for i, row in enumerate(top_100_pp)])
+                bonus_pp = 416.6667 * (1 - 0.9994 ** len(res))
+                stats.pp = round(weighted_pp + bonus_pp)
+
+        # keep stats up to date in sql
+        await glob.db.execute(
+            'UPDATE stats SET pp_{0:sql} = %s, '
+            'plays_{0:sql} = plays_{0:sql} + 1, '
+            'acc_{0:sql} = %s, rscore_{0:sql} = %s, '
+            'tscore_{0:sql} = %s, playtime_{0:sql} = %s, '
+            'maxcombo_{0:sql} = %s '
+            'WHERE id = %s'.format(s.mode),
+            [
+                stats.pp, stats.acc, stats.rscore,
+                stats.tscore, stats.playtime,
+                stats.max_combo, s.player.id
+            ]
+        )
+
+        # calculate rank.
+        # TODO: adjust any people inbetween we passed,
+        # check whether they're online, and push their
+        # stats to all online players if nescessary.
+        res = await glob.db.fetch(
+            'SELECT COUNT(*) AS c FROM stats s '
+            'INNER JOIN users u USING(id) '
+            f'WHERE s.pp_{s.mode:sql} > %s '
+            'AND u.priv & 1',
+            [stats.pp]
+        )
+
+        stats.rank = res['c'] + 1
+        s.player.enqueue(packets.userStats(s.player))
 
     if not s.player.restricted:
         # update beatmap with new stats
+        s.bmap.plays += 1
+        if s.passed:
+            s.bmap.passes += 1
+
         await glob.db.execute(
             'UPDATE maps SET plays = %s, '
             'passes = %s WHERE md5 = %s',
             [s.bmap.plays, s.bmap.passes, s.bmap.md5]
         )
 
-    # Update the user.
+    # update their recent score
     s.player.recent_scores[s.mode] = s
     if 'recent_score' in s.player.__dict__:
         del s.player.recent_score # wipe cached_property
 
-    await s.player.update_stats(s.mode)
-
     """ score submission charts """
 
-    if s.status == SubmissionStatus.FAILED or s.mode >= GameMode.rx_std:
+    if not s.passed or s.mode >= GameMode.rx_std:
         # basically, the osu! client and the way bancho handles this
         # is dumb. if you submit a failed play on bancho, it will
         # still generate the charts and send it to the client, even
@@ -753,7 +801,6 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # achievements unlocked only for non-restricted players
         if not s.player.restricted:
             if s.bmap.awards_pp:
-                mode_vn = s.mode.as_vanilla
                 player_achs = s.player.achievements[mode_vn]
 
                 for ach in glob.achievements[mode_vn]:

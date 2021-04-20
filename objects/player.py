@@ -797,61 +797,6 @@ class Player:
 
         self.achievements[a.mode].add(a)
 
-    async def update_stats(self, mode: GameMode = GameMode.vn_std) -> None:
-        """Update a player's stats in-game and in sql."""
-        table = mode.sql_table
-
-        res = await glob.db.fetchall(
-            f'SELECT s.pp, s.acc FROM {table} s '
-            'INNER JOIN maps m ON s.map_md5 = m.md5 '
-            'WHERE s.userid = %s AND s.mode = %s '
-            'AND s.status = 2 AND m.status IN (2, 3) ' # ranked, approved
-            'ORDER BY s.pp DESC LIMIT 100',
-            [self.id, mode.as_vanilla]
-        )
-
-        if not res:
-            breakpoint()
-            return # ?
-
-        stats = self.stats[mode]
-
-        # increment playcount
-        stats.plays += 1
-
-        # calculate avg acc based on top 100 scores
-        tot = div = 0
-        for i, row in enumerate(res):
-            add = int((0.95 ** i) * 100)
-            tot += row['acc'] * add
-            div += add
-
-        stats.acc = tot / div
-
-        # calculate weighted pp based on top 100 scores
-        stats.pp = round(sum([row['pp'] * 0.95 ** i
-                              for i, row in enumerate(res)]))
-
-        # keep stats up to date in sql
-        await glob.db.execute(
-            'UPDATE stats SET pp_{0:sql} = %s, '
-            'plays_{0:sql} = plays_{0:sql} + 1, '
-            'acc_{0:sql} = %s WHERE id = %s'.format(mode),
-            [stats.pp, stats.acc, self.id]
-        )
-
-        # calculate rank.
-        res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats s '
-            'INNER JOIN users u USING(id) '
-            f'WHERE s.pp_{mode:sql} > %s '
-            'AND u.priv & 1',
-            [stats.pp]
-        )
-
-        stats.rank = res['c'] + 1
-        self.enqueue(packets.userStats(self))
-
     async def friends_from_sql(self) -> None:
         """Retrieve `self`'s friends from sql."""
         _friends = {row['user2'] for row in await glob.db.fetchall(
