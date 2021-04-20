@@ -1953,6 +1953,7 @@ async def api_get_match(conn: Connection) -> Optional[bytes]:
     # TODO: eventually, this should contain recent score info.
     if not (
         'id' in conn.args and
+        conn.args['id'].isdecimal() and
         0 <= (match_id := int(conn.args['id'])) < 64
     ):
         return (400, b'Must provide valid match id.')
