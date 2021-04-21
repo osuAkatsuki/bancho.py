@@ -353,16 +353,6 @@ create table user_achievements
 	primary key (userid, achid)
 );
 
-create table user_hashes
-(
-	id int auto_increment
-		primary key,
-	osupath char(32) not null,
-	adapters char(32) not null,
-	uninstall_id char(32) not null,
-	disk_serial char(32) not null
-);
-
 create table users
 (
 	id int auto_increment

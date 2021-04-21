@@ -320,3 +320,6 @@ alter table stats change maxcombo_rx_std max_combo_rx_std int(11) unsigned defau
 alter table stats change maxcombo_rx_taiko max_combo_rx_taiko int(11) unsigned default 0 not null;
 alter table stats change maxcombo_rx_catch max_combo_rx_catch int(11) unsigned default 0 not null;
 alter table stats change maxcombo_ap_std max_combo_ap_std int(11) unsigned default 0 not null;
+
+# v3.2.7
+drop table if exists user_hashes;
