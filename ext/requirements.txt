@@ -4,6 +4,7 @@ asyncpg
 bcrypt
 cmyui
 datadog
+geoip2
 maniera
 mysql-connector-python
 orjson

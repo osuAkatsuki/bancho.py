@@ -761,8 +761,18 @@ class Player:
 
         log(f'{self} removed {p} from their friends.')
 
-    async def fetch_geoloc(self, ip: str) -> None:
-        """Fetch a player's geolocation data based on their ip."""
+    def fetch_geoloc_db(self, ip: str) -> None:
+        """Fetch a player's geolocation data based on their ip (using local db)."""
+        res = glob.geoloc_db.city(ip)
+
+        iso_code = res.country.iso_code
+        loc = res.location
+
+        self.country = (country_codes[iso_code], iso_code)
+        self.location = (loc.latitude, loc.longitude)
+
+    async def fetch_geoloc_web(self, ip: str) -> None:
+        """Fetch a player's geolocation data based on their ip (using ip-api)."""
         url = f'http://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:
@@ -780,11 +790,9 @@ class Player:
                 log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
                 return
 
-        country = lines[1]
+        iso_code = lines[1]
 
-        # store their country as a 2-letter code, and as a number.
-        # the players location is stored for the ingame world map.
-        self.country = (country_codes[country], country)
+        self.country = (country_codes[iso_code], iso_code)
         self.location = (float(lines[6]), float(lines[7])) # lat, long
 
     async def unlock_achievement(self, a: 'Achievement') -> None:

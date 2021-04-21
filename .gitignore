@@ -4,3 +4,4 @@ __pycache__/
 /.data
 _testing/
 *.lprof
+ext/GeoLite2-City.mmdb

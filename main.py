@@ -18,6 +18,7 @@ import aiohttp
 import cmyui
 import datadog
 import orjson # go zoom
+import geoip2.database
 from cmyui import Ansi
 from cmyui import log
 
@@ -39,7 +40,9 @@ __all__ = ()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 2, 6)
+glob.version = cmyui.Version(3, 2, 7)
+
+GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
 async def setup_collections() -> None:
     """Setup & cache many global collections (mostly from sql)."""
@@ -95,6 +98,13 @@ async def before_serving() -> None:
     await updater.run()
     await updater.log_startup()
 
+    # open a connection to our local geoloc database,
+    # if the database file is present.
+    if GEOLOC_DB_FILE.exists():
+        glob.geoloc_db = geoip2.database.Reader(str(GEOLOC_DB_FILE))
+    else:
+        glob.geoloc_db = None
+
     # cache many global collections/objects from sql,
     # such as channels, mappools, clans, bot, etc.
     await setup_collections()
@@ -126,6 +136,9 @@ async def after_serving() -> None:
 
     if hasattr(glob, 'db') and glob.db.pool is not None:
         await glob.db.close()
+
+    if hasattr(glob, 'geoloc_db') and glob.geoloc_db is not None:
+        glob.geoloc_db.close()
 
     if hasattr(glob, 'datadog') and glob.datadog is not None:
         glob.datadog.stop() # stop thread

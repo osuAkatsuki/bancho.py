@@ -605,9 +605,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     await p.friends_from_sql()
 
     if ip != '127.0.0.1':
-        # update their country data with
-        # the IP from the login request.
-        await p.fetch_geoloc(ip)
+        if glob.geoloc_db is not None:
+            # use local db
+            p.fetch_geoloc_db(ip)
+        else:
+            # use ip-api
+            await p.fetch_geoloc_web(ip)
 
     data += packets.mainMenuIcon()
     data += packets.friendsList(*p.friends)

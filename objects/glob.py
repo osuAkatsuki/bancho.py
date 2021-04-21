@@ -15,6 +15,7 @@ if __import__('typing').TYPE_CHECKING:
     from cmyui import Server
     from cmyui import Version
     from datadog import ThreadStats
+    import geoip2.database
 
     from objects.achievement import Achievement
     from objects.collections import PlayerList
@@ -50,6 +51,8 @@ achievements: dict[int, list['Achievement']] # per vn gamemode
 
 bot: 'Player'
 version: 'Version'
+
+geoloc_db: 'geoip2.database.Reader'
 
 # currently registered api tokens
 api_keys: dict[str, int] # {api_key: player_id}
