@@ -1060,9 +1060,10 @@ async def server(ctx: Context) -> str:
     ram_info = ' / '.join(f'{v // 1024 ** 2}MB' for v in ram_values)
 
     # divide up pkg versions, 3 displayed per line, e.g.
-    # aiohttp v3.6.3 | aiomysql v0.0.20 | asyncpg v0.21.0
-    # aiomysql v0.0.20 | asyncpg v0.21.0 | bcrypt v3.2.0
-    # asyncpg v0.21.0 | bcrypt v3.2.0 | cmyui v1.6.6
+    # aiohttp v3.6.3 | aiomysql v0.0.21 | bcrypt v3.2.0
+    # cmyui v1.7.3 | datadog v0.40.1 | geoip2 v4.1.0
+    # maniera v1.0.0 | mysql-connector-python v8.0.23 | orjson v3.5.1
+    # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
     reqs = (Path.cwd() / 'ext/requirements.txt').read_text().splitlines()
     pkg_sections = [reqs[i:i+3] for i in range(0, len(reqs), 3)]
 
