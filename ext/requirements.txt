@@ -3,6 +3,7 @@ aiomysql
 bcrypt
 cmyui
 datadog
+dill
 geoip2
 maniera
 mysql-connector-python
