@@ -144,6 +144,18 @@ async def after_serving() -> None:
         glob.datadog.stop() # stop thread
         glob.datadog.flush() # flush any leftover
 
+def detect_mysqld_running() -> None:
+    for path in (
+        '/var/run/mysqld/mysqld.pid',
+        '/var/run/mariadb/mariadb.pid'
+    ):
+        if os.path.exists(path):
+            # path found
+            return True
+    else:
+        # not found, try pgrep
+        return os.system('pgrep mysqld') == 0
+
 if __name__ == '__main__':
     # attempt to start up gulag.
     if sys.version_info < (3, 9):
@@ -153,7 +165,7 @@ if __name__ == '__main__':
     # make sure nginx & mysqld are running.
     if (
         glob.config.mysql['host'] in ('localhost', '127.0.0.1') and
-        not os.path.exists('/var/run/mysqld/mysqld.pid')
+        not detect_mysqld_running()
     ):
         sys.exit('Please start your mysqld server.')
 
