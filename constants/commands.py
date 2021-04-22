@@ -7,6 +7,7 @@ import os
 import pprint
 import random
 import re
+import secrets
 import signal
 import struct
 import time
@@ -1311,7 +1312,7 @@ async def mp_host(ctx: Context) -> str:
 @mp_commands.add(Privileges.Normal)
 async def mp_randpw(ctx: Context) -> str:
     """Randomize the current match's password."""
-    ctx.match.passwd = cmyui.rstring(16)
+    ctx.match.passwd = secrets.token_hex(8)
     return 'Match password randomized.'
 
 @mp_commands.add(Privileges.Normal, aliases=['inv'])

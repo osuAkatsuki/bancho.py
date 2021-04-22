@@ -4,6 +4,7 @@ import dill as pickle
 import inspect
 import pymysql
 import requests
+import secrets
 import sys
 import types
 from pathlib import Path
@@ -17,7 +18,6 @@ from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
-from cmyui.utils import rstring
 
 __all__ = (
     'get_press_times',
@@ -166,7 +166,7 @@ async def log_strange_occurrence(obj: object) -> None:
     if not uploaded:
         # log to a file locally, and prompt the user
         while True:
-            log_file = STRANGE_LOG_DIR / f'strange_{rstring(8)}.db'
+            log_file = STRANGE_LOG_DIR / f'strange_{secrets.token_hex(4)}.db'
             if not log_file.exists():
                 break
 

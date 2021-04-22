@@ -13,9 +13,11 @@ from cmyui import Ansi
 
 from constants.privileges import Privileges
 from objects import glob
-from objects.clan import Clan, ClanPrivileges
+from objects.clan import Clan
+from objects.clan import ClanPrivileges
 from objects.channel import Channel
-from objects.match import Match, MapPool
+from objects.match import MapPool
+from objects.match import Match
 from objects.player import Player
 from utils.misc import make_safe_name
 

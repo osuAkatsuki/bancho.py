@@ -4,6 +4,7 @@ import copy
 import hashlib
 import random
 import re
+import secrets
 import struct
 import time
 from collections import defaultdict
@@ -24,7 +25,6 @@ from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
 from cmyui import ratelimit
-from cmyui import rstring
 from cmyui.discord import Webhook
 
 import packets
@@ -148,7 +148,7 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
         return (400, b'Invalid file type.')
 
     while True:
-        filename = f'{rstring(8)}.{extension}'
+        filename = f'{secrets.token_urlsafe(8)}.{extension}'
         screenshot_file = SCREENSHOTS_PATH / filename
         if not screenshot_file.exists():
             break
