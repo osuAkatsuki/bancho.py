@@ -27,7 +27,6 @@ from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
 from utils.misc import escape_enum
-from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
@@ -397,9 +396,7 @@ class BanchoPacketReader:
         # ignore match id (i16) and inprogress (i8).
         self.view = self.view[3:]
 
-        #m.type = MatchTypes(self.read_i8())
-        if self.read_i8() == 1:
-            point_of_interest() # what is powerplay
+        self.read_i8() # powerplay unused
 
         m.mods = Mods(self.read_i32())
 

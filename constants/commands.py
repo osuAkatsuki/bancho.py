@@ -1031,6 +1031,12 @@ async def reload(ctx: Context) -> str:
 async def server(ctx: Context) -> str:
     """Retrieve performance data about the server."""
 
+    build_str = f'gulag v{glob.version!r} ({glob.config.domain})'
+
+    # get info about this process
+    proc = psutil.Process(os.getpid())
+    uptime = int(time.time() - proc.create_time())
+
     # get info about our cpu
     with open('/proc/cpuinfo') as f:
         header = 'model name\t: '
@@ -1042,13 +1048,16 @@ async def server(ctx: Context) -> str:
             if line.startswith('model name')
         )
 
+    # list of all cpus installed with thread count
+    cpus_info = ' | '.join(f'{v}x {k}' for k, v in model_names.most_common())
+
     # get system-wide ram usage
     sys_ram = psutil.virtual_memory()
 
-    # get info about this process
-    proc = psutil.Process(os.getpid())
-    uptime = int(time.time() - proc.create_time())
+    # output ram usage as `{gulag_used}MB / {sys_used}MB / {sys_total}MB`
     gulag_ram = proc.memory_info()[0]
+    ram_values = (gulag_ram, sys_ram.used, sys_ram.total)
+    ram_info = ' / '.join(f'{v // 1024 ** 2}MB' for v in ram_values)
 
     # divide up pkg versions, 3 displayed per line, e.g.
     # aiohttp v3.6.3 | aiomysql v0.0.20 | asyncpg v0.21.0
@@ -1057,15 +1066,17 @@ async def server(ctx: Context) -> str:
     reqs = (Path.cwd() / 'ext/requirements.txt').read_text().splitlines()
     pkg_sections = [reqs[i:i+3] for i in range(0, len(reqs), 3)]
 
-    # output as `{gulag_used}MB / {sys_used}MB / {sys_total}MB`
-    ram_values = (gulag_ram, sys_ram.used, sys_ram.total)
+    mirror_url = glob.config.mirror
+    using_osuapi = glob.config.osu_api_key != ''
+    advanced_mode = glob.config.advanced
+    auto_logging = glob.config.automatically_report_problems
 
     return '\n'.join([
-        f'gulag v{glob.version!r} ({glob.config.domain}) | uptime: {seconds_readable(uptime)}',
-        f'cpu(s): {" | ".join(f"{v}x {k}" for k, v in model_names.most_common())}',
-        f'ram: {" / ".join(f"{v // 1024 ** 2}MB" for v in ram_values)}',
-        f'mirror: {glob.config.mirror} | osu!api connection: {glob.config.osu_api_key != ""}',
-        f'advanced mode: {glob.config.advanced}',
+        f'{build_str} | uptime: {seconds_readable(uptime)}',
+        f'cpu(s): {cpus_info}',
+        f'ram: {ram_info}',
+        f'mirror: {mirror_url} | osu!api connection: {using_osuapi}',
+        f'advanced mode: {advanced_mode} | auto logging: {auto_logging}',
         '',
         'requirements',
         '\n'.join([' | '.join([

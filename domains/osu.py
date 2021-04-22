@@ -28,6 +28,7 @@ from cmyui import rstring
 from cmyui.discord import Webhook
 
 import packets
+import utils.misc
 from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
@@ -39,7 +40,6 @@ from objects.player import Privileges
 from objects.score import Score
 from objects.score import SubmissionStatus
 from utils.misc import escape_enum
-from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 from utils.recalculator import PPCalculator
 
@@ -228,9 +228,9 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
         )
 
     for _ in data['Ids']:
-        # still have yet to see
-        # this actually used..
-        point_of_interest()
+        # still have yet to see this actually used..
+        stacktrace = utils.misc.get_appropriate_stacktrace()
+        await utils.misc.log_strange_occurrence(stacktrace)
 
     return '\n'.join(ret).encode()
 
@@ -376,13 +376,15 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     async with glob.http.get(search_url, params=params) as resp:
         if not resp:
-            point_of_interest()
+            stacktrace = utils.misc.get_appropriate_stacktrace()
+            await utils.misc.log_strange_occurrence(stacktrace)
 
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
                 return b'0' # no maps found
             elif resp.status != 200:
-                point_of_interest()
+                stacktrace = utils.misc.get_appropriate_stacktrace()
+                await utils.misc.log_strange_occurrence(stacktrace)
         else: # cheesegull
             if resp.status != 200:
                 return b'Failed to retrieve data from mirror!'
@@ -391,7 +393,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
         if USING_CHIMU:
             if result['code'] != 0:
-                point_of_interest()
+                stacktrace = utils.misc.get_appropriate_stacktrace()
+                await utils.misc.log_strange_occurrence(stacktrace)
                 return b'Failed to retrieve data from mirror!'
             result = result['data']
 
@@ -554,7 +557,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     score.time_elapsed = int(time_elapsed)
 
     if 'i' in conn.files:
-        point_of_interest()
+        stacktrace = utils.misc.get_appropriate_stacktrace()
+        await utils.misc.log_strange_occurrence(stacktrace)
 
     if not ( # check all players not whitelisted or restricted
         score.player.priv & Privileges.Whitelisted or

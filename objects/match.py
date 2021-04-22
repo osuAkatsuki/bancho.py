@@ -21,7 +21,6 @@ from constants.mods import Mods
 from objects import glob
 from objects.beatmap import Beatmap
 from utils.misc import escape_enum
-from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
@@ -335,9 +334,6 @@ class Match:
     def enqueue(self, data: bytes, lobby: bool = True,
                 immune: Sequence[int] = []) -> None:
         """Add data to be sent to all clients in the match."""
-        if not self.chat:
-            point_of_interest()
-
         self.chat.enqueue(data, immune)
 
         if lobby and (lchan := glob.channels['#lobby']) and lchan.players:
@@ -345,9 +341,6 @@ class Match:
 
     def enqueue_state(self, lobby: bool = True) -> None:
         """Enqueue `self`'s state to players in the match & lobby."""
-        if not self.chat:
-            point_of_interest()
-
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
