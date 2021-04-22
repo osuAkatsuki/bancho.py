@@ -144,6 +144,7 @@ def get_appropriate_stacktrace() -> list[inspect.FrameInfo]:
 STRANGE_LOG_DIR = Path.cwd() / '.data/logs'
 async def log_strange_occurrence(obj: object) -> None:
     pickled_obj = pickle.dumps(obj)
+    uploaded = False
 
     if glob.config.automatically_report_problems:
         # automatically reporting problems to cmyui's server
@@ -153,15 +154,17 @@ async def log_strange_occurrence(obj: object) -> None:
             data = pickled_obj,
         ) as resp:
             if (
-                resp.status != 200 or
-                (await resp.read()) != b'ok'
+                resp.status == 200 and
+                (await resp.read()) == b'ok'
             ):
-                # something went wrong?
-                raise Exception(f'Err uploading to log.cmyui.xyz {resp.status=}')
+                uploaded = True
+                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
+                log("Thank you for your participation! <3", Ansi.LBLUE)
+            else:
+                log(f"Autoupload to cmyui's server failed (HTTP {resp.status})", Ansi.LRED)
 
-        log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-    else:
-        # not automatically reporting, log to file
+    if not uploaded:
+        # log to a file locally, and prompt the user
         while True:
             log_file = STRANGE_LOG_DIR / f'strange_{rstring(8)}.db'
             if not log_file.exists():
@@ -170,8 +173,10 @@ async def log_strange_occurrence(obj: object) -> None:
         log_file.touch(exist_ok=False)
         log_file.write_bytes(pickled_obj)
 
-        log(f"Logged strange occurrence to `{'/'.join(log_file.parts[-4:])}`", Ansi.LBLUE)
-        log("We'd appreciate if you could forward this to cmyui#0425, thanks!", Ansi.LYELLOW)
+        log('Logged strange occurrence to', Ansi.LYELLOW, end=' ')
+        printc('/'.join(log_file.parts[-4:]), Ansi.LBLUE)
+
+        log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
 
 def pymysql_encode(conv: Callable):
     """Decorator to allow for adding to pymysql's encoders."""
