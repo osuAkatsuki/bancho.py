@@ -912,7 +912,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 @register
 class LobbyPart(BanchoPacket, type=Packets.OSU_PART_LOBBY):
     async def handle(self, p: Player) -> None:
-        p.in_lobby=False
+        p.in_lobby = False
 
 @register
 class LobbyJoin(BanchoPacket, type=Packets.OSU_JOIN_LOBBY):

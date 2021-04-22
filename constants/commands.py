@@ -320,7 +320,7 @@ async def _with(ctx: Context) -> str:
 
     _mods = f'+{mods!r} ' if mods else ''
     return _mods + ' | '.join([f'{k}: {pp:,.2f}pp'
-                       for k, pp in pp_values])
+                               for k, pp in pp_values])
 
 @command(Privileges.Normal, aliases=['req'])
 async def request(ctx: Context) -> str:
@@ -556,7 +556,10 @@ async def silence(ctx: Context) -> str:
     if not (t := await glob.players.get_ensure(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
-    if t.priv & Privileges.Staff and not ctx.player.priv & Privileges.Dangerous:
+    if (
+        t.priv & Privileges.Staff and
+        not ctx.player.priv & Privileges.Dangerous
+    ):
         return 'Only developers can manage staff members.'
 
     if not (rgx := regexes.scaled_duration.match(ctx.args[1])):
@@ -588,7 +591,10 @@ async def unsilence(ctx: Context) -> str:
     if not t.silenced:
         return f'{t} is not silenced.'
 
-    if t.priv & Privileges.Staff and not ctx.player.priv & Privileges.Dangerous:
+    if (
+        t.priv & Privileges.Staff and
+        not ctx.player.priv & Privileges.Dangerous
+    ):
         return 'Only developers can manage staff members.'
 
     await t.unsilence(ctx.player)
@@ -609,7 +615,10 @@ async def restrict(ctx: Context) -> str:
     if not (t := await glob.players.get_ensure(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
-    if t.priv & Privileges.Staff and not ctx.player.priv & Privileges.Dangerous:
+    if (
+        t.priv & Privileges.Staff and
+        not ctx.player.priv & Privileges.Dangerous
+    ):
         return 'Only developers can manage staff members.'
 
     if t.restricted:
@@ -1098,7 +1107,7 @@ if glob.config.advanced:
     __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
             'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
-            'cmyui',  'datetime', 'time', 'inspect', 'math',
+            'cmyui', 'datetime', 'time', 'inspect', 'math',
             'importlib'
         ) if mod in installed_mods
     }

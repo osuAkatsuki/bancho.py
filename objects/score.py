@@ -60,14 +60,14 @@ class Grade(IntEnum):
     @classmethod
     def from_str(cls, s: str, hidden: bool = False) -> 'Grade':
         return {
-            'SS': self.XH if hidden else self.SH,
-            'S': self.SH if hidden else self.S,
-            'A': self.A,
-            'B': self.B,
-            'C': self.C,
-            'D': self.D,
-            'F': self.F,
-            'N': self.N
+            'SS': cls.XH if hidden else cls.SH,
+            'S': cls.SH if hidden else cls.S,
+            'A': cls.A,
+            'B': cls.B,
+            'C': cls.C,
+            'D': cls.D,
+            'F': cls.F,
+            'N': cls.N
         }[s]
 
 @unique
@@ -325,8 +325,10 @@ class Score:
             s.rank = await s.calc_lb_placement()
         else:
             s.pp = s.sr = 0.0
-            s.status = SubmissionStatus.SUBMITTED if s.passed \
-                  else SubmissionStatus.FAILED
+            if s.passed:
+                s.status = SubmissionStatus.SUBMITTED
+            else:
+                s.status = SubmissionStatus.FAILED
 
         return s
 

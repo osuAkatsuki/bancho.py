@@ -26,7 +26,7 @@ __all__ = (
     'seconds_readable',
     'install_excepthook',
     'get_appropriate_stacktrace',
-    'log_to_server',
+    'log_strange_occurrence',
 
     'pymysql_encode',
     'escape_enum'
