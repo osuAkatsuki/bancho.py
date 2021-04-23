@@ -291,12 +291,10 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
     _: osuTypes.i32 # pretty awesome design on osu!'s end :P
 
     async def handle(self, p: Player) -> None:
-        if (since_login := time.time() - p.login_time) < 1:
-            # osu! has a weird tendency to log out immediately when
-            # it logs in, then reconnects? not sure why..?
-            # XXX: will log this so that we can find an ideal time
-            log_msg = f'double login time: {since_login * 1000}ms'
-            await utils.misc.log_strange_occurrence(log_msg)
+        if (time.time() - p.login_time) < 1:
+            # osu! has a weird tendency to log out immediately after login.
+            # i've tested the times and they're generally 300-800ms, so
+            # we'll block any logout request within 1 second from login.
             return
 
         p.logout()
