@@ -161,6 +161,13 @@ def detect_mysqld_running() -> None:
 
 if __name__ == '__main__':
     # attempt to start up gulag.
+    if sys.platform != 'linux':
+        log('gulag currently only supports linux', Ansi.LRED)
+        if sys.platform == 'win32':
+            log("you could also try wsl(2), i'd recommend ubuntu 18.04 "
+                "(i use it to test gulag)", Ansi.LBLUE)
+        sys.exit()
+
     if sys.version_info < (3, 9):
         sys.exit('gulag uses many modern python features, '
                  'and the minimum python version is 3.9.')
