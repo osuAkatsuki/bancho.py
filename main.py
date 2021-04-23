@@ -197,9 +197,9 @@ if __name__ == '__main__':
 
     achievements_path = data_path / 'assets/medals/client'
     if not achievements_path.exists():
-        # create directory & download achievement pngs
+        # create directory & download achievement images
         achievements_path.mkdir(parents=True)
-        utils.misc.download_achievement_pngs(achievements_path)
+        utils.misc.download_achievement_images(achievements_path)
 
     # make sure oppai-ng is built and ready.
     glob.oppai_built = (Path.cwd() / 'oppai-ng/oppai').exists()
