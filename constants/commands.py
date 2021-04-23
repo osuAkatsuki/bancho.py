@@ -164,7 +164,7 @@ async def roll(ctx: Context) -> str:
         max_roll = 100
 
     if max_roll == 0:
-        return "Roll what?"
+        return f'{ctx.player.name} rolls 0 points!'
 
     points = random.randrange(0, max_roll)
     return f'{ctx.player.name} rolls {points} points!'
