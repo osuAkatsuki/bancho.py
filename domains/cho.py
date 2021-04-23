@@ -318,9 +318,9 @@ WELCOME_MSG = '\n'.join((
     "Enjoy the server!"
 ))
 
-RESTRICTED_MSG = (glob.config.res_msg)
+RESTRICTED_MSG = glob.config.res_msg
 
-UNRESTRICTED_MSG = (glob.config.unres_msg)
+UNRESTRICTED_MSG = glob.config.unres_msg
 
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     """\
