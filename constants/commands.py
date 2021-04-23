@@ -28,6 +28,7 @@ import cmyui
 import psutil
 
 import packets
+import domains.cho
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -630,6 +631,7 @@ async def restrict(ctx: Context) -> str:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
+    t.enqueue(packets.notification(objects.cho.RESTRICTED_MSG))
     await t.restrict(admin=ctx.player, reason=reason)
 
     return f'{t} was restricted.'
@@ -658,9 +660,11 @@ async def unrestrict(ctx: Context) -> str:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
+    t.enqueue(packets.notification(objects.cho.UNRESTRICTED_MSG))    
     await t.unrestrict(ctx.player, reason)
 
     return f'{t} was unrestricted.'
+
 
 @command(Privileges.Admin, hidden=True)
 async def alert(ctx: Context) -> str:

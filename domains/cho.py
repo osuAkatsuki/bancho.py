@@ -324,6 +324,11 @@ RESTRICTED_MSG = (
     'greater than 3 months, you may appeal via the form on the site.'
 )
 
+UNRESTRICTED_MSG = (
+    'Your account has been unrestricted.'
+    'Please relogin for changes to take effect.'
+)
+
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
