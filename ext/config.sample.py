@@ -110,7 +110,7 @@ datadog = {
 # they relog but restriction and unrestriction (hopefully)
 # should automatically log them out once the command
 # is run by a staff member. if you want multiple messages
-# sent, seperate them using commas, or edit the lines below.
+# sent, seperate them with multiple apostrophes (shown below), or edit the lines
 res_msg = { 
     'Your account is currently in restricted mode. '
     'If you believe this is a mistake, or have waited a period '
