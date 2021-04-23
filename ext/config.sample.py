@@ -111,16 +111,16 @@ datadog = {
 # should automatically log them out once the command
 # is run by a staff member. if you want multiple messages
 # sent, seperate them with multiple apostrophes (shown below), or edit the lines
-res_msg = { 
+res_msg = (
     'Your account is currently in restricted mode. '
     'If you believe this is a mistake, or have waited a period '
     'greater than 3 months, you may appeal via the form on the site.'
-}
+)
 
-unres_msg = {
+unres_msg = (
     'Your account has been unrestricted.'
     'Please relogin for changes to take effect.'
-}
+)
 
 # high ceiling values for autoban as a very simple form
 # of "anticheat", simply ban a user if they are not
