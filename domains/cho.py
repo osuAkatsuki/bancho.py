@@ -318,16 +318,9 @@ WELCOME_MSG = '\n'.join((
     "Enjoy the server!"
 ))
 
-RESTRICTED_MSG = (
-    'Your account is currently in restricted mode. '
-    'If you believe this is a mistake, or have waited a period '
-    'greater than 3 months, you may appeal via the form on the site.'
-)
+RESTRICTED_MSG = (glob.config.res_msg)
 
-UNRESTRICTED_MSG = (
-    'Your account has been unrestricted.'
-    'Please relogin for changes to take effect.'
-)
+UNRESTRICTED_MSG = (glob.config.unres_msg)
 
 async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     """\
