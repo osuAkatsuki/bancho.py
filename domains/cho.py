@@ -926,6 +926,15 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
     async def handle(self, p: Player) -> None:
         # TODO: match validation..?
+        if p.restricted:
+            p.enqueue(
+                packets.matchJoinFail() +
+                packets.notification(
+                    'Multiplayer is not available while restricted.'
+                )
+            )
+            return
+        
         if p.silenced:
             p.enqueue(
                 packets.matchJoinFail() +
@@ -992,6 +1001,15 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
         if not (m := glob.matches[self.match_id]):
             log(f'{p} tried to join a non-existant mp lobby?')
             p.enqueue(packets.matchJoinFail())
+            return
+        
+        if p.restricted:
+            p.enqueue(
+                packets.matchJoinFail() +
+                packets.notification(
+                    'Multiplayer is not available while restricted.'
+                )
+            )
             return
 
         if p.silenced:
