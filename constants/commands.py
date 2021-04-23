@@ -631,7 +631,7 @@ async def restrict(ctx: Context) -> str:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    t.enqueue(packets.notification(objects.cho.RESTRICTED_MSG))
+    t.enqueue(packets.notification(domains.cho.RESTRICTED_MSG))
     await t.restrict(admin=ctx.player, reason=reason)
 
     return f'{t} was restricted.'
@@ -660,7 +660,7 @@ async def unrestrict(ctx: Context) -> str:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    t.enqueue(packets.notification(objects.cho.UNRESTRICTED_MSG))    
+    t.enqueue(packets.notification(domains.cho.UNRESTRICTED_MSG))    
     await t.unrestrict(ctx.player, reason)
 
     return f'{t} was unrestricted.'
