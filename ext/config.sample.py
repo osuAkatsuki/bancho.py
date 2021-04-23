@@ -105,6 +105,23 @@ datadog = {
     'app_key': ''
 }
 
+# what you want the bot (Aika) to message players when they get
+# restricted or unrestricted; note that this only happens when
+# they relog but restriction and unrestriction (hopefully)
+# should automatically log them out once the command
+# is run by a staff member. if you want multiple messages
+# sent, seperate them using commas, or edit the lines below.
+res_msg = { 
+    'Your account is currently in restricted mode. '
+    'If you believe this is a mistake, or have waited a period '
+    'greater than 3 months, you may appeal via the form on the site.'
+}
+
+unres_msg = {
+    'Your account has been unrestricted.'
+    'Please relogin for changes to take effect.'
+}
+
 # high ceiling values for autoban as a very simple form
 # of "anticheat", simply ban a user if they are not
 # whitelisted, and submit a score of too high caliber.
