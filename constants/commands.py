@@ -169,6 +169,43 @@ async def roll(ctx: Context) -> str:
     points = random.randrange(0, max_roll)
     return f'{ctx.player.name} rolls {points} points!'
 
+@command(Privileges.Normal)
+async def reconnect(ctx: Context) -> str:
+    """Disconnect and reconnect to the server."""
+    ctx.player.logout()
+
+@command(Privileges.Normal)
+async def changename(ctx: Context) -> str:
+    """Change your username."""
+    name = ' '.join(ctx.args)
+
+    if not regexes.username.match(name):
+        return 'Must be 2-15 characters in length.'
+
+    if '_' in name and ' ' in name:
+        return 'May contain "_" and " ", but not both.'
+
+    if name in glob.config.disallowed_names:
+        return 'Disallowed username; pick another.'
+
+    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', [name]):
+        return 'Username already taken by another player.'
+
+    # all checks passed, update their name
+    safe_name = name.lower().replace(' ', '_')
+
+    await glob.db.execute(
+        'UPDATE users '
+        'SET name = %s, safe_name = %s '
+        'WHERE id = %s',
+        [name, safe_name, ctx.player.id]
+    )
+
+    ctx.player.enqueue(packets.notification(
+        f'Your username has been changed to {name}!')
+    )
+    ctx.player.logout()
+
 @command(Privileges.Normal, aliases=['bloodcat', 'beatconnect', 'chimu', 'q'])
 async def maplink(ctx: Context) -> str:
     """Return a download link to the user's current map (situation dependant)."""
