@@ -52,7 +52,7 @@ class ChannelList(list):
         if isinstance(index, str):
             return self.get(index)
         else:
-            return self[index]
+            return super().__getitem__(index)
 
     def __repr__(self) -> str:
         # XXX: we use the "real" name, aka

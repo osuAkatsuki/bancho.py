@@ -2228,7 +2228,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
     if name in glob.config.disallowed_names:
         errors['username'].append('Disallowed username; pick another.')
 
-    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', name):
+    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', [name]):
         errors['username'].append('Username already taken by another player.')
 
     # Emails must:

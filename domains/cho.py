@@ -939,7 +939,7 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
                 )
             )
             return
-        
+
         if p.silenced:
             p.enqueue(
                 packets.matchJoinFail() +
@@ -1007,7 +1007,7 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
             log(f'{p} tried to join a non-existant mp lobby?')
             p.enqueue(packets.matchJoinFail())
             return
-        
+
         if p.restricted:
             p.enqueue(
                 packets.matchJoinFail() +
