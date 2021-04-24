@@ -716,6 +716,11 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
             return
 
         if current_host := p.spectating:
+            if current_host == new_host:
+                # client asking to spec when already
+                # speccing, likely downloaded new map.
+                return
+
             current_host.remove_spectator(p)
 
         new_host.add_spectator(p)
