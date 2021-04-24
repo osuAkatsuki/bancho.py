@@ -358,7 +358,7 @@ class Player:
 
         # leave channels
         while self.channels:
-            self.leave_channel(self.channels[0])
+            self.leave_channel(self.channels[0], kick=False)
 
         # remove from playerlist and
         # enqueue logout to all users.
@@ -646,7 +646,7 @@ class Player:
 
         return True
 
-    def leave_channel(self, c: Channel) -> None:
+    def leave_channel(self, c: Channel, kick: bool = True) -> None:
         """Attempt to remove `self` from `c`."""
         # ensure they're in the chan.
         if self not in c:
@@ -655,7 +655,8 @@ class Player:
         c.remove(self) # remove from c.players
         self.channels.remove(c) # remove from p.channels
 
-        self.enqueue(packets.channelKick(c.name))
+        if kick:
+            self.enqueue(packets.channelKick(c.name))
 
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
