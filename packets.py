@@ -52,7 +52,7 @@ class Packets(IntEnum):
     CHO_USER_ID = 5
     CHO_SEND_MESSAGE = 7
     CHO_PONG = 8
-    CHO_HANDLE_IRC_CHANGE_USERNAME = 9
+    CHO_HANDLE_IRC_CHANGE_USERNAME = 9 # unused
     CHO_HANDLE_IRC_QUIT = 10
     CHO_USER_STATS = 11
     CHO_USER_LOGOUT = 12
@@ -626,6 +626,7 @@ def pong() -> bytes:
     return write(Packets.CHO_PONG)
 
 # packet id: 9
+# NOTE: deprecated
 def changeUsername(old: str, new: str) -> bytes:
     return write(
         Packets.CHO_HANDLE_IRC_CHANGE_USERNAME,
