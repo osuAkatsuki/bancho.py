@@ -500,10 +500,7 @@ class Beatmap:
         mode_vn = self.mode.as_vanilla
         self.pp_cache[mode_vn][mods] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        ppcalc = await PPCalculator.from_id(
-            map_id=self.id, mods=mods,
-            mode_vn=mode_vn
-        )
+        ppcalc = await PPCalculator.from_map(self, mods=mods, mode_vn=mode_vn)
 
         if not ppcalc:
             return

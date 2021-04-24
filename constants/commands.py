@@ -289,9 +289,7 @@ async def _with(ctx: Context) -> str:
 
     if key_value is not None:
         # custom param specified, calculate it on the fly.
-        ppcalc = await PPCalculator.from_id(
-            map_id=bmap.id, **pp_attrs
-        )
+        ppcalc = await PPCalculator.from_map(bmap, **pp_attrs)
         if not ppcalc:
             return 'Could not retrieve map file.'
 
@@ -897,9 +895,7 @@ async def recalc(ctx: Context) -> str:
 
         bmap = ctx.player.last_np['bmap']
 
-        ppcalc = await PPCalculator.from_id(
-            map_id=bmap.id, mode_vn=mode_vn
-        )
+        ppcalc = await PPCalculator.from_map(bmap, mode_vn=mode_vn)
 
         if not ppcalc:
             return 'Could not retrieve map file.'

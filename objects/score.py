@@ -384,7 +384,7 @@ class Score:
                 'mode_vn': mode_vn
             }
 
-        ppcalc = await PPCalculator.from_id(map_id=self.bmap.id, **pp_attrs)
+        ppcalc = await PPCalculator.from_map(self.bmap, **pp_attrs)
 
         if not ppcalc:
             return (0.0, 0.0)

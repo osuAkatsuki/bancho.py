@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import hashlib
 import math
 import struct
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import aiohttp
 from cmyui import Ansi
 from cmyui import log
 from maniera.calculator import Maniera
+
+if TYPE_CHECKING:
+    from objects.beatmap import Beatmap
 
 __all__ = ('PPCalculator',)
 
@@ -17,11 +22,11 @@ BEATMAPS_PATH = Path.cwd() / '.data/osu'
 class PPCalculator:
     """Asynchronously wraps the process of calculating difficulty in osu!."""
     __slots__ = ('file', 'mode_vn', 'pp_attrs')
-    def __init__(self, map_id: int, **pp_attrs) -> None:
+    def __init__(self, bmap: 'Beatmap', **pp_attrs) -> None:
         # NOTE: this constructor should not be called
         # unless you are CERTAIN the map is on disk
         # for normal usage, use the classmethods
-        self.file = f'.data/osu/{map_id}.osu'
+        self.file = f'.data/osu/{bmap.id}.osu'
 
         if 'mode_vn' in pp_attrs:
             self.mode_vn = pp_attrs['mode_vn']
@@ -31,13 +36,13 @@ class PPCalculator:
         self.pp_attrs = pp_attrs
 
     @staticmethod
-    async def get_from_osuapi(map_id: int, dest_path: Path) -> bool:
-        url = f'https://old.ppy.sh/osu/{map_id}'
+    async def get_from_osuapi(bmap: 'Beatmap', dest_path: Path) -> bool:
+        url = f'https://old.ppy.sh/osu/{bmap.id}'
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as r:
                 if not r or r.status != 200:
-                    log(f'Could not find map by id {map_id}!', Ansi.LRED)
+                    log(f'Could not find map by id {bmap.id}!', Ansi.LRED)
                     return False
 
                 content = await r.read()
@@ -46,26 +51,27 @@ class PPCalculator:
         return True
 
     @classmethod
-    async def get_file(cls, map_id: int) -> None:
-        path = BEATMAPS_PATH / f'{map_id}.osu'
+    async def get_file(cls, bmap: 'Beatmap') -> None:
+        path = BEATMAPS_PATH / f'{bmap.id}.osu'
 
-        # check if file exists on disk already
-        if not path.exists():
-            # not found on disk, try osu!api
-            if not await cls.get_from_osuapi(map_id, path):
+        if (
+            not path.exists() or
+            bmap.md5 != hashlib.md5(path.read_bytes()).hexdigest()
+        ):
+            # map not up to date, we gotta update it
+            if not await cls.get_from_osuapi(bmap, path):
                 # failed to find the map
                 return
 
-        # map is now on disk, return filepath.
         return path
 
     @classmethod
-    async def from_id(cls, map_id: int, **pp_attrs):
+    async def from_map(cls, bmap: 'Beatmap', **pp_attrs):
         # ensure we have the file on disk for recalc
-        if not await cls.get_file(map_id):
+        if not await cls.get_file(bmap):
             return
 
-        return cls(map_id, **pp_attrs)
+        return cls(bmap, **pp_attrs)
 
     async def perform(self) -> tuple[float, float]:
         """Calculate pp & sr using the current state of the recalculator."""

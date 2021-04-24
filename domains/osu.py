@@ -2048,22 +2048,17 @@ async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
 
     if 'md5' in conn.args:
         # get id from md5
-        res = await glob.db.fetch(
-            'SELECT id FROM maps '
-            'WHERE md5 = %s',
-            [conn.args.pop('md5')]
-        )
-        if not res:
-            return JSON({'status': 'Failed: no map found'})
-
-        map_id = res['id']
+        bmap = await Beatmap.from_md5(md5=conn.args['md5'])
     elif 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Failed: invalid map id'}))
 
-        map_id = int(conn.args.pop('id'))
+        bmap = await Beatmap.from_md5(md5=conn.args['md5'])
     else:
         return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
+
+    if not bmap:
+        return JSON({'status': 'Failed: map not found'})
 
     pp_kwargs = {}
     valid_kwargs = (
@@ -2087,7 +2082,7 @@ async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
     if pp_kwargs.get('mode_vn', 0) not in (0, 1):
         return (503, JSON({'status': 'Failed: unsupported mode'}))
 
-    ppcalc = await PPCalculator.from_id(map_id, **pp_kwargs)
+    ppcalc = await PPCalculator.from_map(bmap, **pp_kwargs)
 
     if not ppcalc:
         return JSON({'status': 'Failed: could not retrieve map'})
@@ -2172,11 +2167,14 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
 
     path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
-    if path.exists():
-        # map found on disk.
+    if (
+        path.exists() and
+        res['md5'] == hashlib.md5(path.read_bytes()).hexdigest()
+    ):
+        # up to date map found on disk.
         content = path.read_bytes()
     else:
-        # we don't have map, get from osu!
+        # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
 
         async with glob.http.get(url) as resp:
