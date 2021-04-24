@@ -430,7 +430,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     if not user_info:
         # no account by this name exists.
-        return packets.userID(-1), 'no'
+        return (packets.notification(f'{BASE_DOMAIN}: Unknown username') +
+                packets.userID(-1)), 'no'
 
     tourney_privs = int(Privileges.Normal | Privileges.Donator)
 
@@ -452,10 +453,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # results to speed up subsequent logins.
     if pw_bcrypt in bcrypt_cache: # ~0.01 ms
         if pw_md5 != bcrypt_cache[pw_bcrypt]:
-            return packets.userID(-1), 'no'
+            return (packets.notification(f'{BASE_DOMAIN}: Incorrect login') +
+                    packets.userID(-1)), 'no'
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            return packets.userID(-1), 'no'
+            return (packets.notification(f'{BASE_DOMAIN}: Incorrect login') +
+                    packets.userID(-1)), 'no'
 
         bcrypt_cache[pw_bcrypt] = pw_md5
 

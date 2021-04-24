@@ -148,6 +148,7 @@ async def after_serving() -> None:
         glob.datadog.flush() # flush any leftover
 
 def detect_mysqld_running() -> None:
+    """Detect whether theres a mysql server running locally."""
     for path in (
         '/var/run/mysqld/mysqld.pid',
         '/var/run/mariadb/mariadb.pid'

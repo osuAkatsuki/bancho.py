@@ -201,8 +201,8 @@ async def changename(ctx: Context) -> str:
         [name, safe_name, ctx.player.id]
     )
 
-    ctx.player.enqueue(packets.notification(
-        f'Your username has been changed to {name}!')
+    ctx.player.enqueue(
+        packets.notification(f'Your username has been changed to {name}!')
     )
     ctx.player.logout()
 
