@@ -955,10 +955,11 @@ async def recalc(ctx: Context) -> str:
                 continue
 
             for score in scores:
-                ppcalc.mods = Mods(score['mods'])
-                ppcalc.combo = score['max_combo']
-                ppcalc.nmiss = score['nmiss']
-                ppcalc.acc = score['acc']
+                # TODO: speedtest vs 1bang
+                ppcalc.pp_attrs['mods'] = Mods(score['mods'])
+                ppcalc.pp_attrs['combo'] = score['max_combo']
+                ppcalc.pp_attrs['nmiss'] = score['nmiss']
+                ppcalc.pp_attrs['acc'] = score['acc']
 
                 pp, _ = await ppcalc.perform() # sr not needed
 
