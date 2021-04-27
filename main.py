@@ -8,11 +8,28 @@
 # osu!'s built-in registration.
 # certificate: https://akatsuki.pw/static/ca.crt
 
-import utils.misc
-utils.misc.install_excepthook()
+__all__ = ()
+
+if __name__ != '__main__':
+    raise RuntimeError('gulag should only be run directly!')
 
 import os
 import sys
+
+# set cwd to /gulag
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
+try:
+    from objects import glob
+except ModuleNotFoundError as exc:
+    if exc.msg == "No module named 'config'":
+        import shutil
+        shutil.copy('ext/config.sample.py', 'config.py')
+        sys.exit('\x1b[0;92mA config file has been generated, '
+                 'please configure it to your needs.\x1b[0m')
+    else:
+        raise
+
 from pathlib import Path
 
 import aiohttp
@@ -25,8 +42,8 @@ from cmyui import Ansi
 from cmyui import log
 
 import bg_loops
+import utils.misc
 from constants.privileges import Privileges
-from objects import glob
 from objects.achievement import Achievement
 from objects.collections import PlayerList
 from objects.collections import MatchList
@@ -36,7 +53,7 @@ from objects.collections import MapPoolList
 from objects.player import Player
 from utils.updater import Updater
 
-__all__ = ()
+utils.misc.install_excepthook()
 
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
@@ -62,9 +79,9 @@ async def setup_collections() -> None:
     ))[0]
 
     glob.bot = Player(
-        id = 1, name = bot_name, priv = Privileges.Normal,
-        login_time = float(0x7fffffff), # never auto-dc
-        bot_client = True
+        id=1, name=bot_name, priv=Privileges.Normal,
+        login_time=float(0x7fffffff), # never auto-dc
+        bot_client=True
     )
     glob.players.append(glob.bot)
 
@@ -149,7 +166,7 @@ async def after_serving() -> None:
         glob.datadog.stop() # stop thread
         glob.datadog.flush() # flush any leftover
 
-def detect_mysqld_running() -> None:
+def detect_mysqld_running() -> bool:
     """Detect whether theres a mysql server running locally."""
     for path in (
         '/var/run/mysqld/mysqld.pid',
@@ -162,8 +179,8 @@ def detect_mysqld_running() -> None:
         # not found, try pgrep
         return os.system('pgrep mysqld') == 0
 
-if __name__ == '__main__':
-    # attempt to start up gulag.
+def ensure_platform() -> None:
+    """Ensure we're running on an appropriate platform for gulag."""
     if sys.platform != 'linux':
         log('gulag currently only supports linux', Ansi.LRED)
         if sys.platform == 'win32':
@@ -175,6 +192,8 @@ if __name__ == '__main__':
         sys.exit('gulag uses many modern python features, '
                  'and the minimum python version is 3.9.')
 
+def ensure_services() -> None:
+    """Ensure all required services are running in the background."""
     # make sure nginx & mysqld are running.
     if (
         glob.config.mysql['host'] in ('localhost', '127.0.0.1') and
@@ -185,7 +204,17 @@ if __name__ == '__main__':
     if not os.path.exists('/var/run/nginx.pid'):
         sys.exit('Please start your nginx server.')
 
-    # warn if gulag is running on root.
+def main() -> None:
+    """Attempt to start up gulag."""
+    # make sure we're running on an appropriate
+    # platform with all required software.
+    ensure_platform()
+
+    # make sure all required services
+    # are being run in the background.
+    ensure_services()
+
+    # warn the user if gulag is running on root.
     if os.geteuid() == 0:
         log('It is not recommended to run gulag as root, '
             'especially in production..', Ansi.LYELLOW)
@@ -193,9 +222,6 @@ if __name__ == '__main__':
         if glob.config.advanced:
             log('The risk is even greater with features '
                 'such as config.advanced enabled.', Ansi.LRED)
-
-    # set cwd to /gulag.
-    os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
     # create /.data and its subdirectories.
     data_path = Path.cwd() / '.data'
@@ -273,3 +299,5 @@ if __name__ == '__main__':
     # NOTE: eventually the event loop creation will likely be
     # moved into the gulag codebase for increased flexibility.
     app.run(glob.config.server_addr, handle_restart=True)
+
+main()
