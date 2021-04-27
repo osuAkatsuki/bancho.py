@@ -280,9 +280,6 @@ async def _with(ctx: Context) -> str:
     mods = key_value = None # key_value is acc when std, score when mania
 
     if mode_vn in (0, 1): # oppai-ng
-        if not glob.oppai_built:
-            return 'No oppai-ng binary was found at startup.'
-
         # +?<mods> <acc>%?
         if 1 < len(ctx.args) > 2:
             return 'Invalid syntax: !with <mods/acc> ...'
@@ -913,9 +910,6 @@ async def stealth(ctx: Context) -> str:
 @command(Privileges.Dangerous)
 async def recalc(ctx: Context) -> str:
     """Performs a full PP recalc on a specified map, or all maps."""
-    if not glob.oppai_built:
-        return 'No oppai-ng binary was found at startup.'
-
     if len(ctx.args) != 1 or ctx.args[0] not in ('map', 'all'):
         return 'Invalid syntax: !recalc <map/all>'
 

@@ -361,10 +361,6 @@ class Score:
         mode_vn = self.mode.as_vanilla
 
         if mode_vn in (0, 1):
-            if not glob.oppai_built:
-                # oppai-ng not compiled
-                return (0.0, 0.0)
-
             pp_attrs = {
                 'mods': self.mods,
                 'combo': self.max_combo,

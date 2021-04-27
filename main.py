@@ -20,6 +20,7 @@ import cmyui
 import datadog
 import orjson # go zoom
 import geoip2.database
+import subprocess
 from cmyui import Ansi
 from cmyui import log
 
@@ -42,6 +43,7 @@ __all__ = ()
 # worth reading through it's code before playing with it.
 glob.version = cmyui.Version(3, 2, 9)
 
+OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
 async def setup_collections() -> None:
@@ -209,13 +211,28 @@ if __name__ == '__main__':
         achievements_path.mkdir(parents=True)
         utils.misc.download_achievement_images(achievements_path)
 
-    # make sure oppai-ng is built and ready.
-    glob.oppai_built = (Path.cwd() / 'oppai-ng/oppai').exists()
+    # make sure oppai-ng binary is built and ready.
+    if not OPPAI_PATH.exists():
+        log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['git', 'submodule', 'init'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if p.wait() == 1:
+            sys.exit('Failed to initialize git submodules.')
 
-    if not glob.oppai_built:
-        log('No oppai-ng compiled binary found. PP for all '
-            'std & taiko scores will be set to 0; instructions '
-            'can be found in the README file.', Ansi.LRED)
+        p = subprocess.Popen(args=['git', 'submodule', 'update'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if p.wait() == 1:
+            sys.exit('Failed to update git submodules.')
+
+    if not (OPPAI_PATH / 'oppai').exists():
+        log('No oppai-ng binary found, attempting to build.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['./build'], cwd='oppai-ng',
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if p.wait() == 1:
+            sys.exit('Failed to build oppai-ng automatically.')
 
     # create a server object, which serves as a map of domains.
     app = glob.app = cmyui.Server(

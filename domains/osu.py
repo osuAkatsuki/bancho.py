@@ -2043,9 +2043,6 @@ def requires_api_key(f: Callable) -> Callable:
 @requires_api_key
 async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
     """Calculate and return pp & sr for a given map."""
-    if not glob.oppai_built:
-        return (503, JSON({'status': 'Failed: oppai-ng not built'}))
-
     if 'md5' in conn.args:
         # get id from md5
         bmap = await Beatmap.from_md5(md5=conn.args['md5'])

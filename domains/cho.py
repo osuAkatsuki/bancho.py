@@ -849,9 +849,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         }
 
                         # calc pp if possible
-                        if mode_vn in (0, 1) and not glob.oppai_built:
-                            msg = 'No oppai-ng binary was found at startup.'
-                        elif mode_vn == 2: # TODO: catch
+                        if mode_vn == 2: # TODO: catch
                             msg = 'PP not yet supported for that mode.'
                         elif mode_vn == 3 and bmap.mode.as_vanilla != 3:
                             msg = 'Mania converts not yet supported.'

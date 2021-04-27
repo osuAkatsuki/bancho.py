@@ -34,8 +34,7 @@ __all__ = (
     'pools', 'clans', 'achievements',
     'version', 'bot', 'api_keys',
     'bancho_packets', 'db', 'http',
-    'datadog', 'sketchy_queue',
-    'oppai_built', 'cache'
+    'datadog', 'sketchy_queue', 'cache'
 )
 
 # server object
@@ -67,9 +66,6 @@ datadog: 'Optional[ThreadStats]'
 
 # queue of submitted scores deemed 'sketchy'; to be analyzed.
 sketchy_queue: 'Queue[Score]'
-
-# whether or not the oppai-ng binary was located at startup.
-oppai_built: bool
 
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or
