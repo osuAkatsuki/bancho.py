@@ -148,7 +148,7 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
         return (400, b'Invalid file type.')
 
     while True:
-        filename = f'{secrets.token_urlsafe(8)}.{extension}'
+        filename = f'{secrets.token_urlsafe(6)}.{extension}'
         screenshot_file = SCREENSHOTS_PATH / filename
         if not screenshot_file.exists():
             break
