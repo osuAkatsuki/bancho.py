@@ -89,49 +89,13 @@ class Score:
     """\
     Server side representation of an osu! score; any gamemode.
 
-    Attributes
+    Possibly confusing attributes
     -----------
-    id: `int`
-        The score's unique ID.
-
     bmap: Optional[`Beatmap`]
         A beatmap obj representing the osu map.
 
     player: Optional[`Player`]
         A player obj of the player who submitted the score.
-
-    pp: `float`
-        The score's performance points.
-
-    score: `int`
-        The score's osu! score value.
-
-    max_combo: `int`
-        The maximum combo reached in the score.
-
-    mods: `Mods`
-        A bitwise value of the osu! mods used in the score.
-
-    acc: `float`
-        The accuracy of the score.
-
-    n300: `int`
-        The number of 300s in the score.
-
-    n100: `int`
-        The number of 100s in the score (150s if taiko).
-
-    n50: `int`
-        The number of 50s in the score.
-
-    nmiss: `int`
-        The number of misses in the score.
-
-    ngeki: `int`
-        The number of gekis in the score.
-
-    nkatu: `int`
-        The number of katus in the score.
 
     grade: `Grade`
         The letter grade in the score.
@@ -139,20 +103,8 @@ class Score:
     rank: `int`
         The leaderboard placement of the score.
 
-    passed: `bool`
-        Whether the score completed the map.
-
     perfect: `bool`
         Whether the score is a full-combo.
-
-    status: `SubmissionStatus`
-        The submission status of the score.
-
-    mode: `GameMode`
-        The game mode of the score.
-
-    play_time: `datetime`
-        A datetime obj of the time of score submission.
 
     time_elapsed: `int`
         The total elapsed time of the play (in milliseconds).
@@ -168,28 +120,28 @@ class Score:
     """
     __slots__ = (
         'id', 'bmap', 'player',
-        'pp', 'sr', 'score', 'max_combo', 'mods',
-        'acc', 'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu', 'grade',
-        'rank', 'passed', 'perfect', 'status',
-        'mode', 'play_time', 'time_elapsed',
+        'mode', 'mods',
+        'pp', 'sr', 'score', 'max_combo', 'acc',
+        'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu',
+        'grade', 'rank', 'passed', 'perfect', 'status',
+        'play_time', 'time_elapsed',
         'client_flags', 'prev_best'
     )
 
     def __init__(self):
         self.id: Optional[int] = None
-
         self.bmap: Optional[Beatmap] = None
         self.player: Optional['Player'] = None
 
-        # pp & star rating
-        self.pp: Optional[float] = None
-        self.sr: Optional[float] = None
-
-        self.score: Optional[int] = None
-        self.max_combo: Optional[int] = None
+        self.mode: Optional[GameMode] = None
         self.mods: Optional[Mods] = None
 
+        self.pp: Optional[float] = None
+        self.sr: Optional[float] = None
+        self.score: Optional[int] = None
+        self.max_combo: Optional[int] = None
         self.acc: Optional[float] = None
+
         # TODO: perhaps abstract these differently
         # since they're mode dependant? feels weird..
         self.n300: Optional[int] = None
@@ -198,6 +150,7 @@ class Score:
         self.nmiss: Optional[int] = None
         self.ngeki: Optional[int] = None
         self.nkatu: Optional[int] = None
+
         self.grade: Optional[Grade] = None
 
         self.rank: Optional[int] = None
@@ -205,7 +158,6 @@ class Score:
         self.perfect: Optional[bool] = None
         self.status: Optional[SubmissionStatus] = None
 
-        self.mode: Optional[GameMode] = None
         self.play_time: Optional[datetime] = None
         self.time_elapsed: Optional[datetime] = None
 
@@ -213,6 +165,8 @@ class Score:
         self.client_flags: Optional[ClientFlags] = None
 
         self.prev_best: Optional[Score] = None
+
+    """Classmethods to fetch a score object from various data types."""
 
     @classmethod
     async def from_sql(cls, scoreid: int, sql_table: str):
@@ -285,7 +239,7 @@ class Score:
 
         if not s.player:
             # return the obj with an empty player to
-            # determine whether the score faield to
+            # determine whether the score failed to
             # be parsed vs. the user could not be found
             # logged in (we want to not send a reply to
             # the osu! client if they're simply not logged
@@ -318,10 +272,13 @@ class Score:
         s.calc_accuracy()
 
         if s.bmap:
-            # ignore sr for now.
             s.pp, s.sr = await s.calc_diff()
 
-            await s.calc_status()
+            if s.passed:
+                await s.calc_status()
+            else:
+                s.status = SubmissionStatus.FAILED
+
             s.rank = await s.calc_lb_placement()
         else:
             s.pp = s.sr = 0.0
@@ -331,6 +288,8 @@ class Score:
                 s.status = SubmissionStatus.FAILED
 
         return s
+
+    """Methods to calculate internal data for a score."""
 
     async def calc_lb_placement(self) -> int:
         table = self.mode.sql_table
@@ -388,11 +347,7 @@ class Score:
         return await ppcalc.perform()
 
     async def calc_status(self) -> None:
-        """Calculate the submission status of a score."""
-        if not self.passed:
-            self.status = SubmissionStatus.FAILED
-            return
-
+        """Calculate the submission status of a submitted score."""
         table = self.mode.sql_table
 
         # find any other `status = 2` scores we have
