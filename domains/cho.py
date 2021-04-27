@@ -8,12 +8,12 @@ from datetime import timedelta as td
 from typing import Callable
 
 import bcrypt
-from cmyui import _isdecimal
-from cmyui import Ansi
-from cmyui import AnsiRGB
 from cmyui import Connection
 from cmyui import Domain
-from cmyui import log
+from cmyui.logging import log
+from cmyui.logging import Ansi
+from cmyui.logging import AnsiRGB
+from cmyui.utils import _isdecimal
 from cmyui.discord import Webhook
 
 import packets
@@ -1139,7 +1139,8 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         if self.new.map_id == -1:
             # map being changed, unready players.
             m.unready_players(expected=SlotStatus.ready)
-        elif m.map_id == -1:
+            m.prev_map_id = m.map_id
+        elif m.map_id == -1 and m.prev_map_id != self.new.map_id:
             # new map has been chosen, send to match chat.
             m.chat.send_bot(f'Selected: {self.new.map_embed}.')
 

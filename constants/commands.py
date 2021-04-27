@@ -1162,8 +1162,8 @@ if glob.config.advanced:
         try: # def __py(ctx)
             exec(definition, __py_namespace)  # add to namespace
             ret = await __py_namespace['__py'](ctx) # await it's return
-        except Exception as e: # return exception in osu! chat
-            ret = f'{e.__class__}: {e}'
+        except Exception as exc: # return exception in osu! chat
+            ret = f'{exc.__class__}: {exc}'
 
         if '__py' in __py_namespace:
             del __py_namespace['__py']
@@ -1251,7 +1251,12 @@ async def mp_map(ctx: Context) -> str:
     if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
         return 'Invalid syntax: !mp map <beatmapid>'
 
-    if not (bmap := await Beatmap.from_bid(int(ctx.args[0]))):
+    map_id = int(ctx.args[0])
+
+    if map_id == ctx.match.map_id:
+        return 'Map already selected.'
+
+    if not (bmap := await Beatmap.from_bid(map_id)):
         return 'Beatmap not found.'
 
     ctx.match.map_id = bmap.id

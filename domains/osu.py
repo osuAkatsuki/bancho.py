@@ -631,8 +631,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
             score.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
             announce_chan.send(' '.join(ann), sender=score.player, to_self=True)
 
-        # Our score is our best score.
-        # Update any preexisting personal best
+        # this score is our best score.
+        # update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
         await glob.db.execute(
             f'UPDATE {scores_table} SET status = 1 '

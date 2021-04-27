@@ -204,7 +204,7 @@ class Match:
     """
     __slots__ = (
         'id', 'name', 'passwd', 'host', '_refs',
-        'map_id', 'map_md5', 'map_name',
+        'map_id', 'map_md5', 'map_name', 'prev_map_id',
         'mods', 'freemods', 'mode',
         'chat', 'slots',
         #'type',
@@ -231,6 +231,7 @@ class Match:
         self.map_id = 0
         self.map_md5 = ''
         self.map_name = ''
+        self.prev_map_id = 0 # previously chosen map
 
         self.mods = Mods.NOMOD
         self.mode = GameMode.vn_std
