@@ -33,7 +33,7 @@ class Updater:
 
     async def run(self) -> None:
         """Prepare, and run the updater."""
-        prev_ver = await self.get_prev_version()# or self.version
+        prev_ver = await self.get_prev_version()
 
         if not prev_ver:
             # first time running the server.
@@ -50,7 +50,7 @@ class Updater:
             input('> Press enter to continue')
 
         await self._update_cmyui() # pip install -U cmyui
-        await self._update_sql(prev_ver)
+        await self._update_sql(prev_ver) # run updates.sql
 
     @staticmethod
     async def get_prev_version() -> Optional[Version]:
@@ -70,8 +70,8 @@ class Updater:
         await glob.db.execute(
             'INSERT INTO startups '
             '(ver_major, ver_minor, ver_micro, datetime) '
-            'VALUES (%s, %s, %s, %s)',
-            [ver.major, ver.minor, ver.micro, dt.now()]
+            'VALUES (%s, %s, %s, NOW())',
+            [ver.major, ver.minor, ver.micro]
         )
 
     async def _get_latest_cmyui(self) -> Version:
