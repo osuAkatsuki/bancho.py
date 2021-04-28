@@ -1,12 +1,12 @@
 #!/usr/bin/env python3.9
 # -*- coding: utf-8 -*-
 
-# if you're interested in development, my test server is
-# usually up at 51.161.34.235. just switch the ip of any
-# switcher to the one above, toggle it off and on again, and
-# you should be connected. registration is done ingame with
-# osu!'s built-in registration.
-# certificate: https://akatsuki.pw/static/ca.crt
+# if you're interested in development, my test server is usually
+# up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
+# connection method you would with any other modern server and you
+# should have no problems connecting. registration is done ingame
+# with osu!'s in-game registration. the api can also be tested here,
+# e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 
 __all__ = ()
 
