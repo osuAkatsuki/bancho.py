@@ -993,9 +993,14 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     ]):
         return b'-1|false'
 
-    if (map_md5 := conn.args['c']) in glob.cache['unsubmitted']:
-        # map has already been confirmed as unsubmitted.
+    map_md5 = conn.args['c']
+
+    # check if this md5 has already been  cached as
+    # unsubmitted/needs update to reduce osu!api spam
+    if map_md5 in glob.cache['unsubmitted']:
         return b'-1|false'
+    if map_md5 in glob.cache['needs_update']:
+        return b'1|false'
 
     mods = Mods(int(conn.args['mods']))
     mode_vn = int(conn.args['m'])
@@ -1061,6 +1066,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
                 if set_exists:
                     # map can be updated.
+                    glob.cache['needs_update'].add(map_md5)
                     return b'1|false'
                 else:
                     # map is unsubmitted.
