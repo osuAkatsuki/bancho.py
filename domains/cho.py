@@ -1464,7 +1464,7 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             log(f'{p} tried to add a user who is not online! ({self.user_id})')
             return
 
-        if t.id == 1:
+        if t is glob.bot:
             # you cannot add the bot as a friend since it's already
             # your friend :]
             return
@@ -1481,7 +1481,7 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             log(f'{p} tried to remove a user who is not online! ({self.user_id})')
             return
 
-        if t.id == 1:
+        if t is glob.bot:
             # you cannot remove the bot as a friend because it wont
             # like that >:[
             return
