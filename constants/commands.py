@@ -13,6 +13,7 @@ import struct
 import time
 import uuid
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version as pkg_version
 from time import perf_counter_ns as clock_ns
@@ -62,7 +63,8 @@ class Command(NamedTuple):
     hidden: bool
     doc: str
 
-class Context(NamedTuple):
+@dataclass
+class Context:
     player: Player
     trigger: str
     args: Sequence[str]
