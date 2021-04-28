@@ -776,7 +776,8 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            log(f'{p} tried to send a dm while silenced.', Ansi.LYELLOW)
+            if glob.app.debug:
+                log(f'{p} tried to send a dm while silenced.', Ansi.LYELLOW)
             return
 
         # remove leading/trailing whitespace
@@ -786,18 +787,23 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
         if not (t := await glob.players.get_ensure(name=t_name)):
-            log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
+            if glob.app.debug:
+                log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
             return
 
         if t.pm_private and p.id not in t.friends:
             p.enqueue(packets.userDMBlocked(t_name))
-            log(f'{p} tried to message {t}, but they are blocking dms.')
+
+            if glob.app.debug:
+                log(f'{p} tried to message {t}, but they are blocking dms.')
             return
 
         if t.silenced:
             # if target is silenced, inform player.
             p.enqueue(packets.targetSilenced(t_name))
-            log(f'{p} tried to message {t}, but they are silenced.')
+
+            if glob.app.debug:
+                log(f'{p} tried to message {t}, but they are silenced.')
             return
 
         # limit message length to 2k chars

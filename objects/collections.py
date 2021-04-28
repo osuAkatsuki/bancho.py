@@ -268,6 +268,11 @@ class PlayerList(list):
 
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
+        if p not in self:
+            if glob.app.debug:
+                log(f'{p} removed from player list when not online?')
+            return
+
         super().remove(p)
 
         if glob.app.debug:

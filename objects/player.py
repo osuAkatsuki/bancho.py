@@ -745,12 +745,12 @@ class Player:
             [self.id, p.id]
         )
 
-        log(f'{self} added {p} to their friends.')
+        log(f'{self} friended {p}.')
 
     async def remove_friend(self, p: 'Player') -> None:
         """Attempt to remove `p` from `self`'s friends."""
         if p.id not in self.friends:
-            log(f'{self} tried to remove {p}, who is not their friend!', Ansi.LYELLOW)
+            log(f'{self} tried to unfriend {p}, who is not their friend!', Ansi.LYELLOW)
             return
 
         self.friends.remove(p.id)
