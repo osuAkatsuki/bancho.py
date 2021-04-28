@@ -17,6 +17,7 @@ from typing import Optional
 import aiomysql
 from cmyui import Ansi
 from cmyui import log
+from cmyui import printc
 from cmyui import Version
 from pip._internal.cli.main import main as pip_main
 
@@ -36,8 +37,17 @@ class Updater:
 
         if not prev_ver:
             # first time running the server.
-            # might add other code here eventually..
             prev_ver = self.version
+
+            printc('\n'.join([
+                'Welcome to gulag!',
+                'If you have any issues with the server,',
+                'feel free to join our public Discord :)',
+                '',
+                'https://discord.gg/ShEQgUx',
+                'Enjoy the server!'
+            ]), Ansi.LCYAN)
+            input('> Press enter to continue')
 
         await self._update_cmyui() # pip install -U cmyui
         await self._update_sql(prev_ver)
@@ -54,7 +64,7 @@ class Updater:
         if res:
             return Version(*map(int, res))
 
-    async def log_startup(self):
+    async def log_startup(self) -> None:
         """Log this startup to sql for future use."""
         ver = self.version
         await glob.db.execute(
@@ -153,6 +163,8 @@ class Updater:
                     )
 
                     input('Press enter to exit')
-                    os.kill(os.getpid(), signal.SIGTERM)
+
+                    await glob.app.after_serving()
+                    raise KeyboardInterrupt
 
     # TODO _update_config?

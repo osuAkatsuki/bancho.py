@@ -83,10 +83,10 @@ class Channel:
 
         self.enqueue(
             packets.sendMessage(
-                sender = bot.name,
-                msg = msg,
-                recipient = self.name,
-                sender_id = bot.id
+                sender=bot.name,
+                msg=msg,
+                recipient=self.name,
+                sender_id=bot.id
             )
         )
 
@@ -104,7 +104,7 @@ class Channel:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
 
-        if len(self.players) == 0 and self.instance:
+        if not self.players and self.instance:
             # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.

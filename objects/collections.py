@@ -81,7 +81,7 @@ class ChannelList(list):
             log(f'{c} removed from channels list.')
 
     @classmethod
-    async def prepare(cls) -> None:
+    async def prepare(cls) -> 'Channels':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching channels from sql', Ansi.LCYAN)
         return cls(
@@ -190,7 +190,7 @@ class PlayerList(list):
     def _parse_attr(kwargs: dict[str, object]) -> Optional[tuple[str, object]]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
         for attr in ('token', 'id', 'name'):
-            if val := kwargs.pop(attr, None):
+            if (val := kwargs.pop(attr, None)) is not None:
                 if attr == 'name':
                     attr = 'safe_name'
                     val = make_safe_name(val)
@@ -320,7 +320,7 @@ class MapPoolList(list):
             log(f'{mp} removed from mappools list.')
 
     @classmethod
-    async def prepare(cls) -> None:
+    async def prepare(cls) -> 'MapPools':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching mappools from sql', Ansi.LCYAN)
         return cls([
@@ -380,7 +380,7 @@ class ClanList(list):
             log(f'{c} removed from clans list.')
 
     @classmethod
-    async def prepare(cls) -> None:
+    async def prepare(cls) -> 'Clans':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching clans from sql', Ansi.LCYAN)
         res = await glob.db.fetchall('SELECT * FROM clans')

@@ -51,7 +51,7 @@ achievements: dict[int, list['Achievement']] # per vn gamemode
 bot: 'Player'
 version: 'Version'
 
-geoloc_db: 'geoip2.database.Reader'
+geoloc_db: 'Optional[geoip2.database.Reader]'
 
 # currently registered api tokens
 api_keys: dict[str, int] # {api_key: player_id}

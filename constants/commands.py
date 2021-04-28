@@ -1360,8 +1360,7 @@ async def mp_invite(ctx: Context) -> str:
     if not (t := glob.players.get(name=ctx.args[0])):
         return 'Could not find a user by that name.'
     elif t is glob.bot:
-        ctx.player.send_bot("I'm too busy!")
-        return
+        return "I'm too busy!"
 
     if ctx.player is t:
         return "You can't invite yourself!"
@@ -2166,13 +2165,17 @@ async def process_commands(p: Player, t: Messageable,
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
-            ctx = Context(**{
-                'player': p,
-                'trigger': trigger,
-                'args': args,
-                'match' if isinstance(t, Match) else 'recipient': t
-            })
+        if (
+            trigger in cmd.triggers and
+            p.priv & cmd.priv == cmd.priv
+        ):
+            # found matching trigger with sufficient privs
+            ctx = Context(player=p, trigger=trigger, args=args)
+
+            if isinstance(t, Match):
+                ctx.match = t
+            else:
+                ctx.recipient = t
 
             # command found & we have privileges, run it.
             if res := await cmd.callback(ctx):

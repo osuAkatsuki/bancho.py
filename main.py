@@ -109,7 +109,7 @@ async def setup_collections() -> None:
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
     # retrieve a client session to use for http connections.
-    glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
+    glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps) # type: ignore
 
     # retrieve a pool of connections to use for mysql interaction.
     glob.db = cmyui.AsyncSQLPool()
