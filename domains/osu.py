@@ -2022,34 +2022,37 @@ async def api_get_match(conn: Connection) -> Optional[bytes]:
         return (404, JSON({'status': 'Match not found.'}))
 
     return JSON({
-        'name': match.name,
-        'mode': match.mode.as_vanilla,
-        'mods': int(match.mods),
-        'seed': match.seed,
-        'host': {
-            'id': match.host.id,
-            'name': match.host.name
-        },
-        'refs': [{'id': p.id, 'name': p.name} for p in match.refs],
-        'in_progress': match.in_progress,
-        'is_scrimming': match.is_scrimming,
-        'map': {
-            'id': match.map_id,
-            'md5': match.map_md5,
-            'name': match.map_name
-        },
-        'active_slots': {
-            str(idx): {
-                'loaded': slot.loaded,
-                'mods': int(slot.mods),
-                'player': {
-                    'id': slot.player.id,
-                    'name': slot.player.name
-                },
-                'skipped': slot.skipped,
-                'status': int(slot.status),
-                'team': int(slot.team)
-            } for idx, slot in enumerate(match.slots) if slot.player
+        'status': 'success',
+        'match': {
+            'name': match.name,
+            'mode': match.mode.as_vanilla,
+            'mods': int(match.mods),
+            'seed': match.seed,
+            'host': {
+                'id': match.host.id,
+                'name': match.host.name
+            },
+            'refs': [{'id': p.id, 'name': p.name} for p in match.refs],
+            'in_progress': match.in_progress,
+            'is_scrimming': match.is_scrimming,
+            'map': {
+                'id': match.map_id,
+                'md5': match.map_md5,
+                'name': match.map_name
+            },
+            'active_slots': {
+                str(idx): {
+                    'loaded': slot.loaded,
+                    'mods': int(slot.mods),
+                    'player': {
+                        'id': slot.player.id,
+                        'name': slot.player.name
+                    },
+                    'skipped': slot.skipped,
+                    'status': int(slot.status),
+                    'team': int(slot.team)
+                } for idx, slot in enumerate(match.slots) if slot.player
+            }
         }
     })
 
