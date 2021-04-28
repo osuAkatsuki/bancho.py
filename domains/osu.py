@@ -1395,6 +1395,7 @@ SCOREID_BORDERS = tuple(
 @domain.route('/api/get_player_count')
 async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     """Get the current amount of online players."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
@@ -1403,30 +1404,34 @@ async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     ))[0]
 
     return JSON({
-        'online': len(glob.players.unrestricted) - 1,
-        'total': total_users
+        'status': 'success',
+        'counts': {
+            'online': len(glob.players.unrestricted) - 1,
+            'total': total_users
+        }
     })
 
 @domain.route('/api/get_player_info')
 async def api_get_player_info(conn: Connection) -> Optional[bytes]:
     """Return information about a given player."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if 'name' not in conn.args and 'id' not in conn.args:
-        return (400, b'Must provide either id or name!')
+        return (400, JSON({'status': 'Must provide either id or name!'}))
 
     if (
         'scope' not in conn.args or
         conn.args['scope'] not in ('info', 'stats', 'all')
     ):
-        return (400, b'Must provide scope (info/stats/all).')
+        return (400, JSON({'status': 'Must provide scope (info/stats/all).'}))
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
-            return (400, b'Invalid player id.')
+            return (400, JSON({'status': 'Invalid player id.'}))
 
         pid = conn.args['id']
     else:
         if not 2 <= len(name := unquote(conn.args['name'])) < 16:
-            return (400, b'Invalid player name.')
+            return (400, JSON({'status': 'Invalid player name.'}))
 
         # get their id from username.
         pid = await glob.db.fetch(
@@ -1436,7 +1441,7 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
         )
 
         if not pid:
-            return (404, b'Player not found.')
+            return (404, JSON({'status': 'Player not found.'}))
 
         pid = pid['id']
 
@@ -1451,7 +1456,7 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
         )
 
         if not res:
-            return (404, b'Player not found')
+            return (404, JSON({'status': 'Player not found'}))
 
         api_data |= res
 
@@ -1463,38 +1468,45 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
         )
 
         if not res:
-            return (404, b'Player not found')
+            return (404, JSON({'status': 'Player not found'}))
 
         api_data |= res
 
-    return orjson.dumps(api_data)
+    return orjson.dumps({'status': 'success', 'player': api_data})
 
 @domain.route('/api/get_player_status')
 async def api_get_player_status(conn: Connection) -> Optional[bytes]:
     """Return a players current status, if they are online."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
         pid = conn.args['id']
         if not pid.isdecimal():
-            return (400, b'Invalid player id.')
+            return (400, JSON({'status': 'Invalid player id.'}))
         # get player by id
         p = glob.players.get(id=int(pid))
     elif 'name' in conn.args:
         name = unquote(conn.args['name'])
         if not 2 <= len(name) < 16:
-            return (400, b'Invalid player name.')
+            return (400, JSON({'status': 'Invalid player name.'}))
 
         # get player by name
         p = glob.players.get(name=name)
     else:
-        return (400, b'Must provide either id or name!')
+        return (400, JSON({'status': 'Must provide either id or name!'}))
 
     if not p:
-        # no such player online
+        # no such player online, return their last seen time
         res = await glob.db.fetch('SELECT latest_activity FROM users WHERE id = %s', [pid])
         if not res:
-            return (404, b'Player not found.')
+            return (404, JSON({'status': 'Player not found.'}))
 
-        return JSON({'online': False, 'last_seen': res['latest_activity']})
+        return JSON({
+            'status': 'success',
+            'player_status': {
+                'online': False,
+                'last_seen': res['latest_activity']
+            }
+        })
 
     if p.status.map_md5:
         bmap = await Beatmap.from_md5(p.status.map_md5)
@@ -1502,54 +1514,58 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
         bmap = None
 
     return JSON({
-        'online': True,
-        'login_time': p.login_time,
-        'status': {
-            'action': int(p.status.action),
-            'info_text': p.status.info_text,
-            'mode': int(p.status.mode),
-            'mods': int(p.status.mods),
-            'beatmap': {
-                'md5': bmap.md5,
-                'id': bmap.id,
-                'set_id': bmap.set_id,
-                'artist': bmap.artist,
-                'title': bmap.title,
-                'version': bmap.version,
-                'creator': bmap.creator,
-                'last_update': bmap.last_update,
-                'total_length': bmap.total_length,
-                'max_combo': bmap.max_combo,
-                'status': bmap.status,
-                'plays': bmap.plays,
-                'passes': bmap.passes,
-                'mode': bmap.mode,
-                'bpm': bmap.bpm,
-                'cs': bmap.cs,
-                'od': bmap.od,
-                'ar': bmap.ar,
-                'hp': bmap.hp,
-                'diff': bmap.diff
-            } if bmap else None
+        'status': 'success',
+        'player_status': {
+            'online': True,
+            'login_time': p.login_time,
+            'status': {
+                'action': int(p.status.action),
+                'info_text': p.status.info_text,
+                'mode': int(p.status.mode),
+                'mods': int(p.status.mods),
+                'beatmap': {
+                    'md5': bmap.md5,
+                    'id': bmap.id,
+                    'set_id': bmap.set_id,
+                    'artist': bmap.artist,
+                    'title': bmap.title,
+                    'version': bmap.version,
+                    'creator': bmap.creator,
+                    'last_update': bmap.last_update,
+                    'total_length': bmap.total_length,
+                    'max_combo': bmap.max_combo,
+                    'status': bmap.status,
+                    'plays': bmap.plays,
+                    'passes': bmap.passes,
+                    'mode': bmap.mode,
+                    'bpm': bmap.bpm,
+                    'cs': bmap.cs,
+                    'od': bmap.od,
+                    'ar': bmap.ar,
+                    'hp': bmap.hp,
+                    'diff': bmap.diff
+                } if bmap else None
+            }
         }
     })
 
 @domain.route('/api/get_player_scores')
 async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
     """Return a list of a given user's recent/best scores."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
-            return (400, b'Invalid player id.')
+            return (400, JSON({'status': 'Invalid player id.'}))
         p = await glob.players.get_ensure(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
-            return (400, b'Invalid player name.')
+            return (400, JSON({'status': 'Invalid player name.'}))
         p = await glob.players.get_ensure(name=conn.args['name'])
     else:
-        return (400, b'Must provide either id or name.')
+        return (400, JSON({'status': 'Must provide either id or name.'}))
 
     if not p:
-        return (404, b'Player not found.')
+        return (404, JSON({'status': 'Player not found.'}))
 
     # parse args (scope, mode, mods, limit)
 
@@ -1557,7 +1573,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
         'scope' in conn.args and
         conn.args['scope'] in ('recent', 'best')
     ):
-        return (400, b'Must provide valid scope (recent/best).')
+        return (400, JSON({'status': 'Must provide valid scope (recent/best).'}))
 
     scope = conn.args['scope']
 
@@ -1566,7 +1582,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
             mode_arg.isdecimal() and
             0 <= (mode := int(mode_arg)) <= 7
         ):
-            return (400, b'Invalid mode.')
+            return (400, JSON({'status': 'Invalid mode.'}))
 
         mode = GameMode(mode)
     else:
@@ -1593,7 +1609,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
             limit_arg.isdecimal() and
             0 < (limit := int(limit_arg)) <= 100
         ):
-            return (400, b'Invalid limit.')
+            return (400, JSON({'status': 'Invalid limit.'}))
     else:
         limit = 25
 
@@ -1649,26 +1665,27 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
             'diff': bmap.diff
         }
 
-    return JSON(res)
+    return JSON({'status': 'success', 'scores': res})
 
 @domain.route('/api/get_player_most_played')
 async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
+    conn.resp_headers['Content-Type'] = f'application/json'
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
-            return (400, b'Invalid player id.')
+            return (400, JSON({'status': 'Invalid player id.'}))
         p = await glob.players.get_ensure(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
-            return (400, b'Invalid player name.')
+            return (400, JSON({'status': 'Invalid player name.'}))
         p = await glob.players.get_ensure(name=conn.args['name'])
     else:
-        return (400, b'Must provide either id or name.')
+        return (400, JSON({'status': 'Must provide either id or name.'}))
 
     if not p:
-        return (404, b'Player not found.')
+        return (404, JSON({'status': 'Player not found.'}))
 
     # parse args (mode, limit)
 
@@ -1677,7 +1694,7 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
             mode_arg.isdecimal() and
             0 <= (mode := int(mode_arg)) <= 7
         ):
-            return (400, b'Invalid mode.')
+            return (400, JSON({'status': 'Invalid mode.'}))
 
         mode = GameMode(mode)
     else:
@@ -1688,7 +1705,7 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
             limit_arg.isdecimal() and
             0 < (limit := int(limit_arg)) <= 100
         ):
-            return (400, b'Invalid limit.')
+            return (400, JSON({'status': 'Invalid limit.'}))
     else:
         limit = 25
 
@@ -1705,64 +1722,69 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
         [p.id, limit]
     )
 
-    return JSON(res)
+    return JSON({'status': 'success', 'maps': res})
 
 @domain.route('/api/get_map_info')
 async def api_get_map_info(conn: Connection) -> Optional[bytes]:
     """Return information about a given beatmap."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
-            return (400, b'Invalid map id.')
+            return (400, JSON({'status': 'Invalid map id.'}))
         bmap = await Beatmap.from_bid(int(conn.args['id']))
     elif 'md5' in conn.args:
         if len(conn.args['md5']) != 32:
-            return (400, b'Invalid map md5.')
+            return (400, JSON({'status': 'Invalid map md5.'}))
         bmap = await Beatmap.from_md5(conn.args['md5'])
     else:
-        return (400, b'Must provide either id or md5!')
+        return (400, JSON({'status': 'Must provide either id or md5!'}))
 
     if not bmap:
-        return (404, b'Map not found.')
+        return (404, JSON({'status': 'Map not found.'}))
 
-    return JSON({ # really?
-        'md5': bmap.md5,
-        'id': bmap.id,
-        'set_id': bmap.set_id,
-        'artist': bmap.artist,
-        'title': bmap.title,
-        'version': bmap.version,
-        'creator': bmap.creator,
-        'last_update': bmap.last_update,
-        'total_length': bmap.total_length,
-        'max_combo': bmap.max_combo,
-        'status': bmap.status,
-        'plays': bmap.plays,
-        'passes': bmap.passes,
-        'mode': bmap.mode,
-        'bpm': bmap.bpm,
-        'cs': bmap.cs,
-        'od': bmap.od,
-        'ar': bmap.ar,
-        'hp': bmap.hp,
-        'diff': bmap.diff
+    return JSON({
+        'status': 'success',
+        'map': {
+            'md5': bmap.md5,
+            'id': bmap.id,
+            'set_id': bmap.set_id,
+            'artist': bmap.artist,
+            'title': bmap.title,
+            'version': bmap.version,
+            'creator': bmap.creator,
+            'last_update': bmap.last_update,
+            'total_length': bmap.total_length,
+            'max_combo': bmap.max_combo,
+            'status': bmap.status,
+            'plays': bmap.plays,
+            'passes': bmap.passes,
+            'mode': bmap.mode,
+            'bpm': bmap.bpm,
+            'cs': bmap.cs,
+            'od': bmap.od,
+            'ar': bmap.ar,
+            'hp': bmap.hp,
+            'diff': bmap.diff
+        }
     })
 
 @domain.route('/api/get_map_scores')
 async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
     """Return the top n scores on a given beatmap."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
-            return (400, b'Invalid map id.')
+            return (400, JSON({'status': 'Invalid map id.'}))
         bmap = await Beatmap.from_bid(int(conn.args['id']))
     elif 'md5' in conn.args:
         if len(conn.args['md5']) != 32:
-            return (400, b'Invalid map md5.')
+            return (400, JSON({'status': 'Invalid map md5.'}))
         bmap = await Beatmap.from_md5(conn.args['md5'])
     else:
-        return (400, b'Must provide either id or md5!')
+        return (400, JSON({'status': 'Must provide either id or md5!'}))
 
     if not bmap:
-        return (404, b'Map not found.')
+        return (404, JSON({'status': 'Map not found.'}))
 
     # parse args (scope, mode, mods, limit)
 
@@ -1770,7 +1792,7 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
         'scope' not in conn.args or
         conn.args['scope'] not in ('recent', 'best')
     ):
-        return (400, b'Must provide valid scope (recent/best).')
+        return (400, JSON({'status': 'Must provide valid scope (recent/best).'}))
 
     scope = conn.args['scope']
 
@@ -1779,7 +1801,7 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
             mode_arg.isdecimal() and
             0 <= (mode := int(mode_arg)) <= 7
         ):
-            return (400, b'Invalid mode.')
+            return (400, JSON({'status': 'Invalid mode.'}))
 
         mode = GameMode(mode)
     else:
@@ -1806,7 +1828,7 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
             limit_arg.isdecimal() and
             0 < (limit := int(limit_arg)) <= 100
         ):
-            return (400, b'Invalid limit.')
+            return (400, JSON({'status': 'Invalid limit.'}))
     else:
         limit = 50
 
@@ -1838,16 +1860,17 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
     params.append(limit)
 
     res = await glob.db.fetchall(' '.join(query), params)
-    return JSON(res)
+    return JSON({'status': 'success', 'scores': res})
 
 @domain.route('/api/get_score_info')
 async def api_get_score_info(conn: Connection) -> Optional[bytes]:
     """Return information about a given score."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if not (
         'id' in conn.args and
         conn.args['id'].isdecimal()
     ):
-        return (400, b'Must provide score id.')
+        return (400, JSON({'status': 'Must provide score id.'}))
 
     score_id = int(conn.args['id'])
 
@@ -1858,7 +1881,7 @@ async def api_get_score_info(conn: Connection) -> Optional[bytes]:
     elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
         scores_table = 'scores_ap'
     else:
-        return (400, b'Invalid score id.')
+        return (400, JSON({'status': 'Invalid score id.'}))
 
     res = await glob.db.fetch(
         'SELECT map_md5, score, pp, acc, max_combo, mods, '
@@ -1870,18 +1893,20 @@ async def api_get_score_info(conn: Connection) -> Optional[bytes]:
     )
 
     if not res:
-        return (404, b'Score not found.')
+        return (404, JSON({'status': 'Score not found.'}))
 
-    return JSON(res)
+
+    return JSON({'status': 'success', 'score': res})
 
 @domain.route('/api/get_replay')
 async def api_get_replay(conn: Connection) -> Optional[bytes]:
     """Return a given replay (including headers)."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     if not (
         'id' in conn.args and
         conn.args['id'].isdecimal()
     ):
-        return (400, b'Must provide score id.')
+        return (400, JSON({'status': 'Must provide score id.'}))
 
     score_id = int(conn.args['id'])
 
@@ -1892,12 +1917,12 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
         scores_table = 'scores_ap'
     else:
-        return (400, b'Invalid score id.')
+        return (400, JSON({'status': 'Invalid score id.'}))
 
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f'{score_id}.osr'
     if not replay_file.exists():
-        return (404, b'Replay not found.')
+        return (404, JSON({'status': 'Replay not found.'}))
 
     # read replay frames from file
     raw_replay = replay_file.read_bytes()
@@ -1906,7 +1931,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
         'include_headers' in conn.args and
         conn.args['include_headers'].lower() == 'false'
     ):
-        return raw_replay
+        return {'status': 'success', 'replay': raw_replay}
 
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
@@ -1925,7 +1950,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
 
     if not res:
         # score not found in sql
-        return (404, b'Score not found.') # but replay was? lol
+        return (404, JSON({'status': 'Score not found.'})) # but replay was? lol
 
     # generate the replay's hash
     replay_md5 = hashlib.md5(
@@ -1983,16 +2008,17 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> Optional[bytes]:
     """Return information of a given multiplayer match."""
+    conn.resp_headers['Content-Type'] = f'application/json'
     # TODO: eventually, this should contain recent score info.
     if not (
         'id' in conn.args and
         conn.args['id'].isdecimal() and
         0 <= (match_id := int(conn.args['id'])) < 64
     ):
-        return (400, b'Must provide valid match id.')
+        return (400, JSON({'status': 'Must provide valid match id.'}))
 
     if not (match := glob.matches[match_id]):
-        return (404, b'Match not found.')
+        return (404, JSON({'status': 'Match not found.'}))
 
     return JSON({
         'name': match.name,
@@ -2029,13 +2055,14 @@ async def api_get_match(conn: Connection) -> Optional[bytes]:
 def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
     async def wrapper(conn: Connection) -> Optional[bytes]:
+        conn.resp_headers['Content-Type'] = f'application/json'
         if 'Authorization' not in conn.headers:
-            return (400, b'Must provide authorization token.')
+            return (400, JSON({'status': 'Must provide authorization token.'}))
 
         api_key = conn.headers['Authorization']
 
         if api_key not in glob.api_keys:
-            return (401, b'Unknown authorization token.')
+            return (401, JSON({'status': 'Unknown authorization token.'}))
 
         # get player from api token
         player_id = glob.api_keys[api_key]
@@ -2043,6 +2070,9 @@ def requires_api_key(f: Callable) -> Callable:
 
         return await f(conn, p)
     return wrapper
+
+# NOTE: `Content-Type = application/json` is applied in the above decorator
+#                                         for the following api handlers.
 
 # TODO: mania support (and ctb later)
 @domain.route('/api/calculate_pp')
@@ -2103,24 +2133,24 @@ async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
 async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
     """Update the tokenholder's avatar to a given file."""
     if 'avatar' not in conn.files:
-        return (400, b'Must provide avatar file.')
+        return (400, JSON({'status': 'must provide avatar file.'}))
 
     ava_file = conn.files['avatar']
 
     # block files over 4MB
     if len(ava_file) > (4 * 1024 * 1024):
-        return (400, b'Avatar file too large (max 4MB).')
+        return (400, JSON({'status': 'avatar file too large (max 4MB).'}))
 
     if ava_file[6:10] in (b'JFIF', b'Exif'):
         ext = 'jpeg'
     elif ava_file.startswith(b'\211PNG\r\n\032\n'):
         ext = 'png'
     else:
-        return (400, b'Invalid file type.')
+        return (400, JSON({'status': 'invalid file type.'}))
 
     # write to the avatar file
     (AVATARS_PATH / f'{p.id}.{ext}').write_bytes(ava_file)
-    return b'Success.'
+    return JSON({'status': 'success.'})
 
 """ Misc handlers """
 
@@ -2132,7 +2162,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
     path = SCREENSHOTS_PATH / conn.path[4:]
 
     if not path.exists():
-        return (404, b'Screenshot not found.')
+        return (404, JSON({'status': 'Screenshot not found.'}))
 
     return path.read_bytes()
 
