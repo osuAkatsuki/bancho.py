@@ -1716,10 +1716,11 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
         f'FROM {mode.sql_table} s '
         'INNER JOIN maps m ON m.md5 = s.map_md5 '
         'WHERE s.userid = %s '
+        'AND s.mode = %s '
         'GROUP BY s.map_md5 '
         'ORDER BY plays DESC '
         'LIMIT %s',
-        [p.id, limit]
+        [p.id, mode.as_vanilla, limit]
     )
 
     return JSON({'status': 'success', 'maps': res})
