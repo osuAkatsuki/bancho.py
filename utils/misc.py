@@ -186,7 +186,8 @@ async def log_strange_occurrence(obj: object) -> None:
         # automatically reporting problems to cmyui's server
         async with glob.http.post(
             url = 'https://log.cmyui.xyz/',
-            headers = {'Gulag-Version': repr(glob.version)},
+            headers = {'Gulag-Version': repr(glob.version),
+                       'Gulag-Domain': glob.config.domain},
             data = pickled_obj,
         ) as resp:
             if (
