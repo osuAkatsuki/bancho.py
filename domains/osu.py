@@ -2004,7 +2004,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
         '({play_time:%Y-%m-%d}).osr"'
     ).format(**res)
 
-    return bytes(buf)
+    return JSON({'status': 'success', 'replay': bytes(buf)})
 
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> Optional[bytes]:
