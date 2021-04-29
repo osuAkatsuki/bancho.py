@@ -188,6 +188,9 @@ async def block(ctx: Context) -> str:
     if target.id in ctx.player.blocks:
         return f'{target.name} already blocked!'
 
+    if target.id in ctx.player.friends:
+        ctx.player.friends.remove(target.id)
+
     await ctx.player.add_block(target)
     return f'Added {target.name} to blocked users.'
 

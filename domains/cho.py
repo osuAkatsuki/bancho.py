@@ -1478,9 +1478,10 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
             return
 
         if t is glob.bot:
-            # you cannot add the bot as a friend since it's already
-            # your friend :]
             return
+
+        if t.id in p.blocks:
+            p.blocks.remove(t.id)
 
         await p.update_latest_activity()
         await p.add_friend(t)
@@ -1495,8 +1496,6 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
             return
 
         if t is glob.bot:
-            # you cannot remove the bot as a friend because it wont
-            # like that >:[
             return
 
         await p.update_latest_activity()
