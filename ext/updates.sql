@@ -323,3 +323,7 @@ alter table stats change maxcombo_ap_std max_combo_ap_std int(11) unsigned defau
 
 # v3.2.7
 drop table if exists user_hashes;
+
+# v3.3.0
+rename table friendships to relationships;
+alter table relationships add type enum('friend', 'block') not null;

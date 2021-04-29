@@ -137,7 +137,7 @@ class Player:
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
-        'priv', 'stats', 'status', 'friends', 'channels',
+        'priv', 'stats', 'status', 'friends', 'blocks', 'channels',
         'spectators', 'spectating', 'match', 'stealth',
         'clan', 'clan_priv', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
@@ -173,7 +173,10 @@ class Player:
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
 
-        self.friends: set[int] = set() # userids, not player objects
+        # userids, not player objects
+        self.friends: set[int] = set()
+        self.blocks: set[int] = set()
+
         self.channels: list[Channel] = []
         self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
@@ -740,8 +743,8 @@ class Player:
 
         self.friends.add(p.id)
         await glob.db.execute(
-            'INSERT INTO friendships '
-            'VALUES (%s, %s)',
+            "REPLACE INTO relationships "
+            "VALUES (%s, %s, 'friend')",
             [self.id, p.id]
         )
 
@@ -755,12 +758,42 @@ class Player:
 
         self.friends.remove(p.id)
         await glob.db.execute(
-            'DELETE FROM friendships '
+            'DELETE FROM relationships '
             'WHERE user1 = %s AND user2 = %s',
             [self.id, p.id]
         )
 
-        log(f'{self} removed {p} from their friends.')
+        log(f'{self} unfriended {p}.')
+
+    async def add_block(self, p: 'Player') -> None:
+        """Attempt to add `p` to `self`'s blocks."""
+        if p.id in self.blocks:
+            log(f"{self} tried to block {p}, who they've already blocked!", Ansi.LYELLOW)
+            return
+
+        self.blocks.add(p.id)
+        await glob.db.execute(
+            "REPLACE INTO relationships "
+            "VALUES (%s, %s, 'block')",
+            [self.id, p.id]
+        )
+
+        log(f'{self} blocked {p}.')
+
+    async def remove_block(self, p: 'Player') -> None:
+        """Attempt to remove `p` from `self`'s blocks."""
+        if p.id not in self.blocks:
+            log(f"{self} tried to unblock {p}, who they haven't blocked!", Ansi.LYELLOW)
+            return
+
+        self.blocks.remove(p.id)
+        await glob.db.execute(
+            'DELETE FROM relationships '
+            'WHERE user1 = %s AND user2 = %s',
+            [self.id, p.id]
+        )
+
+        log(f'{self} unblocked {p}.')
 
     def fetch_geoloc_db(self, ip: str) -> None:
         """Fetch geolocation data based on ip (using local db)."""
@@ -807,14 +840,23 @@ class Player:
 
         self.achievements[a.mode].add(a)
 
-    async def friends_from_sql(self) -> None:
-        """Retrieve `self`'s friends from sql."""
-        _friends = {row['user2'] for row in await glob.db.fetchall(
-            'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
-        )}
+    async def relationships_from_sql(self) -> None:
+        """Retrieve `self`'s relationships from sql."""
+        res = await glob.db.fetchall(
+            'SELECT user2, type '
+            'FROM relationships '
+            'WHERE user1 = %s',
+            [self.id]
+        )
+
+        for row in res:
+            if row['type'] == 'friend':
+                self.friends.add(row['user2'])
+            else:
+                self.blocks.add(row['user2'])
 
         # always have bot added to friends.
-        self.friends = _friends | {1}
+        self.friends.add(1)
 
     async def achievements_from_sql(self) -> None:
         """Retrieve `self`'s achievements from sql."""

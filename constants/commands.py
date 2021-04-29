@@ -171,6 +171,46 @@ async def roll(ctx: Context) -> str:
     points = random.randrange(0, max_roll)
     return f'{ctx.player.name} rolls {points} points!'
 
+@command(Privileges.Normal, hidden=True)
+async def block(ctx: Context) -> str:
+    """Block another user from communicating with you."""
+    target = await glob.players.get_ensure(name=' '.join(ctx.args))
+
+    if not target:
+        return 'User not found.'
+
+    if (
+        target is glob.bot or
+        target is ctx.player
+    ):
+        return 'What?'
+
+    if target.id in ctx.player.blocks:
+        return f'{target.name} already blocked!'
+
+    await ctx.player.add_block(target)
+    return f'Added {target.name} to blocked users.'
+
+@command(Privileges.Normal, hidden=True)
+async def unblock(ctx: Context) -> str:
+    """Unblock another user from communicating with you."""
+    target = await glob.players.get_ensure(name=' '.join(ctx.args))
+
+    if not target:
+        return 'User not found.'
+
+    if (
+        target is glob.bot or
+        target is ctx.player
+    ):
+        return 'What?'
+
+    if target.id not in ctx.player.blocks:
+        return f'{target.name} not blocked!'
+
+    await ctx.player.remove_block(target)
+    return f'Removed {target.name} from blocked users.'
+
 @command(Privileges.Normal)
 async def reconnect(ctx: Context) -> str:
     """Disconnect and reconnect to the server."""

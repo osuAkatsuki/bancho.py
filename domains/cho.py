@@ -606,7 +606,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     # information from sql to be cached.
     await p.achievements_from_sql()
     await p.stats_from_sql_full()
-    await p.friends_from_sql()
+    await p.relationships_from_sql()
 
     if ip != '127.0.0.1':
         if glob.geoloc_db is not None:
@@ -789,6 +789,13 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         if not (t := await glob.players.get_ensure(name=t_name)):
             if glob.app.debug:
                 log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
+            return
+
+        if p.id in t.blocks:
+            p.enqueue(packets.userDMBlocked(t_name))
+
+            if glob.app.debug:
+                log(f'{p} tried to message {t}, but they have them blocked.')
             return
 
         if t.pm_private and p.id not in t.friends:

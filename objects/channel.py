@@ -66,16 +66,20 @@ class Channel:
 
     def send(self, msg: str, sender: 'Player',
              to_self: bool = False) -> None:
-        """Enqueue `msg` to all connected clients from `sender`."""
-        self.enqueue(
-            packets.sendMessage(
-                sender = sender.name,
-                msg = msg,
-                recipient = self.name,
-                sender_id = sender.id
-            ),
-            immune = () if to_self else (sender.id,)
+        """Enqueue `msg` to all appropriate clients from `sender`."""
+        data = packets.sendMessage(
+            sender=sender.name,
+            msg=msg,
+            recipient=self.name,
+            sender_id=sender.id
         )
+
+        for p in self.players:
+            if (
+                sender.id not in p.blocks and
+                (to_self or p.id != sender.id)
+            ):
+                p.enqueue(data)
 
     def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to all connected clients from bot."""

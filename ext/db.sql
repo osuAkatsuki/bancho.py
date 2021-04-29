@@ -75,10 +75,11 @@ create table favourites
 	primary key (userid, setid)
 );
 
-create table friendships
+create table relationships
 (
 	user1 int not null,
 	user2 int not null,
+	type enum('friend', 'block') not null,
 	primary key (user1, user2)
 );
 
