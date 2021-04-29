@@ -932,6 +932,7 @@ class Player:
         return randnum
 
     async def update_latest_activity(self) -> None:
+        """Update the player's latest activity in the database."""
         await glob.db.execute(
             'UPDATE users '
             'SET latest_activity = UNIX_TIMESTAMP() '

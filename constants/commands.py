@@ -1404,10 +1404,11 @@ async def mp_invite(ctx: Context) -> str:
 
     if not (t := glob.players.get(name=ctx.args[0])):
         return 'Could not find a user by that name.'
-    elif t is glob.bot:
+
+    if t is glob.bot:
         return "I'm too busy!"
 
-    if ctx.player is t:
+    if t is ctx.player:
         return "You can't invite yourself!"
 
     t.enqueue(packets.matchInvite(ctx.player, t.name))

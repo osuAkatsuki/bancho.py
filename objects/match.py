@@ -378,8 +378,9 @@ class Match:
         self.winners.clear()
         self.bans.clear()
 
-    async def await_submissions(self, was_playing: list['Player']
-                               ) -> tuple[dict[str, Union[int, float]], list['Player']]:
+    async def await_submissions(
+        self, was_playing: Sequence['Player']
+    ) -> tuple[dict[str, Union[int, float]], list['Player']]:
         """Await score submissions from all players in completed state."""
         scores = defaultdict(int)
         didnt_submit: list['Player'] = []
@@ -429,7 +430,7 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: list['Player']) -> None:
+    async def update_matchpoints(self, was_playing: Sequence['Player']) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
 

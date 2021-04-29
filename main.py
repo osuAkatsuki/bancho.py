@@ -45,11 +45,11 @@ import bg_loops
 import utils.misc
 from constants.privileges import Privileges
 from objects.achievement import Achievement
-from objects.collections import PlayerList
-from objects.collections import MatchList
-from objects.collections import ChannelList
-from objects.collections import ClanList
-from objects.collections import MapPoolList
+from objects.collections import Players
+from objects.collections import Matches
+from objects.collections import Channels
+from objects.collections import Clans
+from objects.collections import MapPools
 from objects.player import Player
 from utils.updater import Updater
 
@@ -63,26 +63,36 @@ glob.version = cmyui.Version(3, 3, 0)
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
-async def setup_collections() -> None:
-    """Setup & cache many global collections (mostly from sql)."""
-    glob.players = PlayerList() # online players
-    glob.matches = MatchList() # active multiplayer matches
-
-    glob.channels = await ChannelList.prepare() # active channels
-    glob.clans = await ClanList.prepare() # active clans
-    glob.pools = await MapPoolList.prepare() # active mappools
-
-    # create our bot & append it to the global player list.
-    bot_name = (await glob.db.fetch(
+async def fetch_bot_name() -> str:
+    """Fetch the bot's name from the database, if available."""
+    res = await glob.db.fetch(
         'SELECT name FROM users '
         'WHERE id = 1', _dict=False
-    ))[0]
-
-    glob.bot = Player(
-        id=1, name=bot_name, priv=Privileges.Normal,
-        login_time=float(0x7fffffff), # never auto-dc
-        bot_client=True
     )
+
+    if not res:
+        log("Couldn't find bot account in the database, "
+            "defaulting to BanchoBot for their name.", Ansi.LYELLOW)
+        return 'BanchoBot'
+
+    return res[0]
+
+async def setup_collections() -> None:
+    """Setup & cache many global collections."""
+    # dynamic (active) sets, only in ram
+    glob.players = Players()
+    glob.matches = Matches()
+
+    # static (inactive) sets, in ram & sql
+    glob.channels = await Channels.prepare()
+    glob.clans = await Clans.prepare()
+    glob.pools = await MapPools.prepare()
+
+    # create bot & add it to online players
+    glob.bot = Player(
+        id=1, name=await fetch_bot_name(), priv=Privileges.Normal,
+        login_time=float(0x7fffffff), bot_client=True
+    ) # never auto-dc the bot ^
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)

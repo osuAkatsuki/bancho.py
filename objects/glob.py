@@ -18,11 +18,11 @@ if __import__('typing').TYPE_CHECKING:
     import geoip2.database
 
     from objects.achievement import Achievement
-    from objects.collections import PlayerList
-    from objects.collections import ChannelList
-    from objects.collections import MatchList
-    from objects.collections import ClanList
-    from objects.collections import MapPoolList
+    from objects.collections import Players
+    from objects.collections import Channels
+    from objects.collections import Matches
+    from objects.collections import Clans
+    from objects.collections import MapPools
     from objects.player import Player
     from objects.score import Score
     from packets import BanchoPacket
@@ -41,11 +41,11 @@ __all__ = (
 app: 'Server'
 
 # current server state
-players: 'PlayerList'
-channels: 'ChannelList'
-matches: 'MatchList'
-clans: 'ClanList'
-pools: 'MapPoolList'
+players: 'Players'
+channels: 'Channels'
+matches: 'Matches'
+clans: 'Clans'
+pools: 'MapPools'
 achievements: dict[int, list['Achievement']] # per vn gamemode
 
 bot: 'Player'

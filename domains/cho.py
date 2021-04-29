@@ -1575,7 +1575,8 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
         if not (t := glob.players.get(id=self.user_id)):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
             return
-        elif t is glob.bot:
+
+        if t is glob.bot:
             p.send_bot("I'm too busy!")
             return
 

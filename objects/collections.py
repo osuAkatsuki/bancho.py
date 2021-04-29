@@ -4,8 +4,9 @@
 # in a lot of these classes; needs refactor.
 
 import asyncio
-from typing import Optional
 from typing import Iterator
+from typing import Optional
+from typing import Sequence
 from typing import Union
 
 from cmyui import log
@@ -22,17 +23,17 @@ from objects.player import Player
 from utils.misc import make_safe_name
 
 __all__ = (
-    'ChannelList',
-    'MatchList',
-    'PlayerList',
-    'MapPoolList',
-    'ClanList'
+    'Channels',
+    'Matches',
+    'Players',
+    'Mappools',
+    'Clans'
 )
 
 # TODO: decorator for these collections which automatically
 # adds debugging to their append/remove/insert/extend methods.
 
-class ChannelList(list):
+class Channels(list):
     """The currently active chat channels on the server."""
 
     def __iter__(self) -> Iterator['Channel']:
@@ -94,7 +95,7 @@ class ChannelList(list):
             ) for row in await glob.db.fetchall('SELECT * FROM channels')
         )
 
-class MatchList(list):
+class Matches(list):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
@@ -138,7 +139,7 @@ class MatchList(list):
         if glob.app.debug:
             log(f'{m} removed from matches list.')
 
-class PlayerList(list):
+class Players(list):
     """The currently active players on the server."""
     __slots__ = ('_lock',)
 
@@ -180,7 +181,7 @@ class PlayerList(list):
         """Return a set of the current unrestricted players."""
         return {p for p in self if p.priv & Privileges.Normal}
 
-    def enqueue(self, data: bytes, immune: list[Player] = []) -> None:
+    def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
         for p in self:
             if p not in immune:
@@ -278,7 +279,7 @@ class PlayerList(list):
         if glob.app.debug:
             log(f'{p} removed from global player list.')
 
-class MapPoolList(list):
+class MapPools(list):
     """The currently active mappools on the server."""
 
     def __iter__(self) -> Iterator['MapPool']:
@@ -332,7 +333,7 @@ class MapPoolList(list):
             ) for row in await glob.db.fetchall('SELECT * FROM tourney_pools')
         ])
 
-class ClanList(list):
+class Clans(list):
     """The currently active clans on the server."""
 
     def __iter__(self) -> Iterator['Clan']:

@@ -14,6 +14,7 @@ from functools import cache
 from functools import lru_cache
 from functools import partialmethod
 from typing import Optional
+from typing import Sequence
 from typing import TYPE_CHECKING
 
 from constants.gamemodes import GameMode
@@ -477,7 +478,7 @@ def write_string(s: str) -> bytearray:
 
     return ret
 
-def write_i32_list(l: tuple[int, ...]) -> bytearray:
+def write_i32_list(l: Sequence[int]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
     ret = bytearray(len(l).to_bytes(2, 'little'))
 
@@ -561,7 +562,7 @@ def write_scoreframe(s: ScoreFrame) -> bytearray:
         s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     ))
 
-def write(packid: int, *args: tuple[object, ...]) -> bytes:
+def write(packid: int, *args: Sequence[object]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('<Hx', packid))
 
