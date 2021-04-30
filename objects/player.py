@@ -373,6 +373,8 @@ class Player:
 
             glob.players.enqueue(packets.logout(self.id))
 
+        log(f'{self} logged out.', Ansi.LYELLOW)
+
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
         self.priv = new

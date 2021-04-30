@@ -300,7 +300,6 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
         p.logout()
 
         await p.update_latest_activity()
-        log(f'{p} logged out.', Ansi.LYELLOW)
 
 @register(restricted=True)
 class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
