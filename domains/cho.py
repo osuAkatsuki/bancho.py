@@ -6,6 +6,7 @@ import time
 from datetime import datetime as dt
 from datetime import timedelta as td
 from typing import Callable
+from typing import Union
 
 import bcrypt
 from cmyui import Connection
@@ -126,7 +127,7 @@ glob.bancho_packets = {
     'restricted': {}
 }
 
-def register(restricted: bool = False) -> Callable:
+def register(restricted: Union[bool, Callable] = False) -> Callable:
     """Register a handler in `glob.bancho_packets`."""
     def wrapper(cls: BanchoPacket) -> Callable:
         new_entry = {cls.type: cls}

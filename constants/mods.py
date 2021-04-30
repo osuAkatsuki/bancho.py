@@ -123,7 +123,7 @@ class Mods(IntFlag):
         return self
 
     @classmethod
-    def from_modstr(cls, s: str):
+    def from_modstr(cls, s: str) -> 'Mods':
         # from fmt: `HDDTRX`
         def get_mod(idx: int) -> str:
             return s[idx:idx + 2].upper()
@@ -145,7 +145,7 @@ class Mods(IntFlag):
         return mods
 
     @classmethod
-    def from_np(cls, s: str, mode_vn: int):
+    def from_np(cls, s: str, mode_vn: int) -> 'Mods':
         mods = cls.NOMOD
         _dict = npstr2mod_dict # global
 

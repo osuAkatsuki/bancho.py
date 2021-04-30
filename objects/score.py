@@ -169,7 +169,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, scoreid: int, sql_table: str):
+    async def from_sql(cls, scoreid: int, sql_table: str) -> Optional['Score']:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -210,8 +210,10 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data_b64: str, iv_b64: str,
-                              osu_ver: str, pw_md5: str) -> Optional['Score']:
+    async def from_submission(
+        cls, data_b64: str, iv_b64: str,
+        osu_ver: str, pw_md5: str
+    ) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
         iv = b64decode(iv_b64).decode('latin_1')
         data_aes = b64decode(data_b64).decode('latin_1')

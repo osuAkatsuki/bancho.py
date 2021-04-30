@@ -22,7 +22,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 try:
     from objects import glob
 except ModuleNotFoundError as exc:
-    if exc.msg == "No module named 'config'":
+    if exc.name == 'config':
         import shutil
         shutil.copy('ext/config.sample.py', 'config.py')
         sys.exit('\x1b[0;92mA config file has been generated, '

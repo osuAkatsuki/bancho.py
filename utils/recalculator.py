@@ -5,6 +5,7 @@ import hashlib
 import math
 import struct
 from pathlib import Path
+from typing import Optional
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -51,7 +52,7 @@ class PPCalculator:
         return True
 
     @classmethod
-    async def get_file(cls, bmap: 'Beatmap') -> None:
+    async def get_file(cls, bmap: 'Beatmap') -> Optional[Path]:
         path = BEATMAPS_PATH / f'{bmap.id}.osu'
 
         if (
@@ -66,7 +67,7 @@ class PPCalculator:
         return path
 
     @classmethod
-    async def from_map(cls, bmap: 'Beatmap', **pp_attrs):
+    async def from_map(cls, bmap: 'Beatmap', **pp_attrs) -> Optional['PPCalculator']:
         # ensure we have the file on disk for recalc
         if not await cls.get_file(bmap):
             return

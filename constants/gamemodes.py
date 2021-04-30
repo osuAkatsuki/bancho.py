@@ -50,7 +50,7 @@ class GameMode(IntEnum):
     ap_std   = 7
 
     @classmethod
-    def from_params(cls, mode_vn: int, mods: Mods):
+    def from_params(cls, mode_vn: int, mods: Mods) -> 'GameMode':
         mode = mode_vn
         if mods & Mods.RELAX:
             mode += 4

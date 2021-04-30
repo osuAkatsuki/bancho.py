@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from typing import Optional
 
 from cmyui import Ansi
 from cmyui import log
@@ -40,71 +41,82 @@ class RankedStatus(IntEnum):
     Loved = 5
 
     def __str__(self) -> str:
-        return {
-            self.NotSubmitted: 'Unsubmitted',
-            self.Pending: 'Unranked',
-            self.UpdateAvailable: 'Outdated',
-            self.Ranked: 'Ranked',
-            self.Approved: 'Approved',
-            self.Qualified: 'Qualified',
-            self.Loved: 'Loved'
-        }[self.value]
+        return gulagstatus2str_dict[self.value]
 
     @property
-    def osu_api(self):
+    def osu_api(self) -> int:
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
-        return {
-            self.Pending: 0,
-            self.Ranked: 1,
-            self.Approved: 2,
-            self.Qualified: 3,
-            self.Loved: 4
-        }[self.value]
+        return gulag2osuapistatus_dict[self.value]
 
-    @classmethod
-    def from_osuapi(cls, osuapi_status: int):
+    @staticmethod
+    def from_osuapi(osuapi_status: int) -> 'RankedStatus':
         """Convert from osu!api status."""
-        return cls(
-            defaultdict(lambda: cls.UpdateAvailable, {
-                -2: cls.Pending, # graveyard
-                -1: cls.Pending, # wip
-                 0: cls.Pending,
-                 1: cls.Ranked,
-                 2: cls.Approved,
-                 3: cls.Qualified,
-                 4: cls.Loved
-            })[osuapi_status]
-        )
+        return osu2gulagstatus_dict[osuapi_status]
 
-    @classmethod
-    def from_osudirect(cls, osudirect_status: int):
+    @staticmethod
+    def from_osudirect(osudirect_status: int) -> 'RankedStatus':
         """Convert from osu!direct status."""
-        return cls(
-            defaultdict(lambda: cls.UpdateAvailable, {
-                0: cls.Ranked,
-                2: cls.Pending,
-                3: cls.Qualified,
-                #4: all ranked statuses lol
-                5: cls.Pending, # graveyard
-                7: cls.Ranked, # played before
-                8: cls.Loved
-            })[osudirect_status]
-        )
+        return direct2gulagstatus_dict[osudirect_status]
 
-    @classmethod
-    def from_str(cls, status_str: str):
-        """Convert from string value."""
-        return cls( # could perhaps have `'unranked': cls.Pending`?
-            defaultdict(lambda: cls.UpdateAvailable, {
-                'pending': cls.Pending,
-                'ranked': cls.Ranked,
-                'approved': cls.Approved,
-                'qualified': cls.Qualified,
-                'loved': cls.Loved
-            })[status_str]
-        )
+    @staticmethod
+    def from_str(status_str: str) -> 'RankedStatus':
+        """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
+        return str2gulagstatus_dict[status_str]
 
+osu2gulagstatus_dict = defaultdict(
+    lambda: RankedStatus.UpdateAvailable, {
+        -2: RankedStatus.Pending, # graveyard
+        -1: RankedStatus.Pending, # wip
+        0:  RankedStatus.Pending,
+        1:  RankedStatus.Ranked,
+        2:  RankedStatus.Approved,
+        3:  RankedStatus.Qualified,
+        4:  RankedStatus.Loved
+    }
+)
+
+direct2gulagstatus_dict = defaultdict(
+    lambda: RankedStatus.UpdateAvailable, {
+        0: RankedStatus.Ranked,
+        2: RankedStatus.Pending,
+        3: RankedStatus.Qualified,
+        #4: all ranked statuses lol
+        5: RankedStatus.Pending, # graveyard
+        7: RankedStatus.Ranked, # played before
+        8: RankedStatus.Loved
+    }
+)
+
+gulag2osuapistatus_dict = {
+    RankedStatus.Pending: 0,
+    RankedStatus.Ranked: 1,
+    RankedStatus.Approved: 2,
+    RankedStatus.Qualified: 3,
+    RankedStatus.Loved: 4
+}
+
+str2gulagstatus_dict = defaultdict(
+    lambda: RankedStatus.UpdateAvailable, {
+        'pending': RankedStatus.Pending,
+        'ranked': RankedStatus.Ranked,
+        'approved': RankedStatus.Approved,
+        'qualified': RankedStatus.Qualified,
+        'loved': RankedStatus.Loved
+    }
+)
+
+gulagstatus2str_dict = {
+    RankedStatus.NotSubmitted: 'Unsubmitted',
+    RankedStatus.Pending: 'Unranked',
+    RankedStatus.UpdateAvailable: 'Outdated',
+    RankedStatus.Ranked: 'Ranked',
+    RankedStatus.Approved: 'Approved',
+    RankedStatus.Qualified: 'Qualified',
+    RankedStatus.Loved: 'Loved'
+}
+
+...
 #@dataclass
 #class BeatmapInfoRequest:
 #    filenames: Sequence[str]
@@ -144,7 +156,7 @@ class Beatmap:
                  'mode', 'bpm', 'cs', 'od', 'ar', 'hp',
                  'diff', 'pp_cache')
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.md5 = kwargs.get('md5', '')
         self.id = kwargs.get('id', 0)
         self.set_id = kwargs.get('set_id', 0)
@@ -185,7 +197,7 @@ class Beatmap:
         return f'{self.artist} - {self.title} [{self.version}]'
 
     @property
-    def url(self):
+    def url(self) -> str:
         """The osu! beatmap url for `self`."""
         return f'https://osu.{BASE_DOMAIN}/b/{self.id}'
 
@@ -206,7 +218,7 @@ class Beatmap:
                                RankedStatus.Approved)
 
     @classmethod
-    async def from_bid(cls, bid: int) -> 'Beatmap':
+    async def from_bid(cls, bid: int) -> 'Optional[Beatmap]':
         """Create a `Beatmap` from sql using a beatmap id."""
         # TODO: perhaps some better caching solution that allows
         # for maps to be retrieved from the cache by id OR md5?
@@ -232,22 +244,21 @@ class Beatmap:
         # I think i'll have md5 most times lol.
 
     @classmethod
-    async def from_bid_sql(cls, bid: int):
+    async def from_bid_sql(cls, bid: int) -> Optional['Beatmap']:
         """Fetch & return a map object from sql by id."""
         if res := await glob.db.fetch(
             'SELECT md5, set_id, '
             'artist, title, version, creator, '
             'last_update, total_length, max_combo, '
-            'status, frozen, plays, passes, '
-            'mode, bpm, cs, od, ar, hp, '
-            'diff '
+            'status, frozen, plays, passes, mode, '
+            'bpm, cs, od, ar, hp, diff '
             'FROM maps WHERE id = %s',
             [bid]
         ):
             return cls(**res, id=bid)
 
     @classmethod
-    async def from_md5(cls, md5: str):
+    async def from_md5(cls, md5: str) -> Optional['Beatmap']:
         """Create a `Beatmap` from cache, sql or osu!api using it's md5."""
         # check if the map is in the cache.
         if cached := cls.from_md5_cache(md5):
@@ -282,7 +293,7 @@ class Beatmap:
         return m
 
     @staticmethod
-    def from_md5_cache(md5: str):
+    def from_md5_cache(md5: str) -> 'Beatmap':
         """Fetch & return a map object from cache by md5."""
         if md5 in glob.cache['beatmap']:
             # check if our cached result is within timeout.
@@ -296,7 +307,7 @@ class Beatmap:
             del glob.cache['beatmap'][md5]
 
     @classmethod
-    async def from_md5_sql(cls, md5: str):
+    async def from_md5_sql(cls, md5: str) -> Optional['Beatmap']:
         """Fetch & return a map object from sql by md5."""
         if res := await glob.db.fetch(
             'SELECT id, set_id, '
@@ -311,7 +322,7 @@ class Beatmap:
             return cls(**res, md5=md5)
 
     @classmethod
-    async def from_md5_osuapi(cls, md5: str):
+    async def from_md5_osuapi(cls, md5: str) -> Optional['Beatmap']:
         """Fetch & return a map object from osu!api by md5."""
         url = 'https://old.ppy.sh/api/get_beatmaps'
         params = {'k': glob.config.osu_api_key, 'h': md5}
