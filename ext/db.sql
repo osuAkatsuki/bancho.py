@@ -75,6 +75,17 @@ create table favourites
 	primary key (userid, setid)
 );
 
+create table ingame_logins
+(
+	id int auto_increment
+		primary key,
+	userid int not null,
+	ip varchar(45) not null comment 'maxlen for ipv6',
+	osu_ver date not null,
+	osu_stream varchar(11) not null,
+	datetime datetime not null
+);
+
 create table relationships
 (
 	user1 int not null,

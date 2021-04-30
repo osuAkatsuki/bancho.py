@@ -358,24 +358,27 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     if len(client_info := split[2].split('|')) != 5:
         return # invalid request
 
-    if not (r := regexes.osu_ver.match(client_info[0])):
+    osu_ver_str = client_info[0]
+
+    if not (r := regexes.osu_ver.match(osu_ver_str)):
         return # invalid request
 
     # quite a bit faster than using dt.strptime.
-    osu_ver = dt(
+    osu_ver_dt = dt(
         year = int(r['ver'][0:4]),
         month = int(r['ver'][4:6]),
         day = int(r['ver'][6:8])
     )
 
-    tourney_client = r['stream'] == 'tourney'
+    osu_ver_stream = r['stream']
+    using_tourney_client = osu_ver_stream == 'tourney'
 
     # disallow the login if their osu! client is older
     # than two months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
     if not glob.app.debug:
-        if osu_ver < (dt.now() - td(60)):
+        if osu_ver_dt < (dt.now() - td(60)):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
@@ -403,7 +406,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     login_time = time.time()
 
-    if not tourney_client:
+    if not using_tourney_client:
         # Check if the player is already online
         if (
             (p := glob.players.get(name=username)) and
@@ -436,7 +439,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     tourney_privs = int(Privileges.Normal | Privileges.Donator)
 
     if (
-        tourney_client and
+        using_tourney_client and
         not user_info['priv'] & tourney_privs == tourney_privs
     ):
         # trying to use tourney client with insufficient privileges.
@@ -462,9 +465,15 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
         bcrypt_cache[pw_bcrypt] = pw_md5
 
-    """ handle client hashes """
+    """ login credentials verified """
 
-    # insert new set/occurrence.
+    await glob.db.execute(
+        'INSERT INTO ingame_logins '
+        '(userid, ip, osu_ver, osu_stream, datetime) '
+        'VALUES (%s, %s, %s, %s, NOW())',
+        [user_info['id'], ip, osu_ver_dt, osu_ver_stream]
+    )
+
     await glob.db.execute(
         'INSERT INTO client_hashes '
         '(userid, osupath, adapters, uninstall_id,'
@@ -551,12 +560,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     extras = {
         'utc_offset': utc_offset,
-        'osu_ver': osu_ver,
+        'osu_ver': osu_ver_dt,
         'pm_private': pm_private,
         'login_time': login_time,
         'clan': clan,
         'clan_priv': clan_priv,
-        'tourney_client': tourney_client
+        'tourney_client': using_tourney_client
     }
 
     p = Player(

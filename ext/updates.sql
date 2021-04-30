@@ -327,3 +327,15 @@ drop table if exists user_hashes;
 # v3.3.0
 rename table friendships to relationships;
 alter table relationships add type enum('friend', 'block') not null;
+
+# v3.3.1
+create table ingame_logins
+(
+	id int auto_increment
+		primary key,
+	userid int not null,
+	ip varchar(45) not null comment 'maxlen for ipv6',
+	osu_ver date not null,
+	osu_stream varchar(11) not null,
+	datetime datetime not null
+);
