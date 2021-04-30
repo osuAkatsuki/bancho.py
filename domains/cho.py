@@ -436,11 +436,12 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         return (packets.notification(f'{BASE_DOMAIN}: Unknown username') +
                 packets.userID(-1)), 'no'
 
-    tourney_privs = int(Privileges.Normal | Privileges.Donator)
-
     if (
         using_tourney_client and
-        not user_info['priv'] & tourney_privs == tourney_privs
+        not (
+            user_info['priv'] & Privileges.Donator and
+            user_info['priv'] & Privileges.Normal
+        )
     ):
         # trying to use tourney client with insufficient privileges.
         return packets.userID(-1), 'no'
@@ -717,7 +718,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     p._queue.clear() # TODO: this is pretty suboptimal
 
     user_os = 'runningunderwine' if is_wine else 'win32'
-    log(f'{p} logged in ({user_os}).', Ansi.LCYAN)
+    log(f'{p} logged in [{osu_ver_str} | {user_os}].', Ansi.LCYAN)
 
     await p.update_latest_activity()
     return bytes(data), p.token
@@ -1458,8 +1459,10 @@ class TourneyMatchJoinChannel(BanchoPacket, type=Packets.OSU_TOURNAMENT_JOIN_MAT
         if not (m := glob.matches[self.match_id]):
             return # match not found
 
-        if p.id in [s.player.id for s in m.slots]:
-            return # playing in the match
+        for s in m.slots:
+            if s.player is not None:
+                if p.id == s.player.id:
+                    return # playing in the match
 
         # attempt to join match chan
         if p.join_channel(m.chat):
