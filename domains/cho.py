@@ -370,7 +370,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         day = int(r['ver'][6:8])
     )
 
-    osu_ver_stream = r['stream']
+    osu_ver_stream = r['stream'] or 'stable'
     using_tourney_client = osu_ver_stream == 'tourney'
 
     # disallow the login if their osu! client is older
