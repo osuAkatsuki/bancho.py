@@ -395,7 +395,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
     if len(client_hashes := client_info[3].split(':')[:-1]) != 5:
         return # invalid request
 
-    client_hashes.pop(1) # no need for non-md5 adapters
+    is_wine = client_hashes.pop(1) == 'runningunderwine'
 
     pm_private = client_info[4] == '1'
 
@@ -476,67 +476,69 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         [user_info['id'], *client_hashes]
     )
 
-    # TODO: runningunderwine support
+    if not is_wine:
+        # find any other users from any of the same hwid values.
+        hwid_matches = await glob.db.fetchall(
+            'SELECT u.name, u.priv, h.occurrences '
+            'FROM client_hashes h '
+            'INNER JOIN users u ON h.userid = u.id '
+            'WHERE h.userid != %s AND (h.adapters = %s '
+            'OR h.uninstall_id = %s OR h.disk_serial = %s)',
+            [user_info['id'], *client_hashes[1:]]
+        )
 
-    # find any other users from any of the same hwid values.
-    hwid_matches = await glob.db.fetchall(
-        'SELECT u.name, u.priv, h.occurrences '
-        'FROM client_hashes h '
-        'INNER JOIN users u ON h.userid = u.id '
-        'WHERE h.userid != %s AND (h.adapters = %s '
-        'OR h.uninstall_id = %s OR h.disk_serial = %s)',
-        [user_info['id'], *client_hashes[1:]]
-    )
+        if hwid_matches:
+            # we have other accounts with matching hashes
 
-    if hwid_matches:
-        # we have other accounts with matching hashes
+            # NOTE: this is an area i've seen a lot of implementations rush
+            # through and poorly design; this section is CRITICAL for both
+            # keeping multiaccounting down, but perhaps more importantly in
+            # scenarios where multiple users are forced to use a single pc
+            # (lan meetups, at a friends place, shared computer, etc.).
+            # these scenarios are usually the ones where new players will
+            # get invited to your server.. first impressions are important
+            # and you don't want a ban and support ticket to be this users
+            # first experience. :P
 
-        # NOTE: this is an area i've seen a lot of implementations rush
-        # through and poorly design; this section is CRITICAL for both
-        # keeping multiaccounting down, but perhaps more importantly in
-        # scenarios where multiple users are forced to use a single pc
-        # (lan meetups, at a friends place, shared computer, etc.).
-        # these scenarios are usually the ones where new players will
-        # get invited to your server.. first impressions are important
-        # and you don't want a ban and support ticket to be this users
-        # first experience. :P
+            # anyways yeah needless to say i'm gonna think about this one
 
-        # anyways yeah needless to say i'm gonna think about this one
+            if not user_info['priv'] & Privileges.Verified:
+                # this player is not verified yet, this is their first
+                # time connecting in-game and submitting their hwid set.
+                # we will not allow any banned matches; if there are any,
+                # then ask the user to contact staff and resolve manually.
+                if not all([x['priv'] & Privileges.Normal for x in hwid_matches]):
+                    return (packets.notification('Please contact staff directly '
+                                                'to create an account.') +
+                            packets.userID(-1)), 'no'
 
-        if not user_info['priv'] & Privileges.Verified:
-            # this player is not verified yet, this is their first
-            # time connecting in-game and submitting their hwid set.
-            # we will not allow any banned matches; if there are any,
-            # then ask the user to contact staff and resolve manually.
-            if not all([x['priv'] & Privileges.Normal for x in hwid_matches]):
-                return (packets.notification('Please contact staff directly '
-                                             'to create an account.') +
-                        packets.userID(-1)), 'no'
+            else:
+                # player is verified
+                # TODO: discord webhook?
+                # TODO: staff hwid locking & bypass detections.
+                unique_players = set()
+                total_occurrences = 0
+                for match in hwid_matches:
+                    if match['name'] not in unique_players:
+                        unique_players.add(match['name'])
+                    total_occurrences += match['occurrences']
 
-        else:
-            # player is verified
-            # TODO: discord webhook?
-            # TODO: staff hwid locking & bypass detections.
-            unique_players = set()
-            total_occurrences = 0
-            for match in hwid_matches:
-                if match['name'] not in unique_players:
-                    unique_players.add(match['name'])
-                total_occurrences += match['occurrences']
+                msg_content = (
+                    f'{username} logged in with HWID matches '
+                    f'from {len(unique_players)} other users. '
+                    f'({total_occurrences} total occurrences)'
+                )
 
-            msg_content = (
-                f'{username} logged in with HWID matches '
-                f'from {len(unique_players)} other users. '
-                f'({total_occurrences} total occurrences)'
-            )
+                if webhook_url := glob.config.webhooks['audit-log']:
+                    # TODO: make it look nicer lol.. very basic
+                    webhook = Webhook(url=webhook_url)
+                    webhook.content = msg_content
+                    await webhook.post(glob.http)
 
-            if webhook_url := glob.config.webhooks['audit-log']:
-                # TODO: make it look nicer lol.. very basic
-                webhook = Webhook(url=webhook_url)
-                webhook.content = msg_content
-                await webhook.post(glob.http)
-
-            log(msg_content, Ansi.LRED)
+                log(msg_content, Ansi.LRED)
+    else:
+        # TODO: alternative checks for runningunderwine
+        ...
 
     # get clan & clan priv if we're in a clan
     if user_info['clan_id'] != 0:
@@ -705,7 +707,9 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     p._queue.clear() # TODO: this is pretty suboptimal
 
-    log(f'{p} logged in.', Ansi.LCYAN)
+    user_os = 'runningunderwine' if is_wine else 'win32'
+    log(f'{p} logged in ({user_os}).', Ansi.LCYAN)
+
     await p.update_latest_activity()
     return bytes(data), p.token
 
@@ -984,6 +988,8 @@ class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
 
         await p.update_latest_activity()
         p.join_match(self.match, self.match.passwd)
+
+        self.match.chat.send_bot(f'Match created by {p.name}.')
         log(f'{p} created a new multiplayer match.')
 
 async def check_menu_option(p: Player, key: int):
