@@ -1025,8 +1025,8 @@ async def debug(ctx: Context) -> str:
     glob.app.debug = not glob.app.debug
     return f"Toggled {'on' if glob.app.debug else 'off'}."
 
-# TODO: this command is rly bad, it probably
-# shouldn't really be a command to begin with..
+# NOTE: these commands will likely be removed
+#       with the addition of a good frontend.
 str_priv_dict = {
     'normal': Privileges.Normal,
     'verified': Privileges.Verified,
@@ -1040,24 +1040,45 @@ str_priv_dict = {
     'admin': Privileges.Admin,
     'dangerous': Privileges.Dangerous
 }
+
 @command(Privileges.Dangerous, hidden=True)
-async def setpriv(ctx: Context) -> str:
+async def addpriv(ctx: Context) -> str:
     """Set privileges for a specified player (by name)."""
     if len(ctx.args) < 2:
-        return 'Invalid syntax: !setpriv <name> <role1 role2 role3 ...>'
+        return 'Invalid syntax: !addpriv <name> <role1 role2 role3 ...>'
 
-    priv = Privileges(0)
+    bits = Privileges(0)
 
     for m in [m.lower() for m in ctx.args[1:]]:
         if m not in str_priv_dict:
             return f'Not found: {m}.'
 
-        priv |= str_priv_dict[m]
+        bits |= str_priv_dict[m]
 
     if not (t := await glob.players.get_ensure(name=ctx.args[0])):
         return 'Could not find user.'
 
-    await t.update_privs(priv)
+    await t.add_privs(bits)
+    return f"Updated {t}'s privileges."
+
+@command(Privileges.Dangerous, hidden=True)
+async def rmpriv(ctx: Context) -> str:
+    """Set privileges for a specified player (by name)."""
+    if len(ctx.args) < 2:
+        return 'Invalid syntax: !rmpriv <name> <role1 role2 role3 ...>'
+
+    bits = Privileges(0)
+
+    for m in [m.lower() for m in ctx.args[1:]]:
+        if m not in str_priv_dict:
+            return f'Not found: {m}.'
+
+        bits |= str_priv_dict[m]
+
+    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+        return 'Could not find user.'
+
+    await t.remove_privs(bits)
     return f"Updated {t}'s privileges."
 
 @command(Privileges.Dangerous)
