@@ -584,6 +584,17 @@ class Player:
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f'Match {self.match} finished.')
+
+            # cancel any pending start timers
+            if self.match.starting['start'] is not None:
+                self.match.starting['start'].cancel()
+                for alert in self.match.starting['alerts']:
+                    alert.cancel()
+
+                # i'm ocd
+                self.match.starting['start'] = None
+                self.match.starting['alerts'] = None
+
             glob.matches.remove(self.match)
 
             if lobby := glob.channels['#lobby']:

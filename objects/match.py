@@ -24,6 +24,8 @@ from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
+    from asyncio import TimerHandle
+
     from objects.player import Player
     from objects.channel import Channel
 
@@ -196,6 +198,10 @@ class Match:
     slots: list[`Slot`]
         A list of 16 `Slot` objects representing the match's slots.
 
+    starting: Optional[dict[str, `TimerHandle`]]
+        Used when the match is started with !mp start <seconds>.
+        It stores both the starting timer, and the chat alert timers.
+
     seed: `int`
         The seed used for osu!mania's random mod.
 
@@ -209,7 +215,7 @@ class Match:
         'chat', 'slots',
         #'type',
         'team_type', 'win_condition',
-        'in_progress', 'seed',
+        'in_progress', 'starting', 'seed',
 
         'pool', # mappool currently selected
 
@@ -245,6 +251,9 @@ class Match:
         self.win_condition = MatchWinConditions.score
 
         self.in_progress = False
+        self.starting: dict[str, Optional[Union['TimerHandle', list['TimerHandle']]]] = {
+            'start': None, 'alerts': None
+        }
         self.seed = 0
 
         self.pool: Optional[MapPool] = None

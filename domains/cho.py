@@ -965,8 +965,9 @@ class LobbyJoin(BanchoPacket, type=Packets.OSU_JOIN_LOBBY):
     async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
-        for m in [_m for _m in glob.matches if _m]:
-            p.enqueue(packets.newMatch(m))
+        for m in glob.matches:
+            if m is not None:
+                p.enqueue(packets.newMatch(m))
 
 @register
 class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):

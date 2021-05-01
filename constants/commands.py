@@ -1267,33 +1267,80 @@ async def mp_help(ctx: Context) -> str:
 @mp_commands.add(Privileges.Normal, aliases=['st'])
 async def mp_start(ctx: Context) -> str:
     """Start the current multiplayer match, with any players ready."""
-    if (msg_len := len(ctx.args)) > 1:
+    if len(ctx.args) > 1:
         return 'Invalid syntax: !mp start <force/seconds>'
 
-    if msg_len == 1:
+    # this command can be used in a few different ways;
+    # !mp start: start the match now (make sure all players are ready)
+    # !mp start force: start the match now (don't check for ready)
+    # !mp start N: start the match in N seconds (don't check for ready)
+    # !mp start cancel: cancel the current match start timer
+
+    if not ctx.args:
+        # !mp start
+        if ctx.match.starting['start'] is not None:
+            # TODO: print time remaining
+            return 'Match start already enqueued!'
+
+        if any(s.status == SlotStatus.not_ready for s in ctx.match.slots):
+            return 'Not all players are ready (`!mp start force` to override).'
+    else:
         if ctx.args[0].isdecimal():
+            # !mp start N
+            if ctx.match.starting['start'] is not None:
+                # TODO: print time remaining
+                return 'Match start already enqueued!'
+
             # !mp start <seconds>
             duration = int(ctx.args[0])
             if not 0 < duration <= 300:
                 return 'Timer range is 1-300 seconds.'
 
-            def _start():
+            def _start() -> None:
+                """Remove any pending timers & start the match."""
+                # remove start & alert timers
+                ctx.match.starting['start'] = None
+                ctx.match.starting['alerts'] = None
+
                 # make sure player didn't leave the
                 # match since queueing this start lol..
-                if ctx.player in ctx.match:
-                    ctx.match.start()
+                if ctx.player not in ctx.match:
+                    ctx.match.chat.send_bot('Player left match? (cancelled)')
+                    return
 
+                ctx.match.start()
+                ctx.match.chat.send_bot('Starting match.')
+
+            def _alert_start(t: int) -> None:
+                """Alert the match of the impending start."""
+                ctx.match.chat.send_bot(f'Match starting in {t} seconds.')
+
+            # add timers to our match object,
+            # so we can cancel them if needed.
             loop = asyncio.get_running_loop()
-            loop.call_later(duration, _start)
+            ctx.match.starting['start'] = loop.call_later(duration, _start)
+            ctx.match.starting['alerts'] = [
+                loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                for t in (60, 30, 10, 5, 4, 3, 2, 1) if t < duration
+            ]
+
             return f'Match will start in {duration} seconds.'
+        elif ctx.args[0] in ('cancel', 'c'):
+            # !mp start cancel
+            if ctx.match.starting['start'] is None:
+                return 'Match timer not active!'
+
+            ctx.match.starting['start'].cancel()
+            for alert in ctx.match.starting['alerts']:
+                alert.cancel()
+
+            ctx.match.starting['start'] = None
+            ctx.match.starting['alerts'] = None
+
+            return 'Match timer cancelled.'
         elif ctx.args[0] not in ('force', 'f'):
             return 'Invalid syntax: !mp start <force/seconds>'
         # !mp start force simply passes through
-    else:
-        # !mp start (no force or timer)
-        if any(s.status == SlotStatus.not_ready for s in ctx.match.slots):
-            return ('Not all players are ready '
-                    '(use `!mp start force` to override).')
 
     ctx.match.start()
     return 'Good luck!'
