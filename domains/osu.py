@@ -560,9 +560,11 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         stacktrace = utils.misc.get_appropriate_stacktrace()
         await utils.misc.log_strange_occurrence(stacktrace)
 
-    if not ( # check all players not whitelisted or restricted
-        score.player.priv & Privileges.Whitelisted or
-        score.player.restricted
+    if ( # check for pp caps on ranked & approved maps for appropriate players.
+        score.bmap.status != RankedStatus.Loved and not (
+            score.player.priv & Privileges.Whitelisted or
+            score.player.restricted
+        )
     ):
         # Get the PP cap for the current context.
         pp_cap = glob.config.autoban_pp[score.mode][score.mods & Mods.FLASHLIGHT != 0]
