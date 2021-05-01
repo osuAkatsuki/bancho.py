@@ -2157,6 +2157,15 @@ async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
 
 """ Misc handlers """
 
+# NOTE: this will likely be removed with the addition of a frontend.
+@domain.route({re.compile(r'^/beatmapsets/\d{1,10}(?:/discussion)?/?$'),
+               re.compile(r'^/beatmaps/\d{1,10}/?'),
+               re.compile(r'^/community/forums/topics/\d{1,10}/?$')})
+async def osu_redirects(conn: Connection) -> Optional[bytes]:
+    """Redirect some common url's the client uses to osu!."""
+    conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
+    return (301, b'')
+
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.(png|jpeg)$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
     """Serve a screenshot from the server, by filename."""
