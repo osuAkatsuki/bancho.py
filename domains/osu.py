@@ -695,9 +695,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
 
-    stats_query = [
-        'UPDATE stats SET ' # no , intentionally
-        'plays_{0:sql} = %s',
+    stats_query = [ # build a list of params to update
+        'UPDATE stats SET plays_{0:sql} = %s',
         'playtime_{0:sql} = %s'
     ]
     stats_params = [stats.plays, stats.playtime]
