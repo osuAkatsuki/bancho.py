@@ -656,20 +656,32 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        # (thanks osu for doing this by name rather than id very cool)
-        query = ('SELECT m.`msg`, m.`time`, m.`from_id`, '
-                '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
-                '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
-                'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0')
+        res = await glob.db.fetchall(
+            'SELECT m.`msg`, m.`time`, m.`from_id`, '
+            '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
+            '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
+            'FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0',
+            [p.id]
+        )
 
-        for msg in await glob.db.fetchall(query, [p.id]):
-            msg_time = dt.fromtimestamp(msg['time'])
-            msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
+        if res:
+            sent_to = set() # ids
 
-            data += packets.sendMessage(
-                sender=msg['from'], msg=msg_ts,
-                recipient=msg['to'], sender_id=msg['from_id']
-            )
+            for msg in res:
+                if msg['from'] not in sent_to:
+                    packets.sendMessage(
+                        sender=msg['from'], msg='Mail received while offline.',
+                        recipient=msg['to'], sender_id=msg['from_id']
+                    )
+                    sent_to.add(msg['from'])
+
+                msg_time = dt.fromtimestamp(msg['time'])
+                msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
+
+                data += packets.sendMessage(
+                    sender=msg['from'], msg=msg_ts,
+                    recipient=msg['to'], sender_id=msg['from_id']
+                )
 
         if not p.priv & Privileges.Verified:
             # this is the player's first login, verify their
