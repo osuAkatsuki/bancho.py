@@ -64,10 +64,14 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
+    ip = conn.headers['X-Real-IP']
+
     if (
         'User-Agent' not in conn.headers or
         conn.headers['User-Agent'] != 'osu!'
     ):
+        url = f'{conn.cmd} {conn.headers["Host"]}{conn.path}'
+        log(f'[{ip}] {url} missing user-agent.', Ansi.LRED)
         return
 
     # check for 'osu-token' in the headers.
@@ -77,9 +81,7 @@ async def bancho_handler(conn: Connection) -> bytes:
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
-            resp, token = await login(
-                conn.body, conn.headers['X-Real-IP']
-            )
+            resp, token = await login(conn.body, ip)
 
         conn.resp_headers['cho-token'] = token
         return resp
@@ -138,8 +140,8 @@ def register(restricted: Union[bool, Callable] = False) -> Callable:
         return cls
 
     if callable(restricted):
-        _cls, restricted = restricted, False
         # packet class passed right in
+        _cls, restricted = restricted, False
         return wrapper(_cls)
     return wrapper
 
@@ -322,7 +324,7 @@ RESTRICTED_MSG = (
     'greater than 3 months, you may appeal via the form on the site.'
 )
 
-async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
+async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
@@ -349,7 +351,8 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
 
     """ Parse data and verify the request is legitimate. """
 
-    if len(split := origin.decode().split('\n')[:-1]) != 3:
+    if len(split := body.decode().split('\n')[:-1]) != 3:
+        log(f'Invalid login request from {ip}.', Ansi.LRED)
         return # invalid request
 
     username = split[0]

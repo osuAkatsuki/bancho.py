@@ -1430,7 +1430,7 @@ async def mp_addref(ctx: Context) -> str:
         return f'{t} is already a match referee!'
 
     ctx.match._refs.add(t)
-    return 'Match referees updated.'
+    return f'{t.name} added to match referees.'
 
 @mp_commands.add(Privileges.Normal)
 async def mp_rmref(ctx: Context) -> str:
@@ -1448,7 +1448,7 @@ async def mp_rmref(ctx: Context) -> str:
         return 'The host is always a referee!'
 
     ctx.match._refs.remove(t)
-    return 'Match referees updated.'
+    return f'{t.name} removed from match referees.'
 
 @mp_commands.add(Privileges.Normal)
 async def mp_listref(ctx: Context) -> str:

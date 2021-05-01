@@ -569,8 +569,8 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
         if score.pp > pp_cap:
             msg_content = (
-                f'{score.player} banned for submitting '
-                f'{score.pp:.2f}pp score on gm {score.mode!r}.',
+                f'{score.player} restricted for submitting '
+                f'{score.pp:.2f}pp score on gm {score.mode!r}.'
             )
 
             if webhook_url := glob.config.webhooks['audit-log']:
@@ -2159,6 +2159,7 @@ async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
 
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.(png|jpeg)$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
+    """Serve a screenshot from the server, by filename."""
     if len(conn.path) not in (16, 17):
         return (400, b'Invalid request.')
 
@@ -2187,6 +2188,7 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
 
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
+    """Send the latest .osu file the server has for a given map."""
     if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
         log(f'Requested invalid map update {conn.path}.', Ansi.LRED)
         return (400, b'Invalid map file syntax.')

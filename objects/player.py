@@ -429,15 +429,15 @@ class Player:
             [admin.id, self.id, log_msg]
         )
 
+        if 'restricted' in self.__dict__:
+            del self.restricted # wipe cached_property
+
+        log(f'Restricted {self}.', Ansi.LCYAN)
+
         if self.online:
             # log the user out if they're offline, this
             # will simply relog them and refresh their state.
             self.logout()
-
-        if 'restricted' in self.__dict__:
-            del self.restricted # wipe cached_property
-
-        log(f'Restrict {self}.', Ansi.LCYAN)
 
     async def unrestrict(self, admin: 'Player', reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
@@ -451,15 +451,15 @@ class Player:
             [admin.id, self.id, log_msg]
         )
 
-        if self.online:
-            # log the user out if they're offline, this
-            # will simply relog them and refresh their state.
-            self.logout()
-
         if 'restricted' in self.__dict__:
             del self.restricted # wipe cached_property
 
         log(f'Unrestricted {self}.', Ansi.LCYAN)
+
+        if self.online:
+            # log the user out if they're offline, this
+            # will simply relog them and refresh their state.
+            self.logout()
 
     async def silence(self, admin: 'Player', duration: int,
                       reason: str) -> None:
@@ -597,6 +597,10 @@ class Player:
                         self.match.host = s.player
                         self.match.host.enqueue(packets.matchTransferHost())
                         break
+
+            if self in self.match._refs:
+                self.match._refs.remove(self)
+                self.match.chat.send_bot(f'{self.name} removed from match referees.')
 
             # notify others of our deprature
             self.match.enqueue_state()
