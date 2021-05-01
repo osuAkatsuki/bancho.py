@@ -199,12 +199,12 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f'https://osu.{BASE_DOMAIN}/b/{self.id}'
+        return f'https://osu.{BASE_DOMAIN}/beatmapsets/{self.set_id}#{self.id}'
 
     @property
-    def set_url(self) -> str:
+    def set_url(self) -> str: # same as above, just no beatmap id
         """The osu! beatmap set url for `self`."""
-        return f'https://osu.{BASE_DOMAIN}/s/{self.set_id}'
+        return f'https://osu.{BASE_DOMAIN}/beatmapsets/{self.set_id}'
 
     @property
     def embed(self) -> str:
