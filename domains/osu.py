@@ -570,22 +570,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         pp_cap = glob.config.autoban_pp[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
-            msg_content = (
-                f'{score.player} restricted for submitting '
-                f'{score.pp:.2f}pp score on gm {score.mode!r}.'
-            )
-
-            if webhook_url := glob.config.webhooks['audit-log']:
-                # TODO: make it look nicer lol.. very basic
-                webhook = Webhook(url=webhook_url)
-                webhook.content = msg_content
-                await webhook.post(glob.http)
-
-            log(msg_content, Ansi.LRED)
-
             await score.player.restrict(
-                admin = glob.bot,
-                reason = f'[{score.mode!r}] autoban @ {score.pp:.2f}'
+                admin=glob.bot,
+                reason=f'[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp'
             )
 
     """ Score submission checks completed; submit the score. """

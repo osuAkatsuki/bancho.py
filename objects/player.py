@@ -14,8 +14,9 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
-from cmyui import Ansi
-from cmyui import log
+from cmyui.logging import Ansi
+from cmyui.logging import log
+from cmyui.discord import Webhook
 
 import packets
 from constants.countries import country_codes
@@ -432,7 +433,13 @@ class Player:
         if 'restricted' in self.__dict__:
             del self.restricted # wipe cached_property
 
-        log(f'Restricted {self}.', Ansi.LCYAN)
+        log_msg = f'{admin} restricted {self} for: {reason}.'
+
+        log(log_msg, Ansi.LRED)
+
+        if webhook_url := glob.config.webhooks['audit-log']:
+            webhook = Webhook(webhook_url, content=log_msg)
+            await webhook.post(glob.http)
 
         if self.online:
             # log the user out if they're offline, this
@@ -454,7 +461,13 @@ class Player:
         if 'restricted' in self.__dict__:
             del self.restricted # wipe cached_property
 
-        log(f'Unrestricted {self}.', Ansi.LCYAN)
+        log_msg = f'{admin} unrestricted {self} for: {reason}.'
+
+        log(log_msg, Ansi.LRED)
+
+        if webhook_url := glob.config.webhooks['audit-log']:
+            webhook = Webhook(webhook_url, content=log_msg)
+            await webhook.post(glob.http)
 
         if self.online:
             # log the user out if they're offline, this
