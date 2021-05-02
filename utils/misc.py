@@ -147,6 +147,7 @@ def seconds_readable(seconds: int) -> str:
     return ':'.join(r)
 
 def install_excepthook():
+    """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
     sys._excepthook = sys.excepthook # backup
     def _excepthook(
         type_: Type[BaseException],
@@ -156,6 +157,17 @@ def install_excepthook():
         if type_ is KeyboardInterrupt:
             print('\33[2K\r', end='Aborted startup.')
             return
+        elif (
+            type_ is AttributeError and
+            value.args[0].startswith("module 'config' has no attribute")
+        ):
+            attr_name = value.args[0][34:-1]
+            log("gulag's config has been updated, and has "
+                f"added a new `{attr_name}` attribute.", Ansi.LMAGENTA)
+            log("Please refer to it's value & example in "
+                "ext/config.sample.py for additional info.", Ansi.LCYAN)
+            return
+
         print('\x1b[0;31mgulag ran into an issue '
             'before starting up :(\x1b[0m')
         sys._excepthook(type_, value, traceback)

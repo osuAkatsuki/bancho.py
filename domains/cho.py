@@ -732,7 +732,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
     p._queue.clear() # TODO: this is pretty suboptimal
 
-    user_os = 'wine (linux / osx)' if is_wine else 'win32'
+    user_os = 'unix (wine)' if is_wine else 'win32'
     log(f'{p} logged in with {osu_ver_str} on {user_os}.', Ansi.LCYAN)
 
     await p.update_latest_activity()

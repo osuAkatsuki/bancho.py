@@ -25,7 +25,6 @@ from cmyui import Connection
 from cmyui import Domain
 from cmyui import log
 from cmyui import ratelimit
-from cmyui.discord import Webhook
 
 import packets
 import utils.misc
