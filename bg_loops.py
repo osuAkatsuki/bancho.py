@@ -1,28 +1,29 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-import lzma
+#import lzma
 import time
-from pathlib import Path
+#from pathlib import Path
 from typing import Coroutine
-from typing import TYPE_CHECKING
+#from typing import TYPE_CHECKING
 
-from cmyui.osu import ReplayFrame
-from cmyui.discord import Webhook
-from cmyui.discord import Embed
+#from cmyui.osu import ReplayFrame
+#from cmyui.discord import Webhook
+#from cmyui.discord import Embed
 from cmyui import log, Ansi
 
 import packets
-import utils.misc
-from constants.gamemodes import GameMode
+#import utils.misc
+#from constants.gamemodes import GameMode
 from constants.privileges import Privileges
 from objects import glob
 
-if TYPE_CHECKING:
-    from objects.score import Score
+#if TYPE_CHECKING:
+#    from objects.score import Score
 
 __all__ = ('donor_expiry', 'disconnect_ghosts',
-           'replay_detections', 'reroll_bot_status')
+           #'replay_detections',
+           'reroll_bot_status')
 
 async def donor_expiry() -> list[Coroutine]:
     """Add new donation ranks & enqueue tasks to remove current ones."""
@@ -82,6 +83,7 @@ async def disconnect_ghosts() -> None:
         # run this indefinitely
         await asyncio.sleep(PING_TIMEOUT // 3)
 
+'''
 # This function is currently pretty tiny and useless, but
 # will just continue to expand as more ideas come to mind.
 async def analyze_score(score: 'Score') -> None:
@@ -151,6 +153,7 @@ async def replay_detections() -> None:
 
     while score := await queue.get():
         loop.create_task(analyze_score(score))
+'''
 
 async def reroll_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""

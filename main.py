@@ -149,11 +149,13 @@ async def before_serving() -> None:
     # setup a loop to kick inactive ghosted players.
     new_coros.append(bg_loops.disconnect_ghosts())
 
+    '''
     # if the surveillance webhook has a value, run
     # automatic (still very primitive) detections on
     # replays deemed by the server's configurable values.
     if glob.config.webhooks['surveillance']:
         new_coros.append(bg_loops.replay_detections())
+    '''
 
     # reroll the bot's random status every `interval` sec.
     new_coros.append(bg_loops.reroll_bot_status(interval=300))

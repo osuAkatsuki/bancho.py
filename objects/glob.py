@@ -7,7 +7,7 @@ import config  # NOQA
 
 # this file contains no actualy definitions
 if __import__('typing').TYPE_CHECKING:
-    from asyncio import Queue
+    #from asyncio import Queue
     from typing import Optional
 
     from aiohttp.client import ClientSession
@@ -24,7 +24,7 @@ if __import__('typing').TYPE_CHECKING:
     from objects.collections import Clans
     from objects.collections import MapPools
     from objects.player import Player
-    from objects.score import Score
+    #from objects.score import Score
     from packets import BanchoPacket
     from packets import Packets
 
@@ -34,7 +34,7 @@ __all__ = (
     'pools', 'clans', 'achievements',
     'version', 'bot', 'api_keys',
     'bancho_packets', 'db', 'http',
-    'datadog', 'sketchy_queue', 'cache'
+    'datadog', 'cache'#, 'sketchy_queue'
 )
 
 # server object
@@ -64,9 +64,6 @@ db: 'AsyncSQLPool'
 http: 'ClientSession'
 datadog: 'Optional[ThreadStats]'
 
-# queue of submitted scores deemed 'sketchy'; to be analyzed.
-sketchy_queue: 'Queue[Score]'
-
 # gulag's main cache.
 # the idea here is simple - keep a copy of things either from sql or
 # that take a lot of time to produce in memory for quick and easy access.
@@ -94,3 +91,8 @@ cache = {
     'unsubmitted': set(), # {md5, ...}
     'needs_update': set() # {md5, ...}
 }
+
+''' (currently unused)
+# queue of submitted scores deemed 'sketchy'; to be analyzed.
+sketchy_queue: 'Queue[Score]'
+'''
