@@ -1279,8 +1279,8 @@ async def mp_start(ctx: Context) -> str:
     if not ctx.args:
         # !mp start
         if ctx.match.starting['start'] is not None:
-            # TODO: print time remaining
-            return 'Match start already enqueued!'
+            time_remaining = int(ctx.match.starting['time'] - time.time())
+            return f'Match starting in {time_remaining} seconds.'
 
         if any(s.status == SlotStatus.not_ready for s in ctx.match.slots):
             return 'Not all players are ready (`!mp start force` to override).'
@@ -1288,8 +1288,8 @@ async def mp_start(ctx: Context) -> str:
         if ctx.args[0].isdecimal():
             # !mp start N
             if ctx.match.starting['start'] is not None:
-                # TODO: print time remaining
-                return 'Match start already enqueued!'
+                time_remaining = int(ctx.match.starting['time'] - time.time())
+                return f'Match starting in {time_remaining} seconds.'
 
             # !mp start <seconds>
             duration = int(ctx.args[0])
@@ -1301,6 +1301,7 @@ async def mp_start(ctx: Context) -> str:
                 # remove start & alert timers
                 ctx.match.starting['start'] = None
                 ctx.match.starting['alerts'] = None
+                ctx.match.starting['time'] = None
 
                 # make sure player didn't leave the
                 # match since queueing this start lol..
@@ -1323,6 +1324,7 @@ async def mp_start(ctx: Context) -> str:
                 loop.call_later(duration - t, lambda t=t: _alert_start(t))
                 for t in (60, 30, 10, 5, 4, 3, 2, 1) if t < duration
             ]
+            ctx.match.starting['time'] = time.time() + duration
 
             return f'Match will start in {duration} seconds.'
         elif ctx.args[0] in ('cancel', 'c'):
@@ -1336,6 +1338,7 @@ async def mp_start(ctx: Context) -> str:
 
             ctx.match.starting['start'] = None
             ctx.match.starting['alerts'] = None
+            ctx.match.starting['time'] = None
 
             return 'Match timer cancelled.'
         elif ctx.args[0] not in ('force', 'f'):

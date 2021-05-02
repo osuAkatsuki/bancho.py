@@ -604,9 +604,10 @@ class Player:
                 for alert in self.match.starting['alerts']:
                     alert.cancel()
 
-                # i'm ocd
+                # i guess unnecessary but i'm ocd
                 self.match.starting['start'] = None
                 self.match.starting['alerts'] = None
+                self.match.starting['time'] = None
 
             glob.matches.remove(self.match)
 

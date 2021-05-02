@@ -185,6 +185,11 @@ class Slot:
         self.loaded = False
         self.skipped = False
 
+StartingTimers = dict[
+                       # start         alerts               time
+    str, Optional[Union['TimerHandle', list['TimerHandle'], float]]
+]
+
 class Match:
     """\
     An osu! multiplayer match.
@@ -251,8 +256,8 @@ class Match:
         self.win_condition = MatchWinConditions.score
 
         self.in_progress = False
-        self.starting: dict[str, Optional[Union['TimerHandle', list['TimerHandle']]]] = {
-            'start': None, 'alerts': None
+        self.starting: StartingTimers = {
+            'start': None, 'alerts': None, 'time': None
         }
         self.seed = 0
 
