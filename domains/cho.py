@@ -191,7 +191,9 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         msg = self.msg.msg.strip()
         recipient = self.msg.recipient
 
-        if recipient == '#spectator':
+        if recipient == '#highlight':
+            return
+        elif recipient == '#spectator':
             if p.spectating:
                 # we are spectating someone
                 spec_id = p.spectating.id
@@ -1415,6 +1417,9 @@ class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
+        if self.name == '#highlight':
+            return
+
         c = glob.channels[self.name]
 
         if not c or not p.join_channel(c):
@@ -1555,6 +1560,9 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
+        if self.name == '#highlight':
+            return
+
         c = glob.channels[self.name]
 
         if not c:
