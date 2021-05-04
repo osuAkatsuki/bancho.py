@@ -24,7 +24,7 @@ if you're making large scale changes, do it for learning rather than clout, and
 i promise the long-term game will this kind of behaviour nicely :)
 
 there is currently no official frontend project for gulag, but members of the community
-have made significant headway with [gulag-web](https://github.com/Yo-ru/gulag-web).
+have made significant headway with [gulag-web](https://github.com/Varkaria/gulag-web).
 please note that this project is not maintained by me, and that my focus remains on the
 osu! server itself.
 
