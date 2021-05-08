@@ -292,7 +292,7 @@ class Player:
         return self.remaining_silence != 0
 
     @cached_property
-    def bancho_priv(self) -> int:
+    def bancho_priv(self) -> ClientPrivileges:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
         if self.priv & Privileges.Normal:

@@ -672,7 +672,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
             for msg in res:
                 if msg['from'] not in sent_to:
                     packets.sendMessage(
-                        sender=msg['from'], msg='Mail received while offline.',
+                        sender=msg['from'], msg='Unread messages',
                         recipient=msg['to'], sender_id=msg['from_id']
                     )
                     sent_to.add(msg['from'])
