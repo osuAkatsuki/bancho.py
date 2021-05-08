@@ -2154,7 +2154,7 @@ if glob.config.redirect_osu_urls:
         conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
         return (301, b'')
 
-@domain.route(re.compile(r'^/ss/[a-zA-Z0-9]{8}\.(png|jpeg)$'))
+@domain.route(re.compile(r'^/ss/[a-zA-Z0-9-_]{8}\.(png|jpeg)$'))
 async def get_screenshot(conn: Connection) -> Optional[bytes]:
     """Serve a screenshot from the server, by filename."""
     if len(conn.path) not in (16, 17):
