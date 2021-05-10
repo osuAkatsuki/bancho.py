@@ -7,10 +7,11 @@ import time
 from typing import Coroutine
 #from typing import TYPE_CHECKING
 
-#from cmyui.osu import ReplayFrame
 #from cmyui.discord import Webhook
 #from cmyui.discord import Embed
-from cmyui import log, Ansi
+from cmyui.logging import Ansi
+from cmyui.logging import log
+#from cmyui.osu import ReplayFrame
 
 import packets
 #import utils.misc

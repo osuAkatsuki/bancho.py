@@ -11,9 +11,9 @@ if __import__('typing').TYPE_CHECKING:
     from typing import Optional
 
     from aiohttp.client import ClientSession
-    from cmyui import AsyncSQLPool
-    from cmyui import Server
-    from cmyui import Version
+    from cmyui.mysql import AsyncSQLPool
+    from cmyui.version import Version
+    from cmyui.web import Server
     from datadog import ThreadStats
     import geoip2.database
 

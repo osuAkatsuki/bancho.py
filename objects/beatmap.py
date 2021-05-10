@@ -7,8 +7,8 @@ from enum import IntEnum
 from enum import unique
 from typing import Optional
 
-from cmyui import Ansi
-from cmyui import log
+from cmyui.logging import Ansi
+from cmyui.logging import log
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods

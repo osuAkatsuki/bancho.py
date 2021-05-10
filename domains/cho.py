@@ -9,13 +9,13 @@ from typing import Callable
 from typing import Union
 
 import bcrypt
-from cmyui import Connection
-from cmyui import Domain
-from cmyui.logging import log
+from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import AnsiRGB
+from cmyui.logging import log
 from cmyui.utils import _isdecimal
-from cmyui.discord import Webhook
+from cmyui.web import Connection
+from cmyui.web import Domain
 
 import packets
 import utils.misc

@@ -7,8 +7,8 @@ from enum import unique
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui import Ansi
-from cmyui import log
+from cmyui.logging import Ansi
+from cmyui.logging import log
 from py3rijndael import RijndaelCbc
 from py3rijndael import ZeroPadding
 

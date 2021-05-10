@@ -9,8 +9,8 @@ from typing import Optional
 from typing import Sequence
 from typing import Union
 
-from cmyui import log
-from cmyui import Ansi
+from cmyui.logging import Ansi
+from cmyui.logging import log
 
 from constants.privileges import Privileges
 from objects import glob

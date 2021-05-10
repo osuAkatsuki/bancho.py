@@ -38,8 +38,8 @@ import datadog
 import orjson # go zoom
 import geoip2.database
 import subprocess
-from cmyui import Ansi
-from cmyui import log
+from cmyui.logging import Ansi
+from cmyui.logging import log
 
 import bg_loops
 import utils.misc

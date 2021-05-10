@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Optional
 
 import aiomysql
-from cmyui import Ansi
-from cmyui import log
-from cmyui import printc
-from cmyui import Version
+from cmyui.logging import Ansi
+from cmyui.logging import log
+from cmyui.logging import printc
+from cmyui.version import Version
 from pip._internal.cli.main import main as pip_main
 
 from objects import glob

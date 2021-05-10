@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from cmyui import Connection
-from cmyui import Domain
+from cmyui.web import Connection
+from cmyui.web import Domain
 
 from objects import glob
 

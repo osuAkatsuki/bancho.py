@@ -12,7 +12,8 @@ from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
 
-from cmyui import log, Ansi
+from cmyui.logging import Ansi
+from cmyui.logging import log
 
 import packets
 from constants import regexes
