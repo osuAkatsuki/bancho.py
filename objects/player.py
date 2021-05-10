@@ -437,9 +437,10 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := glob.config.webhooks['audit-log']:
-            webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(glob.http)
+        if glob.has_internet:
+            if webhook_url := glob.config.webhooks['audit-log']:
+                webhook = Webhook(webhook_url, content=log_msg)
+                await webhook.post(glob.http)
 
         if self.online:
             # log the user out if they're offline, this
@@ -465,9 +466,10 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := glob.config.webhooks['audit-log']:
-            webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(glob.http)
+        if glob.has_internet:
+            if webhook_url := glob.config.webhooks['audit-log']:
+                webhook = Webhook(webhook_url, content=log_msg)
+                await webhook.post(glob.http)
 
         if self.online:
             # log the user out if they're offline, this
@@ -838,6 +840,9 @@ class Player:
 
     async def fetch_geoloc_web(self, ip: str) -> None:
         """Fetch geolocation data based on ip (using ip-api)."""
+        if not glob.has_internet: # requires internet connection
+            return
+
         url = f'http://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:

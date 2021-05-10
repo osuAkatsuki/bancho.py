@@ -374,6 +374,9 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
+    if not glob.has_internet:
+        return b'-1\nosu!direct requires an internet connection.'
+
     if USING_CHIMU:
         search_url = f'{glob.config.mirror}/search'
     else:
@@ -410,7 +413,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
                 await utils.misc.log_strange_occurrence(stacktrace)
         else: # cheesegull
             if resp.status != 200:
-                return b'Failed to retrieve data from mirror!'
+                return b'-1\nFailed to retrieve data from the beatmap mirror.'
 
         result = await resp.json()
 
@@ -418,7 +421,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             if result['code'] != 0:
                 stacktrace = utils.misc.get_appropriate_stacktrace()
                 await utils.misc.log_strange_occurrence(stacktrace)
-                return b'Failed to retrieve data from mirror!'
+                return b'-1\nFailed to retrieve data from the beatmap mirror.'
             result = result['data']
 
     lresult = len(result) # send over 100 if we receive
@@ -1333,24 +1336,34 @@ async def banchoConnect(conn: Connection) -> Optional[bytes]:
     # TODO: perhaps handle this..?
     NotImplemented
 
+_checkupdates_cache = { # default timeout is 1h, set on request.
+    'cuttingedge': {'check': None, 'path': None, 'timeout': 0},
+    'stable40': {'check': None, 'path': None, 'timeout': 0},
+    'beta40': {'check': None, 'path': None, 'timeout': 0},
+    'stable': {'check': None, 'path': None, 'timeout': 0}
+}
+
 # NOTE: this will only be triggered when using a server switcher.
 @domain.route('/web/check-updates.php')
 @required_args({'action', 'stream'})
 async def checkUpdates(conn: Connection) -> Optional[bytes]:
+    if not glob.has_internet:
+        return (503, b'') # requires internet connection
+
     action = conn.args['action']
     stream = conn.args['stream']
 
     if action not in ('check', 'path', 'error'):
-        return (400, b'Invalid action.')
+        return (400, b'') # invalid action
 
     if stream not in ('cuttingedge', 'stable40', 'beta40', 'stable'):
-        return (400, b'Invalid stream.')
+        return (400, b'') # invalid stream
 
     if action == 'error':
         # client is just reporting an error updating
         return
 
-    cache = glob.cache['update'][stream]
+    cache = _checkupdates_cache[stream]
     current_time = int(time.time())
 
     if cache[action] and cache['timeout'] > current_time:
@@ -1359,7 +1372,7 @@ async def checkUpdates(conn: Connection) -> Optional[bytes]:
     url = 'https://old.ppy.sh/web/check-updates.php'
     async with glob.http.get(url, params = conn.args) as resp:
         if not resp or resp.status != 200:
-            return (503, b'Failed to retrieve data from osu!')
+            return (503, b'') # failed to get data from osu
 
         result = await resp.read()
 
@@ -2222,7 +2235,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
             re['creator'], re['version']
         ]
     )):
-        return (404, b'Map not found.')
+        return (404, b'') # map not found in sql
 
     path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
@@ -2233,13 +2246,16 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
         # up to date map found on disk.
         content = path.read_bytes()
     else:
+        if not glob.has_internet:
+            return (503, b'') # requires internet connection
+
         # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f'Could not find map {path}!', Ansi.LRED)
-                return (404, b'Could not find map on osu! server.')
+                return (404, b'') # couldn't find on osu!'s server
 
             content = await resp.read()
 

@@ -118,8 +118,11 @@ async def setup_collections() -> None:
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
-    # retrieve a client session to use for http connections.
-    glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps) # type: ignore
+    if glob.has_internet:
+        # retrieve a client session to use for http connections.
+        glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps) # type: ignore
+    else:
+        glob.http = None
 
     # retrieve a pool of connections to use for mysql interaction.
     glob.db = cmyui.AsyncSQLPool()
@@ -165,7 +168,7 @@ async def before_serving() -> None:
 
 async def after_serving() -> None:
     """Called after the server stops serving connections."""
-    if hasattr(glob, 'http'):
+    if hasattr(glob, 'http') and glob.http is not None:
         await glob.http.close()
 
     if hasattr(glob, 'db') and glob.db.pool is not None:
@@ -234,6 +237,12 @@ def main() -> None:
         if glob.config.advanced:
             log('The risk is even greater with features '
                 'such as config.advanced enabled.', Ansi.LRED)
+
+    # check whether we are connected to the internet.
+    glob.has_internet = utils.misc.check_connection(timeout=1.5)
+    if not glob.has_internet:
+        log('Running in offline mode, some features '
+            'will not be available.', Ansi.LRED)
 
     # create /.data and its subdirectories.
     data_path = Path.cwd() / '.data'

@@ -49,7 +49,8 @@ class Updater:
             ]), Ansi.LCYAN)
             input('> Press enter to continue')
 
-        await self._update_cmyui() # pip install -U cmyui
+        if glob.has_internet:
+            await self._update_cmyui() # pip install -U cmyui
         await self._update_sql(prev_ver) # run updates.sql
 
     @staticmethod

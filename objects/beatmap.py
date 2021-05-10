@@ -324,6 +324,9 @@ class Beatmap:
     @classmethod
     async def from_md5_osuapi(cls, md5: str) -> Optional['Beatmap']:
         """Fetch & return a map object from osu!api by md5."""
+        if not glob.has_internet: # requires internet connection
+            return None
+
         url = 'https://old.ppy.sh/api/get_beatmaps'
         params = {'k': glob.config.osu_api_key, 'h': md5}
 
@@ -401,6 +404,9 @@ class Beatmap:
     @classmethod
     async def cache_set(cls, set_id: int) -> None:
         """Cache (ram & sql) all maps from the osu!api."""
+        if not glob.has_internet: # requires internet connection
+            return None
+
         url = 'https://old.ppy.sh/api/get_beatmaps'
         params = {'k': glob.config.osu_api_key, 's': set_id}
 

@@ -551,11 +551,12 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
                     f'({total_occurrences} total occurrences)'
                 )
 
-                if webhook_url := glob.config.webhooks['audit-log']:
-                    # TODO: make it look nicer lol.. very basic
-                    webhook = Webhook(url=webhook_url)
-                    webhook.content = msg_content
-                    await webhook.post(glob.http)
+                if glob.has_internet:
+                    if webhook_url := glob.config.webhooks['audit-log']:
+                        # TODO: make it look nicer lol.. very basic
+                        webhook = Webhook(url=webhook_url)
+                        webhook.content = msg_content
+                        await webhook.post(glob.http)
 
                 log(msg_content, Ansi.LRED)
     else:
@@ -606,8 +607,16 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
         p.bancho_priv | ClientPrivileges.Supporter
     )
 
-    data += packets.notification('Welcome back to the gulag!\n'
-                                f'Current build: v{glob.version}')
+    data += packets.notification(
+        'Welcome back to the gulag!\n'
+        f'Current build: v{glob.version}'
+    )
+
+    if not glob.has_internet:
+        data += packets.notification(
+            'The server is currently running in offline mode; '
+            'some features will be unavailble.'
+        )
 
     # send all channel info.
     for c in glob.channels:
@@ -678,7 +687,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
             for msg in res:
                 if msg['from'] not in sent_to:
-                    packets.sendMessage(
+                    data += packets.sendMessage(
                         sender=msg['from'], msg='Unread messages',
                         recipient=msg['to'], sender_id=msg['from_id']
                     )
