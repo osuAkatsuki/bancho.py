@@ -395,6 +395,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     #display_city = client_info[2] == '1'
 
     # Client hashes contain a few values useful to us.
+    # TODO: store these correctly in the db
     # [0]: md5(osu path)
     # [1]: adapters (network physical addresses delimited by '.')
     # [2]: md5(adapters)
@@ -403,7 +404,13 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     if len(client_hashes := client_info[3].split(':')[:-1]) != 5:
         return # invalid request
 
-    is_wine = client_hashes.pop(1) == 'runningunderwine'
+    adapters = client_hashes.pop(1)
+    is_wine = adapters == 'runningunderwine'
+
+    if adapters == '.': # none sent
+        data = packets.userID(-1) + \
+               packets.notification('Please restart your osu! and try again.')
+        return data, 'no'
 
     pm_private = client_info[4] == '1'
 
