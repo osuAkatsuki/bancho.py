@@ -19,12 +19,13 @@ from urllib.parse import unquote
 
 import bcrypt
 import orjson
-from cmyui import _isdecimal
-from cmyui import Ansi
-from cmyui import Connection
-from cmyui import Domain
-from cmyui import log
-from cmyui import ratelimit
+from cmyui.logging import Ansi
+from cmyui.logging import log
+from cmyui.logging import printc
+from cmyui.utils import _isdecimal
+from cmyui.web import Connection
+from cmyui.web import Domain
+from cmyui.web import ratelimit
 
 import packets
 import utils.misc
@@ -117,12 +118,35 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
 """ /web/ handlers """
 
 # TODO
-# POST /web/osu-error.php
 # POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
+
+@domain.route('/web/osu-error.php', methods=['POST'])
+async def osuError(conn: Connection) -> Optional[bytes]:
+    if glob.app.debug:
+        err_args = conn.multipart_args
+        if 'u' in err_args and 'p' in err_args:
+            if not (
+                p := await glob.players.get_login(
+                    name = unquote(err_args['u']),
+                    pw_md5 = err_args['p']
+                )
+            ):
+                # player login incorrect
+                await utils.misc.log_strange_occurrence('osu-error auth failed')
+                p = None
+        else:
+            p = None
+
+        err_desc = '{feedback} ({exception})'.format(**err_args)
+        log(f'{p or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
+        printc(err_args['stacktrace'][:-2], Ansi.LMAGENTA)
+
+    # TODO: save error in db
+    pass
 
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
