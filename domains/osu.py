@@ -1331,7 +1331,7 @@ async def banchoConnect(conn: Connection) -> Optional[bytes]:
 
         # NOTE: you can actually return an endpoint here
         # for the client to use as a bancho endpoint.
-        return b'allez-vous owo'
+        return
 
     # TODO: perhaps handle this..?
     NotImplemented
@@ -1643,10 +1643,10 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
         'SELECT id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
         'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {mode.sql_table} WHERE userid = %s'
+        f'FROM {mode.sql_table} WHERE userid = %s AND mode = %s'
     ]
 
-    params = [p.id]
+    params = [p.id, mode.as_vanilla]
 
     if mods is not None:
         if strong_equality:
