@@ -463,17 +463,15 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     pw_bcrypt = user_info['pw_bcrypt'].encode()
     user_info['pw_bcrypt'] = pw_bcrypt
 
-    # check credentials against db.
-    # algorithms like these are intentionally
-    # designed to be slow; we'll cache the
-    # results to speed up subsequent logins.
+    # check credentials against db. algorithms like these are intentionally
+    # designed to be slow; we'll cache the results to speed up subsequent logins.
     if pw_bcrypt in bcrypt_cache: # ~0.01 ms
         if pw_md5 != bcrypt_cache[pw_bcrypt]:
-            return (packets.notification(f'{BASE_DOMAIN}: Incorrect login') +
+            return (packets.notification(f'{BASE_DOMAIN}: Incorrect password') +
                     packets.userID(-1)), 'no'
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            return (packets.notification(f'{BASE_DOMAIN}: Incorrect login') +
+            return (packets.notification(f'{BASE_DOMAIN}: Incorrect password') +
                     packets.userID(-1)), 'no'
 
         bcrypt_cache[pw_bcrypt] = pw_md5
