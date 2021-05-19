@@ -110,7 +110,7 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
             return False
 
         log(f'Saving achievement: {ach}', Ansi.LCYAN)
-        (achievements_path / f'{ach}').write_bytes(r.content)
+        (achievements_path / ach).write_bytes(r.content)
 
     return True
 
@@ -192,7 +192,7 @@ def install_excepthook():
             return
 
         print('\x1b[0;31mgulag ran into an issue '
-            'before starting up :(\x1b[0m')
+              'before starting up :(\x1b[0m')
         sys._excepthook(type_, value, traceback)
     sys.excepthook = _excepthook
 

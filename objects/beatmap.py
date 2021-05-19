@@ -2,6 +2,7 @@
 
 import time
 from collections import defaultdict
+#from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
@@ -116,7 +117,6 @@ gulagstatus2str_dict = {
     RankedStatus.Loved: 'Loved'
 }
 
-...
 #@dataclass
 #class BeatmapInfoRequest:
 #    filenames: Sequence[str]

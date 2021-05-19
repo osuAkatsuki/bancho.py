@@ -169,7 +169,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, scoreid: int, sql_table: str) -> Optional['Score']:
+    async def from_sql(cls, scoreid: int, scores_table: str) -> Optional['Score']:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -179,7 +179,7 @@ class Score:
             'nmiss, ngeki, nkatu, grade, perfect, '
             'status, mode, play_time, '
             'time_elapsed, client_flags '
-            f'FROM {sql_table} WHERE id = %s',
+            f'FROM {scores_table} WHERE id = %s',
             [scoreid], _dict=False
         )
 
@@ -294,7 +294,7 @@ class Score:
     """Methods to calculate internal data for a score."""
 
     async def calc_lb_placement(self) -> int:
-        table = self.mode.sql_table
+        scores_table = self.mode.scores_table
 
         if self.mode >= GameMode.rx_std:
             scoring = 'pp'
@@ -304,7 +304,7 @@ class Score:
             score = self.score
 
         res = await glob.db.fetch(
-            f'SELECT COUNT(*) AS c FROM {table} s '
+            f'SELECT COUNT(*) AS c FROM {scores_table} s '
             'INNER JOIN users u ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 AND u.priv & 1 '
@@ -350,12 +350,12 @@ class Score:
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""
-        table = self.mode.sql_table
+        scores_table = self.mode.scores_table
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
         res = await glob.db.fetch(
-            f'SELECT id, pp FROM {table} '
+            f'SELECT id, pp FROM {scores_table} '
             'WHERE userid = %s AND map_md5 = %s '
             'AND mode = %s AND status = 2',
             [self.player.id, self.bmap.md5, self.mode.as_vanilla]
@@ -364,7 +364,7 @@ class Score:
         if res:
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res['id'], table)
+            self.prev_best = await Score.from_sql(res['id'], scores_table)
 
             # if our new score is better, update
             # both of our score's submission statuses.

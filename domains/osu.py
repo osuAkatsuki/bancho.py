@@ -162,10 +162,23 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
     if len(ss_file) > (4 * 1024 * 1024):
         return (400, b'Screenshot file too large.')
 
-    # check if jpeg or png
-    if ss_file[6:10] in (b'JFIF', b'Exif'):
+    if (
+        'v' not in conn.multipart_args or
+        conn.multipart_args['v'] != '1'
+    ):
+        await utils.misc.log_strange_occurrence(
+            f'v=1 missing from osu-screenshot mp args; {conn.multipart_args}'
+        )
+
+    if (
+        ss_file[:4] == b'\xff\xd8\xff\xe0' and
+        ss_file[6:11] == b'JFIF\x00'
+    ):
         extension = 'jpeg'
-    elif ss_file.startswith(b'\211PNG\r\n\032\n'):
+    elif (
+        ss_file[:8] == b'\x89PNG\r\n\x1a\n' and
+        ss_file[-8] == b'\x49END\xae\x42\x60\x82'
+    ):
         extension = 'png'
     else:
         return (400, b'Invalid file type.')
@@ -202,6 +215,10 @@ def gulag_to_osuapi_status(s: int) -> int:
 @get_login(name_p='u', pass_p='h')
 async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
     data = orjson.loads(conn.body)
+
+    num_requests = len(data['Filenames']) + len(data['Ids'])
+    log(f'{p} requested info for {num_requests} maps.', Ansi.LCYAN)
+
     ret = []
 
     for idx, fname in enumerate(data['Filenames']):
@@ -250,10 +267,10 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
             )
         )
 
-    for _ in data['Ids']:
-        # still have yet to see this actually used..
-        stacktrace = utils.misc.get_appropriate_stacktrace()
-        await utils.misc.log_strange_occurrence(stacktrace)
+    if data['Ids']: # still have yet to see this used
+        await utils.misc.log_strange_occurrence(
+            f'{p} requested map(s) info by id ({data["Ids"]})'
+        )
 
     return '\n'.join(ret).encode()
 
@@ -550,7 +567,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         if not score.player.restricted:
             glob.players.enqueue(packets.userStats(score.player))
 
-    scores_table = score.mode.sql_table
+    scores_table = score.mode.scores_table
     mode_vn = score.mode.as_vanilla
 
     # Check for score duplicates
@@ -1033,7 +1050,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         if not p.restricted:
             glob.players.enqueue(packets.userStats(p))
 
-    table = mode.sql_table
+    scores_table = mode.scores_table
     scoring = 'pp' if mode >= GameMode.rx_std else 'score'
 
     if not (bmap := Beatmap.from_md5_cache(map_md5)):
@@ -1112,7 +1129,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
         "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
         "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
-        f"FROM {table} s "
+        f"FROM {scores_table} s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = %s AND s.status = 2 "
@@ -1167,7 +1184,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         'max_combo, n50, n100, n300, '
         'nmiss, nkatu, ngeki, perfect, mods, '
         'UNIX_TIMESTAMP(play_time) time '
-        f'FROM {table} '
+        f'FROM {scores_table} '
         'WHERE map_md5 = %s AND mode = %s '
         'AND userid = %s AND status = 2 '
         'ORDER BY _score DESC LIMIT 1', [
@@ -1182,7 +1199,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
     if p_best:
         # calculate the rank of the score.
         p_best_rank = 1 + (await glob.db.fetch(
-            f'SELECT COUNT(*) AS count FROM {table} s '
+            f'SELECT COUNT(*) AS count FROM {scores_table} s '
             'INNER JOIN users u ON u.id = s.userid '
             'WHERE s.map_md5 = %s AND s.mode = %s '
             'AND s.status = 2 AND u.priv & 1 '
@@ -1643,7 +1660,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
         'SELECT id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
         'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {mode.sql_table} WHERE userid = %s AND mode = %s'
+        f'FROM {mode.scores_table} WHERE userid = %s AND mode = %s'
     ]
 
     params = [p.id, mode.as_vanilla]
@@ -1747,7 +1764,7 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
     res = await glob.db.fetchall(
         'SELECT m.md5, m.id, m.set_id, m.status, '
         'm.artist, m.title, m.version, m.creator, COUNT(*) plays '
-        f'FROM {mode.sql_table} s '
+        f'FROM {mode.scores_table} s '
         'INNER JOIN maps m ON m.md5 = s.map_md5 '
         'WHERE s.userid = %s '
         'AND s.mode = %s '
@@ -1875,7 +1892,7 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
         's.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, '
         'u.name player_name, '
         'c.id clan_id, c.name clan_name, c.tag clan_tag '
-        f'FROM {mode.sql_table} s '
+        f'FROM {mode.scores_table} s '
         'INNER JOIN users u ON u.id = s.userid '
         'LEFT JOIN clans c ON c.id = u.clan_id '
         'WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2'

@@ -64,7 +64,7 @@ class GameMode(IntEnum):
         return cls(mode)
 
     @property
-    def sql_table(self) -> str:
+    def scores_table(self) -> str:
         if self.value < self.rx_std:
             return 'scores_vn'
         elif self.value < self.ap_std:

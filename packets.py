@@ -21,6 +21,7 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.types import osuTypes
 from objects import glob
+#from objects.beatmap import BeatmapInfo
 from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
@@ -505,19 +506,19 @@ def write_channel(name: str, topic: str,
     return ret
 
 # XXX: deprecated
-# def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
-#     """ Write `maps` into bytes (osu! map info). """
-#     ret = bytearray(len(maps).to_bytes(4, 'little'))
+#def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
+#    """ Write `maps` into bytes (osu! map info). """
+#    ret = bytearray(len(maps).to_bytes(4, 'little'))
 #
-#     # Write files
-#     for m in maps:
-#         ret += struct.pack('<hiiiBbbbb',
-#             m.id, m.map_id, m.set_id, m.thread_id, m.status,
-#             m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
-#         )
-#         ret += write_string(m.map_md5)
+#    # Write files
+#    for m in maps:
+#        ret += struct.pack('<hiiiBbbbb',
+#            m.id, m.map_id, m.set_id, m.thread_id, m.status,
+#            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
+#        )
+#        ret += write_string(m.map_md5)
 #
-#     return ret
+#    return ret
 
 def write_match(m: Match, send_pw: bool = True) -> bytearray:
     """ Write `m` into bytes (osu! match). """
