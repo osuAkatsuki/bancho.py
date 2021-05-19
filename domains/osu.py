@@ -1867,12 +1867,18 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
     else:
         limit = 50
 
+    # NOTE: userid will eventually become player_id,
+    # along with everywhere else in the codebase.
     query = [
-        'SELECT map_md5, score, pp, acc, max_combo, mods, '
-        'n300, n100, n50, nmiss, ngeki, nkatu, grade, status, '
-        'mode, play_time, time_elapsed, userid, perfect '
-        f'FROM {mode.sql_table} '
-        'WHERE map_md5 = %s AND mode = %s AND status = 2'
+        'SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, '
+        's.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, '
+        's.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, '
+        'u.name player_name, '
+        'c.id clan_id, c.name clan_name, c.tag clan_tag '
+        f'FROM {mode.sql_table} s '
+        'INNER JOIN users u ON u.id = s.userid '
+        'LEFT JOIN clans c ON c.id = u.clan_id '
+        'WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2'
     ]
     params = [bmap.md5, mode.as_vanilla]
 
