@@ -1689,7 +1689,17 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
             'diff': bmap.diff
         }
 
-    return JSON({'status': 'success', 'scores': res})
+    player_info = {
+        'id': p.id,
+        'name': p.name,
+        'clan': {
+            'id': p.clan.id,
+            'name': p.clan.name,
+            'tag': p.clan.tag
+        } if p.clan else None
+    }
+
+    return JSON({'status': 'success', 'scores': res, 'player': player_info})
 
 @domain.route('/api/get_player_most_played')
 async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
