@@ -19,6 +19,9 @@ import sys
 # set cwd to /gulag
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
+#set utf8 encoding for stdout
+sys.stdout.reconfigure(encoding='utf-8') 
+
 try:
     from objects import glob
 except ModuleNotFoundError as exc:
