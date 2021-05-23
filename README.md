@@ -1,18 +1,18 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-gulag is my implementation of an osu! server's backend (bancho protocol, /web
-endpoints, avatars/assets, and a devevloper rest api). it's designed as a modern
-substitution for existing osu! server projects who've become inactive or who've
-gone closed-source. i aim to make this project the ideal choice for running osu!
-private servers, and to fully support osu!'s protocol, while abusing it a little
-to get as much as we safely can out of it. :)
+gulag is my implementation of an osu! server's backend (bancho protocol, /web/
+endpoints, avatars, static assets, and a devevloper rest api). it's designed as
+a modern substitution for existing osu! server projects who've become inactive
+or who've gone closed-source. i aim to make this project the ideal choice for
+running osu! private servers, and to fully support osu!'s protocol, while
+abusing it a little to get as much as we safely can out of it. :)
 
 i'll set the stage with a brief introduction; i've been playing actively on osu!
 private servers since early 2016, and founded [akatsuki](https://akatsuki.pw) in
-late 2017 using ripples source with no prior development experience. i spent
-nearly all of my spare time learning more about the world of programming and
-osu! servers by working on their codebase, until i had eventually learned enough
-to try writing a server from scratch.
+late 2017 using [ripple](https://github.com/osuripple)'s source with no prior
+development experience. i spent nearly all of my spare time learning more about
+the wonderful world of (osu!) programming by working on their codebase, until
+i had eventually learned enough to try writing a server from scratch.
 
 gulag was my third attempt to write an osu! server, and based on my previous
 failures i didn't believe i had what it took to write a competitive server; but
@@ -38,7 +38,7 @@ projects have popped up, such as [peace](https://github.com/Pure-Peace/Peace),
 [kuriso](https://github.com/osukurikku/kuriso), and many other attempts have
 been made by less experienced developers to write servers as a means to learn
 more about programming as a whole, which has thankfully become more possible
-due to the increased amount of documentation & examples such as gulag available.
+due to the increased amount of documentation & examples (such as gulag) available.
 
 at the moment, gulag's still in development and if you're running a serious
 instance of a private server in production, i wouldn't yet recommend switching

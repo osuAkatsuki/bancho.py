@@ -10,17 +10,29 @@
 
 __all__ = ()
 
+import sys
+
 if __name__ != '__main__':
-    raise RuntimeError('gulag should only be run directly!')
+    # check specifically for asgi servers since
+    # related projects use it (like gulag-web)
+    if (
+        __name__ == 'main' and
+        any([sys.argv[0].endswith(suffix)
+             for suffix in ('hypercorn', 'uvicorn')])
+    ):
+        raise RuntimeError(
+            "gulag is not an ASGI implementation and uses it's own http "
+            "server implementation; please run it directly (./main.py).")
+    else:
+        raise RuntimeError('gulag should only be run directly (./main.py).')
 
 import os
-import sys
 
 # set cwd to /gulag
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-#set utf8 encoding for stdout
-sys.stdout.reconfigure(encoding='utf-8') 
+# we print utf-8 content quite often
+sys.stdout.reconfigure(encoding='utf-8')
 
 try:
     from objects import glob
