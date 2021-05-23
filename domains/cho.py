@@ -1150,11 +1150,17 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
         else:
+            if slot.player is m.host:
+                # don't allow the match host to kick
+                # themselves by clicking their crown
+                return
+
             if slot.player:
                 # uggggggh i hate trusting the osu! client
                 # man why is it designed like this
                 # TODO: probably going to end up changing
                 ... #slot.reset()
+
             slot.status = SlotStatus.locked
 
         m.enqueue_state()
