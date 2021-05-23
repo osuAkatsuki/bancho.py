@@ -57,39 +57,41 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.members.remove(p.id)
 
-        await glob.db.execute(
-            'UPDATE users '
-            'SET clan_id = 0, clan_priv = 0 '
-            'WHERE id = %s',
-            [p.id]
-        )
+        async with glob.db.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'UPDATE users '
+                    'SET clan_id = 0, clan_priv = 0 '
+                    'WHERE id = %s',
+                    [p.id]
+                )
 
-        if not self.members:
-            # no members left, disband clan.
-            await glob.db.execute(
-                'DELETE FROM clans '
-                'WHERE id = %s',
-                [self.id]
-            )
-        elif p.id == self.owner:
-            # owner leaving and members left,
-            # transfer the ownership.
-            # TODO: prefer officers
-            self.owner = next(iter(self.members))
+                if not self.members:
+                    # no members left, disband clan.
+                    await cur.execute(
+                        'DELETE FROM clans '
+                        'WHERE id = %s',
+                        [self.id]
+                    )
+                elif p.id == self.owner:
+                    # owner leaving and members left,
+                    # transfer the ownership.
+                    # TODO: prefer officers
+                    self.owner = next(iter(self.members))
 
-            await glob.db.execute(
-                'UPDATE clans '
-                'SET owner = %s '
-                'WHERE id = %s',
-                [self.owner, self.id]
-            )
+                    await cur.execute(
+                        'UPDATE clans '
+                        'SET owner = %s '
+                        'WHERE id = %s',
+                        [self.owner, self.id]
+                    )
 
-            await glob.db.execute(
-                'UPDATE users '
-                'SET clan_priv = 3 '
-                'WHERE id = %s',
-                [self.owner]
-            )
+                    await cur.execute(
+                        'UPDATE users '
+                        'SET clan_priv = 3 '
+                        'WHERE id = %s',
+                        [self.owner]
+                    )
 
         p.clan = None
         p.clan_priv = None

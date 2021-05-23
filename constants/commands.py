@@ -518,48 +518,53 @@ async def _map(ctx: Context) -> str:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    if ctx.args[1] == 'set':
-        # update whole set
-        await glob.db.execute(
-            'UPDATE maps SET status = %s, '
-            'frozen = 1 WHERE set_id = %s',
-            [new_status, bmap.set_id]
-        )
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            if ctx.args[1] == 'set':
+                # update whole set
+                await cur.execute(
+                    'UPDATE maps SET status = %s, '
+                    'frozen = 1 WHERE set_id = %s',
+                    [new_status, bmap.set_id]
+                )
 
-        # select all map ids for clearing map requests.
-        map_ids = [x[0] for x in await glob.db.fetchall(
-            'SELECT id FROM maps '
-            'WHERE set_id = %s',
-            [bmap.set_id], _dict=False
-        )]
+                # select all map ids for clearing map requests.
+                await cur.execute(
+                    'SELECT id FROM maps '
+                    'WHERE set_id = %s',
+                    [bmap.set_id]
+                )
+                map_ids = [row[0] async for row in cur]
 
-        for cached in glob.cache['beatmap'].values():
-            # not going to bother checking timeout
-            if cached['map'].set_id == bmap.set_id:
-                cached['map'].status = new_status
+                for cached in glob.cache['beatmap'].values():
+                    # not going to bother checking timeout
+                    if cached['map'].set_id == bmap.set_id:
+                        cached['map'].status = new_status
 
-    else:
-        # update only map
-        await glob.db.execute(
-            'UPDATE maps SET status = %s, '
-            'frozen = 1 WHERE id = %s',
-            [new_status, bmap.id]
-        )
+            else:
+                # update only map
+                await cur.execute(
+                    'UPDATE maps SET status = %s, '
+                    'frozen = 1 WHERE id = %s',
+                    [new_status, bmap.id]
+                )
 
-        map_ids = [bmap.id]
+                map_ids = [bmap.id]
 
-        for cached in glob.cache['beatmap'].values():
-            # not going to bother checking timeout
-            if cached['map'] is bmap:
-                cached['map'].status = new_status
-                break
+                for cached in glob.cache['beatmap'].values():
+                    # not going to bother checking timeout
+                    if cached['map'] is bmap:
+                        cached['map'].status = new_status
+                        break
 
-    # deactivate rank requests for all ids
-    for map_id in map_ids:
-        await glob.db.execute(
-            'UPDATE map_requests SET active = 0 '
-            'WHERE map_id = %s', [map_id]
-        )
+            # deactivate rank requests for all ids
+            for map_id in map_ids:
+                await cur.execute(
+                    'UPDATE map_requests '
+                    'SET active = 0 '
+                    'WHERE map_id = %s',
+                    [map_id]
+                )
 
     return f'{bmap.embed} updated to {new_status!s}.'
 
@@ -1092,12 +1097,14 @@ async def wipemap(ctx: Context) -> str:
     map_md5 = ctx.player.last_np['bmap'].md5
 
     # delete scores from all tables
-    for t in ('vn', 'rx', 'ap'):
-        await glob.db.execute(
-            f'DELETE FROM scores_{t} '
-            'WHERE map_md5 = %s',
-            [map_md5]
-        )
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            for t in ('vn', 'rx', 'ap'):
+                await cur.execute(
+                    f'DELETE FROM scores_{t} '
+                    'WHERE map_md5 = %s',
+                    [map_md5]
+                )
 
     return 'Scores wiped.'
 

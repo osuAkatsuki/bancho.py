@@ -5,16 +5,13 @@
 # and when it detects a change, it will apply any nescessary
 # changes to your sql database & keep cmyui_pkg up to date.
 
-import asyncio
 import re
-import os
-import signal
-from datetime import datetime as dt
-from importlib.metadata import version as pkg_version
+import importlib.metadata
 from pathlib import Path
 from typing import Optional
 
 import aiomysql
+
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
@@ -91,7 +88,7 @@ class Updater:
 
     async def _update_cmyui(self) -> None:
         """Check if cmyui_pkg has a newer release; update if available."""
-        module_ver = Version.from_str(pkg_version('cmyui'))
+        module_ver = Version.from_str(importlib.metadata.version('cmyui'))
         latest_ver = await self._get_latest_cmyui()
 
         if module_ver < latest_ver:
@@ -146,26 +143,27 @@ class Updater:
         log(f'Updating sql (v{prev_version!r} -> '
                           f'v{self.version!r}).', Ansi.LMAGENTA)
 
-        sql_lock = asyncio.Lock()
+        async with glob.db.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await conn.begin()
+                for query in queries:
+                    try:
+                        await cur.execute(query)
+                    except aiomysql.MySQLError:
+                        # if anything goes wrong while writing a query,
+                        # most likely something is very wrong.
+                        await conn.rollback()
 
-        # TODO: sql transaction? for rollback
-        async with sql_lock:
-            for query in queries:
-                try:
-                    await glob.db.execute(query)
-                except aiomysql.MySQLError:
-                    # if anything goes wrong while writing a query,
-                    # most likely something is very wrong.
-                    log(f'Failed: {query}', Ansi.GRAY)
-                    log(
-                        "SQL failed to update - unless you've been modifying "
-                        "sql and know what caused this, please please contact "
-                        "cmyui#0425.", Ansi.LRED
-                    )
+                        log(f'Failed: {query}', Ansi.GRAY)
+                        log("SQL failed to update - unless you've been "
+                            "modifying sql and know what caused this, "
+                            "please please contact cmyui#0425.", Ansi.LRED)
 
-                    input('Press enter to exit')
+                        input('Press enter to exit')
 
-                    await glob.app.after_serving()
-                    raise KeyboardInterrupt
+                        await glob.app.after_serving()
+                        raise KeyboardInterrupt
+                    else:
+                        await conn.commit()
 
     # TODO _update_config?

@@ -17,6 +17,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
+import aiomysql
 import bcrypt
 import orjson
 from cmyui.logging import Ansi
@@ -221,51 +222,55 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     ret = []
 
-    for idx, fname in enumerate(data['Filenames']):
-        # Attempt to regex pattern match the filename.
-        # If there is no match, simply ignore this map.
-        # XXX: Sometimes a map will be requested without a
-        # diff name, not really sure how to handle this? lol
-        if not (r := regexes.mapfile.match(fname)):
-            continue
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            for idx, fname in enumerate(data['Filenames']):
+                # Attempt to regex pattern match the filename.
+                # If there is no match, simply ignore this map.
+                # XXX: Sometimes a map will be requested without a
+                # diff name, not really sure how to handle this? lol
+                if not (r := regexes.mapfile.match(fname)):
+                    continue
 
-        # try getting the map from sql
-        res = await glob.db.fetch(
-            'SELECT id, set_id, status, md5 '
-            'FROM maps WHERE artist = %s AND '
-            'title = %s AND creator = %s AND '
-            'version = %s', [
-                r['artist'], r['title'],
-                r['creator'], r['version']
-            ]
-        )
+                # try getting the map from sql
+                await cur.execute(
+                    'SELECT id, set_id, status, md5 '
+                    'FROM maps WHERE artist = %s AND '
+                    'title = %s AND creator = %s AND '
+                    'version = %s', [
+                        r['artist'], r['title'],
+                        r['creator'], r['version']
+                    ]
+                )
 
-        if not res:
-            # no map found
-            continue
+                if not (res := await cur.fetchone()):
+                    # no map found
+                    continue
 
-        # convert from gulag -> osu!api status
-        res['status'] = gulag_to_osuapi_status(res['status'])
+                # convert from gulag -> osu!api status
+                res['status'] = gulag_to_osuapi_status(res['status'])
 
-        # try to get the user's grades on the map osu!
-        # only allows us to send back one per gamemode,
-        # so we'll just send back relax for the time being..
-        # XXX: perhaps user-customizable in the future?
-        grades = ['N', 'N', 'N', 'N']
+                # try to get the user's grades on the map osu!
+                # only allows us to send back one per gamemode,
+                # so we'll just send back relax for the time being..
+                # XXX: perhaps user-customizable in the future?
+                grades = ['N', 'N', 'N', 'N']
 
-        for score in await glob.db.fetchall(
-            'SELECT grade, mode FROM scores_rx '
-            'WHERE map_md5 = %s AND userid = %s '
-            'AND status = 2',
-            [res['md5'], p.id]
-        ):
-            grades[score['mode']] = score['grade']
+                await cur.execute(
+                    'SELECT grade, mode FROM scores_rx '
+                    'WHERE map_md5 = %s AND userid = %s '
+                    'AND status = 2',
+                    [res['md5'], p.id]
+                )
 
-        ret.append(
-            '{i}|{id}|{set_id}|{md5}|{status}|{grades}'.format(
-                i = idx, grades = '|'.join(grades), **res
-            )
-        )
+                async for score in cur:
+                    grades[score['mode']] = score['grade']
+
+                ret.append(
+                    '{i}|{id}|{set_id}|{md5}|{status}|{grades}'.format(
+                        i = idx, grades = '|'.join(grades), **res
+                    )
+                )
 
     if data['Ids']: # still have yet to see this used
         await utils.misc.log_strange_occurrence(

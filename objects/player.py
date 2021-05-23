@@ -14,6 +14,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
+import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.discord import Webhook
@@ -674,8 +675,11 @@ class Player:
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
         # in the instance; for normal channels, enqueue to all.
-        for p in (c.players if c.instance else glob.players):
-            p.enqueue(packets.channelInfo(*c.basic_info))
+        recipients = c.players if c.instance else glob.players
+        chan_info_packet = packets.channelInfo(*c.basic_info)
+
+        for p in recipients:
+            p.enqueue(chan_info_packet)
 
         if glob.app.debug:
             log(f'{self} joined {c}.')
@@ -698,9 +702,10 @@ class Player:
         # for instanced channels, enqueue update to only players
         # in the instance; for normal channels, enqueue to all.
         recipients = c.players if c.instance else glob.players
+        chan_info_packet = packets.channelInfo(*c.basic_info)
 
         for p in recipients:
-            p.enqueue(packets.channelInfo(*c.basic_info))
+            p.enqueue(chan_info_packet)
 
         if glob.app.debug:
             log(f'{self} left {c}.')
@@ -896,55 +901,68 @@ class Player:
 
     async def achievements_from_sql(self) -> None:
         """Retrieve `self`'s achievements from sql."""
-        for mode in range(4):
-            # get all users achievements for this mode
-            res = await glob.db.fetchall(
-                'SELECT ua.achid id FROM user_achievements ua '
-                'INNER JOIN achievements a ON a.id = ua.achid '
-                'WHERE ua.userid = %s AND a.mode = %s',
-                [self.id, mode]
-            )
+        async with glob.db.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                for mode in range(4):
+                    # get all users achievements for this mode
+                    await cur.execute(
+                        'SELECT ua.achid id FROM user_achievements ua '
+                        'INNER JOIN achievements a ON a.id = ua.achid '
+                        'WHERE ua.userid = %s AND a.mode = %s',
+                        [self.id, mode]
+                    )
 
-            if not res:
-                # user has no achievements for this mode
-                continue
+                    if cur.rowcount == 0:
+                        # no achievements
+                        # for given mode
+                        continue
 
-            # get cached achievements for this mode
-            achs = glob.achievements[mode]
+                    # get cached achievements for this mode
+                    achs = glob.achievements[mode]
 
-            for row in res:
-                for ach in achs:
-                    if row['id'] == ach.id:
-                        self.achievements[mode].add(ach)
+                    async for row in cur:
+                        for ach in achs:
+                            if row[0] == ach.id:
+                                self.achievements[mode].add(ach)
 
     async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for mode in GameMode:
-            # grab static stats from SQL.
-            res = await glob.db.fetch(
-                'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
-                'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-                'playtime_{0:sql} playtime, max_combo_{0:sql} max_combo '
-                'FROM stats WHERE id = %s'.format(mode),
-                [self.id]
-            )
+        async with glob.db.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(
+                    'SELECT * FROM stats WHERE id = %s',
+                    [self.id]
+                )
 
-            if not res:
-                log(f"Failed to fetch {self}'s {mode!r} stats.", Ansi.LRED)
-                return
+                res = await cur.fetchone()
 
-            # calculate rank.
-            res['rank'] = (await glob.db.fetch(
-                'SELECT COUNT(*) AS higher_pp_players '
-                'FROM stats s '
-                'INNER JOIN users u USING(id) '
-                f'WHERE s.pp_{mode:sql} > %s '
-                'AND u.priv & 1 and u.id != %s',
-                [res['pp'], self.id]
-            ))['higher_pp_players'] + 1
+                # get global rank for each mode
+                # XXX: this will be improved in future
+                for mode in GameMode:
+                    mode_suffix = format(mode, 'sql')
+                    # calculate rank.
+                    await cur.execute(
+                        'SELECT COUNT(*) AS higher_pp_players '
+                        'FROM stats s '
+                        'INNER JOIN users u USING(id) '
+                        f'WHERE s.pp_{mode_suffix} > %s '
+                        'AND u.priv & 1 and u.id != %s',
+                        [res[f'pp_{mode_suffix}'], self.id]
+                    )
 
-            # update stats
-            self.stats[mode] = ModeData(**res)
+                    mode_rank = (await cur.fetchone())['higher_pp_players'] + 1
+
+                    # update stats
+                    self.stats[mode] = ModeData(
+                        tscore=res[f'tscore_{mode_suffix}'],
+                        rscore=res[f'rscore_{mode_suffix}'],
+                        pp=res[f'pp_{mode_suffix}'],
+                        acc=res[f'acc_{mode_suffix}'],
+                        plays=res[f'plays_{mode_suffix}'],
+                        playtime=res[f'playtime_{mode_suffix}'],
+                        max_combo=res[f'max_combo_{mode_suffix}'],
+                        rank=mode_rank
+                    )
 
     async def add_to_menu(
         self, coroutine: Coroutine,
