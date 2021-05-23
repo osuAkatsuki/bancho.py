@@ -84,7 +84,7 @@ class Channels(list):
     @classmethod
     async def prepare(cls) -> 'Channels':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching channels from sql', Ansi.LCYAN)
+        log('Fetching channels from sql.', Ansi.LCYAN)
         return cls(
             Channel(
                 name = row['name'],
@@ -323,8 +323,8 @@ class MapPools(list):
     @classmethod
     async def prepare(cls) -> 'MapPools':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching mappools from sql', Ansi.LCYAN)
-        return cls([
+        log('Fetching mappools from sql.', Ansi.LCYAN)
+        obj = cls([
             MapPool(
                 id = row['id'],
                 name = row['name'],
@@ -332,6 +332,11 @@ class MapPools(list):
                 created_by = await glob.players.get_ensure(id=row['created_by'])
             ) for row in await glob.db.fetchall('SELECT * FROM tourney_pools')
         ])
+
+        for pool in obj:
+            await pool.maps_from_sql()
+
+        return obj
 
 class Clans(list):
     """The currently active clans on the server."""
@@ -383,7 +388,7 @@ class Clans(list):
     @classmethod
     async def prepare(cls) -> 'Clans':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching clans from sql', Ansi.LCYAN)
+        log('Fetching clans from sql.', Ansi.LCYAN)
         res = await glob.db.fetchall('SELECT * FROM clans')
         obj = cls([Clan(**row) for row in res])
 

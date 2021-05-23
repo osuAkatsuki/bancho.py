@@ -326,6 +326,8 @@ RESTRICTED_MSG = (
     'greater than 3 months, you may appeal via the form on the site.'
 )
 
+DELTA_60_DAYS = td(days=60)
+
 async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
@@ -383,7 +385,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
     if not glob.app.debug:
-        if osu_ver_dt < (dt.now() - td(60)):
+        if osu_ver_dt < (dt.now() - DELTA_60_DAYS):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
@@ -408,8 +410,8 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
     is_wine = adapters == 'runningunderwine'
 
     if adapters == '.': # none sent
-        data = packets.userID(-1) + \
-               packets.notification('Please restart your osu! and try again.')
+        data = (packets.userID(-1) +
+                packets.notification('Please restart your osu! and try again.'))
         return data, 'no'
 
     pm_private = client_info[4] == '1'
