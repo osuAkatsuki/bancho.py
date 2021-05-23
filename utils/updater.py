@@ -144,11 +144,11 @@ class Updater:
                           f'v{self.version!r}).', Ansi.LMAGENTA)
 
         async with glob.db.pool.acquire() as conn:
-            async with conn.cursor() as cur:
+            async with conn.cursor() as db_cursor:
                 await conn.begin()
                 for query in queries:
                     try:
-                        await cur.execute(query)
+                        await db_cursor.execute(query)
                     except aiomysql.MySQLError:
                         # if anything goes wrong while writing a query,
                         # most likely something is very wrong.

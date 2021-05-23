@@ -881,16 +881,16 @@ class Player:
 
         self.achievements[a.mode].add(a)
 
-    async def relationships_from_sql(self) -> None:
+    async def relationships_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s relationships from sql."""
-        res = await glob.db.fetchall(
+        await db_cursor.execute(
             'SELECT user2, type '
             'FROM relationships '
             'WHERE user1 = %s',
             [self.id]
         )
 
-        for row in res:
+        async for row in db_cursor:
             if row['type'] == 'friend':
                 self.friends.add(row['user2'])
             else:
@@ -899,70 +899,66 @@ class Player:
         # always have bot added to friends.
         self.friends.add(1)
 
-    async def achievements_from_sql(self) -> None:
+    async def achievements_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s achievements from sql."""
-        async with glob.db.pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                for mode in range(4):
-                    # get all users achievements for this mode
-                    await cur.execute(
-                        'SELECT ua.achid id FROM user_achievements ua '
-                        'INNER JOIN achievements a ON a.id = ua.achid '
-                        'WHERE ua.userid = %s AND a.mode = %s',
-                        [self.id, mode]
-                    )
+        for mode in range(4):
+            # get all users achievements for this mode
+            await db_cursor.execute(
+                'SELECT ua.achid id FROM user_achievements ua '
+                'INNER JOIN achievements a ON a.id = ua.achid '
+                'WHERE ua.userid = %s AND a.mode = %s',
+                [self.id, mode]
+            )
 
-                    if cur.rowcount == 0:
-                        # no achievements
-                        # for given mode
-                        continue
+            if db_cursor.rowcount == 0:
+                # no achievements
+                # for given mode
+                continue
 
-                    # get cached achievements for this mode
-                    achs = glob.achievements[mode]
+            # get cached achievements for this mode
+            achs = glob.achievements[mode]
 
-                    async for row in cur:
-                        for ach in achs:
-                            if row[0] == ach.id:
-                                self.achievements[mode].add(ach)
+            async for row in db_cursor:
+                for ach in achs:
+                    if row['id'] == ach.id:
+                        self.achievements[mode].add(ach)
 
-    async def stats_from_sql_full(self) -> None:
+    async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        async with glob.db.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(
-                    'SELECT * FROM stats WHERE id = %s',
-                    [self.id]
-                )
+        await db_cursor.execute(
+            'SELECT * FROM stats WHERE id = %s',
+            [self.id]
+        )
 
-                res = await cur.fetchone()
+        res = await db_cursor.fetchone()
 
-                # get global rank for each mode
-                # XXX: this will be improved in future
-                for mode in GameMode:
-                    mode_suffix = format(mode, 'sql')
-                    # calculate rank.
-                    await cur.execute(
-                        'SELECT COUNT(*) AS higher_pp_players '
-                        'FROM stats s '
-                        'INNER JOIN users u USING(id) '
-                        f'WHERE s.pp_{mode_suffix} > %s '
-                        'AND u.priv & 1 and u.id != %s',
-                        [res[f'pp_{mode_suffix}'], self.id]
-                    )
+        # get global rank for each mode
+        # XXX: this will be improved in future
+        for mode in GameMode:
+            mode_suffix = format(mode, 'sql')
+            # calculate rank.
+            await db_cursor.execute(
+                'SELECT COUNT(*) AS higher_pp_players '
+                'FROM stats s '
+                'INNER JOIN users u USING(id) '
+                f'WHERE s.pp_{mode_suffix} > %s '
+                'AND u.priv & 1 and u.id != %s',
+                [res[f'pp_{mode_suffix}'], self.id]
+            )
 
-                    mode_rank = (await cur.fetchone())['higher_pp_players'] + 1
+            mode_rank = (await db_cursor.fetchone())['higher_pp_players'] + 1
 
-                    # update stats
-                    self.stats[mode] = ModeData(
-                        tscore=res[f'tscore_{mode_suffix}'],
-                        rscore=res[f'rscore_{mode_suffix}'],
-                        pp=res[f'pp_{mode_suffix}'],
-                        acc=res[f'acc_{mode_suffix}'],
-                        plays=res[f'plays_{mode_suffix}'],
-                        playtime=res[f'playtime_{mode_suffix}'],
-                        max_combo=res[f'max_combo_{mode_suffix}'],
-                        rank=mode_rank
-                    )
+            # update stats
+            self.stats[mode] = ModeData(
+                tscore=res[f'tscore_{mode_suffix}'],
+                rscore=res[f'rscore_{mode_suffix}'],
+                pp=res[f'pp_{mode_suffix}'],
+                acc=res[f'acc_{mode_suffix}'],
+                plays=res[f'plays_{mode_suffix}'],
+                playtime=res[f'playtime_{mode_suffix}'],
+                max_combo=res[f'max_combo_{mode_suffix}'],
+                rank=mode_rank
+            )
 
     async def add_to_menu(
         self, coroutine: Coroutine,

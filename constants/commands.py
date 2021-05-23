@@ -519,22 +519,22 @@ async def _map(ctx: Context) -> str:
     # surely this will not scale as well..
 
     async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as cur:
+        async with conn.cursor() as db_cursor:
             if ctx.args[1] == 'set':
                 # update whole set
-                await cur.execute(
+                await db_cursor.execute(
                     'UPDATE maps SET status = %s, '
                     'frozen = 1 WHERE set_id = %s',
                     [new_status, bmap.set_id]
                 )
 
                 # select all map ids for clearing map requests.
-                await cur.execute(
+                await db_cursor.execute(
                     'SELECT id FROM maps '
                     'WHERE set_id = %s',
                     [bmap.set_id]
                 )
-                map_ids = [row[0] async for row in cur]
+                map_ids = [row[0] async for row in db_cursor]
 
                 for cached in glob.cache['beatmap'].values():
                     # not going to bother checking timeout
@@ -543,7 +543,7 @@ async def _map(ctx: Context) -> str:
 
             else:
                 # update only map
-                await cur.execute(
+                await db_cursor.execute(
                     'UPDATE maps SET status = %s, '
                     'frozen = 1 WHERE id = %s',
                     [new_status, bmap.id]
@@ -559,7 +559,7 @@ async def _map(ctx: Context) -> str:
 
             # deactivate rank requests for all ids
             for map_id in map_ids:
-                await cur.execute(
+                await db_cursor.execute(
                     'UPDATE map_requests '
                     'SET active = 0 '
                     'WHERE map_id = %s',
@@ -1098,9 +1098,9 @@ async def wipemap(ctx: Context) -> str:
 
     # delete scores from all tables
     async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as cur:
+        async with conn.cursor() as db_cursor:
             for t in ('vn', 'rx', 'ap'):
-                await cur.execute(
+                await db_cursor.execute(
                     f'DELETE FROM scores_{t} '
                     'WHERE map_md5 = %s',
                     [map_md5]

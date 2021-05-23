@@ -9,6 +9,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Union
 
+import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
@@ -82,18 +83,19 @@ class Channels(list):
             log(f'{c} removed from channels list.')
 
     @classmethod
-    async def prepare(cls) -> 'Channels':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Channels':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching channels from sql.', Ansi.LCYAN)
-        return cls(
+        await db_cursor.execute('SELECT * FROM channels')
+        return cls([
             Channel(
                 name = row['name'],
                 topic = row['topic'],
                 read_priv = Privileges(row['read_priv']),
                 write_priv = Privileges(row['write_priv']),
                 auto_join = row['auto_join'] == 1
-            ) for row in await glob.db.fetchall('SELECT * FROM channels')
-        )
+            ) async for row in db_cursor
+        ])
 
 class Matches(list):
     """The currently active multiplayer matches on the server."""
@@ -321,20 +323,21 @@ class MapPools(list):
             log(f'{mp} removed from mappools list.')
 
     @classmethod
-    async def prepare(cls) -> 'MapPools':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'MapPools':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching mappools from sql.', Ansi.LCYAN)
+        await db_cursor.execute('SELECT * FROM tourney_pools')
         obj = cls([
             MapPool(
                 id = row['id'],
                 name = row['name'],
                 created_at = row['created_at'],
                 created_by = await glob.players.get_ensure(id=row['created_by'])
-            ) for row in await glob.db.fetchall('SELECT * FROM tourney_pools')
+            ) async for row in db_cursor
         ])
 
         for pool in obj:
-            await pool.maps_from_sql()
+            await pool.maps_from_sql(db_cursor)
 
         return obj
 
@@ -386,13 +389,13 @@ class Clans(list):
             log(f'{c} removed from clans list.')
 
     @classmethod
-    async def prepare(cls) -> 'Clans':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Clans':
         """Fetch data from sql & return; preparing to run the server."""
         log('Fetching clans from sql.', Ansi.LCYAN)
-        res = await glob.db.fetchall('SELECT * FROM clans')
-        obj = cls([Clan(**row) for row in res])
+        await db_cursor.execute('SELECT * FROM clans')
+        obj = cls([Clan(**row) async for row in db_cursor])
 
         for clan in obj:
-            await clan.members_from_sql()
+            await clan.members_from_sql(db_cursor)
 
         return obj

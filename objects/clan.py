@@ -5,6 +5,8 @@ from enum import IntEnum
 from enum import unique
 from typing import TYPE_CHECKING
 
+import aiomysql
+
 from objects import glob
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
@@ -58,8 +60,8 @@ class Clan:
         self.members.remove(p.id)
 
         async with glob.db.pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
+            async with conn.cursor() as db_cursor:
+                await db_cursor.execute(
                     'UPDATE users '
                     'SET clan_id = 0, clan_priv = 0 '
                     'WHERE id = %s',
@@ -68,7 +70,7 @@ class Clan:
 
                 if not self.members:
                     # no members left, disband clan.
-                    await cur.execute(
+                    await db_cursor.execute(
                         'DELETE FROM clans '
                         'WHERE id = %s',
                         [self.id]
@@ -79,14 +81,14 @@ class Clan:
                     # TODO: prefer officers
                     self.owner = next(iter(self.members))
 
-                    await cur.execute(
+                    await db_cursor.execute(
                         'UPDATE clans '
                         'SET owner = %s '
                         'WHERE id = %s',
                         [self.owner, self.id]
                     )
 
-                    await cur.execute(
+                    await db_cursor.execute(
                         'UPDATE users '
                         'SET clan_priv = 3 '
                         'WHERE id = %s',
@@ -96,19 +98,19 @@ class Clan:
         p.clan = None
         p.clan_priv = None
 
-    async def members_from_sql(self) -> None:
+    async def members_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Fetch all members from sql."""
         # TODO: in the future, we'll want to add
         # clan 'mods', so fetching rank here may
         # be a good idea to sort people into
         # different roles.
-        res = await glob.db.fetchall(
+        await db_cursor.execute(
             'SELECT id FROM users WHERE clan_id = %s',
-            [self.id], _dict=False
+            [self.id]
         )
 
-        if res:
-            self.members.update(*res)
+        async for row in db_cursor:
+            self.members.add(row['id'])
 
     def __repr__(self) -> str:
         return f'[{self.tag}] {self.name}'

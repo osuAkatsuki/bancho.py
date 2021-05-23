@@ -48,6 +48,7 @@ except ModuleNotFoundError as exc:
 from pathlib import Path
 
 import aiohttp
+import aiomysql
 import cmyui
 import datadog
 import orjson # go zoom
@@ -78,41 +79,43 @@ glob.version = cmyui.Version(3, 3, 5)
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
-async def fetch_bot_name() -> str:
+async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
     """Fetch the bot's name from the database, if available."""
-    res = await glob.db.fetch(
+    await db_cursor.execute(
         'SELECT name FROM users '
-        'WHERE id = 1', _dict=False
+        'WHERE id = 1'
     )
 
-    if not res:
+    if db_cursor.rowcount == 0:
         log("Couldn't find bot account in the database, "
             "defaulting to BanchoBot for their name.", Ansi.LYELLOW)
         return 'BanchoBot'
 
-    return res[0]
+    return (await db_cursor.fetchone())['name']
 
-async def setup_collections() -> None:
+async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache many global collections."""
     # dynamic (active) sets, only in ram
     glob.players = Players()
     glob.matches = Matches()
 
     # static (inactive) sets, in ram & sql
-    glob.channels = await Channels.prepare()
-    glob.clans = await Clans.prepare()
-    glob.pools = await MapPools.prepare()
+    glob.channels = await Channels.prepare(db_cursor)
+    glob.clans = await Clans.prepare(db_cursor)
+    glob.pools = await MapPools.prepare(db_cursor)
 
     # create bot & add it to online players
     glob.bot = Player(
-        id=1, name=await fetch_bot_name(), priv=Privileges.Normal,
+        id=1, name=await fetch_bot_name(db_cursor), priv=Privileges.Normal,
         login_time=float(0x7fffffff), bot_client=True
     ) # never auto-dc the bot ^
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)
     glob.achievements = {0: [], 1: [], 2: [], 3: []}
-    async for row in glob.db.iterall('SELECT * FROM achievements'):
+
+    await db_cursor.execute('SELECT * FROM achievements')
+    async for row in db_cursor:
         # NOTE: achievement conditions are stored as
         # stringified python expressions in the database
         # to allow for easy custom achievements.
@@ -123,12 +126,13 @@ async def setup_collections() -> None:
         glob.achievements[row['mode']].append(achievement)
 
     # static api keys
+    await db_cursor.execute(
+        'SELECT id, api_key FROM users '
+        'WHERE api_key IS NOT NULL'
+    )
     glob.api_keys = {
         row['api_key']: row['id']
-        for row in await glob.db.fetchall(
-            'SELECT id, api_key FROM users '
-            'WHERE api_key IS NOT NULL'
-        )
+        async for row in db_cursor
     }
 
 async def before_serving() -> None:
@@ -157,7 +161,9 @@ async def before_serving() -> None:
 
     # cache many global collections/objects from sql,
     # such as channels, mappools, clans, bot, etc.
-    await setup_collections()
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as db_cursor:
+            await setup_collections(db_cursor)
 
     new_coros = []
 

@@ -223,7 +223,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
     ret = []
 
     async with glob.db.pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
+        async with conn.cursor(aiomysql.DictCursor) as db_cursor:
             for idx, fname in enumerate(data['Filenames']):
                 # Attempt to regex pattern match the filename.
                 # If there is no match, simply ignore this map.
@@ -233,7 +233,7 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
                     continue
 
                 # try getting the map from sql
-                await cur.execute(
+                await db_cursor.execute(
                     'SELECT id, set_id, status, md5 '
                     'FROM maps WHERE artist = %s AND '
                     'title = %s AND creator = %s AND '
@@ -243,9 +243,10 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
                     ]
                 )
 
-                if not (res := await cur.fetchone()):
-                    # no map found
-                    continue
+                if db_cursor.rowcount == 0:
+                    continue # no map found
+
+                res = await db_cursor.fetchone()
 
                 # convert from gulag -> osu!api status
                 res['status'] = gulag_to_osuapi_status(res['status'])
@@ -256,14 +257,14 @@ async def osuGetBeatmapInfo(p: 'Player', conn: Connection) -> Optional[bytes]:
                 # XXX: perhaps user-customizable in the future?
                 grades = ['N', 'N', 'N', 'N']
 
-                await cur.execute(
+                await db_cursor.execute(
                     'SELECT grade, mode FROM scores_rx '
                     'WHERE map_md5 = %s AND userid = %s '
                     'AND status = 2',
                     [res['md5'], p.id]
                 )
 
-                async for score in cur:
+                async for score in db_cursor:
                     grades[score['mode']] = score['grade']
 
                 ret.append(

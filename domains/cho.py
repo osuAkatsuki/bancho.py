@@ -8,6 +8,7 @@ from datetime import timedelta as td
 from typing import Callable
 from typing import Union
 
+import aiomysql
 import bcrypt
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
@@ -81,7 +82,9 @@ async def bancho_handler(conn: Connection) -> bytes:
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
-            resp, token = await login(conn.body, ip)
+            async with glob.db.pool.acquire() as db_conn:
+                async with db_conn.cursor(aiomysql.DictCursor) as db_cursor:
+                    resp, token = await login(conn.body, ip, db_cursor)
 
         conn.resp_headers['cho-token'] = token
         return resp
@@ -92,8 +95,8 @@ async def bancho_handler(conn: Connection) -> bytes:
     if not player:
         # token not found; chances are that we just restarted
         # the server - tell their client to reconnect immediately.
-        return packets.notification('Server has restarted.') + \
-               packets.restartServer(0) # send 0ms since server is up
+        return (packets.notification('Server has restarted.') +
+                packets.restartServer(0)) # send 0ms since server is up
 
     # restricted users may only use certain packet handlers.
     if not player.restricted:
@@ -328,7 +331,7 @@ RESTRICTED_MSG = (
 
 DELTA_60_DAYS = td(days=60)
 
-async def login(body: bytes, ip: str) -> tuple[bytes, str]:
+async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
@@ -438,12 +441,13 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
                 return data, 'no'
 
-    user_info = await glob.db.fetch(
+    await db_cursor.execute(
         'SELECT id, name, priv, pw_bcrypt, '
         'silence_end, clan_id, clan_priv, api_key '
         'FROM users WHERE safe_name = %s',
         [utils.misc.make_safe_name(username)]
     )
+    user_info = await db_cursor.fetchone()
 
     if not user_info:
         # no account by this name exists.
@@ -480,14 +484,14 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
     """ login credentials verified """
 
-    await glob.db.execute(
+    await db_cursor.execute(
         'INSERT INTO ingame_logins '
         '(userid, ip, osu_ver, osu_stream, datetime) '
         'VALUES (%s, %s, %s, %s, NOW())',
         [user_info['id'], ip, osu_ver_dt, osu_ver_stream]
     )
 
-    await glob.db.execute(
+    await db_cursor.execute(
         'INSERT INTO client_hashes '
         '(userid, osupath, adapters, uninstall_id,'
         ' disk_serial, latest_time, occurrences) '
@@ -500,7 +504,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
     if not is_wine:
         # find any other users from any of the same hwid values.
-        hwid_matches = await glob.db.fetchall(
+        await db_cursor.execute(
             'SELECT u.name, u.priv, h.occurrences '
             'FROM client_hashes h '
             'INNER JOIN users u ON h.userid = u.id '
@@ -508,6 +512,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
             'OR h.uninstall_id = %s OR h.disk_serial = %s)',
             [user_info['id'], *client_hashes[1:]]
         )
+        hwid_matches = await db_cursor.fetchall()
 
         if hwid_matches:
             # we have other accounts with matching hashes
@@ -535,8 +540,8 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
                             packets.userID(-1)), 'no'
 
             else:
+                '''
                 # player is verified
-                # TODO: discord webhook?
                 # TODO: staff hwid locking & bypass detections.
                 unique_players = set()
                 total_occurrences = 0
@@ -559,6 +564,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
                         await webhook.post(glob.http)
 
                 log(msg_content, Ansi.LRED)
+                '''
     else:
         # TODO: alternative checks for runningunderwine
         ...
@@ -572,21 +578,15 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
         del user_info['clan_priv']
         clan = clan_priv = None
 
-    extras = {
-        'utc_offset': utc_offset,
-        'osu_ver': osu_ver_dt,
-        'pm_private': pm_private,
-        'login_time': login_time,
-        'clan': clan,
-        'clan_priv': clan_priv,
-        'tourney_client': using_tourney_client
-    }
-
     p = Player(
-        **user_info, # {id, name, priv, pw_bcrypt,
-                     #  silence_end, api_key}
-        **extras     # {utc_offset, osu_ver, pm_private,
-                     #  login_time, clan, clan_priv}
+        **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key}
+        utc_offset=utc_offset,
+        osu_ver=osu_ver_dt,
+        pm_private=pm_private,
+        login_time=login_time,
+        clan=clan,
+        clan_priv=clan_priv,
+        tourney_client=using_tourney_client
     )
 
     for mode in GameMode:
@@ -637,9 +637,9 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
     # fetch some of the player's
     # information from sql to be cached.
-    await p.achievements_from_sql()
-    await p.stats_from_sql_full()
-    await p.relationships_from_sql()
+    await p.achievements_from_sql(db_cursor)
+    await p.stats_from_sql_full(db_cursor)
+    await p.relationships_from_sql(db_cursor)
 
     if ip != '127.0.0.1':
         if glob.geoloc_db is not None:
@@ -674,7 +674,7 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        res = await glob.db.fetchall(
+        await db_cursor.execute(
             'SELECT m.`msg`, m.`time`, m.`from_id`, '
             '(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, '
             '(SELECT name FROM users WHERE id = m.`to_id`) AS `to` '
@@ -682,10 +682,10 @@ async def login(body: bytes, ip: str) -> tuple[bytes, str]:
             [p.id]
         )
 
-        if res:
+        if db_cursor.rowcount != 0:
             sent_to = set() # ids
 
-            for msg in res:
+            for msg in db_cursor:
                 if msg['from'] not in sent_to:
                     data += packets.sendMessage(
                         sender=msg['from'], msg='Unread messages',

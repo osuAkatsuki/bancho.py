@@ -129,38 +129,36 @@ class MapPool:
     def __repr__(self) -> str:
         return f'<{self.name}>'
 
-    async def maps_from_sql(self) -> None:
+    async def maps_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
-        async with glob.db.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(
-                    'SELECT map_id, mods, slot '
-                    'FROM tourney_pool_maps '
-                    'WHERE pool_id = %s',
-                    [self.id]
+        await db_cursor.execute(
+            'SELECT map_id, mods, slot '
+            'FROM tourney_pool_maps '
+            'WHERE pool_id = %s',
+            [self.id]
+        )
+
+        async for row in db_cursor:
+            map_id = row['map_id']
+            bmap = await Beatmap.from_bid(map_id)
+
+            if not bmap:
+                # map not found? remove it from the
+                # pool and log this incident to console.
+                # NOTE: it's intentional that this removes
+                # it from not only this pool, but all pools.
+                # TODO: perhaps discord webhook?
+                log(f'Removing {map_id} from pool {self.name} (not found).', Ansi.LRED)
+
+                await db_cursor.execute(
+                    'DELETE FROM tourney_pool_maps '
+                    'WHERE map_id = %s',
+                    [map_id]
                 )
+                continue
 
-                async for row in cur:
-                    map_id = row['map_id']
-                    bmap = await Beatmap.from_bid(map_id)
-
-                    if not bmap:
-                        # map not found? remove it from the
-                        # pool and log this incident to console.
-                        # NOTE: it's intentional that this removes
-                        # it from not only this pool, but all pools.
-                        # TODO: perhaps discord webhook?
-                        log(f'Removing {map_id} from pool {self.name} (not found).', Ansi.LRED)
-
-                        await cur.execute(
-                            'DELETE FROM tourney_pool_maps '
-                            'WHERE map_id = %s',
-                            [map_id]
-                        )
-                        continue
-
-                    key = (Mods(row['mods']), row['slot'])
-                    self.maps[key] = bmap
+            key = (Mods(row['mods']), row['slot'])
+            self.maps[key] = bmap
 
 class Slot:
     """An individual player slot in an osu! multiplayer match."""
