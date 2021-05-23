@@ -169,7 +169,7 @@ def check_connection(timeout: float = 1.0) -> bool:
     socket.setdefaulttimeout(default_timeout)
     return online
 
-def install_excepthook():
+def install_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
     sys._excepthook = sys.excepthook # backup
     def _excepthook(
@@ -197,6 +197,7 @@ def install_excepthook():
     sys.excepthook = _excepthook
 
 def get_appropriate_stacktrace() -> list[inspect.FrameInfo]:
+    """Return information of all frames related to cmyui_pkg and below."""
     stack = inspect.stack()[1:]
     for idx, frame in enumerate(stack):
         if frame.function == 'run':
@@ -253,7 +254,7 @@ async def log_strange_occurrence(obj: object) -> None:
 
         log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
 
-def pymysql_encode(conv: Callable):
+def pymysql_encode(conv: Callable) -> Callable:
     """Decorator to allow for adding to pymysql's encoders."""
     def wrapper(cls):
         pymysql.converters.encoders[cls] = conv
