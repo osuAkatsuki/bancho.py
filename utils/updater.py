@@ -143,6 +143,8 @@ class Updater:
         log(f'Updating sql (v{prev_version!r} -> '
                           f'v{self.version!r}).', Ansi.LMAGENTA)
 
+        updated = False
+
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor() as db_cursor:
                 await conn.begin()
@@ -150,20 +152,27 @@ class Updater:
                     try:
                         await db_cursor.execute(query)
                     except aiomysql.MySQLError:
-                        # if anything goes wrong while writing a query,
-                        # most likely something is very wrong.
+                        # if anything goes wrong while writing a query
+                        # something is probably very wrong, so roll
+                        # back changes & abort startup.
                         await conn.rollback()
-
-                        log(f'Failed: {query}', Ansi.GRAY)
-                        log("SQL failed to update - unless you've been "
-                            "modifying sql and know what caused this, "
-                            "please please contact cmyui#0425.", Ansi.LRED)
-
-                        input('Press enter to exit')
-
-                        await glob.app.after_serving()
-                        raise KeyboardInterrupt
+                        break
                     else:
                         await conn.commit()
+                else:
+                    # all queries ran
+                    # without problems.
+                    updated = True
+
+        if not updated:
+            log(f'Failed: {query}', Ansi.GRAY)
+            log("SQL failed to update - unless you've been "
+                "modifying sql and know what caused this, "
+                "please please contact cmyui#0425.", Ansi.LRED)
+
+            input('Press enter to exit')
+
+            await glob.app.after_serving()
+            raise KeyboardInterrupt
 
     # TODO _update_config?
