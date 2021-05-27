@@ -685,7 +685,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
         if db_cursor.rowcount != 0:
             sent_to = set() # ids
 
-            for msg in db_cursor:
+            async for msg in db_cursor:
                 if msg['from'] not in sent_to:
                     data += packets.sendMessage(
                         sender=msg['from'], msg='Unread messages',
