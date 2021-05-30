@@ -79,7 +79,6 @@ class Updater:
             if not resp or resp.status != 200:
                 return self.version
 
-            # safe cuz py>=3.7 dicts are ordered
             if not (json := await resp.json()):
                 return self.version
 
@@ -117,8 +116,8 @@ class Updater:
 
             if line.startswith('#'):
                 # may be normal comment or new version
-                if rgx := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):
-                    current_ver = Version.from_str(rgx['ver'])
+                if r_match := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):
+                    current_ver = Version.from_str(r_match['ver'])
 
                 continue
             elif not current_ver:

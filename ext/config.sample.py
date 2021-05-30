@@ -47,6 +47,10 @@ menu_icon = (
 # seasonal backgrounds to be displayed ingame.
 seasonal_bgs = ('https://akatsuki.pw/static/flower.png',)
 
+# max amount of multiplayer matches
+# that can be created simultaneously
+max_multi_matches = 64
+
 # high ceiling values for autoban as a very simple form
 # of "anticheat", simply ban a user if they are not
 # whitelisted, and submit a score of too high caliber.

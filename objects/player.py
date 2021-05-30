@@ -569,7 +569,7 @@ class Player:
         if (lobby := glob.channels['#lobby']) in self.channels:
             self.leave_channel(lobby)
 
-        slot = m.slots[0 if slotID == -1 else slotID]
+        slot: Slot = m.slots[0 if slotID == -1 else slotID]
 
         # if in a teams-vs mode, switch team from neutral to red.
         if m.team_type in (MatchTeamTypes.team_vs,
@@ -655,16 +655,11 @@ class Player:
 
     def join_channel(self, c: Channel) -> bool:
         """Attempt to add `self` to `c`."""
-        # ensure they're not already in chan.
-        if self in c:
-            return False
-
-        # ensure they have read privs.
-        if self.priv & c.read_priv != c.read_priv:
-            return False
-
-        # lobby can only be interacted with while in mp lobby.
-        if c._name == '#lobby' and not self.in_lobby:
+        if (
+            self in c or # player already in channel
+            self.priv & c.read_priv != c.read_priv or # no read privs
+            c._name == '#lobby' and not self.in_lobby # not in mp lobby
+        ):
             return False
 
         c.append(self) # add to c.players
@@ -672,14 +667,19 @@ class Player:
 
         self.enqueue(packets.channelJoin(c.name))
 
-        # update channel usercounts for all clients that can see.
-        # for instanced channels, enqueue update to only players
-        # in the instance; for normal channels, enqueue to all.
-        recipients = c.players if c.instance else glob.players
-        chan_info_packet = packets.channelInfo(*c.basic_info)
+        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
 
-        for p in recipients:
-            p.enqueue(chan_info_packet)
+        if c.instance:
+            # instanced channel, only send the players
+            # who are currently inside of the instance
+            for p in c.players:
+                p.enqueue(chan_info_packet)
+        else:
+            # normal channel, send to all players who
+            # have access to see the channel's usercount.
+            for p in glob.players[1:]:
+                if p.priv & c.read_priv != c.read_priv:
+                    p.enqueue(chan_info_packet)
 
         if glob.app.debug:
             log(f'{self} joined {c}.')
@@ -698,14 +698,19 @@ class Player:
         if kick:
             self.enqueue(packets.channelKick(c.name))
 
-        # update channel usercounts for all clients that can see.
-        # for instanced channels, enqueue update to only players
-        # in the instance; for normal channels, enqueue to all.
-        recipients = c.players if c.instance else glob.players
-        chan_info_packet = packets.channelInfo(*c.basic_info)
+        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
 
-        for p in recipients:
-            p.enqueue(chan_info_packet)
+        if c.instance:
+            # instanced channel, only send the players
+            # who are currently inside of the instance
+            for p in c.players:
+                p.enqueue(chan_info_packet)
+        else:
+            # normal channel, send to all players who
+            # have access to see the channel's usercount.
+            for p in glob.players:
+                if p.priv & c.read_priv != c.read_priv:
+                    p.enqueue(chan_info_packet)
 
         if glob.app.debug:
             log(f'{self} left {c}.')
@@ -740,8 +745,8 @@ class Player:
 
             self.enqueue(packets.spectatorJoined(p.id))
         else:
-            # player is admin in stealth, only give other
-            # players data to us, not vice-versa.
+            # player is admin in stealth, only give
+            # other players data to us, not vice-versa.
             for s in self.spectators:
                 p.enqueue(packets.fellowSpectatorJoined(s.id))
 
@@ -848,7 +853,7 @@ class Player:
         if not glob.has_internet: # requires internet connection
             return
 
-        url = f'http://ip-api.com/line/{ip}'
+        url = f'https://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
@@ -936,6 +941,7 @@ class Player:
         # XXX: this will be improved in future
         for mode in GameMode:
             mode_suffix = format(mode, 'sql')
+
             # calculate rank.
             await db_cursor.execute(
                 'SELECT COUNT(*) AS higher_pp_players '

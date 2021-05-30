@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import functools
 from enum import IntEnum
 from enum import unique
 
@@ -50,6 +51,7 @@ class GameMode(IntEnum):
     ap_std   = 7
 
     @classmethod
+    @functools.lru_cache(maxsize=32)
     def from_params(cls, mode_vn: int, mods: Mods) -> 'GameMode':
         mode = mode_vn
         if mods & Mods.RELAX:
@@ -63,7 +65,7 @@ class GameMode(IntEnum):
 
         return cls(mode)
 
-    @property
+    @functools.cached_property
     def scores_table(self) -> str:
         if self.value < self.rx_std:
             return 'scores_vn'
@@ -72,16 +74,18 @@ class GameMode(IntEnum):
         else:
             return 'scores_ap'
 
-    @property
+    @functools.cached_property
     def as_vanilla(self) -> int:
         if self.value == self.ap_std:
             return 0
 
         return self.value % 4
 
+    @functools.cache
     def __repr__(self) -> str:
         return gm_str[self.value]
 
+    @functools.cache
     def __format__(self, fmt: str) -> str:
         if fmt == 'sql':
             return gm_sql[self.value]

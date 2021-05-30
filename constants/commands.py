@@ -335,10 +335,10 @@ async def _with(ctx: Context) -> str:
             if cmyui._isdecimal(param, _float=True): # acc
                 if not 0 <= (key_value := float(param)) <= 100:
                     return 'Invalid accuracy.'
-                pp_attrs.update({'acc': key_value})
+                pp_attrs['acc'] = key_value
             elif len(param) % 2 == 0: # mods
                 mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
-                pp_attrs.update({'mods': mods})
+                pp_attrs['mods'] = mods
             else:
                 return 'Invalid syntax: !with <mods/acc> ...'
 
@@ -359,10 +359,10 @@ async def _with(ctx: Context) -> str:
                 if not 0 <= (key_value := int(param)) <= 1000000:
                     return 'Invalid score.'
 
-                pp_attrs.update({'score': key_value})
+                pp_attrs['score'] = key_value
             elif len(param) % 2 == 0: # mods
                 mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
-                pp_attrs.update({'mods': mods})
+                pp_attrs['mods'] = mods
             else:
                 return 'Invalid syntax: !with <mods/score> ...'
 
@@ -445,7 +445,7 @@ async def get_apikey(ctx: Context) -> str:
         'WHERE id = %s',
         [ctx.player.api_key, ctx.player.id]
     )
-    glob.api_keys.update({ctx.player.api_key: ctx.player.id})
+    glob.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(packets.notification('/savelog & click popup for an easy copy.'))
     return f'Your API key is now: {ctx.player.api_key}'
@@ -633,6 +633,11 @@ SHORTHAND_REASONS = {
     'au': 'using 3rd party programs (auto play)'
 }
 
+DURATION_MULTIPLIERS = {
+    's': 1, 'm': 60, 'h': 3600,
+    'd': 86400, 'w': 604800
+}
+
 @command(Privileges.Mod, hidden=True)
 async def silence(ctx: Context) -> str:
     """Silence a specified player with a specified duration & reason."""
@@ -648,15 +653,12 @@ async def silence(ctx: Context) -> str:
     ):
         return 'Only developers can manage staff members.'
 
-    if not (rgx := regexes.scaled_duration.match(ctx.args[1])):
+    if not (r_match := regexes.scaled_duration.match(ctx.args[1])):
         return 'Invalid syntax: !silence <name> <duration> <reason>'
 
-    multiplier = {
-        's': 1, 'm': 60, 'h': 3600,
-        'd': 86400, 'w': 604800
-    }[rgx['scale']]
+    multiplier = DURATION_MULTIPLIERS[r_match['scale']]
 
-    duration = int(rgx['duration']) * multiplier
+    duration = int(r_match['duration']) * multiplier
     reason = ' '.join(ctx.args[2:])
 
     if reason in SHORTHAND_REASONS:
@@ -795,15 +797,12 @@ async def shutdown(ctx: Context) -> str:
         _signal = signal.SIGTERM
 
     if ctx.args: # shutdown after a delay
-        if not (rgx := regexes.scaled_duration.match(ctx.args[0])):
+        if not (r_match := regexes.scaled_duration.match(ctx.args[0])):
             return f'Invalid syntax: !{ctx.trigger} <delay> <msg ...>'
 
-        multiplier = {
-            's': 1, 'm': 60, 'h': 3600,
-            'd': 86400, 'w': 604800
-        }[rgx['scale']]
+        multiplier = DURATION_MULTIPLIERS[r_match['scale']]
 
-        delay = int(rgx['duration']) * multiplier
+        delay = int(r_match['duration']) * multiplier
 
         if delay < 15:
             return 'Minimum delay is 15 seconds.'
@@ -1138,7 +1137,11 @@ async def reload(ctx: Context) -> str:
     except AttributeError:
         return f'Failed at {child}.'
 
-    mod = importlib.reload(mod)
+    try:
+        mod = importlib.reload(mod)
+    except TypeError as exc:
+        return f'{exc.args[0]}.'
+
     return f'Reloaded {mod.__name__}'
 
 @command(Privileges.Normal)
@@ -1163,7 +1166,7 @@ async def server(ctx: Context) -> str:
         )
 
     # list of all cpus installed with thread count
-    cpus_info = ' | '.join(f'{v}x {k}' for k, v in model_names.most_common())
+    cpus_info = ' | '.join([f'{v}x {k}' for k, v in model_names.most_common()])
 
     # get system-wide ram usage
     sys_ram = psutil.virtual_memory()
@@ -1171,7 +1174,7 @@ async def server(ctx: Context) -> str:
     # output ram usage as `{gulag_used}MB / {sys_used}MB / {sys_total}MB`
     gulag_ram = proc.memory_info()[0]
     ram_values = (gulag_ram, sys_ram.used, sys_ram.total)
-    ram_info = ' / '.join(f'{v // 1024 ** 2}MB' for v in ram_values)
+    ram_info = ' / '.join([f'{v // 1024 ** 2}MB' for v in ram_values])
 
     # divide up pkg versions, 3 displayed per line, e.g.
     # aiohttp v3.6.3 | aiomysql v0.0.21 | bcrypt v3.2.0
@@ -1209,6 +1212,7 @@ async def server(ctx: Context) -> str:
 
 if glob.config.advanced:
     from sys import modules as installed_mods
+
     __py_namespace = globals() | {
         mod: __import__(mod) for mod in (
             'asyncio', 'dis', 'os', 'sys', 'struct', 'discord',
@@ -1289,7 +1293,7 @@ async def mp_start(ctx: Context) -> str:
             time_remaining = int(ctx.match.starting['time'] - time.time())
             return f'Match starting in {time_remaining} seconds.'
 
-        if any(s.status == SlotStatus.not_ready for s in ctx.match.slots):
+        if any([s.status == SlotStatus.not_ready for s in ctx.match.slots]):
             return 'Not all players are ready (`!mp start force` to override).'
     else:
         if ctx.args[0].isdecimal():
@@ -1636,11 +1640,11 @@ async def mp_scrim(ctx: Context) -> str:
     """Start a scrim in the current match."""
     if (
         len(ctx.args) != 1 or
-        not (rgx := re.fullmatch(r'^(?:bo)?(\d{1,2})$', ctx.args[0]))
+        not (r_match := re.fullmatch(r'^(?:bo)?(\d{1,2})$', ctx.args[0]))
     ):
         return 'Invalid syntax: !mp scrim <bo#>'
 
-    if not 0 <= (best_of := int(rgx[1])) < 16:
+    if not 0 <= (best_of := int(r_match[1])) < 16:
         return 'Best of must be in range 0-15.'
 
     winning_pts = (best_of // 2) + 1
@@ -1774,12 +1778,12 @@ async def mp_ban(ctx: Context) -> str:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
-    mods = Mods.from_modstr(rgx[1])
-    slot = int(rgx[2])
+    mods = Mods.from_modstr(r_match[1])
+    slot = int(r_match[2])
 
     if (mods, slot) not in ctx.match.pool.maps:
         return f'Found no {mods_slot} pick in the pool.'
@@ -1802,12 +1806,12 @@ async def mp_unban(ctx: Context) -> str:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
-    mods = Mods.from_modstr(rgx[1])
-    slot = int(rgx[2])
+    mods = Mods.from_modstr(r_match[1])
+    slot = int(r_match[2])
 
     if (mods, slot) not in ctx.match.pool.maps:
         return f'Found no {mods_slot} pick in the pool.'
@@ -1830,12 +1834,12 @@ async def mp_pick(ctx: Context) -> str:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
-    mods = Mods.from_modstr(rgx[1])
-    slot = int(rgx[2])
+    mods = Mods.from_modstr(r_match[1])
+    slot = int(r_match[2])
 
     if (mods, slot) not in ctx.match.pool.maps:
         return f'Found no {mods_slot} pick in the pool.'
@@ -1953,15 +1957,15 @@ async def pool_add(ctx: Context) -> str:
     bmap = ctx.player.last_np['bmap']
 
     # separate mods & slot
-    if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: HD2'
 
-    if len(rgx[1]) % 2 != 0:
+    if len(r_match[1]) % 2 != 0:
         return 'Invalid mods.'
 
     # not calling mods.filter_invalid_combos here intentionally.
-    mods = Mods.from_modstr(rgx[1])
-    slot = int(rgx[2])
+    mods = Mods.from_modstr(r_match[1])
+    slot = int(r_match[2])
 
     if not (pool := glob.pools.get(name)):
         return 'Could not find a pool by that name!'
@@ -1995,12 +1999,12 @@ async def pool_remove(ctx: Context) -> str:
     mods_slot = mods_slot.upper() # ocd
 
     # separate mods & slot
-    if not (rgx := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
         return 'Invalid pick syntax; correct example: HD2'
 
     # not calling mods.filter_invalid_combos here intentionally.
-    mods = Mods.from_modstr(rgx[1])
-    slot = int(rgx[2])
+    mods = Mods.from_modstr(r_match[1])
+    slot = int(r_match[2])
 
     if not (pool := glob.pools.get(name)):
         return 'Could not find a pool by that name!'

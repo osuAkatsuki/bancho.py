@@ -82,7 +82,8 @@ GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
     """Fetch the bot's name from the database, if available."""
     await db_cursor.execute(
-        'SELECT name FROM users '
+        'SELECT name '
+        'FROM users '
         'WHERE id = 1'
     )
 
@@ -155,7 +156,7 @@ async def before_serving() -> None:
     # open a connection to our local geoloc database,
     # if the database file is present.
     if GEOLOC_DB_FILE.exists():
-        glob.geoloc_db = geoip2.database.Reader(str(GEOLOC_DB_FILE))
+        glob.geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
     else:
         glob.geoloc_db = None
 
@@ -189,18 +190,30 @@ async def before_serving() -> None:
 
 async def after_serving() -> None:
     """Called after the server stops serving connections."""
-    if hasattr(glob, 'http') and glob.http is not None:
+    if (
+        hasattr(glob, 'http') and
+        glob.http is not None
+    ):
         await glob.http.close()
 
-    if hasattr(glob, 'db') and glob.db.pool is not None:
+    if (
+        hasattr(glob, 'db') and
+        glob.db.pool is not None
+    ):
         await glob.db.close()
 
-    if hasattr(glob, 'geoloc_db') and glob.geoloc_db is not None:
+    if (
+        hasattr(glob, 'geoloc_db') and
+        glob.geoloc_db is not None
+    ):
         glob.geoloc_db.close()
 
-    if hasattr(glob, 'datadog') and glob.datadog is not None:
-        glob.datadog.stop() # stop thread
-        glob.datadog.flush() # flush any leftover
+    if (
+        hasattr(glob, 'datadog') and
+        glob.datadog is not None
+    ):
+        glob.datadog.stop()
+        glob.datadog.flush()
 
 def detect_mysqld_running() -> bool:
     """Detect whether theres a mysql server running locally."""

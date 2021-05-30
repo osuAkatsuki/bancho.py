@@ -176,11 +176,11 @@ class Slot:
     def empty(self) -> bool:
         return self.player is None
 
-    def copy_from(self, s) -> None:
-        self.player = s.player
-        self.status = s.status
-        self.team = s.team
-        self.mods = s.mods
+    def copy_from(self, other: 'Slot') -> None:
+        self.player = other.player
+        self.status = other.status
+        self.team = other.team
+        self.mods = other.mods
 
     def reset(self) -> None:
         self.player = None
@@ -528,10 +528,10 @@ class Match:
                 del m
 
             else: # teams
-                if rgx := regexes.tourney_matchname.match(self.name):
-                    match_name = rgx['name']
-                    team_names = {MatchTeams.blue: rgx['T1'],
-                                MatchTeams.red: rgx['T2']}
+                if r_match := regexes.tourney_matchname.match(self.name):
+                    match_name = r_match['name']
+                    team_names = {MatchTeams.blue: r_match['T1'],
+                                MatchTeams.red: r_match['T2']}
                 else:
                     match_name = self.name
                     team_names = {MatchTeams.blue: 'Blue',

@@ -12,20 +12,20 @@ private servers since early 2016, and founded [akatsuki](https://akatsuki.pw) in
 late 2017 using [ripple](https://github.com/osuripple)'s source with no prior
 development experience. i spent nearly all of my spare time learning more about
 the wonderful world of (osu!) programming by working on their codebase, until
-i had eventually learned enough to try writing a server from scratch.
+i had eventually learned enough to try writing a server from the ground up.
 
 gulag was my third attempt to write an osu! server, and based on my previous
 failures i didn't believe i had what it took to write a competitive server; but
 after months of development and gradual progress it's seemed more and more
 likely that it'd really become the replacement for akatsuki's existing stack.
 
-in my (pretty qualified) opinion (as someone who's really dove deep into most
-competing implementations), i'd definitely say gulag is currently the most
-maintainable, thoughtfully efficient and well suited for the operation of an
-osu! private server of anything i've seen. i think there are some great
-projects out there (especially some of the more modern ones), but frankly
-i've spent countless hours thinking about how i can improve the server and
-make it superior in a wide variety of different ways, not being scared to
+in my opinion, i think it's become the most maintainable, thoughtfully efficient
+and well suited for the operation of an osu! private server of anything i've seen.
+it's certainly not the fastest, but for the level of abstraction it's written at
+it's certainly much more efficient than any alternative options. there are some
+other great projects out there (especially some of the more modern ones), but
+frankly i've spent countless hours thinking about how i can improve the server
+and make it superior in a wide variety of different ways, not being scared to
 tear down & refactor large structures in the codebase as i learn more.
 i really think it's paid off, and i can say without a doubt that i plan to
 use this software for akatsuki. of course everyone has their biases and values

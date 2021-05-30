@@ -283,7 +283,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
                     p.last_np = {
                         'bmap': bmap,
                         'mode_vn': mode_vn,
-                        'timeout': time.time() + 300 # 5mins
+                        'timeout': time.time() + 300 # /np's last 5mins
                     }
                 else:
                     # time out their previous /np
@@ -329,6 +329,16 @@ RESTRICTED_MSG = (
     'greater than 3 months, you may appeal via the form on the site.'
 )
 
+WELCOME_NOTIFICATION = packets.notification(
+    'Welcome back to the gulag!\n'
+    f'Current build: v{glob.version}'
+)
+
+OFFLINE_NOTIFICATION = packets.notification(
+    'The server is currently running in offline mode; '
+    'some features will be unavailble.'
+)
+
 DELTA_60_DAYS = td(days=60)
 
 async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
@@ -370,17 +380,17 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
 
     osu_ver_str = client_info[0]
 
-    if not (r := regexes.osu_ver.match(osu_ver_str)):
+    if not (r_match := regexes.osu_ver.match(osu_ver_str)):
         return # invalid request
 
     # quite a bit faster than using dt.strptime.
     osu_ver_dt = dt(
-        year = int(r['ver'][0:4]),
-        month = int(r['ver'][4:6]),
-        day = int(r['ver'][6:8])
+        year=int(r_match['ver'][0:4]),
+        month=int(r_match['ver'][4:6]),
+        day=int(r_match['ver'][6:8])
     )
 
-    osu_ver_stream = r['stream'] or 'stable'
+    osu_ver_stream = r_match['stream'] or 'stable'
     using_tourney_client = osu_ver_stream == 'tourney'
 
     # disallow the login if their osu! client is older
@@ -502,72 +512,43 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
         [user_info['id'], *client_hashes]
     )
 
-    if not is_wine:
-        # find any other users from any of the same hwid values.
-        await db_cursor.execute(
-            'SELECT u.name, u.priv, h.occurrences '
-            'FROM client_hashes h '
-            'INNER JOIN users u ON h.userid = u.id '
-            'WHERE h.userid != %s AND (h.adapters = %s '
-            'OR h.uninstall_id = %s OR h.disk_serial = %s)',
-            [user_info['id'], *client_hashes[1:]]
-        )
-        hwid_matches = await db_cursor.fetchall()
-
-        if hwid_matches:
-            # we have other accounts with matching hashes
-
-            # NOTE: this is an area i've seen a lot of implementations rush
-            # through and poorly design; this section is CRITICAL for both
-            # keeping multiaccounting down, but perhaps more importantly in
-            # scenarios where multiple users are forced to use a single pc
-            # (lan meetups, at a friends place, shared computer, etc.).
-            # these scenarios are usually the ones where new players will
-            # get invited to your server.. first impressions are important
-            # and you don't want a ban and support ticket to be this users
-            # first experience. :P
-
-            # anyways yeah needless to say i'm gonna think about this one
-
-            if not user_info['priv'] & Privileges.Verified:
-                # this player is not verified yet, this is their first
-                # time connecting in-game and submitting their hwid set.
-                # we will not allow any banned matches; if there are any,
-                # then ask the user to contact staff and resolve manually.
-                if not all([x['priv'] & Privileges.Normal for x in hwid_matches]):
-                    return (packets.notification('Please contact staff directly '
-                                                'to create an account.') +
-                            packets.userID(-1)), 'no'
-
-            else:
-                '''
-                # player is verified
-                # TODO: staff hwid locking & bypass detections.
-                unique_players = set()
-                total_occurrences = 0
-                for match in hwid_matches:
-                    if match['name'] not in unique_players:
-                        unique_players.add(match['name'])
-                    total_occurrences += match['occurrences']
-
-                msg_content = (
-                    f'{username} logged in with HWID matches '
-                    f'from {len(unique_players)} other users. '
-                    f'({total_occurrences} total occurrences)'
-                )
-
-                if glob.has_internet:
-                    if webhook_url := glob.config.webhooks['audit-log']:
-                        # TODO: make it look nicer lol.. very basic
-                        webhook = Webhook(url=webhook_url)
-                        webhook.content = msg_content
-                        await webhook.post(glob.http)
-
-                log(msg_content, Ansi.LRED)
-                '''
+    if is_wine:
+        hw_checks = 'h.uninstall_id = %s'
+        hw_args = [client_hashes[3]]
     else:
-        # TODO: alternative checks for runningunderwine
-        ...
+        hw_checks = ('h.adapters = %s OR '
+                     'h.uninstall_id = %s OR '
+                     'h.disk_serial = %s')
+        hw_args = client_hashes[1:]
+
+    await db_cursor.execute(
+        'SELECT u.name, u.priv, h.occurrences '
+        'FROM client_hashes h '
+        'INNER JOIN users u ON h.userid = u.id '
+        'WHERE h.userid != %s AND '
+        f'({hw_checks})',
+        [user_info['id'], *hw_args]
+    )
+
+    if db_cursor.rowcount != 0:
+        # we have other accounts with matching hashes
+        hw_matches = await db_cursor.fetchall()
+
+        if user_info['priv'] & Privileges.Verified:
+            # the player is
+            ...
+        else:
+            # this player is not verified yet, this is their first
+            # time connecting in-game and submitting their hwid set.
+            # we will not allow any banned matches; if there are any,
+            # then ask the user to contact staff and resolve manually.
+            if not all([hw_match['priv'] & Privileges.Normal
+                        for hw_match in hw_matches]):
+                return (packets.notification('Please contact staff directly '
+                                            'to create an account.') +
+                        packets.userID(-1)), 'no'
+
+    """ All checks passed, player is safe to login """
 
     # get clan & clan priv if we're in a clan
     if user_info['clan_id'] != 0:
@@ -607,30 +588,39 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
         p.bancho_priv | ClientPrivileges.Supporter
     )
 
-    data += packets.notification(
-        'Welcome back to the gulag!\n'
-        f'Current build: v{glob.version}'
-    )
+    data += WELCOME_NOTIFICATION
 
     if not glob.has_internet:
-        data += packets.notification(
-            'The server is currently running in offline mode; '
-            'some features will be unavailble.'
+        data += OFFLINE_NOTIFICATION
+
+    # send all channel related info to the client,
+    # and update channel playercounts for all users.
+    # TODO: refactor stuff like Player.join_channel
+    # to be usable here without being disgusting?
+    for c in glob.channels:
+        if (
+            not c.auto_join or
+            p.priv & c.read_priv != c.read_priv or
+            c._name == '#lobby' # (can't be in mp lobby @ login)
+        ):
+            continue
+
+        c.append(p)
+        p.channels.append(c)
+
+        # send chan info to all players who can see
+        # the channel (to update their playercounts)
+        chan_info_packet = packets.channelInfo(
+            c._name, c.topic, len(c.players)
         )
 
-    # send all channel info.
-    for c in glob.channels:
-        if p.priv & c.read_priv != c.read_priv:
-            continue # no priv to read
+        data += chan_info_packet
 
-        # autojoinable channels
-        if c.auto_join and p.join_channel(c):
-            # NOTE: p.join_channel enqueues channelJoin, but
-            # if we don't send this back in this specific request,
-            # the client will attempt to join the channel again.
-            data += packets.channelJoin(c.name)
+        for o in glob.players:
+            if o.priv & c.read_priv == c.read_priv:
+                o.enqueue(chan_info_packet)
 
-        data += packets.channelInfo(*c.basic_info)
+        data += packets.channelJoin(c._name)
 
     # tells osu! to reorder channels based on config.
     data += packets.channelInfoEnd()
@@ -654,10 +644,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     data += packets.silenceEnd(p.remaining_silence)
 
     # update our new player's stats, and broadcast them.
-    user_data = (
-        packets.userPresence(p) +
-        packets.userStats(p)
-    )
+    user_data = packets.userPresence(p) + packets.userStats(p)
 
     data += user_data
 
@@ -747,8 +734,6 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
 
         time_taken = time.time() - login_time
         glob.datadog.histogram('gulag.login_time', time_taken)
-
-    p._queue.clear() # TODO: this is pretty suboptimal
 
     user_os = 'unix (wine)' if is_wine else 'win32'
     log(f'{p} logged in with {osu_ver_str} on {user_os}.', Ansi.LCYAN)
@@ -1675,16 +1660,13 @@ class UserPresenceRequest(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST):
 
 @register
 class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST_ALL):
-    async def handle(self, p: Player) -> None:
-        # XXX: this only sends when the client can see > 256 players,
-        # so this probably won't have much use for private servers.
+    ingame_time: osuTypes.i32 # TODO: should probably ratelimit with this (300k s)
 
-        # NOTE: i'm not exactly sure how bancho implements this and whether
-        # i'm supposed to filter the users presences to send back with the
-        # player's presence filter; i can add it in the future perhaps.
-        for t in glob.players.unrestricted:
-            if p is not t:
-                p.enqueue(packets.userPresence(t))
+    async def handle(self, p: Player) -> None:
+        # NOTE: this packet is only used when there
+        # are >256 players visible to the client.
+
+        p.enqueue(b''.join(map(packets.userPresence, glob.players.unrestricted)))
 
 @register
 class ToggleBlockingDMs(BanchoPacket, type=Packets.OSU_TOGGLE_BLOCK_NON_FRIEND_DMS):

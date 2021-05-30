@@ -102,16 +102,16 @@ class Matches(list):
 
     def __init__(self) -> None:
         super().__init__()
-        self.extend([None] * 64)
+        self.extend([None] * glob.config.max_multi_matches)
 
     def __iter__(self) -> Iterator['Match']:
         return super().__iter__()
 
     def __repr__(self) -> str:
-        return f'[{", ".join(m.name for m in self if m)}]'
+        return f'[{", ".join([m.name for m in self if m])}]'
 
     def get_free(self) -> Optional[int]:
-        """Return the first free slot id from `self`."""
+        """Return the first free match id from `self`."""
         for idx, m in enumerate(self):
             if m is None:
                 return idx
@@ -119,7 +119,7 @@ class Matches(list):
     def append(self, m: 'Match') -> bool:
         """Append `m` to the list."""
         if (free := self.get_free()) is not None:
-            # set the id of the match to the free slot.
+            # set the id of the match to the lowest available free.
             m.id = free
             self[free] = m
 
@@ -190,7 +190,7 @@ class Players(list):
                 p.enqueue(data)
 
     @staticmethod
-    def _parse_attr(kwargs: dict[str, object]) -> Optional[tuple[str, object]]:
+    def _parse_attr(kwargs: dict[str, object]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
         for attr in ('token', 'id', 'name'):
             if (val := kwargs.pop(attr, None)) is not None:
@@ -266,9 +266,6 @@ class Players(list):
 
         super().append(p)
 
-        if glob.app.debug:
-            log(f'{p} added to global player list.')
-
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
@@ -277,9 +274,6 @@ class Players(list):
             return
 
         super().remove(p)
-
-        if glob.app.debug:
-            log(f'{p} removed from global player list.')
 
 class MapPools(list):
     """The currently active mappools on the server."""

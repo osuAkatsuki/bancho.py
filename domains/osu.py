@@ -59,7 +59,7 @@ AVATARS_PATH = Path.cwd() / '.data/avatars'
 
 """ Some helper decorators (used for /web/ connections) """
 
-def _required_args(args: set[str], argset: str) -> Callable:
+def _required_args(req_args: set[str], argset: str) -> Callable:
     """Decorator to ensure all required arguments are present."""
     # NOTE: this function is not meant to be used directly, but
     # rather used in the form as the functions below.
@@ -69,8 +69,9 @@ def _required_args(args: set[str], argset: str) -> Callable:
         # all arguments are sent in the request.
         @wraps(f)
         async def handler(conn: Connection) -> Optional[bytes]:
-            _argset = getattr(conn, argset)
-            if all([x in _argset for x in args]):
+            args = getattr(conn, argset)
+
+            if args.keys() >= req_args:
                 # all args given, call the
                 # handler with the conn.
                 return await f(conn)
@@ -80,12 +81,12 @@ def _required_args(args: set[str], argset: str) -> Callable:
 
 # the decorator above may be used
 # for either args, mpargs, or files.
-def required_args(args: set[str]) -> Callable:
-    return _required_args(args, argset='args')
-def required_mpargs(args: set[str]) -> Callable:
-    return _required_args(args, argset='multipart_args')
-def required_files(args: set[str]) -> Callable:
-    return _required_args(args, argset='files')
+def required_args(req_args: set[str]) -> Callable:
+    return _required_args(req_args, argset='args')
+def required_mpargs(req_args: set[str]) -> Callable:
+    return _required_args(req_args, argset='multipart_args')
+def required_files(req_args: set[str]) -> Callable:
+    return _required_args(req_args, argset='files')
 
 def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
     """Decorator to ensure a player's login information is correct."""
@@ -531,8 +532,8 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             '0|0|0|0|0').format(**bmapset).encode()
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
-def chart_entry(name: str, k: Optional[object], v: object) -> str:
-    return f'{name}Before:{k or ""}|{name}After:{v}'
+def chart_entry(name: str, before: Optional[object], after: object) -> str:
+    return f'{name}Before:{before or ""}|{name}After:{after}'
 
 @domain.route('/web/osu-submit-modular-selector.php', methods=['POST'])
 @required_mpargs({'x', 'ft', 'score', 'fs', 'bmk', 'iv',
@@ -555,7 +556,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         return
     elif not score.bmap:
         # Map does not exist, most likely unsubmitted.
-        return b'error: no'
+        return b'error: beatmap'
     elif score.bmap.status == RankedStatus.Pending:
         # XXX: Perhaps will accept in the future,
         return b'error: no' # not now though.
@@ -2262,46 +2263,52 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
 @domain.route(re.compile(r'^/web/maps/'))
 async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     """Send the latest .osu file the server has for a given map."""
-    if not (re := regexes.mapfile.match(unquote(conn.path[10:]))):
-        log(f'Requested invalid map update {conn.path}.', Ansi.LRED)
-        return (400, b'Invalid map file syntax.')
+    if conn.headers['Host'] == 'osu.ppy.sh':
+        # server switcher, use old method
+        if not (r_match := regexes.mapfile.match(unquote(conn.path[10:]))):
+            log(f'Requested invalid map update {conn.path}.', Ansi.LRED)
+            return (400, b'Invalid map file syntax.')
 
-    if not (res := await glob.db.fetch(
-        'SELECT id, md5 FROM maps WHERE '
-        'artist = %s AND title = %s '
-        'AND creator = %s AND version = %s', [
-            re['artist'], re['title'],
-            re['creator'], re['version']
-        ]
-    )):
-        return (404, b'') # map not found in sql
+        if not (res := await glob.db.fetch(
+            'SELECT id, md5 FROM maps WHERE '
+            'artist = %s AND title = %s '
+            'AND creator = %s AND version = %s', [
+                r_match['artist'], r_match['title'],
+                r_match['creator'], r_match['version']
+            ]
+        )):
+            return (404, b'') # map not found in sql
 
-    path = BEATMAPS_PATH / f'{res["id"]}.osu'
+        path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
-    if (
-        path.exists() and
-        res['md5'] == hashlib.md5(path.read_bytes()).hexdigest()
-    ):
-        # up to date map found on disk.
-        content = path.read_bytes()
+        if (
+            path.exists() and
+            res['md5'] == hashlib.md5(path.read_bytes()).hexdigest()
+        ):
+            # up to date map found on disk.
+            content = path.read_bytes()
+        else:
+            if not glob.has_internet:
+                return (503, b'') # requires internet connection
+
+            # map not found, or out of date; get from osu!
+            url = f"https://old.ppy.sh/osu/{res['id']}"
+
+            async with glob.http.get(url) as resp:
+                if not resp or resp.status != 200:
+                    log(f'Could not find map {path}!', Ansi.LRED)
+                    return (404, b'') # couldn't find on osu!'s server
+
+                content = await resp.read()
+
+            # save it to disk for future
+            path.write_bytes(content)
+
+        return content
     else:
-        if not glob.has_internet:
-            return (503, b'') # requires internet connection
-
-        # map not found, or out of date; get from osu!
-        url = f"https://old.ppy.sh/osu/{res['id']}"
-
-        async with glob.http.get(url) as resp:
-            if not resp or resp.status != 200:
-                log(f'Could not find map {path}!', Ansi.LRED)
-                return (404, b'') # couldn't find on osu!'s server
-
-            content = await resp.read()
-
-        # save it to disk for future
-        path.write_bytes(content)
-
-    return content
+        # using -devserver, just redirect them to osu
+        conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
+        return (301, b'')
 
 @domain.route('/p/doyoureallywanttoaskpeppy')
 async def peppyDMHandler(conn: Connection) -> Optional[bytes]:

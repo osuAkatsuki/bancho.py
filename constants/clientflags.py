@@ -50,7 +50,6 @@ class ClientFlags(IntFlag):
     # from my experience, pretty decent
     # for detecting autobotted scores.
     RawMouseDiscrepancy         = 1 << 12
-
     RawKeyboardDiscrepancy      = 1 << 13
 
     """osu! anticheat 2019"""

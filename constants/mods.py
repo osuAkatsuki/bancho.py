@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import functools
 from enum import IntFlag
 from enum import unique
 
@@ -46,6 +47,7 @@ class Mods(IntFlag):
     SCOREV2     = 1 << 29
     MIRROR      = 1 << 30
 
+    @functools.cache
     def __repr__(self) -> str:
         if self.value == Mods.NOMOD:
             return 'NM'
@@ -123,11 +125,9 @@ class Mods(IntFlag):
         return self
 
     @classmethod
+    @functools.lru_cache(maxsize=64)
     def from_modstr(cls, s: str) -> 'Mods':
         # from fmt: `HDDTRX`
-        def get_mod(idx: int) -> str:
-            return s[idx:idx + 2].upper()
-
         mods = cls.NOMOD
         _dict = modstr2mod_dict # global
 
@@ -145,6 +145,7 @@ class Mods(IntFlag):
         return mods
 
     @classmethod
+    @functools.lru_cache(maxsize=64)
     def from_np(cls, s: str, mode_vn: int) -> 'Mods':
         mods = cls.NOMOD
         _dict = npstr2mod_dict # global
