@@ -10,7 +10,7 @@ from objects import glob
 if TYPE_CHECKING:
     from objects.player import Player
 
-__all__ = 'Channel',
+__all__ = ('Channel',)
 
 class Channel:
     """An osu! chat channel.
@@ -28,7 +28,7 @@ class Channel:
         Instanced channels are deleted when all players have left;
         this is useful for things like multiplayer, spectator, etc.
     """
-    __slots__ = ('_name', 'topic', 'players',
+    __slots__ = ('_name', 'name', 'topic', 'players',
                  'read_priv', 'write_priv',
                  'auto_join', 'instance')
 
@@ -37,7 +37,16 @@ class Channel:
                  write_priv: Privileges = Privileges.Normal,
                  auto_join: bool = True,
                  instance: bool = False) -> None:
+        # TODO: think of better names than `_name` and `name`
         self._name = name # 'real' name ('#{multi/spec}_{id}')
+
+        if self._name.startswith('#spec_'):
+            self.name = '#spectator'
+        elif self._name.startswith('#multi_'):
+            self.name = '#multiplayer'
+        else:
+            self.name = self._name
+
         self.topic = topic
         self.read_priv = read_priv
         self.write_priv = write_priv
@@ -45,19 +54,6 @@ class Channel:
         self.instance = instance
 
         self.players: list['Player'] = []
-
-    @property
-    def name(self) -> str:
-        if self._name.startswith('#spec_'):
-            return '#spectator'
-        elif self._name.startswith('#multi_'):
-            return '#multiplayer'
-        else:
-            return self._name
-
-    @property
-    def basic_info(self) -> tuple[str, str, int]:
-        return (self.name, self.topic, len(self.players))
 
     def __repr__(self) -> str:
         return f'<{self._name}>'

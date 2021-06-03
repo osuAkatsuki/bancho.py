@@ -763,8 +763,9 @@ class Player:
             # remove host from channel, deleting it.
             self.leave_channel(c)
         else:
+            # send new playercount
+            c_info = packets.channelInfo(c.name, c.topic, len(c.players))
             fellow = packets.fellowSpectatorLeft(p.id)
-            c_info = packets.channelInfo(*c.basic_info) # new playercount
 
             self.enqueue(c_info)
 

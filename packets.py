@@ -377,18 +377,18 @@ class BanchoPacketReader:
     def read_message(self) -> Message: # namedtuple
         """Read an osu! message from the internal buffer."""
         return Message(
-            sender = self.read_string(),
-            msg = self.read_string(),
-            recipient = self.read_string(),
-            sender_id = self.read_i32()
+            sender=self.read_string(),
+            msg=self.read_string(),
+            recipient=self.read_string(),
+            sender_id=self.read_i32()
         )
 
     def read_channel(self) -> Channel: # namedtuple
         """Read an osu! channel from the internal buffer."""
         return Channel(
-            name = self.read_string(),
-            topic = self.read_string(),
-            players = self.read_i32()
+            name=self.read_string(),
+            topic=self.read_string(),
+            players=self.read_i32()
         )
 
     def read_match(self) -> Match:
@@ -445,8 +445,8 @@ class BanchoPacketReader:
         self.view = self.view[29:]
 
         if sf.score_v2:
-            sf.combo_portion = self.read_f32()
-            sf.bonus_portion = self.read_f32()
+            sf.combo_portion = self.read_f64()
+            sf.bonus_portion = self.read_f64()
 
         return sf
 
@@ -1003,7 +1003,6 @@ def restartServer(ms: int) -> bytes:
     )
 
 # packet id: 88
-@lru_cache(maxsize=4)
 def matchInvite(p: 'Player', t_name: str) -> bytes:
     msg = f'Come join my game: {p.match.embed}.'
     return write(

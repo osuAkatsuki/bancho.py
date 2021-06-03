@@ -56,13 +56,6 @@ if TYPE_CHECKING:
 Messageable = Union['Channel', Player]
 CommandResponse = dict[str, str]
 
-class Command(NamedTuple):
-    triggers: list[str]
-    callback: Callable
-    priv: Privileges
-    hidden: bool
-    doc: str
-
 @dataclass
 class Context:
     player: Player
@@ -71,6 +64,13 @@ class Context:
 
     recipient: Optional[Messageable] = None
     match: Optional[Match] = None
+
+class Command(NamedTuple):
+    triggers: list[str]
+    callback: Callable[[Context], str]
+    priv: Privileges
+    hidden: bool
+    doc: str
 
 class CommandSet:
     __slots__ = ('trigger', 'doc', 'commands')
@@ -814,8 +814,7 @@ async def shutdown(ctx: Context) -> str:
 
             glob.players.enqueue(packets.notification(alert_msg))
 
-        loop = asyncio.get_running_loop()
-        loop.call_later(delay, os.kill, os.getpid(), _signal)
+        glob.loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f'Enqueued {ctx.trigger}.'
     else: # shutdown immediately
         os.kill(os.getpid(), _signal)
@@ -1112,10 +1111,10 @@ async def wipemap(ctx: Context) -> str:
 #    """Temporary command to illustrate the menu option idea."""
 #    async def callback():
 #        # this is called when the menu item is clicked
-#        p.enqueue(packets.notification('clicked!'))
+#        ctx.player.enqueue(packets.notification('clicked!'))
 #
 #    # add the option to their menu opts & send them a button
-#    opt_id = await p.add_to_menu(callback)
+#    opt_id = await ctx.player.add_to_menu(callback)
 #    return f'[osump://{opt_id}/dn option]'
 
 @command(Privileges.Dangerous, aliases=['re'])
@@ -1329,10 +1328,9 @@ async def mp_start(ctx: Context) -> str:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            loop = asyncio.get_running_loop()
-            ctx.match.starting['start'] = loop.call_later(duration, _start)
+            ctx.match.starting['start'] = glob.loop.call_later(duration, _start)
             ctx.match.starting['alerts'] = [
-                loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                glob.loop.call_later(duration - t, lambda t=t: _alert_start(t))
                 for t in (60, 30, 10, 5, 4, 3, 2, 1) if t < duration
             ]
             ctx.match.starting['time'] = time.time() + duration

@@ -150,10 +150,8 @@ async def replay_detections() -> None:
     glob.sketchy_queue = asyncio.Queue() # cursed type hint fix
     queue: asyncio.Queue['Score'] = glob.sketchy_queue
 
-    loop = asyncio.get_running_loop()
-
     while score := await queue.get():
-        loop.create_task(analyze_score(score))
+        glob.loop.create_task(analyze_score(score))
 '''
 
 async def reroll_bot_status(interval: int) -> None:

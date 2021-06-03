@@ -939,6 +939,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
 
     log(f'[{score.mode!r}] {score.player} submitted a score! '
         f'({score.status!r}, {score.pp:,.2f}pp / {stats.pp:,}pp)', Ansi.LGREEN)
+
     return ret
 
 @domain.route('/web/osu-getreplay.php')
@@ -1182,7 +1183,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     if not scores:
         # simply return an empty set.
-        return '\n'.join(l + ['', '']).encode()
+        return ('\n'.join(l) + '\n\n').encode()
 
     p_best = await glob.db.fetch(
         f'SELECT id, {scoring} AS _score, '
@@ -1217,9 +1218,11 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         l.append(
             score_fmt.format(
                 **p_best,
-                name = p.full_name, userid = p.id,
-                score = int(p_best['_score']),
-                has_replay = '1', rank = p_best_rank
+                name=p.full_name,
+                userid=p.id,
+                score=int(p_best['_score']),
+                has_replay='1',
+                rank=p_best_rank
             )
         )
     else:
@@ -1227,8 +1230,10 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     l.extend([
         score_fmt.format(
-            **s, score = int(s['_score']),
-            has_replay = '1', rank = idx + 1
+            **s,
+            score=int(s['_score']),
+            has_replay='1',
+            rank=idx + 1
         ) for idx, s in enumerate(scores)
     ])
 

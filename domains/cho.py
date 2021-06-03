@@ -889,7 +889,7 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
                         p.last_np = {
                             'bmap': bmap,
                             'mode_vn': mode_vn,
-                            'timeout': time.time() + 300 # 5mins
+                            'timeout': time.time() + 300 # /np's last 5mins
                         }
 
                         # calc pp if possible
