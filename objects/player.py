@@ -588,7 +588,16 @@ class Player:
                 log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
-        self.match.get_slot(self).reset()
+        slot = self.match.get_slot(self)
+
+        if slot.status == SlotStatus.locked:
+            # player was kicked, keep the slot locked.
+            new_status = SlotStatus.locked
+        else:
+            # player left, open the slot for new players to join.
+            new_status = SlotStatus.open
+
+        slot.reset(new_status=new_status)
 
         self.leave_channel(self.match.chat)
 
