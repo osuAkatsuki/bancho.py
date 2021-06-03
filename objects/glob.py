@@ -35,7 +35,8 @@ __all__ = (
     'version', 'bot', 'api_keys',
     'bancho_packets', 'db',
     'has_internet', 'http',
-    'datadog', 'cache'#, 'sketchy_queue'
+    'datadog', 'cache', 'loop',
+    #'sketchy_queue'
 )
 
 # server object

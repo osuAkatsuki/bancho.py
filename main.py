@@ -45,6 +45,7 @@ except ModuleNotFoundError as exc:
     else:
         raise
 
+import asyncio
 from pathlib import Path
 
 import aiohttp
@@ -137,6 +138,8 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
+    glob.loop = asyncio.get_event_loop()
+
     if glob.has_internet:
         # retrieve a client session to use for http connections.
         glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps) # type: ignore

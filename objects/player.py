@@ -973,14 +973,15 @@ class Player:
         # return the key.
         return randnum
 
-    async def update_latest_activity(self) -> None:
+    def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
-        await glob.db.execute(
+        task = glob.db.execute(
             'UPDATE users '
             'SET latest_activity = UNIX_TIMESTAMP() '
             'WHERE id = %s',
             [self.id]
         )
+        glob.loop.create_task(task)
 
     def enqueue(self, b: bytes) -> None:
         """Add data to be sent to the client."""
