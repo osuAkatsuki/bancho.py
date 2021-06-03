@@ -47,7 +47,7 @@ channels: 'Channels'
 matches: 'Matches'
 clans: 'Clans'
 pools: 'MapPools'
-achievements: dict[int, list['Achievement']] # per vn gamemode
+achievements: list['Achievement']
 
 bot: 'Player'
 version: 'Version'

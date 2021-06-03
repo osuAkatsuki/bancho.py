@@ -188,11 +188,7 @@ class Player:
         self.clan: Optional['Clan'] = extras.get('clan', None)
         self.clan_priv: Optional['ClanPrivileges'] = extras.get('clan_priv', None)
 
-        # store achievements per-gamemode
-        self.achievements: dict[int, set['Achievement']] = {
-            0: set(), 1: set(),
-            2: set(), 3: set()
-        }
+        self.achievements: set['Achievement'] = set()
 
         self.country = (0, 'XX') # (code, letters)
         self.location = (0.0, 0.0) # (lat, long)
@@ -884,7 +880,7 @@ class Player:
             [self.id, a.id]
         )
 
-        self.achievements[a.mode].add(a)
+        self.achievements.add(a)
 
     async def relationships_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s relationships from sql."""
@@ -906,27 +902,17 @@ class Player:
 
     async def achievements_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s achievements from sql."""
-        for mode in range(4):
-            # get all users achievements for this mode
-            await db_cursor.execute(
-                'SELECT ua.achid id FROM user_achievements ua '
-                'INNER JOIN achievements a ON a.id = ua.achid '
-                'WHERE ua.userid = %s AND a.mode = %s',
-                [self.id, mode]
-            )
+        await db_cursor.execute(
+            'SELECT ua.achid id FROM user_achievements ua '
+            'INNER JOIN achievements a ON a.id = ua.achid '
+            'WHERE ua.userid = %s',
+            [self.id]
+        )
 
-            if db_cursor.rowcount == 0:
-                # no achievements
-                # for given mode
-                continue
-
-            # get cached achievements for this mode
-            achs = glob.achievements[mode]
-
-            async for row in db_cursor:
-                for ach in achs:
-                    if row['id'] == ach.id:
-                        self.achievements[mode].add(ach)
+        async for row in db_cursor:
+            for ach in glob.achievements:
+                if row['id'] == ach.id:
+                    self.achievements.add(ach)
 
     async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""

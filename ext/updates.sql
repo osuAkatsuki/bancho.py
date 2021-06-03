@@ -339,3 +339,10 @@ create table ingame_logins
 	osu_stream varchar(11) not null,
 	datetime datetime not null
 );
+
+# v3.3.7
+update achievements set cond = CONCAT(cond, ' and mode_vn = 0') where mode = 0;
+update achievements set cond = CONCAT(cond, ' and mode_vn = 1') where mode = 1;
+update achievements set cond = CONCAT(cond, ' and mode_vn = 2') where mode = 2;
+update achievements set cond = CONCAT(cond, ' and mode_vn = 3') where mode = 3;
+alter table achievements drop column mode;

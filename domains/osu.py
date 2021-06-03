@@ -862,14 +862,12 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # achievements unlocked only for non-restricted players
         if not score.player.restricted:
             if score.bmap.awards_pp:
-                player_achs = score.player.achievements[mode_vn]
-
-                for ach in glob.achievements[mode_vn]:
-                    if ach in player_achs:
+                for ach in glob.achievements:
+                    if ach in score.player.achievements:
                         # player already has this achievement.
                         continue
 
-                    if ach.cond(score):
+                    if ach.cond(score, mode_vn):
                         await score.player.unlock_achievement(ach)
                         achievements.append(ach)
 

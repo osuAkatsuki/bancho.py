@@ -113,18 +113,17 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)
-    glob.achievements = {0: [], 1: [], 2: [], 3: []}
+    glob.achievements = []
 
     await db_cursor.execute('SELECT * FROM achievements')
     async for row in db_cursor:
         # NOTE: achievement conditions are stored as
         # stringified python expressions in the database
         # to allow for easy custom achievements.
-        condition = eval(f'lambda score: {row.pop("cond")}')
+        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
         achievement = Achievement(**row, cond=condition)
 
-        # NOTE: achievements are grouped by modes internally.
-        glob.achievements[row['mode']].append(achievement)
+        glob.achievements.append(achievement)
 
     # static api keys
     await db_cursor.execute(
