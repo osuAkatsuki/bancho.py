@@ -4,7 +4,7 @@ import random
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date
 from enum import IntEnum
 from enum import unique
 from functools import cached_property
@@ -198,7 +198,7 @@ class Player:
         self.away_msg: Optional[str] = None
         self.silence_end = extras.get('silence_end', 0)
         self.in_lobby = False
-        self.osu_ver: Optional[datetime] = extras.get('osu_ver', None)
+        self.osu_ver: Optional[date] = extras.get('osu_ver', None)
         self.pres_filter = PresenceFilter.Nil
 
         login_time = extras.get('login_time', 0.0)

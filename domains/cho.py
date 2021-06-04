@@ -3,8 +3,9 @@
 import asyncio
 import re
 import time
-from datetime import datetime as dt
-from datetime import timedelta as td
+from datetime import date
+from datetime import datetime
+from datetime import timedelta
 from typing import Callable
 from typing import Union
 
@@ -338,7 +339,7 @@ OFFLINE_NOTIFICATION = packets.notification(
     'some features will be unavailble.'
 )
 
-DELTA_60_DAYS = td(days=60)
+DELTA_60_DAYS = timedelta(days=60)
 
 async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
     """\
@@ -383,7 +384,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
         return # invalid request
 
     # quite a bit faster than using dt.strptime.
-    osu_ver_dt = dt(
+    osu_ver_date = date(
         year=int(r_match['ver'][0:4]),
         month=int(r_match['ver'][4:6]),
         day=int(r_match['ver'][6:8])
@@ -397,7 +398,9 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
     if not glob.app.debug:
-        if osu_ver_dt < (dt.now() - DELTA_60_DAYS):
+        # TODO: look into why datetime.now() is a few multiples
+        # faster than date.today() & datetime.today()
+        if osu_ver_date < (datetime.now() - DELTA_60_DAYS):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
@@ -497,7 +500,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
         'INSERT INTO ingame_logins '
         '(userid, ip, osu_ver, osu_stream, datetime) '
         'VALUES (%s, %s, %s, %s, NOW())',
-        [user_info['id'], ip, osu_ver_dt, osu_ver_stream]
+        [user_info['id'], ip, osu_ver_date, osu_ver_stream]
     )
 
     await db_cursor.execute(
@@ -561,7 +564,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     p = Player(
         **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key}
         utc_offset=utc_offset,
-        osu_ver=osu_ver_dt,
+        osu_ver=osu_ver_date,
         pm_private=pm_private,
         login_time=login_time,
         clan=clan,

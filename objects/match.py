@@ -3,8 +3,8 @@
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime as dt
-from datetime import timedelta as td
+from datetime import datetime as datetime
+from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
 from typing import Optional
@@ -48,14 +48,14 @@ BASE_DOMAIN = glob.config.domain
 @unique
 @pymysql_encode(escape_enum)
 class SlotStatus(IntEnum):
-    open       = 1
-    locked     = 2
-    not_ready  = 4
-    ready      = 8
-    no_map     = 16
-    playing    = 32
-    complete   = 64
-    quit       = 128
+    open      = 1
+    locked    = 2
+    not_ready = 4
+    ready     = 8
+    no_map    = 16
+    playing   = 32
+    complete  = 64
+    quit      = 128
 
     has_player = not_ready | ready | no_map | playing | complete
 
@@ -118,7 +118,7 @@ class MapPool:
     __slots__ = ('id', 'name', 'created_at', 'created_by', 'maps')
 
     def __init__(self, id: int, name: str,
-                 created_at: dt, created_by: 'Player') -> None:
+                 created_at: datetime, created_by: 'Player') -> None:
         self.id = id
         self.name = name
         self.created_at = created_at
@@ -421,8 +421,8 @@ class Match:
             # scores until they've all been submitted.
             while True:
                 rc_score = s.player.recent_score
-                max_age = dt.now() - td(seconds=bmap.total_length +
-                                                time_waited + 0.5)
+                max_age = datetime.now() - timedelta(seconds=bmap.total_length +
+                                                     time_waited + 0.5)
 
                 if (
                     rc_score and
