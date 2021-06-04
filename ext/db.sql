@@ -145,6 +145,16 @@ create table maps
 		unique (md5)
 );
 
+create table mapsets
+(
+	server enum('osu!', 'gulag') default 'osu!' not null,
+	id int not null,
+	last_osuapi_check datetime default CURRENT_TIMESTAMP not null,
+	primary key (server, id),
+	constraint nmapsets_id_uindex
+		unique (id)
+);
+
 create table map_requests
 (
 	id int auto_increment

@@ -115,9 +115,6 @@ pp_cached_scores = (8e5, 8.5e5, 9e5, 9.5e5, 10e5) # mania
 # should be redirected to osu.ppy.sh (https://osu.ppy.sh/beatmaps/123).
 redirect_osu_urls = False
 
-# the max duration to cache a beatmap for.
-map_cache_timeout = 3600 # ~3600
-
 # the max duration to cache osu-checkupdates requests for.
 # NOTE: this is only required for switchers and will be removed.
 updates_cache_timeout = 3600 # ~3600

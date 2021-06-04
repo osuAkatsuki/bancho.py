@@ -346,3 +346,14 @@ update achievements set cond = CONCAT(cond, ' and mode_vn == 1') where mode = 1;
 update achievements set cond = CONCAT(cond, ' and mode_vn == 2') where mode = 2;
 update achievements set cond = CONCAT(cond, ' and mode_vn == 3') where mode = 3;
 alter table achievements drop column mode;
+
+# v3.3.8
+create table mapsets
+(
+	server enum('osu!', 'gulag') default 'osu!' not null,
+	id int not null,
+	last_osuapi_check datetime default CURRENT_TIMESTAMP not null,
+	primary key (server, id),
+	constraint nmapsets_id_uindex
+		unique (id)
+);

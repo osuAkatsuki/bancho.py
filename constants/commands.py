@@ -536,10 +536,8 @@ async def _map(ctx: Context) -> str:
                 )
                 map_ids = [row[0] async for row in db_cursor]
 
-                for cached in glob.cache['beatmap'].values():
-                    # not going to bother checking timeout
-                    if cached['map'].set_id == bmap.set_id:
-                        cached['map'].status = new_status
+                for bmap in glob.cache['beatmapsets'][bmap.set_id].maps:
+                    bmap.status = new_status
 
             else:
                 # update only map
@@ -551,11 +549,8 @@ async def _map(ctx: Context) -> str:
 
                 map_ids = [bmap.id]
 
-                for cached in glob.cache['beatmap'].values():
-                    # not going to bother checking timeout
-                    if cached['map'] is bmap:
-                        cached['map'].status = new_status
-                        break
+                if bmap.md5 in glob.cache['beatmap']:
+                    glob.cache['beatmap'][bmap.md5].status = new_status
 
             # deactivate rank requests for all ids
             for map_id in map_ids:
