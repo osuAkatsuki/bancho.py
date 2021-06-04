@@ -27,7 +27,7 @@ if __import__('typing').TYPE_CHECKING:
     from objects.player import Player
     #from objects.score import Score
     from packets import BanchoPacket
-    from packets import Packets
+    from packets import ClientPackets
 
 __all__ = (
     # current server state
@@ -60,7 +60,7 @@ geoloc_db: 'Optional[geoip2.database.Reader]'
 api_keys: dict[str, int] # {api_key: player_id}
 
 # list of registered packets
-bancho_packets: dict['Packets', 'BanchoPacket']
+bancho_packets: dict['ClientPackets', 'BanchoPacket']
 
 # active connections
 db: 'AsyncSQLPool'

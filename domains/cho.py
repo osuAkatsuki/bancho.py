@@ -39,9 +39,9 @@ from objects.match import SlotStatus
 from objects.player import Action
 from objects.player import Player
 from objects.player import PresenceFilter
+from packets import ClientPackets
 from packets import BanchoPacket
 from packets import BanchoPacketReader
-from packets import Packets
 
 """ Bancho: handle connections from the osu! client """
 
@@ -149,12 +149,12 @@ def register(restricted: Union[bool, Callable] = False) -> Callable:
     return wrapper
 
 @register(restricted=True)
-class Ping(BanchoPacket, type=Packets.OSU_PING):
+class Ping(BanchoPacket, type=ClientPackets.PING):
     async def handle(self, p: Player) -> None:
         pass # ping be like
 
 @register(restricted=True)
-class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
+class ChangeAction(BanchoPacket, type=ClientPackets.CHANGE_ACTION):
     action: osuTypes.u8
     info_text: osuTypes.string
     map_md5: osuTypes.string
@@ -182,7 +182,7 @@ class ChangeAction(BanchoPacket, type=Packets.OSU_CHANGE_ACTION):
             glob.players.enqueue(packets.userStats(p))
 
 @register
-class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
+class SendMessage(BanchoPacket, type=ClientPackets.SEND_PUBLIC_MESSAGE):
     msg: osuTypes.message
 
     async def handle(self, p: Player) -> None:
@@ -295,7 +295,7 @@ class SendMessage(BanchoPacket, type=Packets.OSU_SEND_PUBLIC_MESSAGE):
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register(restricted=True)
-class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
+class Logout(BanchoPacket, type=ClientPackets.LOGOUT):
     _: osuTypes.i32 # pretty awesome design on osu!'s end :P
 
     async def handle(self, p: Player) -> None:
@@ -310,7 +310,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
         p.update_latest_activity()
 
 @register(restricted=True)
-class StatsUpdateRequest(BanchoPacket, type=Packets.OSU_REQUEST_STATUS_UPDATE):
+class StatsUpdateRequest(BanchoPacket, type=ClientPackets.REQUEST_STATUS_UPDATE):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
@@ -744,7 +744,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     return bytes(data), p.token
 
 @register
-class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
+class StartSpectating(BanchoPacket, type=ClientPackets.START_SPECTATING):
     target_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -763,7 +763,7 @@ class StartSpectating(BanchoPacket, type=Packets.OSU_START_SPECTATING):
         new_host.add_spectator(p)
 
 @register
-class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
+class StopSpectating(BanchoPacket, type=ClientPackets.STOP_SPECTATING):
     async def handle(self, p: Player) -> None:
         host = p.spectating
 
@@ -774,15 +774,11 @@ class StopSpectating(BanchoPacket, type=Packets.OSU_STOP_SPECTATING):
         host.remove_spectator(p)
 
 @register
-class SpectateFrames(BanchoPacket, type=Packets.OSU_SPECTATE_FRAMES):
-    play_data: osuTypes.raw
+class SpectateFrames(BanchoPacket, type=ClientPackets.SPECTATE_FRAMES):
+    frame_bundle: osuTypes.replayFrameBundle
 
     async def handle(self, p: Player) -> None:
-        # this runs very frequently during spectation,
-        # so it's written to run pretty quick.
-
-        # read the entire data of the packet, and ignore it internally
-        data = packets.spectateFrames(self.play_data)
+        data = packets.spectateFrames(self.frame_bundle.raw_data)
 
         # enqueue the data
         # to all spectators.
@@ -790,7 +786,7 @@ class SpectateFrames(BanchoPacket, type=Packets.OSU_SPECTATE_FRAMES):
             t.enqueue(data)
 
 @register
-class CantSpectate(BanchoPacket, type=Packets.OSU_CANT_SPECTATE):
+class CantSpectate(BanchoPacket, type=ClientPackets.CANT_SPECTATE):
     async def handle(self, p: Player) -> None:
         if not p.spectating:
             log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
@@ -805,7 +801,7 @@ class CantSpectate(BanchoPacket, type=Packets.OSU_CANT_SPECTATE):
             t.enqueue(data)
 
 @register
-class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
+class SendPrivateMessage(BanchoPacket, type=ClientPackets.SEND_PRIVATE_MESSAGE):
     msg: osuTypes.message
 
     async def handle(self, p: Player) -> None:
@@ -961,12 +957,12 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         log(f'{p} @ {t}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register
-class LobbyPart(BanchoPacket, type=Packets.OSU_PART_LOBBY):
+class LobbyPart(BanchoPacket, type=ClientPackets.PART_LOBBY):
     async def handle(self, p: Player) -> None:
         p.in_lobby = False
 
 @register
-class LobbyJoin(BanchoPacket, type=Packets.OSU_JOIN_LOBBY):
+class LobbyJoin(BanchoPacket, type=ClientPackets.JOIN_LOBBY):
     async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
@@ -975,7 +971,7 @@ class LobbyJoin(BanchoPacket, type=Packets.OSU_JOIN_LOBBY):
                 p.enqueue(packets.newMatch(m))
 
 @register
-class MatchCreate(BanchoPacket, type=Packets.OSU_CREATE_MATCH):
+class MatchCreate(BanchoPacket, type=ClientPackets.CREATE_MATCH):
     match: osuTypes.match
 
     async def handle(self, p: Player) -> None:
@@ -1041,7 +1037,7 @@ async def check_menu_option(p: Player, key: int):
         del p.menu_options[key]
 
 @register
-class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
+class MatchJoin(BanchoPacket, type=ClientPackets.JOIN_MATCH):
     match_id: osuTypes.i32
     match_passwd: osuTypes.string
 
@@ -1081,13 +1077,13 @@ class MatchJoin(BanchoPacket, type=Packets.OSU_JOIN_MATCH):
         p.join_match(m, self.match_passwd)
 
 @register
-class MatchPart(BanchoPacket, type=Packets.OSU_PART_MATCH):
+class MatchPart(BanchoPacket, type=ClientPackets.PART_MATCH):
     async def handle(self, p: Player) -> None:
         p.update_latest_activity()
         p.leave_match()
 
 @register
-class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
+class MatchChangeSlot(BanchoPacket, type=ClientPackets.MATCH_CHANGE_SLOT):
     slot_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1110,7 +1106,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
         m.enqueue_state() # technically not needed for host?
 
 @register
-class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
+class MatchReady(BanchoPacket, type=ClientPackets.MATCH_READY):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1119,7 +1115,7 @@ class MatchReady(BanchoPacket, type=Packets.OSU_MATCH_READY):
         m.enqueue_state(lobby=False)
 
 @register
-class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
+class MatchLock(BanchoPacket, type=ClientPackets.MATCH_LOCK):
     slot_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1155,7 +1151,7 @@ class MatchLock(BanchoPacket, type=Packets.OSU_MATCH_LOCK):
         m.enqueue_state()
 
 @register
-class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
+class MatchChangeSettings(BanchoPacket, type=ClientPackets.MATCH_CHANGE_SETTINGS):
     new: osuTypes.match
 
     async def handle(self, p: Player) -> None:
@@ -1260,7 +1256,7 @@ class MatchChangeSettings(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SETTINGS):
         m.enqueue_state()
 
 @register
-class MatchStart(BanchoPacket, type=Packets.OSU_MATCH_START):
+class MatchStart(BanchoPacket, type=ClientPackets.MATCH_START):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1272,7 +1268,7 @@ class MatchStart(BanchoPacket, type=Packets.OSU_MATCH_START):
         m.start()
 
 @register
-class MatchScoreUpdate(BanchoPacket, type=Packets.OSU_MATCH_SCORE_UPDATE):
+class MatchScoreUpdate(BanchoPacket, type=ClientPackets.MATCH_SCORE_UPDATE):
     play_data: osuTypes.raw
 
     async def handle(self, p: Player) -> None:
@@ -1291,7 +1287,7 @@ class MatchScoreUpdate(BanchoPacket, type=Packets.OSU_MATCH_SCORE_UPDATE):
         m.enqueue(bytes(buf), lobby=False)
 
 @register
-class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
+class MatchComplete(BanchoPacket, type=ClientPackets.MATCH_COMPLETE):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1324,7 +1320,7 @@ class MatchComplete(BanchoPacket, type=Packets.OSU_MATCH_COMPLETE):
             asyncio.create_task(m.update_matchpoints(was_playing))
 
 @register
-class MatchChangeMods(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_MODS):
+class MatchChangeMods(BanchoPacket, type=ClientPackets.MATCH_CHANGE_MODS):
     mods: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1355,7 +1351,7 @@ def is_playing(slot: Slot) -> bool:
     )
 
 @register
-class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
+class MatchLoadComplete(BanchoPacket, type=ClientPackets.MATCH_LOAD_COMPLETE):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1369,7 +1365,7 @@ class MatchLoadComplete(BanchoPacket, type=Packets.OSU_MATCH_LOAD_COMPLETE):
             m.enqueue(packets.matchAllPlayerLoaded(), lobby=False)
 
 @register
-class MatchNoBeatmap(BanchoPacket, type=Packets.OSU_MATCH_NO_BEATMAP):
+class MatchNoBeatmap(BanchoPacket, type=ClientPackets.MATCH_NO_BEATMAP):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1378,7 +1374,7 @@ class MatchNoBeatmap(BanchoPacket, type=Packets.OSU_MATCH_NO_BEATMAP):
         m.enqueue_state(lobby=False)
 
 @register
-class MatchNotReady(BanchoPacket, type=Packets.OSU_MATCH_NOT_READY):
+class MatchNotReady(BanchoPacket, type=ClientPackets.MATCH_NOT_READY):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1387,7 +1383,7 @@ class MatchNotReady(BanchoPacket, type=Packets.OSU_MATCH_NOT_READY):
         m.enqueue_state(lobby=False)
 
 @register
-class MatchFailed(BanchoPacket, type=Packets.OSU_MATCH_FAILED):
+class MatchFailed(BanchoPacket, type=ClientPackets.MATCH_FAILED):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1397,7 +1393,7 @@ class MatchFailed(BanchoPacket, type=Packets.OSU_MATCH_FAILED):
         m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)), lobby=False)
 
 @register
-class MatchHasBeatmap(BanchoPacket, type=Packets.OSU_MATCH_HAS_BEATMAP):
+class MatchHasBeatmap(BanchoPacket, type=ClientPackets.MATCH_HAS_BEATMAP):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1406,7 +1402,7 @@ class MatchHasBeatmap(BanchoPacket, type=Packets.OSU_MATCH_HAS_BEATMAP):
         m.enqueue_state(lobby=False)
 
 @register
-class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
+class MatchSkipRequest(BanchoPacket, type=ClientPackets.MATCH_SKIP_REQUEST):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1422,7 +1418,7 @@ class MatchSkipRequest(BanchoPacket, type=Packets.OSU_MATCH_SKIP_REQUEST):
         m.enqueue(packets.matchSkip(), lobby=False)
 
 @register(restricted=True)
-class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
+class ChannelJoin(BanchoPacket, type=ClientPackets.CHANNEL_JOIN):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
@@ -1436,7 +1432,7 @@ class ChannelJoin(BanchoPacket, type=Packets.OSU_CHANNEL_JOIN):
             return
 
 @register
-class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
+class MatchTransferHost(BanchoPacket, type=ClientPackets.MATCH_TRANSFER_HOST):
     slot_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1460,7 +1456,7 @@ class MatchTransferHost(BanchoPacket, type=Packets.OSU_MATCH_TRANSFER_HOST):
         m.enqueue_state()
 
 @register
-class TourneyMatchInfoRequest(BanchoPacket, type=Packets.OSU_TOURNAMENT_MATCH_INFO_REQUEST):
+class TourneyMatchInfoRequest(BanchoPacket, type=ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST):
     match_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1476,7 +1472,7 @@ class TourneyMatchInfoRequest(BanchoPacket, type=Packets.OSU_TOURNAMENT_MATCH_IN
         p.enqueue(packets.updateMatch(m, send_pw=False))
 
 @register
-class TourneyMatchJoinChannel(BanchoPacket, type=Packets.OSU_TOURNAMENT_JOIN_MATCH_CHANNEL):
+class TourneyMatchJoinChannel(BanchoPacket, type=ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL):
     match_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1499,7 +1495,7 @@ class TourneyMatchJoinChannel(BanchoPacket, type=Packets.OSU_TOURNAMENT_JOIN_MAT
             m.tourney_clients.add(p.id)
 
 @register
-class TourneyMatchLeaveChannel(BanchoPacket, type=Packets.OSU_TOURNAMENT_LEAVE_MATCH_CHANNEL):
+class TourneyMatchLeaveChannel(BanchoPacket, type=ClientPackets.TOURNAMENT_LEAVE_MATCH_CHANNEL):
     match_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1517,7 +1513,7 @@ class TourneyMatchLeaveChannel(BanchoPacket, type=Packets.OSU_TOURNAMENT_LEAVE_M
         m.tourney_clients.remove(p.id)
 
 @register
-class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
+class FriendAdd(BanchoPacket, type=ClientPackets.FRIEND_ADD):
     user_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1535,7 +1531,7 @@ class FriendAdd(BanchoPacket, type=Packets.OSU_FRIEND_ADD):
         await p.add_friend(t)
 
 @register
-class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
+class FriendRemove(BanchoPacket, type=ClientPackets.FRIEND_REMOVE):
     user_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1550,7 +1546,7 @@ class FriendRemove(BanchoPacket, type=Packets.OSU_FRIEND_REMOVE):
         await p.remove_friend(t)
 
 @register
-class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
+class MatchChangeTeam(BanchoPacket, type=ClientPackets.MATCH_CHANGE_TEAM):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1565,7 +1561,7 @@ class MatchChangeTeam(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_TEAM):
         m.enqueue_state(lobby=False)
 
 @register(restricted=True)
-class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
+class ChannelPart(BanchoPacket, type=ClientPackets.CHANNEL_PART):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
@@ -1586,7 +1582,7 @@ class ChannelPart(BanchoPacket, type=Packets.OSU_CHANNEL_PART):
         p.leave_channel(c)
 
 @register(restricted=True)
-class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):
+class ReceiveUpdates(BanchoPacket, type=ClientPackets.RECEIVE_UPDATES):
     value: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1597,14 +1593,14 @@ class ReceiveUpdates(BanchoPacket, type=Packets.OSU_RECEIVE_UPDATES):
         p.pres_filter = PresenceFilter(self.value)
 
 @register
-class SetAwayMessage(BanchoPacket, type=Packets.OSU_SET_AWAY_MESSAGE):
+class SetAwayMessage(BanchoPacket, type=ClientPackets.SET_AWAY_MESSAGE):
     msg: osuTypes.message
 
     async def handle(self, p: Player) -> None:
         p.away_msg = self.msg.msg
 
 @register(restricted=True)
-class StatsRequest(BanchoPacket, type=Packets.OSU_USER_STATS_REQUEST):
+class StatsRequest(BanchoPacket, type=ClientPackets.USER_STATS_REQUEST):
     user_ids: osuTypes.i32_list
 
     async def handle(self, p: Player) -> None:
@@ -1616,7 +1612,7 @@ class StatsRequest(BanchoPacket, type=Packets.OSU_USER_STATS_REQUEST):
                 p.enqueue(packets.userStats(t))
 
 @register
-class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
+class MatchInvite(BanchoPacket, type=ClientPackets.MATCH_INVITE):
     user_id: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
@@ -1637,7 +1633,7 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
         log(f'{p} invited {t} to their match.')
 
 @register
-class MatchChangePassword(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_PASSWORD):
+class MatchChangePassword(BanchoPacket, type=ClientPackets.MATCH_CHANGE_PASSWORD):
     match: osuTypes.match
 
     async def handle(self, p: Player) -> None:
@@ -1652,7 +1648,7 @@ class MatchChangePassword(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_PASSWORD):
         m.enqueue_state()
 
 @register
-class UserPresenceRequest(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST):
+class UserPresenceRequest(BanchoPacket, type=ClientPackets.USER_PRESENCE_REQUEST):
     user_ids: osuTypes.i32_list
 
     async def handle(self, p: Player) -> None:
@@ -1661,7 +1657,7 @@ class UserPresenceRequest(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST):
                 p.enqueue(packets.userPresence(t))
 
 @register
-class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUEST_ALL):
+class UserPresenceRequestAll(BanchoPacket, type=ClientPackets.USER_PRESENCE_REQUEST_ALL):
     ingame_time: osuTypes.i32 # TODO: should probably ratelimit with this (300k s)
 
     async def handle(self, p: Player) -> None:
@@ -1671,7 +1667,7 @@ class UserPresenceRequestAll(BanchoPacket, type=Packets.OSU_USER_PRESENCE_REQUES
         p.enqueue(b''.join(map(packets.userPresence, glob.players.unrestricted)))
 
 @register
-class ToggleBlockingDMs(BanchoPacket, type=Packets.OSU_TOGGLE_BLOCK_NON_FRIEND_DMS):
+class ToggleBlockingDMs(BanchoPacket, type=ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS):
     value: osuTypes.i32
 
     async def handle(self, p: Player) -> None:
