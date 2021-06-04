@@ -4,7 +4,6 @@ import asyncio
 import re
 import time
 from datetime import date
-from datetime import datetime
 from datetime import timedelta
 from typing import Callable
 from typing import Union
@@ -398,9 +397,9 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
     if not glob.app.debug:
-        # TODO: look into why datetime.now() is a few multiples
-        # faster than date.today() & datetime.today()
-        if osu_ver_date < (datetime.now() - DELTA_60_DAYS):
+        # this is currently slow, but asottile is on the
+        # case https://bugs.python.org/issue44307 :D
+        if osu_ver_date < (date.today() - DELTA_60_DAYS):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
