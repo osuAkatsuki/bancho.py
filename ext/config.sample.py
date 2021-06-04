@@ -17,7 +17,8 @@ mysql = {
     'db': 'cmyui',
     'host': 'localhost',
     'password': 'lol123',
-    'user': 'cmyui'
+    'user': 'cmyui',
+    'maxsize': 16
 }
 
 # your osu!api key, required for beatmap info.
