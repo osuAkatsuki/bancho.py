@@ -369,7 +369,7 @@ class Beatmap:
         # NOTE: `self` is not guaranteed to have any attributes
         #       initialized when this is called.
         self.md5 = osuapi_resp['file_md5']
-        self.id = int(osuapi_resp['beatmap_id'])
+        #self.id = int(osuapi_resp['beatmap_id'])
         self.set_id = int(osuapi_resp['beatmapset_id'])
 
         self.artist, self.title, self.version, self.creator = (
@@ -456,6 +456,8 @@ class BeatmapSet:
                 if bmap_id not in current_maps:
                     # we don't have this bmap id, add it to cache & db
                     bmap: 'Beatmap' = Beatmap.__new__(Beatmap)
+                    bmap.id = bmap_id
+
                     bmap._parse_from_osuapi_resp(api_bmap)
 
                     # (some gulag-specific stuff not given by api)
@@ -541,8 +543,9 @@ class BeatmapSet:
                     'artist, title, version, creator, '
                     'last_update, total_length, max_combo, '
                     'status, frozen, plays, passes, mode, '
-                    'bpm, cs, od, ar, hp, diff, last_osuapi_check '
-                    'FROM maps WHERE set_id = %s',
+                    'bpm, cs, od, ar, hp, diff '
+                    'FROM maps '
+                    'WHERE set_id = %s',
                     [bsid]
                 )
 
@@ -570,13 +573,34 @@ class BeatmapSet:
             self.maps = []
             self.last_osuapi_check = datetime.now()
 
+            # XXX: pre-mapset gulag support
+            # select all current beatmaps
+            # that're frozen in the db
+            res = await glob.db.fetchall(
+                'SELECT id, status '
+                'FROM maps '
+                'WHERE set_id = %s '
+                'AND frozen = 1',
+                [bsid]
+            )
+
+            current_maps = {row['id']: row['status'] for row in res}
+
             for api_bmap in api_data:
                 # newer version available for this map
                 bmap: 'Beatmap' = Beatmap.__new__(Beatmap)
+                bmap.id = int(api_bmap['beatmap_id'])
+
+                if bmap.id in current_maps:
+                    # map is currently frozen, keep it's status.
+                    bmap.status = RankedStatus(current_maps[bmap.id])
+                    bmap.frozen = True
+                else:
+                    bmap.frozen = False
+
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some gulag-specific stuff not given by api)
-                bmap.frozen = False
                 bmap.passes = 0
                 bmap.plays = 0
                 bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
