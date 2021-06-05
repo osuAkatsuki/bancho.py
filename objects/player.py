@@ -859,7 +859,7 @@ class Player:
         if not glob.has_internet: # requires internet connection
             return
 
-        url = f'https://ip-api.com/line/{ip}'
+        url = f'http://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:
             if not resp or resp.status != 200:
