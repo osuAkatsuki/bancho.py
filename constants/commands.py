@@ -688,7 +688,7 @@ async def unsilence(ctx: Context) -> str:
 # and are generally for managing players.
 """
 
-@command(Privileges.Admin, hidden=True)
+@command(Privileges.Admin, aliases=['u'], hidden=True)
 async def user(ctx: Context) -> str:
     """Return general information about a given user."""
     if not ctx.args:
@@ -708,6 +708,11 @@ async def user(ctx: Context) -> str:
     login_delta = current_time - p.login_time
     last_recv_delta = current_time - p.last_recv_time
 
+    if current_time < p.last_np['timeout']:
+        last_np = p.last_np['bmap'].embed
+    else:
+        last_np = None
+
     return '\n'.join((
         f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
         f'Privileges: {priv_readable}',
@@ -716,7 +721,10 @@ async def user(ctx: Context) -> str:
         f'Last server interaction: {last_recv_delta:.2f} sec ago',
         f'osu! build: {p.osu_ver} | Tourney: {p.tourney_client}',
         f'Silenced: {p.silenced} | Spectating: {p.spectating}',
-        f'Spectators: {p.spectators}',
+        f'Last /np: {last_np}',
+        f'Recent score: {p.recent_score}',
+        f'Match: {p.match}',
+        f'Spectators: {p.spectators}'
     ))
 
 @command(Privileges.Admin, hidden=True)
