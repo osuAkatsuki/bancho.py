@@ -136,7 +136,7 @@ Directory Structure
     ├── ext        # external files from gulag's primary operation.
     ├── objects    # code for representing players, scores, maps, and more.
     ├── utils      # utility functions used throughout the codebase for general purposes.
-    └── domains    # the route-continaing domains accessible to the public web.
+    └── domains    # the route-containing domains accessible to the public web.
         ├── cho    # (ce|c4|c5|c6).ppy.sh/* routes (bancho connections)
         ├── osu    # osu.ppy.sh/* routes (mainly /web/ & /api/)
         └── ava    # a.ppy.sh/* routes (avatars)
