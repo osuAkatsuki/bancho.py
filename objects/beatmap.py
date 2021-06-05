@@ -645,8 +645,9 @@ class BeatmapSet:
             beatmap_cache[bmap.md5] = bmap
             beatmap_cache[bmap.id] = bmap
 
-        # TODO: perhaps move updates a set thing rather than
-        # having it as a beatmap-specific thing? seems better..
+        # TODO: this can be done less often for certain types of maps,
+        # such as ones that're ranked on bancho and won't be updated,
+        # and perhaps ones that haven't been updated in a long time.
         if not did_api_request:
             if datetime.now() > (bmap_set.last_osuapi_check + MAP_CACHE_TIMEOUT):
                 await bmap_set._update_if_available()

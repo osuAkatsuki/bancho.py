@@ -51,7 +51,7 @@ contributions are welcome but please don't feel like they're required; gulag's
 mostly my baby and i really want to get the master implementation as close to
 perfection as i can. if you're a dev and want to contribute, i'd strongly
 recommend forking the repository and playing around on a server of your own,
-this is how all previous high quality contributions have come into fruitition.
+this is how all previous high quality contributions have come into fruition.
 
 there is currently no official frontend project for gulag. the most serious
 attempt to date is [gulag-web](https://github.com/Varkaria/gulag-web), though
@@ -66,7 +66,7 @@ important notes:
 - i will not help with the creation of a fake *.ppy.sh cert for switcher support.
 
 ```sh
-# add ppa for py3.9 (i love anthonywritescode)
+# add ppa for py3.9 (i love asottile)
 sudo add-apt-repository ppa:deadsnakes/ppa
 
 # install requirements (py3.9, mysql, nginx, build tools, certbot)
