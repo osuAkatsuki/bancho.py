@@ -2439,7 +2439,8 @@ async def register_account(
         errors['password'].append('That password was deemed too simple.')
 
     if errors:
-        # we have errors to send back.
+        # we have errors to send back, send them back delimited by newlines.
+        errors = {k: ['\n'.join(v)] for k, v in errors.items()}
         errors_full = {'form_error': {'user': errors}}
         return (400, orjson.dumps(errors_full))
 
