@@ -357,4 +357,10 @@ def main() -> None:
     # moved into the gulag codebase for increased flexibility.
     app.run(glob.config.server_addr, handle_restart=True)
 
+# XXX: cmyui-specific development stuff,
+#      please ignore this :)
+if os.getenv('cmyuiosu') is not None:
+    from _testing import runtime
+    runtime.setup()
+
 main()
