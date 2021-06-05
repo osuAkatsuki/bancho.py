@@ -4,6 +4,7 @@ import asyncio
 import re
 import time
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 from typing import Callable
 from typing import Union
@@ -180,6 +181,8 @@ class ChangeAction(BanchoPacket, type=ClientPackets.CHANGE_ACTION):
         if not p.restricted:
             glob.players.enqueue(packets.userStats(p))
 
+IGNORED_CHANNELS = ['#highlight', '#userlog']
+
 @register
 class SendMessage(BanchoPacket, type=ClientPackets.SEND_PUBLIC_MESSAGE):
     msg: osuTypes.message
@@ -193,7 +196,7 @@ class SendMessage(BanchoPacket, type=ClientPackets.SEND_PUBLIC_MESSAGE):
         msg = self.msg.msg.strip()
         recipient = self.msg.recipient
 
-        if recipient == '#highlight':
+        if recipient in IGNORED_CHANNELS:
             return
         elif recipient == '#spectator':
             if p.spectating:
@@ -681,7 +684,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
                     )
                     sent_to.add(msg['from'])
 
-                msg_time = dt.fromtimestamp(msg['time'])
+                msg_time = datetime.fromtimestamp(msg['time'])
                 msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
                 data += packets.sendMessage(
@@ -1421,7 +1424,7 @@ class ChannelJoin(BanchoPacket, type=ClientPackets.CHANNEL_JOIN):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
-        if self.name == '#highlight':
+        if self.name in IGNORED_CHANNELS:
             return
 
         c = glob.channels[self.name]
@@ -1564,7 +1567,7 @@ class ChannelPart(BanchoPacket, type=ClientPackets.CHANNEL_PART):
     name: osuTypes.string
 
     async def handle(self, p: Player) -> None:
-        if self.name == '#highlight':
+        if self.name in IGNORED_CHANNELS:
             return
 
         c = glob.channels[self.name]
