@@ -1,7 +1,7 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
 gulag is my implementation of an osu! server's backend (bancho protocol, /web/
-endpoints, avatars, static assets, and a devevloper rest api). it's designed as
+endpoints, avatars, static assets, and a developer rest api). it's designed as
 a modern substitution for existing osu! server projects who've become inactive
 or who've gone closed-source. i aim to make this project the ideal choice for
 running osu! private servers, and to fully support osu!'s protocol, while
@@ -136,7 +136,7 @@ Directory Structure
     ├── ext        # external files from gulag's primary operation.
     ├── objects    # code for representing players, scores, maps, and more.
     ├── utils      # utility functions used throughout the codebase for general purposes.
-    └── domains    # the route-continaing domains accessible to the public web.
+    └── domains    # the route-containing domains accessible to the public web.
         ├── cho    # (ce|c4|c5|c6).ppy.sh/* routes (bancho connections)
         ├── osu    # osu.ppy.sh/* routes (mainly /web/ & /api/)
         └── ava    # a.ppy.sh/* routes (avatars)
