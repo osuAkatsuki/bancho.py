@@ -2410,19 +2410,20 @@ async def register_account(
     if name in glob.config.disallowed_names:
         errors['username'].append('Disallowed username; pick another.')
 
-    await db_cursor.execute('SELECT 1 FROM users WHERE name = %s', [name])
-    if db_cursor.rowcount != 0:
-        errors['username'].append('Username already taken by another player.')
+    if 'username' not in errors:
+        await db_cursor.execute('SELECT 1 FROM users WHERE name = %s', [name])
+        if db_cursor.rowcount != 0:
+            errors['username'].append('Username already taken by another player.')
 
     # Emails must:
     # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
     # - not already be taken by another player
     if not regexes.email.match(email):
         errors['user_email'].append('Invalid email syntax.')
-
-    await db_cursor.execute('SELECT 1 FROM users WHERE email = %s', [email])
-    if db_cursor.rowcount != 0:
-        errors['user_email'].append('Email already taken by another player.')
+    else:
+        await db_cursor.execute('SELECT 1 FROM users WHERE email = %s', [email])
+        if db_cursor.rowcount != 0:
+            errors['user_email'].append('Email already taken by another player.')
 
     # Passwords must:
     # - be within 8-32 characters in length
