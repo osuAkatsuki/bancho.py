@@ -7,10 +7,12 @@
 
 import struct
 import random
+from abc import ABC
 from enum import IntEnum
 from enum import unique
 from functools import cache
 from functools import lru_cache
+from typing import Iterator
 from typing import NamedTuple
 from typing import Sequence
 from typing import TYPE_CHECKING
@@ -196,6 +198,10 @@ class ReplayFrameBundle(NamedTuple):
 
     raw_data: memoryview # readonly
 
+class BasePacket(ABC):
+    def __init__(self, reader: 'BanchoPacketReader') -> None: ...
+    async def handle(self, p: 'Player') -> None: ...
+
 class BanchoPacketReader:
     """\
     A class for reading bancho packets sequentially.
@@ -205,7 +211,7 @@ class BanchoPacketReader:
     view: `memoryview`
         A low-level view to the underlying buffer passed in.
 
-    packet_map: `dict[Packets (packet id), BanchoPacket (handler)]`
+    packet_map: `dict[ClientPackets, BasePacket]`
         The map of packets the packet reader will handle.
 
     _current: Optional[`BanchoPacket`]
@@ -227,7 +233,7 @@ class BanchoPacketReader:
 
         self.current_len = 0 # last read packet's length
 
-    def __iter__(self): # :( can't type hint
+    def __iter__(self) -> Iterator[BasePacket]:
         return self
 
     def __next__(self):
@@ -251,19 +257,7 @@ class BanchoPacketReader:
         packet_cls = self.packet_map[p_type]
         self.current_len = p_len
 
-        # TODO: rather than explicitly calling __new__
-        # and __init__ here separately, we should probably
-        # just inherit the packets from a base class which
-        # takes the reader in __init__, that way we get our
-        # type hinting back for iterating over the reader
-        # and simplify this code in the process as well.
-        packet_obj = packet_cls.__new__(packet_cls)
-
-        if p_len != 0:
-            # packet has data, let it read from buffer.
-            packet_obj.__init__(self)
-
-        return packet_obj
+        return packet_cls(self)
 
     def _read_header(self) -> tuple[int, int]:
         """Read the header of an osu! packet (id & length)."""

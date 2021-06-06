@@ -39,8 +39,9 @@ from objects.match import SlotStatus
 from objects.player import Action
 from objects.player import Player
 from objects.player import PresenceFilter
-from packets import ClientPackets
 from packets import BanchoPacketReader
+from packets import BasePacket
+from packets import ClientPackets
 
 """ Bancho: handle connections from the osu! client """
 
@@ -108,13 +109,13 @@ async def bancho_handler(conn: Connection) -> bytes:
     # allowing logic to be implemented around the actual handler.
     # NOTE: any unhandled packets will be ignored internally.
 
-    packets_read = []
+    packets_handled = []
     for packet in BanchoPacketReader(conn.body, packet_map):
         await packet.handle(player)
-        packets_read.append(packet.__class__.__name__)
+        packets_handled.append(packet.__class__.__name__)
 
     if glob.app.debug:
-        packets_str = ', '.join(packets_read) or 'None'
+        packets_str = ', '.join(packets_handled) or 'None'
         log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
 
     player.last_recv_time = time.time()
@@ -146,12 +147,12 @@ def register(
     return wrapper
 
 @register(ClientPackets.PING, restricted=True)
-class Ping:
+class Ping(BasePacket):
     async def handle(self, p: Player) -> None:
         pass # ping be like
 
 @register(ClientPackets.CHANGE_ACTION, restricted=True)
-class ChangeAction:
+class ChangeAction(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.action = reader.read_u8()
         self.info_text = reader.read_string()
@@ -182,7 +183,7 @@ class ChangeAction:
 IGNORED_CHANNELS = ['#highlight', '#userlog']
 
 @register(ClientPackets.SEND_PUBLIC_MESSAGE)
-class SendMessage:
+class SendMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
@@ -296,7 +297,7 @@ class SendMessage:
         log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register(ClientPackets.LOGOUT, restricted=True)
-class Logout:
+class Logout(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         reader.read_i32() # reserved
 
@@ -312,7 +313,7 @@ class Logout:
         p.update_latest_activity()
 
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
-class StatsUpdateRequest:
+class StatsUpdateRequest(BasePacket):
     async def handle(self, p: Player) -> None:
         p.enqueue(packets.userStats(p))
 
@@ -747,7 +748,7 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     return bytes(data), p.token
 
 @register(ClientPackets.START_SPECTATING)
-class StartSpectating:
+class StartSpectating(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.target_id = reader.read_i32()
 
@@ -767,7 +768,7 @@ class StartSpectating:
         new_host.add_spectator(p)
 
 @register(ClientPackets.STOP_SPECTATING)
-class StopSpectating:
+class StopSpectating(BasePacket):
     async def handle(self, p: Player) -> None:
         host = p.spectating
 
@@ -778,7 +779,7 @@ class StopSpectating:
         host.remove_spectator(p)
 
 @register(ClientPackets.SPECTATE_FRAMES)
-class SpectateFrames:
+class SpectateFrames(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.frame_bundle = reader.read_replayframe_bundle()
 
@@ -796,7 +797,7 @@ class SpectateFrames:
             t.enqueue(data)
 
 @register(ClientPackets.CANT_SPECTATE)
-class CantSpectate:
+class CantSpectate(BasePacket):
     async def handle(self, p: Player) -> None:
         if not p.spectating:
             log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
@@ -811,7 +812,7 @@ class CantSpectate:
             t.enqueue(data)
 
 @register(ClientPackets.SEND_PRIVATE_MESSAGE)
-class SendPrivateMessage:
+class SendPrivateMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
@@ -968,12 +969,12 @@ class SendPrivateMessage:
         log(f'{p} @ {t}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
 
 @register(ClientPackets.PART_LOBBY)
-class LobbyPart:
+class LobbyPart(BasePacket):
     async def handle(self, p: Player) -> None:
         p.in_lobby = False
 
 @register(ClientPackets.JOIN_LOBBY)
-class LobbyJoin:
+class LobbyJoin(BasePacket):
     async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
@@ -982,7 +983,7 @@ class LobbyJoin:
                 p.enqueue(packets.newMatch(m))
 
 @register(ClientPackets.CREATE_MATCH)
-class MatchCreate:
+class MatchCreate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match = reader.read_match()
 
@@ -1049,7 +1050,7 @@ async def check_menu_option(p: Player, key: int):
         del p.menu_options[key]
 
 @register(ClientPackets.JOIN_MATCH)
-class MatchJoin:
+class MatchJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
         self.match_passwd = reader.read_string()
@@ -1090,13 +1091,13 @@ class MatchJoin:
         p.join_match(m, self.match_passwd)
 
 @register(ClientPackets.PART_MATCH)
-class MatchPart:
+class MatchPart(BasePacket):
     async def handle(self, p: Player) -> None:
         p.update_latest_activity()
         p.leave_match()
 
 @register(ClientPackets.MATCH_CHANGE_SLOT)
-class MatchChangeSlot:
+class MatchChangeSlot(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
@@ -1120,7 +1121,7 @@ class MatchChangeSlot:
         m.enqueue_state() # technically not needed for host?
 
 @register(ClientPackets.MATCH_READY)
-class MatchReady:
+class MatchReady(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1129,7 +1130,7 @@ class MatchReady:
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_LOCK)
-class MatchLock:
+class MatchLock(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
@@ -1166,7 +1167,7 @@ class MatchLock:
         m.enqueue_state()
 
 @register(ClientPackets.MATCH_CHANGE_SETTINGS)
-class MatchChangeSettings:
+class MatchChangeSettings(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.new = reader.read_match()
 
@@ -1272,7 +1273,7 @@ class MatchChangeSettings:
         m.enqueue_state()
 
 @register(ClientPackets.MATCH_START)
-class MatchStart:
+class MatchStart(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1284,7 +1285,7 @@ class MatchStart:
         m.start()
 
 @register(ClientPackets.MATCH_SCORE_UPDATE)
-class MatchScoreUpdate:
+class MatchScoreUpdate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.play_data = reader.read_raw() # TODO: probably not necessary
 
@@ -1304,7 +1305,7 @@ class MatchScoreUpdate:
         m.enqueue(bytes(buf), lobby=False)
 
 @register(ClientPackets.MATCH_COMPLETE)
-class MatchComplete:
+class MatchComplete(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1337,7 +1338,7 @@ class MatchComplete:
             asyncio.create_task(m.update_matchpoints(was_playing))
 
 @register(ClientPackets.MATCH_CHANGE_MODS)
-class MatchChangeMods:
+class MatchChangeMods(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.mods = reader.read_i32()
 
@@ -1369,7 +1370,7 @@ def is_playing(slot: Slot) -> bool:
     )
 
 @register(ClientPackets.MATCH_LOAD_COMPLETE)
-class MatchLoadComplete:
+class MatchLoadComplete(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1383,7 +1384,7 @@ class MatchLoadComplete:
             m.enqueue(packets.matchAllPlayerLoaded(), lobby=False)
 
 @register(ClientPackets.MATCH_NO_BEATMAP)
-class MatchNoBeatmap:
+class MatchNoBeatmap(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1392,7 +1393,7 @@ class MatchNoBeatmap:
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_NOT_READY)
-class MatchNotReady:
+class MatchNotReady(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1401,7 +1402,7 @@ class MatchNotReady:
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_FAILED)
-class MatchFailed:
+class MatchFailed(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1411,7 +1412,7 @@ class MatchFailed:
         m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)), lobby=False)
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
-class MatchHasBeatmap:
+class MatchHasBeatmap(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1420,7 +1421,7 @@ class MatchHasBeatmap:
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
-class MatchSkipRequest:
+class MatchSkipRequest(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1436,7 +1437,7 @@ class MatchSkipRequest:
         m.enqueue(packets.matchSkip(), lobby=False)
 
 @register(ClientPackets.CHANNEL_JOIN, restricted=True)
-class ChannelJoin:
+class ChannelJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.name = reader.read_string()
 
@@ -1451,7 +1452,7 @@ class ChannelJoin:
             return
 
 @register(ClientPackets.MATCH_TRANSFER_HOST)
-class MatchTransferHost:
+class MatchTransferHost(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
@@ -1476,7 +1477,7 @@ class MatchTransferHost:
         m.enqueue_state()
 
 @register(ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST)
-class TourneyMatchInfoRequest:
+class TourneyMatchInfoRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
@@ -1493,7 +1494,7 @@ class TourneyMatchInfoRequest:
         p.enqueue(packets.updateMatch(m, send_pw=False))
 
 @register(ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL)
-class TourneyMatchJoinChannel:
+class TourneyMatchJoinChannel(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
@@ -1517,7 +1518,7 @@ class TourneyMatchJoinChannel:
             m.tourney_clients.add(p.id)
 
 @register(ClientPackets.TOURNAMENT_LEAVE_MATCH_CHANNEL)
-class TourneyMatchLeaveChannel:
+class TourneyMatchLeaveChannel(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
@@ -1536,7 +1537,7 @@ class TourneyMatchLeaveChannel:
         m.tourney_clients.remove(p.id)
 
 @register(ClientPackets.FRIEND_ADD)
-class FriendAdd:
+class FriendAdd(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
@@ -1555,7 +1556,7 @@ class FriendAdd:
         await p.add_friend(t)
 
 @register(ClientPackets.FRIEND_REMOVE)
-class FriendRemove:
+class FriendRemove(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
@@ -1571,7 +1572,7 @@ class FriendRemove:
         await p.remove_friend(t)
 
 @register(ClientPackets.MATCH_CHANGE_TEAM)
-class MatchChangeTeam:
+class MatchChangeTeam(BasePacket):
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
             return
@@ -1586,7 +1587,7 @@ class MatchChangeTeam:
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.CHANNEL_PART, restricted=True)
-class ChannelPart:
+class ChannelPart(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.name = reader.read_string()
 
@@ -1608,7 +1609,7 @@ class ChannelPart:
         p.leave_channel(c)
 
 @register(ClientPackets.RECEIVE_UPDATES, restricted=True)
-class ReceiveUpdates:
+class ReceiveUpdates(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
@@ -1620,7 +1621,7 @@ class ReceiveUpdates:
         p.pres_filter = PresenceFilter(self.value)
 
 @register(ClientPackets.SET_AWAY_MESSAGE)
-class SetAwayMessage:
+class SetAwayMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
@@ -1628,7 +1629,7 @@ class SetAwayMessage:
         p.away_msg = self.msg.text
 
 @register(ClientPackets.USER_STATS_REQUEST, restricted=True)
-class StatsRequest:
+class StatsRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
@@ -1641,7 +1642,7 @@ class StatsRequest:
                 p.enqueue(packets.userStats(t))
 
 @register(ClientPackets.MATCH_INVITE)
-class MatchInvite:
+class MatchInvite(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
@@ -1663,7 +1664,7 @@ class MatchInvite:
         log(f'{p} invited {t} to their match.')
 
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
-class MatchChangePassword:
+class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match = reader.read_match()
 
@@ -1679,7 +1680,7 @@ class MatchChangePassword:
         m.enqueue_state()
 
 @register(ClientPackets.USER_PRESENCE_REQUEST)
-class UserPresenceRequest:
+class UserPresenceRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
@@ -1689,7 +1690,7 @@ class UserPresenceRequest:
                 p.enqueue(packets.userPresence(t))
 
 @register(ClientPackets.USER_PRESENCE_REQUEST_ALL)
-class UserPresenceRequestAll:
+class UserPresenceRequestAll(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         # TODO: should probably ratelimit with this (300k s)
         self.ingame_time = reader.read_i32()
@@ -1701,7 +1702,7 @@ class UserPresenceRequestAll:
         p.enqueue(b''.join(map(packets.userPresence, glob.players.unrestricted)))
 
 @register(ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)
-class ToggleBlockingDMs:
+class ToggleBlockingDMs(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
