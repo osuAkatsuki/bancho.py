@@ -872,7 +872,7 @@ async def osuSubmitModularSelector(
 
     """ score submission charts """
 
-    if not score.passed:# or score.mode >= GameMode.rx_std:
+    if not score.passed or score.mode >= GameMode.rx_std:
         # basically, the osu! client and the way bancho handles this
         # is dumb. if you submit a failed play on bancho, it will
         # still generate the charts and send it to the client, even
