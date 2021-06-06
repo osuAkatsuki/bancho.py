@@ -7,7 +7,6 @@
 
 import struct
 import random
-from dataclasses import dataclass
 from enum import IntEnum
 from enum import unique
 from functools import cache
@@ -159,8 +158,6 @@ class ServerPackets(IntEnum):
     def __repr__(self) -> str:
         return f'<{self.name} ({self.value})>'
 
-# TODO: test namedtuple vs dataclass speeds
-
 class Message(NamedTuple):
     sender: str
     text: str
@@ -183,16 +180,14 @@ class ReplayAction(IntEnum):
     SongSelect = 7
     WatchingOther = 8
 
-@dataclass
-class ReplayFrame:
+class ReplayFrame(NamedTuple):
     button_state: int
     taiko_byte: int # pre-taiko support (<=2008)
     x: float
     y: float
     time: int
 
-@dataclass
-class ReplayFrameBundle:
+class ReplayFrameBundle(NamedTuple):
     replay_frames: list[ReplayFrame]
     score_frame: ScoreFrame
     action: ReplayAction
