@@ -265,6 +265,9 @@ def main() -> None:
     # are being run in the background.
     ensure_services()
 
+    if glob.config.advanced:
+        log('running in advanced mode', Ansi.LRED)
+
     # warn the user if gulag is running on root.
     if os.geteuid() == 0:
         log('It is not recommended to run gulag as root, '
