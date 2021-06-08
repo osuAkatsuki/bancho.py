@@ -344,7 +344,7 @@ OFFLINE_NOTIFICATION = packets.notification(
 
 DELTA_60_DAYS = timedelta(days=60)
 
-async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
+async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
@@ -370,6 +370,9 @@ async def login(body: bytes, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[b
     """
 
     """ Parse data and verify the request is legitimate. """
+    # the body for login requests is quite small
+    # so copying here is fine for simplicity
+    body = body_view.tobytes()
 
     if len(split := body.decode().split('\n')[:-1]) != 3:
         log(f'Invalid login request from {ip}.', Ansi.LRED)
