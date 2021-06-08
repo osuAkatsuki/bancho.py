@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# note that this is not used directly in this
-# module, but it frequently used through the
-# `glob.config.attr` syntax outside of here.
-import config  # NOQA
+import config # export
 
 # this file contains no actualy definitions
 if __import__('typing').TYPE_CHECKING:
@@ -26,7 +23,7 @@ if __import__('typing').TYPE_CHECKING:
     from objects.collections import MapPools
     from objects.player import Player
     #from objects.score import Score
-    from packets import BanchoPacket
+    from packets import BasePacket
     from packets import ClientPackets
 
 __all__ = (
@@ -60,7 +57,7 @@ geoloc_db: 'Optional[geoip2.database.Reader]'
 api_keys: dict[str, int] # {api_key: player_id}
 
 # list of registered packets
-bancho_packets: dict['ClientPackets', 'BanchoPacket']
+bancho_packets: dict['ClientPackets', 'BasePacket']
 
 # active connections
 db: 'AsyncSQLPool'
