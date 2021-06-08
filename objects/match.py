@@ -286,7 +286,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f'https://{BASE_DOMAIN}/b/{self.map_id}'
+        return f'https://osu.{BASE_DOMAIN}/beatmaps/{self.map_id}'
 
     @property
     def embed(self) -> str:

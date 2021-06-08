@@ -918,7 +918,7 @@ async def osuSubmitModularSelector(
         # append beatmap ranking chart (#2)
         charts.append('|'.join((
             'chartId:beatmap',
-            f'chartUrl:https://{BASE_DOMAIN}/b/{score.bmap.id}',
+            f'chartUrl:{score.bmap.set.url}',
             'chartName:Beatmap Ranking',
 
             *((
