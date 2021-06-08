@@ -402,7 +402,7 @@ class BanchoPacketReader:
         m = Match()
 
         # ignore match id (i16) and inprogress (i8).
-        self.view = self.view[3:]
+        self.body_view = self.body_view[3:]
 
         self.read_i8() # powerplay unused
 
@@ -424,7 +424,7 @@ class BanchoPacketReader:
         for slot in m.slots:
             if slot.status & SlotStatus.has_player:
                 # we don't need this, ignore it.
-                self.view = self.view[4:]
+                self.body_view = self.body_view[4:]
 
         host_id = self.read_i32()
         m.host = glob.players.get(id=host_id)
@@ -446,8 +446,8 @@ class BanchoPacketReader:
         return m
 
     def read_scoreframe(self) -> ScoreFrame:
-        sf = ScoreFrame(*SCOREFRAME_FMT.unpack_from(self.view[:29]))
-        self.view = self.view[29:]
+        sf = ScoreFrame(*SCOREFRAME_FMT.unpack_from(self.body_view[:29]))
+        self.body_view = self.body_view[29:]
 
         if sf.score_v2:
             sf.combo_portion = self.read_f64()
@@ -466,7 +466,7 @@ class BanchoPacketReader:
 
     def read_replayframe_bundle(self) -> ReplayFrameBundle:
         # save raw format to distribute to the other clients
-        raw_data = self.view[:self.current_len]
+        raw_data = self.body_view[:self.current_len]
 
         extra = self.read_i32() # bancho proto >= 18
         framecount = self.read_u16()
