@@ -8,44 +8,9 @@
 # with osu!'s built-in registration. the api can also be tested here,
 # e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 
-__all__ = ()
-
-import sys
-
-if __name__ != '__main__':
-    # check specifically for asgi servers since
-    # related projects use it (like gulag-web)
-    if (
-        __name__ == 'main' and
-        any([sys.argv[0].endswith(suffix)
-             for suffix in ('hypercorn', 'uvicorn')])
-    ):
-        raise RuntimeError(
-            "gulag is not an ASGI implementation and uses it's own http "
-            "server implementation; please run it directly (./main.py).")
-    else:
-        raise RuntimeError('gulag should only be run directly (./main.py).')
-
-import os
-
-# set cwd to /gulag
-os.chdir(os.path.dirname(os.path.realpath(__file__)))
-
-# we print utf-8 content quite often
-sys.stdout.reconfigure(encoding='utf-8')
-
-try:
-    from objects import glob
-except ModuleNotFoundError as exc:
-    if exc.name == 'config':
-        import shutil
-        shutil.copy('ext/config.sample.py', 'config.py')
-        sys.exit('\x1b[0;92mA config file has been generated, '
-                 'please configure it to your needs.\x1b[0m')
-    else:
-        raise
-
 import asyncio
+import os
+import sys
 from pathlib import Path
 
 import aiohttp
@@ -70,6 +35,25 @@ from objects.collections import MapPools
 from objects.player import Player
 from utils.updater import Updater
 
+__all__ = ()
+
+# we print utf-8 content quite often
+sys.stdout.reconfigure(encoding='utf-8')
+
+# set cwd to /gulag
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
+try:
+    from objects import glob
+except ModuleNotFoundError as exc:
+    if exc.name == 'config':
+        import shutil
+        shutil.copy('ext/config.sample.py', 'config.py')
+        sys.exit('\x1b[0;92mA config file has been generated, '
+                 'please configure it to your needs.\x1b[0m')
+    else:
+        raise
+
 utils.misc.install_excepthook()
 
 # current version of gulag
@@ -79,21 +63,6 @@ glob.version = cmyui.Version(3, 3, 9)
 
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
-
-async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
-    """Fetch the bot's name from the database, if available."""
-    await db_cursor.execute(
-        'SELECT name '
-        'FROM users '
-        'WHERE id = 1'
-    )
-
-    if db_cursor.rowcount == 0:
-        log("Couldn't find bot account in the database, "
-            "defaulting to BanchoBot for their name.", Ansi.LYELLOW)
-        return 'BanchoBot'
-
-    return (await db_cursor.fetchone())['name']
 
 async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache many global collections."""
@@ -108,9 +77,12 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
 
     # create bot & add it to online players
     glob.bot = Player(
-        id=1, name=await fetch_bot_name(db_cursor), priv=Privileges.Normal,
-        login_time=float(0x7fffffff), bot_client=True
-    ) # never auto-dc the bot ^
+        id=1,
+        name=await utils.misc.fetch_bot_name(db_cursor),
+        login_time=float(0x7fffffff), # (never auto-dc)
+        priv=Privileges.Normal,
+        bot_client=True
+    )
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)
@@ -118,9 +90,8 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
 
     await db_cursor.execute('SELECT * FROM achievements')
     async for row in db_cursor:
-        # NOTE: achievement conditions are stored as
-        # stringified python expressions in the database
-        # to allow for easy custom achievements.
+        # NOTE: achievement conditions are stored as stringified python
+        # expressions in the database to allow for extensive customizability.
         condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
         achievement = Achievement(**row, cond=condition)
 
@@ -151,6 +122,7 @@ async def before_serving() -> None:
     await glob.db.connect(glob.config.mysql)
 
     # run the sql & submodule updater (uses http & db).
+    # TODO: updating cmyui_pkg should run before it's import
     updater = Updater(glob.version)
     await updater.run()
     await updater.log_startup()
@@ -255,7 +227,12 @@ def ensure_services() -> None:
     if not os.path.exists('/var/run/nginx.pid'):
         sys.exit('Please start your nginx server.')
 
-def main() -> None:
+def _install_cmyui_dev_hooks():
+    """Change internals to help with debugging & active development."""
+    from _testing import runtime
+    runtime.setup()
+
+if __name__ == '__main__':
     """Attempt to start up gulag."""
     # make sure we're running on an appropriate
     # platform with all required software.
@@ -354,16 +331,22 @@ def main() -> None:
     else:
         glob.datadog = None
 
+    # cmyui-specific dev hooks, you can ignore this :)
+    if os.getenv('cmyuiosu') is not None:
+        _install_cmyui_dev_hooks()
+
     # start up the server; this starts an event loop internally,
     # using uvloop if it's installed. it uses SIGUSR1 for restarts.
     # NOTE: eventually the event loop creation will likely be
     # moved into the gulag codebase for increased flexibility.
     app.run(glob.config.server_addr, handle_restart=True)
 
-# XXX: cmyui-specific development stuff,
-#      please ignore this :)
-if os.getenv('cmyuiosu') is not None:
-    from _testing import runtime
-    runtime.setup()
-
-main()
+elif __name__ == 'main':
+    # check specifically for asgi servers since many related projects
+    # (such as gulag-web) use them, so people may assume we do as well.
+    if any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn'))):
+        raise RuntimeError(
+            "gulag is not an ASGI implementation and uses it's own http "
+            "server implementation; please run it directly (./main.py).")
+    else:
+        raise RuntimeError('gulag should only be run directly (./main.py).')

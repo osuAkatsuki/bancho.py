@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import dill as pickle
 import inspect
 import io
-import pymysql
 import requests
 import secrets
 import socket
@@ -15,6 +13,10 @@ from typing import Callable
 from typing import Sequence
 from typing import Type
 
+import aiomysql
+import dill as pickle
+import pymysql
+
 from objects import glob
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -25,6 +27,7 @@ from cmyui.osu.replay import ReplayFrame
 __all__ = (
     'get_press_times',
     'make_safe_name',
+    'fetch_bot_name',
     'download_achievement_images',
     'seconds_readable',
     'check_connection',
@@ -72,6 +75,21 @@ def get_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(' ', '_')
+
+async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
+    """Fetch the bot's name from the database, if available."""
+    await db_cursor.execute(
+        'SELECT name '
+        'FROM users '
+        'WHERE id = 1'
+    )
+
+    if db_cursor.rowcount == 0:
+        log("Couldn't find bot account in the database, "
+            "defaulting to BanchoBot for their name.", Ansi.LYELLOW)
+        return 'BanchoBot'
+
+    return (await db_cursor.fetchone())['name']
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""

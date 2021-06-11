@@ -761,9 +761,10 @@ async def osuSubmitModularSelector(
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
 
+    mode_sql = format(score.mode, 'sql')
     stats_query = [ # build a list of params to update
-        'UPDATE stats SET plays_{0:sql} = %s',
-        'playtime_{0:sql} = %s'
+        'UPDATE stats SET plays_{mode} = %s',
+        'playtime_{mode} = %s'
     ]
     stats_params = [stats.plays, stats.playtime]
 
@@ -774,12 +775,12 @@ async def osuSubmitModularSelector(
         # update max combo
         if score.max_combo > stats.max_combo:
             stats.max_combo = score.max_combo
-            stats_query.append('max_combo_{0:sql} = %s')
+            stats_query.append('max_combo_{mode} = %s')
             stats_params.append(stats.max_combo)
 
         # update total score
         stats.tscore += score.score
-        stats_query.append('tscore_{0:sql} = %s')
+        stats_query.append('tscore_{mode} = %s')
         stats_params.append(stats.tscore)
 
         if score.status == SubmissionStatus.BEST:
@@ -793,7 +794,7 @@ async def osuSubmitModularSelector(
                 # it's score from our ranked score.
                 additional_rscore -= score.prev_best.score
             stats.rscore += additional_rscore
-            stats_query.append('rscore_{0:sql} = %s')
+            stats_query.append('rscore_{mode} = %s')
             stats_params.append(stats.rscore)
 
             # fetch scores sorted by pp for total acc/pp calc
@@ -820,7 +821,7 @@ async def osuSubmitModularSelector(
                 tot += row['acc'] * add
                 div += add
             stats.acc = tot / div
-            stats_query.append('acc_{0:sql} = %s')
+            stats_query.append('acc_{mode} = %s')
             stats_params.append(stats.acc)
 
             # update total weighted pp
@@ -828,7 +829,7 @@ async def osuSubmitModularSelector(
                                for i, row in enumerate(top_100_pp)])
             bonus_pp = 416.6667 * (1 - 0.9994 ** total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
-            stats_query.append('pp_{0:sql} = %s')
+            stats_query.append('pp_{mode} = %s')
             stats_params.append(stats.pp)
 
             # update rank
@@ -839,14 +840,14 @@ async def osuSubmitModularSelector(
                 'SELECT COUNT(*) AS higher_pp_players '
                 'FROM stats s '
                 'INNER JOIN users u USING(id) '
-                f'WHERE s.pp_{score.mode:sql} > %s '
+                f'WHERE s.pp_{mode_sql} > %s '
                 'AND u.priv & 1 and u.id != %s',
                 [stats.pp, score.player.id]
             )
             stats.rank = 1 + (await db_cursor.fetchone())['higher_pp_players']
 
     # construct the sql query of any stat changes
-    stats_query = ','.join(stats_query).format(score.mode) + ' WHERE id = %s'
+    stats_query = f"{','.join(stats_query).format(mode=mode_sql)} WHERE id = %s"
     stats_params.append(score.player.id)
 
     # send any stat changes to sql, and other players
@@ -1388,16 +1389,14 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if not (t := await glob.players.get_ensure(name=t_name)):
-        return
-
-    # mark any unread mail from this user as read.
-    await glob.db.execute(
-        'UPDATE `mail` SET `read` = 1 '
-        'WHERE `to_id` = %s AND `from_id` = %s '
-        'AND `read` = 0',
-        [p.id, t.id]
-    )
+    if t := await glob.players.get_ensure(name=t_name):
+        # mark any unread mail from this user as read.
+        await glob.db.execute(
+            'UPDATE `mail` SET `read` = 1 '
+            'WHERE `to_id` = %s AND `from_id` = %s '
+            'AND `read` = 0',
+            [p.id, t.id]
+        )
 
 @domain.route('/web/osu-getseasonal.php')
 async def osuSeasonal(conn: Connection) -> Optional[bytes]:

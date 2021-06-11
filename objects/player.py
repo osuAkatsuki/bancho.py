@@ -927,7 +927,9 @@ class Player:
     async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         await db_cursor.execute(
-            'SELECT * FROM stats WHERE id = %s',
+            'SELECT * '
+            'FROM stats '
+            'WHERE id = %s',
             [self.id]
         )
 
