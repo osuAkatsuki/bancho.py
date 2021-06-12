@@ -407,7 +407,7 @@ DIRECT_SET_INFO_FMTSTR = (
 
 DIRECT_MAP_INFO_FMTSTR = (
     '[{DifficultyRating:.2f}⭐] {DiffName} '
-    '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'
+    '{{cs: {CS} / od: {OD} / ar: {AR} / hp: {HP}}}@{Mode}'
 )
 
 @domain.route('/web/osu-search.php')
