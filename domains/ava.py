@@ -41,3 +41,31 @@ async def get_avatar(conn: Connection) -> Optional[bytes]:
     ext = 'png' if path.suffix == '.png' else 'jpeg'
     conn.resp_headers['Content-Type'] = f'image/{ext}'
     return path.read_bytes()
+
+BANNERS_PATH = Path.cwd() / '.data/banners'
+DEFAULT_BANNER = BANNERS_PATH / 'default.png'
+@domain.route(re.compile(r'\/banners\/(?:\d{1,10}(?:.(?:jpg|jpeg|png))?|favicon.ico)?$'))
+async def get_banner(conn: Connection) -> Optional[bytes]:
+    filename = conn.path[9:]
+
+    if '.' in filename:
+        # user id & file extension provided
+        path = BANNERS_PATH / filename
+        if not path.exists():
+            path = DEFAULT_BANNER
+    elif filename not in ('', 'favicon.ico'):
+        # user id provided - determine file extension
+        for ext in ('jpg', 'jpeg', 'png'):
+            path = BANNERS_PATH / f'{filename}.{ext}'
+            if path.exists():
+                break
+        else:
+            # no file exists
+            path = DEFAULT_BANNER
+    else:
+        # empty path or favicon, serve default banner
+        path = DEFAULT_BANNER
+
+    ext = 'png' if path.suffix == '.png' else 'jpeg'
+    conn.resp_headers['Content-Type'] = f'image/{ext}'
+    return path.read_bytes()
