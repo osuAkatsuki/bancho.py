@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import functools
 from typing import Sequence
 from typing import TYPE_CHECKING
 
@@ -60,6 +61,22 @@ class Channel:
 
     def __contains__(self, p: 'Player') -> bool:
         return p in self.players
+
+    # XXX: should this be cached differently?
+
+    @functools.cache
+    def can_read(self, priv: Privileges) -> bool:
+        if not self.read_priv:
+            return True
+
+        return priv & self.read_priv
+
+    @functools.cache
+    def can_write(self, priv: Privileges) -> bool:
+        if not self.write_priv:
+            return True
+
+        return priv & self.write_priv
 
     def send(self, msg: str, sender: 'Player',
              to_self: bool = False) -> None:

@@ -222,7 +222,7 @@ class SendMessage(BasePacket):
             log(f'{p} wrote to non-existent {recipient}.', Ansi.LYELLOW)
             return
 
-        if p.priv & t_chan.write_priv != t_chan.write_priv:
+        if not t_chan.can_write(p.priv):
             log(f'{p} wrote to {recipient} with insufficient privileges.')
             return
 
@@ -609,7 +609,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
     for c in glob.channels:
         if (
             not c.auto_join or
-            p.priv & c.read_priv != c.read_priv or
+            not c.can_read(p.priv) or
             c._name == '#lobby' # (can't be in mp lobby @ login)
         ):
             continue
@@ -626,7 +626,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
         data += chan_info_packet
 
         for o in glob.players:
-            if o.priv & c.read_priv == c.read_priv:
+            if c.can_read(o.priv):
                 o.enqueue(chan_info_packet)
 
         data += packets.channelJoin(c._name)
