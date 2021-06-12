@@ -536,7 +536,7 @@ async def _map(ctx: Context) -> str:
                 )
                 map_ids = [row[0] async for row in db_cursor]
 
-                for bmap in glob.cache['beatmapsets'][bmap.set_id].maps:
+                for bmap in glob.cache['beatmapset'][bmap.set_id].maps:
                     bmap.status = new_status
 
             else:

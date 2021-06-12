@@ -1120,7 +1120,7 @@ async def getScores(
 
         if (
             has_set_id and
-            map_set_id not in glob.cache['beatmapsets']
+            map_set_id not in glob.cache['beatmapset']
         ):
             # set not cached, it doesn't exist
             glob.cache['unsubmitted'].add(map_md5)
@@ -1141,7 +1141,7 @@ async def getScores(
             # from our api requests.
             if has_set_id:
                 # we can look it up in the specific set from cache
-                bmap_list = glob.cache['beatmapsets'][map_set_id].maps
+                bmap_list = glob.cache['beatmapset'][map_set_id].maps
             else:
                 # look it up in our cache the painfully slow way
                 bmap_list = glob.cache['beatmap'].values()

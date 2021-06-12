@@ -81,7 +81,7 @@ cache = {
     # cache all beatmap data calculated while online. this way,
     # the most requested maps will inevitably always end up cached.
     'beatmap': {}, # {md5: map, id: map, ...}
-    'beatmapsets': {},
+    'beatmapset': {}, # {bsid: map_set}
 
     # cache all beatmaps which are unsubmitted or need an update,
     # since their osu!api requests will fail and thus we'll do the

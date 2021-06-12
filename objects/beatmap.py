@@ -253,7 +253,7 @@ class Beatmap:
     @classmethod
     async def from_md5(cls, md5: str, set_id: int = -1) -> Optional['Beatmap']:
         """Fetch a map from the cache, database, or osuapi by md5."""
-        bmap = cls._from_md5_cache(md5)
+        bmap = await cls._from_md5_cache(md5)
 
         if not bmap:
             if set_id <= 0:
@@ -285,7 +285,7 @@ class Beatmap:
                 return
 
             # fetching the set will put all maps in cache
-            bmap = cls._from_md5_cache(md5)
+            bmap = await cls._from_md5_cache(md5)
 
             if not bmap:
                 return
@@ -295,7 +295,7 @@ class Beatmap:
     @classmethod
     async def from_bid(cls, bid: int) -> Optional['Beatmap']:
         """Fetch a map from the cache, database, or osuapi by id."""
-        bmap = cls._from_bid_cache(bid)
+        bmap = await cls._from_bid_cache(bid)
 
         if not bmap:
             # try getting the set id either from the db,
@@ -326,7 +326,7 @@ class Beatmap:
                 return
 
             # fetching the set will put all maps in cache
-            bmap = cls._from_bid_cache(bid)
+            bmap = await cls._from_bid_cache(bid)
 
             if not bmap:
                 return
@@ -410,16 +410,26 @@ class Beatmap:
         self.diff = float(osuapi_resp['difficultyrating'])
 
     @staticmethod
-    def _from_md5_cache(md5: str) -> Optional['Beatmap']:
+    async def _from_md5_cache(md5: str) -> Optional['Beatmap']:
         """Fetch a map from the cache by md5."""
         if md5 in glob.cache['beatmap']:
-            return glob.cache['beatmap'][md5]
+            bmap: Beatmap = glob.cache['beatmap'][md5]
+
+            if bmap.set.cache_expired():
+                await bmap.set._update_if_available()
+
+            return bmap
 
     @staticmethod
-    def _from_bid_cache(bid: int) -> Optional['Beatmap']:
+    async def _from_bid_cache(bid: int) -> Optional['Beatmap']:
         """Fetch a map from the cache by id."""
         if bid in glob.cache['beatmap']:
-            return glob.cache['beatmap'][bid]
+            bmap: Beatmap = glob.cache['beatmap'][bid]
+
+            if bmap.set.cache_expired():
+                await bmap.set._update_if_available()
+
+            return bmap
 
 class BeatmapSet:
     __slots__ = ('id', 'last_osuapi_check', 'maps')
@@ -443,6 +453,35 @@ class BeatmapSet:
     def url(self) -> str: # same as above, just no beatmap id
         """The online url for this beatmap set."""
         return f'https://osu.{BASE_DOMAIN}/beatmapsets/{self.id}'
+
+    @functools.cache
+    def all_ranked_or_approved(self) -> bool:
+        return all([bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
+                    for bmap in self.maps])
+
+    @functools.cache
+    def all_loved(self) -> bool:
+        return all([bmap.status == RankedStatus.Loved
+                    for bmap in self.maps])
+
+    def cache_expired(self) -> bool:
+        """Whether the cached version of the set is
+           expired and needs an update from the osu!api."""
+        # ranked & approved maps are update-locked.
+        if self.all_ranked_or_approved():
+            return False
+
+        # TODO: check for further patterns to signify that maps could be
+        # checked less often, such as how long since their last update.
+
+        timeout = MAP_CACHE_TIMEOUT
+
+        # loved maps may be updated, but it's less
+        # likely for a mapper to remove a leaderboard.
+        if self.all_loved():
+            timeout *= 4
+
+        return datetime.now() > (self.last_osuapi_check + timeout)
 
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
@@ -516,10 +555,15 @@ class BeatmapSet:
                 )
 
     @staticmethod
-    def _from_bsid_cache(bsid: int) -> Optional['BeatmapSet']:
+    async def _from_bsid_cache(bsid: int) -> Optional['BeatmapSet']:
         """Fetch a mapset from the cache by set id."""
-        if bsid in glob.cache['beatmapsets']:
-            return glob.cache['beatmapsets'][bsid]
+        if bsid in glob.cache['beatmapset']:
+            bmap_set: BeatmapSet = glob.cache['beatmapset'][bsid]
+
+            if bmap_set.cache_expired():
+                await bmap_set._update_if_available()
+
+            return glob.cache['beatmapset'][bsid]
 
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional['BeatmapSet']:
@@ -552,14 +596,12 @@ class BeatmapSet:
                 if db_cursor.rowcount == 0:
                     return
 
-                map_res = await db_cursor.fetchall()
+                bmap_set = cls(id=bsid, **set_res)
 
-        bmap_set = cls(id=bsid, **set_res)
-
-        for row in map_res:
-            bmap = Beatmap(**row)
-            bmap.set = bmap_set
-            bmap_set.maps.append(bmap)
+                async for row in db_cursor:
+                    bmap = Beatmap(**row)
+                    bmap.set = bmap_set
+                    bmap_set.maps.append(bmap)
 
         return bmap_set
 
@@ -618,7 +660,7 @@ class BeatmapSet:
         if bsid == 93655:
             return # what the fuck is this map
 
-        bmap_set = cls._from_bsid_cache(bsid)
+        bmap_set = await cls._from_bsid_cache(bsid)
         did_api_request = False
 
         if not bmap_set:
@@ -636,7 +678,7 @@ class BeatmapSet:
                 did_api_request = True
 
         # cache the individual maps & set for future requests
-        beatmapset_cache = glob.cache['beatmapsets']
+        beatmapset_cache = glob.cache['beatmapset']
         beatmap_cache = glob.cache['beatmap']
 
         beatmapset_cache[bsid] = bmap_set
@@ -648,8 +690,7 @@ class BeatmapSet:
         # TODO: this can be done less often for certain types of maps,
         # such as ones that're ranked on bancho and won't be updated,
         # and perhaps ones that haven't been updated in a long time.
-        if not did_api_request:
-            if datetime.now() > (bmap_set.last_osuapi_check + MAP_CACHE_TIMEOUT):
-                await bmap_set._update_if_available()
+        if not did_api_request and bmap_set.cache_expired():
+            await bmap_set._update_if_available()
 
         return bmap_set
