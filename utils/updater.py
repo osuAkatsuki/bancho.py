@@ -24,6 +24,8 @@ __all__ = ('Updater',)
 
 SQL_UPDATES_FILE = Path.cwd() / 'ext/updates.sql'
 
+VERSION_RGX = re.compile(r'^# v(?P<ver>\d+\.\d+\.\d+)$')
+
 class Updater:
     def __init__(self, version: Version) -> None:
         self.version = version
@@ -116,7 +118,7 @@ class Updater:
 
             if line.startswith('#'):
                 # may be normal comment or new version
-                if r_match := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):
+                if r_match := VERSION_RGX.fullmatch(line):
                     current_ver = Version.from_str(r_match['ver'])
 
                 continue

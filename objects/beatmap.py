@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import aiomysql
 import functools
 from collections import defaultdict
 #from dataclasses import dataclass
@@ -10,6 +9,7 @@ from enum import IntEnum
 from enum import unique
 from typing import Optional
 
+import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
@@ -128,7 +128,7 @@ gulagstatus2str_dict = {
 async def osuapiv1_getbeatmaps(**params) -> Optional[dict[str, object]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if glob.app.debug:
-        log(f'Doing osu!api request (getbeatmaps) [{params}]', Ansi.LMAGENTA)
+        log(f'Doing osu!api (getbeatmaps) request {params}', Ansi.LMAGENTA)
 
     params['k'] = glob.config.osu_api_key
 
