@@ -157,6 +157,35 @@ async def _help(ctx: Context) -> str:
 
     return '\n'.join(l)
 
+@command(Privileges.Normal, hidden=True)
+async def _link(ctx: Context) -> str:
+	"""Link your osu account on our discord server"""
+	discordtag = " ".join(ctx.args[0:])
+	if not discordtag:
+		return f'Please enter your discord tag.\nExample usage: !link def750#0947'
+
+	#Check if on chat
+	if ctx.recipient is not glob.bot:
+		return f'Command only available in DMs with {glob.bot.name}.'
+	randcode = random.randrange(10000, 99999)
+
+	if not await glob.db.fetch('SELECT id FROM discord WHERE id = %s', [ctx.player.id]):
+		await glob.db.execute(
+			'INSERT INTO discord '
+			'(id, discord_tag, code) '
+			'VALUES (%s, %s, %s)',
+			[ctx.player.id, discordtag, randcode]
+    )
+	else:
+		await glob.db.execute(
+			'UPDATE discord '
+			'SET id = %s, discord_tag = %s, code = %s '
+			'WHERE id = %s',
+			[ctx.player.id, discordtag, randcode, ctx.player.id]
+		)
+	print(f"<{ctx.player.name} ({ctx.player.id})> Executed link command, discord tag specified: {discordtag}, code recieved: {randcode}")
+	return f"Your verification code: {randcode} \nDiscord Tag you specified: {discordtag} \nIf it's incorrect please execute command again ;)"
+
 @command(Privileges.Normal)
 async def roll(ctx: Context) -> str:
     """Roll an n-sided die where n is the number you write (100 default)."""
