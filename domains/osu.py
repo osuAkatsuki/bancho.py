@@ -427,7 +427,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 
     params = {
         'amount': 100,
-        'offset': conn.args['p']
+        'offset': int(conn.args['p']) * 100
     }
 
     # eventually we could try supporting these,
