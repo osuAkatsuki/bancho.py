@@ -9,6 +9,7 @@
 # e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 
 import asyncio
+import io
 import os
 import sys
 from pathlib import Path
@@ -38,7 +39,8 @@ from utils.updater import Updater
 __all__ = ()
 
 # we print utf-8 content quite often
-sys.stdout.reconfigure(encoding='utf-8')
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # set cwd to /gulag
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
