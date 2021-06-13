@@ -222,6 +222,10 @@ class SendMessage(BasePacket):
             log(f'{p} wrote to non-existent {recipient}.', Ansi.LYELLOW)
             return
 
+        if p not in t_chan:
+            log(f'{p} wrote to {recipient} without being in it.')
+            return
+
         if not t_chan.can_write(p.priv):
             log(f'{p} wrote to {recipient} with insufficient privileges.')
             return
