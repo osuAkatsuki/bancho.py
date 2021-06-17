@@ -702,7 +702,7 @@ async def user(ctx: Context) -> str:
             return 'Player not found.'
 
     priv_readable = '|'.join(reversed([priv.name for priv in Privileges
-                                if bin(priv).count('1') == 1])) # py3.10 save me
+                                       if bin(priv).count('1') == 1]))
 
     current_time = time.time()
     login_delta = current_time - p.login_time

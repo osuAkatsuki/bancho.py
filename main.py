@@ -349,6 +349,7 @@ elif __name__ == 'main':
     if any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn'))):
         raise RuntimeError(
             "gulag is not an ASGI implementation and uses it's own http "
-            "server implementation; please run it directly (./main.py).")
+            "server implementation; please run it directly (./main.py)."
+        )
     else:
         raise RuntimeError('gulag should only be run directly (./main.py).')
