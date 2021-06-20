@@ -65,7 +65,10 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
-    ip = conn.headers['X-Real-IP']
+    if 'CF-Connecting-IP' in conn.headers:
+        ip = conn.headers['CF-Connecting-IP']
+    else:
+        ip = conn.headers['X-Real-IP']
 
     if (
         'User-Agent' not in conn.headers or
