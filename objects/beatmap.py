@@ -459,20 +459,35 @@ class BeatmapSet:
         return f'https://osu.{BASE_DOMAIN}/beatmapsets/{self.id}'
 
     @functools.cache
-    def all_ranked_or_approved(self) -> bool:
-        return all([bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
-                    for bmap in self.maps])
+    def all_officially_ranked_or_approved(self) -> bool:
+        """Whether all of the maps in the set are
+           ranked or approved on official servers."""
+        for bmap in self.maps:
+            if (
+                bmap.status not in (RankedStatus.Ranked,
+                                    RankedStatus.Approved) or
+                bmap.frozen # ranked/approved, but only on gulag
+            ):
+                return False
+        return True
 
     @functools.cache
-    def all_loved(self) -> bool:
-        return all([bmap.status == RankedStatus.Loved
-                    for bmap in self.maps])
+    def all_officially_loved(self) -> bool:
+        """Whether all of the maps in the set are
+           loved on official servers."""
+        for bmap in self.maps:
+            if (
+                bmap.status != RankedStatus.Loved or
+                bmap.frozen # loved, but only on gulag
+            ):
+                return False
+        return True
 
     def cache_expired(self) -> bool:
         """Whether the cached version of the set is
            expired and needs an update from the osu!api."""
         # ranked & approved maps are update-locked.
-        if self.all_ranked_or_approved():
+        if self.all_officially_ranked_or_approved():
             return False
 
         # TODO: check for further patterns to signify that maps could be
@@ -482,7 +497,7 @@ class BeatmapSet:
 
         # loved maps may be updated, but it's less
         # likely for a mapper to remove a leaderboard.
-        if self.all_loved():
+        if self.all_officially_loved():
             timeout *= 4
 
         return datetime.now() > (self.last_osuapi_check + timeout)
