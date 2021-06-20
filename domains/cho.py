@@ -1220,13 +1220,17 @@ class MatchChangeSettings(BasePacket):
             # map being changed, unready players.
             m.unready_players(expected=SlotStatus.ready)
             m.prev_map_id = m.map_id
-        elif m.map_id == -1 and m.prev_map_id != self.new.map_id:
-            # new map has been chosen, send to match chat.
-            m.chat.send_bot(f'Selected: {self.new.map_embed}.')
 
-        # copy map & basic match info
-        if self.new.map_md5 != m.map_md5:
-            # map changed, check if we have it server-side.
+            m.map_id = -1
+            m.map_md5 = ''
+            m.map_name = ''
+        elif m.map_id == -1:
+            if m.prev_map_id != self.new.map_id:
+                # new map has been chosen, send to match chat.
+                m.chat.send_bot(f'Selected: {self.new.map_embed}.')
+
+            # use our serverside version if we have it, but
+            # still allow for users to pick unknown maps.
             bmap = await Beatmap.from_md5(self.new.map_md5)
 
             if bmap:
