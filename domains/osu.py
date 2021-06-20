@@ -240,23 +240,13 @@ async def osuGetBeatmapInfo(
 
     ret = []
 
-    for idx, fname in enumerate(data['Filenames']):
-        # Attempt to regex pattern match the filename.
-        # If there is no match, simply ignore this map.
-        # XXX: Sometimes a map will be requested without a
-        # diff name, not really sure how to handle this? lol
-        if not (r_match := regexes.mapfile.match(fname)):
-            continue
-
+    for idx, map_filename in enumerate(data['Filenames']):
         # try getting the map from sql
         await db_cursor.execute(
             'SELECT id, set_id, status, md5 '
-            'FROM maps WHERE artist = %s AND '
-            'title = %s AND creator = %s AND '
-            'version = %s', [
-                r_match['artist'], r_match['title'],
-                r_match['creator'], r_match['version']
-            ]
+            'FROM maps '
+            'WHERE filename = %s',
+            [map_filename]
         )
 
         if db_cursor.rowcount == 0:
@@ -2304,17 +2294,13 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
     """Send the latest .osu file the server has for a given map."""
     if conn.headers['Host'] == 'osu.ppy.sh':
         # server switcher, use old method
-        if not (r_match := regexes.mapfile.match(unquote(conn.path[10:]))):
-            log(f'Requested invalid map update {conn.path}.', Ansi.LRED)
-            return (400, b'Invalid map file syntax.')
+        map_filename = unquote(conn.path[10:])
 
         if not (res := await glob.db.fetch(
-            'SELECT id, md5 FROM maps WHERE '
-            'artist = %s AND title = %s '
-            'AND creator = %s AND version = %s', [
-                r_match['artist'], r_match['title'],
-                r_match['creator'], r_match['version']
-            ]
+            'SELECT id, md5 '
+            'FROM maps '
+            'WHERE filename = %s',
+            [map_filename]
         )):
             return (404, b'') # map not found in sql
 

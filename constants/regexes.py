@@ -4,14 +4,9 @@ import re
 
 from objects import glob # this will 100% become a problem
 
-__all__ = ('mapfile', 'osu_ver', 'username', 'email', 'now_playing')
+__all__ = ('osu_ver', 'username', 'email', 'now_playing')
 
 DOMAIN_ESCAPED = glob.config.domain.replace('.', r'\.')
-
-mapfile = re.compile(
-    r'^(?P<artist>.+) - (?P<title>.+) \((?P<creator>.+)\) '
-    r'\[(?P<version>.+)\]\.osu$' # ver can technically be 0 chars?
-)
 
 osu_ver = re.compile(
     r'^b(?P<ver>\d{8})(?:\.(?P<subver>\d))?'
