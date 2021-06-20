@@ -222,7 +222,7 @@ async def reconnect(ctx: Context) -> str:
 @command(Privileges.Normal)
 async def changename(ctx: Context) -> str:
     """Change your username."""
-    name = ' '.join(ctx.args)
+    name = ' '.join(ctx.args).strip()
 
     if not regexes.username.match(name):
         return 'Must be 2-15 characters in length.'

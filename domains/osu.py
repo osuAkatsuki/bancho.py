@@ -2387,7 +2387,7 @@ async def register_account(
 ) -> Optional[bytes]:
     mp_args = conn.multipart_args
 
-    name = mp_args['user[username]']
+    name = mp_args['user[username]'].strip()
     email = mp_args['user[user_email]']
     pw_txt = mp_args['user[password]']
 
