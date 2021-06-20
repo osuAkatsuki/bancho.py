@@ -134,7 +134,7 @@ def command(priv: Privileges, aliases: list[str] = [],
 # and are granted to any unbanned players.
 """
 
-@command(Privileges.Normal, aliases=['h'], hidden=True)
+@command(Privileges.Normal, aliases=['', 'h'], hidden=True)
 async def _help(ctx: Context) -> str:
     """Show all documented commands the play can access."""
     prefix = glob.config.command_prefix
