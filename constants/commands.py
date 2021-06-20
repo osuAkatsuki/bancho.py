@@ -269,7 +269,9 @@ async def maplink(ctx: Context) -> str:
     else:
         return 'No map found!'
 
-    return f'[https://chimu.moe/d/{bmap.set_id} {bmap.full}]'
+    # gatari.pw & nerina.pw are pretty much the only
+    # reliable mirrors i know of? perhaps beatconnect
+    return f'[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full}]'
 
 @command(Privileges.Normal, aliases=['last', 'r'])
 async def recent(ctx: Context) -> str:
