@@ -1179,7 +1179,7 @@ async def getScores(
         params.append(p.friends | {p.id})
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
-        params.append(p.country[1]) # letters, not id
+        params.append(p.geoloc['country']['iso_code'])
 
     query.append('ORDER BY _score DESC LIMIT 50')
 
@@ -2423,12 +2423,45 @@ async def register_account(
 
             safe_name = name.lower().replace(' ', '_')
 
+            if 'CF-IPCountry' in conn.headers:
+                # best case, dev has enabled ip geolocation in the
+                # network tab of cloudflare, so it sends the iso code.
+                country = conn.headers['CF-IPCountry']
+            else:
+                # backup method, get the user's ip and
+                # do a db lookup to get their country.
+                if 'CF-Connecting-IP' in conn.headers:
+                    ip = conn.headers['CF-Connecting-IP']
+                else:
+                    # if the request has been forwarded, get the origin
+                    forwards = conn.headers['X-Forwarded-For'].split(',')
+                    if len(forwards) != 1:
+                        ip = forwards[0]
+                    else:
+                        ip = conn.headers['X-Real-IP']
+
+                if ip != '127.0.0.1':
+                    if glob.geoloc_db is not None:
+                        # decent case, dev has downloaded a geoloc db from
+                        # maxmind, so we can do a local db lookup. (~1-5ms)
+                        # https://www.maxmind.com/en/home
+                        geoloc = utils.misc.fetch_geoloc_db(ip)
+                    else:
+                        # worst case, we must do an external db lookup
+                        # using a public api. (depends, `ping ip-api.com`)
+                        geoloc = await utils.misc.fetch_geoloc_web(ip)
+
+                    country = geoloc['country']
+                else:
+                    # localhost, unknown country
+                    country = 'XX'
+
             # add to `users` table.
             await db_cursor.execute(
                 'INSERT INTO users '
-                '(name, safe_name, email, pw_bcrypt, creation_time, latest_activity) '
-                'VALUES (%s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
-                [name, safe_name, email, pw_bcrypt]
+                '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
+                'VALUES (%s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
+                [name, safe_name, email, pw_bcrypt, country]
             )
             user_id = db_cursor.lastrowid
 

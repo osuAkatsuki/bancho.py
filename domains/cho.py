@@ -560,7 +560,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
         hw_matches = await db_cursor.fetchall()
 
         if user_info['priv'] & Privileges.Verified:
-            # the player is
+            # TODO: this is a normal, registered & verified player.
             ...
         else:
             # this player is not verified yet, this is their first
@@ -583,6 +583,17 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
         del user_info['clan_id']
         del user_info['clan_priv']
         clan = clan_priv = None
+
+    if ip != '127.0.0.1':
+        if glob.geoloc_db is not None:
+            # good, dev has downloaded a geoloc db from maxmind,
+            # so we can do a local db lookup. (typically ~1-5ms)
+            # https://www.maxmind.com/en/home
+            user_info['geoloc'] = utils.misc.fetch_geoloc_db(ip)
+        else:
+            # bad, we must do an external db lookup using
+            # a public api. (depends, `ping ip-api.com`)
+            user_info['geoloc'] = await utils.misc.fetch_geoloc_web(ip)
 
     p = Player(
         **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key}
@@ -648,14 +659,6 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
     await p.achievements_from_sql(db_cursor)
     await p.stats_from_sql_full(db_cursor)
     await p.relationships_from_sql(db_cursor)
-
-    if ip != '127.0.0.1':
-        if glob.geoloc_db is not None:
-            # use local db
-            p.fetch_geoloc_db(ip)
-        else:
-            # use ip-api
-            await p.fetch_geoloc_web(ip)
 
     data += packets.mainMenuIcon()
     data += packets.friendsList(*p.friends)

@@ -20,7 +20,6 @@ from cmyui.logging import log
 from cmyui.discord import Webhook
 
 import packets
-from constants.countries import country_codes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.privileges import ClientPrivileges
@@ -190,8 +189,14 @@ class Player:
 
         self.achievements: set['Achievement'] = set()
 
-        self.country = (0, 'XX') # (code, letters)
-        self.location = (0.0, 0.0) # (lat, long)
+        self.geoloc = extras.get('geoloc', {
+            'latitude': 0.0,
+            'longitude': 0.0,
+            'country': {
+                'iso_code': 'XX',
+                'numeric': 0
+            }
+        })
 
         self.utc_offset = extras.get('utc_offset', 0)
         self.pm_private = extras.get('pm_private', False)
@@ -847,43 +852,6 @@ class Player:
         )
 
         log(f'{self} unblocked {p}.')
-
-    def fetch_geoloc_db(self, ip: str) -> None:
-        """Fetch geolocation data based on ip (using local db)."""
-        res = glob.geoloc_db.city(ip)
-
-        iso_code = res.country.iso_code
-        loc = res.location
-
-        self.country = (country_codes[iso_code], iso_code)
-        self.location = (loc.latitude, loc.longitude)
-
-    async def fetch_geoloc_web(self, ip: str) -> None:
-        """Fetch geolocation data based on ip (using ip-api)."""
-        if not glob.has_internet: # requires internet connection
-            return
-
-        url = f'http://ip-api.com/line/{ip}'
-
-        async with glob.http.get(url) as resp:
-            if not resp or resp.status != 200:
-                log('Failed to get geoloc data: request failed.', Ansi.LRED)
-                return
-
-            status, *lines = (await resp.text()).split('\n')
-
-            if status != 'success':
-                err_msg = lines[0]
-                if err_msg == 'invalid query':
-                    err_msg += f' ({url})'
-
-                log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
-                return
-
-        iso_code = lines[1]
-
-        self.country = (country_codes[iso_code], iso_code)
-        self.location = (float(lines[6]), float(lines[7])) # lat, long
 
     async def unlock_achievement(self, a: 'Achievement') -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
