@@ -620,6 +620,21 @@ class BeatmapSet:
 
                 async for row in db_cursor:
                     bmap = Beatmap(**row)
+
+                    # XXX: tempfix for gulag <v3.4.1,
+                    # where filenames weren't stored.
+                    if not bmap.filename:
+                        bmap.filename = (
+                            '{artist} - {title} ({creator}) [{version}].osu'
+                        ).format(**row).translate(IGNORED_BEATMAP_CHARS)
+
+                        await glob.db.execute(
+                            'UPDATE maps '
+                            'SET filename = %s '
+                            'WHERE id = %s',
+                            [bmap.filename, bmap.id]
+                        )
+
                     bmap.set = bmap_set
                     bmap_set.maps.append(bmap)
 
@@ -628,7 +643,6 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_osuapi(cls, bsid: int) -> Optional['BeatmapSet']:
         """Fetch a mapset from the osu!api by set id."""
-
         if api_data := await osuapiv1_getbeatmaps(s=bsid):
             self: 'BeatmapSet' = cls.__new__(cls)
             self.id = bsid
@@ -663,9 +677,9 @@ class BeatmapSet:
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some gulag-specific stuff not given by api)
+                bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
                 bmap.passes = 0
                 bmap.plays = 0
-                bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
 
                 bmap.set = self
                 self.maps.append(bmap)
