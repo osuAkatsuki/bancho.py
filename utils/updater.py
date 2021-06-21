@@ -146,6 +146,9 @@ class Updater:
 
         updated = False
 
+        # NOTE: this using a transaction is pretty pointless with mysql since
+        # any structural changes to tables will implciticly commit the changes.
+        # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor() as db_cursor:
                 await conn.begin()
@@ -153,16 +156,12 @@ class Updater:
                     try:
                         await db_cursor.execute(query)
                     except aiomysql.MySQLError:
-                        # if anything goes wrong while writing a query
-                        # something is probably very wrong, so roll
-                        # back changes & abort startup.
                         await conn.rollback()
                         break
-                    else:
-                        await conn.commit()
                 else:
                     # all queries ran
                     # without problems.
+                    await conn.commit()
                     updated = True
 
         if not updated:

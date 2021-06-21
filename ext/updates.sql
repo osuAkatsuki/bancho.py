@@ -357,3 +357,8 @@ create table mapsets
 	constraint nmapsets_id_uindex
 		unique (id)
 );
+
+# v3.4.1
+alter table maps add filename varchar(256) charset utf8 not null after creator;
+# missed this in v3.3.8 update, no problem though
+alter table maps drop column last_osuapi_check;
