@@ -68,7 +68,12 @@ async def bancho_handler(conn: Connection) -> bytes:
     if 'CF-Connecting-IP' in conn.headers:
         ip = conn.headers['CF-Connecting-IP']
     else:
-        ip = conn.headers['X-Real-IP']
+        # if the request has been forwarded, get the origin
+        forwards = conn.headers['X-Forwarded-For'].split(',')
+        if len(forwards) != 1:
+            ip = forwards[0]
+        else:
+            ip = conn.headers['X-Real-IP']
 
     if (
         'User-Agent' not in conn.headers or
