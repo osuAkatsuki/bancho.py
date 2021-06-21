@@ -166,39 +166,23 @@ async def before_serving() -> None:
 
 async def after_serving() -> None:
     """Called after the server stops serving connections."""
-    if (
-        hasattr(glob, 'http') and
-        glob.http is not None
-    ):
+    if hasattr(glob, 'http') and glob.http is not None:
         await glob.http.close()
 
-    if (
-        hasattr(glob, 'db') and
-        glob.db.pool is not None
-    ):
+    if hasattr(glob, 'db') and glob.db.pool is not None:
         await glob.db.close()
 
-    if (
-        hasattr(glob, 'geoloc_db') and
-        glob.geoloc_db is not None
-    ):
+    if hasattr(glob, 'geoloc_db') and glob.geoloc_db is not None:
         glob.geoloc_db.close()
 
-    if (
-        hasattr(glob, 'datadog') and
-        glob.datadog is not None
-    ):
+    if hasattr(glob, 'datadog') and glob.datadog is not None:
         glob.datadog.stop()
         glob.datadog.flush()
 
 def detect_mysqld_running() -> bool:
     """Detect whether theres a mysql server running locally."""
-    for path in (
-        '/var/run/mysqld/mysqld.pid',
-        '/var/run/mariadb/mariadb.pid'
-    ):
-        if os.path.exists(path):
-            # path found
+    for service in ('mysqld', 'mariadb'):
+        if os.path.exists(f'/var/run/mysqld/{service}.pid'):
             return True
     else:
         # not found, try pgrep
@@ -346,10 +330,10 @@ if __name__ == '__main__':
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
-    if any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn'))):
+    if any([sys.argv[0].endswith(x) for x in ('hypercorn', 'uvicorn')]):
         raise RuntimeError(
-            "gulag is not an ASGI implementation and uses it's own http "
-            "server implementation; please run it directly (./main.py)."
+            "gulag does not use an ASGI framework, and uses it's own custom "
+            "web framework implementation; please run it directly (./main.py)."
         )
     else:
         raise RuntimeError('gulag should only be run directly (./main.py).')
