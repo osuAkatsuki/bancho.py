@@ -774,8 +774,19 @@ class StartSpectating(BasePacket):
 
         if current_host := p.spectating:
             if current_host == new_host:
-                # client asking to spec when already
-                # speccing, likely downloaded new map.
+                # host hasn't changed, they didn't have
+                # the map but have downloaded it.
+
+                if not p.stealth:
+                    # NOTE: `p` would have already received the other
+                    # fellow spectators, so no need to resend them.
+                    new_host.enqueue(packets.spectatorJoined(p.id))
+
+                    p_joined = packets.fellowSpectatorJoined(p.id)
+                    for spec in new_host.spectators:
+                        if spec is not p:
+                            spec.enqueue(p_joined)
+
                 return
 
             current_host.remove_spectator(p)
