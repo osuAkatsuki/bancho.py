@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from typing import Union
 from pathlib import Path
 
-import cmyui
+import cmyui.utils
 import psutil
 
 import packets
@@ -334,7 +334,7 @@ async def _with(ctx: Context) -> str:
         mods = key_value = None
 
         for param in (p.strip('+%') for p in ctx.args):
-            if cmyui._isdecimal(param, _float=True): # acc
+            if cmyui.utils._isdecimal(param, _float=True): # acc
                 if not 0 <= (key_value := float(param)) <= 100:
                     return 'Invalid accuracy.'
                 pp_attrs['acc'] = key_value
@@ -2343,10 +2343,10 @@ async def process_commands(p: Player, t: Messageable,
 
             # command found & we have privileges, run it.
             if res := await cmd.callback(ctx):
-                ms_taken = (clock_ns() - start_time) / 1e6
+                elapsed = cmyui.utils.magnitude_fmt_time(clock_ns() - start_time)
 
                 return {
-                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {elapsed}',
                     'hidden': cmd.hidden
                 }
 
