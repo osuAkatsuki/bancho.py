@@ -2285,7 +2285,9 @@ async def process_commands(p: Player, t: Messageable,
     # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
     start_time = clock_ns()
-    trigger, *args = msg[len(glob.config.command_prefix):].strip().split(' ')
+
+    prefix_len = len(glob.config.command_prefix)
+    trigger, *args = msg[prefix_len:].strip().split(' ', maxsplit=1)
 
     # case-insensitive triggers
     trigger = trigger.lower()
@@ -2318,7 +2320,7 @@ async def process_commands(p: Player, t: Messageable,
             trigger, *args = args # get subcommand
 
             # case-insensitive triggers
-            trigger = trigger.lower()
+            trigger = trigger.lower().lstrip()
 
             commands = cmd_set.commands
             break
