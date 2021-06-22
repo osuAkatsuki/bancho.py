@@ -829,13 +829,14 @@ class CantSpectate(BasePacket):
             log(f"{p} sent can't spectate while not spectating?", Ansi.LRED)
             return
 
-        data = packets.spectatorCantSpectate(p.id)
+        if not p.stealth:
+            data = packets.spectatorCantSpectate(p.id)
 
-        host = p.spectating
-        host.enqueue(data)
+            host = p.spectating
+            host.enqueue(data)
 
-        for t in host.spectators:
-            t.enqueue(data)
+            for t in host.spectators:
+                t.enqueue(data)
 
 @register(ClientPackets.SEND_PRIVATE_MESSAGE)
 class SendPrivateMessage(BasePacket):
