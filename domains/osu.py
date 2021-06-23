@@ -2426,7 +2426,7 @@ async def register_account(
             if 'CF-IPCountry' in conn.headers:
                 # best case, dev has enabled ip geolocation in the
                 # network tab of cloudflare, so it sends the iso code.
-                country = conn.headers['CF-IPCountry']
+                country_iso_code = conn.headers['CF-IPCountry']
             else:
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
@@ -2451,17 +2451,17 @@ async def register_account(
                         # using a public api. (depends, `ping ip-api.com`)
                         geoloc = await utils.misc.fetch_geoloc_web(ip)
 
-                    country = geoloc['country']
+                    country_iso_code = geoloc['country']['iso_code']
                 else:
                     # localhost, unknown country
-                    country = 'XX'
+                    country_iso_code = 'XX'
 
             # add to `users` table.
             await db_cursor.execute(
                 'INSERT INTO users '
                 '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
                 'VALUES (%s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
-                [name, safe_name, email, pw_bcrypt, country]
+                [name, safe_name, email, pw_bcrypt, country_iso_code]
             )
             user_id = db_cursor.lastrowid
 
