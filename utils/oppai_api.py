@@ -10,7 +10,7 @@ from objects.beatmap import Beatmap
 
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
-# bind types to all all oppai-ng c functions
+# bind types to all oppai-ng c functions
 _oppai_ng_lib = ctypes.cdll.LoadLibrary('oppai-ng/liboppai.so')
 
 # main api
