@@ -7,6 +7,7 @@ import time
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from pathlib import Path
 from typing import Callable
 from typing import Union
 
@@ -15,6 +16,7 @@ import bcrypt
 from cmyui.logging import Ansi
 from cmyui.logging import AnsiRGB
 from cmyui.logging import log
+from cmyui.utils import magnitude_fmt_time
 from cmyui.utils import _isdecimal
 from cmyui.web import Connection
 from cmyui.web import Domain
@@ -29,6 +31,7 @@ from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from objects import glob
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
 from objects.channel import Channel
 from objects.clan import ClanPrivileges
@@ -42,8 +45,11 @@ from objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
+from utils.oppai_api import OppaiWrapper
 
 """ Bancho: handle connections from the osu! client """
+
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 BASE_DOMAIN = glob.config.domain
 _domain_escaped = BASE_DOMAIN.replace('.', r'\.')
@@ -349,8 +355,8 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    'Welcome back to the gulag!\n'
-    f'Current build: v{glob.version}'
+    f'Welcome back to {BASE_DOMAIN}!\n'
+    f'Running gulag v{glob.version}.'
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -596,7 +602,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
             user_info['geoloc'] = await utils.misc.fetch_geoloc_web(ip)
 
     p = Player(
-        **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key}
+        **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}
         utc_offset=utc_offset,
         osu_ver=osu_ver_date,
         pm_private=pm_private,
@@ -934,39 +940,64 @@ class SendPrivateMessage(BasePacket):
                             'timeout': time.time() + 300 # /np's last 5mins
                         }
 
-                        # calc pp if possible
-                        if mode_vn == 2: # TODO: catch
-                            msg = 'PP not yet supported for that mode.'
-                        elif mode_vn == 3 and bmap.mode.as_vanilla != 3:
-                            msg = 'Mania converts not yet supported.'
+                        # calculate generic pp values from their /np
+
+                        if not await ensure_local_osu_file(bmap.id, bmap.md5):
+                            msg = ('Mapfile could not be found; '
+                                   'this incident has been reported.')
                         else:
-                            if match['mods'] is not None:
-                                # [1:] to remove leading whitespace
-                                mods = Mods.from_np(match['mods'][1:], mode_vn)
-                            else:
-                                mods = Mods.NOMOD
+                            # calculate pp for common generic values
+                            pp_calc_st = time.time_ns()
 
-                            if mods not in bmap.pp_cache[mode_vn]:
-                                await bmap.cache_pp(mods)
+                            if mode_vn in (0, 1): # osu, taiko
+                                with OppaiWrapper(bmap.id) as ez:
+                                    # std & taiko, use oppai-ng to calc pp
+                                    if match['mods'] is not None:
+                                        # [1:] to remove leading whitespace
+                                        ez.set_mods(Mods.from_np(match['mods'][1:], mode_vn))
 
-                            # since this is a DM to the bot, we should
-                            # send back a list of general PP values.
-                            if mode_vn in (0, 1): # use acc
-                                _keys = (
-                                    f'{acc:.2f}%'
-                                    for acc in glob.config.pp_cached_accs
-                                )
-                            elif mode_vn == 3: # use score
-                                _keys = (
-                                    f'{int(score // 1000)}k'
-                                    for score in glob.config.pp_cached_scores
-                                )
+                                    pp_values = [] # [(acc, pp), ...]
 
-                            pp_cache = bmap.pp_cache[mode_vn][mods]
-                            msg = ' | '.join([
-                                f'{k}: {pp:,.2f}pp'
-                                for k, pp in zip(_keys, pp_cache)
-                            ])
+                                    for acc in glob.config.pp_cached_accs:
+                                        ez.set_accuracy_percent(acc)
+                                        ez.calculate()
+
+                                        pp_values.append((acc, ez.get_pp()))
+
+                                    msg = ' | '.join([
+                                        f'{acc:.2f}%: {pp:,.2f}pp'
+                                        for acc, pp in pp_values
+                                    ])
+                            elif mode_vn == 2: # catch
+                                msg = 'Gamemode not yet supported.'
+                            else: # mania
+                                msg = 'Gamemode not yet supported.'
+
+                                """ https://github.com/NiceAesth/maniera/pull/1
+                                if match['mods'] is not None:
+                                    # [1:] to remove leading whitespace
+                                    mods = int(Mods.from_np(match['mods'][1:], mode_vn))
+                                else:
+                                    mods = 0
+
+                                path = BEATMAPS_PATH / f'{bmap.id}.osu'
+
+                                calc = Maniera(path, mods, 0)
+                                calc.sr = calc._calculateStars()
+                                pp_values = []
+
+                                for score in glob.config.pp_cached_scores:
+                                    calc.score = score
+                                    pp_values.append((score, calc._calculatePP()))
+
+                                msg = ' | '.join([
+                                    f'{score // 1000:.0f}k: {pp:,.2f}pp'
+                                    for score, pp in pp_values
+                                ])
+                                """
+
+                            elapsed = time.time_ns() - pp_calc_st
+                            msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
                     else:
                         msg = 'Could not find map.'
 

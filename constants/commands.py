@@ -25,10 +25,13 @@ from typing import TYPE_CHECKING
 from typing import Union
 from pathlib import Path
 
+import aiomysql
 import cmyui.utils
 import psutil
+from maniera.calculator import Maniera
 
 import packets
+import utils.misc
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -36,6 +39,7 @@ from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import Privileges
 from objects import glob
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
 from objects.clan import Clan
 from objects.clan import ClanPrivileges
@@ -48,10 +52,12 @@ from objects.match import SlotStatus
 from objects.player import Player
 from objects.score import SubmissionStatus
 from utils.misc import seconds_readable
-from utils.recalculator import PPCalculator
+from utils.oppai_api import OppaiWrapper
 
 if TYPE_CHECKING:
     from objects.channel import Channel
+
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 Messageable = Union['Channel', Player]
 CommandResponse = dict[str, str]
@@ -321,89 +327,63 @@ async def _with(ctx: Context) -> str:
         return 'Please /np a map first!'
 
     bmap: Beatmap = ctx.player.last_np['bmap']
+
+    if not await ensure_local_osu_file(bmap.id, bmap.md5):
+        return ('Mapfile could not be found; '
+                'this incident has been reported.')
+
     mode_vn = ctx.player.last_np['mode_vn']
 
-    pp_attrs = {'mode_vn': mode_vn}
-    mods = key_value = None # key_value is acc when std, score when mania
+    if mode_vn in (0, 1): # osu, taiko
+        if not ctx.args or len(ctx.args) > 2:
+            return 'Invalid syntax: !with <acc/mods ...>'
 
-    if mode_vn in (0, 1): # oppai-ng
-        # +?<mods> <acc>%?
-        if 1 < len(ctx.args) > 2:
-            return 'Invalid syntax: !with <mods/acc> ...'
-
-        mods = key_value = None
+        acc = 100.0
+        mods = Mods.NOMOD
 
         for param in (p.strip('+%') for p in ctx.args):
             if cmyui.utils._isdecimal(param, _float=True): # acc
-                if not 0 <= (key_value := float(param)) <= 100:
+                if not 0 <= (acc := float(param)) <= 100:
                     return 'Invalid accuracy.'
-                pp_attrs['acc'] = key_value
-            elif len(param) % 2 == 0: # mods
-                mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
-                pp_attrs['mods'] = mods
+            elif len(param) % 2 == 0:
+                mods = Mods.from_modstr(param)
+                mods = mods.filter_invalid_combos(mode_vn)
             else:
-                return 'Invalid syntax: !with <mods/acc> ...'
+                return 'Invalid syntax: !with <acc/mods ...>'
 
-    elif mode_vn == 2: # TODO: catch support
-        return 'PP not yet supported for that mode.'
-    elif mode_vn == 3: # maniera
-        if bmap.mode.as_vanilla != 3:
-            return 'Mania converts not yet supported.'
+        with OppaiWrapper(bmap.id) as ez:
+            ez.set_accuracy_percent(acc)
+            if mods: ez.set_mods(mods)
 
-        # +?<mods> <score>
-        if 1 < len(ctx.args) > 2:
-            return 'Invalid syntax: !with <mods/score> ...'
+            ez.calculate()
 
-        mods = key_value = None
+            return f'{acc:.2f}% {mods!r}: {ez.get_pp():.2f}pp ({ez.get_sr():.2f}*)'
+    elif mode_vn == 2: # catch
+        return 'Gamemode not yet supported.'
+    else: # mania
+        if not ctx.args or len(ctx.args) > 2:
+            return 'Invalid syntax: !with <score/mods ...>'
 
-        for param in (p.lstrip('+') for p in ctx.args):
-            if param.isdecimal(): # score
-                if not 0 <= (key_value := int(param)) <= 1000000:
+        score = 1000
+        mods = Mods.NOMOD
+
+        for param in (p.strip('+k') for p in ctx.args):
+            if cmyui.utils._isdecimal(param): # acc
+                if not 0 <= (score := float(param)) <= 1000:
                     return 'Invalid score.'
-
-                pp_attrs['score'] = key_value
-            elif len(param) % 2 == 0: # mods
-                mods = Mods.from_modstr(param).filter_invalid_combos(mode_vn)
-                pp_attrs['mods'] = mods
+                if score < 500:
+                    return '<500k score is always 0pp.'
+            elif len(param) % 2 == 0:
+                mods = Mods.from_modstr(param)
+                mods = mods.filter_invalid_combos(mode_vn)
             else:
-                return 'Invalid syntax: !with <mods/score> ...'
+                return 'Invalid syntax: !with <score/mods ...>'
 
-    if key_value is not None:
-        # custom param specified, calculate it on the fly.
-        ppcalc = await PPCalculator.from_map(bmap, **pp_attrs)
-        if not ppcalc:
-            return 'Could not retrieve map file.'
+        path = BEATMAPS_PATH / f'{bmap.id}.osu'
+        calc = Maniera(path, int(mods), int(score * 1000))
+        calc.calculate()
 
-        pp, _ = await ppcalc.perform() # don't need sr
-
-        if mode_vn in (0, 1): # acc
-            _key = f'{key_value:.2f}%'
-        elif mode_vn == 3: # score
-            _key = f'{key_value // 1000}k'
-        pp_values = [(_key, pp)]
-    else:
-        # general accuracy values requested.
-        if mods not in bmap.pp_cache[mode_vn]:
-            await bmap.cache_pp(mods)
-
-        pp_cache = bmap.pp_cache[mode_vn][mods]
-
-        if mode_vn in (0, 1): # use acc
-            _keys = (
-                f'{acc:.2f}%'
-                for acc in glob.config.pp_cached_accs
-            )
-        elif mode_vn == 3: # use score
-            _keys = (
-                f'{int(score // 1000)}k'
-                for score in glob.config.pp_cached_scores
-            )
-
-        pp_values = zip(_keys, pp_cache)
-
-    _mods = f'+{mods!r} ' if mods else ''
-    return _mods + ' | '.join([f'{k}: {pp:,.2f}pp'
-                               for k, pp in pp_values])
+        return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.sr:.2f}*)'
 
 @command(Privileges.Normal, aliases=['req'])
 async def request(ctx: Context) -> str:
@@ -993,70 +973,118 @@ async def stealth(ctx: Context) -> str:
 
 @command(Privileges.Dangerous)
 async def recalc(ctx: Context) -> str:
-    """Performs a full PP recalc on a specified map, or all maps."""
+    """Recalculate pp for a given map, or all maps."""
+    # NOTE: at the moment this command isn't very optimal and re-parses
+    # the beatmap file each iteration; this will be heavily improved.
     if len(ctx.args) != 1 or ctx.args[0] not in ('map', 'all'):
         return 'Invalid syntax: !recalc <map/all>'
 
-    score_counts = [] # keep track of # of scores recalced
-
     if ctx.args[0] == 'map':
-        # recalculate all scores on their last /np'ed map.
+        # by specific map, use their last /np
         if time.time() >= ctx.player.last_np['timeout']:
             return 'Please /np a map first!'
 
-        # TODO: mania support (and ctb later)
-        if (mode_vn := ctx.player.last_np['mode_vn']) not in (0, 1):
-            return 'PP not yet supported for that mode.'
+        bmap: Beatmap = ctx.player.last_np['bmap']
 
-        bmap = ctx.player.last_np['bmap']
+        if not await ensure_local_osu_file(bmap.id, bmap.md5):
+            return ('Mapfile could not be found; '
+                    'this incident has been reported.')
 
-        ppcalc = await PPCalculator.from_map(bmap, mode_vn=mode_vn)
+        async with glob.db.pool.acquire() as conn:
+            async with (
+                conn.cursor(aiomysql.DictCursor) as select_cursor,
+                conn.cursor(aiomysql.Cursor) as update_cursor
+            ):
+                with OppaiWrapper(bmap.id) as ez:
+                    ez.set_mode_vn(0) # TODO: other modes
+                    for table in ('scores_vn', 'scores_rx', 'scores_ap'):
+                        await select_cursor.execute(
+                            'SELECT id, acc, mods, max_combo, nmiss '
+                            f'FROM {table} '
+                            'WHERE map_md5 = %s AND mode = 0', # TODO: ""
+                            [bmap.md5]
+                        )
 
-        if not ppcalc:
-            return 'Could not retrieve map file.'
+                        async for row in select_cursor:
+                            ez.set_accuracy_percent(row['acc'])
+                            ez.set_mods_int(row['mods'])
+                            ez.set_combo(row['max_combo'])
+                            ez.set_nmiss(row['nmiss'])
 
-        ctx.recipient.send_bot(f'Performing full recalc on {bmap.embed}.')
+                            ez.calculate()
 
-        for table in ('scores_vn', 'scores_rx', 'scores_ap'):
-            # fetch all scores from the table on this map
-            scores = await glob.db.fetchall(
-                'SELECT id, acc, mods, max_combo, '
-                'n300, n100, n50, nmiss, ngeki, nkatu '
-                f'FROM {table} WHERE map_md5 = %s '
-                'AND status = 2 AND mode = %s',
-                [bmap.md5, mode_vn]
-            )
-
-            score_counts.append(len(scores))
-
-            if not scores:
-                continue
-
-            for score in scores:
-                # TODO: speedtest vs 1bang
-                ppcalc.pp_attrs['mods'] = Mods(score['mods'])
-                ppcalc.pp_attrs['combo'] = score['max_combo']
-                ppcalc.pp_attrs['nmiss'] = score['nmiss']
-                ppcalc.pp_attrs['acc'] = score['acc']
-
-                pp, _ = await ppcalc.perform() # sr not needed
-
-                await glob.db.execute(
-                    f'UPDATE {table} '
-                    'SET pp = %s '
-                    'WHERE id = %s',
-                    [pp, score['id']]
-                )
-
+                            await update_cursor.execute(
+                                f'UPDATE {table} '
+                                'SET pp = %s '
+                                'WHERE id = %s',
+                                [ez.get_pp(), row['id']]
+                            )
     else:
-        # recalculate all scores on every map
-        if not ctx.player.priv & Privileges.Dangerous:
-            return 'This command is limited to developers.'
+        # recalc all plays on the server, on all maps
+        staff_chan = glob.channels['#staff'] # log any errs here
 
-        return 'TODO'
+        async def recalc_all() -> None:
+            staff_chan.send_bot(f'{ctx.player} started a full recalculation.')
+            st = time.time()
 
-    recap = '{0} vn | {1} rx | {2} ap'.format(*score_counts)
-    return f'Recalculated {sum(score_counts)} ({recap}) scores.'
+            async with glob.db.pool.acquire() as conn:
+                async with (
+                    conn.cursor(aiomysql.Cursor) as bmap_select_cursor,
+                    conn.cursor(aiomysql.DictCursor) as score_select_cursor,
+                    conn.cursor(aiomysql.Cursor) as update_cursor
+                ):
+                    await bmap_select_cursor.execute(
+                        'SELECT id, md5 '
+                        'FROM maps '
+                        'WHERE passes > 0'
+                    )
+
+                    map_count = bmap_select_cursor.rowcount
+                    staff_chan.send_bot(f'Recalculating {map_count} maps.')
+
+                    async for bmap_row in bmap_select_cursor:
+                        bmap_id, bmap_md5 = bmap_row
+
+                        if not await ensure_local_osu_file(bmap_id, bmap_md5):
+                            staff_chan.send_bot("[Recalc] Couldn't find "
+                                                f"{bmap_id} / {bmap_md5}")
+                            continue
+
+                        with OppaiWrapper(bmap_id) as ez:
+                            ez.set_mode_vn(0) # TODO: other modes
+                            for table in ('scores_vn', 'scores_rx', 'scores_ap'):
+                                await score_select_cursor.execute(
+                                    'SELECT id, acc, mods, max_combo, nmiss '
+                                    f'FROM {table} '
+                                    'WHERE map_md5 = %s AND mode = 0', # TODO: ""
+                                    [bmap_md5]
+                                )
+
+                                async for row in score_select_cursor:
+                                    ez.set_accuracy_percent(row['acc'])
+                                    ez.set_mods_int(row['mods'])
+                                    ez.set_combo(row['max_combo'])
+                                    ez.set_nmiss(row['nmiss'])
+
+                                    ez.calculate()
+
+                                    await update_cursor.execute(
+                                        f'UPDATE {table} '
+                                        'SET pp = %s '
+                                        'WHERE id = %s',
+                                        [ez.get_pp(), row['id']]
+                                    )
+
+                        # leave at least 1/100th of
+                        # a second for handling conns.
+                        await asyncio.sleep(0.01)
+
+            elapsed = utils.misc.seconds_readable(int(time.time() - st))
+            staff_chan.send_bot(f'Recalculation complete. | Elapsed: {elapsed}')
+
+        glob.loop.create_task(recalc_all())
+
+    return 'Starting a full recalculation.'
 
 @command(Privileges.Dangerous, hidden=True)
 async def debug(ctx: Context) -> str:
@@ -2287,7 +2315,7 @@ async def process_commands(p: Player, t: Messageable,
     start_time = clock_ns()
 
     prefix_len = len(glob.config.command_prefix)
-    trigger, *args = msg[prefix_len:].strip().split(' ', maxsplit=1)
+    trigger, *args = msg[prefix_len:].strip().split(' ')
 
     # case-insensitive triggers
     trigger = trigger.lower()
@@ -2320,7 +2348,7 @@ async def process_commands(p: Player, t: Messageable,
             trigger, *args = args # get subcommand
 
             # case-insensitive triggers
-            trigger = trigger.lower().lstrip()
+            trigger = trigger.lower()
 
             commands = cmd_set.commands
             break

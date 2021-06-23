@@ -750,7 +750,6 @@ class Player:
             log(f'{self} failed to join {spec_chan}?', Ansi.LYELLOW)
             return
 
-        #p.enqueue(packets.channelJoin(c.name))
         if not p.stealth:
             p_joined = packets.fellowSpectatorJoined(p.id)
             for s in self.spectators:

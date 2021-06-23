@@ -42,7 +42,6 @@ from objects.score import Score
 from objects.score import SubmissionStatus
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
-from utils.recalculator import PPCalculator
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -2169,60 +2168,6 @@ def requires_api_key(f: Callable) -> Callable:
 
 # NOTE: `Content-Type = application/json` is applied in the above decorator
 #                                         for the following api handlers.
-
-# TODO: mania support (and ctb later)
-@domain.route('/api/calculate_pp')
-@requires_api_key
-async def api_calculate_pp(conn: Connection, p: 'Player') -> Optional[bytes]:
-    """Calculate and return pp & sr for a given map."""
-    if 'md5' in conn.args:
-        # get id from md5
-        bmap = await Beatmap.from_md5(md5=conn.args['md5'])
-    elif 'id' in conn.args:
-        if not conn.args['id'].isdecimal():
-            return (400, JSON({'status': 'Failed: invalid map id'}))
-
-        bmap = await Beatmap.from_md5(md5=conn.args['md5'])
-    else:
-        return (400, JSON({'status': 'Failed: Must provide map md5 or id'}))
-
-    if not bmap:
-        return JSON({'status': 'Failed: map not found'})
-
-    pp_kwargs = {}
-    valid_kwargs = (
-        ('mods', int),
-        ('combo', int),
-        ('nmiss', int),
-        ('mode_vn', int),
-        ('acc', float)
-    )
-
-    # ignore any invalid args
-    for n, t in valid_kwargs:
-        if n in conn.args:
-            val = conn.args[n]
-
-            if not _isdecimal(val, _float=t is float):
-                continue
-
-            pp_kwargs[n] = t(val)
-
-    if pp_kwargs.get('mode_vn', 0) not in (0, 1):
-        return (503, JSON({'status': 'Failed: unsupported mode'}))
-
-    ppcalc = await PPCalculator.from_map(bmap, **pp_kwargs)
-
-    if not ppcalc:
-        return JSON({'status': 'Failed: could not retrieve map'})
-
-    pp, sr = await ppcalc.perform()
-
-    return JSON({
-        'status': 'Success',
-        'pp': pp,
-        'sr': sr
-    })
 
 @domain.route('/api/set_avatar', methods=['POST', 'PUT'])
 @requires_api_key

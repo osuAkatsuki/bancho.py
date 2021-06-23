@@ -275,9 +275,9 @@ if __name__ == '__main__':
         if p.wait() == 1:
             sys.exit('Failed to update git submodules.')
 
-    if not (OPPAI_PATH / 'oppai').exists():
-        log('No oppai-ng binary found, attempting to build.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['./build'], cwd='oppai-ng',
+    if not (OPPAI_PATH / 'liboppai.so').exists():
+        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
                              stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
         if p.wait() == 1:

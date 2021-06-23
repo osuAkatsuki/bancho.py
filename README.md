@@ -84,8 +84,8 @@ git submodule init && git submodule update
 # install gulag requirements w/ pip
 python3.9 -m pip install -r ext/requirements.txt
 
-# build oppai-ng's binary
-cd oppai-ng && ./build && cd ..
+# build oppai-ng's static library
+cd oppai-ng && ./libbuild && cd ..
 
 ######################################
 # NOTE: before continuing, create an #
