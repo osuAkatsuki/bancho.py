@@ -101,8 +101,7 @@ class Matches(list):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
-        super().__init__()
-        self.extend([None] * glob.config.max_multi_matches)
+        super().__init__([None] * glob.config.max_multi_matches)
 
     def __iter__(self) -> Iterator['Match']:
         return super().__iter__()

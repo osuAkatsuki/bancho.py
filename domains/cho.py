@@ -20,6 +20,7 @@ from cmyui.utils import magnitude_fmt_time
 from cmyui.utils import _isdecimal
 from cmyui.web import Connection
 from cmyui.web import Domain
+from maniera.calculator import Maniera
 
 import packets
 import utils.misc
@@ -971,33 +972,32 @@ class SendPrivateMessage(BasePacket):
                             elif mode_vn == 2: # catch
                                 msg = 'Gamemode not yet supported.'
                             else: # mania
-                                msg = 'Gamemode not yet supported.'
-
-                                """ https://github.com/NiceAesth/maniera/pull/1
-                                if match['mods'] is not None:
-                                    # [1:] to remove leading whitespace
-                                    mods = int(Mods.from_np(match['mods'][1:], mode_vn))
+                                if bmap.mode.as_vanilla != 3:
+                                    msg = 'Mania converts not currently supported.'
                                 else:
-                                    mods = 0
+                                    if match['mods'] is not None:
+                                        # [1:] to remove leading whitespace
+                                        mods = int(Mods.from_np(match['mods'][1:], mode_vn))
+                                    else:
+                                        mods = 0
 
-                                path = BEATMAPS_PATH / f'{bmap.id}.osu'
+                                    path = BEATMAPS_PATH / f'{bmap.id}.osu'
 
-                                calc = Maniera(path, mods, 0)
-                                calc.sr = calc._calculateStars()
-                                pp_values = []
+                                    calc = Maniera(path, mods, 0)
+                                    calc.sr = calc._calculateStars()
+                                    pp_values = []
 
-                                for score in glob.config.pp_cached_scores:
-                                    calc.score = score
-                                    pp_values.append((score, calc._calculatePP()))
+                                    for score in glob.config.pp_cached_scores:
+                                        calc.score = score
+                                        pp_values.append((score, calc._calculatePP()))
 
-                                msg = ' | '.join([
-                                    f'{score // 1000:.0f}k: {pp:,.2f}pp'
-                                    for score, pp in pp_values
-                                ])
-                                """
+                                    msg = ' | '.join([
+                                        f'{score // 1000:.0f}k: {pp:,.2f}pp'
+                                        for score, pp in pp_values
+                                    ])
 
-                            elapsed = time.time_ns() - pp_calc_st
-                            msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
+                                elapsed = time.time_ns() - pp_calc_st
+                                msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
                     else:
                         msg = 'Could not find map.'
 
