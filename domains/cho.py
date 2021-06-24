@@ -16,6 +16,7 @@ import bcrypt
 from cmyui.logging import Ansi
 from cmyui.logging import AnsiRGB
 from cmyui.logging import log
+from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from cmyui.utils import _isdecimal
 from cmyui.web import Connection
@@ -46,7 +47,6 @@ from objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
-from utils.oppai_api import OppaiWrapper
 
 """ Bancho: handle connections from the osu! client """
 
@@ -963,7 +963,8 @@ class SendPrivateMessage(BasePacket):
 
                         # calculate generic pp values from their /np
 
-                        if not await ensure_local_osu_file(bmap.id, bmap.md5):
+                        osu_file_path = BEATMAPS_PATH / f'{bmap.id}.osu'
+                        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
                             resp_msg = ('Mapfile could not be found; '
                                         'this incident has been reported.')
                         else:
@@ -971,20 +972,21 @@ class SendPrivateMessage(BasePacket):
                             pp_calc_st = time.time_ns()
 
                             if mode_vn in (0, 1): # osu, taiko
-                                with OppaiWrapper(bmap.id) as ez:
+                                with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
                                     # std & taiko, use oppai-ng to calc pp
                                     if r_match['mods'] is not None:
                                         # [1:] to remove leading whitespace
                                         mods_str = r_match['mods'][1:]
-                                        ez.set_mods(Mods.from_np(mods_str, mode_vn))
+                                        mods = Mods.from_np(mods_str, mode_vn)
+                                        ezpp.set_mods(int(mods))
 
                                     pp_values = [] # [(acc, pp), ...]
 
                                     for acc in glob.config.pp_cached_accs:
-                                        ez.set_accuracy_percent(acc)
-                                        ez.calculate()
+                                        ezpp.set_accuracy_percent(acc)
+                                        ezpp.calculate(osu_file_path)
 
-                                        pp_values.append((acc, ez.get_pp()))
+                                        pp_values.append((acc, ezpp.get_pp()))
 
                                     resp_msg = ' | '.join([
                                         f'{acc}%: {pp:,.2f}pp'
@@ -1003,9 +1005,7 @@ class SendPrivateMessage(BasePacket):
                                     else:
                                         mods = 0
 
-                                    path = BEATMAPS_PATH / f'{bmap.id}.osu'
-
-                                    calc = Maniera(path, mods, 0)
+                                    calc = Maniera(str(osu_file_path), mods, 0)
                                     calc.sr = calc._calculateStars()
                                     pp_values = []
 

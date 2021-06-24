@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
 from py3rijndael import RijndaelCbc
 from py3rijndael import ZeroPadding
@@ -22,7 +23,6 @@ from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
-from utils.oppai_api import OppaiWrapper
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -282,8 +282,9 @@ class Score:
         # now we can calculate things based on our data.
         s.calc_accuracy()
 
-        if s.bmap and await ensure_local_osu_file(s.bmap.id, s.bmap.md5):
-            s.pp, s.sr = s.calc_diff()
+        osu_file_path = BEATMAPS_PATH / f'{s.bmap.id}.osu'
+        if s.bmap and await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
+            s.pp, s.sr = s.calc_diff(osu_file_path)
 
             if s.passed:
                 await s.calc_status()
@@ -323,28 +324,25 @@ class Score:
 
         return res['c'] + 1 if res else 1
 
-    # could be staticmethod?
-    # we'll see after some usage of gulag
-    # whether it's beneficial or not.
-    def calc_diff(self) -> tuple[float, float]:
+    def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
         if mode_vn in (0, 1): # osu, taiko
-            with OppaiWrapper(self.bmap.id) as ez:
-                ez.set_accuracy_percent(self.acc)
-                ez.set_combo(self.max_combo)
-                ez.set_nmiss(self.nmiss)
+            with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                ezpp.set_accuracy_percent(self.acc)
+                ezpp.set_combo(self.max_combo)
+                ezpp.set_nmiss(self.nmiss)
 
                 if self.mods:
-                    ez.set_mods(self.mods)
+                    ezpp.set_mods(int(self.mods))
 
                 if mode_vn:
-                    ez.set_mode_vn(mode_vn)
+                    ezpp.set_mode(mode_vn)
 
-                ez.calculate()
+                ezpp.calculate(osu_file_path)
 
-                return (ez.get_pp(), ez.get_sr())
+                return (ezpp.get_pp(), ezpp.get_sr())
         elif mode_vn == 2: # catch
             return (0.0, 0.0)
         else: # mania
@@ -356,8 +354,7 @@ class Score:
             else:
                 mods = 0
 
-            path = BEATMAPS_PATH / f'{self.id}.osu'
-            calc = Maniera(path, mods, self.score)
+            calc = Maniera(str(osu_file_path), mods, self.score)
             calc.calculate()
 
             return (calc.pp, calc.sr)

@@ -28,6 +28,7 @@ from pathlib import Path
 import aiomysql
 import cmyui.utils
 import psutil
+from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
 
 import packets
@@ -52,7 +53,6 @@ from objects.match import SlotStatus
 from objects.player import Player
 from objects.score import SubmissionStatus
 from utils.misc import seconds_readable
-from utils.oppai_api import OppaiWrapper
 
 if TYPE_CHECKING:
     from objects.channel import Channel
@@ -328,7 +328,8 @@ async def _with(ctx: Context) -> str:
 
     bmap: Beatmap = ctx.player.last_np['bmap']
 
-    if not await ensure_local_osu_file(bmap.id, bmap.md5):
+    osu_file_path = BEATMAPS_PATH / f'{bmap.id}.osu'
+    if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
         return ('Mapfile could not be found; '
                 'this incident has been reported.')
 
@@ -351,13 +352,14 @@ async def _with(ctx: Context) -> str:
             else:
                 return 'Invalid syntax: !with <acc/mods ...>'
 
-        with OppaiWrapper(bmap.id) as ez:
-            ez.set_accuracy_percent(acc)
-            if mods: ez.set_mods(mods)
+        with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+            ezpp.set_accuracy_percent(acc)
+            if mods:
+                ezpp.set_mods(int(mods))
 
-            ez.calculate()
+            ezpp.calculate(osu_file_path)
 
-            return f'{acc:.2f}% {mods!r}: {ez.get_pp():.2f}pp ({ez.get_sr():.2f}*)'
+            return f'{acc:.2f}% {mods!r}: {ezpp.get_pp():.2f}pp ({ezpp.get_sr():.2f}*)'
     elif mode_vn == 2: # catch
         return 'Gamemode not yet supported.'
     else: # mania
@@ -369,18 +371,17 @@ async def _with(ctx: Context) -> str:
 
         for param in (p.strip('+k') for p in ctx.args):
             if cmyui.utils._isdecimal(param): # acc
-                if not 0 <= (score := float(param)) <= 1000:
+                if not 0 <= (score := int(param)) <= 1000:
                     return 'Invalid score.'
-                if score < 500:
-                    return '<500k score is always 0pp.'
+                if score <= 500:
+                    return '<=500k score is always 0pp.'
             elif len(param) % 2 == 0:
                 mods = Mods.from_modstr(param)
                 mods = mods.filter_invalid_combos(mode_vn)
             else:
                 return 'Invalid syntax: !with <score/mods ...>'
 
-        path = BEATMAPS_PATH / f'{bmap.id}.osu'
-        calc = Maniera(path, int(mods), int(score * 1000))
+        calc = Maniera(str(osu_file_path), int(mods), score * 1000)
         calc.calculate()
 
         return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.sr:.2f}*)'
@@ -986,7 +987,8 @@ async def recalc(ctx: Context) -> str:
 
         bmap: Beatmap = ctx.player.last_np['bmap']
 
-        if not await ensure_local_osu_file(bmap.id, bmap.md5):
+        osu_file_path = BEATMAPS_PATH / f'{bmap.id}.osu'
+        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
             return ('Mapfile could not be found; '
                     'this incident has been reported.')
 
@@ -995,8 +997,8 @@ async def recalc(ctx: Context) -> str:
                 conn.cursor(aiomysql.DictCursor) as select_cursor,
                 conn.cursor(aiomysql.Cursor) as update_cursor
             ):
-                with OppaiWrapper(bmap.id) as ez:
-                    ez.set_mode_vn(0) # TODO: other modes
+                with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                    ezpp.set_mode(0) # TODO: other modes
                     for table in ('scores_vn', 'scores_rx', 'scores_ap'):
                         await select_cursor.execute(
                             'SELECT id, acc, mods, max_combo, nmiss '
@@ -1006,18 +1008,18 @@ async def recalc(ctx: Context) -> str:
                         )
 
                         async for row in select_cursor:
-                            ez.set_accuracy_percent(row['acc'])
-                            ez.set_mods_int(row['mods'])
-                            ez.set_combo(row['max_combo'])
-                            ez.set_nmiss(row['nmiss'])
+                            ezpp.set_accuracy_percent(row['acc'])
+                            ezpp.set_mods(row['mods'])
+                            ezpp.set_combo(row['max_combo'])
+                            ezpp.set_nmiss(row['nmiss'])
 
-                            ez.calculate()
+                            ezpp.calculate(osu_file_path)
 
                             await update_cursor.execute(
                                 f'UPDATE {table} '
                                 'SET pp = %s '
                                 'WHERE id = %s',
-                                [ez.get_pp(), row['id']]
+                                [ezpp.get_pp(), row['id']]
                             )
     else:
         # recalc all plays on the server, on all maps
@@ -1045,13 +1047,14 @@ async def recalc(ctx: Context) -> str:
                     async for bmap_row in bmap_select_cursor:
                         bmap_id, bmap_md5 = bmap_row
 
-                        if not await ensure_local_osu_file(bmap_id, bmap_md5):
+                        osu_file_path = BEATMAPS_PATH / f'{bmap.id}.osu'
+                        if not await ensure_local_osu_file(osu_file_path, bmap_id, bmap_md5):
                             staff_chan.send_bot("[Recalc] Couldn't find "
                                                 f"{bmap_id} / {bmap_md5}")
                             continue
 
-                        with OppaiWrapper(bmap_id) as ez:
-                            ez.set_mode_vn(0) # TODO: other modes
+                        with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                            ezpp.set_mode(0) # TODO: other modes
                             for table in ('scores_vn', 'scores_rx', 'scores_ap'):
                                 await score_select_cursor.execute(
                                     'SELECT id, acc, mods, max_combo, nmiss '
@@ -1061,18 +1064,18 @@ async def recalc(ctx: Context) -> str:
                                 )
 
                                 async for row in score_select_cursor:
-                                    ez.set_accuracy_percent(row['acc'])
-                                    ez.set_mods_int(row['mods'])
-                                    ez.set_combo(row['max_combo'])
-                                    ez.set_nmiss(row['nmiss'])
+                                    ezpp.set_accuracy_percent(row['acc'])
+                                    ezpp.set_mods(row['mods'])
+                                    ezpp.set_combo(row['max_combo'])
+                                    ezpp.set_nmiss(row['nmiss'])
 
-                                    ez.calculate()
+                                    ezpp.calculate(osu_file_path)
 
                                     await update_cursor.execute(
                                         f'UPDATE {table} '
                                         'SET pp = %s '
                                         'WHERE id = %s',
-                                        [ez.get_pp(), row['id']]
+                                        [ezpp.get_pp(), row['id']]
                                     )
 
                         # leave at least 1/100th of

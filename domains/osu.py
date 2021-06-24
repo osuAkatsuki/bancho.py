@@ -2188,14 +2188,14 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
         )):
             return (404, b'') # map not found in sql
 
-        path = BEATMAPS_PATH / f'{res["id"]}.osu'
+        osu_file_path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
         if (
-            path.exists() and
-            res['md5'] == hashlib.md5(path.read_bytes()).hexdigest()
+            osu_file_path.exists() and
+            res['md5'] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
         ):
             # up to date map found on disk.
-            content = path.read_bytes()
+            content = osu_file_path.read_bytes()
         else:
             if not glob.has_internet:
                 return (503, b'') # requires internet connection
@@ -2205,13 +2205,13 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
 
             async with glob.http.get(url) as resp:
                 if not resp or resp.status != 200:
-                    log(f'Could not find map {path}!', Ansi.LRED)
+                    log(f'Could not find map {osu_file_path}!', Ansi.LRED)
                     return (404, b'') # couldn't find on osu!'s server
 
                 content = await resp.read()
 
             # save it to disk for future
-            path.write_bytes(content)
+            osu_file_path.write_bytes(content)
 
         return content
     else:

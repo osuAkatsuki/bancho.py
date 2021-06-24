@@ -49,14 +49,15 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[dict[str, object]]:
         ):
             return await resp.json()
 
-async def ensure_local_osu_file(bmap_id: int, bmap_md5: str) -> bool:
+async def ensure_local_osu_file(
+    osu_file_path: Path,
+    bmap_id: int, bmap_md5: str
+) -> bool:
     """Ensure we have the latest .osu file locally,
        downloading it from the osu!api if required."""
-    path = BEATMAPS_PATH / f'{bmap_id}.osu'
-
     if (
-        not path.exists() or
-        hashlib.md5(path.read_bytes()).hexdigest() != bmap_md5
+        not osu_file_path.exists() or
+        hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
         if glob.app.debug:
@@ -70,7 +71,7 @@ async def ensure_local_osu_file(bmap_id: int, bmap_md5: str) -> bool:
                 await utils.misc.log_strange_occurrence(stacktrace)
                 return False
 
-            path.write_bytes(await r.read())
+            osu_file_path.write_bytes(await r.read())
 
     return True
 
