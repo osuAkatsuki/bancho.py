@@ -1327,10 +1327,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
         sttime = mp_args['starttime']
         comment = mp_args['comment']
 
-        if (
-            'f' in mp_args and
-            p.priv & Privileges.Donator
-        ):
+        if 'f' in mp_args and p.priv & Privileges.Donator:
             # only supporters can use colours.
             # XXX: colour may still be none,
             # since mp_args is a defaultdict.
@@ -1523,30 +1520,32 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
 
     api_data = {}
 
-    if conn.args['scope'] in ('info', 'all'): # user info
-        res = await glob.db.fetch(
+    # fetch user's info if requested
+    if conn.args['scope'] in ('info', 'all'):
+        info_res = await glob.db.fetch(
             'SELECT id, name, safe_name, '
-            'priv, country, silence_end ' # silence_end public?
+            'priv, country, silence_end '
             'FROM users WHERE id = %s',
             [pid]
         )
 
-        if not res:
+        if not info_res:
             return (404, JSON({'status': 'Player not found'}))
 
-        api_data |= res
+        api_data |= info_res
 
-    if conn.args['scope'] in ('stats', 'all'): # user stats
+    # fetch user's stats if requested
+    if conn.args['scope'] in ('stats', 'all'):
         # get all regular stats
-        res = await glob.db.fetch(
+        stats_res = await glob.db.fetch(
             'SELECT * FROM stats '
             'WHERE id = %s', [pid]
         )
 
-        if not res:
+        if not stats_res:
             return (404, JSON({'status': 'Player not found'}))
 
-        api_data |= res
+        api_data |= stats_res
 
     return orjson.dumps({'status': 'success', 'player': api_data})
 
@@ -1599,28 +1598,7 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
                 'info_text': p.status.info_text,
                 'mode': int(p.status.mode),
                 'mods': int(p.status.mods),
-                'beatmap': {
-                    'md5': bmap.md5,
-                    'id': bmap.id,
-                    'set_id': bmap.set_id,
-                    'artist': bmap.artist,
-                    'title': bmap.title,
-                    'version': bmap.version,
-                    'creator': bmap.creator,
-                    'last_update': bmap.last_update,
-                    'total_length': bmap.total_length,
-                    'max_combo': bmap.max_combo,
-                    'status': bmap.status,
-                    'plays': bmap.plays,
-                    'passes': bmap.passes,
-                    'mode': bmap.mode,
-                    'bpm': bmap.bpm,
-                    'cs': bmap.cs,
-                    'od': bmap.od,
-                    'ar': bmap.ar,
-                    'hp': bmap.hp,
-                    'diff': bmap.diff
-                } if bmap else None
+                'beatmap': bmap.as_dict if bmap else None
             }
         }
     })
@@ -1718,28 +1696,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
 
     for row in res:
         bmap = await Beatmap.from_md5(row.pop('map_md5'))
-        row['beatmap'] = {
-            'md5': bmap.md5,
-            'id': bmap.id,
-            'set_id': bmap.set_id,
-            'artist': bmap.artist,
-            'title': bmap.title,
-            'version': bmap.version,
-            'creator': bmap.creator,
-            'last_update': bmap.last_update,
-            'total_length': bmap.total_length,
-            'max_combo': bmap.max_combo,
-            'status': bmap.status,
-            'plays': bmap.plays,
-            'passes': bmap.passes,
-            'mode': bmap.mode,
-            'bpm': bmap.bpm,
-            'cs': bmap.cs,
-            'od': bmap.od,
-            'ar': bmap.ar,
-            'hp': bmap.hp,
-            'diff': bmap.diff
-        }
+        row['beatmap'] = bmap.as_dict
 
     player_info = {
         'id': p.id,
@@ -1831,28 +1788,7 @@ async def api_get_map_info(conn: Connection) -> Optional[bytes]:
 
     return JSON({
         'status': 'success',
-        'map': {
-            'md5': bmap.md5,
-            'id': bmap.id,
-            'set_id': bmap.set_id,
-            'artist': bmap.artist,
-            'title': bmap.title,
-            'version': bmap.version,
-            'creator': bmap.creator,
-            'last_update': bmap.last_update,
-            'total_length': bmap.total_length,
-            'max_combo': bmap.max_combo,
-            'status': bmap.status,
-            'plays': bmap.plays,
-            'passes': bmap.passes,
-            'mode': bmap.mode,
-            'bpm': bmap.bpm,
-            'cs': bmap.cs,
-            'od': bmap.od,
-            'ar': bmap.ar,
-            'hp': bmap.hp,
-            'diff': bmap.diff
-        }
+        'map': bmap.as_dict
     })
 
 @domain.route('/api/get_map_scores')

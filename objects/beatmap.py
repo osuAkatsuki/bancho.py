@@ -203,11 +203,11 @@ class Beatmap:
     """
     __slots__ = ('set', 'md5', 'id', 'set_id',
                  'artist', 'title', 'version', 'creator',
-                 'filename', 'last_update', 'total_length',
+                 'last_update', 'total_length',
                  'max_combo', 'status', 'frozen',
                  'plays', 'passes', 'mode', 'bpm',
-                 'cs', 'od', 'ar', 'hp',
-                 'diff', 'pp_cache')
+                 'cs', 'od', 'ar', 'hp', 'diff',
+                 'filename', 'pp_cache')
 
     def __init__(self, **kwargs) -> None:
         self.set: Optional[BeatmapSet] = None
@@ -221,8 +221,6 @@ class Beatmap:
         self.version = kwargs.get('version', '') # diff name
         self.creator = kwargs.get('creator', '')
 
-        self.filename = kwargs.get('filename', '')
-
         self.last_update = kwargs.get('last_update', DEFAULT_LAST_UPDATE)
         self.total_length = kwargs.get('total_length', 0)
         self.max_combo = kwargs.get('max_combo', 0)
@@ -232,15 +230,17 @@ class Beatmap:
 
         self.plays = kwargs.get('plays', 0)
         self.passes = kwargs.get('passes', 0)
-
         self.mode = GameMode(kwargs.get('mode', 0))
         self.bpm = kwargs.get('bpm', 0.0)
+
         self.cs = kwargs.get('cs', 0.0)
         self.od = kwargs.get('od', 0.0)
         self.ar = kwargs.get('ar', 0.0)
         self.hp = kwargs.get('hp', 0.0)
 
         self.diff = kwargs.get('diff', 0.00)
+
+        self.filename = kwargs.get('filename', '')
         self.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}} # {mode_vn: {mods: (acc/score: pp, ...), ...}}
 
     def __repr__(self) -> str:
@@ -266,6 +266,31 @@ class Beatmap:
         """Return whether the map's status awards pp for scores."""
         return self.status in (RankedStatus.Ranked,
                                RankedStatus.Approved)
+
+    @functools.cached_property
+    def as_dict(self) -> dict[str, object]:
+        return {
+            'md5': self.md5,
+            'id': self.id,
+            'set_id': self.set_id,
+            'artist': self.artist,
+            'title': self.title,
+            'version': self.version,
+            'creator': self.creator,
+            'last_update': self.last_update,
+            'total_length': self.total_length,
+            'max_combo': self.max_combo,
+            'status': self.status,
+            'plays': self.plays,
+            'passes': self.passes,
+            'mode': self.mode,
+            'bpm': self.bpm,
+            'cs': self.cs,
+            'od': self.od,
+            'ar': self.ar,
+            'hp': self.hp,
+            'diff': self.diff
+        }
 
     # TODO: implement some locking for the map fetch methods
 
