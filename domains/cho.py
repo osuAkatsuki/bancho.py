@@ -919,13 +919,13 @@ class SendPrivateMessage(BasePacket):
                     'receive your messsage on their next login.'
                 ))
 
-                # insert mail into db, marked as unread.
-                await glob.db.execute(
-                    'INSERT INTO `mail` '
-                    '(`from_id`, `to_id`, `msg`, `time`) '
-                    'VALUES (%s, %s, %s, UNIX_TIMESTAMP())',
-                    [p.id, t.id, msg]
-                )
+            # insert mail into db, marked as unread.
+            await glob.db.execute(
+                'INSERT INTO `mail` '
+                '(`from_id`, `to_id`, `msg`, `time`) '
+                'VALUES (%s, %s, %s, UNIX_TIMESTAMP())',
+                [p.id, t.id, msg]
+            )
         else:
             # messaging the bot, check for commands & /np.
             cmd = (msg.startswith(glob.config.command_prefix) and
