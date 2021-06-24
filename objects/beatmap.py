@@ -716,7 +716,7 @@ class BeatmapSet:
             return self
 
     @classmethod
-    async def from_bsid(cls, bsid: int) -> Optional['Beatmap']:
+    async def from_bsid(cls, bsid: int) -> Optional['BeatmapSet']:
         """Cache all maps in a set from the osuapi, optionally
            returning beatmaps by their md5 or id."""
         bmap_set = await cls._from_bsid_cache(bsid)

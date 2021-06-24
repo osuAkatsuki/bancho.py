@@ -99,6 +99,11 @@ class Channel:
         """Enqueue `msg` to all connected clients from bot."""
         bot = glob.bot
 
+        msg_len = len(msg)
+
+        if msg_len >= 31979: # TODO ??????????
+            msg = f'message would have crashed games ({msg_len} chars)'
+
         self.enqueue(
             packets.sendMessage(
                 sender=bot.name,
