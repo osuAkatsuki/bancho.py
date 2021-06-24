@@ -353,9 +353,10 @@ async def _with(ctx: Context) -> str:
                 return 'Invalid syntax: !with <acc/mods ...>'
 
         with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
-            ezpp.set_accuracy_percent(acc)
             if mods:
                 ezpp.set_mods(int(mods))
+
+            ezpp.set_accuracy_percent(acc)
 
             ezpp.calculate(osu_file_path)
 
@@ -1008,10 +1009,10 @@ async def recalc(ctx: Context) -> str:
                         )
 
                         async for row in select_cursor:
-                            ezpp.set_accuracy_percent(row['acc'])
                             ezpp.set_mods(row['mods'])
+                            ezpp.set_nmiss(row['nmiss']) # clobbers acc
                             ezpp.set_combo(row['max_combo'])
-                            ezpp.set_nmiss(row['nmiss'])
+                            ezpp.set_accuracy_percent(row['acc'])
 
                             ezpp.calculate(osu_file_path)
 
@@ -1021,6 +1022,8 @@ async def recalc(ctx: Context) -> str:
                                 'WHERE id = %s',
                                 [ezpp.get_pp(), row['id']]
                             )
+
+        return 'Map recalculated.'
     else:
         # recalc all plays on the server, on all maps
         staff_chan = glob.channels['#staff'] # log any errs here
@@ -1047,7 +1050,7 @@ async def recalc(ctx: Context) -> str:
                     async for bmap_row in bmap_select_cursor:
                         bmap_id, bmap_md5 = bmap_row
 
-                        osu_file_path = BEATMAPS_PATH / f'{bmap.id}.osu'
+                        osu_file_path = BEATMAPS_PATH / f'{bmap_id}.osu'
                         if not await ensure_local_osu_file(osu_file_path, bmap_id, bmap_md5):
                             staff_chan.send_bot("[Recalc] Couldn't find "
                                                 f"{bmap_id} / {bmap_md5}")
@@ -1064,10 +1067,10 @@ async def recalc(ctx: Context) -> str:
                                 )
 
                                 async for row in score_select_cursor:
-                                    ezpp.set_accuracy_percent(row['acc'])
                                     ezpp.set_mods(row['mods'])
+                                    ezpp.set_nmiss(row['nmiss']) # clobbers acc
                                     ezpp.set_combo(row['max_combo'])
-                                    ezpp.set_nmiss(row['nmiss'])
+                                    ezpp.set_accuracy_percent(row['acc'])
 
                                     ezpp.calculate(osu_file_path)
 
@@ -1087,7 +1090,7 @@ async def recalc(ctx: Context) -> str:
 
         glob.loop.create_task(recalc_all())
 
-    return 'Starting a full recalculation.'
+        return 'Starting a full recalculation.'
 
 @command(Privileges.Dangerous, hidden=True)
 async def debug(ctx: Context) -> str:

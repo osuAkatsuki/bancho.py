@@ -330,15 +330,15 @@ class Score:
 
         if mode_vn in (0, 1): # osu, taiko
             with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
-                ezpp.set_accuracy_percent(self.acc)
-                ezpp.set_combo(self.max_combo)
-                ezpp.set_nmiss(self.nmiss)
-
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
 
                 if mode_vn:
                     ezpp.set_mode(mode_vn)
+
+                ezpp.set_combo(self.max_combo)
+                ezpp.set_nmiss(self.nmiss) # clobbers acc
+                ezpp.set_accuracy_percent(self.acc)
 
                 ezpp.calculate(osu_file_path)
 
