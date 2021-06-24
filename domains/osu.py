@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Union
 from urllib.parse import unquote
 
 import aiomysql
@@ -46,6 +47,8 @@ from utils.misc import pymysql_encode
 if TYPE_CHECKING:
     from objects.player import Player
 
+HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
+
 """ osu: handle connections from web, api, and beyond? """
 
 BASE_DOMAIN = glob.config.domain
@@ -67,7 +70,7 @@ def _required_args(req_args: set[str], argset: str) -> Callable:
         # modify the handler code to ensure that
         # all arguments are sent in the request.
         @wraps(f)
-        async def handler(conn: Connection) -> Optional[bytes]:
+        async def handler(conn: Connection) -> HTTPResponse:
             args = getattr(conn, argset)
 
             if args.keys() >= req_args:
@@ -97,7 +100,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
         # modify the handler code to get the player
         # object before calling the handler itself.
         @wraps(f)
-        async def handler(conn: Connection) -> Optional[bytes]:
+        async def handler(conn: Connection) -> HTTPResponse:
             # args may be provided in regular args
             # or multipart, but only one at a time.
             argset = conn.args or conn.multipart_args
@@ -121,7 +124,7 @@ def acquire_db_conn(cursor_cls = aiomysql.Cursor) -> Callable:
        connection & cursor for a handler."""
     def wrapper(f: Callable) -> Callable:
         @wraps(f)
-        async def handler(*args) -> Optional[bytes]:
+        async def handler(*args) -> HTTPResponse:
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(cursor_cls) as db_cursor:
                     return await f(*args, db_cursor)
@@ -138,7 +141,7 @@ def acquire_db_conn(cursor_cls = aiomysql.Cursor) -> Callable:
 # GET /web/osu-get-beatmap-topic.php
 
 @domain.route('/web/osu-error.php', methods=['POST'])
-async def osuError(conn: Connection) -> Optional[bytes]:
+async def osuError(conn: Connection) -> HTTPResponse:
     if glob.app.debug:
         err_args = conn.multipart_args
         if 'u' in err_args and 'p' in err_args:
@@ -164,7 +167,7 @@ async def osuError(conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
 @get_login(name_p='u', pass_p='p')
-async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
     if 'ss' not in conn.files:
         log('Screenshot req missing file.', Ansi.LRED)
         return (400, b'Missing file.')
@@ -210,7 +213,7 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-getfriends.php')
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
-async def osuGetFriends(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuGetFriends(p: 'Player', conn: Connection) -> HTTPResponse:
     return '\n'.join(map(str, p.friends)).encode()
 
 _gulag_osuapi_status_map = {
@@ -231,7 +234,7 @@ async def osuGetBeatmapInfo(
     p: 'Player',
     conn: Connection,
     db_cursor: aiomysql.DictCursor
-) -> Optional[bytes]:
+) -> HTTPResponse:
     data = orjson.loads(conn.body)
 
     num_requests = len(data['Filenames']) + len(data['Ids'])
@@ -290,7 +293,7 @@ async def osuGetBeatmapInfo(
 @domain.route('/web/osu-getfavourites.php')
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
-async def osuGetFavourites(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuGetFavourites(p: 'Player', conn: Connection) -> HTTPResponse:
     favourites = await glob.db.fetchall(
         'SELECT setid FROM favourites '
         'WHERE userid = %s',
@@ -302,7 +305,7 @@ async def osuGetFavourites(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-addfavourite.php')
 @required_args({'u', 'h', 'a'})
 @get_login(name_p='u', pass_p='h', auth_error=b'Please login to add favourites!')
-async def osuAddFavourite(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuAddFavourite(p: 'Player', conn: Connection) -> HTTPResponse:
     # make sure set id is valid
     if not conn.args['a'].isdecimal():
         return (400, b'Invalid beatmap set id.')
@@ -325,7 +328,7 @@ async def osuAddFavourite(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/lastfm.php')
 @required_args({'b', 'action', 'us', 'ha'})
 @get_login(name_p='us', pass_p='ha')
-async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def lastFM(p: 'Player', conn: Connection) -> HTTPResponse:
     if conn.args['b'][0] != 'a':
         # not anticheat related, tell the
         # client not to send any more for now.
@@ -400,7 +403,7 @@ DIRECT_MAP_INFO_FMTSTR = (
 @domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login(name_p='u', pass_p='h')
-async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
     if not conn.args['p'].isdecimal():
         return (400, b'')
 
@@ -487,7 +490,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-search-set.php')
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
-async def osuSearchSetHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuSearchSetHandler(p: 'Player', conn: Connection) -> HTTPResponse:
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
     if 's' in conn.args:
@@ -551,7 +554,7 @@ def chart_entry(name: str, before: Optional[object], after: object) -> str:
 async def osuSubmitModularSelector(
     conn: Connection,
     db_cursor: aiomysql.DictCursor
-) -> Optional[bytes]:
+) -> HTTPResponse:
     mp_args = conn.multipart_args
 
     # Parse our score data into a score obj.
@@ -966,7 +969,7 @@ async def osuSubmitModularSelector(
 @domain.route('/web/osu-getreplay.php')
 @required_args({'u', 'h', 'm', 'c'})
 @get_login(name_p='u', pass_p='h')
-async def getReplay(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def getReplay(p: 'Player', conn: Connection) -> HTTPResponse:
     if 'c' not in conn.args or not conn.args['c'].isdecimal():
         return # invalid connection
 
@@ -989,7 +992,7 @@ async def osuRate(
     p: 'Player',
     conn: Connection,
     db_cursor: aiomysql.Cursor
-) -> Optional[bytes]:
+) -> HTTPResponse:
     map_md5 = conn.args['c']
 
     if 'v' not in conn.args:
@@ -1061,7 +1064,7 @@ async def getScores(
     p: 'Player',
     conn: Connection,
     db_cursor: aiomysql.DictCursor
-) -> Optional[bytes]:
+) -> HTTPResponse:
     if not all([ # make sure all int args are integral
         _isdecimal(conn.args[k], _negative=True)
         for k in ('mods', 'v', 'm', 'i')
@@ -1270,7 +1273,7 @@ async def getScores(
 @required_mpargs({'u', 'p', 'b', 's',
                   'm', 'r', 'a'})
 @get_login(name_p='u', pass_p='p')
-async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuComment(p: 'Player', conn: Connection) -> HTTPResponse:
     mp_args = conn.multipart_args
 
     action = mp_args['a']
@@ -1354,7 +1357,7 @@ async def osuComment(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-markasread.php')
 @required_args({'u', 'h', 'channel'})
 @get_login(name_p='u', pass_p='h')
-async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
+async def osuMarkAsRead(p: 'Player', conn: Connection) -> HTTPResponse:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
@@ -1368,11 +1371,11 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> Optional[bytes]:
         )
 
 @domain.route('/web/osu-getseasonal.php')
-async def osuSeasonal(conn: Connection) -> Optional[bytes]:
+async def osuSeasonal(conn: Connection) -> HTTPResponse:
     return orjson.dumps(glob.config.seasonal_bgs)
 
 @domain.route('/web/bancho_connect.php')
-async def banchoConnect(conn: Connection) -> Optional[bytes]:
+async def banchoConnect(conn: Connection) -> HTTPResponse:
     if 'v' in conn.args:
         # TODO: implement verification..?
         # long term. For now, just send an empty reply
@@ -1395,7 +1398,7 @@ _checkupdates_cache = { # default timeout is 1h, set on request.
 # NOTE: this will only be triggered when using a server switcher.
 @domain.route('/web/check-updates.php')
 @required_args({'action', 'stream'})
-async def checkUpdates(conn: Connection) -> Optional[bytes]:
+async def checkUpdates(conn: Connection) -> HTTPResponse:
     if not glob.has_internet:
         return (503, b'') # requires internet connection
 
@@ -1466,7 +1469,7 @@ SCOREID_BORDERS = tuple(
 )
 
 @domain.route('/api/get_player_count')
-async def api_get_player_count(conn: Connection) -> Optional[bytes]:
+async def api_get_player_count(conn: Connection) -> HTTPResponse:
     """Get the current amount of online players."""
     conn.resp_headers['Content-Type'] = f'application/json'
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
@@ -1485,7 +1488,7 @@ async def api_get_player_count(conn: Connection) -> Optional[bytes]:
     })
 
 @domain.route('/api/get_player_info')
-async def api_get_player_info(conn: Connection) -> Optional[bytes]:
+async def api_get_player_info(conn: Connection) -> HTTPResponse:
     """Return information about a given player."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if 'name' not in conn.args and 'id' not in conn.args:
@@ -1550,7 +1553,7 @@ async def api_get_player_info(conn: Connection) -> Optional[bytes]:
     return orjson.dumps({'status': 'success', 'player': api_data})
 
 @domain.route('/api/get_player_status')
-async def api_get_player_status(conn: Connection) -> Optional[bytes]:
+async def api_get_player_status(conn: Connection) -> HTTPResponse:
     """Return a players current status, if they are online."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
@@ -1604,7 +1607,7 @@ async def api_get_player_status(conn: Connection) -> Optional[bytes]:
     })
 
 @domain.route('/api/get_player_scores')
-async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
+async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     """Return a list of a given user's recent/best scores."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
@@ -1711,7 +1714,7 @@ async def api_get_player_scores(conn: Connection) -> Optional[bytes]:
     return JSON({'status': 'success', 'scores': res, 'player': player_info})
 
 @domain.route('/api/get_player_most_played')
-async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
+async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
     conn.resp_headers['Content-Type'] = f'application/json'
@@ -1769,7 +1772,7 @@ async def api_get_player_most_played(conn: Connection) -> Optional[bytes]:
     return JSON({'status': 'success', 'maps': res})
 
 @domain.route('/api/get_map_info')
-async def api_get_map_info(conn: Connection) -> Optional[bytes]:
+async def api_get_map_info(conn: Connection) -> HTTPResponse:
     """Return information about a given beatmap."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
@@ -1792,7 +1795,7 @@ async def api_get_map_info(conn: Connection) -> Optional[bytes]:
     })
 
 @domain.route('/api/get_map_scores')
-async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
+async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     """Return the top n scores on a given beatmap."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if 'id' in conn.args:
@@ -1892,7 +1895,7 @@ async def api_get_map_scores(conn: Connection) -> Optional[bytes]:
     return JSON({'status': 'success', 'scores': res})
 
 @domain.route('/api/get_score_info')
-async def api_get_score_info(conn: Connection) -> Optional[bytes]:
+async def api_get_score_info(conn: Connection) -> HTTPResponse:
     """Return information about a given score."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if not (
@@ -1927,7 +1930,7 @@ async def api_get_score_info(conn: Connection) -> Optional[bytes]:
     return JSON({'status': 'success', 'score': res})
 
 @domain.route('/api/get_replay')
-async def api_get_replay(conn: Connection) -> Optional[bytes]:
+async def api_get_replay(conn: Connection) -> HTTPResponse:
     """Return a given replay (including headers)."""
     conn.resp_headers['Content-Type'] = f'application/json'
     if not (
@@ -2034,7 +2037,7 @@ async def api_get_replay(conn: Connection) -> Optional[bytes]:
     return JSON({'status': 'success', 'replay': bytes(buf)})
 
 @domain.route('/api/get_match')
-async def api_get_match(conn: Connection) -> Optional[bytes]:
+async def api_get_match(conn: Connection) -> HTTPResponse:
     """Return information of a given multiplayer match."""
     conn.resp_headers['Content-Type'] = f'application/json'
     # TODO: eventually, this should contain recent score info.
@@ -2085,7 +2088,7 @@ async def api_get_match(conn: Connection) -> Optional[bytes]:
 
 def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
-    async def wrapper(conn: Connection) -> Optional[bytes]:
+    async def wrapper(conn: Connection) -> HTTPResponse:
         conn.resp_headers['Content-Type'] = f'application/json'
         if 'Authorization' not in conn.headers:
             return (400, JSON({'status': 'Must provide authorization token.'}))
@@ -2107,7 +2110,7 @@ def requires_api_key(f: Callable) -> Callable:
 
 @domain.route('/api/set_avatar', methods=['POST', 'PUT'])
 @requires_api_key
-async def api_set_avatar(conn: Connection, p: 'Player') -> Optional[bytes]:
+async def api_set_avatar(conn: Connection, p: 'Player') -> HTTPResponse:
     """Update the tokenholder's avatar to a given file."""
     if 'avatar' not in conn.files:
         return (400, JSON({'status': 'must provide avatar file.'}))
@@ -2136,13 +2139,13 @@ if glob.config.redirect_osu_urls:
     @domain.route({re.compile(r'^/beatmapsets/\d{1,10}(?:/discussion)?/?$'),
                    re.compile(r'^/beatmaps/\d{1,10}/?'),
                    re.compile(r'^/community/forums/topics/\d{1,10}/?$')})
-    async def osu_redirects(conn: Connection) -> Optional[bytes]:
+    async def osu_redirects(conn: Connection) -> HTTPResponse:
         """Redirect some common url's the client uses to osu!."""
         conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
         return (301, b'')
 
 @domain.route(re.compile(r'^/ss/[a-zA-Z0-9-_]{8}\.(png|jpeg)$'))
-async def get_screenshot(conn: Connection) -> Optional[bytes]:
+async def get_screenshot(conn: Connection) -> HTTPResponse:
     """Serve a screenshot from the server, by filename."""
     if len(conn.path) not in (16, 17):
         return (400, b'Invalid request.')
@@ -2155,7 +2158,7 @@ async def get_screenshot(conn: Connection) -> Optional[bytes]:
     return path.read_bytes()
 
 @domain.route(re.compile(r'^/d/\d{1,10}n?$'))
-async def get_osz(conn: Connection) -> Optional[bytes]:
+async def get_osz(conn: Connection) -> HTTPResponse:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     set_id = conn.path[3:]
 
@@ -2171,7 +2174,7 @@ async def get_osz(conn: Connection) -> Optional[bytes]:
     return (301, b'')
 
 @domain.route(re.compile(r'^/web/maps/'))
-async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
+async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
     """Send the latest .osu file the server has for a given map."""
     if conn.headers['Host'] == 'osu.ppy.sh':
         # server switcher, use old method
@@ -2217,7 +2220,7 @@ async def get_updated_beatmap(conn: Connection) -> Optional[bytes]:
         return (301, b'')
 
 @domain.route('/p/doyoureallywanttoaskpeppy')
-async def peppyDMHandler(conn: Connection) -> Optional[bytes]:
+async def peppyDMHandler(conn: Connection) -> HTTPResponse:
     return (
         b"This user's ID is usually peppy's (when on bancho), "
         b"and is blocked from being messaged by the osu! client."
@@ -2231,7 +2234,7 @@ async def peppyDMHandler(conn: Connection) -> Optional[bytes]:
 async def register_account(
     conn: Connection,
     db_cursor: aiomysql.Cursor
-) -> Optional[bytes]:
+) -> HTTPResponse:
     mp_args = conn.multipart_args
 
     name = mp_args['user[username]'].strip()
