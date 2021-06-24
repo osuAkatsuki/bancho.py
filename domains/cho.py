@@ -65,15 +65,8 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
-    if 'CF-Connecting-IP' in conn.headers:
-        ip = conn.headers['CF-Connecting-IP']
-    else:
-        # if the request has been forwarded, get the origin
-        forwards = conn.headers['X-Forwarded-For'].split(',')
-        if len(forwards) != 1:
-            ip = forwards[0]
-        else:
-            ip = conn.headers['X-Real-IP']
+    ip = conn.headers['X-Forwarded-For'] and conn.headers['X-Forwarded-For'].split(',')[0]
+    # TODO: use client ip address if no reverse proxy
 
     if (
         'User-Agent' not in conn.headers or
