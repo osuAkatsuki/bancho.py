@@ -1012,6 +1012,7 @@ class SendPrivateMessage(BasePacket):
 
                                     for score in glob.config.pp_cached_scores:
                                         calc.score = score
+
                                         pp = calc._calculatePP()
 
                                         pp_values.append((score, pp))
@@ -1021,8 +1022,8 @@ class SendPrivateMessage(BasePacket):
                                         for score, pp in pp_values
                                     ])
 
-                                elapsed = time.time_ns() - pp_calc_st
-                                resp_msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
+                            elapsed = time.time_ns() - pp_calc_st
+                            resp_msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
                     else:
                         resp_msg = 'Could not find map.'
 
