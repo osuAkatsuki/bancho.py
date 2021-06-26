@@ -1705,12 +1705,12 @@ async def mp_condition(ctx: Context) -> str:
     ctx.match.enqueue_state(lobby=False)
     return 'Match win condition updated.'
 
-@mp_commands.add(Privileges.Normal)
+@mp_commands.add(Privileges.Normal, aliases=['autoref'])
 async def mp_scrim(ctx: Context) -> str:
     """Start a scrim in the current match."""
     if (
         len(ctx.args) != 1 or
-        not (r_match := re.fullmatch(r'^(?:bo)?(\d{1,2})$', ctx.args[0]))
+        not (r_match := regexes.best_of.fullmatch(ctx.args[0]))
     ):
         return 'Invalid syntax: !mp scrim <bo#>'
 
