@@ -491,8 +491,11 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
 @required_args({'u', 'h'})
 @get_login(name_p='u', pass_p='h')
 async def osuSearchSetHandler(p: 'Player', conn: Connection) -> HTTPResponse:
+    # TODO: refactor this to use the new internal bmap(set) api
+
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
+
     if 's' in conn.args:
         # gulag chat menu: if the argument is negative,
         # check if it's in the players menu options.

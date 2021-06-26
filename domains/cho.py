@@ -1094,7 +1094,7 @@ class MatchCreate(BasePacket):
         self.match.chat.send_bot(f'Match created by {p.name}.')
         log(f'{p} created a new multiplayer match.')
 
-async def check_menu_option(p: Player, key: int):
+async def check_menu_option(p: Player, key: int) -> None:
     if key not in p.menu_options:
         return
 
