@@ -2328,13 +2328,14 @@ async def clan_info(ctx: Context) -> str:
     res = await glob.db.fetchall(
         'SELECT name, clan_priv '
         'FROM users '
-        'WHERE clan_id = %s',
+        'WHERE clan_id = %s '
+        'ORDER BY clan_priv DESC',
         [clan.id], _dict=False
     )
 
-    for name, clan_priv in sorted(res, key=lambda row: row[1]):
+    for member_name, clan_priv in res:
         priv_str = ('Member', 'Officer', 'Owner')[clan_priv - 1]
-        msg.append(f'[{priv_str}] {name}')
+        msg.append(f'[{priv_str}] {member_name}')
 
     return '\n'.join(msg)
 
