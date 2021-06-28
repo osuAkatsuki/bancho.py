@@ -4,7 +4,7 @@ import re
 
 from objects import glob # this will 100% become a problem
 
-__all__ = ('osu_ver', 'username', 'email', 'now_playing')
+__all__ = ('osu_ver', 'username', 'email', 'now_playing', 'best_of')
 
 DOMAIN_ESCAPED = glob.config.domain.replace('.', r'\.')
 
@@ -37,3 +37,5 @@ tourney_matchname = re.compile(
 )
 
 mappool_pick = re.compile(r'^([a-zA-Z]+)([0-9]+)$')
+
+best_of = re.compile(r'^(?:bo)?(\d{1,2})$')

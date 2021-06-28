@@ -237,7 +237,7 @@ class BanchoPacketReader:
     def __iter__(self) -> Iterator[BasePacket]:
         return self
 
-    def __next__(self):
+    def __next__(self) -> BasePacket:
         # do not break until we've read the
         # header of a packet we can handle.
         while self.body_view: # len(self.view) < 7?
@@ -702,7 +702,7 @@ BOT_STATUSES = (
 # `bg_loops.reroll_bot_status` to keep fresh.
 
 @cache
-def botStats():
+def botStats() -> bytes:
     # pick at random from list of potential statuses.
     status_id, status_txt = random.choice(BOT_STATUSES)
 
@@ -1015,7 +1015,7 @@ def matchPlayerSkipped(pid: int) -> bytes:
 # friends list, their presence is requested
 # *very* frequently; only build it once.
 @cache
-def botPresence():
+def botPresence() -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
         (glob.bot.id, osuTypes.i32),

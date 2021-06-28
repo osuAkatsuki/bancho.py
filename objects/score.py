@@ -4,11 +4,14 @@ from base64 import b64decode
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
+from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from cmyui.osu.oppai_ng import OppaiWrapper
+from maniera.calculator import Maniera
 from py3rijndael import RijndaelCbc
 from py3rijndael import ZeroPadding
 
@@ -16,8 +19,8 @@ from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
-from utils.recalculator import PPCalculator
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 
@@ -29,6 +32,8 @@ __all__ = (
     'SubmissionStatus',
     'Score'
 )
+
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 @unique
 @pymysql_encode(escape_enum)
@@ -277,8 +282,9 @@ class Score:
         # now we can calculate things based on our data.
         s.calc_accuracy()
 
-        if s.bmap:
-            s.pp, s.sr = await s.calc_diff()
+        osu_file_path = BEATMAPS_PATH / f'{s.bmap.id}.osu'
+        if s.bmap and await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
+            s.pp, s.sr = s.calc_diff(osu_file_path)
 
             if s.passed:
                 await s.calc_status()
@@ -318,39 +324,40 @@ class Score:
 
         return res['c'] + 1 if res else 1
 
-    # could be staticmethod?
-    # we'll see after some usage of gulag
-    # whether it's beneficial or not.
-    async def calc_diff(self) -> tuple[float, float]:
+    def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn in (0, 1):
-            pp_attrs = {
-                'mods': self.mods,
-                'combo': self.max_combo,
-                'nmiss': self.nmiss,
-                'mode_vn': mode_vn,
-                'acc': self.acc
-            }
-        elif mode_vn == 2:
+        if mode_vn in (0, 1): # osu, taiko
+            with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                if self.mods:
+                    ezpp.set_mods(int(self.mods))
+
+                if mode_vn:
+                    ezpp.set_mode(mode_vn)
+
+                ezpp.set_combo(self.max_combo)
+                ezpp.set_nmiss(self.nmiss) # clobbers acc
+                ezpp.set_accuracy_percent(self.acc)
+
+                ezpp.calculate(osu_file_path)
+
+                return (ezpp.get_pp(), ezpp.get_sr())
+        elif mode_vn == 2: # catch
             return (0.0, 0.0)
-        elif mode_vn == 3:
+        else: # mania
             if self.bmap.mode.as_vanilla != 3:
                 return (0.0, 0.0) # maniera has no convert support
 
-            pp_attrs = {
-                'mods': self.mods,
-                'score': self.score,
-                'mode_vn': mode_vn
-            }
+            if self.mods != Mods.NOMOD:
+                mods = int(self.mods)
+            else:
+                mods = 0
 
-        ppcalc = await PPCalculator.from_map(self.bmap, **pp_attrs)
+            calc = Maniera(str(osu_file_path), mods, self.score)
+            calc.calculate()
 
-        if not ppcalc:
-            return (0.0, 0.0)
-
-        return await ppcalc.perform()
+            return (calc.pp, calc.sr)
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""

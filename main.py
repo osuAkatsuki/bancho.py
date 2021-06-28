@@ -61,7 +61,7 @@ utils.misc.install_excepthook()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 4, 1)
+glob.version = cmyui.Version(3, 5, 0)
 
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
@@ -275,9 +275,9 @@ if __name__ == '__main__':
         if p.wait() == 1:
             sys.exit('Failed to update git submodules.')
 
-    if not (OPPAI_PATH / 'oppai').exists():
-        log('No oppai-ng binary found, attempting to build.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['./build'], cwd='oppai-ng',
+    if not (OPPAI_PATH / 'liboppai.so').exists():
+        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
                              stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
         if p.wait() == 1:

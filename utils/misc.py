@@ -2,7 +2,6 @@
 
 import inspect
 import io
-from re import I
 import requests
 import secrets
 import socket

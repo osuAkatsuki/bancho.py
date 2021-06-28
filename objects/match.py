@@ -264,7 +264,7 @@ class Match:
         self.starting: StartingTimers = {
             'start': None, 'alerts': None, 'time': None
         }
-        self.seed = 0
+        self.seed = 0 # used for mania random mod
 
         self.pool: Optional[MapPool] = None
 
