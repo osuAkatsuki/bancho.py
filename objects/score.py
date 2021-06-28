@@ -397,57 +397,49 @@ class Score:
         mode_vn = self.mode.as_vanilla
 
         if mode_vn == 0: # osu!
-            total = sum((self.n300, self.n100, self.n50, self.nmiss))
+            total = self.n300 + self.n100 + self.n50 + self.nmiss
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * sum((
-                self.n50 * 50.0,
-                self.n100 * 100.0,
-                self.n300 * 300.0
-            )) / (total * 300.0)
+            self.acc = 100.0 * (
+                (self.n300 * 300.0) +
+                (self.n100 * 100.0) +
+                (self.n50 * 50.0)
+            ) / (total * 300.0)
 
         elif mode_vn == 1: # osu!taiko
-            total = sum((self.n300, self.n100, self.nmiss))
+            total = self.n300 + self.n100 + self.nmiss
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * sum((
-                self.n100 * 0.5,
-                self.n300
-            )) / total
+            self.acc = 100.0 * ((self.n100 * 0.5) + self.n300) / total
 
         elif mode_vn == 2:
             # osu!catch
-            total = sum((self.n300, self.n100, self.n50,
-                         self.nkatu, self.nmiss))
+            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * sum((
-                self.n300,
-                self.n100,
-                self.n50
-            )) / total
+            self.acc = 100.0 * (self.n300 + self.n100 + self.n50) / total
 
         elif mode_vn == 3:
             # osu!mania
-            total = sum((self.n300, self.n100, self.n50,
-                         self.ngeki, self.nkatu, self.nmiss))
+            total = (self.n300 + self.n100 + self.n50 +
+                     self.ngeki + self.nkatu + self.nmiss)
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * sum((
-                self.n50 * 50.0,
-                self.n100 * 100.0,
-                self.nkatu * 200.0,
-                (self.n300 + self.ngeki) * 300.0
-            )) / (total * 300.0)
+            self.acc = 100.0 * (
+                (self.n50 * 50.0) +
+                (self.n100 * 100.0) +
+                (self.nkatu * 200.0) +
+                ((self.n300 + self.ngeki) * 300.0)
+            ) / (total * 300.0)
