@@ -576,9 +576,6 @@ async def osuSubmitModularSelector(
     elif not score.bmap:
         # Map does not exist, most likely unsubmitted.
         return b'error: beatmap'
-    elif score.bmap.status == RankedStatus.Pending:
-        # XXX: Perhaps will accept in the future,
-        return b'error: no' # not now though.
 
     # we should update their activity no matter
     # what the result of the score submission is.
@@ -631,7 +628,7 @@ async def osuSubmitModularSelector(
         await utils.misc.log_strange_occurrence(stacktrace)
 
     if ( # check for pp caps on ranked & approved maps for appropriate players.
-        score.bmap.status != RankedStatus.Loved and not (
+        score.bmap.awards_ranked_pp and not (
             score.player.priv & Privileges.Whitelisted or
             score.player.restricted
         )
@@ -654,14 +651,22 @@ async def osuSubmitModularSelector(
         if glob.datadog:
             glob.datadog.increment('gulag.submitted_scores_best')
 
-        if score.rank == 1 and not score.player.restricted:
+        if (
+            score.bmap.has_leaderboard and
+            score.rank == 1 and
+            not score.player.restricted
+        ):
             # this is the new #1, post the play to #announce.
             announce_chan = glob.channels['#announce']
 
-            if score.bmap.awards_pp:
-                performance = f'{score.pp:,.2f}pp'
-            else:
+            if (
+                score.mode < GameMode.rx_std and
+                score.bmap.status == RankedStatus.Loved
+            ):
+                # use score for vanilla loved only
                 performance = f'{score.score:,} score'
+            else:
+                performance = f'{score.pp:,.2f}pp'
 
             # Announce the user's #1 score.
             # TODO: truncate artist/title/version to fit on screen
@@ -758,13 +763,24 @@ async def osuSubmitModularSelector(
     stats.plays += 1
 
     mode_sql = format(score.mode, 'sql')
-    stats_query = [ # build a list of params to update
-        'UPDATE stats SET plays_{mode} = %s',
-        'playtime_{mode} = %s'
-    ]
-    stats_params = [stats.plays, stats.playtime]
 
-    if score.passed and score.bmap.awards_pp:
+    if not (score.passed and score.bmap.awards_ranked_pp):
+        # only update plays & playtime, simple query
+        stats_query = (
+            'UPDATE stats '
+            'SET plays_{mode} = %s, '
+            'playtime_{mode} = %s'
+        ).format(mode=mode_sql)
+        stats_params = [stats.plays, stats.playtime]
+    else:
+        # score is a pass & the map awards pp,
+        # build complex stats update query.
+        stats_query = [ # build a list of params to update
+            'UPDATE stats SET plays_{mode} = %s',
+            'playtime_{mode} = %s'
+        ]
+        stats_params = [stats.plays, stats.playtime]
+
         # submitted score on a ranked map,
         # update max combo and total score.
 
@@ -842,8 +858,10 @@ async def osuSubmitModularSelector(
             )
             stats.rank = 1 + (await db_cursor.fetchone())['higher_pp_players']
 
-    # construct the sql query of any stat changes
-    stats_query = f"{','.join(stats_query).format(mode=mode_sql)} WHERE id = %s"
+        # combine the list of updates into a single querystring
+        stats_query = ','.join(stats_query).format(mode=mode_sql)
+
+    stats_query += ' WHERE id = %s'
     stats_params.append(score.player.id)
 
     # send any stat changes to sql, and other players
@@ -883,24 +901,24 @@ async def osuSubmitModularSelector(
         ret = b'error: no'
 
     else:
-        # prepare to send the user charts & achievements.
-        achievements = []
+        # construct and send achievements & ranking charts to the client
+        if score.bmap.awards_ranked_pp and not score.player.restricted:
+            achievements = []
+            for ach in glob.achievements:
+                if ach in score.player.achievements:
+                    # player already has this achievement.
+                    continue
 
-        # achievements unlocked only for non-restricted players
-        if not score.player.restricted:
-            if score.bmap.awards_pp:
-                for ach in glob.achievements:
-                    if ach in score.player.achievements:
-                        # player already has this achievement.
-                        continue
+                if ach.cond(score, mode_vn):
+                    await score.player.unlock_achievement(ach)
+                    achievements.append(ach)
 
-                    if ach.cond(score, mode_vn):
-                        await score.player.unlock_achievement(ach)
-                        achievements.append(ach)
+            achievements_str = '/'.join(map(repr, achievements))
+        else:
+            achievements_str = ''
 
-        # XXX: really not a fan of how this is done atm,
-        # but it's kinda just something that's probably
-        # going to be ugly no matter what i do lol :v
+        # TODO: some of these don't need to be sent
+        #       depending on the maps ranked status
         charts = []
 
         # append beatmap info chart (#1)
@@ -959,7 +977,7 @@ async def osuSubmitModularSelector(
                 chart_entry('pp', None, stats.pp),
             )),
 
-            f'achievements-new:{"/".join(map(repr, achievements))}'
+            f'achievements-new:{achievements_str}'
         )))
 
         ret = '\n'.join(charts).encode()

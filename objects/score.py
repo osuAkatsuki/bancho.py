@@ -21,6 +21,7 @@ from constants.mods import Mods
 from objects import glob
 from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
+from objects.beatmap import RankedStatus
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 
@@ -282,16 +283,18 @@ class Score:
         # now we can calculate things based on our data.
         s.calc_accuracy()
 
-        osu_file_path = BEATMAPS_PATH / f'{s.bmap.id}.osu'
-        if s.bmap and await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
-            s.pp, s.sr = s.calc_diff(osu_file_path)
+        if s.bmap:
+            osu_file_path = BEATMAPS_PATH / f'{s.bmap.id}.osu'
+            if await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
+                s.pp, s.sr = s.calc_diff(osu_file_path)
 
-            if s.passed:
-                await s.calc_status()
-            else:
-                s.status = SubmissionStatus.FAILED
+                if s.passed:
+                    await s.calc_status()
+                else:
+                    s.status = SubmissionStatus.FAILED
 
-            s.rank = await s.calc_lb_placement()
+                if s.bmap.status != RankedStatus.Pending:
+                    s.rank = await s.calc_lb_placement()
         else:
             s.pp = s.sr = 0.0
             if s.passed:

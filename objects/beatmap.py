@@ -262,9 +262,18 @@ class Beatmap:
         """An osu! chat embed to `self`'s osu! beatmap page."""
         return f'[{self.url} {self.full}]'
 
+    # TODO: cache these & standardize method for changing status
+
     @property
-    def awards_pp(self) -> bool:
-        """Return whether the map's status awards pp for scores."""
+    def has_leaderboard(self) -> bool:
+        """Return whether the map has a ranked leaderboard."""
+        return self.status in (RankedStatus.Ranked,
+                               RankedStatus.Approved,
+                               RankedStatus.Loved)
+
+    @property
+    def awards_ranked_pp(self) -> bool:
+        """Return whether the map's status awards ranked pp for scores."""
         return self.status in (RankedStatus.Ranked,
                                RankedStatus.Approved)
 
