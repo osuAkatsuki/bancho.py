@@ -416,6 +416,10 @@ class Match:
 
         bmap = await Beatmap.from_md5(self.map_md5)
 
+        if not bmap:
+            # map isn't submitted
+            return (), ()
+
         for s in was_playing:
             # continue trying to fetch each player's
             # scores until they've all been submitted.
