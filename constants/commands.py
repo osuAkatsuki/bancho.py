@@ -6,7 +6,6 @@ import importlib
 import os
 import pprint
 import random
-import re
 import secrets
 import signal
 import struct
@@ -1367,7 +1366,7 @@ if glob.config.advanced:
         # TODO: perhaps size checks?
 
         if not isinstance(ret, str):
-            ret = pprint.pformat(ret)
+            ret = pprint.pformat(ret, compact=True)
 
         return ret
 
