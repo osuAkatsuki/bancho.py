@@ -2283,11 +2283,12 @@ async def clan_disband(ctx: Context) -> str:
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
-    for m in [glob.players.get(id=p_id) for p_id in clan.members]:
-        if 'full_name' in m.__dict__:
-            del m.full_name # wipe cached_property
-
-        m.clan = m.clan_priv = None
+    for member_id in clan.members:
+        if member := glob.players.get(id=member_id):
+            member.clan = None
+            member.clan_priv = None
+            if 'full_name' in member.__dict__:
+                del member.full_name # wipe cached_property
 
     await glob.db.execute(
         'UPDATE users '
