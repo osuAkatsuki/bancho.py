@@ -268,7 +268,7 @@ class Beatmap:
         return self.status in (RankedStatus.Ranked,
                                RankedStatus.Approved)
 
-    @functools.cached_property
+    @property # perhaps worth caching some of?
     def as_dict(self) -> dict[str, object]:
         return {
             'md5': self.md5,
