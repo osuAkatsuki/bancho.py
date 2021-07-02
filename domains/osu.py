@@ -1698,7 +1698,8 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
         'SELECT id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
         'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {mode.scores_table} WHERE userid = %s AND mode = %s'
+        f'FROM {mode.scores_table} '
+        'WHERE userid = %s AND mode = %s'
     ]
 
     params = [p.id, mode.as_vanilla]
@@ -1711,7 +1712,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
             query.append('AND mods & %s != 0')
             params.append(mods)
 
-    sort = 'pp' if scope == 'best' else 'play_time'
+    if scope == 'best':
+        query.append('AND status = 2') # only pp-awarding scores
+        sort = 'pp'
+    else:
+        sort = 'play_time'
 
     query.append(f'ORDER BY {sort} DESC LIMIT %s')
     params.append(limit)
