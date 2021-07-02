@@ -1,5 +1,7 @@
 # like budget wireshark for osu! server stuff
-# usage: `mitmdump -qs tools/proxy.py`
+# usage: enable http://localhost:8080 proxy in windows,
+#        (https://i.cmyui.xyz/DNnqifKHyBSA9X8NEHg.png)
+#        and run this with `mitmdump -qs tools/proxy.py`
 
 domain = 'cmyui.xyz' # XXX: put your domain here
 
