@@ -17,6 +17,7 @@ from typing import Union
 import aiomysql
 import dill as pickle
 import pymysql
+from geoip2.types import IPAddress
 
 from objects import glob
 from constants.countries import country_codes
@@ -277,7 +278,7 @@ async def log_strange_occurrence(obj: object) -> None:
 
         log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
 
-def fetch_geoloc_db(ip: str) -> dict[str, Union[str, float]]:
+def fetch_geoloc_db(ip: IPAddress) -> dict[str, Union[str, float]]:
     """Fetch geolocation data based on ip (using local db)."""
     res = glob.geoloc_db.city(ip)
 
@@ -292,7 +293,7 @@ def fetch_geoloc_db(ip: str) -> dict[str, Union[str, float]]:
         }
     }
 
-async def fetch_geoloc_web(ip: str) -> dict[str, Union[str, float]]:
+async def fetch_geoloc_web(ip: IPAddress) -> dict[str, Union[str, float]]:
     """Fetch geolocation data based on ip (using ip-api)."""
     if not glob.has_internet: # requires internet connection
         return

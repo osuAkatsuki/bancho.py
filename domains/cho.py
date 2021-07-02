@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import ipaddress
 import re
 import struct
 import time
@@ -73,14 +74,20 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
     if 'CF-Connecting-IP' in conn.headers:
-        ip = conn.headers['CF-Connecting-IP']
+        ip_str = conn.headers['CF-Connecting-IP']
     else:
         # if the request has been forwarded, get the origin
         forwards = conn.headers['X-Forwarded-For'].split(',')
         if len(forwards) != 1:
-            ip = forwards[0]
+            ip_str = forwards[0]
         else:
-            ip = conn.headers['X-Real-IP']
+            ip_str = conn.headers['X-Real-IP']
+
+    if ip_str in glob.cache['ip']:
+        ip = glob.cache['ip'][ip_str]
+    else:
+        ip = ipaddress.IPv4Address(ip_str)
+        glob.cache['ip'][ip_str] = ip
 
     if (
         'User-Agent' not in conn.headers or
@@ -368,7 +375,11 @@ OFFLINE_NOTIFICATION = packets.notification(
 
 DELTA_60_DAYS = timedelta(days=60)
 
-async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) -> tuple[bytes, str]:
+async def login(
+    body_view: memoryview,
+    ip: ipaddress.IPv4Address,
+    db_cursor: aiomysql.DictCursor
+) -> tuple[bytes, str]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
@@ -531,7 +542,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
         'INSERT INTO ingame_logins '
         '(userid, ip, osu_ver, osu_stream, datetime) '
         'VALUES (%s, %s, %s, %s, NOW())',
-        [user_info['id'], ip, osu_ver_date, osu_ver_stream]
+        [user_info['id'], str(ip), osu_ver_date, osu_ver_stream]
     )
 
     await db_cursor.execute(
@@ -592,7 +603,7 @@ async def login(body_view: memoryview, ip: str, db_cursor: aiomysql.DictCursor) 
         del user_info['clan_priv']
         clan = clan_priv = None
 
-    if ip != '127.0.0.1':
+    if not ip.is_private:
         if glob.geoloc_db is not None:
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)

@@ -2,6 +2,7 @@
 
 import copy
 import hashlib
+import ipaddress
 import random
 import re
 import secrets
@@ -2336,16 +2337,22 @@ async def register_account(
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
                 if 'CF-Connecting-IP' in conn.headers:
-                    ip = conn.headers['CF-Connecting-IP']
+                    ip_str = conn.headers['CF-Connecting-IP']
                 else:
                     # if the request has been forwarded, get the origin
                     forwards = conn.headers['X-Forwarded-For'].split(',')
                     if len(forwards) != 1:
-                        ip = forwards[0]
+                        ip_str = forwards[0]
                     else:
-                        ip = conn.headers['X-Real-IP']
+                        ip_str = conn.headers['X-Real-IP']
 
-                if ip != '127.0.0.1':
+                if ip_str in glob.cache['ip']:
+                    ip = glob.cache['ip'][ip_str]
+                else:
+                    ip = ipaddress.IPv4Address(ip_str)
+                    glob.cache['ip'][ip_str] = ip
+
+                if not ip.is_private:
                     if glob.geoloc_db is not None:
                         # decent case, dev has downloaded a geoloc db from
                         # maxmind, so we can do a local db lookup. (~1-5ms)
