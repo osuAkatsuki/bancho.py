@@ -182,7 +182,7 @@ async def after_serving() -> None:
 def detect_mysqld_running() -> bool:
     """Detect whether theres a mysql server running locally."""
     for service in ('mysqld', 'mariadb'):
-        if os.path.exists(f'/var/run/mysqld/{service}.pid'):
+        if os.path.exists(f'/var/run/{service}/{service}.pid'):
             return True
     else:
         # not found, try pgrep
