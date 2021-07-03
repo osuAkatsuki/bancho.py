@@ -42,6 +42,9 @@ from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import Slot
 from objects.match import SlotStatus
+from objects.menu import Menu
+from objects.menu import MenuCommands
+from objects.menu import MenuFunction
 from objects.player import Action
 from objects.player import Player
 from objects.player import PresenceFilter
@@ -1106,22 +1109,34 @@ class MatchCreate(BasePacket):
         self.match.chat.send_bot(f'Match created by {p.name}.')
         log(f'{p} created a new multiplayer match.')
 
-async def check_menu_option(p: Player, key: int) -> None:
-    if key not in p.menu_options:
+async def execute_menu_option(p: Player, key: int) -> None:
+    if key not in p.current_menu.options:
         return
 
-    opt = p.menu_options[key]
+    # this is one of their menu options, execute it.
+    cmd, data = p.current_menu.options[key]
 
-    if time.time() > opt['timeout']:
-        # the option has expired
-        del p.menu_options[key]
-        return
+    if glob.config.debug:
+        print(f'\x1b[0;95m{cmd!r}\x1b[0m {data}')
 
-    # we have a menu option, call it.
-    await opt['callback']()
-
-    if not opt['reusable']:
-        del p.menu_options[key]
+    if cmd == MenuCommands.Reset:
+        # go back to the main menu
+        p.current_menu = p.previous_menus[0]
+        p.previous_menus.clear()
+    elif cmd == MenuCommands.Back:
+        # return one menu back
+        p.current_menu = p.previous_menus.pop()
+        p.send_current_menu()
+    elif cmd == MenuCommands.Advance:
+        # advance to a new menu
+        assert isinstance(data, Menu)
+        p.previous_menus.append(p.current_menu)
+        p.current_menu = data
+        p.send_current_menu()
+    elif cmd == MenuCommands.Execute:
+        # execute a function on the current menu
+        assert isinstance(data, MenuFunction)
+        await data.callback(p)
 
 @register(ClientPackets.JOIN_MATCH)
 class MatchJoin(BasePacket):
@@ -1130,10 +1145,13 @@ class MatchJoin(BasePacket):
         self.match_passwd = reader.read_string()
 
     async def handle(self, p: Player) -> None:
-        if not 0 <= self.match_id < 64:
-            if self.match_id >= 64:
+        is_menu_request = \
+            self.match_id >= glob.config.max_multi_matches
+
+        if is_menu_request or self.match_id < 0:
+            if is_menu_request:
                 # NOTE: this function is unrelated to mp.
-                await check_menu_option(p, self.match_id)
+                await execute_menu_option(p, self.match_id)
 
             p.enqueue(packets.matchJoinFail())
             return

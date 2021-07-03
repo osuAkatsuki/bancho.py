@@ -498,35 +498,8 @@ async def osuSearchSetHandler(p: 'Player', conn: Connection) -> HTTPResponse:
     # just do same same query with either bid or bsid.
 
     if 's' in conn.args:
-        # gulag chat menu: if the argument is negative,
-        # check if it's in the players menu options.
-        if conn.args['s'][0] == '-':
-            opt_id = int(conn.args['s'])
-
-            if opt_id not in p.menu_options:
-                return b'no voila'
-
-            opt = p.menu_options[opt_id]
-
-            if time.time() > opt['timeout']:
-                # the option has expired.
-                del p.menu_options[opt_id]
-                return
-
-            # we have a menu option. activate it.
-            await opt['callback']()
-
-            if not opt['reusable']:
-                # remove the option from the player
-                del p.menu_options[opt_id]
-
-            # send back some random syntactically valid
-            # beatmap info so that the client doesn't open
-            # a webpage when clicking an unknown url.
-            return b'voila'
-        else:
-            # this is just a normal request
-            k, v = ('set_id', conn.args['s'])
+        # this is just a normal request
+        k, v = ('set_id', conn.args['s'])
     elif 'b' in conn.args:
         k, v = ('id', conn.args['b'])
     else:

@@ -1222,16 +1222,10 @@ async def wipemap(ctx: Context) -> str:
 
     return 'Scores wiped.'
 
-#@command(Privileges.Dangerous, aliases=['men'], hidden=True)
-#async def menu_preview(ctx: Context) -> str:
-#    """Temporary command to illustrate the menu option idea."""
-#    async def callback():
-#        # this is called when the menu item is clicked
-#        ctx.player.enqueue(packets.notification('clicked!'))
-#
-#    # add the option to their menu opts & send them a button
-#    opt_id = await ctx.player.add_to_menu(callback)
-#    return f'[osump://{opt_id}/dn option]'
+@command(Privileges.Dangerous, hidden=True)
+async def menu(ctx: Context) -> str:
+    """Temporary command to illustrate the menu option idea."""
+    ctx.player.send_current_menu()
 
 @command(Privileges.Dangerous, aliases=['re'])
 async def reload(ctx: Context) -> str:
