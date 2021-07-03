@@ -652,14 +652,7 @@ async def osuSubmitModularSelector(
         if glob.datadog:
             glob.datadog.increment('gulag.submitted_scores_best')
 
-        if (
-            score.bmap.has_leaderboard and
-            score.rank == 1 and
-            not score.player.restricted
-        ):
-            # this is the new #1, post the play to #announce.
-            announce_chan = glob.channels['#announce']
-
+        if score.bmap.has_leaderboard:
             if (
                 score.mode < GameMode.rx_std and
                 score.bmap.status == RankedStatus.Loved
@@ -669,36 +662,46 @@ async def osuSubmitModularSelector(
             else:
                 performance = f'{score.pp:,.2f}pp'
 
-            # Announce the user's #1 score.
-            # TODO: truncate artist/title/version to fit on screen
-            ann = [f'\x01ACTION achieved #1 on {score.bmap.embed}',
-                   f'with {score.acc:.2f}% for {performance}.']
+            score.player.enqueue(packets.notification(
+                f'You achieved #{score.rank}! ({performance})'
+            ))
 
-            if score.mods:
-                ann.insert(1, f'+{score.mods!r}')
+            if (
+                score.rank == 1 and
+                not score.player.restricted
+            ):
+                # this is the new #1, post the play to #announce.
+                announce_chan = glob.channels['#announce']
 
-            scoring_metric = 'pp' if score.mode >= GameMode.rx_std else 'score'
+                # Announce the user's #1 score.
+                # TODO: truncate artist/title/version to fit on screen
+                ann = [f'\x01ACTION achieved #1 on {score.bmap.embed}',
+                    f'with {score.acc:.2f}% for {performance}.']
 
-            # If there was previously a score on the map, add old #1.
-            await db_cursor.execute(
-                'SELECT u.id, name FROM users u '
-                f'INNER JOIN {scores_table} s ON u.id = s.userid '
-                'WHERE s.map_md5 = %s AND s.mode = %s '
-                'AND s.status = 2 AND u.priv & 1 '
-                f'ORDER BY s.{scoring_metric} DESC LIMIT 1',
-                [score.bmap.md5, mode_vn]
-            )
+                if score.mods:
+                    ann.insert(1, f'+{score.mods!r}')
 
-            if db_cursor.rowcount != 0:
-                prev_n1 = await db_cursor.fetchone()
+                scoring_metric = 'pp' if score.mode >= GameMode.rx_std else 'score'
 
-                if score.player.id != prev_n1['id']:
-                    pid = prev_n1['id']
-                    pname = prev_n1['name']
-                    ann.append(f'(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])')
+                # If there was previously a score on the map, add old #1.
+                await db_cursor.execute(
+                    'SELECT u.id, name FROM users u '
+                    f'INNER JOIN {scores_table} s ON u.id = s.userid '
+                    'WHERE s.map_md5 = %s AND s.mode = %s '
+                    'AND s.status = 2 AND u.priv & 1 '
+                    f'ORDER BY s.{scoring_metric} DESC LIMIT 1',
+                    [score.bmap.md5, mode_vn]
+                )
 
-            score.player.enqueue(packets.notification(f'You achieved #1! ({performance})'))
-            announce_chan.send(' '.join(ann), sender=score.player, to_self=True)
+                if db_cursor.rowcount != 0:
+                    prev_n1 = await db_cursor.fetchone()
+
+                    if score.player.id != prev_n1['id']:
+                        pid = prev_n1['id']
+                        pname = prev_n1['name']
+                        ann.append(f'(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])')
+
+                announce_chan.send(' '.join(ann), sender=score.player, to_self=True)
 
         # this score is our best score.
         # update any preexisting personal best
