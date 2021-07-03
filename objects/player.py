@@ -193,7 +193,7 @@ class Player:
             'latitude': 0.0,
             'longitude': 0.0,
             'country': {
-                'iso_code': 'XX',
+                'acronym': 'XX',
                 'numeric': 0
             }
         })

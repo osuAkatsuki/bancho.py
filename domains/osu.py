@@ -1206,7 +1206,7 @@ async def getScores(
         params.append(p.friends | {p.id})
     elif rank_type == RankingType.Country:
         query.append('AND u.country = %s')
-        params.append(p.geoloc['country']['iso_code'])
+        params.append(p.geoloc['country']['acronym'])
 
     query.append('ORDER BY _score DESC LIMIT 50')
 
@@ -2340,7 +2340,7 @@ async def register_account(
             if 'CF-IPCountry' in conn.headers:
                 # best case, dev has enabled ip geolocation in the
                 # network tab of cloudflare, so it sends the iso code.
-                country_iso_code = conn.headers['CF-IPCountry']
+                country_acronym = conn.headers['CF-IPCountry']
             else:
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
@@ -2371,17 +2371,17 @@ async def register_account(
                         # using a public api. (depends, `ping ip-api.com`)
                         geoloc = await utils.misc.fetch_geoloc_web(ip)
 
-                    country_iso_code = geoloc['country']['iso_code']
+                    country_acronym = geoloc['country']['acronym']
                 else:
                     # localhost, unknown country
-                    country_iso_code = 'XX'
+                    country_acronym = 'XX'
 
             # add to `users` table.
             await db_cursor.execute(
                 'INSERT INTO users '
                 '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
                 'VALUES (%s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
-                [name, safe_name, email, pw_bcrypt, country_iso_code]
+                [name, safe_name, email, pw_bcrypt, country_acronym]
             )
             user_id = db_cursor.lastrowid
 
