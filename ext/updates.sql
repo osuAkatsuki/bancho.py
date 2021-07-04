@@ -357,3 +357,11 @@ create table mapsets
 	constraint nmapsets_id_uindex
 		unique (id)
 );
+
+# v3.4.1
+alter table maps add filename varchar(256) charset utf8 not null after creator;
+
+# v3.5.2
+alter table scores_vn add online_checksum char(32) not null;
+alter table scores_rx add online_checksum char(32) not null;
+alter table scores_ap add online_checksum char(32) not null;

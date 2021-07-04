@@ -124,7 +124,8 @@ create table maps
 	artist varchar(128) charset utf8 not null,
 	title varchar(128) charset utf8 not null,
 	version varchar(128) charset utf8 not null,
-	creator varchar(19) charset utf8 not null comment 'not 100% certain on len',
+	creator varchar(19) charset utf8 not null,
+	filename varchar(256) charset utf8 not null,
 	last_update datetime not null,
 	total_length int not null,
 	max_combo int not null,
@@ -216,7 +217,8 @@ create table scores_ap
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table scores_rx
@@ -242,7 +244,8 @@ create table scores_rx
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table scores_vn
@@ -268,7 +271,8 @@ create table scores_vn
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table startups

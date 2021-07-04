@@ -264,7 +264,7 @@ class Match:
         self.starting: StartingTimers = {
             'start': None, 'alerts': None, 'time': None
         }
-        self.seed = 0
+        self.seed = 0 # used for mania random mod
 
         self.pool: Optional[MapPool] = None
 
@@ -415,6 +415,10 @@ class Match:
                         'score')[self.win_condition]
 
         bmap = await Beatmap.from_md5(self.map_md5)
+
+        if not bmap:
+            # map isn't submitted
+            return (), ()
 
         for s in was_playing:
             # continue trying to fetch each player's

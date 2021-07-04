@@ -76,12 +76,17 @@ cache = {
     # algorithms like brypt these are intentionally designed to be
     # slow; we'll cache the results to speed up subsequent logins.
     'bcrypt': {}, # {bcrypt: md5, ...}
+
+    # converting from a stringified ip address to a python ip
+    # object is pretty expensive, so we'll cache known ones.
+    'ip': {}, # {ip_str: IPAddress, ...}
+
     # we'll cache results for osu! client update requests since they
     # are relatively frequently and won't change very frequently.
     # cache all beatmap data calculated while online. this way,
     # the most requested maps will inevitably always end up cached.
     'beatmap': {}, # {md5: map, id: map, ...}
-    'beatmapsets': {},
+    'beatmapset': {}, # {bsid: map_set}
 
     # cache all beatmaps which are unsubmitted or need an update,
     # since their osu!api requests will fail and thus we'll do the

@@ -20,7 +20,6 @@ from cmyui.logging import log
 from cmyui.discord import Webhook
 
 import packets
-from constants.countries import country_codes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.privileges import ClientPrivileges
@@ -32,6 +31,10 @@ from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import Slot
 from objects.match import SlotStatus
+from objects.menu import Menu
+from objects.menu import MenuCommands
+from objects.menu import MenuFunction
+from objects.menu import menu_keygen
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 
@@ -98,6 +101,24 @@ class Status:
     mode: GameMode = GameMode.vn_std
     map_id: int = 0
 
+# temporary menu-related stuff
+async def bot_hello(p: 'Player') -> None:
+    p.send_bot(f'hello {p.name}!')
+
+async def notif_hello(p: 'Player') -> None:
+    p.enqueue(packets.notification(f'hello {p.name}!'))
+
+MENU2 = Menu('Second Menu', {
+    menu_keygen(): (MenuCommands.Back, None),
+    menu_keygen(): (MenuCommands.Execute, MenuFunction('notif_hello', notif_hello)),
+})
+
+MAIN_MENU = Menu('Main Menu', {
+    menu_keygen(): (MenuCommands.Execute, MenuFunction('bot_hello', bot_hello)),
+    menu_keygen(): (MenuCommands.Execute, MenuFunction('notif_hello', notif_hello)),
+    menu_keygen(): (MenuCommands.Advance, MENU2)
+})
+
 class Player:
     """\
     Server side representation of a player; not necessarily online.
@@ -121,10 +142,6 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    menu_options: `dict[int, dict[str, object]]`
-        The current osu! chat menu options available to the player.
-        XXX: These may eventually have a timeout.
-
     bot_client: `bool`
         Whether this is a bot account.
 
@@ -146,7 +163,8 @@ class Player:
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options',
+
+        'current_menu', 'previous_menus',
 
         'bot_client', 'tourney_client',
         'api_key', '_queue',
@@ -190,8 +208,14 @@ class Player:
 
         self.achievements: set['Achievement'] = set()
 
-        self.country = (0, 'XX') # (code, letters)
-        self.location = (0.0, 0.0) # (lat, long)
+        self.geoloc = extras.get('geoloc', {
+            'latitude': 0.0,
+            'longitude': 0.0,
+            'country': {
+                'acronym': 'xx',
+                'numeric': 0
+            }
+        })
 
         self.utc_offset = extras.get('utc_offset', 0)
         self.pm_private = extras.get('pm_private', False)
@@ -208,7 +232,9 @@ class Player:
         # XXX: below is mostly gulag-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores: dict[GameMode, Score] = {}
+        self.recent_scores: dict[GameMode, Optional['Score']] = {
+            mode: None for mode in GameMode
+        }
 
         # store the last beatmap /np'ed by the user.
         self.last_np = {
@@ -217,8 +243,9 @@ class Player:
             'timeout': 0
         }
 
-        # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
-        self.menu_options: dict[int, dict[str, object]] = {}
+        # TODO: document
+        self.current_menu = MAIN_MENU
+        self.previous_menus = []
 
         # subject to possible change in the future,
         # although if anything, bot accounts will
@@ -662,7 +689,7 @@ class Player:
         """Attempt to add `self` to `c`."""
         if (
             self in c or # player already in channel
-            self.priv & c.read_priv != c.read_priv or # no read privs
+            not c.can_read(self.priv) or # no read privs
             c._name == '#lobby' and not self.in_lobby # not in mp lobby
         ):
             return False
@@ -672,7 +699,9 @@ class Player:
 
         self.enqueue(packets.channelJoin(c.name))
 
-        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
+        chan_info_packet = packets.channelInfo(
+            c.name, c.topic, len(c.players)
+        )
 
         if c.instance:
             # instanced channel, only send the players
@@ -682,8 +711,8 @@ class Player:
         else:
             # normal channel, send to all players who
             # have access to see the channel's usercount.
-            for p in glob.players[1:]:
-                if p.priv & c.read_priv != c.read_priv:
+            for p in glob.players:
+                if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
         if glob.app.debug:
@@ -703,7 +732,9 @@ class Player:
         if kick:
             self.enqueue(packets.channelKick(c.name))
 
-        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
+        chan_info_packet = packets.channelInfo(
+            c.name, c.topic, len(c.players)
+        )
 
         if c.instance:
             # instanced channel, only send the players
@@ -714,7 +745,7 @@ class Player:
             # normal channel, send to all players who
             # have access to see the channel's usercount.
             for p in glob.players:
-                if p.priv & c.read_priv != c.read_priv:
+                if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
         if glob.app.debug:
@@ -741,7 +772,6 @@ class Player:
             log(f'{self} failed to join {spec_chan}?', Ansi.LYELLOW)
             return
 
-        #p.enqueue(packets.channelJoin(c.name))
         if not p.stealth:
             p_joined = packets.fellowSpectatorJoined(p.id)
             for s in self.spectators:
@@ -844,43 +874,6 @@ class Player:
 
         log(f'{self} unblocked {p}.')
 
-    def fetch_geoloc_db(self, ip: str) -> None:
-        """Fetch geolocation data based on ip (using local db)."""
-        res = glob.geoloc_db.city(ip)
-
-        iso_code = res.country.iso_code
-        loc = res.location
-
-        self.country = (country_codes[iso_code], iso_code)
-        self.location = (loc.latitude, loc.longitude)
-
-    async def fetch_geoloc_web(self, ip: str) -> None:
-        """Fetch geolocation data based on ip (using ip-api)."""
-        if not glob.has_internet: # requires internet connection
-            return
-
-        url = f'http://ip-api.com/line/{ip}'
-
-        async with glob.http.get(url) as resp:
-            if not resp or resp.status != 200:
-                log('Failed to get geoloc data: request failed.', Ansi.LRED)
-                return
-
-            status, *lines = (await resp.text()).split('\n')
-
-            if status != 'success':
-                err_msg = lines[0]
-                if err_msg == 'invalid query':
-                    err_msg += f' ({url})'
-
-                log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
-                return
-
-        iso_code = lines[1]
-
-        self.country = (country_codes[iso_code], iso_code)
-        self.location = (float(lines[6]), float(lines[7])) # lat, long
-
     async def unlock_achievement(self, a: 'Achievement') -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await glob.db.execute(
@@ -964,26 +957,31 @@ class Player:
                 rank=mode_rank
             )
 
-    async def add_to_menu(
-        self, coroutine: Coroutine,
-        timeout: int = -1,
-        reusable: bool = False
-    ) -> int:
-        """Add a valid callback to the user's osu! chat options."""
-        # generate random negative number in int32 space as the key.
-        rand = partial(random.randint, 64, 0x7fffffff)
-        while (randnum := rand()) in self.menu_options:
-            ...
+    def send_menu_clear(self) -> None:
+        """Clear the user's osu! chat with the bot
+           to make room for a new menu to be sent."""
+        # NOTE: the only issue with this is that it will
+        # wipe any messages the client can see from the bot
+        # (including any other channels). perhaps menus can
+        # be sent from a separate presence to prevent this?
+        self.enqueue(packets.userSilenced(glob.bot.id))
 
-        # append the callback to their menu options w/ args.
-        self.menu_options[randnum] = {
-            'callback': coroutine,
-            'reusable': reusable,
-            'timeout': timeout if timeout != -1 else 0x7fffffff
-        }
+    def send_current_menu(self) -> None:
+        """Forward a standardized form of the user's
+           current menu to them via the osu! chat."""
+        msg = [self.current_menu.name]
 
-        # return the key.
-        return randnum
+        for key, (cmd, data) in self.current_menu.options.items():
+            val = data.name if data else 'Back'
+            msg.append(f'[osump://{key}/ {val}]')
+
+        chat_height = 10
+        lines_used = len(msg)
+        if lines_used < chat_height:
+            msg += [chr(8192)] * (chat_height - lines_used)
+
+        self.send_menu_clear()
+        self.send_bot('\n'.join(msg))
 
     def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""

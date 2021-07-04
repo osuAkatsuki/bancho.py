@@ -34,13 +34,13 @@ __all__ = (
 # TODO: decorator for these collections which automatically
 # adds debugging to their append/remove/insert/extend methods.
 
-class Channels(list):
+class Channels(list[Channel]):
     """The currently active chat channels on the server."""
 
-    def __iter__(self) -> Iterator['Channel']:
+    def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
-    def __contains__(self, o: Union['Channel', str]) -> bool:
+    def __contains__(self, o: Union[Channel, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -48,7 +48,7 @@ class Channels(list):
         else:
             return super().__contains__(o)
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'Channel':
+    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -62,20 +62,20 @@ class Channels(list):
         # #spect_1 instead of #spectator.
         return f'[{", ".join(c._name for c in self)}]'
 
-    def get(self, name: str) -> Optional['Channel']:
+    def get(self, name: str) -> Optional[Channel]:
         """Get a channel from the list by `name`."""
         for c in self:
             if c._name == name:
                 return c
 
-    def append(self, c: 'Channel') -> None:
+    def append(self, c: Channel) -> None:
         """Append `c` to the list."""
         super().append(c)
 
         if glob.app.debug:
             log(f'{c} added to channels list.')
 
-    def remove(self, c: 'Channel') -> None:
+    def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
@@ -97,14 +97,13 @@ class Channels(list):
             ) async for row in db_cursor
         ])
 
-class Matches(list):
+class Matches(list[Match]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
-        super().__init__()
-        self.extend([None] * glob.config.max_multi_matches)
+        super().__init__([None] * glob.config.max_multi_matches)
 
-    def __iter__(self) -> Iterator['Match']:
+    def __iter__(self) -> Iterator[Match]:
         return super().__iter__()
 
     def __repr__(self) -> str:
@@ -116,7 +115,7 @@ class Matches(list):
             if m is None:
                 return idx
 
-    def append(self, m: 'Match') -> bool:
+    def append(self, m: Match) -> bool:
         """Append `m` to the list."""
         if (free := self.get_free()) is not None:
             # set the id of the match to the lowest available free.
@@ -131,7 +130,7 @@ class Matches(list):
             log(f'Match list is full! Could not add {m}.')
             return False
 
-    def remove(self, m: 'Match') -> None:
+    def remove(self, m: Match) -> None:
         """Remove `m` from the list."""
         for i, _m in enumerate(self):
             if m is _m:
@@ -141,7 +140,7 @@ class Matches(list):
         if glob.app.debug:
             log(f'{m} removed from matches list.')
 
-class Players(list):
+class Players(list[Player]):
     """The currently active players on the server."""
     __slots__ = ('_lock',)
 
@@ -275,20 +274,20 @@ class Players(list):
 
         super().remove(p)
 
-class MapPools(list):
+class MapPools(list[MapPool]):
     """The currently active mappools on the server."""
 
-    def __iter__(self) -> Iterator['MapPool']:
+    def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'MapPool':
+    def __getitem__(self, index: Union[int, slice, str]) -> MapPool:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Union['MapPool', str]) -> bool:
+    def __contains__(self, o: Union[MapPool, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -296,20 +295,20 @@ class MapPools(list):
         else:
             return o in self
 
-    def get(self, name: str) -> Optional['MapPool']:
+    def get(self, name: str) -> Optional[MapPool]:
         """Get a pool from the list by `name`."""
         for p in self:
             if p.name == name:
                 return p
 
-    def append(self, mp: 'MapPool') -> None:
+    def append(self, mp: MapPool) -> None:
         """Append `mp` to the list."""
         super().append(mp)
 
         if glob.app.debug:
             log(f'{mp} added to mappools list.')
 
-    def remove(self, mp: 'MapPool') -> None:
+    def remove(self, mp: MapPool) -> None:
         """Remove `mp` from the list."""
         super().remove(mp)
 
@@ -335,20 +334,20 @@ class MapPools(list):
 
         return obj
 
-class Clans(list):
+class Clans(list[Clan]):
     """The currently active clans on the server."""
 
-    def __iter__(self) -> Iterator['Clan']:
+    def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
+    def __getitem__(self, index: Union[int, slice, str]) -> Clan:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Union['Clan', str]) -> bool:
+    def __contains__(self, o: Union[Clan, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -356,7 +355,7 @@ class Clans(list):
         else:
             return o in self
 
-    def get(self, **kwargs) -> Optional['Clan']:
+    def get(self, **kwargs) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
         for attr in ('name', 'tag', 'id'):
             if val := kwargs.pop(attr, None):
@@ -368,14 +367,14 @@ class Clans(list):
             if getattr(c, attr) == val:
                 return c
 
-    def append(self, c: 'Clan') -> None:
+    def append(self, c: Clan) -> None:
         """Append `c` to the list."""
         super().append(c)
 
         if glob.app.debug:
             log(f'{c} added to clans list.')
 
-    def remove(self, c: 'Clan') -> None:
+    def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
