@@ -568,25 +568,13 @@ async def osuSubmitModularSelector(
     mode_vn = score.mode.as_vanilla
 
     # Check for score duplicates
-    # TODO: this it quite the bandaid fix, not that other
-    # implementations do it better.. still though, perhaps
-    # it would be worth going through a hardcoded number or
-    # percent of the replay's frames to really determine
-    # whether the plays are the same, rather than just
-    # using the score/header data.
     await db_cursor.execute(
         f'SELECT 1 FROM {scores_table} '
-        'WHERE play_time > DATE_SUB(NOW(), INTERVAL 2 MINUTE) ' # last 2mins
-        'AND mode = %s AND map_md5 = %s '
-        'AND userid = %s AND mods = %s '
-        'AND score = %s AND play_time', [
-            mode_vn, score.bmap.md5,
-            score.player.id, score.mods, score.score
-        ]
+        'WHERE online_checksum = %s',
+        [score.online_checksum]
     )
-    res = await db_cursor.fetchone()
 
-    if res:
+    if db_cursor.rowcount != 0:
         log(f'{score.player} submitted a duplicate score.', Ansi.LYELLOW)
         return b'error: no'
 
@@ -693,12 +681,14 @@ async def osuSubmitModularSelector(
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s, '
-        '%s, %s, %s, %s)', [
+        '%s, %s, %s, %s, '
+        '%s)', [
             score.bmap.md5, score.score, score.pp, score.acc,
             score.max_combo, score.mods, score.n300, score.n100,
             score.n50, score.nmiss, score.ngeki, score.nkatu,
-            score.grade, score.status, mode_vn, score.play_time,
-            score.time_elapsed, score.client_flags, score.player.id, score.perfect
+            score.grade.name, score.status, mode_vn, score.play_time,
+            score.time_elapsed, score.client_flags, score.player.id, score.perfect,
+            score.online_checksum
         ]
     )
     score.id = db_cursor.lastrowid

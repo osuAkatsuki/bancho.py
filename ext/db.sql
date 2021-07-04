@@ -217,7 +217,8 @@ create table scores_ap
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table scores_rx
@@ -243,7 +244,8 @@ create table scores_rx
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table scores_vn
@@ -269,7 +271,8 @@ create table scores_vn
 	time_elapsed int not null,
 	client_flags int not null,
 	userid int not null,
-	perfect tinyint(1) not null
+	perfect tinyint(1) not null,
+	online_checksum char(32) not null
 );
 
 create table startups

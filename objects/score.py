@@ -13,7 +13,7 @@ from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
 from py3rijndael import RijndaelCbc
-from py3rijndael import ZeroPadding
+from py3rijndael import Pkcs7Padding
 
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
@@ -37,44 +37,36 @@ __all__ = (
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 @unique
-@pymysql_encode(escape_enum)
 class Grade(IntEnum):
-    XH = 0 # HD SS
-    X  = 1 # SS
-    SH = 2 # HD S
-    S  = 3 # S
-    A  = 4
-    B  = 5
-    C  = 6
-    D  = 7
-    F  = 8
-    N  = 9
-
-    def __str__(self) -> str:
-        return {
-            self.XH: 'SS',
-            self.X: 'SS',
-            self.SH: 'S',
-            self.S: 'S',
-            self.A: 'A',
-            self.B: 'B',
-            self.C: 'C',
-            self.D: 'D',
-            self.F: 'F'
-        }[self.value]
+    # NOTE: these are implemented in the opposite order
+    # as osu! to make more sense with <> operators.
+    N  = 0
+    F  = 1
+    D  = 2
+    C  = 3
+    B  = 4
+    A  = 5
+    S  = 6 # S
+    SH = 7 # HD S
+    X  = 8 # SS
+    XH = 9 # HD SS
 
     @classmethod
-    def from_str(cls, s: str, hidden: bool = False) -> 'Grade':
-        return {
-            'SS': cls.XH if hidden else cls.SH,
-            'S': cls.SH if hidden else cls.S,
-            'A': cls.A,
-            'B': cls.B,
-            'C': cls.C,
-            'D': cls.D,
-            'F': cls.F,
-            'N': cls.N
-        }[s]
+    def from_str(cls, s: str) -> 'Grade':
+        return gradestr_to_grade_dict[s.lower()]
+
+gradestr_to_grade_dict = {
+    'xh': Grade.XH,
+    'x': Grade.X,
+    'sh': Grade.SH,
+    's': Grade.S,
+    'a': Grade.A,
+    'b': Grade.B,
+    'c': Grade.C,
+    'd': Grade.D,
+    'f': Grade.F,
+    'n': Grade.N
+}
 
 @unique
 @pymysql_encode(escape_enum)
@@ -131,7 +123,9 @@ class Score:
         'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu',
         'grade', 'rank', 'passed', 'perfect', 'status',
         'play_time', 'time_elapsed',
-        'client_flags', 'prev_best'
+        'client_flags', 'online_checksum',
+
+        'prev_best'
     )
 
     def __init__(self):
@@ -167,8 +161,8 @@ class Score:
         self.play_time: Optional[datetime] = None
         self.time_elapsed: Optional[datetime] = None
 
-        # osu!'s client 'anticheat'.
         self.client_flags: Optional[ClientFlags] = None
+        self.online_checksum: Optional[str] = None
 
         self.prev_best: Optional[Score] = None
 
@@ -188,7 +182,7 @@ class Score:
             'max_combo, mods, acc, n300, n100, n50, '
             'nmiss, ngeki, nkatu, grade, perfect, '
             'status, mode, play_time, '
-            'time_elapsed, client_flags '
+            'time_elapsed, client_flags, online_checksum '
             f'FROM {scores_table} WHERE id = %s',
             [scoreid], _dict=False
         )
@@ -205,11 +199,12 @@ class Score:
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
          s.perfect, s.status, mode_vn, s.play_time,
-         s.time_elapsed, s.client_flags) = res[3:]
+         s.time_elapsed, s.client_flags, s.online_checksum) = res[3:]
 
         # fix some types
         s.passed = s.status != 0
         s.status = SubmissionStatus(s.status)
+        s.grade = Grade.from_str(s.grade)
         s.mods = Mods(s.mods)
         s.mode = GameMode.from_params(mode_vn, s.mods)
         s.client_flags = ClientFlags(s.client_flags)
@@ -225,14 +220,15 @@ class Score:
         osu_ver: str, pw_md5: str
     ) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
-        iv = b64decode(iv_b64).decode('latin_1')
-        data_aes = b64decode(data_b64).decode('latin_1')
-
-        aes_key = f'osu!-scoreburgr---------{osu_ver}'
-        aes = RijndaelCbc(aes_key, iv, ZeroPadding(32), 32)
+        aes = RijndaelCbc(
+            key=f'osu!-scoreburgr---------{osu_ver}',
+            iv=b64decode(iv_b64),
+            padding=Pkcs7Padding(32),
+            block_size=32
+        )
 
         # score data is delimited by colons (:).
-        data = aes.decrypt(data_aes).decode().split(':')
+        data = aes.decrypt(b64decode(data_b64)).decode().split(':')
 
         if len(data) != 18:
             log('Received an invalid score submission.', Ansi.LRED)
@@ -240,10 +236,12 @@ class Score:
 
         s = cls()
 
-        if len(map_md5 := data[0]) != 32:
+        if len(data[0]) != 32 or len(data[2]) != 32:
             return
 
-        pname = data[1].rstrip() # why does osu! make me rstrip lol
+        map_md5 = data[0]
+        pname = data[1].rstrip() # rstrip 1 space if client has supporter
+        s.online_checksum = data[2]
 
         # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
@@ -274,10 +272,12 @@ class Score:
         s.mods = Mods(int(data[13]))
         s.passed = data[14] == 'True'
         s.mode = GameMode.from_params(int(data[15]), s.mods)
-        s.play_time = datetime.now()
-        s.client_flags = data[17].count(' ') # TODO: use osu!ver? (osuver\s+)
 
-        s.grade = _grade if s.passed else 'F'
+        s.play_time = datetime.now() # TODO: use data[16]
+
+        s.client_flags = ClientFlags(data[17].count(' ') & ~4)
+
+        s.grade = Grade.from_str(_grade) if s.passed else Grade.F
 
         # all data read from submission.
         # now we can calculate things based on our data.
@@ -290,11 +290,11 @@ class Score:
 
                 if s.passed:
                     await s.calc_status()
+
+                    if s.bmap.status != RankedStatus.Pending:
+                        s.rank = await s.calc_lb_placement()
                 else:
                     s.status = SubmissionStatus.FAILED
-
-                if s.bmap.status != RankedStatus.Pending:
-                    s.rank = await s.calc_lb_placement()
         else:
             s.pp = s.sr = 0.0
             if s.passed:
