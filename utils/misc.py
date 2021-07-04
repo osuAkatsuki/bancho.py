@@ -2,6 +2,7 @@
 
 import inspect
 import io
+import ipaddress
 import requests
 import secrets
 import socket
@@ -17,7 +18,6 @@ from typing import Union
 import aiomysql
 import dill as pickle
 import pymysql
-from geoip2.types import IPAddress
 
 from objects import glob
 from constants.countries import country_codes
@@ -277,6 +277,8 @@ async def log_strange_occurrence(obj: object) -> None:
         printc('/'.join(log_file.parts[-4:]), Ansi.LBLUE)
 
         log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
+
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 def fetch_geoloc_db(ip: IPAddress) -> dict[str, Union[str, float]]:
     """Fetch geolocation data based on ip (using local db)."""

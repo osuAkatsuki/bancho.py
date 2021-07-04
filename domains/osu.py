@@ -2330,7 +2330,7 @@ async def register_account(
                 if ip_str in glob.cache['ip']:
                     ip = glob.cache['ip'][ip_str]
                 else:
-                    ip = ipaddress.IPv4Address(ip_str)
+                    ip = ipaddress.ip_address(ip_str)
                     glob.cache['ip'][ip_str] = ip
 
                 if not ip.is_private:

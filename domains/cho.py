@@ -52,6 +52,8 @@ from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
 
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+
 """ Bancho: handle connections from the osu! client """
 
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
@@ -89,7 +91,7 @@ async def bancho_handler(conn: Connection) -> bytes:
     if ip_str in glob.cache['ip']:
         ip = glob.cache['ip'][ip_str]
     else:
-        ip = ipaddress.IPv4Address(ip_str)
+        ip = ipaddress.ip_address(ip_str)
         glob.cache['ip'][ip_str] = ip
 
     if (
@@ -380,7 +382,7 @@ DELTA_60_DAYS = timedelta(days=60)
 
 async def login(
     body_view: memoryview,
-    ip: ipaddress.IPv4Address,
+    ip: IPAddress,
     db_cursor: aiomysql.DictCursor
 ) -> tuple[bytes, str]:
     """\

@@ -79,7 +79,7 @@ cache = {
 
     # converting from a stringified ip address to a python ip
     # object is pretty expensive, so we'll cache known ones.
-    'ip': {}, # {ip_str: IPv4Address, ...}
+    'ip': {}, # {ip_str: IPAddress, ...}
 
     # we'll cache results for osu! client update requests since they
     # are relatively frequently and won't change very frequently.
