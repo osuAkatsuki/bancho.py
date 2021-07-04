@@ -284,7 +284,7 @@ def fetch_geoloc_db(ip: IPAddress) -> dict[str, Union[str, float]]:
     """Fetch geolocation data based on ip (using local db)."""
     res = glob.geoloc_db.city(ip)
 
-    acronym = res.country.iso_code
+    acronym = res.country.iso_code.lower()
 
     return {
         'latitude': res.location.latitude,
@@ -317,7 +317,7 @@ async def fetch_geoloc_web(ip: IPAddress) -> dict[str, Union[str, float]]:
             log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
             return
 
-    acronym = lines[1]
+    acronym = lines[1].lower()
 
     return {
         'latitude': float(lines[6]),

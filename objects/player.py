@@ -212,7 +212,7 @@ class Player:
             'latitude': 0.0,
             'longitude': 0.0,
             'country': {
-                'acronym': 'XX',
+                'acronym': 'xx',
                 'numeric': 0
             }
         })

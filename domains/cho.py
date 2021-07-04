@@ -501,7 +501,7 @@ async def login(
                     return data, 'no'
 
     await db_cursor.execute(
-        'SELECT id, name, priv, pw_bcrypt, '
+        'SELECT id, name, priv, pw_bcrypt, country, '
         'silence_end, clan_id, clan_priv, api_key '
         'FROM users WHERE safe_name = %s',
         [utils.misc.make_safe_name(username)]
@@ -608,6 +608,8 @@ async def login(
         del user_info['clan_priv']
         clan = clan_priv = None
 
+    db_country = user_info.pop('country')
+
     if not ip.is_private:
         if glob.geoloc_db is not None:
             # good, dev has downloaded a geoloc db from maxmind,
@@ -618,6 +620,16 @@ async def login(
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
             user_info['geoloc'] = await utils.misc.fetch_geoloc_web(ip)
+
+        if db_country == 'xx':
+            # bugfix for old gulag versions when
+            # country wasn't stored on registration.
+            log(f"Fixing {username}'s country.", Ansi.LGREEN)
+
+            await db_cursor.execute(
+                'UPDATE users SET country = %s WHERE id = %s',
+                [user_info['geoloc']['country']['acronym'], user_info['id']]
+            )
 
     p = Player(
         **user_info, # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}

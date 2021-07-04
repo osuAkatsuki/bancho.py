@@ -2347,7 +2347,7 @@ async def register_account(
                     country_acronym = geoloc['country']['acronym']
                 else:
                     # localhost, unknown country
-                    country_acronym = 'XX'
+                    country_acronym = 'xx'
 
             # add to `users` table.
             await db_cursor.execute(
