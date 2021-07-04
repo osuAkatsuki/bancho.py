@@ -2311,12 +2311,7 @@ async def clan_info(ctx: Context) -> str:
     if not (clan := glob.clans.get(tag=' '.join(ctx.args).upper())):
         return 'Could not find a clan by that tag.'
 
-    owner = await glob.players.get_ensure(id=clan.owner)
-
-    _time = clan.created_at.strftime('%H:%M:%S%p')
-    _date = clan.created_at.strftime('%Y-%m-%d')
-    datetime_fmt = f'Founded at {_time} on {_date}'
-    msg = [f"{owner.embed}'s {clan!r} | {datetime_fmt}."]
+    msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
     res = await glob.db.fetchall(

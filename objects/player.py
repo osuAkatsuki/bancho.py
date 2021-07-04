@@ -232,7 +232,9 @@ class Player:
         # XXX: below is mostly gulag-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores: dict[GameMode, Score] = {}
+        self.recent_scores: dict[GameMode, Optional['Score']] = {
+            mode: None for mode in GameMode
+        }
 
         # store the last beatmap /np'ed by the user.
         self.last_np = {

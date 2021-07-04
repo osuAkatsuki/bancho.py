@@ -1424,6 +1424,9 @@ async def checkUpdates(conn: Connection) -> HTTPResponse:
     return result
 
 """ /api/ Handlers """
+# NOTE: the api is still under design and is subject to change.
+# to keep up with breaking changes, please either join our discord,
+# or keep up with changes to https://github.com/JKBGL/gulag-api-docs.
 
 # Unauthorized (no api key required)
 # GET /api/get_player_count: return total registered & online player counts.

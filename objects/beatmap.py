@@ -634,10 +634,11 @@ class BeatmapSet:
                     'WHERE id = %s',
                     [bsid]
                 )
-                set_res = await db_cursor.fetchone()
 
-                if not set_res:
+                if db_cursor.rowcount == 0:
                     return
+
+                set_res = await db_cursor.fetchone()
 
                 await db_cursor.execute(
                     'SELECT md5, id, set_id, '
