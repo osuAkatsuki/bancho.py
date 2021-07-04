@@ -1032,7 +1032,7 @@ async def osuRate(
         'WHERE map_md5 = %s',
         [map_md5]
     )
-    ratings = [row[0] async for row in await db_cursor]
+    ratings = [row[0] async for row in db_cursor]
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
