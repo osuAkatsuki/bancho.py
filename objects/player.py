@@ -8,8 +8,6 @@ from datetime import date
 from enum import IntEnum
 from enum import unique
 from functools import cached_property
-from functools import partial
-from typing import Coroutine
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -35,11 +33,12 @@ from objects.menu import Menu
 from objects.menu import MenuCommands
 from objects.menu import MenuFunction
 from objects.menu import menu_keygen
+from objects.score import Grade
+from objects.score import Score
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
-    from objects.score import Score
     from objects.achievement import Achievement
     from objects.clan import Clan
     from objects.clan import ClanPrivileges
@@ -90,6 +89,8 @@ class ModeData:
     playtime: int
     max_combo: int
     rank: int # global
+
+    grades: dict[Grade, int] # XH, X, SH, S, A, B, C, D, F, N
 
 @dataclass
 class Status:
@@ -232,7 +233,7 @@ class Player:
         # XXX: below is mostly gulag-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores: dict[GameMode, Optional['Score']] = {
+        self.recent_scores: dict[GameMode, Optional[Score]] = {
             mode: None for mode in GameMode
         }
 
@@ -342,7 +343,7 @@ class Player:
         return self.stats[self.status.mode]
 
     @cached_property
-    def recent_score(self) -> 'Score':
+    def recent_score(self) -> Score:
         """The player's most recently submitted score."""
         score = None
         for s in self.recent_scores.values():
@@ -920,42 +921,40 @@ class Player:
     async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         await db_cursor.execute(
-            'SELECT * '
+            'SELECT tscore, rscore, pp, acc, '
+            'plays, playtime, max_combo, '
+            'xh_count, x_count, sh_count, s_count, a_count '
             'FROM stats '
             'WHERE id = %s',
             [self.id]
         )
 
-        res = await db_cursor.fetchone()
-
-        # get global rank for each mode
-        # XXX: this will be improved in future
-        for mode in GameMode:
-            mode_suffix = format(mode, 'sql')
-
-            # calculate rank.
+        for mode, row in enumerate(await db_cursor.fetchall()):
+            # calculate player's rank.
+            # TODO: do rankings with bisection algorithms
+            # locally, pulling from the database @ startup.
             await db_cursor.execute(
                 'SELECT COUNT(*) AS higher_pp_players '
                 'FROM stats s '
                 'INNER JOIN users u USING(id) '
-                f'WHERE s.pp_{mode_suffix} > %s '
-                'AND u.priv & 1 and u.id != %s',
-                [res[f'pp_{mode_suffix}'], self.id]
+                'WHERE s.mode = %s '
+                'AND s.pp > %s '
+                'AND u.priv & 1 '
+                'AND u.id != %s',
+                [mode, row['pp'], self.id]
             )
 
-            mode_rank = (await db_cursor.fetchone())['higher_pp_players'] + 1
+            row['rank'] = (await db_cursor.fetchone())['higher_pp_players'] + 1
 
-            # update stats
-            self.stats[mode] = ModeData(
-                tscore=res[f'tscore_{mode_suffix}'],
-                rscore=res[f'rscore_{mode_suffix}'],
-                pp=res[f'pp_{mode_suffix}'],
-                acc=res[f'acc_{mode_suffix}'],
-                plays=res[f'plays_{mode_suffix}'],
-                playtime=res[f'playtime_{mode_suffix}'],
-                max_combo=res[f'max_combo_{mode_suffix}'],
-                rank=mode_rank
-            )
+            row['grades'] = {
+                Grade.XH: row.pop('xh_count'),
+                Grade.X: row.pop('x_count'),
+                Grade.SH: row.pop('sh_count'),
+                Grade.S: row.pop('s_count'),
+                Grade.A: row.pop('a_count')
+            }
+
+            self.stats[GameMode(mode)] = ModeData(**row)
 
     def send_menu_clear(self) -> None:
         """Clear the user's osu! chat with the bot

@@ -40,6 +40,7 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import RankedStatus
 from objects.player import Privileges
+from objects.score import Grade
 from objects.score import Score
 from objects.score import SubmissionStatus
 from utils.misc import escape_enum
@@ -725,56 +726,62 @@ async def osuSubmitModularSelector(
     stats = score.player.gm_stats
     prev_stats = copy.copy(stats)
 
-    # update plays & playtime for all submitted scores
+    # stuff update for all submitted scores
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
+    stats.tscore += score.score
 
-    mode_sql = format(score.mode, 'sql')
+    stats_query_l = [
+        'UPDATE stats '
+        'SET plays = %s,'
+        'playtime = %s,'
+        'tscore = %s'
+    ]
 
-    if not (score.passed and score.bmap.awards_ranked_pp):
-        # only update plays & playtime, simple query
-        stats_query = (
-            'UPDATE stats '
-            'SET plays_{mode} = %s, '
-            'playtime_{mode} = %s'
-        ).format(mode=mode_sql)
-        stats_params = [stats.plays, stats.playtime]
-    else:
-        # score is a pass & the map awards pp,
-        # build complex stats update query.
-        stats_query = [ # build a list of params to update
-            'UPDATE stats SET plays_{mode} = %s',
-            'playtime_{mode} = %s'
-        ]
-        stats_params = [stats.plays, stats.playtime]
+    stats_query_args = [stats.plays, stats.playtime, stats.tscore]
 
-        # submitted score on a ranked map,
-        # update max combo and total score.
+    if score.passed and score.bmap.has_leaderboard:
+        # player passed & map is ranked, approved, or loved.
 
-        # update max combo
         if score.max_combo > stats.max_combo:
             stats.max_combo = score.max_combo
-            stats_query.append('max_combo_{mode} = %s')
-            stats_params.append(stats.max_combo)
+            stats_query_l.append('max_combo = %s')
+            stats_query_args.append(stats.max_combo)
 
-        # update total score
-        stats.tscore += score.score
-        stats_query.append('tscore_{mode} = %s')
-        stats_params.append(stats.tscore)
+        if (
+            score.bmap.awards_ranked_pp and
+            score.status == SubmissionStatus.BEST
+        ):
+            # map is ranked or approved, and it's our (new)
+            # best score on the map. update the player's
+            # ranked score, grades, pp, acc and global rank.
 
-        if score.status == SubmissionStatus.BEST:
-            # our (new) best score on the map,
-            # update ranked score, pp, acc, and rank.
-
-            # update ranked score
             additional_rscore = score.score
             if score.prev_best:
                 # we previously had a score, so remove
                 # it's score from our ranked score.
                 additional_rscore -= score.prev_best.score
+
+                if score.grade != score.prev_best.grade:
+                    if score.grade >= Grade.A:
+                        stats.grades[score.grade] += 1
+                        grade_col = format(score.grade, 'stats_column')
+                        stats_query_l.append(f'{grade_col} = {grade_col} + 1')
+
+                    if score.prev_best.grade >= Grade.A:
+                        stats.grades[score.prev_best.grade] -= 1
+                        grade_col = format(score.prev_best.grade, 'stats_column')
+                        stats_query_l.append(f'{grade_col} = {grade_col} - 1')
+            else:
+                # this is our first submitted score on the map
+                if score.grade >= Grade.A:
+                    stats.grades[score.grade] += 1
+                    grade_col = format(score.grade, 'stats_column')
+                    stats_query_l.append(f'{grade_col} = {grade_col} + 1')
+
             stats.rscore += additional_rscore
-            stats_query.append('rscore_{mode} = %s')
-            stats_params.append(stats.rscore)
+            stats_query_l.append('rscore = %s')
+            stats_query_args.append(stats.rscore)
 
             # fetch scores sorted by pp for total acc/pp calc
             # NOTE: we select all plays (and not just top100)
@@ -800,39 +807,41 @@ async def osuSubmitModularSelector(
                 tot += row['acc'] * add
                 div += add
             stats.acc = tot / div
-            stats_query.append('acc_{mode} = %s')
-            stats_params.append(stats.acc)
+            stats_query_l.append('acc = %s')
+            stats_query_args.append(stats.acc)
 
             # update total weighted pp
             weighted_pp = sum([row['pp'] * 0.95 ** i
                                for i, row in enumerate(top_100_pp)])
             bonus_pp = 416.6667 * (1 - 0.9994 ** total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
-            stats_query.append('pp_{mode} = %s')
-            stats_params.append(stats.pp)
+            stats_query_l.append('pp = %s')
+            stats_query_args.append(stats.pp)
 
             # update rank
-            # TODO: adjust any people inbetween we passed,
-            # check whether they're online, and push their
-            # stats to all online players if nescessary.
+            # TODO: do rankings with bisection algorithms
+            # locally, pulling from the database @ startup.
             await db_cursor.execute(
                 'SELECT COUNT(*) AS higher_pp_players '
                 'FROM stats s '
                 'INNER JOIN users u USING(id) '
-                f'WHERE s.pp_{mode_sql} > %s '
-                'AND u.priv & 1 and u.id != %s',
-                [stats.pp, score.player.id]
+                'WHERE s.mode = %s '
+                'AND s.pp > %s '
+                'AND u.priv & 1 '
+                'AND u.id != %s',
+                [mode_vn, stats.pp, score.player.id]
             )
             stats.rank = 1 + (await db_cursor.fetchone())['higher_pp_players']
 
-        # combine the list of updates into a single querystring
-        stats_query = ','.join(stats_query).format(mode=mode_sql)
+    # create a single querystring from the list of updates
+    stats_query = ','.join(stats_query_l)
 
-    stats_query += ' WHERE id = %s'
-    stats_params.append(score.player.id)
+    stats_query += ' WHERE id = %s AND mode = %s'
+    stats_query_args.append(score.player.id)
+    stats_query_args.append(mode_vn)
 
     # send any stat changes to sql, and other players
-    await db_cursor.execute(stats_query, stats_params)
+    await db_cursor.execute(stats_query, stats_query_args)
     glob.players.enqueue(packets.userStats(score.player))
 
     if not score.player.restricted:
@@ -2352,10 +2361,10 @@ async def register_account(
             user_id = db_cursor.lastrowid
 
             # add to `stats` table.
-            await db_cursor.execute(
+            await db_cursor.executemany(
                 'INSERT INTO stats '
-                '(id) VALUES (%s)',
-                [user_id]
+                '(id, mode) VALUES (%s, %s)',
+                [(user_id, mode) for mode in range(8)]
             )
 
         if glob.datadog:

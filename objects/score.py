@@ -55,6 +55,10 @@ class Grade(IntEnum):
     def from_str(cls, s: str) -> 'Grade':
         return gradestr_to_grade_dict[s.lower()]
 
+    def __format__(self, format_spec: str) -> str:
+        if format_spec == 'stats_column':
+            return f'{self.name.lower()}_count'
+
 gradestr_to_grade_dict = {
     'xh': Grade.XH,
     'x': Grade.X,
