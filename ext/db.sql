@@ -366,7 +366,14 @@ insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bc
 values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@gulag.ca',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
-insert into stats (id) values (1);
+INSERT INTO stats (id, mode) VALUES (1, 0);
+INSERT INTO stats (id, mode) VALUES (1, 1);
+INSERT INTO stats (id, mode) VALUES (1, 2);
+INSERT INTO stats (id, mode) VALUES (1, 3);
+INSERT INTO stats (id, mode) VALUES (1, 4);
+INSERT INTO stats (id, mode) VALUES (1, 5);
+INSERT INTO stats (id, mode) VALUES (1, 6);
+INSERT INTO stats (id, mode) VALUES (1, 7);
 
 # offset score ids to avoid replay file collisions.
 alter table scores_rx auto_increment = 3074457345618258602;
