@@ -864,16 +864,7 @@ async def osuSubmitModularSelector(
     """ score submission charts """
 
     if not score.passed or score.mode >= GameMode.rx_std:
-        # basically, the osu! client and the way bancho handles this
-        # is dumb. if you submit a failed play on bancho, it will
-        # still generate the charts and send it to the client, even
-        # when the client can't (and doesn't use them).. so instead,
-        # we'll send back an empty error, which will just tell the
-        # client that the score submission process is complete.. lol
-        # (also no point on rx/ap since you can't see the charts atm xd)
-
-        # TODO: we actually have to send back an empty chart since the
-        # client uses this to confirm the score has been submitted.. lol
+        # charts & achievements won't be shown ingame.
         ret = b'error: no'
 
     else:
@@ -1448,6 +1439,7 @@ async def checkUpdates(conn: Connection) -> HTTPResponse:
 # GET /api/get_score_info: return information about a given score.
 # GET /api/get_replay: return the file for a given replay (with or without headers).
 # GET /api/get_match: return information for a given multiplayer match.
+# GET /api/get_leaderboard: return the top players for a given mode & sort condition
 
 # Authorized (requires valid api key, passed as 'Authorization' header)
 # NOTE: authenticated handlers may have privilege requirements.
@@ -2090,6 +2082,54 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
                 } for idx, slot in enumerate(match.slots) if slot.player
             }
         }
+    })
+
+@domain.route('/api/get_leaderboard')
+async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
+    conn.resp_headers['Content-Type'] = f'application/json'
+
+    if (mode_arg := conn.args.get('mode', None)) is not None:
+        if not (
+            mode_arg.isdecimal() and
+            0 <= (mode := int(mode_arg)) <= 7
+        ):
+            return (400, JSON({'status': 'Invalid mode.'}))
+
+        mode = GameMode(mode)
+    else:
+        mode = GameMode.vn_std
+
+    if (limit_arg := conn.args.get('limit', None)) is not None:
+        if not (
+            limit_arg.isdecimal() and
+            0 < (limit := int(limit_arg)) <= 100
+        ):
+            return (400, JSON({'status': 'Invalid limit.'}))
+    else:
+        limit = 25
+
+    if (sort := conn.args.get('sort', None)) is not None:
+        if sort not in ('tscore', 'rscore', 'pp', 'acc'):
+            return (400, JSON({'status': 'Invalid sort.'}))
+    else:
+        sort = 'pp'
+
+    res = await glob.db.fetchall(
+        'SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, '
+        's.pp, s.plays, s.playtime, s.acc, s.max_combo, '
+        's.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, '
+        'c.id as clan_id, c.name as clan_name, c.tag as clan_tag '
+        'FROM stats s '
+        'LEFT JOIN users u USING (id) '
+        'LEFT JOIN clans c ON u.clan_id = c.id '
+        'WHERE s.mode = %s AND u.priv & 1 '
+        f'ORDER BY s.{sort} DESC LIMIT %s',
+        [mode, limit]
+    )
+
+    return JSON({
+        'status': 'success',
+        'leaderboard': res
     })
 
 def requires_api_key(f: Callable) -> Callable:
