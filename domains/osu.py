@@ -1535,22 +1535,23 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
         if not info_res:
             return (404, JSON({'status': 'Player not found'}))
 
-        api_data |= info_res
+        api_data['info'] = info_res
 
     # fetch user's stats if requested
     if conn.args['scope'] in ('stats', 'all'):
         # get all regular stats
-        stats_res = await glob.db.fetch(
-            'SELECT * FROM stats '
+        stats_res = await glob.db.fetchall(
+            'SELECT tscore, rscore, pp, plays, playtime, acc, max_combo, '
+            'xh_count, x_count, sh_count, s_count, a_count FROM stats '
             'WHERE id = %s', [pid]
         )
 
         if not stats_res:
             return (404, JSON({'status': 'Player not found'}))
 
-        api_data |= stats_res
+        api_data['stats'] = stats_res
 
-    return orjson.dumps({'status': 'success', 'player': api_data})
+    return JSON({'status': 'success', 'player': api_data})
 
 @domain.route('/api/get_player_status')
 async def api_get_player_status(conn: Connection) -> HTTPResponse:
