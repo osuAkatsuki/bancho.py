@@ -2122,7 +2122,7 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
         'FROM stats s '
         'LEFT JOIN users u USING (id) '
         'LEFT JOIN clans c ON u.clan_id = c.id '
-        'WHERE s.mode = %s AND u.priv & 1 '
+        f'WHERE s.mode = %s AND u.priv & 1 AND s.{sort} > 0 '
         f'ORDER BY s.{sort} DESC LIMIT %s',
         [mode, limit]
     )
