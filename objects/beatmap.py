@@ -31,7 +31,6 @@ BEATMAPS_PATH = Path.cwd() / '.data/osu'
 OSUAPI_GET_BEATMAPS = 'https://old.ppy.sh/api/get_beatmaps'
 
 DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
-MAP_CACHE_TIMEOUT = timedelta(hours=4)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
@@ -528,17 +527,26 @@ class BeatmapSet:
         if self.all_officially_ranked_or_approved():
             return False
 
-        # TODO: check for further patterns to signify that maps could be
-        # checked less often, such as how long since their last update.
+        current_datetime = datetime.now()
 
-        timeout = MAP_CACHE_TIMEOUT
+        # the delta between cache invalidations will increase depending
+        # on how long it's been since the map was last updated on osu!
+        last_map_update = max([bmap.last_update for bmap in self.maps])
+        update_delta = current_datetime - last_map_update
 
-        # loved maps may be updated, but it's less
-        # likely for a mapper to remove a leaderboard.
+        # with a minimum of 2 hours, add 5 hours per year since it's update.
+        # the formula for this is subject to adjustment in the future.
+        check_delta = timedelta(hours=2 + ((5 / 365) * update_delta.days))
+
+        # we'll consider it much less likely for a loved map to be unranked;
+        # it's possible but the mapper will remove their leaderboard doing so.
         if self.all_officially_loved():
-            timeout *= 4
+            # TODO: it's still possible for this to happen and the delta can span
+            # over multiple days quite easily here, there should be a command to
+            # force a cache invalidation on the set. (normal privs if spam protected)
+            check_delta *= 4
 
-        return datetime.now() > (self.last_osuapi_check + timeout)
+        return current_datetime > (self.last_osuapi_check + check_delta)
 
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
