@@ -5,7 +5,11 @@
 # up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
 # connection method you would with any other modern server and you
 # should have no problems connecting. registration is done in-game
-# with osu!'s built-in registration. the api can also be tested here,
+# with osu!'s built-in registration (if you're worried about not being
+# properly connected while registering, the server should send back
+# https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login.
+
+# you can also test gulag's rest api using my test server,
 # e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 
 import asyncio
@@ -136,6 +140,18 @@ async def before_serving() -> None:
     else:
         glob.geoloc_db = None
 
+    # support for https://datadoghq.com
+    if all(glob.config.datadog.values()):
+        datadog.initialize(**glob.config.datadog)
+        glob.datadog = datadog.ThreadStats()
+        glob.datadog.start(flush_in_thread=True,
+                           flush_interval=15)
+
+        # wipe any previous stats from the page.
+        glob.datadog.gauge('gulag.online_players', 0)
+    else:
+        glob.datadog = None
+
     # cache many global collections/objects from sql,
     # such as channels, mappools, clans, bot, etc.
     async with glob.db.pool.acquire() as conn:
@@ -179,16 +195,7 @@ async def after_serving() -> None:
         glob.datadog.stop()
         glob.datadog.flush()
 
-def detect_mysqld_running() -> bool:
-    """Detect whether theres a mysql server running locally."""
-    for service in ('mysqld', 'mariadb'):
-        if os.path.exists(f'/var/run/{service}/{service}.pid'):
-            return True
-    else:
-        # not found, try pgrep
-        return os.system('pgrep mysqld') == 0
-
-def ensure_platform() -> None:
+def ensure_supported_platform() -> None:
     """Ensure we're running on an appropriate platform for gulag."""
     if sys.platform != 'linux':
         log('gulag currently only supports linux', Ansi.LRED)
@@ -201,37 +208,39 @@ def ensure_platform() -> None:
         sys.exit('gulag uses many modern python features, '
                  'and the minimum python version is 3.9.')
 
-def ensure_services() -> None:
-    """Ensure all required services are running in the background."""
-    # make sure nginx & mysqld are running.
-    if (
-        glob.config.mysql['host'] in ('localhost', '127.0.0.1') and
-        not detect_mysqld_running()
-    ):
-        sys.exit('Please start your mysqld server.')
+def ensure_local_services_are_running() -> None:
+    """Ensure all required services (nginx & mysql) are running."""
+    # NOTE: if you have any problems with this, please contact me
+    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
+    # how people are using the software so that i can keep it
+    # in mind while developing new features & refactoring.
+
+    if glob.config.mysql['host'] in ('localhost', '127.0.0.1'):
+        # sql server running locally, make sure it's running
+        for service in ('mysqld', 'mariadb'):
+            if os.path.exists(f'/var/run/{service}/{service}.pid'):
+                return True
+        else:
+            # not found, try pgrep
+            pgrep_exit_code = os.system('pgrep mysqld')
+            if pgrep_exit_code != 0:
+                sys.exit('Please start your mysqld server.')
 
     if not os.path.exists('/var/run/nginx.pid'):
         sys.exit('Please start your nginx server.')
 
-def _install_cmyui_dev_hooks():
+def __install_cmyui_dev_hooks() -> None:
     """Change internals to help with debugging & active development."""
-    from _testing import runtime
+    from _testing import runtime # type: ignore
     runtime.setup()
 
-if __name__ == '__main__':
-    """Attempt to start up gulag."""
-    # make sure we're running on an appropriate
-    # platform with all required software.
-    ensure_platform()
-
-    # make sure all required services
-    # are being run in the background.
-    ensure_services()
-
+def display_startup_dialog() -> None:
+    """Print any general information or warnings to the console."""
     if glob.config.advanced:
         log('running in advanced mode', Ansi.LRED)
 
-    # warn the user if gulag is running on root.
+    # running on root is unadvised due to the permissions it grants the
+    # software unnecessary amounts of power over the operating system.
     if os.geteuid() == 0:
         log('It is not recommended to run gulag as root, '
             'especially in production..', Ansi.LYELLOW)
@@ -246,21 +255,24 @@ if __name__ == '__main__':
         log('Running in offline mode, some features '
             'will not be available.', Ansi.LRED)
 
+DATA_PATH = Path.cwd() / '.data'
+ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
+
+def ensure_directory_structure() -> None:
+    """Ensure the .data directory and git submodules are ready."""
     # create /.data and its subdirectories.
-    data_path = Path.cwd() / '.data'
-    data_path.mkdir(exist_ok=True)
+    DATA_PATH.mkdir(exist_ok=True)
 
     for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
-        subdir = data_path / sub_dir
+        subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
 
-    achievements_path = data_path / 'assets/medals/client'
-    if not achievements_path.exists():
-        # create directory & download achievement images
-        achievements_path.mkdir(parents=True)
-        utils.misc.download_achievement_images(achievements_path)
+    if not ACHIEVEMENTS_ASSETS_PATH.exists():
+        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
+        utils.misc.download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
 
-    # make sure oppai-ng binary is built and ready.
+def ensure_dependencies_and_requirements() -> None:
+    """Make sure all of gulag's dependencies are ready."""
     if not OPPAI_PATH.exists():
         log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
         p = subprocess.Popen(args=['git', 'submodule', 'init'],
@@ -283,49 +295,50 @@ if __name__ == '__main__':
         if p.wait() == 1:
             sys.exit('Failed to build oppai-ng automatically.')
 
-    # create a server object, which serves as a map of domains.
-    app = glob.app = cmyui.Server(
+def create_server() -> cmyui.Server:
+    """Create a server object, containing all domains & their endpoints."""
+    server = cmyui.Server(
         name=f'gulag v{glob.version}',
         gzip=4, debug=glob.config.debug
     )
 
-    # add our endpoint's domains to the server;
+    # fetch the domains our server is able to handle
     # each may potentially hold many individual endpoints.
     from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
     from domains.osu import domain as osu_domain # osu.ppy.sh
     from domains.ava import domain as ava_domain # a.ppy.sh
     from domains.map import domain as map_domain # b.ppy.sh
-    app.add_domains({cho_domain, osu_domain,
-                     ava_domain, map_domain})
+    server.add_domains({cho_domain, osu_domain,
+                        ava_domain, map_domain})
 
     # enqueue tasks to run once the server
     # begins, and stops serving connections.
     # these make sure we set everything up
     # and take it down nice and graceful.
-    app.before_serving = before_serving
-    app.after_serving = after_serving
+    server.before_serving = before_serving
+    server.after_serving = after_serving
 
-    # support for https://datadoghq.com
-    if all(glob.config.datadog.values()):
-        datadog.initialize(**glob.config.datadog)
-        glob.datadog = datadog.ThreadStats()
-        glob.datadog.start(flush_in_thread=True,
-                           flush_interval=15)
+    return server
 
-        # wipe any previous stats from the page.
-        glob.datadog.gauge('gulag.online_players', 0)
-    else:
-        glob.datadog = None
+if __name__ == '__main__':
+    # check if the environment is prepared to run the server.
+    ensure_supported_platform() # linux only at the moment
+    ensure_local_services_are_running() # mysql (if local), nginx
+    ensure_directory_structure()
+    ensure_dependencies_and_requirements()
 
-    # cmyui-specific dev hooks, you can ignore this :)
+    # server is ready & safe to start up.
+    glob.app = create_server()
+
+    # TODO: better hook system so this isn't here
     if os.getenv('cmyuiosu') is not None:
-        _install_cmyui_dev_hooks()
+        __install_cmyui_dev_hooks()
 
-    # start up the server; this starts an event loop internally,
-    # using uvloop if it's installed. it uses SIGUSR1 for restarts.
-    # NOTE: eventually the event loop creation will likely be
-    # moved into the gulag codebase for increased flexibility.
-    app.run(glob.config.server_addr, handle_restart=True)
+    # show info & any contextual warnings.
+    display_startup_dialog()
+
+    # start up the event loop and bind a socket to the configured address.
+    glob.app.run(addr=glob.config.server_addr, handle_restart=True)
 
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
