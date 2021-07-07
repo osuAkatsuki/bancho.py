@@ -7,7 +7,7 @@
 # should have no problems connecting. registration is done in-game
 # with osu!'s built-in registration (if you're worried about not being
 # properly connected while registering, the server should send back
-# https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login.
+# https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login).
 
 # you can also test gulag's rest api using my test server,
 # e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
@@ -65,7 +65,7 @@ utils.misc.install_excepthook()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 5, 2)
+glob.version = cmyui.Version(3, 5, 3)
 
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
@@ -239,8 +239,8 @@ def display_startup_dialog() -> None:
     if glob.config.advanced:
         log('running in advanced mode', Ansi.LRED)
 
-    # running on root is unadvised due to the permissions it grants the
-    # software unnecessary amounts of power over the operating system.
+    # running on root grants the software potentally dangerous and
+    # unnecessary power over the operating system and is not advised.
     if os.geteuid() == 0:
         log('It is not recommended to run gulag as root, '
             'especially in production..', Ansi.LYELLOW)
