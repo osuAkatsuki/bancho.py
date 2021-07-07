@@ -190,6 +190,37 @@ gulagstatus2str_dict = {
 class Beatmap:
     """A class representing an osu! beatmap.
 
+    This class provides a high level api which should always be the
+    preferred method of fetching beatmaps due to it's housekeeping.
+    It will perform caching & invalidation, handle map updates while
+    minimizing osu!api requests, and always use the most efficient
+    method available to fetch the beatmap's information, while
+    maintaining a low overhead.
+
+    The only methods you should need are:
+      await Beatmap.from_md5(md5: str, set_id: int = -1) -> Optional[Beatmap]
+      await Beatmap.from_bid(bid: int) -> Optional[Beatmap]
+
+    Properties:
+      Beatmap.full -> str # Artist - Title [Version]
+      Beatmap.url -> str # https://osu.cmyui.xyz/beatmaps/321
+      Beatmap.embed -> str # [{url} {full}]
+
+      Beatmap.has_leaderboard -> bool
+      Beatmap.awards_ranked_pp -> bool
+      Beatmap.as_dict -> dict[str, object]
+
+    Lower level API:
+      Beatmap._from_md5_cache(md5: str, check_updates: bool = True) -> Optional[Beatmap]
+      Beatmap._from_bid_cache(bid: int, check_updates: bool = True) -> Optional[Beatmap]
+
+      Beatmap._from_md5_sql(md5: str) -> Optional[Beatmap]
+      Beatmap._from_bid_sql(bid: int) -> Optional[Beatmap]
+
+      Beatmap._parse_from_osuapi_resp(osuapi_resp: dict[str, object]) -> None
+
+    Note that the BeatmapSet class also provides a similar API.
+
     Possibly confusing attributes
     -----------
     frozen: `bool`
@@ -238,7 +269,7 @@ class Beatmap:
         self.ar = kwargs.get('ar', 0.0)
         self.hp = kwargs.get('hp', 0.0)
 
-        self.diff = kwargs.get('diff', 0.00)
+        self.diff = kwargs.get('diff', 0.0)
 
         self.filename = kwargs.get('filename', '')
         self.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}} # {mode_vn: {mods: (acc/score: pp, ...), ...}}
@@ -439,7 +470,8 @@ class Beatmap:
         # if a map is 'frozen', we keeps it's status
         # even after an update from the osu!api.
         if not getattr(self, 'frozen', False):
-            self.status = RankedStatus.from_osuapi(int(osuapi_resp['approved']))
+            osuapi_status = int(osuapi_resp['approved'])
+            self.status = RankedStatus.from_osuapi(osuapi_status)
 
         self.mode = GameMode(int(osuapi_resp['mode']))
         self.bpm = float(osuapi_resp['bpm'])
@@ -473,6 +505,33 @@ class Beatmap:
             return bmap
 
 class BeatmapSet:
+    """A class to represent an osu! beatmap set.
+
+    Like the Beatmap class, this class provides a high level api
+    which should always be the preferred method of fetching beatmaps
+    due to it's housekeeping. It will perform caching & invalidation,
+    handle map updates while minimizing osu!api requests, and always
+    use the most efficient method available to fetch the beatmap's
+    information, while maintaining a low overhead.
+
+    The only methods you should need are:
+      await BeatmapSet.from_bsid(bsid: int) -> Optional[BeatmapSet]
+
+      BeatmapSet.all_officially_ranked_or_approved() -> bool
+      BeatmapSet.all_officially_loved() -> bool
+
+    Properties:
+      BeatmapSet.url -> str # https://osu.cmyui.xyz/beatmapsets/123
+
+    Lower level API:
+      await BeatmapSet._from_bsid_cache(bsid: int) -> Optional[BeatmapSet]
+      await BeatmapSet._from_bsid_sql(bsid: int) -> Optional[BeatmapSet]
+      await BeatmapSet._from_bsid_osuapi(bsid: int) -> Optional[BeatmapSet]
+
+      BeatmapSet._cache_expired() -> bool
+      await BeatmapSet._update_if_available() -> None
+      await BeatmapSet._save_to_sql() -> None
+    """
     __slots__ = ('id', 'last_osuapi_check', 'maps')
 
     def __init__(self, **kwargs) -> None:
@@ -520,7 +579,7 @@ class BeatmapSet:
                 return False
         return True
 
-    def cache_expired(self) -> bool:
+    def _cache_expired(self) -> bool:
         """Whether the cached version of the set is
            expired and needs an update from the osu!api."""
         # ranked & approved maps are update-locked.
@@ -625,7 +684,7 @@ class BeatmapSet:
         if bsid in glob.cache['beatmapset']:
             bmap_set: BeatmapSet = glob.cache['beatmapset'][bsid]
 
-            if bmap_set.cache_expired():
+            if bmap_set._cache_expired():
                 await bmap_set._update_if_available()
 
             return glob.cache['beatmapset'][bsid]
@@ -768,7 +827,7 @@ class BeatmapSet:
         # TODO: this can be done less often for certain types of maps,
         # such as ones that're ranked on bancho and won't be updated,
         # and perhaps ones that haven't been updated in a long time.
-        if not did_api_request and bmap_set.cache_expired():
+        if not did_api_request and bmap_set._cache_expired():
             await bmap_set._update_if_available()
 
         return bmap_set
