@@ -491,7 +491,7 @@ class Beatmap:
         if md5 in glob.cache['beatmap']:
             bmap: Beatmap = glob.cache['beatmap'][md5]
 
-            if check_updates and bmap.set.cache_expired():
+            if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
 
             return bmap
@@ -505,7 +505,7 @@ class Beatmap:
         if bid in glob.cache['beatmap']:
             bmap: Beatmap = glob.cache['beatmap'][bid]
 
-            if check_updates and bmap.set.cache_expired():
+            if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
 
             return bmap
