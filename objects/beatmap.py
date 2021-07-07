@@ -378,7 +378,7 @@ class Beatmap:
                 return
 
             # fetching the set will put all maps in cache
-            bmap = await cls._from_md5_cache(md5)
+            bmap = await cls._from_md5_cache(md5, check_updates=False)
 
             if not bmap:
                 return
@@ -419,7 +419,7 @@ class Beatmap:
                 return
 
             # fetching the set will put all maps in cache
-            bmap = await cls._from_bid_cache(bid)
+            bmap = await cls._from_bid_cache(bid, check_updates=False)
 
             if not bmap:
                 return
@@ -483,23 +483,29 @@ class Beatmap:
         self.diff = float(osuapi_resp['difficultyrating'])
 
     @staticmethod
-    async def _from_md5_cache(md5: str) -> Optional['Beatmap']:
+    async def _from_md5_cache(
+        md5: str,
+        check_updates: bool = True
+    ) -> Optional['Beatmap']:
         """Fetch a map from the cache by md5."""
         if md5 in glob.cache['beatmap']:
             bmap: Beatmap = glob.cache['beatmap'][md5]
 
-            if bmap.set.cache_expired():
+            if check_updates and bmap.set.cache_expired():
                 await bmap.set._update_if_available()
 
             return bmap
 
     @staticmethod
-    async def _from_bid_cache(bid: int) -> Optional['Beatmap']:
+    async def _from_bid_cache(
+        bid: int,
+        check_updates: bool = True
+    ) -> Optional['Beatmap']:
         """Fetch a map from the cache by id."""
         if bid in glob.cache['beatmap']:
             bmap: Beatmap = glob.cache['beatmap'][bid]
 
-            if bmap.set.cache_expired():
+            if check_updates and bmap.set.cache_expired():
                 await bmap.set._update_if_available()
 
             return bmap
