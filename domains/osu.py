@@ -838,7 +838,7 @@ async def osuSubmitModularSelector(
 
     stats_query += ' WHERE id = %s AND mode = %s'
     stats_query_args.append(score.player.id)
-    stats_query_args.append(mode_vn)
+    stats_query_args.append(score.mode.value)
 
     # send any stat changes to sql, and other players
     await db_cursor.execute(stats_query, stats_query_args)
