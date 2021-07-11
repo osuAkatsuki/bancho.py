@@ -2358,15 +2358,10 @@ async def register_account(
                 # network tab of cloudflare, so it sends the iso code.
                 country_acronym = conn.headers['CF-IPCountry']
             else:
-                # backup method, get the user's ip and
-                # do a db lookup to get their country.
-                if 'CF-Connecting-IP' in conn.headers:
-                    ip_str = conn.headers['CF-Connecting-IP']
-                else:
-                    # if the request has been forwarded, get the origin
-                    forwards = conn.headers['X-Forwarded-For'].split(',')
-                    if len(forwards) != 1:
-                        ip_str = forwards[0]
+                # if the request has been forwarded, get the origin
+                forwards = conn.headers['X-Forwarded-For'].split(',')
+                if len(forwards) != 1:
+                    ip_str = forwards[0]
                     else:
                         ip_str = conn.headers['X-Real-IP']
 
