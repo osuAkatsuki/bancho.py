@@ -78,13 +78,9 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route('/', methods=['POST'])
 async def bancho_handler(conn: Connection) -> bytes:
-    if 'CF-Connecting-IP' in conn.headers:
-        ip_str = conn.headers['CF-Connecting-IP']
-    else:
-        # if the request has been forwarded, get the origin
-        forwards = conn.headers['X-Forwarded-For'].split(',')
-        if len(forwards) != 1:
-            ip_str = forwards[0]
+    forwards = conn.headers['X-Forwarded-For'].split(',')
+    if len(forwards) != 1:
+        ip_str = forwards[0]
         else:
             ip_str = conn.headers['X-Real-IP']
 
