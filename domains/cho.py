@@ -330,7 +330,7 @@ class SendMessage(BasePacket):
             t_chan.send(msg, sender=p)
 
         p.update_latest_activity()
-        log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
+        log(f'{p} @ {t_chan}: {msg}', Ansi.LCYAN, file='.data/logs/chat.log')
 
 @register(ClientPackets.LOGOUT, restricted=True)
 class Logout(BasePacket):
@@ -1060,7 +1060,7 @@ class SendPrivateMessage(BasePacket):
                     p.send(resp_msg, sender=t)
 
         p.update_latest_activity()
-        log(f'{p} @ {t}: {msg}', Ansi.LCYAN, fd='.data/logs/chat.log')
+        log(f'{p} @ {t}: {msg}', Ansi.LCYAN, file='.data/logs/chat.log')
 
 @register(ClientPackets.PART_LOBBY)
 class LobbyPart(BasePacket):

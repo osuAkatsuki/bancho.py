@@ -24,7 +24,10 @@ from constants.countries import country_codes
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
-from cmyui.osu.replay import Keys
+from cmyui.osu.replay import KEYS_K1
+from cmyui.osu.replay import KEYS_K2
+from cmyui.osu.replay import KEYS_M1
+from cmyui.osu.replay import KEYS_M2
 from cmyui.osu.replay import ReplayFrame
 
 __all__ = (
@@ -45,10 +48,10 @@ __all__ = (
     'escape_enum'
 )
 
-useful_keys = (Keys.M1, Keys.M2,
-               Keys.K1, Keys.K2)
+useful_keys = (KEYS_M1, KEYS_M2,
+               KEYS_K1, KEYS_K2)
 
-def get_press_times(frames: Sequence[ReplayFrame]) -> dict[Keys, float]:
+def get_press_times(frames: Sequence[ReplayFrame]) -> dict[int, float]:
     """A very basic function to press times of an osu! replay.
        This is mostly only useful for taiko maps, since it
        doesn't take holds into account (taiko has none).
