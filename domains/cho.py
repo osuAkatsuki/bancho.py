@@ -19,7 +19,6 @@ from cmyui.logging import AnsiRGB
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
-from cmyui.utils import _isdecimal
 from cmyui.web import Connection
 from cmyui.web import Domain
 from maniera.calculator import Maniera
@@ -451,7 +450,7 @@ async def login(
                     packets.userID(-2)), 'no'
 
     # ensure utc_offset is a number (negative inclusive).
-    if not _isdecimal(client_info[1], _negative=True):
+    if not client_info[1].replace('-', '').isdecimal():
         return # invalid request
 
     utc_offset = int(client_info[1])
@@ -1045,7 +1044,7 @@ class SendPrivateMessage(BasePacket):
                                         pp_values.append((score, pp))
 
                                     resp_msg = ' | '.join([
-                                        f'{score // 1000:.0f}k: {pp:,.2f}pp'
+                                        f'{int(score // 1000)}k: {pp:,.2f}pp'
                                         for score, pp in pp_values
                                     ])
 

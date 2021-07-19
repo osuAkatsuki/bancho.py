@@ -603,7 +603,7 @@ class BeatmapSet:
         # the formula for this is subject to adjustment in the future.
         check_delta = timedelta(hours=2 + ((5 / 365) * update_delta.days))
 
-        # we'll consider it much less likely for a loved map to be unranked;
+        # we'll consider it much less likely for a loved map to be updated;
         # it's possible but the mapper will remove their leaderboard doing so.
         if self.all_officially_loved():
             # TODO: it's still possible for this to happen and the delta can span
@@ -644,7 +644,7 @@ class BeatmapSet:
             # we have the map on disk but it's been removed from the osu!api.
             # i want to see how frequently this happens and see some examples
             # of when it's triggered since i'm not 100% sure about it, cheers.
-            utils.misc.log_strange_occurrence(
+            await utils.misc.log_strange_occurrence(
                 f'_update_if_available no data, setid: {self.id}'
             )
 
@@ -700,7 +700,6 @@ class BeatmapSet:
         """Fetch a mapset from the database by set id."""
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-
                 await db_cursor.execute(
                     'SELECT last_osuapi_check '
                     'FROM mapsets '

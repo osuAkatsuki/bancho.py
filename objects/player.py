@@ -90,7 +90,7 @@ class ModeData:
     max_combo: int
     rank: int # global
 
-    grades: dict[Grade, int] # XH, X, SH, S, A, B, C, D, F, N
+    grades: dict[Grade, int] # XH, X, SH, S, A
 
 @dataclass
 class Status:

@@ -25,7 +25,6 @@ import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
-from cmyui.utils import _isdecimal
 from cmyui.web import Connection
 from cmyui.web import Domain
 from cmyui.web import ratelimit
@@ -638,7 +637,7 @@ async def osuSubmitModularSelector(
                 # Announce the user's #1 score.
                 # TODO: truncate artist/title/version to fit on screen
                 ann = [f'\x01ACTION achieved #1 on {score.bmap.embed}',
-                    f'with {score.acc:.2f}% for {performance}.']
+                       f'with {score.acc:.2f}% for {performance}.']
 
                 if score.mods:
                     ann.insert(1, f'+{score.mods!r}')
@@ -1054,7 +1053,7 @@ async def getScores(
     db_cursor: aiomysql.DictCursor
 ) -> HTTPResponse:
     if not all([ # make sure all int args are integral
-        _isdecimal(conn.args[k], _negative=True)
+        conn.args[k].replace('-', '').isdecimal()
         for k in ('mods', 'v', 'm', 'i')
     ]):
         return b'-1|false'
