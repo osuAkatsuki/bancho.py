@@ -12,8 +12,8 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
-from py3rijndael import RijndaelCbc
 from py3rijndael import Pkcs7Padding
+from py3rijndael import RijndaelCbc
 
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
