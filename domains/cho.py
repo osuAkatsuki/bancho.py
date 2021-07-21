@@ -377,7 +377,7 @@ OFFLINE_NOTIFICATION = packets.notification(
     'some features will be unavailble.'
 )
 
-DELTA_60_DAYS = timedelta(days=60)
+DELTA_90_DAYS = timedelta(days=90)
 
 async def login(
     body_view: memoryview,
@@ -439,13 +439,13 @@ async def login(
     using_tourney_client = osu_ver_stream == 'tourney'
 
     # disallow the login if their osu! client is older
-    # than two months old, forcing an update re-check.
+    # than three months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
     if not glob.app.debug:
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
-        if osu_ver_date < (date.today() - DELTA_60_DAYS):
+        if osu_ver_date < (date.today() - DELTA_90_DAYS):
             return (packets.versionUpdateForced() +
                     packets.userID(-2)), 'no'
 
