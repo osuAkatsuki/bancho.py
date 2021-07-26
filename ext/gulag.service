@@ -1,7 +1,7 @@
 # copy this file to /etc/systemd/system/gulag.service
 
 [Unit]
-Description=Gulag OSU Server
+Description=gulag osu! server
 After=mysqld.service
 BindsTo=mysqld.service
 
