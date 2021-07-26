@@ -125,8 +125,14 @@ nano config.py
 # have completely configured the file.   #
 ##########################################
 
-# start the server
+# test the server
 ./main.py
+
+
+# you can install the systemd service to run gulag as a daemon that starts at boot
+sudo cp ext/gulag.service /etc/systemd/system/gulag.service
+sudo nano /etc/systemd/system/gulag.service
+sudo systemctl daemon-reload && sudo systemctl enable --now gulag.service
 ```
 
 Directory Structure
