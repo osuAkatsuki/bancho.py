@@ -12,6 +12,7 @@ Type=simple
 # it is a good idea to create a system user for gulag (i.e. `useradd -r gulag`) and configure the gulag directory permissions accordingly (i.e. `chown -R gulag:gulag /srv/gulag; chmod 600 /srv/gulag/config.py`)
 User=gulag
 Group=gulag
+# but if you're a novice and do not want to mess with permissions, then at least set these to your user.
 
 # change these paths if necessary
 WorkingDirectory=/srv/gulag/
