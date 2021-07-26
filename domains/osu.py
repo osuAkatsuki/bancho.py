@@ -442,7 +442,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
                 return b'0' # no maps found
-            elif resp.status == 502: # bad gateway, happens a lot with chimu :/
+            elif resp.status >= 500: # chimu server error (happens a lot :/)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             elif resp.status != 200:
                 stacktrace = utils.misc.get_appropriate_stacktrace()
