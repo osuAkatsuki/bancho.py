@@ -499,13 +499,11 @@ def write_uleb128(num: int) -> Union[bytes, bytearray]:
 
     return ret
 
-def write_string(s: str) -> Union[bytes, bytearray]:
+def write_string(s: str) -> bytes:
     """ Write `s` into bytes (ULEB128 & string). """
     if s:
         encoded = s.encode()
-        ret = bytearray(b'\x0b')
-        ret += write_uleb128(len(encoded))
-        ret += encoded
+        ret = b'\x0b' + write_uleb128(len(encoded)) + encoded
     else:
         ret = b'\x00'
 
