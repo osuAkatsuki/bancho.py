@@ -2,7 +2,8 @@
 
 [Unit]
 Description=Gulag OSU Server
-Requires=mysqld.service
+After=mysqld.service
+BindsTo=mysqld.service
 
 
 [Service]
