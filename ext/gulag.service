@@ -1,0 +1,28 @@
+# copy this file to /etc/systemd/system/gulag.service
+
+[Unit]
+Description=Gulag OSU Server
+Requires=mysqld.service
+
+
+[Service]
+Type=simple
+
+# it is a good idea to create a system user for gulag (i.e. `useradd -r gulag`) and configure the gulag directory permissions accordingly (i.e. `chown -R gulag:gulag /srv/gulag; chmod 600 /srv/gulag/config.py`)
+User=gulag
+Group=gulag
+
+# change these paths if necessary
+WorkingDirectory=/srv/gulag/
+ExecStart=/srv/gulag/main.py
+
+# uncomment if you want to output log to a separate file instead of the system journal
+#StandardOutput=file:/var/log/gulag.log
+#StandardError=file:/var/log/gulag.log
+
+
+[Install]
+WantedBy=multi-user.target
+
+
+# then run `systemctl daemon-reload` and `systemctl enable --now gulag` to enable and start it.
