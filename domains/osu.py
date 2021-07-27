@@ -1665,29 +1665,29 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     # build sql query & fetch info
 
     query = [
-        'SELECT t.id, map_md5, score, pp, acc, max_combo, '
-        'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
-        't.status, t.mode, play_time, time_elapsed, perfect '
+        'SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, '
+        't.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, '
+        't.status, t.mode, t.play_time, t.time_elapsed, t.perfect '
         f'FROM {mode.scores_table} t '
         'INNER JOIN maps b ON t.map_md5 = b.md5 '
-        'WHERE userid = %s AND mode = %s'
+        'WHERE t.userid = %s AND t.mode = %s'
     ]
 
     params = [p.id, mode.as_vanilla]
 
     if mods is not None:
         if strong_equality:
-            query.append('AND mods & %s = %s')
+            query.append('AND t.mods & %s = %s')
             params.extend((mods, mods))
         else:
-            query.append('AND mods & %s != 0')
+            query.append('AND t.mods & %s != 0')
             params.append(mods)
 
     if scope == 'best':
         query.append('AND t.status = 2 AND b.status IN (2, 3)') # only pp-awarding scores
-        sort = 'pp'
+        sort = 't.pp'
     else:
-        sort = 'play_time'
+        sort = 't.play_time'
 
     query.append(f'ORDER BY {sort} DESC LIMIT %s')
     params.append(limit)
