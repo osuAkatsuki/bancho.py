@@ -1684,7 +1684,18 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
             params.append(mods)
 
     if scope == 'best':
-        query.append('AND t.status = 2 AND b.status IN (2, 3)') # only pp-awarding scores
+        include_loved = (
+            'include_loved' in conn.args and
+            conn.args['include_loved'] == '1'
+        )
+    
+        allowed_statuses = [2, 3]
+
+        if include_loved:
+            allowed_statuses.append(5)
+
+        query.append('AND t.status = 2 AND b.status IN %s')
+        params.append(allowed_statuses)
         sort = 't.pp'
     else:
         sort = 't.play_time'
