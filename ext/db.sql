@@ -4,7 +4,7 @@ create table achievements
 		primary key,
 	file varchar(128) not null,
 	name varchar(128) charset utf8 not null,
-	`desc` varchar(256) charset utf8 not null,
+	`desc` varchar(191) charset utf8 not null,
 	cond varchar(64) not null,
 	constraint achievements_desc_uindex
 		unique (`desc`),
@@ -341,7 +341,7 @@ create table users
 		primary key,
 	name varchar(32) charset utf8 not null,
 	safe_name varchar(32) charset utf8 not null,
-	email varchar(254) not null,
+	email varchar(191) not null,
 	priv int default 1 not null,
 	pw_bcrypt char(60) not null,
 	country char(2) default 'xx' not null,

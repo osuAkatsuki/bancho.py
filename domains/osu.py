@@ -1665,10 +1665,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     # build sql query & fetch info
 
     query = [
-        'SELECT id, map_md5, score, pp, acc, max_combo, '
+        'SELECT t.id, map_md5, score, pp, acc, max_combo, '
         'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
-        'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {mode.scores_table} '
+        't.status, t.mode, play_time, time_elapsed, perfect '
+        f'FROM {mode.scores_table} t '
+        'INNER JOIN maps ON t.map_md5 = maps.md5 '
         'WHERE userid = %s AND mode = %s'
     ]
 
@@ -1683,7 +1684,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
             params.append(mods)
 
     if scope == 'best':
-        query.append('AND status = 2') # only pp-awarding scores
+        query.append('AND t.status = 2 AND maps.status IN (2, 3)') # only pp-awarding scores
         sort = 'pp'
     else:
         sort = 'play_time'
@@ -1696,7 +1697,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 
     for row in res:
         bmap = await Beatmap.from_md5(row.pop('map_md5'))
-        row['beatmap'] = bmap.as_dict
+        row['beatmap'] = bmap.as_dict if bmap else None
 
     player_info = {
         'id': p.id,
@@ -2031,7 +2032,7 @@ async def api_get_replay(conn: Connection) -> HTTPResponse:
         '({play_time:%Y-%m-%d}).osr"'
     ).format(**res)
 
-    return JSON({'status': 'success', 'replay': bytes(buf)})
+    return bytes(buf)
 
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> HTTPResponse:
