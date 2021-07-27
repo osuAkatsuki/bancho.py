@@ -1683,7 +1683,6 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
             query.append('AND t.mods & %s != 0')
             params.append(mods)
 
-
     if scope == 'best':
         include_loved = (
             'include_loved' in conn.args and
@@ -1694,7 +1693,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 
         if include_loved:
             allowed_statuses.append(5)
-            
+
         query.append('AND t.status = 2 AND b.status IN %s')
         params.append(allowed_statuses)
         sort = 't.pp'
