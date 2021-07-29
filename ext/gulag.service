@@ -2,7 +2,7 @@
 
 [Unit]
 Description=gulag osu! server
-After=mysqld.service
+After=mysqld.service network-online.target
 BindsTo=mysqld.service
 
 
