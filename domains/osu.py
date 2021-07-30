@@ -442,7 +442,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
                 return b'0' # no maps found
-            elif resp.status == 502: # bad gateway, happens a lot with chimu :/
+            elif resp.status >= 500: # chimu server error (happens a lot :/)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             elif resp.status != 200:
                 stacktrace = utils.misc.get_appropriate_stacktrace()
@@ -1665,28 +1665,40 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     # build sql query & fetch info
 
     query = [
-        'SELECT id, map_md5, score, pp, acc, max_combo, '
-        'mods, n300, n100, n50, nmiss, ngeki, nkatu, grade, '
-        'status, mode, play_time, time_elapsed, perfect '
-        f'FROM {mode.scores_table} '
-        'WHERE userid = %s AND mode = %s'
+        'SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, '
+        't.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, '
+        't.status, t.mode, t.play_time, t.time_elapsed, t.perfect '
+        f'FROM {mode.scores_table} t '
+        'INNER JOIN maps b ON t.map_md5 = b.md5 '
+        'WHERE t.userid = %s AND t.mode = %s'
     ]
 
     params = [p.id, mode.as_vanilla]
 
     if mods is not None:
         if strong_equality:
-            query.append('AND mods & %s = %s')
+            query.append('AND t.mods & %s = %s')
             params.extend((mods, mods))
         else:
-            query.append('AND mods & %s != 0')
+            query.append('AND t.mods & %s != 0')
             params.append(mods)
 
     if scope == 'best':
-        query.append('AND status = 2') # only pp-awarding scores
-        sort = 'pp'
+        include_loved = (
+            'include_loved' in conn.args and
+            conn.args['include_loved'] == '1'
+        )
+    
+        allowed_statuses = [2, 3]
+
+        if include_loved:
+            allowed_statuses.append(5)
+
+        query.append('AND t.status = 2 AND b.status IN %s')
+        params.append(allowed_statuses)
+        sort = 't.pp'
     else:
-        sort = 'play_time'
+        sort = 't.play_time'
 
     query.append(f'ORDER BY {sort} DESC LIMIT %s')
     params.append(limit)
@@ -1696,7 +1708,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 
     for row in res:
         bmap = await Beatmap.from_md5(row.pop('map_md5'))
-        row['beatmap'] = bmap.as_dict
+        row['beatmap'] = bmap.as_dict if bmap else None
 
     player_info = {
         'id': p.id,
@@ -2031,7 +2043,7 @@ async def api_get_replay(conn: Connection) -> HTTPResponse:
         '({play_time:%Y-%m-%d}).osr"'
     ).format(**res)
 
-    return JSON({'status': 'success', 'replay': bytes(buf)})
+    return bytes(buf)
 
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> HTTPResponse:
