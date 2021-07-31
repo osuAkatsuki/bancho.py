@@ -209,7 +209,7 @@ def ensure_supported_platform() -> None:
                  'and the minimum python version is 3.9.')
 
 def ensure_local_services_are_running() -> None:
-    """Ensure all required services (nginx & mysql) are running."""
+    """Ensure all required services (mysql) are running."""
     # NOTE: if you have any problems with this, please contact me
     # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
     # how people are using the software so that i can keep it
@@ -225,9 +225,6 @@ def ensure_local_services_are_running() -> None:
             pgrep_exit_code = os.system('pgrep mysqld')
             if pgrep_exit_code != 0:
                 sys.exit('Please start your mysqld server.')
-
-    if not os.path.exists('/var/run/nginx.pid'):
-        sys.exit('Please start your nginx server.')
 
 def __install_cmyui_dev_hooks() -> None:
     """Change internals to help with debugging & active development."""
