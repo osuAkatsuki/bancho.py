@@ -63,7 +63,7 @@ the new stack; the code will need to be of comparable quality to what you see he
 # Installation Guide
 
 **Important notes:**
-- gulag currently does not work on most other distros besides ubuntu 18.04 and 20.04 due to an issue with the liboppai library.
+- gulag currently does not work on most other distros besides ubuntu 18.04 and 20.04 due to an unknown issue with the liboppai library.
 - osu uses the old deprecated TLSv1.0 so you will need to make sure your reverse proxy supports TLSv1.0. The included nginx configuration should enable TLSv1.0 on 20.04.
 
 ## Install requirements
