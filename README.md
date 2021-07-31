@@ -62,7 +62,7 @@ the new stack; the code will need to be of comparable quality to what you see he
 
 # Installation Guide
 
-## Important notes:
+**Important notes:**
 - gulag currently does not work on most other distros besides ubuntu 18.04 and 20.04 due to an issue with the liboppai library.
 - osu uses the old deprecated TLSv1.0 so you will need to make sure your reverse proxy supports TLSv1.0. The included nginx configuration should enable TLSv1.0 on 20.04.
 
@@ -124,7 +124,7 @@ Test the server:
 ## Install gulag as a daemon for production
 Move gulag to a system-wide location and create a system user for it (optional, recommended for security but may make things harder to work with)
 ```sh
-sudo mv gulag /srv/gulag
+sudo mv gulag /srv/gulag # don't forget to update paths in nginx
 sudo useradd -r gulag
 sudo chown -R gulag:gulag /srv/gulag
 sudo chmod 640 /srv/gulag/config.py # protect credentials
