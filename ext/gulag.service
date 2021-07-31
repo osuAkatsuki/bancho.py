@@ -1,18 +1,14 @@
-# copy this file to /etc/systemd/system/gulag.service
-
 [Unit]
 Description=gulag osu! server
 After=mysqld.service network-online.target
 BindsTo=mysqld.service
 
-
 [Service]
 Type=simple
 
-# it is a good idea to create a system user for gulag (i.e. `useradd -r gulag`) and configure the gulag directory permissions accordingly (i.e. `chown -R gulag:gulag /srv/gulag; chmod 600 /srv/gulag/config.py`)
+# ideally gulag should run under its own user, but change these to your user if you don't want to mess with that stuff.
 User=gulag
 Group=gulag
-# but if you're a novice and do not want to mess with permissions, then at least set these to your user.
 
 # change these paths if necessary
 WorkingDirectory=/srv/gulag/
@@ -21,9 +17,5 @@ ExecStart=/srv/gulag/main.py
 StandardOutput=file:/var/log/gulag.log
 StandardError=file:/var/log/gulag.log
 
-
 [Install]
 WantedBy=multi-user.target
-
-
-# then run `systemctl daemon-reload` and `systemctl enable --now gulag` to enable and start it.
