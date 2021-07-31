@@ -18,9 +18,8 @@ Group=gulag
 WorkingDirectory=/srv/gulag/
 ExecStart=/srv/gulag/main.py
 
-# uncomment if you want to output log to a separate file instead of the system journal
-#StandardOutput=file:/var/log/gulag.log
-#StandardError=file:/var/log/gulag.log
+StandardOutput=file:/var/log/gulag.log
+StandardError=file:/var/log/gulag.log
 
 
 [Install]
