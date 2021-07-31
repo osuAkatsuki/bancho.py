@@ -69,12 +69,12 @@ the new stack; the code will need to be of comparable quality to what you see he
 ## Install requirements
 Ubuntu 20.04 has python3.9 so you can simply do:
 ```sh
-sudo apt install python3.9 python3-pip build-essential mysql-server nginx certbot
+sudo apt install python3.9 python3-pip build-essential mysql-server nginx python3-certbot python3-certbot-nginx
 ```
 For 18.04 you'll need to use the ppa:
 ```sh
 sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt install python3.9 python3.9-dev python3.9-distutils mysql-server nginx build-essential certbot
+sudo apt install python3.9 python3.9-dev python3.9-distutils build-essential mysql-server nginx python3-certbot python3-certbot-nginx
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 ```
