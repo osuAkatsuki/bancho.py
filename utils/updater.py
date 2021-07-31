@@ -46,7 +46,6 @@ class Updater:
                 'https://discord.gg/ShEQgUx',
                 'Enjoy the server!'
             ]), Ansi.LCYAN)
-            input('> Press enter to continue')
 
         if glob.has_internet:
             await self._update_cmyui() # pip install -U cmyui
@@ -169,8 +168,6 @@ class Updater:
             log("SQL failed to update - unless you've been "
                 "modifying sql and know what caused this, "
                 "please please contact cmyui#0425.", Ansi.LRED)
-
-            input('Press enter to exit')
 
             await glob.app.after_serving()
             raise KeyboardInterrupt
