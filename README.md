@@ -54,7 +54,7 @@ recommend forking the repository and playing around on a server of your own,
 this is how all previous high quality contributions have come into fruition.
 
 there is currently no official frontend project for gulag. the most serious
-attempt to date is [gulag-web](https://github.com/Varkaria/gulag-web), though
+attempt to date is [guweb](https://github.com/Varkaria/guweb), though
 there is a pretty decent chance that [varkaria](https://github.com/Varkaria) and
 i will be doing some major refactoring in the future before moving akatsuki onto
 the new stack; the code will need to be of comparable quality to what you see here.
