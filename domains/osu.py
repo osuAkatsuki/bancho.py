@@ -2297,7 +2297,8 @@ async def register_account(
     name = mp_args['user[username]'].strip()
     email = mp_args['user[user_email]']
     pw_txt = mp_args['user[password]']
-
+    safe_name = safe_name = name.lower().replace(' ', '_')
+    
     if not all((name, email, pw_txt)) or 'check' not in mp_args:
         return (400, b'Missing required params')
 
@@ -2320,7 +2321,7 @@ async def register_account(
         errors['username'].append('Disallowed username; pick another.')
 
     if 'username' not in errors:
-        await db_cursor.execute('SELECT 1 FROM users WHERE name = %s', [name])
+        await db_cursor.execute('SELECT 1 FROM users WHERE safe_name = %s', [safe_name])
         if db_cursor.rowcount != 0:
             errors['username'].append('Username already taken by another player.')
 
@@ -2361,8 +2362,6 @@ async def register_account(
             pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
             pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
             glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache result for login
-
-            safe_name = name.lower().replace(' ', '_')
 
             if 'CF-IPCountry' in conn.headers:
                 # best case, dev has enabled ip geolocation in the
