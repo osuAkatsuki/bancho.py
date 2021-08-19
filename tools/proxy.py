@@ -12,7 +12,7 @@ from enum import unique
 from enum import IntEnum
 from typing import Union
 
-from cmyui.logging import AnsiRGB
+from cmyui.logging import RGB
 from mitmproxy import http
 
 @unique
@@ -81,10 +81,10 @@ class ServerPackets(IntEnum):
         return f'<{self.name} ({self.value})>'
 
 BYTE_ORDER_SUFFIXES = [
-    f'{AnsiRGB(0x76eb00)!r}B\x1b[0m',
-    f'{AnsiRGB(0xbfbf00)!r}KB\x1b[0m',
-    f'{AnsiRGB(0xe98b00)!r}MB\x1b[0m',
-    f'{AnsiRGB(0xfd4900)!r}GB\x1b[0m'
+    f'{RGB(0x76eb00)!r}B\x1b[0m',
+    f'{RGB(0xbfbf00)!r}KB\x1b[0m',
+    f'{RGB(0xe98b00)!r}MB\x1b[0m',
+    f'{RGB(0xfd4900)!r}GB\x1b[0m'
 ]
 def fmt_bytes(n: Union[int, float]) -> str:
     for suffix in BYTE_ORDER_SUFFIXES:

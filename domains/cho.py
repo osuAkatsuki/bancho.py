@@ -15,7 +15,7 @@ from typing import Union
 import aiomysql
 import bcrypt
 from cmyui.logging import Ansi
-from cmyui.logging import AnsiRGB
+from cmyui.logging import RGB
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
@@ -142,7 +142,7 @@ async def bancho_handler(conn: Connection) -> bytes:
 
     if glob.app.debug:
         packets_str = ', '.join(packets_handled) or 'None'
-        log(f'[BANCHO] {player} | {packets_str}.', AnsiRGB(0xff68ab))
+        log(f'[BANCHO] {player} | {packets_str}.', RGB(0xff68ab))
 
     player.last_recv_time = time.time()
     conn.resp_headers['Content-Type'] = 'text/html; charset=UTF-8'
