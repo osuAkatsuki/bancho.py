@@ -179,7 +179,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, scoreid: int, scores_table: str) -> Optional['Score']:
+    async def from_sql(cls, score_id: int, scores_table: str) -> Optional['Score']:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -190,7 +190,7 @@ class Score:
             'status, mode, play_time, '
             'time_elapsed, client_flags, online_checksum '
             f'FROM {scores_table} WHERE id = %s',
-            [scoreid], _dict=False
+            [score_id], _dict=False
         )
 
         if not res:
@@ -350,7 +350,7 @@ class Score:
                 ezpp.set_accuracy_percent(self.acc)
 
                 ezpp.calculate(osu_file_path)
-                
+
                 pp = ezpp.get_pp()
                 if pp not in (math.inf, math.nan):
                     return (pp, ezpp.get_sr())

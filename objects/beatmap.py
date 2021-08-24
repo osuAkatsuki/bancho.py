@@ -117,6 +117,8 @@ class RankedStatus(IntEnum):
         """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
         return str2gulagstatus_dict[status_str]
 
+# ranked status translation maps
+
 osu2gulagstatus_dict = defaultdict(
     lambda: RankedStatus.UpdateAvailable, {
         -2: RankedStatus.Pending, # graveyard

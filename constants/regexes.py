@@ -14,7 +14,7 @@ osu_ver = re.compile(
 )
 
 username = re.compile(r'^[\w \[\]-]{2,15}$')
-email = re.compile(r'^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{2,24}$')
+email = re.compile(r'^[^@\s]{1,200}@[^@\s\.]{1,30}(?:\.[^@\.\s]{2,24})+$')
 
 now_playing = re.compile(
     r'^\x01ACTION is (?:playing|editing|watching|listening to) '

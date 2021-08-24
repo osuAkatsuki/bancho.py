@@ -115,7 +115,7 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
-    glob.loop = asyncio.get_event_loop()
+    glob.loop = asyncio.get_running_loop()
 
     if glob.has_internet:
         # retrieve a client session to use for http connections.

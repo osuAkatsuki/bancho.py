@@ -696,9 +696,10 @@ async def osuSubmitModularSelector(
     if score.passed:
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
+        replay_data = conn.files['score']
         replay_missing = (
             'score' not in conn.files or
-            conn.files['score'] == b'\r\n'
+            replay_data == b'\r\n'
         )
 
         if replay_missing and not score.player.restricted:
@@ -713,7 +714,7 @@ async def osuSubmitModularSelector(
             # be improved pretty decently by serializing it
             # manually, so we'll probably do that in the future.
             replay_file = REPLAYS_PATH / f'{score.id}.osr'
-            replay_file.write_bytes(conn.files['score'])
+            replay_file.write_bytes(replay_data)
 
             # TODO: if a play is sketchy.. 🤠
             #await glob.sketchy_queue.put(s)
@@ -1688,7 +1689,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
             'include_loved' in conn.args and
             conn.args['include_loved'] == '1'
         )
-    
+
         allowed_statuses = [2, 3]
 
         if include_loved:
@@ -2298,7 +2299,7 @@ async def register_account(
     email = mp_args['user[user_email]']
     pw_txt = mp_args['user[password]']
     safe_name = safe_name = name.lower().replace(' ', '_')
-    
+
     if not all((name, email, pw_txt)) or 'check' not in mp_args:
         return (400, b'Missing required params')
 
