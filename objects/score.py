@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import functools
 import math
-
 from base64 import b64decode
 from datetime import datetime
 from enum import IntEnum
@@ -54,25 +54,24 @@ class Grade(IntEnum):
     XH = 9 # HD SS
 
     @classmethod
+    @functools.cache
     def from_str(cls, s: str) -> 'Grade':
-        return gradestr_to_grade_dict[s.lower()]
+        return {
+            'xh': Grade.XH,
+            'x': Grade.X,
+            'sh': Grade.SH,
+            's': Grade.S,
+            'a': Grade.A,
+            'b': Grade.B,
+            'c': Grade.C,
+            'd': Grade.D,
+            'f': Grade.F,
+            'n': Grade.N
+        }[s.lower()]
 
     def __format__(self, format_spec: str) -> str:
         if format_spec == 'stats_column':
             return f'{self.name.lower()}_count'
-
-gradestr_to_grade_dict = {
-    'xh': Grade.XH,
-    'x': Grade.X,
-    'sh': Grade.SH,
-    's': Grade.S,
-    'a': Grade.A,
-    'b': Grade.B,
-    'c': Grade.C,
-    'd': Grade.D,
-    'f': Grade.F,
-    'n': Grade.N
-}
 
 @unique
 @pymysql_encode(escape_enum)
@@ -428,9 +427,9 @@ class Score:
 
             self.acc = 100.0 * ((self.n100 * 0.5) + self.n300) / total
 
-        elif mode_vn == 2:
-            # osu!catch
-            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
+        elif mode_vn == 2: # osu!catch
+            total = (self.n300 + self.n100 + self.n50 +
+                     self.nkatu + self.nmiss)
 
             if total == 0:
                 self.acc = 0.0
@@ -438,8 +437,7 @@ class Score:
 
             self.acc = 100.0 * (self.n300 + self.n100 + self.n50) / total
 
-        elif mode_vn == 3:
-            # osu!mania
+        elif mode_vn == 3: # osu!mania
             total = (self.n300 + self.n100 + self.n50 +
                      self.ngeki + self.nkatu + self.nmiss)
 

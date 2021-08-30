@@ -10,6 +10,7 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable
+from typing import Optional
 from typing import Union
 
 import aiomysql
@@ -110,7 +111,13 @@ async def bancho_handler(conn: Connection) -> bytes:
         async with glob.players._lock:
             async with glob.db.pool.acquire() as db_conn:
                 async with db_conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    resp, token = await login(conn.body, ip, db_cursor)
+                    login_data = await login(conn.body, ip, db_cursor)
+
+        if login_data is None:
+            # invalid login; failed.
+            return
+
+        resp, token = login_data
 
         conn.resp_headers['cho-token'] = token
         return resp
@@ -158,18 +165,15 @@ glob.bancho_packets = {
     'restricted': {}
 }
 
-def register(
-    packet: ClientPackets,
-    restricted: Union[bool, Callable] = False
-) -> Callable:
+def register(packet: ClientPackets,
+             restricted: bool = False) -> Callable:
     """Register a handler in `glob.bancho_packets`."""
     def wrapper(cls) -> Callable:
-        new_entry = {packet: cls}
-
-        glob.bancho_packets['all'] |= new_entry
+        glob.bancho_packets['all'][packet] = cls
 
         if restricted:
-            glob.bancho_packets['restricted'] |= new_entry
+            glob.bancho_packets['restricted'][packet] = cls
+
         return cls
     return wrapper
 
@@ -383,7 +387,7 @@ async def login(
     body_view: memoryview,
     ip: IPAddress,
     db_cursor: aiomysql.DictCursor
-) -> tuple[bytes, str]:
+) -> Optional[tuple[bytes, str]]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.

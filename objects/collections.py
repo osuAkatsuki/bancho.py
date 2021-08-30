@@ -199,7 +199,7 @@ class Players(list[Player]):
 
                 return attr, val
         else:
-            raise ValueError('Missing attribute in kwargs! (must provide token/id/name)')
+            raise ValueError('Incorrect call to Players.get()')
 
     def get(self, **kwargs) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
@@ -361,7 +361,7 @@ class Clans(list[Clan]):
             if val := kwargs.pop(attr, None):
                 break
         else:
-            raise ValueError('must provide valid kwarg (name, tag, id) to get()')
+            raise ValueError('Incorrect call to Clans.get()')
 
         for c in self:
             if getattr(c, attr) == val:

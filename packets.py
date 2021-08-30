@@ -260,7 +260,7 @@ class BanchoPacketReader:
 
         return packet_cls(self)
 
-    def _read_header(self) -> tuple[int, int]:
+    def _read_header(self) -> tuple[ClientPackets, int]:
         """Read the header of an osu! packet (id & length)."""
         # read type & length from the body
         data = struct.unpack('<HxI', self.body_view[:7])
@@ -965,7 +965,7 @@ def banchoPrivileges(priv: int) -> bytes:
     )
 
 # packet id: 72
-def friendsList(*friends) -> bytes:
+def friendsList(*friends: tuple[int]) -> bytes:
     return write(
         ServerPackets.FRIENDS_LIST,
         (friends, osuTypes.i32_list)

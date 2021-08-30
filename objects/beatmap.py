@@ -93,83 +93,76 @@ class RankedStatus(IntEnum):
     Qualified = 4
     Loved = 5
 
+    @functools.cache
     def __str__(self) -> str:
-        return gulagstatus2str_dict[self.value]
+        return {
+            RankedStatus.NotSubmitted: 'Unsubmitted',
+            RankedStatus.Pending: 'Unranked',
+            RankedStatus.UpdateAvailable: 'Outdated',
+            RankedStatus.Ranked: 'Ranked',
+            RankedStatus.Approved: 'Approved',
+            RankedStatus.Qualified: 'Qualified',
+            RankedStatus.Loved: 'Loved'
+        }[self.value]
 
     @property
+    @functools.cache
     def osu_api(self) -> int:
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
-        return gulag2osuapistatus_dict[self.value]
+        return {
+            RankedStatus.Pending: 0,
+            RankedStatus.Ranked: 1,
+            RankedStatus.Approved: 2,
+            RankedStatus.Qualified: 3,
+            RankedStatus.Loved: 4
+        }[self.value]
 
     @staticmethod
+    @functools.cache
     def from_osuapi(osuapi_status: int) -> 'RankedStatus':
         """Convert from osu!api status."""
-        return osu2gulagstatus_dict[osuapi_status]
+        return defaultdict(
+            lambda: RankedStatus.UpdateAvailable, {
+                -2: RankedStatus.Pending, # graveyard
+                -1: RankedStatus.Pending, # wip
+                0:  RankedStatus.Pending,
+                1:  RankedStatus.Ranked,
+                2:  RankedStatus.Approved,
+                3:  RankedStatus.Qualified,
+                4:  RankedStatus.Loved
+            }
+        )[osuapi_status]
 
     @staticmethod
+    @functools.cache
     def from_osudirect(osudirect_status: int) -> 'RankedStatus':
         """Convert from osu!direct status."""
-        return direct2gulagstatus_dict[osudirect_status]
+        return defaultdict(
+            lambda: RankedStatus.UpdateAvailable, {
+                0: RankedStatus.Ranked,
+                2: RankedStatus.Pending,
+                3: RankedStatus.Qualified,
+                #4: all ranked statuses lol
+                5: RankedStatus.Pending, # graveyard
+                7: RankedStatus.Ranked, # played before
+                8: RankedStatus.Loved
+            }
+        )[osudirect_status]
 
     @staticmethod
+    @functools.cache
     def from_str(status_str: str) -> 'RankedStatus':
         """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
-        return str2gulagstatus_dict[status_str]
-
-# ranked status translation maps
-
-osu2gulagstatus_dict = defaultdict(
-    lambda: RankedStatus.UpdateAvailable, {
-        -2: RankedStatus.Pending, # graveyard
-        -1: RankedStatus.Pending, # wip
-        0:  RankedStatus.Pending,
-        1:  RankedStatus.Ranked,
-        2:  RankedStatus.Approved,
-        3:  RankedStatus.Qualified,
-        4:  RankedStatus.Loved
-    }
-)
-
-direct2gulagstatus_dict = defaultdict(
-    lambda: RankedStatus.UpdateAvailable, {
-        0: RankedStatus.Ranked,
-        2: RankedStatus.Pending,
-        3: RankedStatus.Qualified,
-        #4: all ranked statuses lol
-        5: RankedStatus.Pending, # graveyard
-        7: RankedStatus.Ranked, # played before
-        8: RankedStatus.Loved
-    }
-)
-
-gulag2osuapistatus_dict = {
-    RankedStatus.Pending: 0,
-    RankedStatus.Ranked: 1,
-    RankedStatus.Approved: 2,
-    RankedStatus.Qualified: 3,
-    RankedStatus.Loved: 4
-}
-
-str2gulagstatus_dict = defaultdict(
-    lambda: RankedStatus.UpdateAvailable, {
-        'pending': RankedStatus.Pending,
-        'ranked': RankedStatus.Ranked,
-        'approved': RankedStatus.Approved,
-        'qualified': RankedStatus.Qualified,
-        'loved': RankedStatus.Loved
-    }
-)
-
-gulagstatus2str_dict = {
-    RankedStatus.NotSubmitted: 'Unsubmitted',
-    RankedStatus.Pending: 'Unranked',
-    RankedStatus.UpdateAvailable: 'Outdated',
-    RankedStatus.Ranked: 'Ranked',
-    RankedStatus.Approved: 'Approved',
-    RankedStatus.Qualified: 'Qualified',
-    RankedStatus.Loved: 'Loved'
-}
+        return defaultdict(
+            lambda: RankedStatus.UpdateAvailable, {
+                'pending': RankedStatus.Pending,
+                'ranked': RankedStatus.Ranked,
+                'approved': RankedStatus.Approved,
+                'qualified': RankedStatus.Qualified,
+                'loved': RankedStatus.Loved
+            }
+        )[status_str]
 
 #@dataclass
 #class BeatmapInfoRequest:
@@ -476,7 +469,12 @@ class Beatmap:
             self.status = RankedStatus.from_osuapi(osuapi_status)
 
         self.mode = GameMode(int(osuapi_resp['mode']))
-        self.bpm = float(osuapi_resp['bpm'])
+
+        if osuapi_resp['bpm'] is not None:
+            self.bpm = float(osuapi_resp['bpm'])
+        else:
+            self.bpm = 0
+
         self.cs = float(osuapi_resp['diff_size'])
         self.od = float(osuapi_resp['diff_overall'])
         self.ar = float(osuapi_resp['diff_approach'])

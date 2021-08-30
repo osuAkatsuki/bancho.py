@@ -219,7 +219,7 @@ def ensure_local_services_are_running() -> None:
         # sql server running locally, make sure it's running
         for service in ('mysqld', 'mariadb'):
             if os.path.exists(f'/var/run/{service}/{service}.pid'):
-                return True
+                return
         else:
             # not found, try pgrep
             pgrep_exit_code = os.system('pgrep mysqld')
@@ -317,7 +317,7 @@ def create_server() -> cmyui.Server:
 
     return server
 
-if __name__ == '__main__':
+def main() -> int:
     # check if the environment is prepared to run the server.
     ensure_supported_platform() # linux only at the moment
     ensure_local_services_are_running() # mysql (if local), nginx
@@ -336,7 +336,10 @@ if __name__ == '__main__':
 
     # start up the event loop and bind a socket to the configured address.
     glob.app.run(addr=glob.config.server_addr, handle_restart=True)
+    return 0
 
+if __name__ == '__main__':
+    raise SystemExit(main())
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
