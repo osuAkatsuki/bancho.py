@@ -7,6 +7,7 @@ import time
 from typing import Coroutine
 #from typing import TYPE_CHECKING
 
+import aiomysql
 #from cmyui.discord import Webhook
 #from cmyui.discord import Embed
 from cmyui.logging import Ansi
@@ -26,7 +27,7 @@ __all__ = ('donor_expiry', 'disconnect_ghosts',
            #'replay_detections',
            'reroll_bot_status')
 
-async def donor_expiry() -> list[Coroutine]:
+async def donor_expiry(db_cursor: aiomysql.DictCursor) -> list[Coroutine]:
     """Add new donation ranks & enqueue tasks to remove current ones."""
     # TODO: this system can get quite a bit better; rather than just
     # removing, it should rather update with the new perks (potentially
@@ -55,19 +56,14 @@ async def donor_expiry() -> list[Coroutine]:
     # enqueue rm_donor for any supporter
     # expiring in the next 30 days.
     # TODO: perhaps donor_end datetime?
-    query = (
-        'SELECT id, donor_end FROM users '
+    await db_cursor.execute(
+        'SELECT id AS userid, donor_end AS `when` FROM users '
         'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
         #'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
         'AND priv & 48' # 48 = Supporter | Premium
     )
 
-    coros = []
-
-    async for donation in glob.db.iterall(query, _dict=False):
-        coros.append(rm_donor(*donation))
-
-    return coros
+    return [rm_donor(**donation) async for donation in db_cursor]
 
 PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def disconnect_ghosts() -> None:

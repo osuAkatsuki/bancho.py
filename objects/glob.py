@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
-import config # export
+from typing import TYPE_CHECKING
+
+# this is used externally, i.e. `glob.config.attr`
+import config # type: ignore
 
 # this file contains no actualy definitions
-if __import__('typing').TYPE_CHECKING:
+if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
     #from asyncio import Queue
+    from datetime import datetime
     from typing import Optional
 
     from aiohttp.client import ClientSession
@@ -32,7 +36,7 @@ __all__ = (
     'pools', 'clans', 'achievements',
     'version', 'bot', 'api_keys',
     'bancho_packets', 'db',
-    'has_internet', 'http',
+    'has_internet', 'boot_time', 'http',
     'datadog', 'cache', 'loop',
     #'sketchy_queue'
 )
@@ -63,6 +67,7 @@ bancho_packets: dict['ClientPackets', 'BasePacket']
 db: 'AsyncSQLPool'
 
 has_internet: bool
+boot_time: 'datetime'
 http: 'Optional[ClientSession]'
 
 datadog: 'Optional[ThreadStats]'

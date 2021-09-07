@@ -473,7 +473,7 @@ class Beatmap:
         if osuapi_resp['bpm'] is not None:
             self.bpm = float(osuapi_resp['bpm'])
         else:
-            self.bpm = 0
+            self.bpm = 0.0
 
         self.cs = float(osuapi_resp['diff_size'])
         self.od = float(osuapi_resp['diff_overall'])

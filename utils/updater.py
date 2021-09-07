@@ -48,7 +48,7 @@ class Updater:
             ]), Ansi.LCYAN)
 
         if glob.has_internet:
-            await self._update_cmyui() # pip install -U cmyui
+            await self._update_cmyui_pkg() # pip install -U cmyui
         await self._update_sql(prev_ver) # run updates.sql
 
     @staticmethod
@@ -73,7 +73,7 @@ class Updater:
             [ver.major, ver.minor, ver.micro]
         )
 
-    async def _get_latest_cmyui(self) -> Version:
+    async def _get_latest_cmyui_pkg_version(self) -> Version:
         """Get the latest version release of cmyui_pkg from pypi."""
         url = 'https://pypi.org/pypi/cmyui/json'
         async with glob.http.get(url) as resp:
@@ -86,10 +86,10 @@ class Updater:
             # return most recent release version
             return Version.from_str(json['info']['version'])
 
-    async def _update_cmyui(self) -> None:
+    async def _update_cmyui_pkg(self) -> None:
         """Check if cmyui_pkg has a newer release; update if available."""
         module_ver = Version.from_str(importlib.metadata.version('cmyui'))
-        latest_ver = await self._get_latest_cmyui()
+        latest_ver = await self._get_latest_cmyui_pkg_version()
 
         if module_ver < latest_ver:
             # package is not up to date; update it.

@@ -16,13 +16,14 @@ import asyncio
 import io
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import aiohttp
 import aiomysql
 import cmyui
 import datadog
-import orjson # go zoom
+import orjson
 import geoip2.database
 import subprocess
 from cmyui.logging import Ansi
@@ -53,10 +54,12 @@ try:
     from objects import glob
 except ModuleNotFoundError as exc:
     if exc.name == 'config':
+        # config file doesn't exist; create it from the default.
         import shutil
         shutil.copy('ext/config.sample.py', 'config.py')
-        sys.exit('\x1b[0;92mA config file has been generated, '
-                 'please configure it to your needs.\x1b[0m')
+        log('A config file has been generated, '
+            'please configure it to your needs.', Ansi.LRED)
+        raise SystemExit(1)
     else:
         raise
 
@@ -69,6 +72,9 @@ glob.version = cmyui.Version(3, 5, 4)
 
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
+DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
+DATA_PATH = Path.cwd() / '.data'
+ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
 
 async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache many global collections."""
@@ -152,16 +158,16 @@ async def before_serving() -> None:
     else:
         glob.datadog = None
 
+    new_coros = []
+
     # cache many global collections/objects from sql,
     # such as channels, mappools, clans, bot, etc.
     async with glob.db.pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as db_cursor:
             await setup_collections(db_cursor)
 
-    new_coros = []
-
-    # create a task for each donor expiring in 30d.
-    new_coros.extend(await bg_loops.donor_expiry())
+            # create a task for each donor expiring in 30d.
+            new_coros.extend(await bg_loops.donor_expiry(db_cursor))
 
     # setup a loop to kick inactive ghosted players.
     new_coros.append(bg_loops.disconnect_ghosts())
@@ -195,41 +201,96 @@ async def after_serving() -> None:
         glob.datadog.stop()
         glob.datadog.flush()
 
-def ensure_supported_platform() -> None:
+def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for gulag."""
     if sys.platform != 'linux':
         log('gulag currently only supports linux', Ansi.LRED)
         if sys.platform == 'win32':
             log("you could also try wsl(2), i'd recommend ubuntu 18.04 "
                 "(i use it to test gulag)", Ansi.LBLUE)
-        sys.exit()
+        return 1
 
     if sys.version_info < (3, 9):
-        sys.exit('gulag uses many modern python features, '
-                 'and the minimum python version is 3.9.')
+        log('gulag uses many modern python features, '
+            'and the minimum python version is 3.9.', Ansi.LRED)
+        return 1
 
-def ensure_local_services_are_running() -> None:
+    return 0
+
+def ensure_local_services_are_running() -> int:
     """Ensure all required services (mysql) are running."""
     # NOTE: if you have any problems with this, please contact me
     # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if glob.config.mysql['host'] in ('localhost', '127.0.0.1'):
+    if glob.config.mysql['host'] in ('localhost', '127.0.0.1', None):
         # sql server running locally, make sure it's running
         for service in ('mysqld', 'mariadb'):
             if os.path.exists(f'/var/run/{service}/{service}.pid'):
-                return
+                break
         else:
             # not found, try pgrep
             pgrep_exit_code = os.system('pgrep mysqld')
             if pgrep_exit_code != 0:
-                sys.exit('Please start your mysqld server.')
+                log('Please start your mysqld server.', Ansi.LRED)
+                return 1
 
-def __install_cmyui_dev_hooks() -> None:
+    return 0
+
+def ensure_directory_structure() -> int:
+    """Ensure the .data directory and git submodules are ready."""
+    # create /.data and its subdirectories.
+    DATA_PATH.mkdir(exist_ok=True)
+
+    for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
+        subdir = DATA_PATH / sub_dir
+        subdir.mkdir(exist_ok=True)
+
+    if not ACHIEVEMENTS_ASSETS_PATH.exists():
+        if not glob.has_internet:
+            # TODO: make it safe to run without achievements
+            return 1
+
+        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
+        utils.misc.download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
+
+    return 0
+
+def ensure_dependencies_and_requirements() -> int:
+    """Make sure all of gulag's dependencies are ready."""
+    if not OPPAI_PATH.exists():
+        log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['git', 'submodule', 'init'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to initialize git submodules.', Ansi.LRED)
+            return exit_code
+
+        p = subprocess.Popen(args=['git', 'submodule', 'update'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to update git submodules.', Ansi.LRED)
+            return exit_code
+
+    if not (OPPAI_PATH / 'liboppai.so').exists():
+        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to build oppai-ng automatically.', Ansi.LRED)
+            return exit_code
+
+    return 0
+
+def __install_debugging_hooks() -> None:
     """Change internals to help with debugging & active development."""
-    from _testing import runtime # type: ignore
-    runtime.setup()
+    if DEBUG_HOOKS_PATH.exists():
+        from _testing import runtime # type: ignore
+        runtime.setup()
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
@@ -246,96 +307,58 @@ def display_startup_dialog() -> None:
             log('The risk is even greater with features '
                 'such as config.advanced enabled.', Ansi.LRED)
 
-    # check whether we are connected to the internet.
-    glob.has_internet = utils.misc.check_connection(timeout=1.5)
     if not glob.has_internet:
         log('Running in offline mode, some features '
             'will not be available.', Ansi.LRED)
 
-DATA_PATH = Path.cwd() / '.data'
-ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
-
-def ensure_directory_structure() -> None:
-    """Ensure the .data directory and git submodules are ready."""
-    # create /.data and its subdirectories.
-    DATA_PATH.mkdir(exist_ok=True)
-
-    for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
-        subdir = DATA_PATH / sub_dir
-        subdir.mkdir(exist_ok=True)
-
-    if not ACHIEVEMENTS_ASSETS_PATH.exists():
-        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
-        utils.misc.download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
-
-def ensure_dependencies_and_requirements() -> None:
-    """Make sure all of gulag's dependencies are ready."""
-    if not OPPAI_PATH.exists():
-        log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['git', 'submodule', 'init'],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if p.wait() == 1:
-            sys.exit('Failed to initialize git submodules.')
-
-        p = subprocess.Popen(args=['git', 'submodule', 'update'],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if p.wait() == 1:
-            sys.exit('Failed to update git submodules.')
-
-    if not (OPPAI_PATH / 'liboppai.so').exists():
-        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if p.wait() == 1:
-            sys.exit('Failed to build oppai-ng automatically.')
-
-def create_server() -> cmyui.Server:
-    """Create a server object, containing all domains & their endpoints."""
-    server = cmyui.Server(
-        name=f'gulag v{glob.version}',
-        gzip=4, debug=glob.config.debug
-    )
-
-    # fetch the domains our server is able to handle
-    # each may potentially hold many individual endpoints.
-    from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
-    from domains.osu import domain as osu_domain # osu.ppy.sh
-    from domains.ava import domain as ava_domain # a.ppy.sh
-    from domains.map import domain as map_domain # b.ppy.sh
-    server.add_domains({cho_domain, osu_domain,
-                        ava_domain, map_domain})
-
-    # enqueue tasks to run once the server
-    # begins, and stops serving connections.
-    # these make sure we set everything up
-    # and take it down nice and graceful.
-    server.before_serving = before_serving
-    server.after_serving = after_serving
-
-    return server
-
 def main() -> int:
-    # check if the environment is prepared to run the server.
-    ensure_supported_platform() # linux only at the moment
-    ensure_local_services_are_running() # mysql (if local), nginx
-    ensure_directory_structure()
-    ensure_dependencies_and_requirements()
+    for safety_check in (
+        ensure_supported_platform, # linux only at the moment
+        ensure_local_services_are_running, # mysql (if local)
+        ensure_directory_structure, # .data/ & achievements/ dir structure
+        ensure_dependencies_and_requirements # submodules & oppai-ng built
+    ):
+        if (exit_code := safety_check()) != 0:
+            return exit_code
 
-    # server is ready & safe to start up.
-    glob.app = create_server()
+    '''Server is safe to start up'''
 
-    # TODO: better hook system so this isn't here
-    if os.getenv('cmyuiosu') is not None:
-        __install_cmyui_dev_hooks()
+    glob.boot_time = datetime.now()
+
+    # install any debugging hooks from
+    # _testing/runtime.py, if present
+    __install_debugging_hooks()
+
+    # check our internet connection status
+    glob.has_internet = utils.misc.check_connection(timeout=1.5)
 
     # show info & any contextual warnings.
     display_startup_dialog()
 
-    # start up the event loop and bind a socket to the configured address.
-    glob.app.run(addr=glob.config.server_addr, handle_restart=True)
+    # create the server object; this will handle http connections
+    # for us via the transport (tcp/ip) socket interface, and will
+    # handle housekeeping (setup, cleanup) for us automatically.
+    glob.app = cmyui.Server(
+        name=f'gulag v{glob.version}',
+        gzip=4, debug=glob.config.debug
+    )
+
+    # add the domains and their respective endpoints to our server object
+    from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
+    from domains.osu import domain as osu_domain # osu.ppy.sh
+    from domains.ava import domain as ava_domain # a.ppy.sh
+    from domains.map import domain as map_domain # b.ppy.sh
+    glob.app.add_domains({cho_domain, osu_domain,
+                        ava_domain, map_domain})
+
+    # attach housekeeping tasks (setup, cleanup)
+    glob.app.before_serving = before_serving
+    glob.app.after_serving = after_serving
+
+    # run the server (this is a blocking call)
+    glob.app.run(addr=glob.config.server_addr,
+                 handle_restart=True) # (using SIGUSR1)
+
     return 0
 
 if __name__ == '__main__':
@@ -343,7 +366,7 @@ if __name__ == '__main__':
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
-    if any([sys.argv[0].endswith(x) for x in ('hypercorn', 'uvicorn')]):
+    if utils.misc.running_via_asgi_webserver(sys.argv[0]):
         raise RuntimeError(
             "gulag does not use an ASGI framework, and uses it's own custom "
             "web framework implementation; please run it directly (./main.py)."

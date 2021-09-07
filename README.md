@@ -31,10 +31,6 @@ especially in performance-critical or code that will be referenced frequently
 
 Installation Guide
 -------------
-important notes:
-- ubuntu 20.04 & nginx have unknown issues? i recommend using 18.04
-- i will not help with the creation of a fake *.ppy.sh cert for switcher support
-
 ```sh
 # add ppa for py3.9 (i love asottile)
 sudo add-apt-repository ppa:deadsnakes/ppa

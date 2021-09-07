@@ -35,6 +35,7 @@ __all__ = (
     'download_achievement_images',
     'seconds_readable',
     'check_connection',
+    'running_via_asgi_webserver',
     'install_excepthook',
     'get_appropriate_stacktrace',
     'log_strange_occurrence',
@@ -193,6 +194,9 @@ def check_connection(timeout: float = 1.0) -> bool:
 
     socket.setdefaulttimeout(default_timeout)
     return online
+
+def running_via_asgi_webserver(running_proc: str) -> bool:
+    return any(map(running_proc.endswith, ('hypercorn', 'uvicorn')))
 
 def install_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
