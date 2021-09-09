@@ -76,7 +76,7 @@ class Updater:
     async def _get_latest_cmyui_pkg_version(self) -> Version:
         """Get the latest version release of cmyui_pkg from pypi."""
         url = 'https://pypi.org/pypi/cmyui/json'
-        async with glob.http.get(url) as resp:
+        async with glob.http_session.get(url) as resp:
             if not resp or resp.status != 200:
                 return self.version
 
@@ -169,7 +169,6 @@ class Updater:
                 "modifying sql and know what caused this, "
                 "please please contact cmyui#0425.", Ansi.LRED)
 
-            await glob.app.after_serving()
             raise KeyboardInterrupt
 
     # TODO _update_config?

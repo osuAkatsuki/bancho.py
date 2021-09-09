@@ -4,6 +4,7 @@
 # in a lot of these classes; needs refactor.
 
 import asyncio
+from typing import Any
 from typing import Iterator
 from typing import Optional
 from typing import Sequence
@@ -48,7 +49,7 @@ class Channels(list[Channel]):
         else:
             return super().__contains__(o)
 
-    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[Channel, list[Channel]]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -189,7 +190,7 @@ class Players(list[Player]):
                 p.enqueue(data)
 
     @staticmethod
-    def _parse_attr(kwargs: dict[str, object]) -> tuple[str, object]:
+    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
         for attr in ('token', 'id', 'name'):
             if (val := kwargs.pop(attr, None)) is not None:
@@ -201,7 +202,7 @@ class Players(list[Player]):
         else:
             raise ValueError('Incorrect call to Players.get()')
 
-    def get(self, **kwargs) -> Optional[Player]:
+    def get(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
         attr, val = self._parse_attr(kwargs)
 
@@ -209,7 +210,7 @@ class Players(list[Player]):
             if getattr(p, attr) == val:
                 return p
 
-    async def get_sql(self, **kwargs) -> Optional[Player]:
+    async def get_sql(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from sql."""
         attr, val = self._parse_attr(kwargs)
 
@@ -235,7 +236,7 @@ class Players(list[Player]):
 
         return Player(**res, token='')
 
-    async def get_ensure(self, **kwargs) -> Optional[Player]:
+    async def get_ensure(self, **kwargs: object) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
         if p := self.get(**kwargs):
             return p
@@ -280,7 +281,7 @@ class MapPools(list[MapPool]):
     def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> MapPool:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[MapPool, list[MapPool]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(index)
@@ -340,7 +341,7 @@ class Clans(list[Clan]):
     def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> Clan:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[Clan, list[Clan]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
@@ -355,7 +356,7 @@ class Clans(list[Clan]):
         else:
             return o in self
 
-    def get(self, **kwargs) -> Optional[Clan]:
+    def get(self, **kwargs: object) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
         for attr in ('name', 'tag', 'id'):
             if val := kwargs.pop(attr, None):

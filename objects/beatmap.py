@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import Any
 from typing import Optional
 
 import aiomysql
@@ -34,14 +35,14 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
-async def osuapiv1_getbeatmaps(**params) -> Optional[dict[str, object]]:
+async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if glob.app.debug:
         log(f'Doing osu!api (getbeatmaps) request {params}', Ansi.LMAGENTA)
 
     params['k'] = glob.config.osu_api_key
 
-    async with glob.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
+    async with glob.http_session.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
         if (
             resp and resp.status == 200 and
             resp.content.total_bytes != 2 # b'[]'
@@ -63,7 +64,7 @@ async def ensure_local_osu_file(
             log(f'Doing osu!api (.osu file) request {bmap_id}', Ansi.LMAGENTA)
 
         url = f'https://old.ppy.sh/osu/{bmap_id}'
-        async with glob.http.get(url) as r:
+        async with glob.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
                 stacktrace = utils.misc.get_appropriate_stacktrace()
@@ -182,6 +183,7 @@ class RankedStatus(IntEnum):
 #    mania_rank: int # u8
 #    map_md5: str
 
+
 class Beatmap:
     """A class representing an osu! beatmap.
 
@@ -235,7 +237,7 @@ class Beatmap:
                  'cs', 'od', 'ar', 'hp', 'diff',
                  'filename', 'pp_cache')
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.set: Optional[BeatmapSet] = None
 
         self.md5 = kwargs.get('md5', '')
@@ -427,7 +429,7 @@ class Beatmap:
     # if you're really modifying gulag by adding new
     # features, or perhaps optimizing parts of the code.
 
-    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, object]) -> None:
+    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, Any]) -> None:
         """Change internal data with the data in osu!api format."""
         # NOTE: `self` is not guaranteed to have any attributes
         #       initialized when this is called.

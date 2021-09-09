@@ -72,6 +72,8 @@ class Grade(IntEnum):
     def __format__(self, format_spec: str) -> str:
         if format_spec == 'stats_column':
             return f'{self.name.lower()}_count'
+        else:
+            raise ValueError(f'Invalid format specifier {format_spec}')
 
 @unique
 @pymysql_encode(escape_enum)
@@ -164,7 +166,7 @@ class Score:
         self.status: Optional[SubmissionStatus] = None
 
         self.play_time: Optional[datetime] = None
-        self.time_elapsed: Optional[datetime] = None
+        self.time_elapsed: Optional[int] = None
 
         self.client_flags: Optional[ClientFlags] = None
         self.online_checksum: Optional[str] = None
@@ -226,7 +228,7 @@ class Score:
     ) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
         aes = RijndaelCbc(
-            key=f'osu!-scoreburgr---------{osu_ver}',
+            key=f'osu!-scoreburgr---------{osu_ver}'.encode(),
             iv=b64decode(iv_b64),
             padding=Pkcs7Padding(32),
             block_size=32

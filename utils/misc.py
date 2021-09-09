@@ -1,18 +1,24 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 import inspect
 import io
 import ipaddress
 import requests
 import secrets
+import signal
 import socket
 import sys
 import types
+import warnings
 import zipfile
 from pathlib import Path
+from typing import Any
 from typing import Callable
+from typing import Optional
 from typing import Sequence
 from typing import Type
+from typing import TypedDict
 from typing import Union
 
 import aiomysql
@@ -39,18 +45,24 @@ __all__ = (
     'install_excepthook',
     'get_appropriate_stacktrace',
     'log_strange_occurrence',
+    'is_inet_address',
 
+    'Geolocation',
     'fetch_geoloc_db',
     'fetch_geoloc_web',
 
     'pymysql_encode',
-    'escape_enum'
+    'escape_enum',
+
+    'shutdown_signal_handler',
+    '_handle_fut_exception',
+    '_cancel_all_tasks'
 )
 
 useful_keys = (Keys.M1, Keys.M2,
                Keys.K1, Keys.K2)
 
-def get_press_times(frames: Sequence[ReplayFrame]) -> dict[int, float]:
+def get_press_times(frames: Sequence[ReplayFrame]) -> dict[int, list[int]]:
     """A very basic function to press times of an osu! replay.
        This is mostly only useful for taiko maps, since it
        doesn't take holds into account (taiko has none).
@@ -60,7 +72,7 @@ def get_press_times(frames: Sequence[ReplayFrame]) -> dict[int, float]:
        much more accurate and useful detection ability.
     """
     # TODO: remove negatives?
-    press_times = {key: [] for key in useful_keys}
+    press_times: dict[int, list[int]] = {key: [] for key in useful_keys}
     cumulative = {key: 0 for key in useful_keys}
 
     prev_frame = frames[0]
@@ -116,7 +128,7 @@ def _download_achievement_images_mirror(achievements_path: Path) -> bool:
 
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
     """Download all used achievement images (one by one, from osu!)."""
-    achs = []
+    achs: list[str] = []
 
     for res in ('', '@2x'):
         for gm in ('osu', 'taiko', 'fruits', 'mania'):
@@ -200,7 +212,8 @@ def running_via_asgi_webserver(running_proc: str) -> bool:
 
 def install_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
-    sys._excepthook = sys.excepthook # backup
+    real_excepthook = sys.excepthook # backup
+
     def _excepthook(
         type_: Type[BaseException],
         value: BaseException,
@@ -222,10 +235,11 @@ def install_excepthook() -> None:
 
         print('\x1b[0;31mgulag ran into an issue '
               'before starting up :(\x1b[0m')
-        sys._excepthook(type_, value, traceback)
+        real_excepthook(type_, value, traceback) # type: ignore
+
     sys.excepthook = _excepthook
 
-def get_appropriate_stacktrace() -> list[inspect.FrameInfo]:
+def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str]]]]:
     """Return information of all frames related to cmyui_pkg and below."""
     stack = inspect.stack()[1:]
     for idx, frame in enumerate(stack):
@@ -238,21 +252,23 @@ def get_appropriate_stacktrace() -> list[inspect.FrameInfo]:
         'function': frame.function,
         'filename': Path(frame.filename).name,
         'lineno': frame.lineno,
-        'charno': frame.index,
+        'charno': frame.index or 0,
         'locals': {k: repr(v) for k, v in frame.frame.f_locals.items()}
-    } for frame in stack[:idx]]
+    } for frame in stack[:idx]][::-1] # reverse for python-like stacktrace
+                                      # ordering; puts the most recent
+                                      # call closest to the command line
 
 STRANGE_LOG_DIR = Path.cwd() / '.data/logs'
 async def log_strange_occurrence(obj: object) -> None:
     if not glob.has_internet: # requires internet connection
         return
 
-    pickled_obj = pickle.dumps(obj)
+    pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
     if glob.config.automatically_report_problems:
         # automatically reporting problems to cmyui's server
-        async with glob.http.post(
+        async with glob.http_session.post(
             url = 'https://log.cmyui.xyz/',
             headers = {'Gulag-Version': repr(glob.version),
                        'Gulag-Domain': glob.config.domain},
@@ -283,31 +299,51 @@ async def log_strange_occurrence(obj: object) -> None:
 
         log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
 
+def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
+    """Check whether addr is of type tuple[str, int]."""
+    return (
+        isinstance(addr, tuple) and
+        len(addr) == 2 and
+        isinstance(addr[0], str) and
+        isinstance(addr[1], int)
+    )
+
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
-def fetch_geoloc_db(ip: IPAddress) -> dict[str, Union[str, float]]:
+class Geolocation(TypedDict):
+    latitude: float
+    longitude: float
+    country: dict[str, Union[str, int]]
+
+def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using local db)."""
+    if not glob.geoloc_db:
+        return
+
     res = glob.geoloc_db.city(ip)
 
-    acronym = res.country.iso_code.lower()
+    if res.country.iso_code is not None:
+        acronym = res.country.iso_code.lower()
+    else:
+        acronym = 'XX'
 
     return {
-        'latitude': res.location.latitude,
-        'longitude': res.location.longitude,
+        'latitude': res.location.latitude or 0.0,
+        'longitude': res.location.longitude or 0.0,
         'country': {
             'acronym': acronym,
             'numeric': country_codes[acronym]
         }
     }
 
-async def fetch_geoloc_web(ip: IPAddress) -> dict[str, Union[str, float]]:
+async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
     if not glob.has_internet: # requires internet connection
         return
 
     url = f'http://ip-api.com/line/{ip}'
 
-    async with glob.http.get(url) as resp:
+    async with glob.http_session.get(url) as resp:
         if not resp or resp.status != 200:
             log('Failed to get geoloc data: request failed.', Ansi.LRED)
             return
@@ -333,12 +369,56 @@ async def fetch_geoloc_web(ip: IPAddress) -> dict[str, Union[str, float]]:
         }
     }
 
-def pymysql_encode(conv: Callable) -> Callable:
+def pymysql_encode(
+    conv: Callable[[Any, Optional[dict[object, object]]], str]
+) -> Callable[[Type[Any]], Type[Any]]:
     """Decorator to allow for adding to pymysql's encoders."""
-    def wrapper(cls):
+    def wrapper(cls: Type[Any]) -> Type[Any]:
         pymysql.converters.encoders[cls] = conv
         return cls
     return wrapper
 
-def escape_enum(val, _ = None) -> str: # used for ^
+def escape_enum(val: Any, _: Optional[dict[object, object]] = None) -> str: # used for ^
     return str(int(val))
+
+def shutdown_signal_handler(signum: Union[int, signal.Signals]) -> None:
+    """Handle a posix signal, flagging the server to shut down."""
+    print('\x1b[2K', end='\r') # remove ^C from window
+
+    # TODO: handle SIGUSR1 for restarting
+
+    if glob.shutting_down:
+        return
+
+    log(f'Received {signal.strsignal(signum)}', Ansi.LRED)
+
+    glob.shutting_down = True
+
+def _handle_fut_exception(fut: asyncio.Future) -> None:
+    if not fut.cancelled():
+        if exception := fut.exception():
+            glob.loop.call_exception_handler({
+                'message': 'unhandled exception during loop shutdown',
+                'exception': exception,
+                'task': fut,
+            })
+
+def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    # NOTE: this shouldn't be required since all tasks
+    # should be gracefully closed before this is called.
+    to_cancel = asyncio.all_tasks(loop)
+
+    if not to_cancel:
+        return
+
+    warnings.warn('Found pending tasks after graceful shutdown.')
+
+    for task in to_cancel:
+        task.cancel()
+
+    loop.run_until_complete(
+        asyncio.gather(*to_cancel, return_exceptions=True)
+    )
+
+    for task in to_cancel:
+        _handle_fut_exception(task)

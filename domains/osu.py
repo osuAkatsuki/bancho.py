@@ -434,7 +434,7 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
         status = RankedStatus.from_osudirect(int(conn.args['r']))
         params['status'] = status.osu_api
 
-    async with glob.http.get(search_url, params=params) as resp:
+    async with glob.http_session.get(search_url, params=params) as resp:
         if not resp:
             stacktrace = utils.misc.get_appropriate_stacktrace()
             await utils.misc.log_strange_occurrence(stacktrace)
@@ -715,9 +715,6 @@ async def osuSubmitModularSelector(
             # manually, so we'll probably do that in the future.
             replay_file = REPLAYS_PATH / f'{score.id}.osr'
             replay_file.write_bytes(replay_data)
-
-            # TODO: if a play is sketchy.. 🤠
-            #await glob.sketchy_queue.put(s)
 
     """ Update the user's & beatmap's stats """
 
@@ -1410,7 +1407,7 @@ async def checkUpdates(conn: Connection) -> HTTPResponse:
         return cache[action]
 
     url = 'https://old.ppy.sh/web/check-updates.php'
-    async with glob.http.get(url, params = conn.args) as resp:
+    async with glob.http_session.get(url, params = conn.args) as resp:
         if not resp or resp.status != 200:
             return (503, b'') # failed to get data from osu
 
@@ -2261,7 +2258,7 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
             # map not found, or out of date; get from osu!
             url = f"https://old.ppy.sh/osu/{res['id']}"
 
-            async with glob.http.get(url) as resp:
+            async with glob.http_session.get(url) as resp:
                 if not resp or resp.status != 200:
                     log(f'Could not find map {osu_file_path}!', Ansi.LRED)
                     return (404, b'') # couldn't find on osu!'s server

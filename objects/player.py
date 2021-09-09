@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import random
 import time
 import uuid
 from dataclasses import dataclass
@@ -8,6 +7,7 @@ from datetime import date
 from enum import IntEnum
 from enum import unique
 from functools import cached_property
+from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -36,6 +36,7 @@ from objects.menu import menu_keygen
 from objects.score import Grade
 from objects.score import Score
 from utils.misc import escape_enum
+from utils.misc import Geolocation
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
@@ -173,12 +174,15 @@ class Player:
     )
 
     def __init__(self, id: int, name: str,
-                 priv: Union[Privileges, int], **extras) -> None:
+                 priv: Union[Privileges, int], **extras: Any) -> None:
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
 
-        self.pw_bcrypt = extras.get('pw_bcrypt', None)
+        if 'pw_bcrypt' in extras:
+            self.pw_bcrypt: Optional[bytes] = extras['pw_bcrypt']
+        else:
+            self.pw_bcrypt = None
 
         # generate a token if not given
         token = extras.get('token', None)
@@ -209,7 +213,7 @@ class Player:
 
         self.achievements: set['Achievement'] = set()
 
-        self.geoloc = extras.get('geoloc', {
+        self.geoloc: Geolocation = extras.get('geoloc', {
             'latitude': 0.0,
             'longitude': 0.0,
             'country': {
@@ -253,7 +257,7 @@ class Player:
         # probably just use the /api/ routes?
         self.bot_client = extras.get('bot_client', False)
         if self.bot_client:
-            self.enqueue = lambda data: None
+            self.enqueue = lambda b: None
 
         self.tourney_client = extras.get('tourney_client', False)
 
@@ -465,7 +469,7 @@ class Player:
         if glob.has_internet:
             if webhook_url := glob.config.webhooks['audit-log']:
                 webhook = Webhook(webhook_url, content=log_msg)
-                await webhook.post(glob.http)
+                await webhook.post(glob.http_session)
 
         if self.online:
             # log the user out if they're offline, this
@@ -494,7 +498,7 @@ class Player:
         if glob.has_internet:
             if webhook_url := glob.config.webhooks['audit-log']:
                 webhook = Webhook(webhook_url, content=log_msg)
-                await webhook.post(glob.http)
+                await webhook.post(glob.http_session)
 
         if self.online:
             # log the user out if they're offline, this
@@ -992,9 +996,9 @@ class Player:
         )
         glob.loop.create_task(task)
 
-    def enqueue(self, b: bytes) -> None:
+    def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
-        self._queue += b
+        self._queue += data
 
     def dequeue(self) -> Optional[bytes]:
         """Get data from the queue to send to the client."""

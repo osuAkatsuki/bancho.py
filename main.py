@@ -15,9 +15,17 @@
 import asyncio
 import io
 import os
+import signal
+import socket
 import sys
+from contextlib import asynccontextmanager
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+from typing import AsyncIterator
+from typing import Iterator
+from typing import Optional
 
 import aiohttp
 import aiomysql
@@ -28,6 +36,7 @@ import geoip2.database
 import subprocess
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from cmyui.logging import RGB
 
 import bg_loops
 import utils.misc
@@ -118,88 +127,6 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
         row['api_key']: row['id']
         async for row in db_cursor
     }
-
-async def before_serving() -> None:
-    """Called before the server begins serving connections."""
-    glob.loop = asyncio.get_running_loop()
-
-    if glob.has_internet:
-        # retrieve a client session to use for http connections.
-        glob.http = aiohttp.ClientSession(json_serialize=orjson.dumps) # type: ignore
-    else:
-        glob.http = None
-
-    # retrieve a pool of connections to use for mysql interaction.
-    glob.db = cmyui.AsyncSQLPool()
-    await glob.db.connect(glob.config.mysql)
-
-    # run the sql & submodule updater (uses http & db).
-    # TODO: updating cmyui_pkg should run before it's import
-    updater = Updater(glob.version)
-    await updater.run()
-    await updater.log_startup()
-
-    # open a connection to our local geoloc database,
-    # if the database file is present.
-    if GEOLOC_DB_FILE.exists():
-        glob.geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
-    else:
-        glob.geoloc_db = None
-
-    # support for https://datadoghq.com
-    if all(glob.config.datadog.values()):
-        datadog.initialize(**glob.config.datadog)
-        glob.datadog = datadog.ThreadStats()
-        glob.datadog.start(flush_in_thread=True,
-                           flush_interval=15)
-
-        # wipe any previous stats from the page.
-        glob.datadog.gauge('gulag.online_players', 0)
-    else:
-        glob.datadog = None
-
-    new_coros = []
-
-    # cache many global collections/objects from sql,
-    # such as channels, mappools, clans, bot, etc.
-    async with glob.db.pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-            await setup_collections(db_cursor)
-
-            # create a task for each donor expiring in 30d.
-            new_coros.extend(await bg_loops.donor_expiry(db_cursor))
-
-    # setup a loop to kick inactive ghosted players.
-    new_coros.append(bg_loops.disconnect_ghosts())
-
-    '''
-    # if the surveillance webhook has a value, run
-    # automatic (still very primitive) detections on
-    # replays deemed by the server's configurable values.
-    if glob.config.webhooks['surveillance']:
-        new_coros.append(bg_loops.replay_detections())
-    '''
-
-    # reroll the bot's random status every `interval` sec.
-    new_coros.append(bg_loops.reroll_bot_status(interval=300))
-
-    for coro in new_coros:
-        glob.app.add_pending_task(coro)
-
-async def after_serving() -> None:
-    """Called after the server stops serving connections."""
-    if hasattr(glob, 'http') and glob.http is not None:
-        await glob.http.close()
-
-    if hasattr(glob, 'db') and glob.db.pool is not None:
-        await glob.db.close()
-
-    if hasattr(glob, 'geoloc_db') and glob.geoloc_db is not None:
-        glob.geoloc_db.close()
-
-    if hasattr(glob, 'datadog') and glob.datadog is not None:
-        glob.datadog.stop()
-        glob.datadog.flush()
 
 def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for gulag."""
@@ -311,7 +238,212 @@ def display_startup_dialog() -> None:
         log('Running in offline mode, some features '
             'will not be available.', Ansi.LRED)
 
-def main() -> int:
+# context managers
+
+@asynccontextmanager
+async def acquire_http_session(has_internet: bool) -> AsyncIterator[Optional[aiohttp.ClientSession]]:
+    if has_internet:
+        # TODO: perhaps a config setting to enable optimizations like this?
+        json_encoder = lambda x: str(orjson.dumps(x))
+
+        http_sess = aiohttp.ClientSession(json_serialize=json_encoder)
+        try:
+            yield http_sess
+        finally:
+            await http_sess.close()
+
+@asynccontextmanager
+async def acquire_mysql_db_pool(config: dict[str, Any]) -> AsyncIterator[Optional[cmyui.AsyncSQLPool]]:
+    db_pool = cmyui.AsyncSQLPool()
+    try:
+        await db_pool.connect(config)
+        yield db_pool
+    finally:
+        await db_pool.close()
+
+@contextmanager
+def acquire_geoloc_db_conn(db_file: Path) -> Iterator[Optional[geoip2.database.Reader]]:
+    if db_file.exists():
+        geoloc_db = geoip2.database.Reader(str(db_file))
+        try:
+            yield geoloc_db
+        finally:
+            geoloc_db.close()
+    else:
+        yield None
+
+@contextmanager
+def acquire_datadog_client(config: dict[str, Any]) -> Iterator[Optional[datadog.ThreadStats]]:
+    if all(config.values()):
+        datadog.initialize(**config)
+        datadog_client = datadog.ThreadStats()
+        try:
+            datadog_client.start(flush_in_thread=True,
+                                flush_interval=15)
+            # wipe any previous stats from the page.
+            datadog_client.gauge('gulag.online_players', 0)
+            yield datadog_client
+        finally:
+            datadog_client.stop()
+            datadog_client.flush()
+    else:
+        yield None
+
+def _conn_finished_cb(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        exc = task.exception()
+        if (
+            exc is not None and
+            not isinstance(exc, (SystemExit, KeyboardInterrupt))
+        ):
+            loop.default_exception_handler({'exception': exc})
+
+    glob.ongoing_conns.remove(task)
+    task.remove_done_callback(_conn_finished_cb)
+
+async def main() -> int:
+    """Initialize, and start up the server."""
+    glob.loop = asyncio.get_running_loop()
+
+    async with (
+        acquire_http_session(glob.has_internet) as glob.http_session,
+        acquire_mysql_db_pool(glob.config.mysql) as glob.db
+    ):
+        # run the sql & submodule updater (uses http & db).
+        # TODO: updating cmyui_pkg should run before it's import
+        updater = Updater(glob.version)
+        await updater.run()
+        await updater.log_startup()
+
+        with (
+            acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
+            acquire_datadog_client(glob.config.datadog) as glob.datadog
+        ):
+            # create the server object; this will handle http connections
+            # for us using the kernel's transport (tcp/ip) socket interface.
+            glob.app = cmyui.Server(
+                name=f'gulag v{glob.version}',
+                gzip=4, debug=glob.config.debug
+            )
+
+            # cache many global collections/objects from sql,
+            # such as channels, mappools, clans, bot, etc.
+            async with glob.db.pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as db_cursor:
+                    await setup_collections(db_cursor)
+
+            # initialize housekeeping tasks to automatically
+            # handle tasks such as disconnecting inactive players,
+            # removing donator startus, etc.
+            await bg_loops.initialize_tasks()
+
+            # fetch our server's endpoints; gulag supports
+            # osu!'s handlers across multiple domains.
+            from domains.cho import domain as c_ppy_sh # /c[e4-6]?.ppy.sh/
+            from domains.osu import domain as osu_ppy_sh
+            from domains.ava import domain as a_ppy_sh
+            from domains.map import domain as b_ppy_sh
+            glob.app.add_domains({c_ppy_sh, osu_ppy_sh,
+                                  a_ppy_sh, b_ppy_sh})
+
+            # support both INET and UNIX sockets
+            if utils.misc.is_inet_address(glob.config.server_addr):
+                sock_family = socket.AF_INET
+            elif isinstance(glob.config.server_addr, str):
+                sock_family = socket.AF_UNIX
+            else:
+                raise ValueError('Invalid socket address.')
+
+            if sock_family == socket.AF_UNIX:
+                # using unix socket - remove if exists on filesystem
+                if os.path.exists(glob.config.server_addr):
+                    os.remove(glob.config.server_addr)
+
+            # create our transport layer socket; osu! uses tcp/ip
+            with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
+                listening_sock.setblocking(False) # asynchronous
+                listening_sock.bind(glob.config.server_addr)
+
+                if sock_family == socket.AF_UNIX:
+                    # using unix socket - give the socket file
+                    # appropriate (read, write) permissions
+                    os.chmod(glob.config.server_addr, 0o666)
+
+                listening_sock.listen(glob.config.max_conns)
+                log(f'-> Listening @ {glob.config.server_addr}', RGB(0x00ff7f))
+
+                glob.shutting_down = False
+
+                sig_handler = utils.misc.shutdown_signal_handler
+                for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+                    loop.add_signal_handler(signum, sig_handler, signum)
+
+                glob.ongoing_conns = []
+
+                while not glob.shutting_down:
+                    # TODO: this timeout based-solution can be heavily
+                    #       improved and refactored out.
+                    try:
+                        conn, _ = await asyncio.wait_for(
+                            fut=loop.sock_accept(listening_sock),
+                            timeout=0.25
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+                    else:
+                        task = loop.create_task(glob.app.handle(conn))
+                        task.add_done_callback(_conn_finished_cb)
+                        glob.ongoing_conns.append(task)
+
+            if sock_family == socket.AF_UNIX:
+                os.remove(glob.config.server_addr)
+
+            # listening socket has been closed; connections will no longer be accepted.
+
+            # we want to attempt to gracefully finish any ongoing connections
+            # and shut down any of the housekeeping tasks running in the background.
+
+            if glob.ongoing_conns:
+                await await_ongoing_connections(timeout=5.0)
+
+            await cancel_housekeeping_tasks()
+
+    return 0
+
+async def await_ongoing_connections(timeout: float) -> None:
+    log(f'-> Allowing up to {timeout:.2f} seconds for '
+       f'{len(glob.ongoing_conns)} ongoing connection(s) to finish.', Ansi.LMAGENTA)
+
+    done, pending = await asyncio.wait(glob.ongoing_conns, timeout=timeout)
+
+    for task in done:
+        utils.misc._handle_fut_exception(task)
+
+    if pending:
+        log(f'-> Awaital timeout - cancelling {len(pending)} pending connection(s).', Ansi.LRED)
+
+        for task in pending:
+            task.cancel()
+
+        await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in pending:
+            utils.misc._handle_fut_exception(task)
+
+async def cancel_housekeeping_tasks() -> None:
+    log(f'-> Cancelling {len(glob.housekeeping_tasks)} housekeeping tasks.', Ansi.LMAGENTA)
+
+    # cancel housekeeping tasks
+    for task in glob.housekeeping_tasks:
+        task.cancel()
+
+    await asyncio.gather(*glob.housekeeping_tasks, return_exceptions=True)
+
+    for task in glob.housekeeping_tasks:
+        utils.misc._handle_fut_exception(task)
+
+if __name__ == '__main__':
+    """Attempt to start the server."""
     for safety_check in (
         ensure_supported_platform, # linux only at the moment
         ensure_local_services_are_running, # mysql (if local)
@@ -319,9 +451,9 @@ def main() -> int:
         ensure_dependencies_and_requirements # submodules & oppai-ng built
     ):
         if (exit_code := safety_check()) != 0:
-            return exit_code
+            raise SystemExit(exit_code)
 
-    '''Server is safe to start up'''
+    """ Server should be safe to start """
 
     glob.boot_time = datetime.now()
 
@@ -335,34 +467,28 @@ def main() -> int:
     # show info & any contextual warnings.
     display_startup_dialog()
 
-    # create the server object; this will handle http connections
-    # for us via the transport (tcp/ip) socket interface, and will
-    # handle housekeeping (setup, cleanup) for us automatically.
-    glob.app = cmyui.Server(
-        name=f'gulag v{glob.version}',
-        gzip=4, debug=glob.config.debug
-    )
+    try:
+        # use uvloop if available
+        # https://github.com/MagicStack/uvloop
+        import uvloop
+        uvloop.install()
+    except ModuleNotFoundError:
+        pass
 
-    # add the domains and their respective endpoints to our server object
-    from domains.cho import domain as cho_domain # c[e4-6]?.ppy.sh
-    from domains.osu import domain as osu_domain # osu.ppy.sh
-    from domains.ava import domain as ava_domain # a.ppy.sh
-    from domains.map import domain as map_domain # b.ppy.sh
-    glob.app.add_domains({cho_domain, osu_domain,
-                        ava_domain, map_domain})
+    loop = asyncio.new_event_loop()
 
-    # attach housekeeping tasks (setup, cleanup)
-    glob.app.before_serving = before_serving
-    glob.app.after_serving = after_serving
+    try:
+        asyncio.set_event_loop(loop)
+        raise SystemExit(loop.run_until_complete(main()))
+    finally:
+        try:
+            utils.misc._cancel_all_tasks(loop)
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
 
-    # run the server (this is a blocking call)
-    glob.app.run(addr=glob.config.server_addr,
-                 handle_restart=True) # (using SIGUSR1)
-
-    return 0
-
-if __name__ == '__main__':
-    raise SystemExit(main())
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
