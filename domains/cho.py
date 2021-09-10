@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Callable
 from typing import Optional
 from typing import Union
-from peace_performance_python.objects import Beatmap as peaceMap
-from peace_performance_python.objects import Calculator
 
 import aiomysql
 import bcrypt
@@ -27,6 +25,8 @@ from cmyui.web import Domain
 from maniera.calculator import Maniera
 
 import packets
+from peace_performance_python.objects import Beatmap as peaceMap
+from peace_performance_python.objects import Calculator
 import utils.misc
 from constants import commands
 from constants import regexes
