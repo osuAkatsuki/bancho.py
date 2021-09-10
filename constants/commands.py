@@ -26,9 +26,10 @@ from pathlib import Path
 
 import aiomysql
 import cmyui.utils
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator
 import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
-from maniera.calculator import Maniera
 
 import packets
 import utils.misc
@@ -334,7 +335,7 @@ async def _with(ctx: Context) -> str:
 
     mode_vn = ctx.player.last_np['mode_vn']
 
-    if mode_vn in (0, 1): # osu, taiko
+    if mode_vn in (0, 1, 2): # osu, taiko, catch
         if not ctx.args or len(ctx.args) > 4:
             return 'Invalid syntax: !with <acc/nmiss/combo/mods ...>'
 
@@ -384,29 +385,62 @@ async def _with(ctx: Context) -> str:
 
         msg = []
 
-        with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+        if mode_vn == 1:
+            with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                if mods is not None:
+                    ezpp.set_mods(int(mods))
+                    msg.append(f'{mods!r}')
+
+                if nmiss is not None:
+                    ezpp.set_nmiss(nmiss)
+                    msg.append(f'{nmiss}m')
+
+                if combo is not None:
+                    ezpp.set_combo(combo)
+                    msg.append(f'{combo}x')
+
+                if acc is not None:
+                    ezpp.set_accuracy_percent(acc)
+                    msg.append(f'{acc:.2f}%')
+
+                ezpp.calculate(osu_file_path)
+                pp, sr = ezpp.get_pp(), ezpp.get_sr()
+
+                return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
+        else:
+            beatmap = PeaceMap(str(osu_file_path))
+            peace = Calculator()
+
             if mods is not None:
-                ezpp.set_mods(int(mods))
+                peace.set_mods(int(mods))
                 msg.append(f'{mods!r}')
 
             if nmiss is not None:
-                ezpp.set_nmiss(nmiss)
+                peace.set_miss(nmiss)
                 msg.append(f'{nmiss}m')
 
             if combo is not None:
-                ezpp.set_combo(combo)
+                peace.set_combo(combo)
                 msg.append(f'{combo}x')
-
+            
             if acc is not None:
-                ezpp.set_accuracy_percent(acc)
+                peace.set_acc(acc)
                 msg.append(f'{acc:.2f}%')
 
-            ezpp.calculate(osu_file_path)
-            pp, sr = ezpp.get_pp(), ezpp.get_sr()
+            if mode_vn:
+                peace.set_mode(mode_vn)
 
-            return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
-    elif mode_vn == 2: # catch
-        return 'Gamemode not yet supported.'
+            calculated = peace.calculate(beatmap)
+            
+            if calculated.pp not in (math.inf, math.nan):
+                temp_pp = round(calculated.pp, 5)
+
+                if (mode_vn == 1 and beatmap.diff > 0 and temp_pp > 800) or calculated.stars > 50:
+                    return f"{' '.join(msg)}: 0pp (0*)" 
+                else:
+                    return f"{' '.join(msg)}: {temp_pp:.2f}pp ({calculated.stars:.2f}*)"
+            else:
+                return f"{' '.join(msg)}: 0pp (0*)"
     else: # mania
         if not ctx.args or len(ctx.args) > 2:
             return 'Invalid syntax: !with <score/mods ...>'
@@ -425,11 +459,20 @@ async def _with(ctx: Context) -> str:
                 mods = mods.filter_invalid_combos(mode_vn)
             else:
                 return 'Invalid syntax: !with <score/mods ...>'
+        
+        beatmap = PeaceMap(str(osu_file_path))
+        peace = Calculator()
 
-        calc = Maniera(str(osu_file_path), int(mods), score * 1000)
-        calc.calculate()
+        if mods != Mods.NOMOD:
+            peace.set_mods(int(mods))
+        
+        if mode_vn:
+            peace.set_mode(mode_vn)
 
-        return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.sr:.2f}*)'
+        peace.set_score(int(score * 1000))
+        
+        calc = peace.calculate(beatmap)
+        return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.stars:.2f}*)'
 
 @command(Privileges.Normal, aliases=['req'])
 async def request(ctx: Context) -> str:
