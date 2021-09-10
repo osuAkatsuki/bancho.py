@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Callable
 from typing import Optional
 from typing import Union
+from peace_performance_python.objects import Beatmap as peaceMap
+from peace_performance_python.objects import Calculator
 
 import aiomysql
 import bcrypt
@@ -1001,56 +1003,76 @@ class SendPrivateMessage(BasePacket):
                             # calculate pp for common generic values
                             pp_calc_st = time.time_ns()
 
-                            if mode_vn in (0, 1): # osu, taiko
-                                with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
-                                    # std & taiko, use oppai-ng to calc pp
-                                    if r_match['mods'] is not None:
-                                        # [1:] to remove leading whitespace
-                                        mods_str = r_match['mods'][1:]
-                                        mods = Mods.from_np(mods_str, mode_vn)
-                                        ezpp.set_mods(int(mods))
+                            if mode_vn in (0, 1, 2): # osu, taiko, catch
+                                if r_match['mods'] is not None:
+                                    # [1:] to remove leading whitespace
+                                    mods_str = r_match['mods'][1:]
+                                    mods = Mods.from_np(mods_str, mode_vn)
+                                else:
+                                    mods = None
+                                
+                                pp_values = [] # [(acc, pp), ...]
 
-                                    pp_values = [] # [(acc, pp), ...]
+                                if mode_vn == 1:
+                                    with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                                        if mods is not None:
+                                            ezpp.set_mods(int(mods))
+
+                                        for acc in glob.config.pp_cached_accs:
+                                            ezpp.set_accuracy_percent(acc)
+
+                                            ezpp.calculate(osu_file_path)
+
+                                            pp_values.append((acc, ezpp.get_pp()))
+                                else:
+                                    beatmap = peaceMap(str(osu_file_path))
+                                    peace = Calculator()
+
+                                    if mods is not None:
+                                        peace.set_mods(int(mods))
+
+                                    peace.set_mode(mode_vn)
 
                                     for acc in glob.config.pp_cached_accs:
-                                        ezpp.set_accuracy_percent(acc)
+                                        peace.set_acc(acc)
 
-                                        ezpp.calculate(osu_file_path)
+                                        calc = peace.calculate(beatmap)
 
-                                        pp_values.append((acc, ezpp.get_pp()))
+                                        pp_values.append((acc, calc.pp))
 
-                                    resp_msg = ' | '.join([
-                                        f'{acc}%: {pp:,.2f}pp'
-                                        for acc, pp in pp_values
-                                    ])
-                            elif mode_vn == 2: # catch
-                                resp_msg = 'Gamemode not yet supported.'
+                                resp_msg = ' | '.join([
+                                    f'{acc}%: {pp:,.2f}pp'
+                                    for acc, pp in pp_values
+                                ])
                             else: # mania
-                                if bmap.mode.as_vanilla != 3:
-                                    resp_msg = 'Mania converts not currently supported.'
+                                if r_match['mods'] is not None:
+                                    # [1:] to remove leading whitespace
+                                    mods_str = r_match['mods'][1:]
+                                    mods = int(Mods.from_np(mods_str, mode_vn))
                                 else:
-                                    if r_match['mods'] is not None:
-                                        # [1:] to remove leading whitespace
-                                        mods_str = r_match['mods'][1:]
-                                        mods = int(Mods.from_np(mods_str, mode_vn))
-                                    else:
-                                        mods = 0
+                                    mods = None
 
-                                    calc = Maniera(str(osu_file_path), mods, 0)
-                                    calc.sr = calc._calculateStars()
-                                    pp_values = []
+                                beatmap = peaceMap(str(osu_file_path))
+                                peace = Calculator()
 
-                                    for score in glob.config.pp_cached_scores:
-                                        calc.score = score
+                                if mods is not None:
+                                    peace.set_mods(int(self.mods))
 
-                                        pp = calc._calculatePP()
+                                peace.set_mode(mode_vn)
 
-                                        pp_values.append((score, pp))
+                                pp_values = []
 
-                                    resp_msg = ' | '.join([
-                                        f'{int(score // 1000)}k: {pp:,.2f}pp'
-                                        for score, pp in pp_values
-                                    ])
+                                for score in glob.config.pp_cached_scores:
+                                    peace.set_score(int(score))
+
+                                    calc = peace.calculate(beatmap)
+
+                                    pp_values.append((score, calc.pp))
+
+                                resp_msg = ' | '.join([
+                                    f'{int(score // 1000)}k: {pp:,.2f}pp'
+                                    for score, pp in pp_values
+                                ])
 
                             elapsed = time.time_ns() - pp_calc_st
                             resp_msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'
