@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
+from peace_performance_python.objects import Beatmap as peaceMap
+from peace_performance_python.objects import Calculator
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
@@ -336,7 +338,7 @@ class Score:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn in (0, 1): # osu, taiko
+        if mode_vn == 0: # std
             with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
@@ -355,21 +357,49 @@ class Score:
                     return (pp, ezpp.get_sr())
                 else:
                     return (0.0, 0.0)
-        elif mode_vn == 2: # catch
-            return (0.0, 0.0)
-        else: # mania
-            if self.bmap.mode.as_vanilla != 3:
-                return (0.0, 0.0) # maniera has no convert support
+        elif mode_vn in (1, 2): # taiko, catch
+            beatmap = peaceMap(osu_file_path)
+            peace = Calculator()
 
             if self.mods != Mods.NOMOD:
-                mods = int(self.mods)
+                peace.set_mods(int(self.mods))
+
+            if mode_vn:
+                peace.set_mode(mode_vn)
+
+            peace.set_combo(self.max_combo)
+            peace.set_miss(self.nmiss)
+            peace.set_acc(self.acc)
+
+            calculated = peace.calculate(beatmap)
+            
+            if calculated.pp not in (math.inf, math.nan):
+                temp_pp = round(calculated.pp, 5)
+                # Some of taiko converted maps are failed to calculate, return zero
+                if (mode_vn == 1 and beatmap.diff > 0 and temp_pp > 800) or calculated.stars > 50:
+                    return (0.0, 0.0)
+                else:
+                    return (temp_pp, calculated.stars)
             else:
-                mods = 0
+                return (0.0, 0.0)
+        elif mode_vn == 3: # mania
+            beatmap = peaceMap(osu_file_path)
+            peace = Calculator()
 
-            calc = Maniera(str(osu_file_path), mods, self.score)
-            calc.calculate()
+            if self.mods != Mods.NOMOD:
+                peace.set_mods(int(self.mods))
 
-            return (calc.pp, calc.sr)
+            if mode_vn:
+                peace.set_mode(mode_vn)
+
+            peace.set_score(int(self.score))
+            calculated = peace.calculate(beatmap)
+
+            if calculated.pp not in (math.inf, math.nan):
+                return (round(calculated.pp, 5), calculated.stars)
+            else:
+                return (0.0, 0.0) 
+
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""
