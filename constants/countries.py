@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 __all__ = ('country_codes',)
 
 country_codes = { # talk about ugly lol

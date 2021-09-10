@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
-
 import functools
 import hashlib
 from collections import defaultdict
 #from dataclasses import dataclass
-from datetime import timedelta
 from datetime import datetime
+from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
+from typing import Mapping
 from typing import Optional
 
 import aiomysql
@@ -97,14 +96,14 @@ class RankedStatus(IntEnum):
     @functools.cache
     def __str__(self) -> str:
         return {
-            RankedStatus.NotSubmitted: 'Unsubmitted',
-            RankedStatus.Pending: 'Unranked',
-            RankedStatus.UpdateAvailable: 'Outdated',
-            RankedStatus.Ranked: 'Ranked',
-            RankedStatus.Approved: 'Approved',
-            RankedStatus.Qualified: 'Qualified',
-            RankedStatus.Loved: 'Loved'
-        }[self.value]
+            self.NotSubmitted: 'Unsubmitted',
+            self.Pending: 'Unranked',
+            self.UpdateAvailable: 'Outdated',
+            self.Ranked: 'Ranked',
+            self.Approved: 'Approved',
+            self.Qualified: 'Qualified',
+            self.Loved: 'Loved'
+        }[self]
 
     @property
     @functools.cache
@@ -112,58 +111,58 @@ class RankedStatus(IntEnum):
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
         return {
-            RankedStatus.Pending: 0,
-            RankedStatus.Ranked: 1,
-            RankedStatus.Approved: 2,
-            RankedStatus.Qualified: 3,
-            RankedStatus.Loved: 4
-        }[self.value]
+            self.Pending: 0,
+            self.Ranked: 1,
+            self.Approved: 2,
+            self.Qualified: 3,
+            self.Loved: 4
+        }[self]
 
-    @staticmethod
     @functools.cache
-    def from_osuapi(osuapi_status: int) -> 'RankedStatus':
+    def from_osuapi(self, osuapi_status: int) -> 'RankedStatus':
         """Convert from osu!api status."""
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                -2: RankedStatus.Pending, # graveyard
-                -1: RankedStatus.Pending, # wip
-                0:  RankedStatus.Pending,
-                1:  RankedStatus.Ranked,
-                2:  RankedStatus.Approved,
-                3:  RankedStatus.Qualified,
-                4:  RankedStatus.Loved
+        mapping: Mapping[int, RankedStatus] = defaultdict(
+            lambda: self.UpdateAvailable, {
+                -2: self.Pending, # graveyard
+                -1: self.Pending, # wip
+                0:  self.Pending,
+                1:  self.Ranked,
+                2:  self.Approved,
+                3:  self.Qualified,
+                4:  self.Loved
             }
-        )[osuapi_status]
+        )
+        return mapping[osuapi_status]
 
-    @staticmethod
     @functools.cache
-    def from_osudirect(osudirect_status: int) -> 'RankedStatus':
+    def from_osudirect(self, osudirect_status: int) -> 'RankedStatus':
         """Convert from osu!direct status."""
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                0: RankedStatus.Ranked,
-                2: RankedStatus.Pending,
-                3: RankedStatus.Qualified,
+        mapping: Mapping[int, RankedStatus] = defaultdict(
+            lambda: self.UpdateAvailable, {
+                0: self.Ranked,
+                2: self.Pending,
+                3: self.Qualified,
                 #4: all ranked statuses lol
-                5: RankedStatus.Pending, # graveyard
-                7: RankedStatus.Ranked, # played before
-                8: RankedStatus.Loved
+                5: self.Pending, # graveyard
+                7: self.Ranked, # played before
+                8: self.Loved
             }
-        )[osudirect_status]
+        )
+        return mapping[osudirect_status]
 
-    @staticmethod
     @functools.cache
-    def from_str(status_str: str) -> 'RankedStatus':
+    def from_str(self, status_str: str) -> 'RankedStatus':
         """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                'pending': RankedStatus.Pending,
-                'ranked': RankedStatus.Ranked,
-                'approved': RankedStatus.Approved,
-                'qualified': RankedStatus.Qualified,
-                'loved': RankedStatus.Loved
+        mapping: Mapping[str, RankedStatus] = defaultdict(
+            lambda: self.UpdateAvailable, {
+                'pending': self.Pending,
+                'ranked': self.Ranked,
+                'approved': self.Approved,
+                'qualified': self.Qualified,
+                'loved': self.Loved
             }
-        )[status_str]
+        )
+        return mapping[status_str]
 
 #@dataclass
 #class BeatmapInfoRequest:
@@ -182,7 +181,6 @@ class RankedStatus(IntEnum):
 #    taiko_rank: int # u8
 #    mania_rank: int # u8
 #    map_md5: str
-
 
 class Beatmap:
     """A class representing an osu! beatmap.

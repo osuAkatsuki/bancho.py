@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 import inspect
 import io
 import ipaddress
-import requests
 import secrets
 import signal
 import socket
@@ -24,15 +21,16 @@ from typing import Union
 import aiomysql
 import dill as pickle
 import pymysql
-
-from objects import glob
-from constants.countries import country_codes
+import requests
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
+
+from constants.countries import country_codes
+from objects import glob
 
 __all__ = (
     'get_press_times',
@@ -207,8 +205,8 @@ def check_connection(timeout: float = 1.0) -> bool:
     socket.setdefaulttimeout(default_timeout)
     return online
 
-def running_via_asgi_webserver(running_proc: str) -> bool:
-    return any(map(running_proc.endswith, ('hypercorn', 'uvicorn')))
+def running_via_asgi_webserver() -> bool:
+    return any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn')))
 
 def install_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""

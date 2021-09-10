@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 import ipaddress
 import re
@@ -16,16 +14,16 @@ from typing import Union
 import aiomysql
 import bcrypt
 from cmyui.logging import Ansi
-from cmyui.logging import RGB
 from cmyui.logging import log
+from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from cmyui.web import Connection
 from cmyui.web import Domain
-
-import packets
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator
+
+import packets
 import utils.misc
 from constants import commands
 from constants import regexes
@@ -35,8 +33,8 @@ from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from objects import glob
-from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.channel import Channel
 from objects.clan import ClanPrivileges
 from objects.match import MatchTeams
@@ -1009,7 +1007,7 @@ class SendPrivateMessage(BasePacket):
                                     mods = Mods.from_np(mods_str, mode_vn)
                                 else:
                                     mods = None
-                                
+
                                 pp_values = [] # [(acc, pp), ...]
 
                                 if mode_vn == 1:

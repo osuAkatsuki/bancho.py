@@ -1,5 +1,4 @@
 #!/usr/bin/env python3.9
-# -*- coding: utf-8 -*-
 
 # if you're interested in development, my test server is usually
 # up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
@@ -17,6 +16,7 @@ import io
 import os
 import signal
 import socket
+import subprocess
 import sys
 from contextlib import asynccontextmanager
 from contextlib import contextmanager
@@ -31,9 +31,8 @@ import aiohttp
 import aiomysql
 import cmyui
 import datadog
-import orjson
 import geoip2.database
-import subprocess
+import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -42,11 +41,11 @@ import bg_loops
 import utils.misc
 from constants.privileges import Privileges
 from objects.achievement import Achievement
-from objects.collections import Players
-from objects.collections import Matches
 from objects.collections import Channels
 from objects.collections import Clans
 from objects.collections import MapPools
+from objects.collections import Matches
+from objects.collections import Players
 from objects.player import Player
 from utils.updater import Updater
 
@@ -79,10 +78,11 @@ utils.misc.install_excepthook()
 # worth reading through it's code before playing with it.
 glob.version = cmyui.Version(3, 5, 4)
 
-OPPAI_PATH = Path.cwd() / 'oppai-ng'
-GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
-DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
 DATA_PATH = Path.cwd() / '.data'
+DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
+GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
+OPPAI_PATH = Path.cwd() / 'oppai-ng'
+
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
 
 async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
@@ -492,7 +492,7 @@ if __name__ == '__main__':
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
-    if utils.misc.running_via_asgi_webserver(sys.argv[0]):
+    if utils.misc.running_via_asgi_webserver():
         raise RuntimeError(
             "gulag does not use an ASGI framework, and uses it's own custom "
             "web framework implementation; please run it directly (./main.py)."

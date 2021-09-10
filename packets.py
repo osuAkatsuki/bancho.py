@@ -1,12 +1,5 @@
-# -*- coding: utf-8 -*-
-
-# NOTE: at some point, parts (or all) of this may
-# be rewritten in cython (or c++ ported with cython)?
-# i'm not sure how well it works with an async setup
-# like this, but we'll see B) massive speed gains tho
-
-import struct
 import random
+import struct
 from abc import ABC
 from enum import IntEnum
 from enum import unique

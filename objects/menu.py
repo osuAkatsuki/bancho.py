@@ -1,16 +1,14 @@
-# -*- coding: utf-8 -*-
-
 # note that this is still a very rough draft of
 # the concept and is subject to major refactoring
 
 import random
-from enum import unique
 from enum import IntEnum
+from enum import unique
 from typing import Callable
 from typing import Coroutine
 from typing import NamedTuple
-from typing import Union
 from typing import TYPE_CHECKING
+from typing import Union
 
 from objects import glob
 

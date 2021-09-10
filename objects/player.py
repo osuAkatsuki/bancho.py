@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import time
 import uuid
 from dataclasses import dataclass
@@ -13,9 +11,9 @@ from typing import TYPE_CHECKING
 from typing import Union
 
 import aiomysql
+from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from cmyui.discord import Webhook
 
 import packets
 from constants.gamemodes import GameMode
@@ -30,9 +28,9 @@ from objects.match import MatchTeamTypes
 from objects.match import Slot
 from objects.match import SlotStatus
 from objects.menu import Menu
+from objects.menu import menu_keygen
 from objects.menu import MenuCommands
 from objects.menu import MenuFunction
-from objects.menu import menu_keygen
 from objects.score import Grade
 from objects.score import Score
 from utils.misc import escape_enum

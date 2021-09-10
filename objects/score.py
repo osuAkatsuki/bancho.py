@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import functools
 import math
 from base64 import b64decode
@@ -14,7 +12,7 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator
+from peace_performance_python.objects import Calculator as PeaceCalculator
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 
@@ -22,8 +20,8 @@ from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
-from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
@@ -89,7 +87,7 @@ class SubmissionStatus(IntEnum):
             self.FAILED: 'Failed',
             self.SUBMITTED: 'Submitted',
             self.BEST: 'Best'
-        }[self.value]
+        }[self]
 
 class Score:
     """\
@@ -360,7 +358,7 @@ class Score:
                     return (0.0, 0.0)
         elif mode_vn in (1, 2): # taiko, catch
             beatmap = PeaceMap(osu_file_path)
-            peace = Calculator()
+            peace = PeaceCalculator()
 
             if self.mods != Mods.NOMOD:
                 peace.set_mods(int(self.mods))
@@ -373,7 +371,7 @@ class Score:
             peace.set_acc(self.acc)
 
             calculated = peace.calculate(beatmap)
-            
+
             if calculated.pp not in (math.inf, math.nan):
                 temp_pp = round(calculated.pp, 5)
 
@@ -385,7 +383,7 @@ class Score:
                 return (0.0, 0.0)
         elif mode_vn == 3: # mania
             beatmap = PeaceMap(osu_file_path)
-            peace = Calculator()
+            peace = PeaceCalculator()
 
             if self.mods != Mods.NOMOD:
                 peace.set_mods(int(self.mods))
@@ -400,6 +398,8 @@ class Score:
                 return (round(calculated.pp, 5), calculated.stars)
             else:
                 return (0.0, 0.0)
+        else:
+            raise ValueError(f'Invalid vanilla mode {mode_vn}')
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""

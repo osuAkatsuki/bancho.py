@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 import copy
 import importlib
+import math
 import os
 import pprint
 import random
@@ -15,6 +14,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version as pkg_version
+from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import Callable
 from typing import Coroutine
@@ -23,14 +23,13 @@ from typing import Optional
 from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
-from pathlib import Path
 
 import aiomysql
 import cmyui.utils
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator
 import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator
 
 import packets
 import utils.misc
@@ -45,8 +44,8 @@ from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
 from objects.clan import Clan
 from objects.clan import ClanPrivileges
-from objects.match import Match
 from objects.match import MapPool
+from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
@@ -422,7 +421,7 @@ async def _with(ctx: Context) -> Optional[str]:
             if combo is not None:
                 peace.set_combo(combo)
                 msg.append(f'{combo}x')
-            
+
             if acc is not None:
                 peace.set_acc(acc)
                 msg.append(f'{acc:.2f}%')
@@ -431,12 +430,12 @@ async def _with(ctx: Context) -> Optional[str]:
                 peace.set_mode(mode_vn)
 
             calculated = peace.calculate(beatmap)
-            
+
             if calculated.pp not in (math.inf, math.nan):
                 temp_pp = round(calculated.pp, 5)
 
                 if (mode_vn == 1 and beatmap.diff > 0 and temp_pp > 800) or calculated.stars > 50:
-                    return f"{' '.join(msg)}: 0pp (0*)" 
+                    return f"{' '.join(msg)}: 0pp (0*)"
                 else:
                     return f"{' '.join(msg)}: {temp_pp:.2f}pp ({calculated.stars:.2f}*)"
             else:
@@ -459,18 +458,18 @@ async def _with(ctx: Context) -> Optional[str]:
                 mods = mods.filter_invalid_combos(mode_vn)
             else:
                 return 'Invalid syntax: !with <score/mods ...>'
-        
+
         beatmap = PeaceMap(str(osu_file_path))
         peace = Calculator()
 
         if mods != Mods.NOMOD:
             peace.set_mods(int(mods))
-        
+
         if mode_vn:
             peace.set_mode(mode_vn)
 
         peace.set_score(int(score * 1000))
-        
+
         calc = peace.calculate(beatmap)
         return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.stars:.2f}*)'
 

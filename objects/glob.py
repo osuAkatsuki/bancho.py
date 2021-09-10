@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from typing import TYPE_CHECKING
 
 # this is used externally, i.e. `glob.config.attr`

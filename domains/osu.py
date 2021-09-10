@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import copy
 import hashlib
 import ipaddress
@@ -14,6 +12,7 @@ from enum import unique
 from functools import wraps
 from pathlib import Path
 from typing import Callable
+from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -55,10 +54,10 @@ HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 BASE_DOMAIN = glob.config.domain
 domain = Domain({f'osu.{BASE_DOMAIN}', 'osu.ppy.sh'})
 
-REPLAYS_PATH = Path.cwd() / '.data/osr'
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
-SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 AVATARS_PATH = Path.cwd() / '.data/avatars'
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
+REPLAYS_PATH = Path.cwd() / '.data/osr'
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 
 """ Some helper decorators (used for /web/ connections) """
 
@@ -173,10 +172,10 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
         log('Screenshot req missing file.', Ansi.LRED)
         return (400, b'Missing file.')
 
-    ss_file = conn.files['ss']
+    ss_data_view = memoryview(conn.files['ss']).toreadonly()
 
     # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-    if len(ss_file) > (4 * 1024 * 1024):
+    if len(ss_data_view) > (4 * 1024 * 1024):
         return (400, b'Screenshot file too large.')
 
     if (
@@ -188,13 +187,13 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
         )
 
     if (
-        ss_file[:4] == b'\xff\xd8\xff\xe0' and
-        ss_file[6:11] == b'JFIF\x00'
+        ss_data_view[:4] == b'\xff\xd8\xff\xe0' and
+        ss_data_view[6:11] == b'JFIF\x00'
     ):
         extension = 'jpeg'
     elif (
-        ss_file[:8] == b'\x89PNG\r\n\x1a\n' and
-        ss_file[-8] == b'\x49END\xae\x42\x60\x82'
+        ss_data_view[:8] == b'\x89PNG\r\n\x1a\n' and
+        ss_data_view[-8] == b'\x49END\xae\x42\x60\x82'
     ):
         extension = 'png'
     else:
@@ -202,11 +201,12 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
 
     while True:
         filename = f'{secrets.token_urlsafe(6)}.{extension}'
-        screenshot_file = SCREENSHOTS_PATH / filename
-        if not screenshot_file.exists():
+        ss_file = SCREENSHOTS_PATH / filename
+        if not ss_file.exists():
             break
 
-    screenshot_file.write_bytes(ss_file)
+    with ss_file.open('wb') as f:
+        f.write(ss_data_view)
 
     log(f'{p} uploaded {filename}.')
     return filename.encode()
@@ -2302,7 +2302,7 @@ async def register_account(
 
     # ensure all args passed
     # are safe for registration.
-    errors = defaultdict(list)
+    errors: Mapping[str, list[str]] = defaultdict(list)
 
     # Usernames must:
     # - be within 2-15 characters in length

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import re
 
 from objects import glob # this will 100% become a problem

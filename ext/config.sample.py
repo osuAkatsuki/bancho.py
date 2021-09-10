@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # this file should generally become
 # less useful as you scroll down.
 # except for the bottom one :P <3
