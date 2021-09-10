@@ -10,14 +10,14 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from peace_performance_python.objects import Beatmap as peaceMap
-from peace_performance_python.objects import Calculator
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
+from peace_performance_python.objects import Beatmap as peaceMap
+from peace_performance_python.objects import Calculator
 
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
