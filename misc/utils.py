@@ -2,9 +2,11 @@ import asyncio
 import inspect
 import io
 import ipaddress
+import os
 import secrets
 import signal
 import socket
+import subprocess
 import sys
 import types
 import warnings
@@ -33,6 +35,7 @@ from constants.countries import country_codes
 from objects import glob
 
 __all__ = (
+    # TODO: organize/sort these
     'get_press_times',
     'make_safe_name',
     'fetch_bot_name',
@@ -54,8 +57,23 @@ __all__ = (
 
     'shutdown_signal_handler',
     '_handle_fut_exception',
-    '_cancel_all_tasks'
+    '_cancel_all_tasks',
+
+    'await_ongoing_connections',
+    'cancel_housekeeping_tasks',
+
+    'ensure_supported_platform',
+    'ensure_local_services_are_running',
+    'ensure_directory_structure',
+    'ensure_dependencies_and_requirements',
+    '__install_debugging_hooks',
+    'display_startup_dialog',
 )
+
+DATA_PATH = Path.cwd() / '.data'
+ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
+DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
+OPPAI_PATH = Path.cwd() / 'oppai-ng'
 
 useful_keys = (Keys.M1, Keys.M2,
                Keys.K1, Keys.K2)
@@ -420,3 +438,145 @@ def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
 
     for task in to_cancel:
         _handle_fut_exception(task)
+
+async def await_ongoing_connections(timeout: float) -> None:
+    log(f'-> Allowing up to {timeout:.2f} seconds for '
+       f'{len(glob.ongoing_conns)} ongoing connection(s) to finish.', Ansi.LMAGENTA)
+
+    done, pending = await asyncio.wait(glob.ongoing_conns, timeout=timeout)
+
+    for task in done:
+        _handle_fut_exception(task)
+
+    if pending:
+        log(f'-> Awaital timeout - cancelling {len(pending)} pending connection(s).', Ansi.LRED)
+
+        for task in pending:
+            task.cancel()
+
+        await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in pending:
+            _handle_fut_exception(task)
+
+async def cancel_housekeeping_tasks() -> None:
+    log(f'-> Cancelling {len(glob.housekeeping_tasks)} housekeeping tasks.', Ansi.LMAGENTA)
+
+    # cancel housekeeping tasks
+    for task in glob.housekeeping_tasks:
+        task.cancel()
+
+    await asyncio.gather(*glob.housekeeping_tasks, return_exceptions=True)
+
+    for task in glob.housekeeping_tasks:
+        _handle_fut_exception(task)
+
+def ensure_supported_platform() -> int:
+    """Ensure we're running on an appropriate platform for gulag."""
+    if sys.platform != 'linux':
+        log('gulag currently only supports linux', Ansi.LRED)
+        if sys.platform == 'win32':
+            log("you could also try wsl(2), i'd recommend ubuntu 18.04 "
+                "(i use it to test gulag)", Ansi.LBLUE)
+        return 1
+
+    if sys.version_info < (3, 9):
+        log('gulag uses many modern python features, '
+            'and the minimum python version is 3.9.', Ansi.LRED)
+        return 1
+
+    return 0
+
+def ensure_local_services_are_running() -> int:
+    """Ensure all required services (mysql) are running."""
+    # NOTE: if you have any problems with this, please contact me
+    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
+    # how people are using the software so that i can keep it
+    # in mind while developing new features & refactoring.
+
+    if glob.config.mysql['host'] in ('localhost', '127.0.0.1', None):
+        # sql server running locally, make sure it's running
+        for service in ('mysqld', 'mariadb'):
+            if os.path.exists(f'/var/run/{service}/{service}.pid'):
+                break
+        else:
+            # not found, try pgrep
+            pgrep_exit_code = os.system('pgrep mysqld')
+            if pgrep_exit_code != 0:
+                log('Please start your mysqld server.', Ansi.LRED)
+                return 1
+
+    return 0
+
+def ensure_directory_structure() -> int:
+    """Ensure the .data directory and git submodules are ready."""
+    # create /.data and its subdirectories.
+    DATA_PATH.mkdir(exist_ok=True)
+
+    for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
+        subdir = DATA_PATH / sub_dir
+        subdir.mkdir(exist_ok=True)
+
+    if not ACHIEVEMENTS_ASSETS_PATH.exists():
+        if not glob.has_internet:
+            # TODO: make it safe to run without achievements
+            return 1
+
+        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
+        download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
+
+    return 0
+
+def ensure_dependencies_and_requirements() -> int:
+    """Make sure all of gulag's dependencies are ready."""
+    if not OPPAI_PATH.exists():
+        log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['git', 'submodule', 'init'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to initialize git submodules.', Ansi.LRED)
+            return exit_code
+
+        p = subprocess.Popen(args=['git', 'submodule', 'update'],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to update git submodules.', Ansi.LRED)
+            return exit_code
+
+    if not (OPPAI_PATH / 'liboppai.so').exists():
+        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
+        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if exit_code := p.wait():
+            log('Failed to build oppai-ng automatically.', Ansi.LRED)
+            return exit_code
+
+    return 0
+
+def __install_debugging_hooks() -> None:
+    """Change internals to help with debugging & active development."""
+    if DEBUG_HOOKS_PATH.exists():
+        from _testing import runtime # type: ignore
+        runtime.setup()
+
+def display_startup_dialog() -> None:
+    """Print any general information or warnings to the console."""
+    if glob.config.advanced:
+        log('running in advanced mode', Ansi.LRED)
+
+    # running on root grants the software potentally dangerous and
+    # unnecessary power over the operating system and is not advised.
+    if os.geteuid() == 0:
+        log('It is not recommended to run gulag as root, '
+            'especially in production..', Ansi.LYELLOW)
+
+        if glob.config.advanced:
+            log('The risk is even greater with features '
+                'such as config.advanced enabled.', Ansi.LRED)
+
+    if not glob.has_internet:
+        log('Running in offline mode, some features '
+            'will not be available.', Ansi.LRED)

@@ -29,7 +29,7 @@ from cmyui.web import Domain
 from cmyui.web import ratelimit
 
 import packets
-import utils.misc
+import misc.utils
 from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
@@ -41,8 +41,8 @@ from objects.player import Privileges
 from objects.score import Grade
 from objects.score import Score
 from objects.score import SubmissionStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -152,7 +152,7 @@ async def osuError(conn: Connection) -> HTTPResponse:
                 )
             ):
                 # player login incorrect
-                await utils.misc.log_strange_occurrence('osu-error auth failed')
+                await misc.utils.log_strange_occurrence('osu-error auth failed')
                 p = None
         else:
             p = None
@@ -182,7 +182,7 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
         'v' not in conn.multipart_args or
         conn.multipart_args['v'] != '1'
     ):
-        await utils.misc.log_strange_occurrence(
+        await misc.utils.log_strange_occurrence(
             f'v=1 missing from osu-screenshot mp args; {conn.multipart_args}'
         )
 
@@ -285,7 +285,7 @@ async def osuGetBeatmapInfo(
         )
 
     if data['Ids']: # still have yet to see this used
-        await utils.misc.log_strange_occurrence(
+        await misc.utils.log_strange_occurrence(
             f'{p} requested map(s) info by id ({data["Ids"]})'
         )
 
@@ -436,8 +436,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
 
     async with glob.http_session.get(search_url, params=params) as resp:
         if not resp:
-            stacktrace = utils.misc.get_appropriate_stacktrace()
-            await utils.misc.log_strange_occurrence(stacktrace)
+            stacktrace = misc.utils.get_appropriate_stacktrace()
+            await misc.utils.log_strange_occurrence(stacktrace)
 
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
@@ -445,8 +445,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
             elif resp.status >= 500: # chimu server error (happens a lot :/)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             elif resp.status != 200:
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
         else: # cheesegull
             if resp.status != 200:
@@ -456,8 +456,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
 
         if USING_CHIMU:
             if result['code'] != 0:
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             result = result['data']
 
@@ -586,8 +586,8 @@ async def osuSubmitModularSelector(
     score.time_elapsed = int(time_elapsed)
 
     if 'i' in conn.files:
-        stacktrace = utils.misc.get_appropriate_stacktrace()
-        await utils.misc.log_strange_occurrence(stacktrace)
+        stacktrace = misc.utils.get_appropriate_stacktrace()
+        await misc.utils.log_strange_occurrence(stacktrace)
 
     if ( # check for pp caps on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp and not (
@@ -2389,11 +2389,11 @@ async def register_account(
                         # decent case, dev has downloaded a geoloc db from
                         # maxmind, so we can do a local db lookup. (~1-5ms)
                         # https://www.maxmind.com/en/home
-                        geoloc = utils.misc.fetch_geoloc_db(ip)
+                        geoloc = misc.utils.fetch_geoloc_db(ip)
                     else:
                         # worst case, we must do an external db lookup
                         # using a public api. (depends, `ping ip-api.com`)
-                        geoloc = await utils.misc.fetch_geoloc_web(ip)
+                        geoloc = await misc.utils.fetch_geoloc_web(ip)
 
                     country_acronym = geoloc['country']['acronym']
                 else:

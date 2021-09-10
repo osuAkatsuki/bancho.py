@@ -22,8 +22,8 @@ from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player

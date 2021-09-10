@@ -20,7 +20,7 @@ from objects.clan import ClanPrivileges
 from objects.match import MapPool
 from objects.match import Match
 from objects.player import Player
-from utils.misc import make_safe_name
+from misc.utils import make_safe_name
 
 __all__ = (
     'Channels',

@@ -3,8 +3,8 @@ from enum import IntEnum
 from enum import unique
 
 from constants.mods import Mods
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 __all__ = ('GameMode',)
 

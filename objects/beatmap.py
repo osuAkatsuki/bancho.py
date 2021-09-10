@@ -15,11 +15,11 @@ import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import utils.misc
+import misc.utils
 from constants.gamemodes import GameMode
 from objects import glob
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 __all__ = ('ensure_local_osu_file', 'RankedStatus',
            'Beatmap', 'BeatmapSet')
@@ -66,8 +66,8 @@ async def ensure_local_osu_file(
         async with glob.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return False
 
             osu_file_path.write_bytes(await r.read())
@@ -644,7 +644,7 @@ class BeatmapSet:
             # we have the map on disk but it's been removed from the osu!api.
             # i want to see how frequently this happens and see some examples
             # of when it's triggered since i'm not 100% sure about it, cheers.
-            await utils.misc.log_strange_occurrence(
+            await misc.utils.log_strange_occurrence(
                 f'_update_if_available no data, setid: {self.id}'
             )
 

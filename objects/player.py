@@ -33,9 +33,9 @@ from objects.menu import MenuCommands
 from objects.menu import MenuFunction
 from objects.score import Grade
 from objects.score import Score
-from utils.misc import escape_enum
-from utils.misc import Geolocation
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import Geolocation
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.achievement import Achievement

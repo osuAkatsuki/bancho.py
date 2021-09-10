@@ -20,8 +20,8 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 from objects import glob
 from objects.beatmap import Beatmap
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from asyncio import TimerHandle

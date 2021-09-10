@@ -32,7 +32,7 @@ from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator
 
 import packets
-import utils.misc
+import misc.utils
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -52,7 +52,7 @@ from objects.match import MatchWinConditions
 from objects.match import SlotStatus
 from objects.player import Player
 from objects.score import SubmissionStatus
-from utils.misc import seconds_readable
+from misc.utils import seconds_readable
 
 if TYPE_CHECKING:
     from objects.channel import Channel
@@ -1174,7 +1174,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         # a second for handling conns.
                         await asyncio.sleep(0.01)
 
-            elapsed = utils.misc.seconds_readable(int(time.time() - st))
+            elapsed = misc.utils.seconds_readable(int(time.time() - st))
             staff_chan.send_bot(f'Recalculation complete. | Elapsed: {elapsed}')
 
         glob.loop.create_task(recalc_all())

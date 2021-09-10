@@ -23,8 +23,8 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player

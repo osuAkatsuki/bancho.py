@@ -24,7 +24,7 @@ from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator
 
 import packets
-import utils.misc
+import misc.utils
 from constants import commands
 from constants import regexes
 from constants.gamemodes import GameMode
@@ -504,7 +504,7 @@ async def login(
         'SELECT id, name, priv, pw_bcrypt, country, '
         'silence_end, clan_id, clan_priv, api_key '
         'FROM users WHERE safe_name = %s',
-        [utils.misc.make_safe_name(username)]
+        [misc.utils.make_safe_name(username)]
     )
     user_info = await db_cursor.fetchone()
 
@@ -618,11 +618,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info['geoloc'] = utils.misc.fetch_geoloc_db(ip)
+            user_info['geoloc'] = misc.utils.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info['geoloc'] = await utils.misc.fetch_geoloc_web(ip)
+            user_info['geoloc'] = await misc.utils.fetch_geoloc_web(ip)
 
         if db_country == 'xx':
             # bugfix for old gulag versions when

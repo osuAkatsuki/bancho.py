@@ -16,29 +16,19 @@ import io
 import os
 import signal
 import socket
-import subprocess
 import sys
-from contextlib import asynccontextmanager
-from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
-from typing import AsyncIterator
-from typing import Iterator
-from typing import Optional
 
-import aiohttp
 import aiomysql
 import cmyui
-import datadog
-import geoip2.database
-import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
 
 import bg_loops
-import utils.misc
+import misc.utils
+import misc.context
 from constants.privileges import Privileges
 from objects.achievement import Achievement
 from objects.collections import Channels
@@ -47,16 +37,7 @@ from objects.collections import MapPools
 from objects.collections import Matches
 from objects.collections import Players
 from objects.player import Player
-from utils.updater import Updater
-
-__all__ = ()
-
-# we print utf-8 content quite often
-if isinstance(sys.stdout, io.TextIOWrapper):
-    sys.stdout.reconfigure(encoding='utf-8')
-
-# set cwd to /gulag
-os.chdir(os.path.dirname(os.path.realpath(__file__)))
+from misc.updater import Updater
 
 try:
     from objects import glob
@@ -71,25 +52,20 @@ except ModuleNotFoundError as exc:
     else:
         raise
 
-utils.misc.install_excepthook()
+__all__ = ()
 
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
 glob.version = cmyui.Version(3, 5, 4)
 
-DATA_PATH = Path.cwd() / '.data'
-DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
-OPPAI_PATH = Path.cwd() / 'oppai-ng'
-
-ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
 
 async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache many global collections."""
     # dynamic (active) sets, only in ram
-    glob.players = Players()
     glob.matches = Matches()
+    glob.players = Players()
 
     # static (inactive) sets, in ram & sql
     glob.channels = await Channels.prepare(db_cursor)
@@ -99,7 +75,7 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     # create bot & add it to online players
     glob.bot = Player(
         id=1,
-        name=await utils.misc.fetch_bot_name(db_cursor),
+        name=await misc.utils.fetch_bot_name(db_cursor),
         login_time=float(0x7fffffff), # (never auto-dc)
         priv=Privileges.Normal,
         bot_client=True
@@ -128,167 +104,6 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
         async for row in db_cursor
     }
 
-def ensure_supported_platform() -> int:
-    """Ensure we're running on an appropriate platform for gulag."""
-    if sys.platform != 'linux':
-        log('gulag currently only supports linux', Ansi.LRED)
-        if sys.platform == 'win32':
-            log("you could also try wsl(2), i'd recommend ubuntu 18.04 "
-                "(i use it to test gulag)", Ansi.LBLUE)
-        return 1
-
-    if sys.version_info < (3, 9):
-        log('gulag uses many modern python features, '
-            'and the minimum python version is 3.9.', Ansi.LRED)
-        return 1
-
-    return 0
-
-def ensure_local_services_are_running() -> int:
-    """Ensure all required services (mysql) are running."""
-    # NOTE: if you have any problems with this, please contact me
-    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
-    # how people are using the software so that i can keep it
-    # in mind while developing new features & refactoring.
-
-    if glob.config.mysql['host'] in ('localhost', '127.0.0.1', None):
-        # sql server running locally, make sure it's running
-        for service in ('mysqld', 'mariadb'):
-            if os.path.exists(f'/var/run/{service}/{service}.pid'):
-                break
-        else:
-            # not found, try pgrep
-            pgrep_exit_code = os.system('pgrep mysqld')
-            if pgrep_exit_code != 0:
-                log('Please start your mysqld server.', Ansi.LRED)
-                return 1
-
-    return 0
-
-def ensure_directory_structure() -> int:
-    """Ensure the .data directory and git submodules are ready."""
-    # create /.data and its subdirectories.
-    DATA_PATH.mkdir(exist_ok=True)
-
-    for sub_dir in ('avatars', 'logs', 'osu', 'osr', 'ss'):
-        subdir = DATA_PATH / sub_dir
-        subdir.mkdir(exist_ok=True)
-
-    if not ACHIEVEMENTS_ASSETS_PATH.exists():
-        if not glob.has_internet:
-            # TODO: make it safe to run without achievements
-            return 1
-
-        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
-        utils.misc.download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
-
-    return 0
-
-def ensure_dependencies_and_requirements() -> int:
-    """Make sure all of gulag's dependencies are ready."""
-    if not OPPAI_PATH.exists():
-        log('No oppai-ng submodule found, attempting to clone.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['git', 'submodule', 'init'],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if exit_code := p.wait():
-            log('Failed to initialize git submodules.', Ansi.LRED)
-            return exit_code
-
-        p = subprocess.Popen(args=['git', 'submodule', 'update'],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if exit_code := p.wait():
-            log('Failed to update git submodules.', Ansi.LRED)
-            return exit_code
-
-    if not (OPPAI_PATH / 'liboppai.so').exists():
-        log('No oppai-ng library found, attempting to build.', Ansi.LMAGENTA)
-        p = subprocess.Popen(args=['./libbuild'], cwd='oppai-ng',
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        if exit_code := p.wait():
-            log('Failed to build oppai-ng automatically.', Ansi.LRED)
-            return exit_code
-
-    return 0
-
-def __install_debugging_hooks() -> None:
-    """Change internals to help with debugging & active development."""
-    if DEBUG_HOOKS_PATH.exists():
-        from _testing import runtime # type: ignore
-        runtime.setup()
-
-def display_startup_dialog() -> None:
-    """Print any general information or warnings to the console."""
-    if glob.config.advanced:
-        log('running in advanced mode', Ansi.LRED)
-
-    # running on root grants the software potentally dangerous and
-    # unnecessary power over the operating system and is not advised.
-    if os.geteuid() == 0:
-        log('It is not recommended to run gulag as root, '
-            'especially in production..', Ansi.LYELLOW)
-
-        if glob.config.advanced:
-            log('The risk is even greater with features '
-                'such as config.advanced enabled.', Ansi.LRED)
-
-    if not glob.has_internet:
-        log('Running in offline mode, some features '
-            'will not be available.', Ansi.LRED)
-
-# context managers
-
-@asynccontextmanager
-async def acquire_http_session(has_internet: bool) -> AsyncIterator[Optional[aiohttp.ClientSession]]:
-    if has_internet:
-        # TODO: perhaps a config setting to enable optimizations like this?
-        json_encoder = lambda x: str(orjson.dumps(x))
-
-        http_sess = aiohttp.ClientSession(json_serialize=json_encoder)
-        try:
-            yield http_sess
-        finally:
-            await http_sess.close()
-
-@asynccontextmanager
-async def acquire_mysql_db_pool(config: dict[str, Any]) -> AsyncIterator[Optional[cmyui.AsyncSQLPool]]:
-    db_pool = cmyui.AsyncSQLPool()
-    try:
-        await db_pool.connect(config)
-        yield db_pool
-    finally:
-        await db_pool.close()
-
-@contextmanager
-def acquire_geoloc_db_conn(db_file: Path) -> Iterator[Optional[geoip2.database.Reader]]:
-    if db_file.exists():
-        geoloc_db = geoip2.database.Reader(str(db_file))
-        try:
-            yield geoloc_db
-        finally:
-            geoloc_db.close()
-    else:
-        yield None
-
-@contextmanager
-def acquire_datadog_client(config: dict[str, Any]) -> Iterator[Optional[datadog.ThreadStats]]:
-    if all(config.values()):
-        datadog.initialize(**config)
-        datadog_client = datadog.ThreadStats()
-        try:
-            datadog_client.start(flush_in_thread=True,
-                                flush_interval=15)
-            # wipe any previous stats from the page.
-            datadog_client.gauge('gulag.online_players', 0)
-            yield datadog_client
-        finally:
-            datadog_client.stop()
-            datadog_client.flush()
-    else:
-        yield None
-
 def _conn_finished_cb(task: asyncio.Task) -> None:
     if not task.cancelled():
         exc = task.exception()
@@ -306,8 +121,8 @@ async def main() -> int:
     glob.loop = asyncio.get_running_loop()
 
     async with (
-        acquire_http_session(glob.has_internet) as glob.http_session,
-        acquire_mysql_db_pool(glob.config.mysql) as glob.db
+        misc.context.acquire_http_session(glob.has_internet) as glob.http_session,
+        misc.context.acquire_mysql_db_pool(glob.config.mysql) as glob.db
     ):
         # run the sql & submodule updater (uses http & db).
         # TODO: updating cmyui_pkg should run before it's import
@@ -316,8 +131,8 @@ async def main() -> int:
         await updater.log_startup()
 
         with (
-            acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
-            acquire_datadog_client(glob.config.datadog) as glob.datadog
+            misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
+            misc.context.acquire_datadog_client(glob.config.datadog) as glob.datadog
         ):
             # create the server object; this will handle http connections
             # for us using the kernel's transport (tcp/ip) socket interface.
@@ -347,7 +162,7 @@ async def main() -> int:
                                   a_ppy_sh, b_ppy_sh})
 
             # support both INET and UNIX sockets
-            if utils.misc.is_inet_address(glob.config.server_addr):
+            if misc.utils.is_inet_address(glob.config.server_addr):
                 sock_family = socket.AF_INET
             elif isinstance(glob.config.server_addr, str):
                 sock_family = socket.AF_UNIX
@@ -374,7 +189,7 @@ async def main() -> int:
 
                 glob.shutting_down = False
 
-                sig_handler = utils.misc.shutdown_signal_handler
+                sig_handler = misc.utils.shutdown_signal_handler
                 for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
                     loop.add_signal_handler(signum, sig_handler, signum)
 
@@ -404,51 +219,26 @@ async def main() -> int:
             # and shut down any of the housekeeping tasks running in the background.
 
             if glob.ongoing_conns:
-                await await_ongoing_connections(timeout=5.0)
+                await misc.utils.await_ongoing_connections(timeout=5.0)
 
-            await cancel_housekeeping_tasks()
+            await misc.utils.cancel_housekeeping_tasks()
 
     return 0
 
-async def await_ongoing_connections(timeout: float) -> None:
-    log(f'-> Allowing up to {timeout:.2f} seconds for '
-       f'{len(glob.ongoing_conns)} ongoing connection(s) to finish.', Ansi.LMAGENTA)
-
-    done, pending = await asyncio.wait(glob.ongoing_conns, timeout=timeout)
-
-    for task in done:
-        utils.misc._handle_fut_exception(task)
-
-    if pending:
-        log(f'-> Awaital timeout - cancelling {len(pending)} pending connection(s).', Ansi.LRED)
-
-        for task in pending:
-            task.cancel()
-
-        await asyncio.gather(*pending, return_exceptions=True)
-
-        for task in pending:
-            utils.misc._handle_fut_exception(task)
-
-async def cancel_housekeeping_tasks() -> None:
-    log(f'-> Cancelling {len(glob.housekeeping_tasks)} housekeeping tasks.', Ansi.LMAGENTA)
-
-    # cancel housekeeping tasks
-    for task in glob.housekeeping_tasks:
-        task.cancel()
-
-    await asyncio.gather(*glob.housekeeping_tasks, return_exceptions=True)
-
-    for task in glob.housekeeping_tasks:
-        utils.misc._handle_fut_exception(task)
-
 if __name__ == '__main__':
     """Attempt to start the server."""
+    os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
+
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+
+    misc.utils.install_excepthook()
+
     for safety_check in (
-        ensure_supported_platform, # linux only at the moment
-        ensure_local_services_are_running, # mysql (if local)
-        ensure_directory_structure, # .data/ & achievements/ dir structure
-        ensure_dependencies_and_requirements # submodules & oppai-ng built
+        misc.utils.ensure_supported_platform, # linux only at the moment
+        misc.utils.ensure_local_services_are_running, # mysql (if local)
+        misc.utils.ensure_directory_structure, # .data/ & achievements/ dir structure
+        misc.utils.ensure_dependencies_and_requirements # submodules & oppai-ng built
     ):
         if (exit_code := safety_check()) != 0:
             raise SystemExit(exit_code)
@@ -459,13 +249,13 @@ if __name__ == '__main__':
 
     # install any debugging hooks from
     # _testing/runtime.py, if present
-    __install_debugging_hooks()
+    misc.utils.__install_debugging_hooks()
 
     # check our internet connection status
-    glob.has_internet = utils.misc.check_connection(timeout=1.5)
+    glob.has_internet = misc.utils.check_connection(timeout=1.5)
 
     # show info & any contextual warnings.
-    display_startup_dialog()
+    misc.utils.display_startup_dialog()
 
     try:
         # use uvloop if available
@@ -482,7 +272,7 @@ if __name__ == '__main__':
         raise SystemExit(loop.run_until_complete(main()))
     finally:
         try:
-            utils.misc._cancel_all_tasks(loop)
+            misc.utils._cancel_all_tasks(loop)
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.run_until_complete(loop.shutdown_default_executor())
         finally:
@@ -492,7 +282,7 @@ if __name__ == '__main__':
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.
-    if utils.misc.running_via_asgi_webserver():
+    if misc.utils.running_via_asgi_webserver():
         raise RuntimeError(
             "gulag does not use an ASGI framework, and uses it's own custom "
             "web framework implementation; please run it directly (./main.py)."
