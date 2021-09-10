@@ -24,8 +24,6 @@ from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
 from pathlib import Path
-from peace_performance_python.objects import Beatmap as peaceMap
-from peace_performance_python.objects import Calculator
 
 import aiomysql
 import cmyui.utils
@@ -34,6 +32,8 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from maniera.calculator import Maniera
 
 import packets
+from peace_performance_python.objects import Beatmap as peaceMap
+from peace_performance_python.objects import Calculator
 import utils.misc
 from constants import regexes
 from constants.gamemodes import GameMode
