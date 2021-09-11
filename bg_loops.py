@@ -65,15 +65,14 @@ async def _disconnect_ghosts() -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
     while True:
-        ctime = time.time()
+        await asyncio.sleep(PING_TIMEOUT // 3)
+        current_time = time.time()
 
         for p in glob.players:
-            if ctime - p.last_recv_time > PING_TIMEOUT:
+            if current_time - p.last_recv_time > PING_TIMEOUT:
                 log(f'Auto-dced {p}.', Ansi.LMAGENTA)
                 p.logout()
 
-        # run this indefinitely
-        await asyncio.sleep(PING_TIMEOUT // 3)
 
 async def _reroll_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""

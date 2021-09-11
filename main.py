@@ -103,6 +103,83 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
         async for row in db_cursor
     }
 
+async def run_server() -> None:
+    """Begin listening for and handling connections on all endpoints."""
+
+    # we'll be working on top of transport layer posix sockets.
+    # these implement tcp/ip over ethernet for us, and osu!stable
+    # uses http/1.0 ontop of this. we'll need to parse the http data,
+    # find the appropriate handler, and dispatch the connection.
+
+    # i'll be using my light web framework to handle parsing & dispatching
+    # of connections to their respective handlers; here, we'll just worry
+    # about the socket-level details, like receiving the data from the clients.
+
+    # if you're interested in more details, you can see the implementation at
+    # https://github.com/cmyui/cmyui_pkg/blob/master/cmyui/web.py
+
+    glob.app = cmyui.Server(
+        name=f'gulag v{glob.version}',
+        gzip=4, debug=glob.config.debug
+    )
+
+    # fetch our server's endpoints; gulag supports
+    # osu!'s handlers across multiple domains.
+    from domains.cho import domain as c_ppy_sh # /c[e4-6]?.ppy.sh/
+    from domains.osu import domain as osu_ppy_sh
+    from domains.ava import domain as a_ppy_sh
+    from domains.map import domain as b_ppy_sh
+    glob.app.add_domains({c_ppy_sh, osu_ppy_sh,
+                            a_ppy_sh, b_ppy_sh})
+
+    # support both INET and UNIX sockets
+    if misc.utils.is_inet_address(glob.config.server_addr):
+        sock_family = socket.AF_INET
+    elif isinstance(glob.config.server_addr, str):
+        sock_family = socket.AF_UNIX
+    else:
+        raise ValueError('Invalid socket address.')
+
+    if sock_family == socket.AF_UNIX:
+        # using unix socket - remove from filesystem if it exists
+        if os.path.exists(glob.config.server_addr):
+            os.remove(glob.config.server_addr)
+
+    # create our transport layer socket; osu! uses tcp/ip
+    with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
+        listening_sock.setblocking(False) # asynchronous
+        listening_sock.bind(glob.config.server_addr)
+
+        if sock_family == socket.AF_UNIX:
+            # using unix socket - give the socket file
+            # appropriate (read, write) permissions
+            os.chmod(glob.config.server_addr, 0o666)
+
+        listening_sock.listen(glob.config.max_conns)
+        log(f'-> Listening @ {glob.config.server_addr}', RGB(0x00ff7f))
+
+        glob.ongoing_conns = []
+        glob.shutting_down = False
+
+        while not glob.shutting_down:
+            # TODO: this timeout based-solution can be heavily
+            #       improved and refactored out.
+            try:
+                conn, _ = await asyncio.wait_for(
+                    fut=loop.sock_accept(listening_sock),
+                    timeout=0.25
+                )
+            except asyncio.TimeoutError:
+                pass
+            else:
+                task = loop.create_task(glob.app.handle(conn))
+                task.add_done_callback(misc.utils._conn_finished_cb)
+                glob.ongoing_conns.append(task)
+
+    if sock_family == socket.AF_UNIX:
+        # using unix socket - remove from filesystem
+        os.remove(glob.config.server_addr)
+
 async def main() -> int:
     """Initialize, and start up the server."""
     glob.loop = asyncio.get_running_loop()
@@ -121,13 +198,6 @@ async def main() -> int:
             misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
             misc.context.acquire_datadog_client(glob.config.datadog) as glob.datadog
         ):
-            # create the server object; this will handle http connections
-            # for us using the kernel's transport (tcp/ip) socket interface.
-            glob.app = cmyui.Server(
-                name=f'gulag v{glob.version}',
-                gzip=4, debug=glob.config.debug
-            )
-
             # cache many global collections/objects from sql,
             # such as channels, mappools, clans, bot, etc.
             async with glob.db.pool.acquire() as conn:
@@ -139,68 +209,16 @@ async def main() -> int:
             # removing donator startus, etc.
             await bg_loops.initialize_tasks()
 
-            # fetch our server's endpoints; gulag supports
-            # osu!'s handlers across multiple domains.
-            from domains.cho import domain as c_ppy_sh # /c[e4-6]?.ppy.sh/
-            from domains.osu import domain as osu_ppy_sh
-            from domains.ava import domain as a_ppy_sh
-            from domains.map import domain as b_ppy_sh
-            glob.app.add_domains({c_ppy_sh, osu_ppy_sh,
-                                  a_ppy_sh, b_ppy_sh})
+            # handle signals so we can ensure a graceful shutdown
+            sig_handler = misc.utils.shutdown_signal_handler
+            for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+                loop.add_signal_handler(signum, sig_handler, signum)
 
-            # support both INET and UNIX sockets
-            if misc.utils.is_inet_address(glob.config.server_addr):
-                sock_family = socket.AF_INET
-            elif isinstance(glob.config.server_addr, str):
-                sock_family = socket.AF_UNIX
-            else:
-                raise ValueError('Invalid socket address.')
+            # TODO: restart signal handler with SIGUSR1
 
-            if sock_family == socket.AF_UNIX:
-                # using unix socket - remove if exists on filesystem
-                if os.path.exists(glob.config.server_addr):
-                    os.remove(glob.config.server_addr)
-
-            # create our transport layer socket; osu! uses tcp/ip
-            with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
-                listening_sock.setblocking(False) # asynchronous
-                listening_sock.bind(glob.config.server_addr)
-
-                if sock_family == socket.AF_UNIX:
-                    # using unix socket - give the socket file
-                    # appropriate (read, write) permissions
-                    os.chmod(glob.config.server_addr, 0o666)
-
-                listening_sock.listen(glob.config.max_conns)
-                log(f'-> Listening @ {glob.config.server_addr}', RGB(0x00ff7f))
-
-                glob.shutting_down = False
-
-                sig_handler = misc.utils.shutdown_signal_handler
-                for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-                    loop.add_signal_handler(signum, sig_handler, signum)
-
-                glob.ongoing_conns = []
-
-                while not glob.shutting_down:
-                    # TODO: this timeout based-solution can be heavily
-                    #       improved and refactored out.
-                    try:
-                        conn, _ = await asyncio.wait_for(
-                            fut=loop.sock_accept(listening_sock),
-                            timeout=0.25
-                        )
-                    except asyncio.TimeoutError:
-                        pass
-                    else:
-                        task = loop.create_task(glob.app.handle(conn))
-                        task.add_done_callback(misc.utils._conn_finished_cb)
-                        glob.ongoing_conns.append(task)
-
-            if sock_family == socket.AF_UNIX:
-                os.remove(glob.config.server_addr)
-
-            # listening socket has been closed; connections will no longer be accepted.
+            # run the server, handling connections
+            # until a termination signal is received.
+            await run_server()
 
             # we want to attempt to gracefully finish any ongoing connections
             # and shut down any of the housekeeping tasks running in the background.
