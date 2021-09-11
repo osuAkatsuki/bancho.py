@@ -22,7 +22,6 @@ from pathlib import Path
 
 import aiomysql
 import cmyui
-from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
 
@@ -39,15 +38,15 @@ from objects.collections import Players
 from objects.player import Player
 from misc.updater import Updater
 
+misc.utils._install_excepthook()
+
 try:
     from objects import glob
 except ModuleNotFoundError as exc:
     if exc.name == 'config':
-        # config file doesn't exist; create it from the default.
-        import shutil
-        shutil.copy('ext/config.sample.py', 'config.py')
-        log('A config file has been generated, '
-            'please configure it to your needs.', Ansi.LRED)
+        # the config module wasn't found,
+        # create it as a copy of the sample config.
+        misc.utils.create_config_from_default()
         raise SystemExit(1)
     else:
         raise
@@ -62,7 +61,7 @@ glob.version = cmyui.Version(3, 5, 4)
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
 async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
-    """Setup & cache many global collections."""
+    """Setup & cache the global collections before listening for connections."""
     # dynamic (active) sets, only in ram
     glob.matches = Matches()
     glob.players = Players()
@@ -103,18 +102,6 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
         row['api_key']: row['id']
         async for row in db_cursor
     }
-
-def _conn_finished_cb(task: asyncio.Task) -> None:
-    if not task.cancelled():
-        exc = task.exception()
-        if (
-            exc is not None and
-            not isinstance(exc, (SystemExit, KeyboardInterrupt))
-        ):
-            loop.default_exception_handler({'exception': exc})
-
-    glob.ongoing_conns.remove(task)
-    task.remove_done_callback(_conn_finished_cb)
 
 async def main() -> int:
     """Initialize, and start up the server."""
@@ -207,7 +194,7 @@ async def main() -> int:
                         pass
                     else:
                         task = loop.create_task(glob.app.handle(conn))
-                        task.add_done_callback(_conn_finished_cb)
+                        task.add_done_callback(misc.utils._conn_finished_cb)
                         glob.ongoing_conns.append(task)
 
             if sock_family == socket.AF_UNIX:
@@ -226,13 +213,11 @@ async def main() -> int:
     return 0
 
 if __name__ == '__main__':
-    """Attempt to start the server."""
+    """After basic safety checks, start the event loop and call our async entry point."""
     os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
 
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding='utf-8')
-
-    misc.utils.install_excepthook()
 
     for safety_check in (
         misc.utils.ensure_supported_platform, # linux only at the moment
@@ -280,12 +265,13 @@ if __name__ == '__main__':
             loop.close()
 
 elif __name__ == 'main':
-    # check specifically for asgi servers since many related projects
-    # (such as gulag-web) use them, so people may assume we do as well.
+    # check specifically for ASGI servers; many related projects use
+    # them to run in production, and devs may assume we do as well.
     if misc.utils.running_via_asgi_webserver():
         raise RuntimeError(
-            "gulag does not use an ASGI framework, and uses it's own custom "
-            "web framework implementation; please run it directly (./main.py)."
+            "gulag implements it's own web framework implementation from "
+            "transport layer (tcp/ip) posix sockets and does not rely on "
+            "an ASGI server to serve connections; run it directy, `./main.py`"
         )
     else:
-        raise RuntimeError('gulag should only be run directly (./main.py).')
+        raise RuntimeError('gulag should only be run directly, `./main.py`')

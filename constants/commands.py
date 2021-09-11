@@ -29,7 +29,7 @@ import cmyui.utils
 import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator
+from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import packets
 import misc.utils
@@ -384,7 +384,7 @@ async def _with(ctx: Context) -> Optional[str]:
 
         msg = []
 
-        if mode_vn == 1:
+        if mode_vn == 0:
             with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
                 if mods is not None:
                     ezpp.set_mods(int(mods))
@@ -407,8 +407,8 @@ async def _with(ctx: Context) -> Optional[str]:
 
                 return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
         else:
-            beatmap = PeaceMap(str(osu_file_path))
-            peace = Calculator()
+            beatmap = PeaceMap(osu_file_path)
+            peace = PeaceCalculator()
 
             if mods is not None:
                 peace.set_mods(int(mods))
@@ -432,13 +432,9 @@ async def _with(ctx: Context) -> Optional[str]:
             calculated = peace.calculate(beatmap)
 
             if calculated.pp not in (math.inf, math.nan):
-                temp_pp = round(calculated.pp, 5)
-
-                if (mode_vn == 1 and beatmap.diff > 0 and temp_pp > 800) or calculated.stars > 50:
-                    return f"{' '.join(msg)}: 0pp (0*)"
-                else:
-                    return f"{' '.join(msg)}: {temp_pp:.2f}pp ({calculated.stars:.2f}*)"
+                return f"{' '.join(msg)}: {calculated.pp:.2f}pp ({calculated.stars:.2f}*)"
             else:
+                # TODO: report to logserver
                 return f"{' '.join(msg)}: 0pp (0*)"
     else: # mania
         if not ctx.args or len(ctx.args) > 2:
@@ -459,8 +455,8 @@ async def _with(ctx: Context) -> Optional[str]:
             else:
                 return 'Invalid syntax: !with <score/mods ...>'
 
-        beatmap = PeaceMap(str(osu_file_path))
-        peace = Calculator()
+        beatmap = PeaceMap(osu_file_path)
+        peace = PeaceCalculator()
 
         if mods != Mods.NOMOD:
             peace.set_mods(int(mods))
@@ -468,7 +464,7 @@ async def _with(ctx: Context) -> Optional[str]:
         if mode_vn:
             peace.set_mode(mode_vn)
 
-        peace.set_score(int(score * 1000))
+        peace.set_score(score * 1000)
 
         calc = peace.calculate(beatmap)
         return f'{score}k {mods!r}: {calc.pp:.2f}pp ({calc.stars:.2f}*)'

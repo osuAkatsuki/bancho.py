@@ -355,6 +355,7 @@ class Score:
                 if pp not in (math.inf, math.nan):
                     return (pp, ezpp.get_sr())
                 else:
+                    # TODO: report to logserver
                     return (0.0, 0.0)
         elif mode_vn in (1, 2): # taiko, catch
             beatmap = PeaceMap(osu_file_path)
@@ -373,13 +374,9 @@ class Score:
             calculated = peace.calculate(beatmap)
 
             if calculated.pp not in (math.inf, math.nan):
-                temp_pp = round(calculated.pp, 5)
-
-                if (mode_vn == 1 and beatmap.diff > 0 and temp_pp > 800) or calculated.stars > 50:
-                    return (0.0, 0.0)
-                else:
-                    return (temp_pp, calculated.stars)
+                return (round(calculated.pp, 5), calculated.stars)
             else:
+                # TODO: report to logserver
                 return (0.0, 0.0)
         elif mode_vn == 3: # mania
             beatmap = PeaceMap(osu_file_path)
@@ -391,12 +388,13 @@ class Score:
             if mode_vn:
                 peace.set_mode(mode_vn)
 
-            peace.set_score(int(self.score))
+            peace.set_score(self.score)
             calculated = peace.calculate(beatmap)
 
             if calculated.pp not in (math.inf, math.nan):
                 return (round(calculated.pp, 5), calculated.stars)
             else:
+                # TODO: report to logserver
                 return (0.0, 0.0)
         else:
             raise ValueError(f'Invalid vanilla mode {mode_vn}')

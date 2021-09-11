@@ -4,6 +4,7 @@ import io
 import ipaddress
 import os
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -18,6 +19,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Type
 from typing import TypedDict
+from typing import TypeVar
 from typing import Union
 
 import aiomysql
@@ -43,7 +45,7 @@ __all__ = (
     'seconds_readable',
     'check_connection',
     'running_via_asgi_webserver',
-    'install_excepthook',
+    '_install_excepthook',
     'get_appropriate_stacktrace',
     'log_strange_occurrence',
     'is_inet_address',
@@ -57,6 +59,7 @@ __all__ = (
 
     'shutdown_signal_handler',
     '_handle_fut_exception',
+    '_conn_finished_cb',
     '_cancel_all_tasks',
 
     'await_ongoing_connections',
@@ -68,6 +71,8 @@ __all__ = (
     'ensure_dependencies_and_requirements',
     '__install_debugging_hooks',
     'display_startup_dialog',
+
+    'create_config_from_default',
 )
 
 DATA_PATH = Path.cwd() / '.data'
@@ -226,7 +231,7 @@ def check_connection(timeout: float = 1.0) -> bool:
 def running_via_asgi_webserver() -> bool:
     return any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn')))
 
-def install_excepthook() -> None:
+def _install_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
     real_excepthook = sys.excepthook # backup
 
@@ -385,11 +390,13 @@ async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
         }
     }
 
+T = TypeVar('T')
+
 def pymysql_encode(
     conv: Callable[[Any, Optional[dict[object, object]]], str]
-) -> Callable[[Type[Any]], Type[Any]]:
+) -> Callable[[T], T]:
     """Decorator to allow for adding to pymysql's encoders."""
-    def wrapper(cls: Type[Any]) -> Type[Any]:
+    def wrapper(cls: T) -> T:
         pymysql.converters.encoders[cls] = conv
         return cls
     return wrapper
@@ -418,6 +425,19 @@ def _handle_fut_exception(fut: asyncio.Future) -> None:
                 'exception': exception,
                 'task': fut,
             })
+
+def _conn_finished_cb(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        exc = task.exception()
+        if (
+            exc is not None and
+            not isinstance(exc, (SystemExit, KeyboardInterrupt))
+        ):
+            loop = asyncio.get_running_loop()
+            loop.default_exception_handler({'exception': exc})
+
+    glob.ongoing_conns.remove(task)
+    task.remove_done_callback(_conn_finished_cb)
 
 def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
     # NOTE: this shouldn't be required since all tasks
@@ -518,10 +538,6 @@ def ensure_directory_structure() -> int:
         subdir.mkdir(exist_ok=True)
 
     if not ACHIEVEMENTS_ASSETS_PATH.exists():
-        if not glob.has_internet:
-            # TODO: make it safe to run without achievements
-            return 1
-
         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
         download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
 
@@ -580,3 +596,12 @@ def display_startup_dialog() -> None:
     if not glob.has_internet:
         log('Running in offline mode, some features '
             'will not be available.', Ansi.LRED)
+
+def create_config_from_default() -> None:
+    """Create the default config from ext/config.sample.py"""
+    os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
+
+    shutil.copy('ext/config.sample.py', 'config.py')
+
+    log('A config file has been generated, '
+        'please configure it to your needs.', Ansi.LRED)

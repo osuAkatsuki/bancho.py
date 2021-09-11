@@ -21,7 +21,7 @@ from cmyui.utils import magnitude_fmt_time
 from cmyui.web import Connection
 from cmyui.web import Domain
 from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator
+from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import packets
 import misc.utils
@@ -1010,7 +1010,7 @@ class SendPrivateMessage(BasePacket):
 
                                 pp_values = [] # [(acc, pp), ...]
 
-                                if mode_vn == 1:
+                                if mode_vn == 0:
                                     with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
@@ -1022,8 +1022,8 @@ class SendPrivateMessage(BasePacket):
 
                                             pp_values.append((acc, ezpp.get_pp()))
                                 else:
-                                    beatmap = PeaceMap(str(osu_file_path))
-                                    peace = Calculator()
+                                    beatmap = PeaceMap(osu_file_path)
+                                    peace = PeaceCalculator()
 
                                     if mods is not None:
                                         peace.set_mods(int(mods))
@@ -1050,7 +1050,7 @@ class SendPrivateMessage(BasePacket):
                                     mods = None
 
                                 beatmap = PeaceMap(str(osu_file_path))
-                                peace = Calculator()
+                                peace = PeaceCalculator()
 
                                 if mods is not None:
                                     peace.set_mods(int(mods))
