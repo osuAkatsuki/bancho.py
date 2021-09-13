@@ -59,7 +59,7 @@ glob.version = cmyui.Version(3, 5, 4)
 
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
 
-async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
+async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache the global collections before listening for connections."""
     # dynamic (active) sets, only in ram
     glob.matches = Matches()
@@ -70,14 +70,11 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
     glob.clans = await Clans.prepare(db_cursor)
     glob.pools = await MapPools.prepare(db_cursor)
 
+    bot_name = await misc.utils.fetch_bot_name(db_cursor)
+
     # create bot & add it to online players
-    glob.bot = Player(
-        id=1,
-        name=await misc.utils.fetch_bot_name(db_cursor),
-        login_time=float(0x7fffffff), # (never auto-dc)
-        priv=Privileges.Normal,
-        bot_client=True
-    )
+    glob.bot = Player(id=1, name=bot_name, login_time=float(0x7fffffff), # (never auto-dc)
+                      priv=Privileges.Normal, bot_client=True)
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)
@@ -201,12 +198,11 @@ async def main() -> int:
             # this includes channels, clans, mappools, bot info, etc.
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    await setup_collections(db_cursor)
+                    await initialize_ram_caches(db_cursor)
 
-            # initialize housekeeping tasks to automatically
-            # handle tasks such as disconnecting inactive players,
-            # removing donator startus, etc.
-            await bg_loops.initialize_tasks()
+            # initialize housekeeping tasks to automatically manage
+            # and ensure memory on ram & disk are kept up to date.
+            await bg_loops.initialize_housekeeping_tasks()
 
             # handle signals so we can ensure a graceful shutdown
             sig_handler = misc.utils.shutdown_signal_handler
@@ -229,12 +225,16 @@ async def main() -> int:
 
     return 0
 
-if __name__ == '__main__':
-    """After basic safety checks, start the event loop and call our async entry point."""
+def setup_runtime_environment() -> None:
+    """Configure the server's runtime environment."""
     os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
 
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding='utf-8')
+
+if __name__ == '__main__':
+    """After basic safety checks, start the event loop and call our async entry point."""
+    setup_runtime_environment() # set cwd, configure stdout
 
     for safety_check in (
         misc.utils.ensure_supported_platform, # linux only at the moment
@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
     # install any debugging hooks from
     # _testing/runtime.py, if present
-    misc.utils.__install_debugging_hooks()
+    misc.utils._install_debugging_hooks()
 
     # check our internet connection status
     glob.has_internet = misc.utils.check_connection(timeout=1.5)

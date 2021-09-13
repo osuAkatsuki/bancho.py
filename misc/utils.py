@@ -73,7 +73,7 @@ __all__ = (
     'ensure_local_services_are_running',
     'ensure_directory_structure',
     'ensure_dependencies_and_requirements',
-    '__install_debugging_hooks',
+    '_install_debugging_hooks',
     'display_startup_dialog',
 
     'create_config_from_default',
@@ -221,24 +221,19 @@ def seconds_readable(seconds: int) -> str:
 
 def check_connection(timeout: float = 1.0) -> bool:
     """Check for an active internet connection."""
-    online = False
-
-    default_timeout = socket.getdefaulttimeout()
-    socket.setdefaulttimeout(timeout)
-
-    # attempt to connect to common dns servers.
-    with socket.socket() as sock:
+    # attempt to connect to common dns servers
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
         for addr in ('1.1.1.1', '1.0.0.1',  # cloudflare
                      '8.8.8.8', '8.8.4.4'): # google
             try:
                 sock.connect((addr, 53))
-                online = True
-                break
+                return True
             except socket.error:
                 continue
 
-    socket.setdefaulttimeout(default_timeout)
-    return online
+    # all connections failed
+    return False
 
 def running_via_asgi_webserver() -> bool:
     return any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn')))
@@ -584,7 +579,7 @@ def ensure_dependencies_and_requirements() -> int:
 
     return 0
 
-def __install_debugging_hooks() -> None:
+def _install_debugging_hooks() -> None:
     """Change internals to help with debugging & active development."""
     if DEBUG_HOOKS_PATH.exists():
         from _testing import runtime # type: ignore

@@ -9,9 +9,10 @@ import packets
 from constants.privileges import Privileges
 from objects import glob
 
-__all__ = ('initialize_tasks',)
+__all__ = ('initialize_housekeeping_tasks',)
 
-async def initialize_tasks() -> None:
+async def initialize_housekeeping_tasks() -> None:
+    """Create tasks for each housekeeping tasks."""
     glob.housekeeping_tasks = [
         glob.loop.create_task(task) for task in (
             *(t for t in await _donor_expiry()),
