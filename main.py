@@ -36,7 +36,6 @@ from objects.collections import MapPools
 from objects.collections import Matches
 from objects.collections import Players
 from objects.player import Player
-from misc.updater import Updater
 
 misc.utils._install_excepthook()
 
@@ -188,11 +187,8 @@ async def main() -> int:
         misc.context.acquire_http_session(glob.has_internet) as glob.http_session,
         misc.context.acquire_mysql_db_pool(glob.config.mysql) as glob.db
     ):
-        # run the sql & submodule updater (uses http & db).
-        # TODO: updating cmyui_pkg should run before it's import
-        updater = Updater(glob.version)
-        await updater.run()
-        await updater.log_startup()
+        await misc.utils.check_for_dependency_updates()
+        await misc.utils.update_mysql_structure()
 
         with (
             misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,

@@ -1,8 +1,10 @@
 import asyncio
 import inspect
+import importlib.metadata
 import io
 import ipaddress
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -14,6 +16,7 @@ import warnings
 import zipfile
 from pathlib import Path
 from typing import Any
+from typing import AsyncGenerator
 from typing import Callable
 from typing import Optional
 from typing import Sequence
@@ -23,6 +26,7 @@ from typing import TypeVar
 from typing import Union
 
 import aiomysql
+import cmyui
 import dill as pickle
 import pymysql
 import requests
@@ -73,12 +77,20 @@ __all__ = (
     'display_startup_dialog',
 
     'create_config_from_default',
+
+    '_get_latest_dependency_versions',
+    'check_for_dependency_updates',
+    '_get_current_mysql_structure_version',
+    'update_mysql_structure',
 )
 
 DATA_PATH = Path.cwd() / '.data'
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / 'assets/medals/client'
 DEBUG_HOOKS_PATH = Path.cwd() / '_testing/runtime.py'
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
+SQL_UPDATES_FILE = Path.cwd() / 'ext/updates.sql'
+
+VERSION_RGX = re.compile(r'^# v(?P<ver>\d+\.\d+\.\d+)$')
 
 useful_keys = (Keys.M1, Keys.M2,
                Keys.K1, Keys.K2)
@@ -605,3 +617,137 @@ def create_config_from_default() -> None:
 
     log('A config file has been generated, '
         'please configure it to your needs.', Ansi.LRED)
+
+async def _get_latest_dependency_versions(
+) -> AsyncGenerator[tuple[str, cmyui.Version, cmyui.Version], None]:
+    """Return the current installed & latest version for each dependency."""
+    with open('ext/requirements.txt') as f:
+        dependencies = f.read().splitlines(keepends=False)
+
+    for dependency in dependencies:
+        current_ver_str = importlib.metadata.version(dependency)
+        current_ver = cmyui.Version.from_str(current_ver_str)
+
+        if not current_ver:
+            # the module uses some more advanced (and often hard to parse)
+            # versioning system, so we won't be able to report updates.
+            continue
+
+        # TODO: split up and do the requests asynchronously
+        url = f'https://pypi.org/pypi/{dependency}/json'
+        async with glob.http_session.get(url) as resp:
+            if (
+                resp.status == 200 and
+                (json := await resp.json())
+            ):
+                latest_ver = cmyui.Version.from_str(json['info']['version'])
+
+                if not latest_ver:
+                    # they've started using a more advanced versioning system.
+                    continue
+
+                yield (dependency, latest_ver, current_ver)
+            else:
+                yield (dependency, current_ver, current_ver)
+
+
+async def check_for_dependency_updates() -> None:
+    """Notify the developer of any dependency updates available."""
+    updates_available = False
+
+    async for module, current_ver, latest_ver in _get_latest_dependency_versions():
+        if latest_ver > current_ver:
+            updates_available = True
+            log(f'{module} has an update available '
+                f'[{current_ver!r} -> {latest_ver!r}]', Ansi.LMAGENTA)
+
+    if updates_available:
+        log('Python modules can be updated with '
+            '`python3.9 -m pip install -U <modules>`.', Ansi.LMAGENTA)
+
+async def _get_current_mysql_structure_version() -> Optional[cmyui.Version]:
+    """Get the last launched version of the server."""
+    res = await glob.db.fetch(
+        'SELECT ver_major, ver_minor, ver_micro '
+        'FROM startups ORDER BY datetime DESC LIMIT 1',
+        _dict=False # get tuple
+    )
+
+    if res:
+        return cmyui.Version(*map(int, res))
+
+async def update_mysql_structure() -> None:
+    """Update the mysql structure, if it has changed."""
+    current_ver = await _get_current_mysql_structure_version()
+    latest_ver = glob.version
+
+    if latest_ver == current_ver:
+        return # already up to date
+
+    # version changed; there may be sql changes.
+    content = SQL_UPDATES_FILE.read_text()
+
+    queries = []
+    q_lines = []
+
+    update_ver = None
+
+    for line in content.splitlines():
+        if not line:
+            continue
+
+        if line.startswith('#'):
+            # may be normal comment or new version
+            if r_match := VERSION_RGX.fullmatch(line):
+                update_ver = cmyui.Version.from_str(r_match['ver'])
+
+            continue
+        elif not update_ver:
+            continue
+
+        # we only need the updates between the
+        # previous and new version of the server.
+        if current_ver < update_ver <= latest_ver:
+            if line.endswith(';'):
+                if q_lines:
+                    q_lines.append(line)
+                    queries.append(' '.join(q_lines))
+                    q_lines = []
+                else:
+                    queries.append(line)
+            else:
+                q_lines.append(line)
+
+    if not queries:
+        return
+
+    log('Updating mysql structure '
+        f'(v{current_ver!r} -> v{latest_ver!r}).', Ansi.LMAGENTA)
+
+    updated = False
+
+    # NOTE: this using a transaction is pretty pointless with mysql since
+    # any structural changes to tables will implciticly commit the changes.
+    # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor() as db_cursor:
+            await conn.begin()
+            for query in queries:
+                try:
+                    await db_cursor.execute(query)
+                except aiomysql.MySQLError:
+                    await conn.rollback()
+                    break
+            else:
+                # all queries ran
+                # without problems.
+                await conn.commit()
+                updated = True
+
+    if not updated:
+        log(f'Failed: {query}', Ansi.GRAY)
+        log("SQL failed to update - unless you've been "
+            "modifying sql and know what caused this, "
+            "please please contact cmyui#0425.", Ansi.LRED)
+
+        raise KeyboardInterrupt
