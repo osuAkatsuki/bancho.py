@@ -97,6 +97,7 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
         'SELECT id, api_key FROM users '
         'WHERE api_key IS NOT NULL'
     )
+
     glob.api_keys = {
         row['api_key']: row['id']
         async for row in db_cursor
@@ -117,11 +118,6 @@ async def run_server() -> None:
     # if you're interested in more details, you can see the implementation at
     # https://github.com/cmyui/cmyui_pkg/blob/master/cmyui/web.py
 
-    glob.app = cmyui.Server(
-        name=f'gulag v{glob.version}',
-        gzip=4, debug=glob.config.debug
-    )
-
     # fetch our server's endpoints; gulag supports
     # osu!'s handlers across multiple domains.
     from domains.cho import domain as c_ppy_sh # /c[e4-6]?.ppy.sh/
@@ -129,7 +125,7 @@ async def run_server() -> None:
     from domains.ava import domain as a_ppy_sh
     from domains.map import domain as b_ppy_sh
     glob.app.add_domains({c_ppy_sh, osu_ppy_sh,
-                            a_ppy_sh, b_ppy_sh})
+                          a_ppy_sh, b_ppy_sh})
 
     # support both INET and UNIX sockets
     if misc.utils.is_inet_address(glob.config.server_addr):
@@ -194,8 +190,15 @@ async def main() -> int:
             misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
             misc.context.acquire_datadog_client(glob.config.datadog) as glob.datadog
         ):
-            # cache many global collections/objects from sql,
-            # such as channels, mappools, clans, bot, etc.
+            # TODO: refactor debugging so
+            # this can be moved to `run_server`.
+            glob.app = cmyui.Server(
+                name=f'gulag v{glob.version}',
+                gzip=4, debug=glob.config.debug
+            )
+
+            # prepare our ram caches, populating from sql where necessary.
+            # this includes channels, clans, mappools, bot info, etc.
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                     await setup_collections(db_cursor)
