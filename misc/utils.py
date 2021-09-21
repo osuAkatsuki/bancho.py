@@ -1,6 +1,6 @@
 import asyncio
-import inspect
 import importlib.metadata
+import inspect
 import io
 import ipaddress
 import os
@@ -49,7 +49,7 @@ __all__ = (
     'seconds_readable',
     'check_connection',
     'running_via_asgi_webserver',
-    '_install_excepthook',
+    '_install_synchronous_excepthook',
     'get_appropriate_stacktrace',
     'log_strange_occurrence',
     'is_inet_address',
@@ -73,6 +73,7 @@ __all__ = (
     'ensure_local_services_are_running',
     'ensure_directory_structure',
     'ensure_dependencies_and_requirements',
+    'setup_runtime_environment',
     '_install_debugging_hooks',
     'display_startup_dialog',
 
@@ -238,7 +239,7 @@ def check_connection(timeout: float = 1.0) -> bool:
 def running_via_asgi_webserver() -> bool:
     return any(map(sys.argv[0].endswith, ('hypercorn', 'uvicorn')))
 
-def _install_excepthook() -> None:
+def _install_synchronous_excepthook() -> None:
     """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
     real_excepthook = sys.excepthook # backup
 
@@ -261,8 +262,8 @@ def _install_excepthook() -> None:
                 "ext/config.sample.py for additional info.", Ansi.LCYAN)
             return
 
-        print('\x1b[0;31mgulag ran into an issue '
-              'before starting up :(\x1b[0m')
+        printc(f'gulag v{glob.version!r} ran into an issue '
+               'before starting up :(', Ansi.RED)
         real_excepthook(type_, value, traceback) # type: ignore
 
     sys.excepthook = _excepthook
@@ -579,6 +580,19 @@ def ensure_dependencies_and_requirements() -> int:
 
     return 0
 
+def setup_runtime_environment() -> None:
+    """Configure the server's runtime environment."""
+    # install a hook to catch exceptions outside of the event loop,
+    # which will handle various situations where the error details
+    # can be cleared up for the developer; for example it will explain
+    # that the config has been updated when an unknown attribute is
+    # accessed, so the developer knows what to do immediately.
+    _install_synchronous_excepthook()
+
+    # we print utf-8 content quite often, so configure sys.stdout
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+
 def _install_debugging_hooks() -> None:
     """Change internals to help with debugging & active development."""
     if DEBUG_HOOKS_PATH.exists():
@@ -606,8 +620,6 @@ def display_startup_dialog() -> None:
 
 def create_config_from_default() -> None:
     """Create the default config from ext/config.sample.py"""
-    os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
-
     shutil.copy('ext/config.sample.py', 'config.py')
 
     log('A config file has been generated, '

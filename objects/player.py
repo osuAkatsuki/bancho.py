@@ -20,6 +20,9 @@ from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
+from misc.utils import escape_enum
+from misc.utils import Geolocation
+from misc.utils import pymysql_encode
 from objects import glob
 from objects.channel import Channel
 from objects.match import Match
@@ -33,9 +36,6 @@ from objects.menu import MenuCommands
 from objects.menu import MenuFunction
 from objects.score import Grade
 from objects.score import Score
-from misc.utils import escape_enum
-from misc.utils import Geolocation
-from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.achievement import Achievement

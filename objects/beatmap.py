@@ -17,9 +17,9 @@ from cmyui.logging import log
 
 import misc.utils
 from constants.gamemodes import GameMode
-from objects import glob
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
+from objects import glob
 
 __all__ = ('ensure_local_osu_file', 'RankedStatus',
            'Beatmap', 'BeatmapSet')

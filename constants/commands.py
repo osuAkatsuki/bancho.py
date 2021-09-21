@@ -31,13 +31,14 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-import packets
 import misc.utils
+import packets
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import Privileges
+from misc.utils import seconds_readable
 from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import ensure_local_osu_file
@@ -52,7 +53,6 @@ from objects.match import MatchWinConditions
 from objects.match import SlotStatus
 from objects.player import Player
 from objects.score import SubmissionStatus
-from misc.utils import seconds_readable
 
 if TYPE_CHECKING:
     from objects.channel import Channel

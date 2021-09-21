@@ -28,12 +28,14 @@ from cmyui.web import Connection
 from cmyui.web import Domain
 from cmyui.web import ratelimit
 
-import packets
 import misc.utils
+import packets
 from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import RankedStatus
@@ -41,8 +43,6 @@ from objects.player import Privileges
 from objects.score import Grade
 from objects.score import Score
 from objects.score import SubmissionStatus
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player

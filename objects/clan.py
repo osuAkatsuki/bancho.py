@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 
 import aiomysql
 
-from objects import glob
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
+from objects import glob
 
 if TYPE_CHECKING:
     from objects.player import Player

@@ -12,22 +12,25 @@ import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import misc.utils
 from constants.privileges import Privileges
+from misc.utils import make_safe_name
 from objects import glob
+from objects.achievement import Achievement
 from objects.channel import Channel
 from objects.clan import Clan
 from objects.clan import ClanPrivileges
 from objects.match import MapPool
 from objects.match import Match
 from objects.player import Player
-from misc.utils import make_safe_name
 
 __all__ = (
     'Channels',
     'Matches',
     'Players',
-    'Mappools',
-    'Clans'
+    'MapPools',
+    'Clans',
+    'initialize_ram_caches'
 )
 
 # TODO: decorator for these collections which automatically
@@ -391,3 +394,44 @@ class Clans(list[Clan]):
             await clan.members_from_sql(db_cursor)
 
         return obj
+
+async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
+    """Setup & cache the global collections before listening for connections."""
+    # dynamic (active) sets, only in ram
+    glob.matches = Matches()
+    glob.players = Players()
+
+    # static (inactive) sets, in ram & sql
+    glob.channels = await Channels.prepare(db_cursor)
+    glob.clans = await Clans.prepare(db_cursor)
+    glob.pools = await MapPools.prepare(db_cursor)
+
+    bot_name = await misc.utils.fetch_bot_name(db_cursor)
+
+    # create bot & add it to online players
+    glob.bot = Player(id=1, name=bot_name, login_time=float(0x7fffffff), # (never auto-dc)
+                      priv=Privileges.Normal, bot_client=True)
+    glob.players.append(glob.bot)
+
+    # global achievements (sorted by vn gamemodes)
+    glob.achievements = []
+
+    await db_cursor.execute('SELECT * FROM achievements')
+    async for row in db_cursor:
+        # NOTE: achievement conditions are stored as stringified python
+        # expressions in the database to allow for extensive customizability.
+        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
+        achievement = Achievement(**row, cond=condition)
+
+        glob.achievements.append(achievement)
+
+    # static api keys
+    await db_cursor.execute(
+        'SELECT id, api_key FROM users '
+        'WHERE api_key IS NOT NULL'
+    )
+
+    glob.api_keys = {
+        row['api_key']: row['id']
+        async for row in db_cursor
+    }

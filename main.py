@@ -12,11 +12,9 @@
 # e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 
 import asyncio
-import io
 import os
 import signal
 import socket
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -28,77 +26,21 @@ from cmyui.logging import RGB
 import bg_loops
 import misc.utils
 import misc.context
-from constants.privileges import Privileges
-from objects.achievement import Achievement
-from objects.collections import Channels
-from objects.collections import Clans
-from objects.collections import MapPools
-from objects.collections import Matches
-from objects.collections import Players
-from objects.player import Player
+import objects.collections
 
-misc.utils._install_excepthook()
+# set the current working directory to /gulag
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-try:
-    from objects import glob
-except ModuleNotFoundError as exc:
-    if exc.name == 'config':
-        # the config module wasn't found,
-        # create it as a copy of the sample config.
-        misc.utils.create_config_from_default()
-        raise SystemExit(1)
-    else:
-        raise
+if not os.path.exists('config.py'):
+    misc.utils.create_config_from_default()
+    raise SystemExit(1)
 
-__all__ = ()
+from objects import glob # (includes config)
 
-# current version of gulag
-# NOTE: this is used internally for the updater, it may be
-# worth reading through it's code before playing with it.
+# !! review code that uses this before modifying it.
 glob.version = cmyui.Version(3, 5, 4)
 
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
-
-async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
-    """Setup & cache the global collections before listening for connections."""
-    # dynamic (active) sets, only in ram
-    glob.matches = Matches()
-    glob.players = Players()
-
-    # static (inactive) sets, in ram & sql
-    glob.channels = await Channels.prepare(db_cursor)
-    glob.clans = await Clans.prepare(db_cursor)
-    glob.pools = await MapPools.prepare(db_cursor)
-
-    bot_name = await misc.utils.fetch_bot_name(db_cursor)
-
-    # create bot & add it to online players
-    glob.bot = Player(id=1, name=bot_name, login_time=float(0x7fffffff), # (never auto-dc)
-                      priv=Privileges.Normal, bot_client=True)
-    glob.players.append(glob.bot)
-
-    # global achievements (sorted by vn gamemodes)
-    glob.achievements = []
-
-    await db_cursor.execute('SELECT * FROM achievements')
-    async for row in db_cursor:
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
-
-        glob.achievements.append(achievement)
-
-    # static api keys
-    await db_cursor.execute(
-        'SELECT id, api_key FROM users '
-        'WHERE api_key IS NOT NULL'
-    )
-
-    glob.api_keys = {
-        row['api_key']: row['id']
-        async for row in db_cursor
-    }
 
 async def run_server() -> None:
     """Begin listening for and handling connections on all endpoints."""
@@ -198,7 +140,7 @@ async def main() -> int:
             # this includes channels, clans, mappools, bot info, etc.
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    await initialize_ram_caches(db_cursor)
+                    await objects.collections.initialize_ram_caches(db_cursor)
 
             # initialize housekeeping tasks to automatically manage
             # and ensure memory on ram & disk are kept up to date.
@@ -225,16 +167,9 @@ async def main() -> int:
 
     return 0
 
-def setup_runtime_environment() -> None:
-    """Configure the server's runtime environment."""
-    os.chdir(os.path.dirname(os.path.realpath(__file__))) # set cwd to /gulag
-
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding='utf-8')
-
 if __name__ == '__main__':
     """After basic safety checks, start the event loop and call our async entry point."""
-    setup_runtime_environment() # set cwd, configure stdout
+    misc.utils.setup_runtime_environment()
 
     for safety_check in (
         misc.utils.ensure_supported_platform, # linux only at the moment

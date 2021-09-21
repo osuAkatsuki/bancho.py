@@ -18,10 +18,10 @@ import packets
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
-from objects import glob
-from objects.beatmap import Beatmap
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
+from objects import glob
+from objects.beatmap import Beatmap
 
 if TYPE_CHECKING:
     from asyncio import TimerHandle

@@ -23,8 +23,8 @@ from cmyui.web import Domain
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-import packets
 import misc.utils
+import packets
 from constants import commands
 from constants import regexes
 from constants.gamemodes import GameMode
