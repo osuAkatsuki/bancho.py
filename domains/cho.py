@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 import ipaddress
 import re
@@ -16,16 +14,17 @@ from typing import Union
 import aiomysql
 import bcrypt
 from cmyui.logging import Ansi
-from cmyui.logging import RGB
 from cmyui.logging import log
+from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from cmyui.web import Connection
 from cmyui.web import Domain
-from maniera.calculator import Maniera
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import misc.utils
 import packets
-import utils.misc
 from constants import commands
 from constants import regexes
 from constants.gamemodes import GameMode
@@ -34,8 +33,8 @@ from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
 from objects import glob
-from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.channel import Channel
 from objects.clan import ClanPrivileges
 from objects.match import MatchTeams
@@ -505,7 +504,7 @@ async def login(
         'SELECT id, name, priv, pw_bcrypt, country, '
         'silence_end, clan_id, clan_priv, api_key '
         'FROM users WHERE safe_name = %s',
-        [utils.misc.make_safe_name(username)]
+        [misc.utils.make_safe_name(username)]
     )
     user_info = await db_cursor.fetchone()
 
@@ -619,11 +618,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info['geoloc'] = utils.misc.fetch_geoloc_db(ip)
+            user_info['geoloc'] = misc.utils.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info['geoloc'] = await utils.misc.fetch_geoloc_web(ip)
+            user_info['geoloc'] = await misc.utils.fetch_geoloc_web(ip)
 
         if db_country == 'xx':
             # bugfix for old gulag versions when
@@ -1001,56 +1000,76 @@ class SendPrivateMessage(BasePacket):
                             # calculate pp for common generic values
                             pp_calc_st = time.time_ns()
 
-                            if mode_vn in (0, 1): # osu, taiko
-                                with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
-                                    # std & taiko, use oppai-ng to calc pp
-                                    if r_match['mods'] is not None:
-                                        # [1:] to remove leading whitespace
-                                        mods_str = r_match['mods'][1:]
-                                        mods = Mods.from_np(mods_str, mode_vn)
-                                        ezpp.set_mods(int(mods))
+                            if mode_vn in (0, 1, 2): # osu, taiko, catch
+                                if r_match['mods'] is not None:
+                                    # [1:] to remove leading whitespace
+                                    mods_str = r_match['mods'][1:]
+                                    mods = Mods.from_np(mods_str, mode_vn)
+                                else:
+                                    mods = None
 
-                                    pp_values = [] # [(acc, pp), ...]
+                                pp_values = [] # [(acc, pp), ...]
+
+                                if mode_vn == 0:
+                                    with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+                                        if mods is not None:
+                                            ezpp.set_mods(int(mods))
+
+                                        for acc in glob.config.pp_cached_accs:
+                                            ezpp.set_accuracy_percent(acc)
+
+                                            ezpp.calculate(osu_file_path)
+
+                                            pp_values.append((acc, ezpp.get_pp()))
+                                else:
+                                    beatmap = PeaceMap(osu_file_path)
+                                    peace = PeaceCalculator()
+
+                                    if mods is not None:
+                                        peace.set_mods(int(mods))
+
+                                    peace.set_mode(mode_vn)
 
                                     for acc in glob.config.pp_cached_accs:
-                                        ezpp.set_accuracy_percent(acc)
+                                        peace.set_acc(acc)
 
-                                        ezpp.calculate(osu_file_path)
+                                        calc = peace.calculate(beatmap)
 
-                                        pp_values.append((acc, ezpp.get_pp()))
+                                        pp_values.append((acc, calc.pp))
 
-                                    resp_msg = ' | '.join([
-                                        f'{acc}%: {pp:,.2f}pp'
-                                        for acc, pp in pp_values
-                                    ])
-                            elif mode_vn == 2: # catch
-                                resp_msg = 'Gamemode not yet supported.'
+                                resp_msg = ' | '.join([
+                                    f'{acc}%: {pp:,.2f}pp'
+                                    for acc, pp in pp_values
+                                ])
                             else: # mania
-                                if bmap.mode.as_vanilla != 3:
-                                    resp_msg = 'Mania converts not currently supported.'
+                                if r_match['mods'] is not None:
+                                    # [1:] to remove leading whitespace
+                                    mods_str = r_match['mods'][1:]
+                                    mods = Mods.from_np(mods_str, mode_vn)
                                 else:
-                                    if r_match['mods'] is not None:
-                                        # [1:] to remove leading whitespace
-                                        mods_str = r_match['mods'][1:]
-                                        mods = int(Mods.from_np(mods_str, mode_vn))
-                                    else:
-                                        mods = 0
+                                    mods = None
 
-                                    calc = Maniera(str(osu_file_path), mods, 0)
-                                    calc.sr = calc._calculateStars()
-                                    pp_values = []
+                                beatmap = PeaceMap(str(osu_file_path))
+                                peace = PeaceCalculator()
 
-                                    for score in glob.config.pp_cached_scores:
-                                        calc.score = score
+                                if mods is not None:
+                                    peace.set_mods(int(mods))
 
-                                        pp = calc._calculatePP()
+                                peace.set_mode(mode_vn)
 
-                                        pp_values.append((score, pp))
+                                pp_values = []
 
-                                    resp_msg = ' | '.join([
-                                        f'{int(score // 1000)}k: {pp:,.2f}pp'
-                                        for score, pp in pp_values
-                                    ])
+                                for score in glob.config.pp_cached_scores:
+                                    peace.set_score(int(score))
+
+                                    calc = peace.calculate(beatmap)
+
+                                    pp_values.append((score, calc.pp))
+
+                                resp_msg = ' | '.join([
+                                    f'{int(score // 1000)}k: {pp:,.2f}pp'
+                                    for score, pp in pp_values
+                                ])
 
                             elapsed = time.time_ns() - pp_calc_st
                             resp_msg += f' | Elapsed: {magnitude_fmt_time(elapsed)}'

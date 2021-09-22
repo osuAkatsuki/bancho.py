@@ -1,12 +1,5 @@
-# -*- coding: utf-8 -*-
-
-# NOTE: at some point, parts (or all) of this may
-# be rewritten in cython (or c++ ported with cython)?
-# i'm not sure how well it works with an async setup
-# like this, but we'll see B) massive speed gains tho
-
-import struct
 import random
+import struct
 from abc import ABC
 from enum import IntEnum
 from enum import unique
@@ -29,8 +22,8 @@ from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -219,12 +212,10 @@ class BanchoPacketReader:
         The length in bytes of the packet currently being handled.
 
     Intended Usage:
-    ```
-      for packet in BanchoPacketReader(conn.body):
-          # once you're ready to handle the packet,
-          # simply call it's .handle() method.
-          await packet.handle()
-    ```
+    >>> for packet in BanchoPacketReader(conn.body):
+    ...     # once you're ready to handle the packet,
+    ...     # simply call it's handle method.
+    ...     await packet.handle()
     """
     __slots__ = ('body_view', 'packet_map', 'current_len')
 

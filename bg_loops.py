@@ -1,33 +1,27 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
-#import lzma
 import time
-#from pathlib import Path
 from typing import Coroutine
-#from typing import TYPE_CHECKING
 
-import aiomysql
-#from cmyui.discord import Webhook
-#from cmyui.discord import Embed
 from cmyui.logging import Ansi
 from cmyui.logging import log
-#from cmyui.osu import ReplayFrame
 
 import packets
-#import utils.misc
-#from constants.gamemodes import GameMode
 from constants.privileges import Privileges
 from objects import glob
 
-#if TYPE_CHECKING:
-#    from objects.score import Score
+__all__ = ('initialize_housekeeping_tasks',)
 
-__all__ = ('donor_expiry', 'disconnect_ghosts',
-           #'replay_detections',
-           'reroll_bot_status')
+async def initialize_housekeeping_tasks() -> None:
+    """Create tasks for each housekeeping tasks."""
+    glob.housekeeping_tasks = [
+        glob.loop.create_task(task) for task in (
+            *(t for t in await _donor_expiry()),
+            _reroll_bot_status(interval=300),
+            _disconnect_ghosts(),
+        )
+    ]
 
-async def donor_expiry(db_cursor: aiomysql.DictCursor) -> list[Coroutine]:
+async def _donor_expiry() -> list[Coroutine[None, None, None]]:
     """Add new donation ranks & enqueue tasks to remove current ones."""
     # TODO: this system can get quite a bit better; rather than just
     # removing, it should rather update with the new perks (potentially
@@ -56,101 +50,32 @@ async def donor_expiry(db_cursor: aiomysql.DictCursor) -> list[Coroutine]:
     # enqueue rm_donor for any supporter
     # expiring in the next 30 days.
     # TODO: perhaps donor_end datetime?
-    await db_cursor.execute(
-        'SELECT id AS userid, donor_end AS `when` FROM users '
-        'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
-        #'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
-        'AND priv & 48' # 48 = Supporter | Premium
-    )
+    async with glob.db.pool.acquire() as conn:
+        async with conn.cursor() as db_cursor:
+            await db_cursor.execute(
+                'SELECT id AS userid, donor_end AS `when` FROM users '
+                'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
+                #'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
+                'AND priv & 48' # 48 = Supporter | Premium
+            )
 
-    return [rm_donor(**donation) async for donation in db_cursor]
+            return [rm_donor(**donation) async for donation in db_cursor]
 
 PING_TIMEOUT = 300000 // 1000 # defined by osu!
-async def disconnect_ghosts() -> None:
+async def _disconnect_ghosts() -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
     while True:
-        ctime = time.time()
+        await asyncio.sleep(PING_TIMEOUT // 3)
+        current_time = time.time()
 
         for p in glob.players:
-            if ctime - p.last_recv_time > PING_TIMEOUT:
+            if current_time - p.last_recv_time > PING_TIMEOUT:
                 log(f'Auto-dced {p}.', Ansi.LMAGENTA)
                 p.logout()
 
-        # run this indefinitely
-        await asyncio.sleep(PING_TIMEOUT // 3)
 
-'''
-# This function is currently pretty tiny and useless, but
-# will just continue to expand as more ideas come to mind.
-async def analyze_score(score: 'Score') -> None:
-    """Analyze a single score."""
-    player = score.player
-
-    # open & parse replay files frames
-    replay_file = REPLAYS_PATH / f'{score.id}.osr'
-    data = lzma.decompress(replay_file.read_bytes())
-
-    frames: list[ReplayFrame] = []
-
-    # ignore seed & blank line at end
-    for action in data.decode().split(',')[:-2]:
-        if frame := ReplayFrame.from_str(action):
-            frames.append(frame)
-
-    if score.mode.as_vanilla == GameMode.vn_taiko:
-        # calculate their average press times.
-        # NOTE: this does not currently take hit object
-        # type into account, making it completely unviable
-        # for any gamemode with holds. it's still relatively
-        # reliable for taiko though :D.
-
-        press_times = utils.misc.get_press_times(frames)
-        config = glob.config.surveillance['hitobj_low_presstimes']
-
-        if any([sum(pt) / len(pt) < config['value'] and
-                len(pt) > config['min_presses']
-                for pt in press_times.values()]):
-            # at least one of the keys is under the
-            # minimum, log this occurence to Discord.
-            webhook_url = glob.config.webhooks['surveillance']
-            webhook = Webhook(url=webhook_url)
-
-            embed = Embed(
-                title = f'[{score.mode!r}] Abnormally low presstimes detected'
-            )
-
-            embed.set_author(
-                url = player.url,
-                name = player.name,
-                icon_url = player.avatar_url
-            )
-
-            embed.set_thumbnail(url=glob.config.webhooks['thumbnail'])
-
-            for key, pt in press_times.items():
-                embed.add_field(
-                    name = f'Key: {key.name}',
-                    value = f'{sum(pt) / len(pt):.2f}ms' if pt else 'N/A',
-                    inline = True
-                )
-
-            webhook.add_embed(embed)
-            await webhook.post(glob.http)
-
-REPLAYS_PATH = Path.cwd() / '.data/osr'
-async def replay_detections() -> None:
-    """Actively run a background thread throughout gulag's
-       lifespan; it will pull replays determined as sketch
-       from a queue indefinitely."""
-    glob.sketchy_queue = asyncio.Queue() # cursed type hint fix
-    queue: asyncio.Queue['Score'] = glob.sketchy_queue
-
-    while score := await queue.get():
-        glob.loop.create_task(analyze_score(score))
-'''
-
-async def reroll_bot_status(interval: int) -> None:
+async def _reroll_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)

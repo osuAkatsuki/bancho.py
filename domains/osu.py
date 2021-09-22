@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import copy
 import hashlib
 import ipaddress
@@ -14,6 +12,7 @@ from enum import unique
 from functools import wraps
 from pathlib import Path
 from typing import Callable
+from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
@@ -29,12 +28,14 @@ from cmyui.web import Connection
 from cmyui.web import Domain
 from cmyui.web import ratelimit
 
+import misc.utils
 import packets
-import utils.misc
 from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import RankedStatus
@@ -42,8 +43,6 @@ from objects.player import Privileges
 from objects.score import Grade
 from objects.score import Score
 from objects.score import SubmissionStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -55,10 +54,10 @@ HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 BASE_DOMAIN = glob.config.domain
 domain = Domain({f'osu.{BASE_DOMAIN}', 'osu.ppy.sh'})
 
-REPLAYS_PATH = Path.cwd() / '.data/osr'
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
-SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 AVATARS_PATH = Path.cwd() / '.data/avatars'
+BEATMAPS_PATH = Path.cwd() / '.data/osu'
+REPLAYS_PATH = Path.cwd() / '.data/osr'
+SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 
 """ Some helper decorators (used for /web/ connections) """
 
@@ -153,7 +152,7 @@ async def osuError(conn: Connection) -> HTTPResponse:
                 )
             ):
                 # player login incorrect
-                await utils.misc.log_strange_occurrence('osu-error auth failed')
+                await misc.utils.log_strange_occurrence('osu-error auth failed')
                 p = None
         else:
             p = None
@@ -173,28 +172,28 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
         log('Screenshot req missing file.', Ansi.LRED)
         return (400, b'Missing file.')
 
-    ss_file = conn.files['ss']
+    ss_data_view = memoryview(conn.files['ss']).toreadonly()
 
     # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-    if len(ss_file) > (4 * 1024 * 1024):
+    if len(ss_data_view) > (4 * 1024 * 1024):
         return (400, b'Screenshot file too large.')
 
     if (
         'v' not in conn.multipart_args or
         conn.multipart_args['v'] != '1'
     ):
-        await utils.misc.log_strange_occurrence(
+        await misc.utils.log_strange_occurrence(
             f'v=1 missing from osu-screenshot mp args; {conn.multipart_args}'
         )
 
     if (
-        ss_file[:4] == b'\xff\xd8\xff\xe0' and
-        ss_file[6:11] == b'JFIF\x00'
+        ss_data_view[:4] == b'\xff\xd8\xff\xe0' and
+        ss_data_view[6:11] == b'JFIF\x00'
     ):
         extension = 'jpeg'
     elif (
-        ss_file[:8] == b'\x89PNG\r\n\x1a\n' and
-        ss_file[-8] == b'\x49END\xae\x42\x60\x82'
+        ss_data_view[:8] == b'\x89PNG\r\n\x1a\n' and
+        ss_data_view[-8] == b'\x49END\xae\x42\x60\x82'
     ):
         extension = 'png'
     else:
@@ -202,11 +201,12 @@ async def osuScreenshot(p: 'Player', conn: Connection) -> HTTPResponse:
 
     while True:
         filename = f'{secrets.token_urlsafe(6)}.{extension}'
-        screenshot_file = SCREENSHOTS_PATH / filename
-        if not screenshot_file.exists():
+        ss_file = SCREENSHOTS_PATH / filename
+        if not ss_file.exists():
             break
 
-    screenshot_file.write_bytes(ss_file)
+    with ss_file.open('wb') as f:
+        f.write(ss_data_view)
 
     log(f'{p} uploaded {filename}.')
     return filename.encode()
@@ -285,7 +285,7 @@ async def osuGetBeatmapInfo(
         )
 
     if data['Ids']: # still have yet to see this used
-        await utils.misc.log_strange_occurrence(
+        await misc.utils.log_strange_occurrence(
             f'{p} requested map(s) info by id ({data["Ids"]})'
         )
 
@@ -434,10 +434,10 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
         status = RankedStatus.from_osudirect(int(conn.args['r']))
         params['status'] = status.osu_api
 
-    async with glob.http.get(search_url, params=params) as resp:
+    async with glob.http_session.get(search_url, params=params) as resp:
         if not resp:
-            stacktrace = utils.misc.get_appropriate_stacktrace()
-            await utils.misc.log_strange_occurrence(stacktrace)
+            stacktrace = misc.utils.get_appropriate_stacktrace()
+            await misc.utils.log_strange_occurrence(stacktrace)
 
         if USING_CHIMU: # error handling varies
             if resp.status == 404:
@@ -445,8 +445,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
             elif resp.status >= 500: # chimu server error (happens a lot :/)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             elif resp.status != 200:
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
         else: # cheesegull
             if resp.status != 200:
@@ -456,8 +456,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> HTTPResponse:
 
         if USING_CHIMU:
             if result['code'] != 0:
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return b'-1\nFailed to retrieve data from the beatmap mirror.'
             result = result['data']
 
@@ -586,8 +586,8 @@ async def osuSubmitModularSelector(
     score.time_elapsed = int(time_elapsed)
 
     if 'i' in conn.files:
-        stacktrace = utils.misc.get_appropriate_stacktrace()
-        await utils.misc.log_strange_occurrence(stacktrace)
+        stacktrace = misc.utils.get_appropriate_stacktrace()
+        await misc.utils.log_strange_occurrence(stacktrace)
 
     if ( # check for pp caps on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp and not (
@@ -715,9 +715,6 @@ async def osuSubmitModularSelector(
             # manually, so we'll probably do that in the future.
             replay_file = REPLAYS_PATH / f'{score.id}.osr'
             replay_file.write_bytes(replay_data)
-
-            # TODO: if a play is sketchy.. 🤠
-            #await glob.sketchy_queue.put(s)
 
     """ Update the user's & beatmap's stats """
 
@@ -1410,7 +1407,7 @@ async def checkUpdates(conn: Connection) -> HTTPResponse:
         return cache[action]
 
     url = 'https://old.ppy.sh/web/check-updates.php'
-    async with glob.http.get(url, params = conn.args) as resp:
+    async with glob.http_session.get(url, params = conn.args) as resp:
         if not resp or resp.status != 200:
             return (503, b'') # failed to get data from osu
 
@@ -2261,7 +2258,7 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
             # map not found, or out of date; get from osu!
             url = f"https://old.ppy.sh/osu/{res['id']}"
 
-            async with glob.http.get(url) as resp:
+            async with glob.http_session.get(url) as resp:
                 if not resp or resp.status != 200:
                     log(f'Could not find map {osu_file_path}!', Ansi.LRED)
                     return (404, b'') # couldn't find on osu!'s server
@@ -2305,7 +2302,7 @@ async def register_account(
 
     # ensure all args passed
     # are safe for registration.
-    errors = defaultdict(list)
+    errors: Mapping[str, list[str]] = defaultdict(list)
 
     # Usernames must:
     # - be within 2-15 characters in length
@@ -2392,11 +2389,11 @@ async def register_account(
                         # decent case, dev has downloaded a geoloc db from
                         # maxmind, so we can do a local db lookup. (~1-5ms)
                         # https://www.maxmind.com/en/home
-                        geoloc = utils.misc.fetch_geoloc_db(ip)
+                        geoloc = misc.utils.fetch_geoloc_db(ip)
                     else:
                         # worst case, we must do an external db lookup
                         # using a public api. (depends, `ping ip-api.com`)
-                        geoloc = await utils.misc.fetch_geoloc_web(ip)
+                        geoloc = await misc.utils.fetch_geoloc_web(ip)
 
                     country_acronym = geoloc['country']['acronym']
                 else:

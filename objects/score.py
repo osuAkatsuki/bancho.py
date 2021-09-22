@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import functools
 import math
 from base64 import b64decode
@@ -13,19 +11,20 @@ from typing import TYPE_CHECKING
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
-from maniera.calculator import Maniera
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator as PeaceCalculator
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
-from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -72,6 +71,8 @@ class Grade(IntEnum):
     def __format__(self, format_spec: str) -> str:
         if format_spec == 'stats_column':
             return f'{self.name.lower()}_count'
+        else:
+            raise ValueError(f'Invalid format specifier {format_spec}')
 
 @unique
 @pymysql_encode(escape_enum)
@@ -86,7 +87,7 @@ class SubmissionStatus(IntEnum):
             self.FAILED: 'Failed',
             self.SUBMITTED: 'Submitted',
             self.BEST: 'Best'
-        }[self.value]
+        }[self]
 
 class Score:
     """\
@@ -164,7 +165,7 @@ class Score:
         self.status: Optional[SubmissionStatus] = None
 
         self.play_time: Optional[datetime] = None
-        self.time_elapsed: Optional[datetime] = None
+        self.time_elapsed: Optional[int] = None
 
         self.client_flags: Optional[ClientFlags] = None
         self.online_checksum: Optional[str] = None
@@ -226,7 +227,7 @@ class Score:
     ) -> Optional['Score']:
         """Create a score object from an osu! submission string."""
         aes = RijndaelCbc(
-            key=f'osu!-scoreburgr---------{osu_ver}',
+            key=f'osu!-scoreburgr---------{osu_ver}'.encode(),
             iv=b64decode(iv_b64),
             padding=Pkcs7Padding(32),
             block_size=32
@@ -336,7 +337,7 @@ class Score:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn in (0, 1): # osu, taiko
+        if mode_vn == 0: # std
             with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
@@ -354,22 +355,49 @@ class Score:
                 if pp not in (math.inf, math.nan):
                     return (pp, ezpp.get_sr())
                 else:
+                    # TODO: report to logserver
                     return (0.0, 0.0)
-        elif mode_vn == 2: # catch
-            return (0.0, 0.0)
-        else: # mania
-            if self.bmap.mode.as_vanilla != 3:
-                return (0.0, 0.0) # maniera has no convert support
+        elif mode_vn in (1, 2): # taiko, catch
+            beatmap = PeaceMap(osu_file_path)
+            peace = PeaceCalculator()
 
             if self.mods != Mods.NOMOD:
-                mods = int(self.mods)
+                peace.set_mods(int(self.mods))
+
+            if mode_vn:
+                peace.set_mode(mode_vn)
+
+            peace.set_combo(self.max_combo)
+            peace.set_miss(self.nmiss)
+            peace.set_acc(self.acc)
+
+            calculated = peace.calculate(beatmap)
+
+            if calculated.pp not in (math.inf, math.nan):
+                return (round(calculated.pp, 5), calculated.stars)
             else:
-                mods = 0
+                # TODO: report to logserver
+                return (0.0, 0.0)
+        elif mode_vn == 3: # mania
+            beatmap = PeaceMap(osu_file_path)
+            peace = PeaceCalculator()
 
-            calc = Maniera(str(osu_file_path), mods, self.score)
-            calc.calculate()
+            if self.mods != Mods.NOMOD:
+                peace.set_mods(int(self.mods))
 
-            return (calc.pp, calc.sr)
+            if mode_vn:
+                peace.set_mode(mode_vn)
+
+            peace.set_score(self.score)
+            calculated = peace.calculate(beatmap)
+
+            if calculated.pp not in (math.inf, math.nan):
+                return (round(calculated.pp, 5), calculated.stars)
+            else:
+                # TODO: report to logserver
+                return (0.0, 0.0)
+        else:
+            raise ValueError(f'Invalid vanilla mode {mode_vn}')
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""

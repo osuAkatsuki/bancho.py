@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
-
 import functools
 from enum import IntFlag
 from enum import unique
 
-from utils.misc import pymysql_encode
-from utils.misc import escape_enum
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 
 __all__ = ('Mods',)
 

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
@@ -20,10 +18,10 @@ import packets
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from asyncio import TimerHandle
@@ -124,7 +122,7 @@ class MapPool:
         self.created_at = created_at
         self.created_by = created_by
 
-        self.maps = {} # {(mods: Mods, slot: int): Beatmap(), ...}
+        self.maps: dict[tuple[Mods, int], Beatmap] = {} # {(mods: Mods, slot: int): Beatmap(), ...}
 
     def __repr__(self) -> str:
         return f'<{self.name}>'
@@ -157,7 +155,7 @@ class MapPool:
                 )
                 continue
 
-            key = (Mods(row['mods']), row['slot'])
+            key: tuple[Mods, int] = (Mods(row['mods']), row['slot'])
             self.maps[key] = bmap
 
 class Slot:
@@ -270,9 +268,9 @@ class Match:
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points = defaultdict(int) # {team/user: wins, ...} (resets when changing teams)
-        self.bans = set() # {(mods, slot), ...}
-        self.winners: list[Union[Player, MatchTeams, None]] = [] # none = tie
+        self.match_points: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        self.bans: set[tuple[Mods, int]] = set()
+        self.winners: list[Union[Player, MatchTeams, None]] = [] # none for tie
         self.winning_pts = 0
         self.use_pp_scoring = False # only for scrims
 
@@ -301,12 +299,17 @@ class Match:
     @property
     def refs(self) -> set['Player']:
         """Return all players with referee permissions."""
-        return {self.host} | self._refs
+        refs = self._refs
+
+        if self.host is not None:
+            refs.add(self.host)
+
+        return refs
 
     def __contains__(self, p: 'Player') -> bool:
         return p in {s.player for s in self.slots}
 
-    def __getitem__(self, key: Union[int, slice]) -> Slot:
+    def __getitem__(self, key: Union[int, slice]) -> Union[Slot, list[Slot]]:
         return self.slots[key]
 
     def __repr__(self) -> str:
@@ -324,7 +327,7 @@ class Match:
             if p is s.player:
                 return idx
 
-    def get_free(self) -> Optional[Slot]:
+    def get_free(self) -> Optional[int]:
         """Return the first unoccupied slot in multi, if any."""
         for idx, s in enumerate(self.slots):
             if s.status == SlotStatus.open:
@@ -377,7 +380,7 @@ class Match:
 
     def start(self) -> None:
         """Start the match for all ready players with the map."""
-        no_map: list[Player] = []
+        no_map: list[int] = []
 
         for s in self.slots:
             # start each player who has the map.
@@ -398,10 +401,10 @@ class Match:
         self.bans.clear()
 
     async def await_submissions(
-        self, was_playing: Sequence['Player']
-    ) -> tuple[dict[str, Union[int, float]], list['Player']]:
+        self, was_playing: Sequence[Slot]
+    ) -> tuple[dict[Union[MatchTeams, 'Player'], int], Sequence['Player']]:
         """Await score submissions from all players in completed state."""
-        scores = defaultdict(int)
+        scores: dict[Union[MatchTeams, 'Player'], int] = defaultdict(int)
         didnt_submit: list['Player'] = []
         time_waited = 0 # allow up to 10s (total, not per player)
 
@@ -418,7 +421,7 @@ class Match:
 
         if not bmap:
             # map isn't submitted
-            return (), ()
+            return {}, ()
 
         for s in was_playing:
             # continue trying to fetch each player's
@@ -453,7 +456,7 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: Sequence['Player']) -> None:
+    async def update_matchpoints(self, was_playing: Sequence[Slot]) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
 
@@ -487,10 +490,10 @@ class Match:
             # all scores are equal, it was a tie.
             if len(scores) != 1 and len(set(scores.values())) == 1:
                 self.winners.append(None)
-                return 'The point has ended in a tie!'
+                return self.chat.send_bot('The point has ended in a tie!')
 
             # Find the winner & increment their matchpoints.
-            winner: Union[Player, MatchTeams] = max(scores, key=scores.get)
+            winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
             self.winners.append(winner)
             self.match_points[winner] += 1
 

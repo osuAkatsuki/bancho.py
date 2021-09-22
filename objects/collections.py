@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
-
 # TODO: there is still a lot of inconsistency
 # in a lot of these classes; needs refactor.
 
 import asyncio
+from typing import Any
 from typing import Iterator
 from typing import Optional
 from typing import Sequence
@@ -13,22 +12,25 @@ import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import misc.utils
 from constants.privileges import Privileges
+from misc.utils import make_safe_name
 from objects import glob
+from objects.achievement import Achievement
+from objects.channel import Channel
 from objects.clan import Clan
 from objects.clan import ClanPrivileges
-from objects.channel import Channel
 from objects.match import MapPool
 from objects.match import Match
 from objects.player import Player
-from utils.misc import make_safe_name
 
 __all__ = (
     'Channels',
     'Matches',
     'Players',
-    'Mappools',
-    'Clans'
+    'MapPools',
+    'Clans',
+    'initialize_ram_caches'
 )
 
 # TODO: decorator for these collections which automatically
@@ -48,7 +50,7 @@ class Channels(list[Channel]):
         else:
             return super().__contains__(o)
 
-    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[Channel, list[Channel]]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -189,7 +191,7 @@ class Players(list[Player]):
                 p.enqueue(data)
 
     @staticmethod
-    def _parse_attr(kwargs: dict[str, object]) -> tuple[str, object]:
+    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
         for attr in ('token', 'id', 'name'):
             if (val := kwargs.pop(attr, None)) is not None:
@@ -201,7 +203,7 @@ class Players(list[Player]):
         else:
             raise ValueError('Incorrect call to Players.get()')
 
-    def get(self, **kwargs) -> Optional[Player]:
+    def get(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
         attr, val = self._parse_attr(kwargs)
 
@@ -209,7 +211,7 @@ class Players(list[Player]):
             if getattr(p, attr) == val:
                 return p
 
-    async def get_sql(self, **kwargs) -> Optional[Player]:
+    async def get_sql(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from sql."""
         attr, val = self._parse_attr(kwargs)
 
@@ -235,7 +237,7 @@ class Players(list[Player]):
 
         return Player(**res, token='')
 
-    async def get_ensure(self, **kwargs) -> Optional[Player]:
+    async def get_ensure(self, **kwargs: object) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
         if p := self.get(**kwargs):
             return p
@@ -280,7 +282,7 @@ class MapPools(list[MapPool]):
     def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> MapPool:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[MapPool, list[MapPool]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(index)
@@ -340,7 +342,7 @@ class Clans(list[Clan]):
     def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> Clan:
+    def __getitem__(self, index: Union[int, slice, str]) -> Union[Clan, list[Clan]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
@@ -355,7 +357,7 @@ class Clans(list[Clan]):
         else:
             return o in self
 
-    def get(self, **kwargs) -> Optional[Clan]:
+    def get(self, **kwargs: object) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
         for attr in ('name', 'tag', 'id'):
             if val := kwargs.pop(attr, None):
@@ -392,3 +394,44 @@ class Clans(list[Clan]):
             await clan.members_from_sql(db_cursor)
 
         return obj
+
+async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
+    """Setup & cache the global collections before listening for connections."""
+    # dynamic (active) sets, only in ram
+    glob.matches = Matches()
+    glob.players = Players()
+
+    # static (inactive) sets, in ram & sql
+    glob.channels = await Channels.prepare(db_cursor)
+    glob.clans = await Clans.prepare(db_cursor)
+    glob.pools = await MapPools.prepare(db_cursor)
+
+    bot_name = await misc.utils.fetch_bot_name(db_cursor)
+
+    # create bot & add it to online players
+    glob.bot = Player(id=1, name=bot_name, login_time=float(0x7fffffff), # (never auto-dc)
+                      priv=Privileges.Normal, bot_client=True)
+    glob.players.append(glob.bot)
+
+    # global achievements (sorted by vn gamemodes)
+    glob.achievements = []
+
+    await db_cursor.execute('SELECT * FROM achievements')
+    async for row in db_cursor:
+        # NOTE: achievement conditions are stored as stringified python
+        # expressions in the database to allow for extensive customizability.
+        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
+        achievement = Achievement(**row, cond=condition)
+
+        glob.achievements.append(achievement)
+
+    # static api keys
+    await db_cursor.execute(
+        'SELECT id, api_key FROM users '
+        'WHERE api_key IS NOT NULL'
+    )
+
+    glob.api_keys = {
+        row['api_key']: row['id']
+        async for row in db_cursor
+    }

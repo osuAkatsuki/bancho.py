@@ -1,25 +1,25 @@
-# -*- coding: utf-8 -*-
-
 import functools
 import hashlib
 from collections import defaultdict
 #from dataclasses import dataclass
-from datetime import timedelta
 from datetime import datetime
+from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import Any
+from typing import Mapping
 from typing import Optional
 
 import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import utils.misc
+import misc.utils
 from constants.gamemodes import GameMode
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
-from utils.misc import escape_enum
-from utils.misc import pymysql_encode
 
 __all__ = ('ensure_local_osu_file', 'RankedStatus',
            'Beatmap', 'BeatmapSet')
@@ -34,14 +34,14 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
-async def osuapiv1_getbeatmaps(**params) -> Optional[dict[str, object]]:
+async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if glob.app.debug:
         log(f'Doing osu!api (getbeatmaps) request {params}', Ansi.LMAGENTA)
 
     params['k'] = glob.config.osu_api_key
 
-    async with glob.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
+    async with glob.http_session.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
         if (
             resp and resp.status == 200 and
             resp.content.total_bytes != 2 # b'[]'
@@ -63,11 +63,11 @@ async def ensure_local_osu_file(
             log(f'Doing osu!api (.osu file) request {bmap_id}', Ansi.LMAGENTA)
 
         url = f'https://old.ppy.sh/osu/{bmap_id}'
-        async with glob.http.get(url) as r:
+        async with glob.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
-                stacktrace = utils.misc.get_appropriate_stacktrace()
-                await utils.misc.log_strange_occurrence(stacktrace)
+                stacktrace = misc.utils.get_appropriate_stacktrace()
+                await misc.utils.log_strange_occurrence(stacktrace)
                 return False
 
             osu_file_path.write_bytes(await r.read())
@@ -96,14 +96,14 @@ class RankedStatus(IntEnum):
     @functools.cache
     def __str__(self) -> str:
         return {
-            RankedStatus.NotSubmitted: 'Unsubmitted',
-            RankedStatus.Pending: 'Unranked',
-            RankedStatus.UpdateAvailable: 'Outdated',
-            RankedStatus.Ranked: 'Ranked',
-            RankedStatus.Approved: 'Approved',
-            RankedStatus.Qualified: 'Qualified',
-            RankedStatus.Loved: 'Loved'
-        }[self.value]
+            self.NotSubmitted: 'Unsubmitted',
+            self.Pending: 'Unranked',
+            self.UpdateAvailable: 'Outdated',
+            self.Ranked: 'Ranked',
+            self.Approved: 'Approved',
+            self.Qualified: 'Qualified',
+            self.Loved: 'Loved'
+        }[self]
 
     @property
     @functools.cache
@@ -111,58 +111,61 @@ class RankedStatus(IntEnum):
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
         return {
-            RankedStatus.Pending: 0,
-            RankedStatus.Ranked: 1,
-            RankedStatus.Approved: 2,
-            RankedStatus.Qualified: 3,
-            RankedStatus.Loved: 4
-        }[self.value]
+            self.Pending: 0,
+            self.Ranked: 1,
+            self.Approved: 2,
+            self.Qualified: 3,
+            self.Loved: 4
+        }[self]
 
-    @staticmethod
+    @classmethod
     @functools.cache
-    def from_osuapi(osuapi_status: int) -> 'RankedStatus':
+    def from_osuapi(cls, osuapi_status: int) -> 'RankedStatus':
         """Convert from osu!api status."""
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                -2: RankedStatus.Pending, # graveyard
-                -1: RankedStatus.Pending, # wip
-                0:  RankedStatus.Pending,
-                1:  RankedStatus.Ranked,
-                2:  RankedStatus.Approved,
-                3:  RankedStatus.Qualified,
-                4:  RankedStatus.Loved
+        mapping: Mapping[int, RankedStatus] = defaultdict(
+            lambda: cls.UpdateAvailable, {
+                -2: cls.Pending, # graveyard
+                -1: cls.Pending, # wip
+                0:  cls.Pending,
+                1:  cls.Ranked,
+                2:  cls.Approved,
+                3:  cls.Qualified,
+                4:  cls.Loved
             }
-        )[osuapi_status]
+        )
+        return mapping[osuapi_status]
 
-    @staticmethod
+    @classmethod
     @functools.cache
-    def from_osudirect(osudirect_status: int) -> 'RankedStatus':
+    def from_osudirect(cls, osudirect_status: int) -> 'RankedStatus':
         """Convert from osu!direct status."""
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                0: RankedStatus.Ranked,
-                2: RankedStatus.Pending,
-                3: RankedStatus.Qualified,
+        mapping: Mapping[int, RankedStatus] = defaultdict(
+            lambda: cls.UpdateAvailable, {
+                0: cls.Ranked,
+                2: cls.Pending,
+                3: cls.Qualified,
                 #4: all ranked statuses lol
-                5: RankedStatus.Pending, # graveyard
-                7: RankedStatus.Ranked, # played before
-                8: RankedStatus.Loved
+                5: cls.Pending, # graveyard
+                7: cls.Ranked, # played before
+                8: cls.Loved
             }
-        )[osudirect_status]
+        )
+        return mapping[osudirect_status]
 
-    @staticmethod
+    @classmethod
     @functools.cache
-    def from_str(status_str: str) -> 'RankedStatus':
+    def from_str(cls, status_str: str) -> 'RankedStatus':
         """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
-        return defaultdict(
-            lambda: RankedStatus.UpdateAvailable, {
-                'pending': RankedStatus.Pending,
-                'ranked': RankedStatus.Ranked,
-                'approved': RankedStatus.Approved,
-                'qualified': RankedStatus.Qualified,
-                'loved': RankedStatus.Loved
+        mapping: Mapping[str, RankedStatus] = defaultdict(
+            lambda: cls.UpdateAvailable, {
+                'pending': cls.Pending,
+                'ranked': cls.Ranked,
+                'approved': cls.Approved,
+                'qualified': cls.Qualified,
+                'loved': cls.Loved
             }
-        )[status_str]
+        )
+        return mapping[status_str]
 
 #@dataclass
 #class BeatmapInfoRequest:
@@ -235,7 +238,7 @@ class Beatmap:
                  'cs', 'od', 'ar', 'hp', 'diff',
                  'filename', 'pp_cache')
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.set: Optional[BeatmapSet] = None
 
         self.md5 = kwargs.get('md5', '')
@@ -427,7 +430,7 @@ class Beatmap:
     # if you're really modifying gulag by adding new
     # features, or perhaps optimizing parts of the code.
 
-    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, object]) -> None:
+    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, Any]) -> None:
         """Change internal data with the data in osu!api format."""
         # NOTE: `self` is not guaranteed to have any attributes
         #       initialized when this is called.
@@ -644,7 +647,7 @@ class BeatmapSet:
             # we have the map on disk but it's been removed from the osu!api.
             # i want to see how frequently this happens and see some examples
             # of when it's triggered since i'm not 100% sure about it, cheers.
-            await utils.misc.log_strange_occurrence(
+            await misc.utils.log_strange_occurrence(
                 f'_update_if_available no data, setid: {self.id}'
             )
 
