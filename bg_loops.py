@@ -2,6 +2,7 @@ import asyncio
 import time
 from typing import Coroutine
 
+import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
@@ -51,7 +52,7 @@ async def _donor_expiry() -> list[Coroutine[None, None, None]]:
     # expiring in the next 30 days.
     # TODO: perhaps donor_end datetime?
     async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
+        async with conn.cursor(aiomysql.DictCursor) as db_cursor:
             await db_cursor.execute(
                 'SELECT id AS userid, donor_end AS `when` FROM users '
                 'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
