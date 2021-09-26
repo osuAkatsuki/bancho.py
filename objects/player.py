@@ -39,6 +39,7 @@ from objects.score import Score
 
 if TYPE_CHECKING:
     from objects.achievement import Achievement
+    from objects.beatmap import Beatmap
     from objects.clan import Clan
     from objects.clan import ClanPrivileges
 
@@ -118,6 +119,12 @@ MAIN_MENU = Menu('Main Menu', {
     menu_keygen(): (MenuCommands.Execute, MenuFunction('notif_hello', notif_hello)),
     menu_keygen(): (MenuCommands.Advance, MENU2)
 })
+
+from typing import TypedDict
+class LastNp(TypedDict):
+    bmap: 'Beatmap'
+    mode_vn: int
+    timeout: float
 
 class Player:
     """\
@@ -240,10 +247,10 @@ class Player:
         }
 
         # store the last beatmap /np'ed by the user.
-        self.last_np = {
+        self.last_np: LastNp = { # type: ignore
             'bmap': None,
             'mode_vn': None,
-            'timeout': 0
+            'timeout': 0.0
         }
 
         # TODO: document
@@ -255,7 +262,7 @@ class Player:
         # probably just use the /api/ routes?
         self.bot_client = extras.get('bot_client', False)
         if self.bot_client:
-            self.enqueue = lambda b: None
+            self.enqueue = lambda data: None # type: ignore
 
         self.tourney_client = extras.get('tourney_client', False)
 
@@ -345,7 +352,7 @@ class Player:
         return self.stats[self.status.mode]
 
     @cached_property
-    def recent_score(self) -> Score:
+    def recent_score(self) -> Optional[Score]:
         """The player's most recently submitted score."""
         score = None
         for s in self.recent_scores.values():
@@ -619,6 +626,7 @@ class Player:
             return
 
         slot = self.match.get_slot(self)
+        assert slot is not None
 
         if slot.status == SlotStatus.locked:
             # player was kicked, keep the slot locked.

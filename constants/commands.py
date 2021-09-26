@@ -22,6 +22,7 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import TYPE_CHECKING
+from typing import TypedDict
 from typing import Union
 
 import aiomysql
@@ -60,7 +61,6 @@ if TYPE_CHECKING:
 BEATMAPS_PATH = Path.cwd() / '.data/osu'
 
 Messageable = Union['Channel', Player]
-CommandResponse = dict[str, Union[str, bool]]
 
 @dataclass
 class Context:
@@ -2388,6 +2388,10 @@ async def clan_list(ctx: Context) -> Optional[str]:
 
     return '\n'.join(msg)
 
+class CommandResponse(TypedDict):
+    resp: Optional[str]
+    hidden: bool
+
 async def process_commands(p: Player, target: Messageable,
                            msg: str) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
@@ -2458,4 +2462,4 @@ async def process_commands(p: Player, target: Messageable,
                     'hidden': cmd.hidden
                 }
 
-            return {'hidden': False}
+            return {'resp': None, 'hidden': False}

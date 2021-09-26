@@ -6,8 +6,12 @@ import config # type: ignore
 # this file contains no actualy definitions
 if TYPE_CHECKING:
     import asyncio
+    import ipaddress
     from datetime import datetime
     from typing import Optional
+    from typing import Type
+    from typing import TypedDict
+    from typing import Union
 
     from aiohttp.client import ClientSession
     from cmyui.mysql import AsyncSQLPool
@@ -20,12 +24,27 @@ if TYPE_CHECKING:
     from objects.collections import Players
     from objects.collections import Channels
     from objects.collections import Matches
+    from objects.beatmap import Beatmap
+    from objects.beatmap import BeatmapSet
     from objects.collections import Clans
     from objects.collections import MapPools
     from objects.player import Player
     #from objects.score import Score
     from packets import BasePacket
     from packets import ClientPackets
+
+    IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+
+    class Cache(TypedDict):
+        bcrypt: dict[bytes, bytes]
+
+        ip: dict[str, 'IPAddress']
+
+        beatmap: dict[str, 'Beatmap']
+        beatmapset: dict[str, 'BeatmapSet']
+
+        unsubmitted: set[str]
+        needs_update: set[str]
 
 __all__ = (
     # current server state
@@ -58,7 +77,7 @@ geoloc_db: 'Optional[geoip2.database.Reader]'
 api_keys: dict[str, int] # {api_key: player_id}
 
 # list of registered packets
-bancho_packets: dict['ClientPackets', 'BasePacket']
+bancho_packets: dict[str, 'dict[ClientPackets, Type[BasePacket]]']
 
 # active connections
 db: 'AsyncSQLPool'
@@ -75,7 +94,7 @@ datadog: 'Optional[ThreadStats]'
 # that take a lot of time to produce in memory for quick and easy access.
 # ideally, the cache is hidden away in methods so that developers do not
 # need to think about it.
-cache = {
+cache: 'Cache' = {
     # algorithms like brypt these are intentionally designed to be
     # slow; we'll cache the results to speed up subsequent logins.
     'bcrypt': {}, # {bcrypt: md5, ...}

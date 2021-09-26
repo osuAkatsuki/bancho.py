@@ -9,9 +9,8 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Callable
 from typing import Optional
+from typing import Type
 from typing import Union
-from typing import TypeVar
-
 
 import aiomysql
 import bcrypt
@@ -53,6 +52,8 @@ from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
 
+HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
+
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 """ Bancho: handle connections from the osu! client """
@@ -78,7 +79,7 @@ async def bancho_http_handler(conn: Connection) -> bytes:
     )).encode()
 
 @domain.route('/', methods=['POST'])
-async def bancho_handler(conn: Connection) -> bytes:
+async def bancho_handler(conn: Connection) -> HTTPResponse:
     if 'CF-Connecting-IP' in conn.headers:
         ip_str = conn.headers['CF-Connecting-IP']
     else:
@@ -166,12 +167,10 @@ glob.bancho_packets = {
     'restricted': {}
 }
 
-T = TypeVar('T')
-
 def register(packet: ClientPackets,
-             restricted: bool = False) -> Callable[[T], T]:
+             restricted: bool = False) -> Callable[[Type[BasePacket]], Type[BasePacket]]:
     """Register a handler in `glob.bancho_packets`."""
-    def wrapper(cls: T) -> T:
+    def wrapper(cls: Type[BasePacket]) -> Type[BasePacket]:
         glob.bancho_packets['all'][packet] = cls
 
         if restricted:
@@ -277,14 +276,16 @@ class SendMessage(BasePacket):
                 '(exceeded 2000 characters).'
             ))
 
-        cmd = (msg.startswith(glob.config.command_prefix) and
-               await commands.process_commands(p, t_chan, msg))
+        if msg.startswith(glob.config.command_prefix):
+            cmd = await commands.process_commands(p, t_chan, msg)
+        else:
+            cmd = None
 
         if cmd:
             # a command was triggered.
             if not cmd['hidden']:
                 t_chan.send(msg, sender=p)
-                if 'resp' in cmd:
+                if cmd['resp'] is not None:
                     t_chan.send_bot(cmd['resp'])
             else:
                 staff = glob.players.staff
@@ -293,7 +294,7 @@ class SendMessage(BasePacket):
                     sender = p,
                     recipients = staff - {p}
                 )
-                if 'resp' in cmd:
+                if cmd['resp'] is not None:
                     t_chan.send_selective(
                         msg = cmd['resp'],
                         sender = glob.bot,
@@ -331,7 +332,7 @@ class SendMessage(BasePacket):
                     }
                 else:
                     # time out their previous /np
-                    p.last_np['timeout'] = 0
+                    p.last_np['timeout'] = 0.0
 
             t_chan.send(msg, sender=p)
 
@@ -746,8 +747,10 @@ async def login(
                 msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
                 data += packets.sendMessage(
-                    sender=msg['from'], msg=msg_ts,
-                    recipient=msg['to'], sender_id=msg['from_id']
+                    sender=msg['from'],
+                    msg=msg_ts,
+                    recipient=msg['to'],
+                    sender_id=msg['from_id']
                 )
 
         if not p.priv & Privileges.Verified:
@@ -778,10 +781,10 @@ async def login(
 
         data += packets.accountRestricted()
         data += packets.sendMessage(
-            sender = glob.bot.name,
-            msg = RESTRICTED_MSG,
-            recipient = p.name,
-            sender_id = glob.bot.id
+            sender=glob.bot.name,
+            msg=RESTRICTED_MSG,
+            recipient=p.name,
+            sender_id=glob.bot.id
         )
 
     # TODO: some sort of admin panel for staff members?
@@ -961,12 +964,14 @@ class SendPrivateMessage(BasePacket):
             )
         else:
             # messaging the bot, check for commands & /np.
-            cmd = (msg.startswith(glob.config.command_prefix) and
-                   await commands.process_commands(p, t, msg))
+            if msg.startswith(glob.config.command_prefix):
+                cmd = await commands.process_commands(p, t, msg)
+            else:
+                cmd = None
 
             if cmd:
                 # command triggered, send response if any.
-                if 'resp' in cmd:
+                if cmd['resp'] is not None:
                     p.send(cmd['resp'], sender=t)
             else:
                 # no commands triggered.
@@ -1053,7 +1058,7 @@ class SendPrivateMessage(BasePacket):
                                 else:
                                     mods = None
 
-                                beatmap = PeaceMap(str(osu_file_path))
+                                beatmap = PeaceMap(osu_file_path)
                                 peace = PeaceCalculator()
 
                                 if mods is not None:
@@ -1081,7 +1086,7 @@ class SendPrivateMessage(BasePacket):
                         resp_msg = 'Could not find map.'
 
                         # time out their previous /np
-                        p.last_np['timeout'] = 0
+                        p.last_np['timeout'] = 0.0
 
                     p.send(resp_msg, sender=t)
 
@@ -1245,9 +1250,11 @@ class MatchChangeSlot(BasePacket):
             return
 
         # swap with current slot.
-        s = m.get_slot(p)
-        m.slots[self.slot_id].copy_from(s)
-        s.reset()
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        m.slots[self.slot_id].copy_from(slot)
+        slot.reset()
 
         m.enqueue_state() # technically not needed for host?
 
@@ -1257,7 +1264,10 @@ class MatchReady(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).status = SlotStatus.ready
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.status = SlotStatus.ready
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_LOCK)
@@ -1327,6 +1337,8 @@ class MatchChangeSettings(BasePacket):
             else:
                 # host mods -> match mods.
                 host = m.get_host_slot() # should always exist
+                assert host is not None
+
                 # the match keeps any speed-changing mods,
                 # and also takes any mods the host has enabled.
                 m.mods &= SPEED_CHANGING_MODS
@@ -1445,7 +1457,10 @@ class MatchComplete(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).status = SlotStatus.complete
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.status = SlotStatus.complete
 
         # check if there are any players that haven't finished.
         if any([s.status == SlotStatus.playing for s in m.slots]):
@@ -1484,17 +1499,20 @@ class MatchChangeMods(BasePacket):
         if m.freemods:
             if p is m.host:
                 # allow host to set speed-changing mods.
-                m.mods = self.mods & SPEED_CHANGING_MODS
+                m.mods = Mods(self.mods & SPEED_CHANGING_MODS)
 
             # set slot mods
-            m.get_slot(p).mods = self.mods & ~SPEED_CHANGING_MODS
+            slot = m.get_slot(p)
+            assert slot is not None
+
+            slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
         else:
             if p is not m.host:
                 log(f'{p} attempted to change mods as non-host.', Ansi.LYELLOW)
                 return
 
             # not freemods, set match mods.
-            m.mods = self.mods
+            m.mods = Mods(self.mods)
 
         m.enqueue_state()
 
@@ -1511,7 +1529,10 @@ class MatchLoadComplete(BasePacket):
             return
 
         # our player has loaded in and is ready to play.
-        m.get_slot(p).loaded = True
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.loaded = True
 
         # check if all players are loaded,
         # if so, tell all players to begin.
@@ -1524,7 +1545,10 @@ class MatchNoBeatmap(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).status = SlotStatus.no_map
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.status = SlotStatus.no_map
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_NOT_READY)
@@ -1533,7 +1557,10 @@ class MatchNotReady(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).status = SlotStatus.not_ready
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.status = SlotStatus.not_ready
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_FAILED)
@@ -1544,7 +1571,10 @@ class MatchFailed(BasePacket):
 
         # find the player's slot id, and enqueue that
         # they've failed to all other players in the match.
-        m.enqueue(packets.matchPlayerFailed(m.get_slot_id(p)), lobby=False)
+        slot_id = m.get_slot_id(p)
+        assert slot_id is not None
+
+        m.enqueue(packets.matchPlayerFailed(slot_id), lobby=False)
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
 class MatchHasBeatmap(BasePacket):
@@ -1552,7 +1582,10 @@ class MatchHasBeatmap(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).status = SlotStatus.not_ready
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.status = SlotStatus.not_ready
         m.enqueue_state(lobby=False)
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
@@ -1561,11 +1594,14 @@ class MatchSkipRequest(BasePacket):
         if not (m := p.match):
             return
 
-        m.get_slot(p).skipped = True
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        slot.skipped = True
         m.enqueue(packets.matchPlayerSkipped(p.id))
 
-        for s in m.slots:
-            if s.status == SlotStatus.playing and not s.skipped:
+        for slot in m.slots:
+            if slot.status == SlotStatus.playing and not slot.skipped:
                 return
 
         # all users have skipped, enqueue a skip.
@@ -1713,11 +1749,13 @@ class MatchChangeTeam(BasePacket):
             return
 
         # toggle team
-        s = m.get_slot(p)
-        if s.team == MatchTeams.blue:
-            s.team = MatchTeams.red
+        slot = m.get_slot(p)
+        assert slot is not None
+
+        if slot.team == MatchTeams.blue:
+            slot.team = MatchTeams.red
         else:
-            s.team = MatchTeams.blue
+            slot.team = MatchTeams.blue
 
         m.enqueue_state(lobby=False)
 

@@ -5,9 +5,12 @@ from enum import IntEnum
 from enum import unique
 from functools import cache
 from functools import lru_cache
+from typing import Any
+from typing import Callable
 from typing import Iterator
 from typing import NamedTuple
 from typing import Sequence
+from typing import Type
 from typing import TYPE_CHECKING
 from typing import Union
 
@@ -195,6 +198,8 @@ class BasePacket(ABC):
     def __init__(self, reader: 'BanchoPacketReader') -> None: ...
     async def handle(self, p: 'Player') -> None: ...
 
+PacketMap = dict[ClientPackets, Type[BasePacket]]
+
 class BanchoPacketReader:
     """\
     A class for reading bancho packets
@@ -219,7 +224,7 @@ class BanchoPacketReader:
     """
     __slots__ = ('body_view', 'packet_map', 'current_len')
 
-    def __init__(self, body_view: memoryview, packet_map: dict) -> None:
+    def __init__(self, body_view: memoryview, packet_map: PacketMap) -> None:
         self.body_view = body_view # readonly
         self.packet_map = packet_map
 
@@ -588,7 +593,8 @@ def write_scoreframe(s: ScoreFrame) -> bytes:
         s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     )
 
-_noexpand_types = {
+
+_noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
     # base
     osuTypes.i8:  struct.Struct('<b').pack,
     osuTypes.u8:  struct.Struct('<B').pack,
@@ -609,14 +615,14 @@ _noexpand_types = {
     # TODO: write replayframe & bundle?
 }
 
-_expand_types = {
+_expand_types: dict[osuTypes, Callable[..., bytearray]]  = {
     # multiarg, tuple expansion
     osuTypes.message: write_message,
     osuTypes.channel: write_channel,
     osuTypes.match: write_match,
 }
 
-def write(packid: int, *args: Sequence[object]) -> bytes:
+def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('<Hx', packid))
 
@@ -956,7 +962,7 @@ def banchoPrivileges(priv: int) -> bytes:
     )
 
 # packet id: 72
-def friendsList(*friends: tuple[int]) -> bytes:
+def friendsList(*friends: int) -> bytes:
     return write(
         ServerPackets.FRIENDS_LIST,
         (friends, osuTypes.i32_list)

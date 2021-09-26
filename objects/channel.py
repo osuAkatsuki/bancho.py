@@ -112,7 +112,7 @@ class Channel:
         )
 
     def send_selective(self, msg: str, sender: 'Player',
-                       recipients: Sequence['Player']) -> None:
+                       recipients: set['Player']) -> None:
         """Enqueue `sender`'s `msg` to `recipients`."""
         for p in recipients:
             if p in self:
