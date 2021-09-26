@@ -24,8 +24,8 @@ from cmyui.logging import log
 from cmyui.logging import RGB
 
 import bg_loops
-import misc.utils
 import misc.context
+import misc.utils
 import objects.collections
 
 # set the current working directory to /gulag

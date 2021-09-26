@@ -14,6 +14,8 @@ from typing import Union
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.types import osuTypes
+from misc.utils import escape_enum
+from misc.utils import pymysql_encode
 from objects import glob
 #from objects.beatmap import BeatmapInfo
 from objects.match import Match
@@ -22,8 +24,6 @@ from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
