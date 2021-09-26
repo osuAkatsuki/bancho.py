@@ -1,8 +1,7 @@
 import asyncio
 import time
-from typing import Coroutine
+from typing import Awaitable
 
-import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
@@ -16,51 +15,42 @@ async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
     glob.housekeeping_tasks = [
         glob.loop.create_task(task) for task in (
-            *(t for t in await _donor_expiry()),
+            _remove_expired_donation_privileges(),
             _reroll_bot_status(interval=300),
             _disconnect_ghosts(),
         )
     ]
 
-async def _donor_expiry() -> list[Coroutine[None, None, None]]:
-    """Add new donation ranks & enqueue tasks to remove current ones."""
-    # TODO: this system can get quite a bit better; rather than just
-    # removing, it should rather update with the new perks (potentially
-    # a different tier, enqueued after their current perks).
+async def _remove_expired_donation_privileges() -> list[Awaitable[None]]:
+    """Remove donation privileges from users with expired sessions."""
+    while True:
+        log('Removing expired donation privileges.', Ansi.LMAGENTA)
 
-    async def rm_donor(userid: int, when: int):
-        if (delta := when - time.time()) >= 0:
-            await asyncio.sleep(delta)
-
-        p = await glob.players.get_ensure(id=userid)
-
-        # TODO: perhaps make a `revoke_donor` method?
-        await p.remove_privs(Privileges.Donator)
-        await glob.db.execute(
-            'UPDATE users '
-            'SET donor_end = 0 '
-            'WHERE id = %s',
-            [p.id]
+        expired_donors = await glob.db.fetchall(
+            'SELECT id FROM users '
+            'WHERE donor_end <= UNIX_TIMESTAMP() '
+            'AND priv & 48', # 48 = Supporter | Premium
+            _dict=False
         )
 
-        if p.online:
-            p.enqueue(packets.notification('Your supporter status has expired.'))
+        for expired_donor_id in expired_donors:
+            p = await glob.players.get_ensure(id=expired_donor_id)
 
-        log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
-
-    # enqueue rm_donor for any supporter
-    # expiring in the next 30 days.
-    # TODO: perhaps donor_end datetime?
-    async with glob.db.pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-            await db_cursor.execute(
-                'SELECT id AS userid, donor_end AS `when` FROM users '
-                'WHERE donor_end <= UNIX_TIMESTAMP() + (60 * 60 * 24 * 7 * 4) '
-                #'WHERE donor_end < DATE_ADD(NOW(), INTERVAL 30 DAY) '
-                'AND priv & 48' # 48 = Supporter | Premium
+            # TODO: perhaps make a `revoke_donor` method?
+            await p.remove_privs(Privileges.Donator)
+            await glob.db.execute(
+                'UPDATE users '
+                'SET donor_end = 0 '
+                'WHERE id = %s',
+                [p.id]
             )
 
-            return [rm_donor(**donation) async for donation in db_cursor]
+            if p.online:
+                p.enqueue(packets.notification('Your supporter status has expired.'))
+
+            log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
+
+        await asyncio.sleep(30 * 60) # once per 30mins
 
 PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def _disconnect_ghosts() -> None:
