@@ -11,17 +11,19 @@ from objects import glob
 
 __all__ = ('initialize_housekeeping_tasks',)
 
+OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000 # defined by osu!
+
 async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
     glob.housekeeping_tasks = [
         glob.loop.create_task(task) for task in (
-            _remove_expired_donation_privileges(),
-            _reroll_bot_status(interval=300),
-            _disconnect_ghosts(),
+            _remove_expired_donation_privileges(interval=30 * 60),
+            _reroll_bot_status(interval=5 * 60),
+            _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
         )
     ]
 
-async def _remove_expired_donation_privileges() -> list[Awaitable[None]]:
+async def _remove_expired_donation_privileges(interval: int) -> list[Awaitable[None]]:
     """Remove donation privileges from users with expired sessions."""
     while True:
         log('Removing expired donation privileges.', Ansi.LMAGENTA)
@@ -50,18 +52,17 @@ async def _remove_expired_donation_privileges() -> list[Awaitable[None]]:
 
             log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
 
-        await asyncio.sleep(30 * 60) # once per 30mins
+        await asyncio.sleep(interval)
 
-PING_TIMEOUT = 300000 // 1000 # defined by osu!
-async def _disconnect_ghosts() -> None:
+async def _disconnect_ghosts(interval: int) -> None:
     """Actively disconnect users above the
        disconnection time threshold on the osu! server."""
     while True:
-        await asyncio.sleep(PING_TIMEOUT // 3)
+        await asyncio.sleep(interval)
         current_time = time.time()
 
         for p in glob.players:
-            if current_time - p.last_recv_time > PING_TIMEOUT:
+            if current_time - p.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f'Auto-dced {p}.', Ansi.LMAGENTA)
                 p.logout()
 
