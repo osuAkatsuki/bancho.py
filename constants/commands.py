@@ -16,8 +16,8 @@ from datetime import datetime
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
+from typing import Awaitable
 from typing import Callable
-from typing import Coroutine
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
@@ -71,7 +71,7 @@ class Context:
     recipient: Optional[Messageable] = None
     match: Optional[Match] = None
 
-Callback = Callable[[Context], Coroutine[None, None, Optional[str]]]
+Callback = Callable[[Context], Awaitable[Optional[str]]]
 
 class Command(NamedTuple):
     triggers: list[str]
@@ -767,7 +767,7 @@ async def user(ctx: Context) -> Optional[str]:
         if not p:
             return 'Player not found.'
 
-    priv_readable = '|'.join(reversed([
+    priv_readable = '|'.join(reversed([ # type: ignore
         priv.name for priv in Privileges
         if p.priv & priv and bin(priv).count('1') == 1
     ]))
@@ -1283,7 +1283,7 @@ async def reload(ctx: Context) -> Optional[str]:
         for child in children:
             mod = getattr(mod, child)
     except AttributeError:
-        return f'Failed at {child}.'
+        return f'Failed at {child}.' # type: ignore
 
     try:
         mod = importlib.reload(mod)
@@ -1889,7 +1889,7 @@ async def mp_loadpool(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get(name)):
+    if not (pool := glob.pools.get_by_name(name)):
         return 'Could not find a pool by that name!'
 
     if ctx.match.pool is pool:
@@ -2046,7 +2046,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if glob.pools.get(name):
+    if glob.pools.get_by_name(name):
         return 'Pool already exists by that name!'
 
     # insert pool into db
@@ -2075,7 +2075,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get(name)):
+    if not (pool := glob.pools.get_by_name(name)):
         return 'Could not find a pool by that name!'
 
     # delete from db
@@ -2114,7 +2114,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get(name)):
+    if not (pool := glob.pools.get_by_name(name)):
         return 'Could not find a pool by that name!'
 
     if (mods, slot) in pool.maps:
@@ -2153,7 +2153,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get(name)):
+    if not (pool := glob.pools.get_by_name(name)):
         return 'Could not find a pool by that name!'
 
     if (mods, slot) not in pool.maps:
@@ -2195,7 +2195,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get(name)):
+    if not (pool := glob.pools.get_by_name(name)):
         return 'Could not find a pool by that name!'
 
     _time = pool.created_at.strftime('%H:%M:%S%p')

@@ -5,6 +5,7 @@ import asyncio
 from typing import Any
 from typing import Iterator
 from typing import Optional
+from typing import overload
 from typing import Sequence
 from typing import Union
 
@@ -50,11 +51,17 @@ class Channels(list[Channel]):
         else:
             return super().__contains__(o)
 
+    @overload
+    def __getitem__(self, index: int) -> Channel: ...
+    @overload
+    def __getitem__(self, index: str) -> Channel: ...
+    @overload
+    def __getitem__(self, index: slice) -> list[Channel]: ...
     def __getitem__(self, index: Union[int, slice, str]) -> Union[Channel, list[Channel]]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
-            return self.get(index)
+            return self.get_by_name(index) # type: ignore
         else:
             return super().__getitem__(index)
 
@@ -64,7 +71,7 @@ class Channels(list[Channel]):
         # #spect_1 instead of #spectator.
         return f'[{", ".join(c._name for c in self)}]'
 
-    def get(self, name: str) -> Optional[Channel]:
+    def get_by_name(self, name: str) -> Optional[Channel]:
         """Get a channel from the list by `name`."""
         for c in self:
             if c._name == name:
@@ -282,10 +289,16 @@ class MapPools(list[MapPool]):
     def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
+    @overload
+    def __getitem__(self, index: int) -> MapPool: ...
+    @overload
+    def __getitem__(self, index: str) -> MapPool: ...
+    @overload
+    def __getitem__(self, index: slice) -> list[MapPool]: ...
     def __getitem__(self, index: Union[int, slice, str]) -> Union[MapPool, list[MapPool]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
-            return self.get(index)
+            return self.get_by_name(index) # type: ignore
         else:
             return super().__getitem__(index)
 
@@ -297,7 +310,7 @@ class MapPools(list[MapPool]):
         else:
             return o in self
 
-    def get(self, name: str) -> Optional[MapPool]:
+    def get_by_name(self, name: str) -> Optional[MapPool]:
         """Get a pool from the list by `name`."""
         for p in self:
             if p.name == name:
@@ -342,6 +355,12 @@ class Clans(list[Clan]):
     def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
+    @overload
+    def __getitem__(self, index: int) -> Clan: ...
+    @overload
+    def __getitem__(self, index: str) -> Clan: ...
+    @overload
+    def __getitem__(self, index: slice) -> list[Clan]: ...
     def __getitem__(self, index: Union[int, slice, str]) -> Union[Clan, list[Clan]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):

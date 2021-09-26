@@ -6,6 +6,7 @@ from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
 from typing import Optional
+from typing import overload
 from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
@@ -309,8 +310,12 @@ class Match:
     def __contains__(self, p: 'Player') -> bool:
         return p in {s.player for s in self.slots}
 
-    def __getitem__(self, key: Union[int, slice]) -> Union[Slot, list[Slot]]:
-        return self.slots[key]
+    @overload
+    def __getitem__(self, index: int) -> Slot: ...
+    @overload
+    def __getitem__(self, index: slice) -> list[Slot]: ...
+    def __getitem__(self, index: Union[int, slice]) -> Union[Slot, list[Slot]]:
+        return self.slots[index]
 
     def __repr__(self) -> str:
         return f'<{self.name} ({self.id})>'
@@ -402,9 +407,9 @@ class Match:
 
     async def await_submissions(
         self, was_playing: Sequence[Slot]
-    ) -> tuple[dict[Union[MatchTeams, 'Player'], int], Sequence['Player']]:
+    ) -> 'tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]':
         """Await score submissions from all players in completed state."""
-        scores: dict[Union[MatchTeams, 'Player'], int] = defaultdict(int)
+        scores: 'dict[Union[MatchTeams, Player], int]' = defaultdict(int)
         didnt_submit: list['Player'] = []
         time_waited = 0 # allow up to 10s (total, not per player)
 

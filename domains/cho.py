@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Callable
 from typing import Optional
 from typing import Union
+from typing import TypeVar
+
 
 import aiomysql
 import bcrypt
@@ -164,10 +166,12 @@ glob.bancho_packets = {
     'restricted': {}
 }
 
+T = TypeVar('T')
+
 def register(packet: ClientPackets,
-             restricted: bool = False) -> Callable:
+             restricted: bool = False) -> Callable[[T], T]:
     """Register a handler in `glob.bancho_packets`."""
-    def wrapper(cls) -> Callable:
+    def wrapper(cls: T) -> T:
         glob.bancho_packets['all'][packet] = cls
 
         if restricted:

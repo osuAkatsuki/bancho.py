@@ -11,6 +11,8 @@ from enum import IntEnum
 from enum import unique
 from functools import wraps
 from pathlib import Path
+from typing import Any
+from typing import Awaitable
 from typing import Callable
 from typing import Mapping
 from typing import Optional
@@ -61,11 +63,13 @@ SCREENSHOTS_PATH = Path.cwd() / '.data/ss'
 
 """ Some helper decorators (used for /web/ connections) """
 
-def _required_args(req_args: set[str], argset: str) -> Callable:
+ConnectionHandler = Callable[[Connection], Awaitable[HTTPResponse]]
+
+def _required_args(req_args: set[str], argset: str) -> Callable[[ConnectionHandler], ConnectionHandler]:
     """Decorator to ensure all required arguments are present."""
     # NOTE: this function is not meant to be used directly, but
     # rather used in the form as the functions below.
-    def wrapper(f: Callable) -> Callable:
+    def wrapper(f: ConnectionHandler) -> ConnectionHandler:
 
         # modify the handler code to ensure that
         # all arguments are sent in the request.
@@ -124,7 +128,7 @@ def acquire_db_conn(cursor_cls = aiomysql.Cursor) -> Callable:
        connection & cursor for a handler."""
     def wrapper(f: Callable) -> Callable:
         @wraps(f)
-        async def handler(*args) -> HTTPResponse:
+        async def handler(*args: Any) -> HTTPResponse:
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(cursor_cls) as db_cursor:
                     return await f(*args, db_cursor)
@@ -162,7 +166,6 @@ async def osuError(conn: Connection) -> HTTPResponse:
         printc(err_args['stacktrace'][:-2], Ansi.LMAGENTA)
 
     # TODO: save error in db
-    pass
 
 @domain.route('/web/osu-screenshot.php', methods=['POST'])
 @required_mpargs({'u', 'p', 'v'})
