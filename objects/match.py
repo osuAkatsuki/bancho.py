@@ -347,8 +347,6 @@ class Match:
             ):
                 return s
 
-        
-
     def copy(self, m: 'Match') -> None:
         """Fully copy the data of another match obj."""
         self.map_id = m.map_id

@@ -593,7 +593,6 @@ def write_scoreframe(s: ScoreFrame) -> bytes:
         s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     )
 
-
 _noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
     # base
     osuTypes.i8:  struct.Struct('<b').pack,
