@@ -1907,7 +1907,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_score_info')
 async def api_get_score_info(conn: Connection) -> HTTPResponse:
     """Return information about a given score."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if not (
         'id' in conn.args and
         conn.args['id'].isdecimal()
