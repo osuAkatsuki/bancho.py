@@ -2425,3 +2425,11 @@ async def register_account(
         log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success
+
+@domain.route('/difficulty-rating', methods=['POST'])
+async def difficultyRatingHandler(conn: Connection) -> Optional[bytes]:
+    params = re.sub(r'^(.*)cloudflare\\r\\n\\r\\n?', '', str(conn._buf))
+    async with glob.http.post("https://osu.ppy.sh/difficulty-rating", data=params[:-6], headers={'Content-type': 'application/json'}) as resp:
+            result = await resp.read()
+
+    return result
