@@ -1463,7 +1463,7 @@ SCOREID_BORDERS = tuple(
 @domain.route('/api/get_player_count')
 async def api_get_player_count(conn: Connection) -> HTTPResponse:
     """Get the current amount of online players."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
@@ -1482,7 +1482,7 @@ async def api_get_player_count(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_player_info')
 async def api_get_player_info(conn: Connection) -> HTTPResponse:
     """Return information about a given player."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if 'name' not in conn.args and 'id' not in conn.args:
         return (400, JSON({'status': 'Must provide either id or name!'}))
 
@@ -1548,7 +1548,7 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_player_status')
 async def api_get_player_status(conn: Connection) -> HTTPResponse:
     """Return a players current status, if they are online."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if 'id' in conn.args:
         pid = conn.args['id']
         if not pid.isdecimal():
@@ -1602,7 +1602,7 @@ async def api_get_player_status(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_player_scores')
 async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     """Return a list of a given user's recent/best scores."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid player id.'}))
@@ -1727,7 +1727,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
 
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
@@ -1784,7 +1784,7 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_map_info')
 async def api_get_map_info(conn: Connection) -> HTTPResponse:
     """Return information about a given beatmap."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid map id.'}))
@@ -1807,7 +1807,7 @@ async def api_get_map_info(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_map_scores')
 async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     """Return the top n scores on a given beatmap."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid map id.'}))
@@ -1942,7 +1942,7 @@ async def api_get_score_info(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_replay')
 async def api_get_replay(conn: Connection) -> HTTPResponse:
     """Return a given replay (including headers)."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     if not (
         'id' in conn.args and
         conn.args['id'].isdecimal()
@@ -2049,7 +2049,7 @@ async def api_get_replay(conn: Connection) -> HTTPResponse:
 @domain.route('/api/get_match')
 async def api_get_match(conn: Connection) -> HTTPResponse:
     """Return information of a given multiplayer match."""
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
     # TODO: eventually, this should contain recent score info.
     if not (
         'id' in conn.args and
@@ -2098,7 +2098,7 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
 
 @domain.route('/api/get_leaderboard')
 async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
-    conn.resp_headers['Content-Type'] = f'application/json'
+    conn.resp_headers['Content-Type'] = 'application/json'
 
     if (mode_arg := conn.args.get('mode', None)) is not None:
         if not (
@@ -2147,7 +2147,7 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
 def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
     async def wrapper(conn: Connection) -> HTTPResponse:
-        conn.resp_headers['Content-Type'] = f'application/json'
+        conn.resp_headers['Content-Type'] = 'application/json'
         if 'Authorization' not in conn.headers:
             return (400, JSON({'status': 'Must provide authorization token.'}))
 
