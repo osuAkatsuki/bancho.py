@@ -2425,3 +2425,8 @@ async def register_account(
         log(f'<{name} ({user_id})> has registered!', Ansi.LGREEN)
 
     return b'ok' # success
+
+@domain.route('/difficulty-rating', methods=['POST'])
+async def difficultyRatingHandler(conn: Connection) -> Optional[bytes]:
+    conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
+    return (307, b'')
