@@ -2428,7 +2428,5 @@ async def register_account(
 
 @domain.route('/difficulty-rating', methods=['POST'])
 async def difficultyRatingHandler(conn: Connection) -> Optional[bytes]:
-    async with glob.http.post("https://osu.ppy.sh/difficulty-rating", data=conn.body.tobytes().decode(), headers={'Content-type': 'application/json'}) as resp:
-            result = await resp.read()
-
-    return result
+    conn.resp_headers['Location'] = f'https://osu.ppy.sh{conn.path}'
+    return (307, b'')
