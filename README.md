@@ -1,3 +1,6 @@
+# FOR MAINTAINER NOTE:
+Our code is public, but our database, package and website are and will be not public. If you want to use our source you most likely need to write stuff yourself unless I personally give you the code
+
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
 gulag is my implementation of an osu! server's backend; it handles connections
