@@ -64,7 +64,6 @@ __all__ = (
     'shutdown_signal_handler',
     '_handle_fut_exception',
     '_conn_finished_cb',
-    '_cancel_all_tasks',
 
     'await_ongoing_connections',
     'cancel_housekeeping_tasks',
@@ -446,26 +445,6 @@ def _conn_finished_cb(task: asyncio.Task) -> None:
 
     glob.ongoing_conns.remove(task)
     task.remove_done_callback(_conn_finished_cb)
-
-def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
-    # NOTE: this shouldn't be required since all tasks
-    # should be gracefully closed before this is called.
-    to_cancel = asyncio.all_tasks(loop)
-
-    if not to_cancel:
-        return
-
-    warnings.warn('Found pending tasks after graceful shutdown.')
-
-    for task in to_cancel:
-        task.cancel()
-
-    loop.run_until_complete(
-        asyncio.gather(*to_cancel, return_exceptions=True)
-    )
-
-    for task in to_cancel:
-        _handle_fut_exception(task)
 
 async def await_ongoing_connections(timeout: float) -> None:
     log(f'-> Allowing up to {timeout:.2f} seconds for '

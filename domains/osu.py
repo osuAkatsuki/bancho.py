@@ -110,7 +110,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
             argset = conn.args or conn.multipart_args
 
             if not (
-                p := await glob.players.get_login(
+                p := await glob.players.from_login(
                     name = unquote(argset[name_p]),
                     pw_md5 = argset[pass_p]
                 )
@@ -150,7 +150,7 @@ async def osuError(conn: Connection) -> HTTPResponse:
         err_args = conn.multipart_args
         if 'u' in err_args and 'p' in err_args:
             if not (
-                p := await glob.players.get_login(
+                p := await glob.players.from_login(
                     name = unquote(err_args['u']),
                     pw_md5 = err_args['p']
                 )
@@ -1349,7 +1349,7 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> HTTPResponse:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if t := await glob.players.get_ensure(name=t_name):
+    if t := await glob.players.from_cache_or_sql(name=t_name):
         # mark any unread mail from this user as read.
         await glob.db.execute(
             'UPDATE `mail` SET `read` = 1 '
@@ -1606,11 +1606,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid player id.'}))
-        p = await glob.players.get_ensure(id=int(conn.args['id']))
+        p = await glob.players.from_cache_or_sql(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
             return (400, JSON({'status': 'Invalid player name.'}))
-        p = await glob.players.get_ensure(name=conn.args['name'])
+        p = await glob.players.from_cache_or_sql(name=conn.args['name'])
     else:
         return (400, JSON({'status': 'Must provide either id or name.'}))
 
@@ -1732,11 +1732,11 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid player id.'}))
-        p = await glob.players.get_ensure(id=int(conn.args['id']))
+        p = await glob.players.from_cache_or_sql(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
             return (400, JSON({'status': 'Invalid player name.'}))
-        p = await glob.players.get_ensure(name=conn.args['name'])
+        p = await glob.players.from_cache_or_sql(name=conn.args['name'])
     else:
         return (400, JSON({'status': 'Must provide either id or name.'}))
 
@@ -2158,7 +2158,7 @@ def requires_api_key(f: Callable) -> Callable:
 
         # get player from api token
         player_id = glob.api_keys[api_key]
-        p = await glob.players.get_ensure(id=player_id)
+        p = await glob.players.from_cache_or_sql(id=player_id)
 
         return await f(conn, p)
     return wrapper

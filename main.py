@@ -100,13 +100,13 @@ async def run_server() -> None:
             #       improved and refactored out.
             try:
                 conn, _ = await asyncio.wait_for(
-                    fut=loop.sock_accept(listening_sock),
+                    fut=glob.loop.sock_accept(listening_sock),
                     timeout=0.25
                 )
             except asyncio.TimeoutError:
                 pass
             else:
-                task = loop.create_task(glob.app.handle(conn))
+                task = glob.loop.create_task(glob.app.handle(conn))
                 task.add_done_callback(misc.utils._conn_finished_cb)
                 glob.ongoing_conns.append(task)
 
@@ -140,7 +140,7 @@ async def main() -> int:
             # this includes channels, clans, mappools, bot info, etc.
             async with glob.db.pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    await objects.collections.initialize_ram_caches(db_cursor)
+                    await objects.collections.initialize_ram_caches(db_cursor) # type: ignore
 
             # initialize housekeeping tasks to automatically manage
             # and ensure memory on ram & disk are kept up to date.
@@ -149,7 +149,7 @@ async def main() -> int:
             # handle signals so we can ensure a graceful shutdown
             sig_handler = misc.utils.shutdown_signal_handler
             for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-                loop.add_signal_handler(signum, sig_handler, signum)
+                glob.loop.add_signal_handler(signum, sig_handler, signum)
 
             # TODO: restart signal handler with SIGUSR1
 
@@ -202,19 +202,7 @@ if __name__ == '__main__':
     except ModuleNotFoundError:
         pass
 
-    loop = asyncio.new_event_loop()
-
-    try:
-        asyncio.set_event_loop(loop)
-        raise SystemExit(loop.run_until_complete(main()))
-    finally:
-        try:
-            misc.utils._cancel_all_tasks(loop)
-            loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.run_until_complete(loop.shutdown_default_executor())
-        finally:
-            asyncio.set_event_loop(None)
-            loop.close()
+    raise SystemExit(asyncio.run(main()))
 
 elif __name__ == 'main':
     # check specifically for ASGI servers; many related projects use

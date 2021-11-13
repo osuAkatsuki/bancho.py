@@ -106,13 +106,13 @@ class Channels(list[Channel]):
             ) async for row in db_cursor
         ])
 
-class Matches(list[Match]):
+class Matches(list[Optional[Match]]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
         super().__init__([None] * glob.config.max_multi_matches)
 
-    def __iter__(self) -> Iterator[Match]:
+    def __iter__(self) -> Iterator[Optional[Match]]:
         return super().__iter__()
 
     def __repr__(self) -> str:
@@ -244,14 +244,14 @@ class Players(list[Player]):
 
         return Player(**res, token='')
 
-    async def get_ensure(self, **kwargs: object) -> Optional[Player]:
+    async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
         if p := self.get(**kwargs):
             return p
         elif p := await self.get_sql(**kwargs):
             return p
 
-    async def get_login(self, name: str, pw_md5: str,
+    async def from_login(self, name: str, pw_md5: str,
                         sql: bool = False) -> Optional[Player]:
         """Return a player with a given name & pw_md5, from cache or sql."""
         if not (p := self.get(name=name)):
@@ -340,7 +340,7 @@ class MapPools(list[MapPool]):
                 id = row['id'],
                 name = row['name'],
                 created_at = row['created_at'],
-                created_by = await glob.players.get_ensure(id=row['created_by'])
+                created_by = await glob.players.from_cache_or_sql(id=row['created_by'])
             ) async for row in db_cursor
         ])
 
@@ -361,7 +361,7 @@ class Clans(list[Clan]):
     def __getitem__(self, index: str) -> Clan: ...
     @overload
     def __getitem__(self, index: slice) -> list[Clan]: ...
-    def __getitem__(self, index: Union[int, slice, str]) -> Union[Clan, list[Clan]]:
+    def __getitem__(self, index):
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)

@@ -36,7 +36,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         )
 
         for expired_donor_id in expired_donors:
-            p = await glob.players.get_ensure(id=expired_donor_id)
+            p = await glob.players.from_cache_or_sql(id=expired_donor_id)
 
             # TODO: perhaps make a `revoke_donor` method?
             await p.remove_privs(Privileges.Donator)

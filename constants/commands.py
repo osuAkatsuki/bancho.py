@@ -179,7 +179,7 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.Normal, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await glob.players.get_ensure(name=' '.join(ctx.args))
+    target = await glob.players.from_cache_or_sql(name=' '.join(ctx.args))
 
     if not target:
         return 'User not found.'
@@ -202,7 +202,7 @@ async def block(ctx: Context) -> Optional[str]:
 @command(Privileges.Normal, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await glob.players.get_ensure(name=' '.join(ctx.args))
+    target = await glob.players.from_cache_or_sql(name=' '.join(ctx.args))
 
     if not target:
         return 'User not found.'
@@ -540,7 +540,7 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in res:
         # find player & map for each row, and add to output.
-        if not (p := await glob.players.get_ensure(id=player_id)):
+        if not (p := await glob.players.from_cache_or_sql(id=player_id)):
             l.append(f'Failed to find requesting player ({player_id})?')
             continue
 
@@ -640,7 +640,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 2 or not ctx.args[1].isdecimal():
         return 'Invalid syntax: !notes <name> <days_back>'
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     days = int(ctx.args[1])
@@ -669,7 +669,7 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return 'Invalid syntax: !addnote <name> <note ...>'
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
@@ -705,7 +705,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return 'Invalid syntax: !silence <name> <duration> <reason>'
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if (
@@ -734,7 +734,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return 'Invalid syntax: !unsilence <name>'
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if not t.silenced:
@@ -762,7 +762,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await glob.players.get_ensure(name=' '.join(ctx.args))
+        p = await glob.players.from_cache_or_sql(name=' '.join(ctx.args))
 
         if not p:
             return 'Player not found.'
@@ -802,7 +802,7 @@ async def restrict(ctx: Context) -> Optional[str]:
         return 'Invalid syntax: !restrict <name> <reason>'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if (
@@ -830,7 +830,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return 'Invalid syntax: !unrestrict <name> <reason>'
 
     # find any user matching (including offline).
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if (
@@ -1213,7 +1213,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return 'Could not find user.'
 
     await t.add_privs(bits)
@@ -1233,7 +1233,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.get_ensure(name=ctx.args[0])):
+    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
         return 'Could not find user.'
 
     await t.remove_privs(bits)
@@ -2061,7 +2061,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
     res = await glob.db.fetch('SELECT * FROM tourney_pools '
                               'WHERE name = %s', [name])
 
-    res['created_by'] = await glob.players.get_ensure(id=res['created_by'])
+    res['created_by'] = await glob.players.from_cache_or_sql(id=res['created_by'])
 
     glob.pools.append(MapPool(**res))
 
