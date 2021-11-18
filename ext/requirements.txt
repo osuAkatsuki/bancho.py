@@ -1,5 +1,6 @@
 aiohttp
 aiomysql
+aioredis
 bcrypt
 cmyui
 datadog

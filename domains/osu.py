@@ -820,19 +820,7 @@ async def osuSubmitModularSelector(
             stats_query_args.append(stats.pp)
 
             # update rank
-            # TODO: do rankings with bisection algorithms
-            # locally, pulling from the database @ startup.
-            await db_cursor.execute(
-                'SELECT COUNT(*) AS higher_pp_players '
-                'FROM stats s '
-                'INNER JOIN users u USING(id) '
-                'WHERE s.mode = %s '
-                'AND s.pp > %s '
-                'AND u.priv & 1 '
-                'AND u.id != %s',
-                [mode_vn, stats.pp, score.player.id]
-            )
-            stats.rank = 1 + (await db_cursor.fetchone())['higher_pp_players']
+            stats.rank = await score.player.update_rank(score.mode)
 
     # create a single querystring from the list of updates
     stats_query = ','.join(stats_query_l)
@@ -1538,6 +1526,13 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
             'xh_count, x_count, sh_count, s_count, a_count FROM stats '
             'WHERE id = %s', [pid]
         )
+
+        for idx, stats_mode in enumerate(stats_res):
+            rank = await glob.redis.zrevrank(f'gulag:leaderboard:{idx}', pid)
+            stats_mode['rank'] = rank + 1 if rank else 0
+
+            country_rank = await glob.redis.zrevrank(f'gulag:leaderboard:{idx}:{info_res["country"]}', pid)
+            stats_mode['country_rank'] = country_rank + 1 if country_rank else 0
 
         if not stats_res:
             return (404, JSON({'status': 'Player not found'}))

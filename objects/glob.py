@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from typing import Union
 
     from aiohttp.client import ClientSession
+    from aioredis import Redis
     from cmyui.mysql import AsyncSQLPool
     from cmyui.version import Version
     from cmyui.web import Server
@@ -81,6 +82,7 @@ bancho_packets: dict[str, 'dict[ClientPackets, Type[BasePacket]]']
 
 # active connections
 db: 'AsyncSQLPool'
+redis: 'Redis'
 
 has_internet: bool
 shutting_down: bool

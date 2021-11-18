@@ -7,6 +7,7 @@ from typing import Iterator
 from typing import Optional
 
 import aiohttp
+import aioredis
 import cmyui
 import datadog
 import geoip2.database
@@ -29,6 +30,14 @@ async def acquire_mysql_db_pool(config: dict[str, Any]) -> AsyncIterator[Optiona
     db_pool = cmyui.AsyncSQLPool()
     try:
         await db_pool.connect(config)
+        yield db_pool
+    finally:
+        await db_pool.close()
+
+@asynccontextmanager
+async def acquire_redis_db_pool() -> AsyncIterator[Optional[aioredis.Redis]]:
+    try:
+        db_pool = await aioredis.from_url("redis://localhost")
         yield db_pool
     finally:
         await db_pool.close()

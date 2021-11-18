@@ -495,7 +495,7 @@ def ensure_supported_platform() -> int:
     return 0
 
 def ensure_local_services_are_running() -> int:
-    """Ensure all required services (mysql) are running."""
+    """Ensure all required services (mysql, redis) are running."""
     # NOTE: if you have any problems with this, please contact me
     # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
     # how people are using the software so that i can keep it
@@ -512,6 +512,11 @@ def ensure_local_services_are_running() -> int:
             if pgrep_exit_code != 0:
                 log('Please start your mysqld server.', Ansi.LRED)
                 return 1
+
+    pgrep_exit_code = os.system('pgrep redis')
+    if pgrep_exit_code != 0:
+        log('Please start your redis server.', Ansi.LRED)
+        return 1
 
     return 0
 

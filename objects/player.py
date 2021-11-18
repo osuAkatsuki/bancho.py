@@ -928,6 +928,32 @@ class Player:
                 if row['id'] == ach.id:
                     self.achievements.add(ach)
 
+    async def get_global_rank(self, mode: GameMode) -> Optional[int]:
+        if self.restricted:
+            return 0
+
+        rank = await glob.redis.zrevrank(f'gulag:leaderboard:{mode.value}', self.id)
+        return rank + 1 if rank else 0
+
+    async def get_country_rank(self, mode: GameMode) -> Optional[int]:
+        if self.restricted:
+            return 0
+
+        country = self.geoloc['country']['acronym']
+        rank = await glob.redis.zrevrank(f'gulag:leaderboard:{mode.value}:{country}', self.id)
+
+        return rank + 1 if rank else 0
+
+    async def update_rank(self, mode: GameMode) -> Optional[int]:
+        country = self.geoloc['country']['acronym']
+        stats = self.stats[mode.value]
+
+        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}', stats.pp, self.id)
+        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}:{country}', stats.pp, self.id)
+
+        stats.rank = await self.get_global_rank(mode)
+        return stats.rank
+
     async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         await db_cursor.execute(
@@ -941,20 +967,7 @@ class Player:
 
         for mode, row in enumerate(await db_cursor.fetchall()):
             # calculate player's rank.
-            # TODO: do rankings with bisection algorithms
-            # locally, pulling from the database @ startup.
-            await db_cursor.execute(
-                'SELECT COUNT(*) AS higher_pp_players '
-                'FROM stats s '
-                'INNER JOIN users u USING(id) '
-                'WHERE s.mode = %s '
-                'AND s.pp > %s '
-                'AND u.priv & 1 '
-                'AND u.id != %s',
-                [mode, row['pp'], self.id]
-            )
-
-            row['rank'] = (await db_cursor.fetchone())['higher_pp_players'] + 1
+            row['rank'] = await self.get_global_rank(GameMode(mode))
 
             row['grades'] = {
                 Grade.XH: row.pop('xh_count'),
