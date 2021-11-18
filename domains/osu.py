@@ -800,21 +800,22 @@ async def osuSubmitModularSelector(
             total_scores = db_cursor.rowcount
             top_100_pp = await db_cursor.fetchmany(size=100)
 
-            # update total weighted accuracy
-            tot = div = 0
-            for i, row in enumerate(top_100_pp):
-                add = int((0.95 ** i) * 100)
-                tot += row['acc'] * add
-                div += add
-            stats.acc = tot / div
+            # calculate new total weighted accuracy
+            weighted_acc = sum([row['acc'] * 0.95 ** i for i, row in enumerate(top_100_pp)])
+            bonus_acc = 100.0 / (20 * (1 - 0.95 ** total_scores))
+            stats.acc = (weighted_acc * bonus_acc) / 100
+
+            # add acc to query
             stats_query_l.append('acc = %s')
             stats_query_args.append(stats.acc)
 
-            # update total weighted pp
+            # calculate new total weighted pp
             weighted_pp = sum([row['pp'] * 0.95 ** i
                                for i, row in enumerate(top_100_pp)])
-            bonus_pp = 416.6667 * (1 - 0.9994 ** total_scores)
+            bonus_pp = 416.6667 * (1 - 0.95 ** total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
+
+            # add pp to query
             stats_query_l.append('pp = %s')
             stats_query_args.append(stats.pp)
 
