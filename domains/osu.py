@@ -1527,6 +1527,13 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
             'WHERE id = %s', [pid]
         )
 
+        for idx, stats_mode in enumerate(stats_res):
+            rank = await glob.redis.zrevrank(f'gulag:leaderboard:{idx}', pid)
+            stats_mode['rank'] = rank + 1 if rank else 0
+
+            country_rank = await glob.redis.zrevrank(f'gulag:leaderboard:{idx}:{info_res["country"]}', pid)
+            stats_mode['country_rank'] = country_rank + 1 if country_rank else 0
+
         if not stats_res:
             return (404, JSON({'status': 'Player not found'}))
 
