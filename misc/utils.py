@@ -664,7 +664,9 @@ async def _get_current_mysql_structure_version() -> Optional[cmyui.Version]:
 
 async def update_mysql_structure() -> None:
     """Update the mysql structure, if it has changed."""
-    current_ver = await _get_current_mysql_structure_version()
+    if not (current_ver := await _get_current_mysql_structure_version()):
+        return # already up to date (server has never run before)
+
     latest_ver = glob.version
 
     if latest_ver == current_ver:
