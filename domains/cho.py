@@ -903,7 +903,7 @@ class SendPrivateMessage(BasePacket):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await glob.players.get_ensure(name=t_name)):
+        if not (t := await glob.players.from_cache_or_sql(name=t_name)):
             if glob.app.debug:
                 log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
             return

@@ -110,7 +110,7 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b'') -> Callable:
             argset = conn.args or conn.multipart_args
 
             if not (
-                p := await glob.players.get_login(
+                p := await glob.players.from_login(
                     name = unquote(argset[name_p]),
                     pw_md5 = argset[pass_p]
                 )
@@ -150,7 +150,7 @@ async def osuError(conn: Connection) -> HTTPResponse:
         err_args = conn.multipart_args
         if 'u' in err_args and 'p' in err_args:
             if not (
-                p := await glob.players.get_login(
+                p := await glob.players.from_login(
                     name = unquote(err_args['u']),
                     pw_md5 = err_args['p']
                 )
@@ -800,21 +800,22 @@ async def osuSubmitModularSelector(
             total_scores = db_cursor.rowcount
             top_100_pp = await db_cursor.fetchmany(size=100)
 
-            # update total weighted accuracy
-            tot = div = 0
-            for i, row in enumerate(top_100_pp):
-                add = int((0.95 ** i) * 100)
-                tot += row['acc'] * add
-                div += add
-            stats.acc = tot / div
+            # calculate new total weighted accuracy
+            weighted_acc = sum([row['acc'] * 0.95 ** i for i, row in enumerate(top_100_pp)])
+            bonus_acc = 100.0 / (20 * (1 - 0.95 ** total_scores))
+            stats.acc = (weighted_acc * bonus_acc) / 100
+
+            # add acc to query
             stats_query_l.append('acc = %s')
             stats_query_args.append(stats.acc)
 
-            # update total weighted pp
+            # calculate new total weighted pp
             weighted_pp = sum([row['pp'] * 0.95 ** i
                                for i, row in enumerate(top_100_pp)])
-            bonus_pp = 416.6667 * (1 - 0.9994 ** total_scores)
+            bonus_pp = 416.6667 * (1 - 0.95 ** total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
+
+            # add pp to query
             stats_query_l.append('pp = %s')
             stats_query_args.append(stats.pp)
 
@@ -1349,7 +1350,7 @@ async def osuMarkAsRead(p: 'Player', conn: Connection) -> HTTPResponse:
     if not (t_name := unquote(conn.args['channel'])):
         return # no channel specified
 
-    if t := await glob.players.get_ensure(name=t_name):
+    if t := await glob.players.from_cache_or_sql(name=t_name):
         # mark any unread mail from this user as read.
         await glob.db.execute(
             'UPDATE `mail` SET `read` = 1 '
@@ -1606,11 +1607,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid player id.'}))
-        p = await glob.players.get_ensure(id=int(conn.args['id']))
+        p = await glob.players.from_cache_or_sql(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
             return (400, JSON({'status': 'Invalid player name.'}))
-        p = await glob.players.get_ensure(name=conn.args['name'])
+        p = await glob.players.from_cache_or_sql(name=conn.args['name'])
     else:
         return (400, JSON({'status': 'Must provide either id or name.'}))
 
@@ -1732,11 +1733,11 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
     if 'id' in conn.args:
         if not conn.args['id'].isdecimal():
             return (400, JSON({'status': 'Invalid player id.'}))
-        p = await glob.players.get_ensure(id=int(conn.args['id']))
+        p = await glob.players.from_cache_or_sql(id=int(conn.args['id']))
     elif 'name' in conn.args:
         if not 0 < len(conn.args['name']) <= 16:
             return (400, JSON({'status': 'Invalid player name.'}))
-        p = await glob.players.get_ensure(name=conn.args['name'])
+        p = await glob.players.from_cache_or_sql(name=conn.args['name'])
     else:
         return (400, JSON({'status': 'Must provide either id or name.'}))
 
@@ -2158,7 +2159,7 @@ def requires_api_key(f: Callable) -> Callable:
 
         # get player from api token
         player_id = glob.api_keys[api_key]
-        p = await glob.players.get_ensure(id=player_id)
+        p = await glob.players.from_cache_or_sql(id=player_id)
 
         return await f(conn, p)
     return wrapper

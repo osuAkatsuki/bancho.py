@@ -64,7 +64,6 @@ __all__ = (
     'shutdown_signal_handler',
     '_handle_fut_exception',
     '_conn_finished_cb',
-    '_cancel_all_tasks',
 
     'await_ongoing_connections',
     'cancel_housekeeping_tasks',
@@ -447,26 +446,6 @@ def _conn_finished_cb(task: asyncio.Task) -> None:
     glob.ongoing_conns.remove(task)
     task.remove_done_callback(_conn_finished_cb)
 
-def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
-    # NOTE: this shouldn't be required since all tasks
-    # should be gracefully closed before this is called.
-    to_cancel = asyncio.all_tasks(loop)
-
-    if not to_cancel:
-        return
-
-    warnings.warn('Found pending tasks after graceful shutdown.')
-
-    for task in to_cancel:
-        task.cancel()
-
-    loop.run_until_complete(
-        asyncio.gather(*to_cancel, return_exceptions=True)
-    )
-
-    for task in to_cancel:
-        _handle_fut_exception(task)
-
 async def await_ongoing_connections(timeout: float) -> None:
     log(f'-> Allowing up to {timeout:.2f} seconds for '
        f'{len(glob.ongoing_conns)} ongoing connection(s) to finish.', Ansi.LMAGENTA)
@@ -685,7 +664,9 @@ async def _get_current_mysql_structure_version() -> Optional[cmyui.Version]:
 
 async def update_mysql_structure() -> None:
     """Update the mysql structure, if it has changed."""
-    current_ver = await _get_current_mysql_structure_version()
+    if not (current_ver := await _get_current_mysql_structure_version()):
+        return # already up to date (server has never run before)
+
     latest_ver = glob.version
 
     if latest_ver == current_ver:

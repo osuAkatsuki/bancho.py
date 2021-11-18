@@ -200,7 +200,7 @@ class Score:
 
         s.id = res[0]
         s.bmap = await Beatmap.from_md5(res[1])
-        s.player = await glob.players.get_ensure(id=res[2])
+        s.player = await glob.players.from_cache_or_sql(id=res[2])
 
         (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
          s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
@@ -251,7 +251,7 @@ class Score:
 
         # get the map & player for the score.
         s.bmap = await Beatmap.from_md5(map_md5)
-        s.player = await glob.players.get_login(pname, pw_md5)
+        s.player = await glob.players.from_login(pname, pw_md5)
 
         if not s.player:
             # return the obj with an empty player to
