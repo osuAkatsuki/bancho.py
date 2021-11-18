@@ -320,7 +320,7 @@ GAMEMODE_STRINGS = (
 )
 
 TOP_SCORE_FMTSTR = (
-    "{idx}. ({pp:.2f}pp) [https://osu.{domain}}/beatmaps/{bmapid} "
+    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmaps/{bmapid} "
     "{artist} - {title} [{version}]]"
 )
 
