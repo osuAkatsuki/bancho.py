@@ -820,19 +820,7 @@ async def osuSubmitModularSelector(
             stats_query_args.append(stats.pp)
 
             # update rank
-            # TODO: do rankings with bisection algorithms
-            # locally, pulling from the database @ startup.
-            await db_cursor.execute(
-                'SELECT COUNT(*) AS higher_pp_players '
-                'FROM stats s '
-                'INNER JOIN users u USING(id) '
-                'WHERE s.mode = %s '
-                'AND s.pp > %s '
-                'AND u.priv & 1 '
-                'AND u.id != %s',
-                [mode_vn, stats.pp, score.player.id]
-            )
-            stats.rank = 1 + (await db_cursor.fetchone())['higher_pp_players']
+            stats.rank = await score.player.update_rank(score.mode)
 
     # create a single querystring from the list of updates
     stats_query = ','.join(stats_query_l)

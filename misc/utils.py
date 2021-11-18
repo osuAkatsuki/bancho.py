@@ -513,6 +513,11 @@ def ensure_local_services_are_running() -> int:
                 log('Please start your mysqld server.', Ansi.LRED)
                 return 1
 
+    pgrep_exit_code = os.system('pgrep redis')
+    if pgrep_exit_code != 0:
+        log('Please start your redis server.', Ansi.LRED)
+        return 1
+
     return 0
 
 def ensure_directory_structure() -> int:

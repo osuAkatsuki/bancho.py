@@ -121,6 +121,7 @@ async def main() -> int:
     async with (
         misc.context.acquire_http_session(glob.has_internet) as glob.http_session,
         misc.context.acquire_mysql_db_pool(glob.config.mysql) as glob.db
+        misc.context.acquire_redis_db_pool() as glob.redis
     ):
         await misc.utils.check_for_dependency_updates()
         await misc.utils.update_mysql_structure()

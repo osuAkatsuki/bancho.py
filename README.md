@@ -35,9 +35,9 @@ Installation Guide
 # add ppa for py3.9 (i love asottile)
 sudo add-apt-repository ppa:deadsnakes/ppa
 
-# install requirements (py3.9, mysql, nginx, build tools, certbot)
+# install requirements (py3.9, mysql, redis, nginx, build tools, certbot)
 sudo apt install python3.9 python3.9-dev python3.9-distutils \
-                 mysql-server nginx build-essential certbot
+                 mysql-server redis-server nginx build-essential certbot
 
 # install pip for py3.9
 wget https://bootstrap.pypa.io/get-pip.py
