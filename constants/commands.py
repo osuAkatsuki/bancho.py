@@ -280,7 +280,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 
 @command(Privileges.Normal, aliases=['last', 'r'])
 async def recent(ctx: Context) -> Optional[str]:
-    """Show information about your most recent score."""
+    """Show information about a player's most recent score."""
     if ctx.args:
         if not (target := glob.players.get(name=' '.join(ctx.args))):
             return 'Player not found.'
@@ -313,7 +313,63 @@ async def recent(ctx: Context) -> Optional[str]:
 
     return ' | '.join(l)
 
-# TODO: !top (get top #1 score)
+GAMEMODE_STRINGS = (
+    'osu!vn', 'taiko!vn', 'catch!vn', 'mania!vn',
+    'osu!rx', 'taiko!rx', 'catch!rx',
+    'osu!ap'
+)
+
+TOP_SCORE_FMTSTR = (
+    "{idx}. ({pp:.2f}pp) [https://osu.{domain}}/beatmaps/{bmapid} "
+    "{artist} - {title} [{version}]]"
+)
+
+@command(Privileges.Normal, hidden=True)
+async def top(ctx: Context) -> Optional[str]:
+    """Show information about a player's top 10 scores."""
+    # !top <mode> (player)
+    if (args_len := len(ctx.args)) not in (1, 2):
+        return 'Invalid syntax: !top <mode> (player)'
+
+    if ctx.args[0] not in GAMEMODE_STRINGS:
+        return f'Valid gamemodes: {", ".join(GAMEMODE_STRINGS)}.'
+
+    if args_len == 2:
+        if not regexes.username.match(ctx.args[1]):
+            return 'Invalid username.'
+
+        # specific player provided
+        if not (p := await glob.players.from_cache_or_sql(name=ctx.args[1])):
+            return 'Player not found.'
+    else:
+        # no player provided, use self
+        p = ctx.player
+
+    mode_str, _, special_mode_str = ctx.args[0].partition('!')
+
+    mode = ['osu', 'taiko', 'catch', 'mania'].index(mode_str)
+    table = f'scores_{special_mode_str}'
+
+    scores = await glob.db.fetchall(
+        "SELECT *, b.id AS bmapid "
+        f"FROM {table} s "
+        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
+        "WHERE s.userid = %s "
+        "AND s.mode = %s "
+        "AND s.status = 2 "
+        "AND b.status in (2, 3) "
+        "ORDER BY s.pp DESC LIMIT 10",
+        [p.id, mode]
+    )
+
+    if not scores:
+        return 'No scores'
+
+    return '\n'.join([f'Top 10 scores for {p.embed} ({ctx.args[0]}).'] + [
+        TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=glob.config.domain, **s)
+        for idx, s in enumerate(scores)
+    ])
+
 # TODO: !compare (compare to previous !last/!top post's map)
 
 @command(Privileges.Normal, aliases=['w'], hidden=True)
