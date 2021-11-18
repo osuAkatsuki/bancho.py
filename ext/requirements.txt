@@ -1,5 +1,6 @@
 aiohttp
 aiomysql
+aioredis
 bcrypt
 cmyui
 datadog
@@ -12,4 +13,3 @@ peace_performance_python
 psutil
 py3rijndael
 uvloop
-aioredis
