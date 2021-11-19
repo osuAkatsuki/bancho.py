@@ -357,7 +357,7 @@ class Score:
                     # TODO: report to logserver
                     return (0.0, 0.0)
 
-                return (pp, ezpp.get_sr())
+                return (round(pp, 5), ezpp.get_sr())
         elif mode_vn in (1, 2): # taiko, catch
             beatmap = PeaceMap(osu_file_path)
             peace = PeaceCalculator()
