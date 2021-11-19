@@ -487,11 +487,11 @@ async def _with(ctx: Context) -> Optional[str]:
 
             calculated = peace.calculate(beatmap)
 
-            if calculated.pp not in (math.inf, math.nan):
-                return f"{' '.join(msg)}: {calculated.pp:.2f}pp ({calculated.stars:.2f}*)"
-            else:
+            if math.isnan(calculated.pp) or math.isinf(calculated.pp):
                 # TODO: report to logserver
                 return f"{' '.join(msg)}: 0pp (0*)"
+
+            return f"{' '.join(msg)}: {calculated.pp:.2f}pp ({calculated.stars:.2f}*)"
     else: # mania
         if not ctx.args or len(ctx.args) > 2:
             return 'Invalid syntax: !with <score/mods ...>'
