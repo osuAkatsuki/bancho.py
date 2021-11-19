@@ -12,7 +12,6 @@ import socket
 import subprocess
 import sys
 import types
-import warnings
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -508,13 +507,15 @@ def ensure_local_services_are_running() -> int:
                 break
         else:
             # not found, try pgrep
-            pgrep_exit_code = os.system('pgrep mysqld')
+            pgrep_exit_code = subprocess.call(
+                ['pgrep', 'mysqld'],
+                stdout=subprocess.DEVNULL
+            )
             if pgrep_exit_code != 0:
                 log('Please start your mysqld server.', Ansi.LRED)
                 return 1
 
-    pgrep_exit_code = os.system('pgrep redis')
-    if pgrep_exit_code != 0:
+    if not os.path.exists('/var/run/redis/redis-server.pid'):
         log('Please start your redis server.', Ansi.LRED)
         return 1
 
