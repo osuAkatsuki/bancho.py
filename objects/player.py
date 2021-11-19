@@ -928,29 +928,28 @@ class Player:
                 if row['id'] == ach.id:
                     self.achievements.add(ach)
 
-    async def get_global_rank(self, mode: GameMode) -> Optional[int]:
+    async def get_global_rank(self, mode: GameMode) -> int:
         if self.restricted:
             return 0
 
         rank = await glob.redis.zrevrank(f'gulag:leaderboard:{mode.value}', self.id)
-        return rank + 1 if rank else 0
+        return rank + 1 if rank is not None else 0
 
-    async def get_country_rank(self, mode: GameMode) -> Optional[int]:
+    async def get_country_rank(self, mode: GameMode) -> int:
         if self.restricted:
             return 0
 
         country = self.geoloc['country']['acronym']
         rank = await glob.redis.zrevrank(f'gulag:leaderboard:{mode.value}:{country}', self.id)
 
-        return rank + 1 if rank else 0
+        return rank + 1 if rank is not None else 0
 
-    async def update_rank(self, mode: GameMode) -> Optional[int]:
+    async def update_rank(self, mode: GameMode) -> int:
         country = self.geoloc['country']['acronym']
-        stats = self.stats[mode.value]
+        stats = self.stats[mode]
 
-        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}', stats.pp, self.id)
-        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}:{country}', stats.pp, self.id)
-
+        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}', {self.id: stats.pp})
+        await glob.redis.zadd(f'gulag:leaderboard:{mode.value}:{country}', {self.id: stats.pp})
         stats.rank = await self.get_global_rank(mode)
         return stats.rank
 
