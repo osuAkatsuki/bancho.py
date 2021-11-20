@@ -80,14 +80,14 @@ class Channel:
         if not self.read_priv:
             return True
 
-        return priv & self.read_priv
+        return priv & self.read_priv != 0
 
     @functools.cache
     def can_write(self, priv: Privileges) -> bool:
         if not self.write_priv:
             return True
 
-        return priv & self.write_priv
+        return priv & self.write_priv != 0
 
     def send(self, msg: str, sender: "Player", to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""

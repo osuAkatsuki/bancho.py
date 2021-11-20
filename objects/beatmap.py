@@ -654,6 +654,9 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
         and propogate any update into our cache & database."""
+        if not glob.config.osu_api_key:
+            return
+
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
             current_maps = {bmap.id: bmap for bmap in self.maps}
             self.last_osuapi_check = datetime.now()
@@ -679,12 +682,9 @@ class BeatmapSet:
 
             await self._save_to_sql()
         else:
-            # we have the map on disk but it's been removed from the osu!api.
-            # i want to see how frequently this happens and see some examples
-            # of when it's triggered since i'm not 100% sure about it, cheers.
-            await misc.utils.log_strange_occurrence(
-                f"_update_if_available no data, setid: {self.id}",
-            )
+            # TODO: we have the map on disk but it's
+            #       been removed from the osu!api.
+            ...
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
