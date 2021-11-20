@@ -6,6 +6,7 @@ import re
 import secrets
 import struct
 import time
+from base64 import b64decode
 from collections import defaultdict
 from enum import IntEnum
 from enum import unique
@@ -29,6 +30,8 @@ from cmyui.logging import printc
 from cmyui.web import Connection
 from cmyui.web import Domain
 from cmyui.web import ratelimit
+from py3rijndael import Pkcs7Padding
+from py3rijndael import RijndaelCbc
 
 import misc.utils
 import packets
@@ -557,24 +560,41 @@ async def osuSubmitModularSelector(
 ) -> HTTPResponse:
     mp_args = conn.multipart_args
 
-    # Parse our score data into a score obj.
-    score = await Score.from_submission(
-        data_b64=mp_args["score"],
-        iv_b64=mp_args["iv"],
-        osu_ver=mp_args["osuver"],
-        pw_md5=mp_args["pass"],
+    # attempt to decrypt score data
+    data_b64 = mp_args["score"]
+    iv_b64 = mp_args["iv"]
+    osu_ver = mp_args["osuver"]
+    pw_md5 = mp_args["pass"]
+
+    aes = RijndaelCbc(
+        key=f"osu!-scoreburgr---------{osu_ver}".encode(),
+        iv=b64decode(iv_b64),
+        padding=Pkcs7Padding(32),
+        block_size=32,
     )
 
-    if not score:
-        log("Failed to parse a score - invalid format.", Ansi.LRED)
-        return b"error: no"
-    elif not score.player:
+    # score data is delimited by colons (:).
+    data = aes.decrypt(b64decode(data_b64)).decode().split(":")
+
+    # fetch map & player
+
+    bmap_md5 = data[0]
+    if not (bmap := await Beatmap.from_md5(bmap_md5)):
+        # Map does not exist, most likely unsubmitted.
+        return b"error: beatmap"
+
+    username = data[1].rstrip()  # rstrip 1 space if client has supporter
+    if not (player := await glob.players.from_login(username, pw_md5)):
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
-    elif not score.bmap:
-        # Map does not exist, most likely unsubmitted.
-        return b"error: beatmap"
+
+    # parse the score from the remaining data
+    score = await Score.from_submission(data[2:])
+
+    # attach bmap & player
+    score.bmap = bmap
+    score.player = player
 
     # we should update their activity no matter
     # what the result of the score submission is.
@@ -679,10 +699,9 @@ async def osuSubmitModularSelector(
                     prev_n1 = await db_cursor.fetchone()
 
                     if score.player.id != prev_n1["id"]:
-                        pid = prev_n1["id"]
-                        pname = prev_n1["name"]
                         ann.append(
-                            f"(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])",
+                            f"(Previous #1: [https://{BASE_DOMAIN}/u/"
+                            "{pid} {pname}])".format(**prev_n1),
                         )
 
                 announce_chan.send(" ".join(ann), sender=score.player, to_self=True)

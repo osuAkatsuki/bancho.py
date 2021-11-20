@@ -150,41 +150,42 @@ class Score:
     )
 
     def __init__(self):
+        # TODO: check whether the reamining Optional's should be
         self.id: Optional[int] = None
         self.bmap: Optional[Beatmap] = None
         self.player: Optional["Player"] = None
 
-        self.mode: Optional[GameMode] = None
-        self.mods: Optional[Mods] = None
+        self.mode: GameMode
+        self.mods: Mods
 
-        self.pp: Optional[float] = None
-        self.sr: Optional[float] = None
-        self.score: Optional[int] = None
-        self.max_combo: Optional[int] = None
-        self.acc: Optional[float] = None
+        self.pp: float
+        self.sr: float
+        self.score: int
+        self.max_combo: int
+        self.acc: float
 
         # TODO: perhaps abstract these differently
         # since they're mode dependant? feels weird..
-        self.n300: Optional[int] = None
-        self.n100: Optional[int] = None  # n150 for taiko
-        self.n50: Optional[int] = None
-        self.nmiss: Optional[int] = None
-        self.ngeki: Optional[int] = None
-        self.nkatu: Optional[int] = None
+        self.n300: int
+        self.n100: int  # n150 for taiko
+        self.n50: int
+        self.nmiss: int
+        self.ngeki: int
+        self.nkatu: int
 
-        self.grade: Optional[Grade] = None
+        self.grade: Grade
+
+        self.passed: bool
+        self.perfect: bool
+        self.status: SubmissionStatus
+
+        self.play_time: datetime
+        self.time_elapsed: int
+
+        self.client_flags: ClientFlags
+        self.online_checksum: str
 
         self.rank: Optional[int] = None
-        self.passed: Optional[bool] = None
-        self.perfect: Optional[bool] = None
-        self.status: Optional[SubmissionStatus] = None
-
-        self.play_time: Optional[datetime] = None
-        self.time_elapsed: Optional[int] = None
-
-        self.client_flags: Optional[ClientFlags] = None
-        self.online_checksum: Optional[str] = None
-
         self.prev_best: Optional[Score] = None
 
     def __repr__(self) -> str:  # maybe shouldn't be so long?
@@ -219,6 +220,8 @@ class Score:
         s.id = res[0]
         s.bmap = await Beatmap.from_md5(res[1])
         s.player = await glob.players.from_cache_or_sql(id=res[2])
+
+        s.sr = 0.0  # TODO
 
         (
             s.pp,
@@ -256,78 +259,31 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(
-        cls,
-        data_b64: str,
-        iv_b64: str,
-        osu_ver: str,
-        pw_md5: str,
-    ) -> Optional["Score"]:
+    async def from_submission(cls, data: list[str]) -> "Score":
         """Create a score object from an osu! submission string."""
-        aes = RijndaelCbc(
-            key=f"osu!-scoreburgr---------{osu_ver}".encode(),
-            iv=b64decode(iv_b64),
-            padding=Pkcs7Padding(32),
-            block_size=32,
-        )
-
-        # score data is delimited by colons (:).
-        data = aes.decrypt(b64decode(data_b64)).decode().split(":")
-
-        if len(data) != 18:
-            log("Received an invalid score submission.", Ansi.LRED)
-            return
-
         s = cls()
+        s.online_checksum = data[0]
 
-        if len(data[0]) != 32 or len(data[2]) != 32:
-            return
-
-        map_md5 = data[0]
-        pname = data[1].rstrip()  # rstrip 1 space if client has supporter
-        s.online_checksum = data[2]
-
-        # get the map & player for the score.
-        s.bmap = await Beatmap.from_md5(map_md5)
-        s.player = await glob.players.from_login(pname, pw_md5)
-
-        if not s.player:
-            # return the obj with an empty player to
-            # determine whether the score failed to
-            # be parsed vs. the user could not be found
-            # logged in (we want to not send a reply to
-            # the osu! client if they're simply not logged
-            # in, so that it will retry once they login).
-            return s
-
-        # XXX: unused idx 2: online score checksum
-        # perhaps will use to improve security at some point?
-
-        # ensure all ints are safe to cast.
-        if not all(map(str.isdecimal, data[3:11] + [data[13], data[15]])):
-            log("Invalid parameter passed into submit-modular.", Ansi.LRED)
-            return
-
-        (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo) = map(
+        s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo = map(
             int,
             data[3:11],
         )
 
-        s.perfect = data[11] == "True"
-        _grade = data[12]  # letter grade
-        s.mods = Mods(int(data[13]))
-        s.passed = data[14] == "True"
-        s.mode = GameMode.from_params(int(data[15]), s.mods)
+        s.perfect = data[9] == "True"
+        _grade = data[10]  # letter grade
+        s.mods = Mods(int(data[11]))
+        s.passed = data[12] == "True"
+        s.mode = GameMode.from_params(int(data[13]), s.mods)
 
         s.play_time = datetime.now()  # TODO: use data[16]
 
-        s.client_flags = ClientFlags(data[17].count(" ") & ~4)
+        s.client_flags = ClientFlags(data[15].count(" ") & ~4)
 
         s.grade = Grade.from_str(_grade) if s.passed else Grade.F
 
         # all data read from submission.
         # now we can calculate things based on our data.
-        s.calc_accuracy()
+        s.acc = s.calc_accuracy()
 
         if s.bmap:
             osu_file_path = BEATMAPS_PATH / f"{s.bmap.id}.osu"
@@ -347,6 +303,9 @@ class Score:
                 s.status = SubmissionStatus.SUBMITTED
             else:
                 s.status = SubmissionStatus.FAILED
+
+        # NOTE: time_elapsed is sent in multipart params,
+        #       and should be set shortly after return.
 
         return s
 
@@ -470,7 +429,7 @@ class Score:
             # this is our first score on the map.
             self.status = SubmissionStatus.BEST
 
-    def calc_accuracy(self) -> None:
+    def calc_accuracy(self) -> float:
         """Calculate the accuracy of our score."""
         mode_vn = self.mode.as_vanilla
 
@@ -478,10 +437,9 @@ class Score:
             total = self.n300 + self.n100 + self.n50 + self.nmiss
 
             if total == 0:
-                self.acc = 0.0
-                return
+                return 0.0
 
-            self.acc = (
+            return (
                 100.0
                 * ((self.n300 * 300.0) + (self.n100 * 100.0) + (self.n50 * 50.0))
                 / (total * 300.0)
@@ -491,19 +449,17 @@ class Score:
             total = self.n300 + self.n100 + self.nmiss
 
             if total == 0:
-                self.acc = 0.0
-                return
+                return 0.0
 
-            self.acc = 100.0 * ((self.n100 * 0.5) + self.n300) / total
+            return 100.0 * ((self.n100 * 0.5) + self.n300) / total
 
         elif mode_vn == 2:  # osu!catch
             total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
 
             if total == 0:
-                self.acc = 0.0
-                return
+                return 0.0
 
-            self.acc = 100.0 * (self.n300 + self.n100 + self.n50) / total
+            return 100.0 * (self.n300 + self.n100 + self.n50) / total
 
         elif mode_vn == 3:  # osu!mania
             total = (
@@ -511,10 +467,9 @@ class Score:
             )
 
             if total == 0:
-                self.acc = 0.0
-                return
+                return 0.0
 
-            self.acc = (
+            return (
                 100.0
                 * (
                     (self.n50 * 50.0)
@@ -524,3 +479,5 @@ class Score:
                 )
                 / (total * 300.0)
             )
+        else:
+            raise Exception(f"Invalid vanilla mode {mode_vn}")
