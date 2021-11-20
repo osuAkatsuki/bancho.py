@@ -246,7 +246,7 @@ async def changename(ctx: Context) -> Optional[str]:
     """Change your username."""
     name = " ".join(ctx.args).strip()
 
-    if not regexes.username.match(name):
+    if not regexes.USERNAME.match(name):
         return "Must be 2-15 characters in length."
 
     if "_" in name and " " in name:
@@ -359,7 +359,7 @@ async def top(ctx: Context) -> Optional[str]:
         return f'Valid gamemodes: {", ".join(GAMEMODE_STRINGS)}.'
 
     if args_len == 2:
-        if not regexes.username.match(ctx.args[1]):
+        if not regexes.USERNAME.match(ctx.args[1]):
             return "Invalid username."
 
         # specific player provided
@@ -782,7 +782,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    if not (r_match := regexes.scaled_duration.match(ctx.args[1])):
+    if not (r_match := regexes.SCALED_DURATION.match(ctx.args[1])):
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
     multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
@@ -974,7 +974,7 @@ async def shutdown(ctx: Context) -> Optional[str]:
         _signal = signal.SIGTERM
 
     if ctx.args:  # shutdown after a delay
-        if not (r_match := regexes.scaled_duration.match(ctx.args[0])):
+        if not (r_match := regexes.SCALED_DURATION.match(ctx.args[0])):
             return f"Invalid syntax: !{ctx.trigger} <delay> <msg ...>"
 
         multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
@@ -1904,7 +1904,7 @@ async def mp_condition(ctx: Context) -> Optional[str]:
 @mp_commands.add(Privileges.NORMAL, aliases=["autoref"])
 async def mp_scrim(ctx: Context) -> Optional[str]:
     """Start a scrim in the current match."""
-    if len(ctx.args) != 1 or not (r_match := regexes.best_of.fullmatch(ctx.args[0])):
+    if len(ctx.args) != 1 or not (r_match := regexes.BEST_OF.fullmatch(ctx.args[0])):
         return "Invalid syntax: !mp scrim <bo#>"
 
     if not 0 <= (best_of := int(r_match[1])) < 16:
@@ -2050,7 +2050,7 @@ async def mp_ban(ctx: Context) -> Optional[str]:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.MAPPOOL_PICK.fullmatch(mods_slot)):
         return "Invalid pick syntax; correct example: HD2"
 
     # not calling mods.filter_invalid_combos here intentionally.
@@ -2079,7 +2079,7 @@ async def mp_unban(ctx: Context) -> Optional[str]:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.MAPPOOL_PICK.fullmatch(mods_slot)):
         return "Invalid pick syntax; correct example: HD2"
 
     # not calling mods.filter_invalid_combos here intentionally.
@@ -2108,7 +2108,7 @@ async def mp_pick(ctx: Context) -> Optional[str]:
     mods_slot = ctx.args[0]
 
     # separate mods & slot
-    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.MAPPOOL_PICK.fullmatch(mods_slot)):
         return "Invalid pick syntax; correct example: HD2"
 
     # not calling mods.filter_invalid_combos here intentionally.
@@ -2231,7 +2231,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     bmap = ctx.player.last_np["bmap"]
 
     # separate mods & slot
-    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.MAPPOOL_PICK.fullmatch(mods_slot)):
         return "Invalid pick syntax; correct example: HD2"
 
     if len(r_match[1]) % 2 != 0:
@@ -2274,7 +2274,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     mods_slot = mods_slot.upper()  # ocd
 
     # separate mods & slot
-    if not (r_match := regexes.mappool_pick.fullmatch(mods_slot)):
+    if not (r_match := regexes.MAPPOOL_PICK.fullmatch(mods_slot)):
         return "Invalid pick syntax; correct example: HD2"
 
     # not calling mods.filter_invalid_combos here intentionally.

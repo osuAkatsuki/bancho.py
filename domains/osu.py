@@ -2347,7 +2347,7 @@ async def register_account(
     # - not contain both ' ' and '_', one is fine
     # - not be in the config's `disallowed_names` list
     # - not already be taken by another player
-    if not regexes.username.match(name):
+    if not regexes.USERNAME.match(name):
         errors["username"].append("Must be 2-15 characters in length.")
 
     if "_" in name and " " in name:
@@ -2364,7 +2364,7 @@ async def register_account(
     # Emails must:
     # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
     # - not already be taken by another player
-    if not regexes.email.match(email):
+    if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
         await db_cursor.execute("SELECT 1 FROM users WHERE email = %s", [email])

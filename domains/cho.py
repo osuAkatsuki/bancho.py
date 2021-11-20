@@ -316,7 +316,7 @@ class SendMessage(BasePacket):
             # check if the user is /np'ing a map.
             # even though this is a public channel,
             # we'll update the player's last np stored.
-            if r_match := regexes.now_playing.match(msg):
+            if r_match := regexes.NOW_PLAYING.match(msg):
                 # the player is /np'ing a map.
                 # save it to their player instance
                 # so we can use this elsewhere owo..
@@ -445,7 +445,7 @@ async def login(
 
     osu_ver_str = client_info[0]
 
-    if not (r_match := regexes.osu_ver.match(osu_ver_str)):
+    if not (r_match := regexes.OSU_VERSION.match(osu_ver_str)):
         return  # invalid request
 
     # quite a bit faster than using dt.strptime.
@@ -1012,7 +1012,7 @@ class SendPrivateMessage(BasePacket):
                     p.send(cmd["resp"], sender=t)
             else:
                 # no commands triggered.
-                if r_match := regexes.now_playing.match(msg):
+                if r_match := regexes.NOW_PLAYING.match(msg):
                     # user is /np'ing a map.
                     # save it to their player instance
                     # so we can use this elsewhere owo..

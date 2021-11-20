@@ -576,7 +576,7 @@ class Match:
                 del m
 
             else:  # teams
-                if r_match := regexes.tourney_matchname.match(self.name):
+                if r_match := regexes.TOURNEY_MATCHNAME.match(self.name):
                     match_name = r_match["name"]
                     team_names = {
                         MatchTeams.blue: r_match["T1"],
