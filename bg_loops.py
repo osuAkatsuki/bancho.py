@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import Awaitable
 
 from cmyui.logging import Ansi
 from cmyui.logging import log

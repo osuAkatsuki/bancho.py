@@ -45,6 +45,7 @@ __all__ = (
     "make_safe_name",
     "fetch_bot_name",
     "download_achievement_images",
+    "download_default_avatar",
     "seconds_readable",
     "check_connection",
     "running_via_asgi_webserver",
@@ -78,9 +79,11 @@ __all__ = (
 
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
+DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 OPPAI_PATH = Path.cwd() / "oppai-ng"
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
+
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 
@@ -191,11 +194,23 @@ def download_achievement_images(achievements_path: Path) -> None:
         downloaded = _download_achievement_images_osu(achievements_path)
 
     if downloaded:
-        log("Successfully saved all achievement images.", Ansi.LGREEN)
+        log("Downloaded all achievement images.", Ansi.LGREEN)
     else:
         # TODO: make the code safe in this state
         log("Failed to download achievement images.", Ansi.LRED)
         achievements_path.rmdir()
+
+
+def download_default_avatar(default_avatar_path: Path) -> None:
+    """Download an avatar to use as the server's default."""
+    r = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
+
+    if r.status_code != 200:
+        log("Failed to fetch default avatar.", Ansi.LRED)
+        return
+
+    log("Downloaded default avatar.", Ansi.LGREEN)
+    default_avatar_path.write_bytes(r.content)
 
 
 def seconds_readable(seconds: int) -> str:
@@ -594,6 +609,9 @@ def ensure_directory_structure() -> int:
     if not ACHIEVEMENTS_ASSETS_PATH.exists():
         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
         download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
+
+    if not DEFAULT_AVATAR_PATH.exists():
+        download_default_avatar(DEFAULT_AVATAR_PATH)
 
     return 0
 
