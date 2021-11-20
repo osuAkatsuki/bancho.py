@@ -127,7 +127,7 @@ async def main() -> int:
         misc.context.acquire_redis_db_pool() as glob.redis,
     ):
         await misc.utils.check_for_dependency_updates()
-        await misc.utils.update_mysql_structure()
+        await misc.utils.run_sql_migrations()
 
         with (
             misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,

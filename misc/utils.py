@@ -72,15 +72,15 @@ __all__ = (
     "create_config_from_default",
     "_get_latest_dependency_versions",
     "check_for_dependency_updates",
-    "_get_current_mysql_structure_version",
-    "update_mysql_structure",
+    "_get_current_sql_structure_version",
+    "run_sql_migrations",
 )
 
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 OPPAI_PATH = Path.cwd() / "oppai-ng"
-SQL_UPDATES_FILE = Path.cwd() / "ext/updates.sql"
+SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 
@@ -736,7 +736,7 @@ async def check_for_dependency_updates() -> None:
         )
 
 
-async def _get_current_mysql_structure_version() -> Optional[cmyui.Version]:
+async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
     """Get the last launched version of the server."""
     res = await glob.db.fetch(
         "SELECT ver_major, ver_minor, ver_micro "
@@ -748,9 +748,9 @@ async def _get_current_mysql_structure_version() -> Optional[cmyui.Version]:
         return cmyui.Version(*map(int, res))
 
 
-async def update_mysql_structure() -> None:
-    """Update the mysql structure, if it has changed."""
-    if not (current_ver := await _get_current_mysql_structure_version()):
+async def run_sql_migrations() -> None:
+    """Update the sql structure, if it has changed."""
+    if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
     latest_ver = glob.version

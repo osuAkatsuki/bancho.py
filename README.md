@@ -63,7 +63,7 @@ pre-commit install
 ######################################
 
 # import gulag's mysql structure
-mysql -u your_sql_username -p your_db_name < ext/db.sql
+mysql -u your_sql_username -p your_db_name < migrations/base.sql
 
 # generate an ssl certificate for your domain (change email & domain)
 sudo certbot certonly \
