@@ -74,7 +74,8 @@ class Clan:
                 if not self.members:
                     # no members left, disband clan.
                     await db_cursor.execute(
-                        "DELETE FROM clans WHERE id = %s", [self.id]
+                        "DELETE FROM clans WHERE id = %s",
+                        [self.id],
                     )
                 elif p.id == self.owner:
                     # owner leaving and members left,

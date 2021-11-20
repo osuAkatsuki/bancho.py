@@ -64,7 +64,8 @@ class Channels(list[Channel]):
         ...
 
     def __getitem__(
-        self, index: Union[int, slice, str]
+        self,
+        index: Union[int, slice, str],
     ) -> Union[Channel, list[Channel]]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
@@ -114,7 +115,7 @@ class Channels(list[Channel]):
                     auto_join=row["auto_join"] == 1,
                 )
                 async for row in db_cursor
-            ]
+            ],
         )
 
 
@@ -266,7 +267,10 @@ class Players(list[Player]):
             return p
 
     async def from_login(
-        self, name: str, pw_md5: str, sql: bool = False
+        self,
+        name: str,
+        pw_md5: str,
+        sql: bool = False,
     ) -> Optional[Player]:
         """Return a player with a given name & pw_md5, from cache or sql."""
         if not (p := self.get(name=name)):
@@ -318,7 +322,8 @@ class MapPools(list[MapPool]):
         ...
 
     def __getitem__(
-        self, index: Union[int, slice, str]
+        self,
+        index: Union[int, slice, str],
     ) -> Union[MapPool, list[MapPool]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
@@ -366,11 +371,11 @@ class MapPools(list[MapPool]):
                     name=row["name"],
                     created_at=row["created_at"],
                     created_by=await glob.players.from_cache_or_sql(
-                        id=row["created_by"]
+                        id=row["created_by"],
                     ),
                 )
                 async for row in db_cursor
-            ]
+            ],
         )
 
         for pool in obj:

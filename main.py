@@ -103,7 +103,8 @@ async def run_server() -> None:
             #       improved and refactored out.
             try:
                 conn, _ = await asyncio.wait_for(
-                    fut=glob.loop.sock_accept(listening_sock), timeout=0.25
+                    fut=glob.loop.sock_accept(listening_sock),
+                    timeout=0.25,
                 )
             except asyncio.TimeoutError:
                 pass
@@ -136,7 +137,9 @@ async def main() -> int:
             # TODO: refactor debugging so
             # this can be moved to `run_server`.
             glob.app = cmyui.Server(
-                name=f"gulag v{glob.version}", gzip=4, debug=glob.config.debug
+                name=f"gulag v{glob.version}",
+                gzip=4,
+                debug=glob.config.debug,
             )
 
             # prepare our ram caches, populating from sql where necessary.
@@ -216,7 +219,7 @@ elif __name__ == "main":
         raise RuntimeError(
             "gulag implements it's own web framework implementation from "
             "transport layer (tcp/ip) posix sockets and does not rely on "
-            "an ASGI server to serve connections; run it directy, `./main.py`"
+            "an ASGI server to serve connections; run it directy, `./main.py`",
         )
     else:
         raise RuntimeError("gulag should only be run directly, `./main.py`")

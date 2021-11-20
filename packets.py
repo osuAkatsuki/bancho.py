@@ -403,7 +403,9 @@ class BanchoPacketReader:
     def read_channel(self) -> Channel:
         """Read an osu! channel from the internal buffer."""
         return Channel(
-            name=self.read_string(), topic=self.read_string(), players=self.read_i32()
+            name=self.read_string(),
+            topic=self.read_string(),
+            players=self.read_i32(),
         )
 
     def read_match(self) -> Match:
@@ -707,7 +709,8 @@ def pong() -> bytes:
 # NOTE: deprecated
 def changeUsername(old: str, new: str) -> bytes:
     return write(
-        ServerPackets.HANDLE_IRC_CHANGE_USERNAME, (f"{old}>>>>{new}", osuTypes.string)
+        ServerPackets.HANDLE_IRC_CHANGE_USERNAME,
+        (f"{old}>>>>{new}", osuTypes.string),
     )
 
 
@@ -944,7 +947,8 @@ def channelKick(name: str) -> bytes:
 @lru_cache(maxsize=8)
 def channelAutoJoin(name: str, topic: str, p_count: int) -> bytes:
     return write(
-        ServerPackets.CHANNEL_AUTO_JOIN, ((name, topic, p_count), osuTypes.channel)
+        ServerPackets.CHANNEL_AUTO_JOIN,
+        ((name, topic, p_count), osuTypes.channel),
     )
 
 
@@ -976,7 +980,8 @@ def protocolVersion(ver: int) -> bytes:
 @cache
 def mainMenuIcon() -> bytes:
     return write(
-        ServerPackets.MAIN_MENU_ICON, ("|".join(glob.config.menu_icon), osuTypes.string)
+        ServerPackets.MAIN_MENU_ICON,
+        ("|".join(glob.config.menu_icon), osuTypes.string),
     )
 
 
@@ -1047,7 +1052,8 @@ def restartServer(ms: int) -> bytes:
 def matchInvite(p: "Player", t_name: str) -> bytes:
     msg = f"Come join my game: {p.match.embed}."
     return write(
-        ServerPackets.MATCH_INVITE, ((p.name, msg, t_name, p.id), osuTypes.message)
+        ServerPackets.MATCH_INVITE,
+        ((p.name, msg, t_name, p.id), osuTypes.message),
     )
 
 
@@ -1094,7 +1100,8 @@ def userDMBlocked(target: str) -> bytes:
 # packet id: 101
 def targetSilenced(target: str) -> bytes:
     return write(
-        ServerPackets.TARGET_IS_SILENCED, (("", "", target, 0), osuTypes.message)
+        ServerPackets.TARGET_IS_SILENCED,
+        (("", "", target, 0), osuTypes.message),
     )
 
 

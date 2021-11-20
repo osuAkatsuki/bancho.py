@@ -94,7 +94,10 @@ class CommandSet:
         self.commands: list[Command] = []
 
     def add(
-        self, priv: Privileges, aliases: list[str] = [], hidden: bool = False
+        self,
+        priv: Privileges,
+        aliases: list[str] = [],
+        hidden: bool = False,
     ) -> Callable[[Callback], Callback]:
         def wrapper(f: Callback) -> Callback:
             self.commands.append(
@@ -108,7 +111,7 @@ class CommandSet:
                     priv=priv,
                     hidden=hidden,
                     doc=f.__doc__,
-                )
+                ),
             )
 
             return f
@@ -130,7 +133,9 @@ command_sets = [
 
 
 def command(
-    priv: Privileges, aliases: list[str] = [], hidden: bool = False
+    priv: Privileges,
+    aliases: list[str] = [],
+    hidden: bool = False,
 ) -> Callable[[Callback], Callback]:
     def wrapper(f: Callback) -> Callback:
         regular_commands.append(
@@ -140,7 +145,7 @@ def command(
                 hidden=hidden,
                 triggers=[f.__name__.strip("_")] + aliases,
                 doc=f.__doc__,
-            )
+            ),
         )
 
         return f
@@ -262,7 +267,7 @@ async def changename(ctx: Context) -> Optional[str]:
     )
 
     ctx.player.enqueue(
-        packets.notification(f"Your username has been changed to {name}!")
+        packets.notification(f"Your username has been changed to {name}!"),
     )
     ctx.player.logout()
 
@@ -389,7 +394,7 @@ async def top(ctx: Context) -> Optional[str]:
         + [
             TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=glob.config.domain, **s)
             for idx, s in enumerate(scores)
-        ]
+        ],
     )
 
 
@@ -664,7 +669,8 @@ async def _map(ctx: Context) -> Optional[str]:
 
                 # select all map ids for clearing map requests.
                 await db_cursor.execute(
-                    "SELECT id FROM maps WHERE set_id = %s", [bmap.set_id]
+                    "SELECT id FROM maps WHERE set_id = %s",
+                    [bmap.set_id],
                 )
                 map_ids = [row[0] async for row in db_cursor]
 
@@ -835,8 +841,8 @@ async def user(ctx: Context) -> Optional[str]:
                 priv.name
                 for priv in Privileges
                 if p.priv & priv and bin(priv).count("1") == 1
-            ]
-        )
+            ],
+        ),
     )
 
     current_time = time.time()
@@ -861,7 +867,7 @@ async def user(ctx: Context) -> Optional[str]:
             f"Recent score: {p.recent_score}",
             f"Match: {p.match}",
             f"Spectators: {p.spectators}",
-        )
+        ),
     )
 
 
@@ -1076,7 +1082,10 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
             # append userpresence packet
             data += struct.pack(
-                "<HxIi", 83, 21 + len(name), i  # packetid  # packet len  # userid
+                "<HxIi",
+                83,
+                21 + len(name),
+                i,  # packetid  # packet len  # userid
             )
             data += f"\x0b{chr(len(name))}{name}".encode()
             data += static_presence
@@ -1195,7 +1204,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                     conn.cursor(aiomysql.Cursor) as update_cursor,
                 ):
                     await bmap_select_cursor.execute(
-                        "SELECT id, md5 FROM maps WHERE passes > 0"
+                        "SELECT id, md5 FROM maps WHERE passes > 0",
                     )
 
                     map_count = bmap_select_cursor.rowcount
@@ -1206,10 +1215,12 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                         osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
                         if not await ensure_local_osu_file(
-                            osu_file_path, bmap_id, bmap_md5
+                            osu_file_path,
+                            bmap_id,
+                            bmap_md5,
                         ):
                             staff_chan.send_bot(
-                                "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}"
+                                "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
                             )
                             continue
 
@@ -1331,7 +1342,8 @@ async def wipemap(ctx: Context) -> Optional[str]:
         async with conn.cursor() as db_cursor:
             for t in ("vn", "rx", "ap"):
                 await db_cursor.execute(
-                    f"DELETE FROM scores_{t} WHERE map_md5 = %s", [map_md5]
+                    f"DELETE FROM scores_{t} WHERE map_md5 = %s",
+                    [map_md5],
                 )
 
     return "Scores wiped."
@@ -1428,9 +1440,9 @@ async def server(ctx: Context) -> Optional[str]:
                 [
                     " | ".join([f"{pkg} v{pkg_version(pkg)}" for pkg in section])
                     for section in pkg_sections
-                ]
+                ],
             ),
-        ]
+        ],
     )
 
 
@@ -2277,7 +2289,8 @@ async def pool_remove(ctx: Context) -> Optional[str]:
 
     # delete from db
     await glob.db.execute(
-        "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s", [mods, slot]
+        "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s",
+        [mods, slot],
     )
 
     # remove from cache
@@ -2297,7 +2310,7 @@ async def pool_list(ctx: Context) -> Optional[str]:
     for pool in pools:
         l.append(
             f"[{pool.created_at:%Y-%m-%d}] {pool.id}. "
-            f"{pool.name}, by {pool.created_by}."
+            f"{pool.name}, by {pool.created_by}.",
         )
 
     return "\n".join(l)
@@ -2380,7 +2393,11 @@ async def clan_create(ctx: Context) -> Optional[str]:
 
     # add clan to cache
     clan = Clan(
-        id=clan_id, name=name, tag=tag, created_at=created_at, owner=ctx.player.id
+        id=clan_id,
+        name=name,
+        tag=tag,
+        created_at=created_at,
+        owner=ctx.player.id,
     )
     glob.clans.append(clan)
 
@@ -2513,7 +2530,9 @@ class CommandResponse(TypedDict):
 
 
 async def process_commands(
-    p: Player, target: Messageable, msg: str
+    p: Player,
+    target: Messageable,
+    msg: str,
 ) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.

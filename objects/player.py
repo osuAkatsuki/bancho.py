@@ -455,7 +455,8 @@ class Player:
         self.priv = new
 
         await glob.db.execute(
-            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s",
+            [self.priv, self.id],
         )
 
         if "bancho_priv" in self.__dict__:
@@ -466,7 +467,8 @@ class Player:
         self.priv |= bits
 
         await glob.db.execute(
-            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s",
+            [self.priv, self.id],
         )
 
         if "bancho_priv" in self.__dict__:
@@ -477,7 +479,8 @@ class Player:
         self.priv &= ~bits
 
         await glob.db.execute(
-            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s",
+            [self.priv, self.id],
         )
 
         if "bancho_priv" in self.__dict__:
@@ -856,7 +859,8 @@ class Player:
 
         self.friends.add(p.id)
         await glob.db.execute(
-            "REPLACE INTO relationships VALUES (%s, %s, 'friend')", [self.id, p.id]
+            "REPLACE INTO relationships VALUES (%s, %s, 'friend')",
+            [self.id, p.id],
         )
 
         log(f"{self} friended {p}.")
@@ -879,13 +883,15 @@ class Player:
         """Attempt to add `p` to `self`'s blocks."""
         if p.id in self.blocks:
             log(
-                f"{self} tried to block {p}, who they've already blocked!", Ansi.LYELLOW
+                f"{self} tried to block {p}, who they've already blocked!",
+                Ansi.LYELLOW,
             )
             return
 
         self.blocks.add(p.id)
         await glob.db.execute(
-            "REPLACE INTO relationships VALUES (%s, %s, 'block')", [self.id, p.id]
+            "REPLACE INTO relationships VALUES (%s, %s, 'block')",
+            [self.id, p.id],
         )
 
         log(f"{self} blocked {p}.")
@@ -916,7 +922,8 @@ class Player:
     async def relationships_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s relationships from sql."""
         await db_cursor.execute(
-            "SELECT user2, type FROM relationships WHERE user1 = %s", [self.id]
+            "SELECT user2, type FROM relationships WHERE user1 = %s",
+            [self.id],
         )
 
         async for row in db_cursor:
@@ -955,7 +962,8 @@ class Player:
 
         country = self.geoloc["country"]["acronym"]
         rank = await glob.redis.zrevrank(
-            f"gulag:leaderboard:{mode.value}:{country}", self.id
+            f"gulag:leaderboard:{mode.value}:{country}",
+            self.id,
         )
 
         return rank + 1 if rank is not None else 0
@@ -966,7 +974,8 @@ class Player:
 
         await glob.redis.zadd(f"gulag:leaderboard:{mode.value}", {self.id: stats.pp})
         await glob.redis.zadd(
-            f"gulag:leaderboard:{mode.value}:{country}", {self.id: stats.pp}
+            f"gulag:leaderboard:{mode.value}:{country}",
+            {self.id: stats.pp},
         )
         stats.rank = await self.get_global_rank(mode)
         return stats.rank
@@ -1049,7 +1058,7 @@ class Player:
                 msg=msg,
                 recipient=(chan or self).name,
                 sender_id=sender.id,
-            )
+            ),
         )
 
     def send_bot(self, msg: str) -> None:
@@ -1058,6 +1067,9 @@ class Player:
 
         self.enqueue(
             packets.sendMessage(
-                sender=bot.name, msg=msg, recipient=self.name, sender_id=bot.id
-            )
+                sender=bot.name,
+                msg=msg,
+                recipient=self.name,
+                sender_id=bot.id,
+            ),
         )

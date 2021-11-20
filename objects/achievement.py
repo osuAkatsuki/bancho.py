@@ -10,7 +10,12 @@ class Achievement:
     __slots__ = ("id", "file", "name", "desc", "cond")
 
     def __init__(
-        self, id: int, file: str, name: str, desc: str, cond: Callable
+        self,
+        id: int,
+        file: str,
+        name: str,
+        desc: str,
+        cond: Callable,
     ) -> None:
         self.id = id
         self.file = file

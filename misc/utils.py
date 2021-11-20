@@ -247,13 +247,15 @@ def _install_synchronous_excepthook() -> None:
     real_excepthook = sys.excepthook  # backup
 
     def _excepthook(
-        type_: Type[BaseException], value: BaseException, traceback: types.TracebackType
+        type_: Type[BaseException],
+        value: BaseException,
+        traceback: types.TracebackType,
     ):
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
             return
         elif type_ is AttributeError and value.args[0].startswith(
-            "module 'config' has no attribute"
+            "module 'config' has no attribute",
         ):
             attr_name = value.args[0][34:-1]
             log(
@@ -424,7 +426,7 @@ T = TypeVar("T")
 
 
 def pymysql_encode(
-    conv: Callable[[Any, Optional[dict[object, object]]], str]
+    conv: Callable[[Any, Optional[dict[object, object]]], str],
 ) -> Callable[[T], T]:
     """Decorator to allow for adding to pymysql's encoders."""
 
@@ -436,7 +438,8 @@ def pymysql_encode(
 
 
 def escape_enum(
-    val: Any, _: Optional[dict[object, object]] = None
+    val: Any,
+    _: Optional[dict[object, object]] = None,
 ) -> str:  # used for ^
     return str(int(val))
 
@@ -463,7 +466,7 @@ def _handle_fut_exception(fut: asyncio.Future) -> None:
                     "message": "unhandled exception during loop shutdown",
                     "exception": exception,
                     "task": fut,
-                }
+                },
             )
 
 
@@ -559,7 +562,8 @@ def ensure_local_services_are_running() -> int:
         else:
             # not found, try pgrep
             pgrep_exit_code = subprocess.call(
-                ["pgrep", "mysqld"], stdout=subprocess.DEVNULL
+                ["pgrep", "mysqld"],
+                stdout=subprocess.DEVNULL,
             )
             if pgrep_exit_code != 0:
                 log("Please start your mysqld server.", Ansi.LRED)
@@ -685,7 +689,8 @@ def create_config_from_default() -> None:
 
 
 async def _get_latest_dependency_versions() -> AsyncGenerator[
-    tuple[str, cmyui.Version, cmyui.Version], None
+    tuple[str, cmyui.Version, cmyui.Version],
+    None,
 ]:
     """Return the current installed & latest version for each dependency."""
     with open("requirements.txt") as f:

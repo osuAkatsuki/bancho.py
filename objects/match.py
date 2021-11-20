@@ -124,7 +124,11 @@ class MapPool:
     __slots__ = ("id", "name", "created_at", "created_by", "maps")
 
     def __init__(
-        self, id: int, name: str, created_at: datetime, created_by: "Player"
+        self,
+        id: int,
+        name: str,
+        created_at: datetime,
+        created_by: "Player",
     ) -> None:
         self.id = id
         self.name = name
@@ -132,7 +136,8 @@ class MapPool:
         self.created_by = created_by
 
         self.maps: dict[
-            tuple[Mods, int], Beatmap
+            tuple[Mods, int],
+            Beatmap,
         ] = {}  # {(mods: Mods, slot: int): Beatmap(), ...}
 
     def __repr__(self) -> str:
@@ -158,7 +163,8 @@ class MapPool:
                 log(f"Removing {map_id} from pool {self.name} (not found).", Ansi.LRED)
 
                 await db_cursor.execute(
-                    "DELETE FROM tourney_pool_maps WHERE map_id = %s", [map_id]
+                    "DELETE FROM tourney_pool_maps WHERE map_id = %s",
+                    [map_id],
                 )
                 continue
 
@@ -384,7 +390,10 @@ class Match:
         self.name = m.name
 
     def enqueue(
-        self, data: bytes, lobby: bool = True, immune: Sequence[int] = []
+        self,
+        data: bytes,
+        lobby: bool = True,
+        immune: Sequence[int] = [],
     ) -> None:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
@@ -431,7 +440,8 @@ class Match:
         self.bans.clear()
 
     async def await_submissions(
-        self, was_playing: Sequence[Slot]
+        self,
+        was_playing: Sequence[Slot],
     ) -> "tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]":
         """Await score submissions from all players in completed state."""
         scores: "dict[Union[MatchTeams, Player], int]" = defaultdict(int)
@@ -457,7 +467,7 @@ class Match:
             while True:
                 rc_score = s.player.recent_score
                 max_age = datetime.now() - timedelta(
-                    seconds=bmap.total_length + time_waited + 0.5
+                    seconds=bmap.total_length + time_waited + 0.5,
                 )
 
                 if (
@@ -543,7 +553,7 @@ class Match:
             if ffa:
                 msg.append(
                     f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
-                    f"[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])"
+                    f"[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])",
                 )
 
                 wmp = self.match_points[winner]
@@ -603,7 +613,7 @@ class Match:
 
                     msg.append(
                         f"{wname} takes the match, finishing {match_name} "
-                        f"with a score of {wmp} - {lmp}! Congratulations!"
+                        f"with a score of {wmp} - {lmp}! Congratulations!",
                     )
                 else:
                     # no winner, just announce the match points so far.
@@ -612,7 +622,7 @@ class Match:
             if didnt_submit:
                 self.chat.send_bot(
                     "If you'd like to perform a rematch, "
-                    "please use the `!mp rematch` command."
+                    "please use the `!mp rematch` command.",
                 )
 
             for line in msg:

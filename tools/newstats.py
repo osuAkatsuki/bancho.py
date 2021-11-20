@@ -14,7 +14,7 @@ TABLE_COLUMNS = ["tscore", "rscore", "pp", "plays", "playtime", "acc", "max_comb
 async def main():
     pool = AsyncSQLPool()
     await pool.connect(
-        {"db": "gulag_old", "host": "localhost", "password": "lol123", "user": "cmyui"}
+        {"db": "gulag_old", "host": "localhost", "password": "lol123", "user": "cmyui"},
     )
 
     async with pool.pool.acquire() as conn:
@@ -43,7 +43,7 @@ async def main():
                     a_count int(11) unsigned default 0 not null,
                     primary key (id, mode)
                 );
-            """
+            """,
             )
 
             # move existing data to new stats table
@@ -62,7 +62,7 @@ async def main():
                             "rx_taiko",
                             "rx_catch",
                             "ap_std",
-                        )
+                        ),
                     ):
                         row_values = [
                             row[f"{column}_{mode_str}"] for column in TABLE_COLUMNS

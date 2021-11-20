@@ -31,7 +31,7 @@ async def acquire_http_session(
 
 @asynccontextmanager
 async def acquire_mysql_db_pool(
-    config: dict[str, Any]
+    config: dict[str, Any],
 ) -> AsyncIterator[Optional[cmyui.AsyncSQLPool]]:
     db_pool = cmyui.AsyncSQLPool()
     try:
@@ -64,7 +64,7 @@ def acquire_geoloc_db_conn(db_file: Path) -> Iterator[Optional[geoip2.database.R
 
 @contextmanager
 def acquire_datadog_client(
-    config: dict[str, Any]
+    config: dict[str, Any],
 ) -> Iterator[Optional[datadog.ThreadStats]]:
     if all(config.values()):
         datadog.initialize(**config)

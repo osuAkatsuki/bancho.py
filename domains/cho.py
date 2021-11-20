@@ -80,7 +80,7 @@ async def bancho_http_handler(conn: Connection) -> bytes:
                 "",
                 f"<b>Packets handled ({len(packets)})</b>",
                 "<br>".join([f"{p.name} ({p.value})" for p in packets]),
-            )
+            ),
         ).encode()
     )
 
@@ -135,7 +135,7 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         # token not found; chances are that we just restarted
         # the server - tell their client to reconnect immediately.
         return packets.notification("Server has restarted.") + packets.restartServer(
-            0
+            0,
         )  # send 0ms since server is up
 
     # restricted users may only use certain packet handlers.
@@ -172,7 +172,8 @@ glob.bancho_packets = {"all": {}, "restricted": {}}
 
 
 def register(
-    packet: ClientPackets, restricted: bool = False
+    packet: ClientPackets,
+    restricted: bool = False,
 ) -> Callable[[Type[BasePacket]], Type[BasePacket]]:
     """Register a handler in `glob.bancho_packets`."""
 
@@ -284,8 +285,8 @@ class SendMessage(BasePacket):
             msg = f"{msg[:2000]}... (truncated)"
             p.enqueue(
                 packets.notification(
-                    "Your message was truncated\n" "(exceeded 2000 characters)."
-                )
+                    "Your message was truncated\n" "(exceeded 2000 characters).",
+                ),
             )
 
         if msg.startswith(glob.config.command_prefix):
@@ -304,7 +305,9 @@ class SendMessage(BasePacket):
                 t_chan.send_selective(msg=msg, sender=p, recipients=staff - {p})
                 if cmd["resp"] is not None:
                     t_chan.send_selective(
-                        msg=cmd["resp"], sender=glob.bot, recipients=staff | {p}
+                        msg=cmd["resp"],
+                        sender=glob.bot,
+                        recipients=staff | {p},
                     )
 
         else:
@@ -375,7 +378,7 @@ WELCOME_MSG = "\n".join(
         "To see a list of commands, use !help.",
         "We have a public (Discord)[https://discord.gg/ShEQgUx]!",
         "Enjoy the server!",
-    )
+    ),
 )
 
 RESTRICTED_MSG = (
@@ -385,19 +388,21 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{glob.version}."
+    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{glob.version}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
     "The server is currently running in offline mode; "
-    "some features will be unavailble."
+    "some features will be unavailble.",
 )
 
 DELTA_90_DAYS = timedelta(days=90)
 
 
 async def login(
-    body_view: memoryview, ip: IPAddress, db_cursor: aiomysql.DictCursor
+    body_view: memoryview,
+    ip: IPAddress,
+    db_cursor: aiomysql.DictCursor,
 ) -> Optional[tuple[bytes, str]]:
     """\
     Login has no specific packet, but happens when the osu!
@@ -488,7 +493,7 @@ async def login(
 
     if not (is_wine or adapters):
         data = packets.userID(-1) + packets.notification(
-            "Please restart your osu! and try again."
+            "Please restart your osu! and try again.",
         )
         return data, "no"
 
@@ -513,7 +518,7 @@ async def login(
                 else:
                     # the user is currently online, send back failure.
                     data = packets.userID(-1) + packets.notification(
-                        "User already logged in."
+                        "User already logged in.",
                     )
 
                     return data, "no"
@@ -530,7 +535,7 @@ async def login(
         # no account by this name exists.
         return (
             packets.notification(f"{BASE_DOMAIN}: Unknown username")
-            + packets.userID(-1)
+            + packets.userID(-1),
         ), "no"
 
     if using_tourney_client and not (
@@ -550,13 +555,13 @@ async def login(
         if pw_md5 != bcrypt_cache[pw_bcrypt]:
             return (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.userID(-1)
+                + packets.userID(-1),
             ), "no"
     else:  # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
             return (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.userID(-1)
+                + packets.userID(-1),
             ), "no"
 
         bcrypt_cache[pw_bcrypt] = pw_md5
@@ -612,13 +617,13 @@ async def login(
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
             if not all(
-                [hw_match["priv"] & Privileges.Normal for hw_match in hw_matches]
+                [hw_match["priv"] & Privileges.Normal for hw_match in hw_matches],
             ):
                 return (
                     packets.notification(
-                        "Please contact staff directly to create an account."
+                        "Please contact staff directly to create an account.",
                     )
-                    + packets.userID(-1)
+                    + packets.userID(-1),
                 ), "no"
 
     """ All checks passed, player is safe to login """
@@ -781,7 +786,7 @@ async def login(
                     | Privileges.Whitelisted
                     | Privileges.Tournament
                     | Privileges.Donator
-                    | Privileges.Alumni
+                    | Privileges.Alumni,
                 )
 
             data += packets.sendMessage(
@@ -960,8 +965,8 @@ class SendPrivateMessage(BasePacket):
             msg = f"{msg[:2000]}... (truncated)"
             p.enqueue(
                 packets.notification(
-                    "Your message was truncated\n" "(exceeded 2000 characters)."
-                )
+                    "Your message was truncated\n" "(exceeded 2000 characters).",
+                ),
             )
 
         if t.status.action == Action.Afk and t.away_msg:
@@ -978,8 +983,8 @@ class SendPrivateMessage(BasePacket):
                 p.enqueue(
                     packets.notification(
                         f"{t.name} is currently offline, but will "
-                        "receive your messsage on their next login."
-                    )
+                        "receive your messsage on their next login.",
+                    ),
                 )
 
             # insert mail into db, marked as unread.
@@ -1028,7 +1033,9 @@ class SendPrivateMessage(BasePacket):
 
                         osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
                         if not await ensure_local_osu_file(
-                            osu_file_path, bmap.id, bmap.md5
+                            osu_file_path,
+                            bmap.id,
+                            bmap.md5,
                         ):
                             resp_msg = (
                                 "Mapfile could not be found; "
@@ -1076,7 +1083,7 @@ class SendPrivateMessage(BasePacket):
                                         pp_values.append((acc, calc.pp))
 
                                 resp_msg = " | ".join(
-                                    [f"{acc}%: {pp:,.2f}pp" for acc, pp in pp_values]
+                                    [f"{acc}%: {pp:,.2f}pp" for acc, pp in pp_values],
                                 )
                             else:  # mania
                                 if r_match["mods"] is not None:
@@ -1107,7 +1114,7 @@ class SendPrivateMessage(BasePacket):
                                     [
                                         f"{int(score // 1000)}k: {pp:,.2f}pp"
                                         for score, pp in pp_values
-                                    ]
+                                    ],
                                 )
 
                             elapsed = time.time_ns() - pp_calc_st
@@ -1150,14 +1157,16 @@ class MatchCreate(BasePacket):
         if p.restricted:
             p.enqueue(
                 packets.matchJoinFail()
-                + packets.notification("Multiplayer is not available while restricted.")
+                + packets.notification(
+                    "Multiplayer is not available while restricted.",
+                ),
             )
             return
 
         if p.silenced:
             p.enqueue(
                 packets.matchJoinFail()
-                + packets.notification("Multiplayer is not available while silenced.")
+                + packets.notification("Multiplayer is not available while silenced."),
             )
             return
 
@@ -1242,14 +1251,16 @@ class MatchJoin(BasePacket):
         if p.restricted:
             p.enqueue(
                 packets.matchJoinFail()
-                + packets.notification("Multiplayer is not available while restricted.")
+                + packets.notification(
+                    "Multiplayer is not available while restricted.",
+                ),
             )
             return
 
         if p.silenced:
             p.enqueue(
                 packets.matchJoinFail()
-                + packets.notification("Multiplayer is not available while silenced.")
+                + packets.notification("Multiplayer is not available while silenced."),
             )
             return
 

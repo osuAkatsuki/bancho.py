@@ -67,7 +67,8 @@ ConnectionHandler = Callable[[Connection], Awaitable[HTTPResponse]]
 
 
 def _required_args(
-    req_args: set[str], argset: str
+    req_args: set[str],
+    argset: str,
 ) -> Callable[[ConnectionHandler], ConnectionHandler]:
     """Decorator to ensure all required arguments are present."""
     # NOTE: this function is not meant to be used directly, but
@@ -121,7 +122,8 @@ def get_login(name_p: str, pass_p: str, auth_error: bytes = b"") -> Callable:
 
             if not (
                 p := await glob.players.from_login(
-                    name=unquote(argset[name_p]), pw_md5=argset[pass_p]
+                    name=unquote(argset[name_p]),
+                    pw_md5=argset[pass_p],
                 )
             ):
                 # player login incorrect
@@ -168,7 +170,8 @@ async def osuError(conn: Connection) -> HTTPResponse:
         if "u" in err_args and "p" in err_args:
             if not (
                 p := await glob.players.from_login(
-                    name=unquote(err_args["u"]), pw_md5=err_args["p"]
+                    name=unquote(err_args["u"]),
+                    pw_md5=err_args["p"],
                 )
             ):
                 # player login incorrect
@@ -200,7 +203,7 @@ async def osuScreenshot(p: "Player", conn: Connection) -> HTTPResponse:
 
     if "v" not in conn.multipart_args or conn.multipart_args["v"] != "1":
         await misc.utils.log_strange_occurrence(
-            f"v=1 missing from osu-screenshot mp args; {conn.multipart_args}"
+            f"v=1 missing from osu-screenshot mp args; {conn.multipart_args}",
         )
 
     if ss_data_view[:4] == b"\xff\xd8\xff\xe0" and ss_data_view[6:11] == b"JFIF\x00":
@@ -245,7 +248,9 @@ def gulag_to_osuapi_status(s: int) -> int:
 @get_login(name_p="u", pass_p="h")
 @acquire_db_conn(aiomysql.DictCursor)
 async def osuGetBeatmapInfo(
-    p: "Player", conn: Connection, db_cursor: aiomysql.DictCursor
+    p: "Player",
+    conn: Connection,
+    db_cursor: aiomysql.DictCursor,
 ) -> HTTPResponse:
     data = orjson.loads(conn.body)
 
@@ -288,12 +293,12 @@ async def osuGetBeatmapInfo(
         ret.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
                 **res, i=idx, grades="|".join(grades)
-            )
+            ),
         )
 
     if data["Ids"]:  # still have yet to see this used
         await misc.utils.log_strange_occurrence(
-            f'{p} requested map(s) info by id ({data["Ids"]})'
+            f'{p} requested map(s) info by id ({data["Ids"]})',
         )
 
     return "\n".join(ret).encode()
@@ -304,7 +309,8 @@ async def osuGetBeatmapInfo(
 @get_login(name_p="u", pass_p="h")
 async def osuGetFavourites(p: "Player", conn: Connection) -> HTTPResponse:
     favourites = await glob.db.fetchall(
-        "SELECT setid FROM favourites WHERE userid = %s", [p.id]
+        "SELECT setid FROM favourites WHERE userid = %s",
+        [p.id],
     )
 
     return "\n".join(favourites).encode()
@@ -327,7 +333,8 @@ async def osuAddFavourite(p: "Player", conn: Connection) -> HTTPResponse:
 
     # add favourite
     await glob.db.execute(
-        "INSERT INTO favourites VALUES (%s, %s)", [p.id, conn.args["a"]]
+        "INSERT INTO favourites VALUES (%s, %s)",
+        [p.id, conn.args["a"]],
     )
 
 
@@ -370,9 +377,9 @@ async def lastFM(p: "Player", conn: Connection) -> HTTPResponse:
                         "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
                         "This tool leaves a change in your registry that the osu! client can detect.",
                         "Please re-install relife and disable the program to avoid any restrictions.",
-                    ]
-                )
-            )
+                    ],
+                ),
+            ),
         )
 
         p.logout()
@@ -481,10 +488,11 @@ async def osuSearchHandler(p: "Player", conn: Connection) -> HTTPResponse:
             bmap["HasVideo"] = "0"
 
         diff_sorted_maps = sorted(
-            bmap["ChildrenBeatmaps"], key=lambda m: m["DifficultyRating"]
+            bmap["ChildrenBeatmaps"],
+            key=lambda m: m["DifficultyRating"],
         )
         diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps]
+            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
         )
 
         ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
@@ -540,11 +548,12 @@ def chart_entry(name: str, before: Optional[object], after: object) -> str:
 
 @domain.route("/web/osu-submit-modular-selector.php", methods=["POST"])
 @required_mpargs(
-    {"x", "ft", "score", "fs", "bmk", "iv", "c1", "st", "pass", "osuver", "s"}
+    {"x", "ft", "score", "fs", "bmk", "iv", "c1", "st", "pass", "osuver", "s"},
 )
 @acquire_db_conn(aiomysql.DictCursor)
 async def osuSubmitModularSelector(
-    conn: Connection, db_cursor: aiomysql.DictCursor
+    conn: Connection,
+    db_cursor: aiomysql.DictCursor,
 ) -> HTTPResponse:
     mp_args = conn.multipart_args
 
@@ -634,7 +643,7 @@ async def osuSubmitModularSelector(
                 performance = f"{score.pp:,.2f}pp"
 
             score.player.enqueue(
-                packets.notification(f"You achieved #{score.rank}! ({performance})")
+                packets.notification(f"You achieved #{score.rank}! ({performance})"),
             )
 
             if score.rank == 1 and not score.player.restricted:
@@ -670,7 +679,7 @@ async def osuSubmitModularSelector(
                         pid = prev_n1["id"]
                         pname = prev_n1["name"]
                         ann.append(
-                            f"(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])"
+                            f"(Previous #1: [https://{BASE_DOMAIN}/u/{pid} {pname}])",
                         )
 
                 announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
@@ -729,7 +738,8 @@ async def osuSubmitModularSelector(
         if replay_missing and not score.player.restricted:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
             await score.player.restrict(
-                admin=glob.bot, reason="submitted score with no replay"
+                admin=glob.bot,
+                reason="submitted score with no replay",
             )
         else:
             # TODO: the replay is currently sent from the osu!
@@ -814,7 +824,7 @@ async def osuSubmitModularSelector(
 
             # calculate new total weighted accuracy
             weighted_acc = sum(
-                [row["acc"] * 0.95 ** i for i, row in enumerate(top_100_pp)]
+                [row["acc"] * 0.95 ** i for i, row in enumerate(top_100_pp)],
             )
             bonus_acc = 100.0 / (20 * (1 - 0.95 ** total_scores))
             stats.acc = (weighted_acc * bonus_acc) / 100
@@ -825,7 +835,7 @@ async def osuSubmitModularSelector(
 
             # calculate new total weighted pp
             weighted_pp = sum(
-                [row["pp"] * 0.95 ** i for i, row in enumerate(top_100_pp)]
+                [row["pp"] * 0.95 ** i for i, row in enumerate(top_100_pp)],
             )
             bonus_pp = 416.6667 * (1 - 0.95 ** total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
@@ -897,7 +907,7 @@ async def osuSubmitModularSelector(
             f"beatmapSetId:{score.bmap.set_id}|"
             f"beatmapPlaycount:{score.bmap.plays}|"
             f"beatmapPasscount:{score.bmap.passes}|"
-            f"approvedDate:{score.bmap.last_update}"
+            f"approvedDate:{score.bmap.last_update}",
         )
 
         # append beatmap ranking chart (#2)
@@ -911,13 +921,19 @@ async def osuSubmitModularSelector(
                         (
                             chart_entry("rank", score.prev_best.rank, score.rank),
                             chart_entry(
-                                "rankedScore", score.prev_best.score, score.score
+                                "rankedScore",
+                                score.prev_best.score,
+                                score.score,
                             ),
                             chart_entry(
-                                "totalScore", score.prev_best.score, score.score
+                                "totalScore",
+                                score.prev_best.score,
+                                score.score,
                             ),
                             chart_entry(
-                                "maxCombo", score.prev_best.max_combo, score.max_combo
+                                "maxCombo",
+                                score.prev_best.max_combo,
+                                score.max_combo,
                             ),
                             chart_entry(
                                 "accuracy",
@@ -937,8 +953,8 @@ async def osuSubmitModularSelector(
                         )
                     ),
                     f"onlineScoreId:{score.id}",
-                )
-            )
+                ),
+            ),
         )
 
         # append overall ranking chart (#3)
@@ -954,7 +970,9 @@ async def osuSubmitModularSelector(
                             chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
                             chart_entry("totalScore", prev_stats.tscore, stats.tscore),
                             chart_entry(
-                                "maxCombo", prev_stats.max_combo, stats.max_combo
+                                "maxCombo",
+                                prev_stats.max_combo,
+                                stats.max_combo,
                             ),
                             chart_entry(
                                 "accuracy",
@@ -974,8 +992,8 @@ async def osuSubmitModularSelector(
                         )
                     ),
                     f"achievements-new:{achievements_str}",
-                )
-            )
+                ),
+            ),
         )
 
         ret = "\n".join(charts).encode()
@@ -1013,7 +1031,9 @@ async def getReplay(p: "Player", conn: Connection) -> HTTPResponse:
 @get_login(name_p="u", pass_p="p", auth_error=b"auth fail")
 @acquire_db_conn(aiomysql.Cursor)
 async def osuRate(
-    p: "Player", conn: Connection, db_cursor: aiomysql.Cursor
+    p: "Player",
+    conn: Connection,
+    db_cursor: aiomysql.Cursor,
 ) -> HTTPResponse:
     map_md5 = conn.args["c"]
 
@@ -1045,7 +1065,8 @@ async def osuRate(
             return
 
         await db_cursor.execute(
-            "INSERT INTO ratings VALUES (%s, %s, %s)", [p.id, map_md5, int(rating)]
+            "INSERT INTO ratings VALUES (%s, %s, %s)",
+            [p.id, map_md5, int(rating)],
         )
 
     await db_cursor.execute("SELECT rating FROM ratings WHERE map_md5 = %s", [map_md5])
@@ -1078,12 +1099,14 @@ SCORE_LISTING_FMTSTR = (
 @get_login(name_p="us", pass_p="ha")
 @acquire_db_conn(aiomysql.DictCursor)
 async def getScores(
-    p: "Player", conn: Connection, db_cursor: aiomysql.DictCursor
+    p: "Player",
+    conn: Connection,
+    db_cursor: aiomysql.DictCursor,
 ) -> HTTPResponse:
     if not all(
         [  # make sure all int args are integral
             conn.args[k].replace("-", "").isdecimal() for k in ("mods", "v", "m", "i")
-        ]
+        ],
     ):
         return b"-1|false"
 
@@ -1145,7 +1168,8 @@ async def getScores(
             # look it up in sql from the filename.
             map_exists = (
                 await glob.db.fetch(
-                    "SELECT 1 FROM maps WHERE filename = %s", [map_filename]
+                    "SELECT 1 FROM maps WHERE filename = %s",
+                    [map_filename],
                 )
                 is not None
             )
@@ -1182,7 +1206,7 @@ async def getScores(
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = %s AND s.status = 2 "
-        "AND (u.priv & 1 OR u.id = %s) AND mode = %s"
+        "AND (u.priv & 1 OR u.id = %s) AND mode = %s",
     ]
 
     params = [map_md5, p.id, mode_vn]
@@ -1210,7 +1234,8 @@ async def getScores(
 
     # fetch beatmap rating from sql
     await db_cursor.execute(
-        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = %s", [bmap.md5]
+        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = %s",
+        [bmap.md5],
     )
     rating = (await db_cursor.fetchone())["rating"]
 
@@ -1261,7 +1286,7 @@ async def getScores(
                 score=int(p_best["_score"]),
                 has_replay="1",
                 rank=p_best_rank,
-            )
+            ),
         )
     else:
         l.append("")
@@ -1272,7 +1297,7 @@ async def getScores(
                 **s, score=int(s["_score"]), has_replay="1", rank=idx + 1
             )
             for idx, s in enumerate(scores)
-        ]
+        ],
     )
 
     return "\n".join(l).encode()
@@ -1314,7 +1339,7 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
                 fmt += f'|{cmt["colour"]}'
 
             ret.append(
-                "{time}\t{target_type}\t" "{fmt}\t{comment}".format(fmt=fmt, **cmt)
+                "{time}\t{target_type}\t" "{fmt}\t{comment}".format(fmt=fmt, **cmt),
             )
 
         p.update_latest_activity()
@@ -1497,7 +1522,7 @@ async def api_get_player_count(conn: Connection) -> HTTPResponse:
                 "online": len(glob.players.unrestricted) - 1,
                 "total": total_users,
             },
-        }
+        },
     )
 
 
@@ -1559,7 +1584,8 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
             stats_mode["rank"] = rank + 1 if rank else 0
 
             country_rank = await glob.redis.zrevrank(
-                f'gulag:leaderboard:{idx}:{info_res["country"]}', pid
+                f'gulag:leaderboard:{idx}:{info_res["country"]}',
+                pid,
             )
             stats_mode["country_rank"] = country_rank + 1 if country_rank else 0
 
@@ -1594,7 +1620,8 @@ async def api_get_player_status(conn: Connection) -> HTTPResponse:
     if not p:
         # no such player online, return their last seen time
         res = await glob.db.fetch(
-            "SELECT latest_activity FROM users WHERE id = %s", [pid]
+            "SELECT latest_activity FROM users WHERE id = %s",
+            [pid],
         )
         if not res:
             return (404, JSON({"status": "Player not found."}))
@@ -1603,7 +1630,7 @@ async def api_get_player_status(conn: Connection) -> HTTPResponse:
             {
                 "status": "success",
                 "player_status": {"online": False, "last_seen": res["latest_activity"]},
-            }
+            },
         )
 
     if p.status.map_md5:
@@ -1625,7 +1652,7 @@ async def api_get_player_status(conn: Connection) -> HTTPResponse:
                     "beatmap": bmap.as_dict if bmap else None,
                 },
             },
-        }
+        },
     )
 
 
@@ -1692,7 +1719,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
         "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
         f"FROM {mode.scores_table} t "
         "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = %s AND t.mode = %s"
+        "WHERE t.userid = %s AND t.mode = %s",
     ]
 
     params = [p.id, mode.as_vanilla]
@@ -1882,7 +1909,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         f"FROM {mode.scores_table} s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2"
+        "WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2",
     ]
     params = [bmap.md5, mode.as_vanilla]
 
@@ -2008,7 +2035,7 @@ async def api_get_replay(conn: Connection) -> HTTPResponse:
             0,  # TODO: rank
             res["mods"],
             "True",  # TODO: ??
-        ).encode()
+        ).encode(),
     ).hexdigest()
 
     # create a buffer to construct the replay output
@@ -2104,7 +2131,7 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
                     if slot.player
                 },
             },
-        }
+        },
     )
 
 
@@ -2207,7 +2234,7 @@ if glob.config.redirect_osu_urls:
             re.compile(r"^/beatmapsets/\d{1,10}(?:/discussion)?/?$"),
             re.compile(r"^/beatmaps/\d{1,10}/?"),
             re.compile(r"^/community/forums/topics/\d{1,10}/?$"),
-        }
+        },
     )
     async def osu_redirects(conn: Connection) -> HTTPResponse:
         """Redirect some common url's the client uses to osu!."""
@@ -2255,7 +2282,8 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
 
         if not (
             res := await glob.db.fetch(
-                "SELECT id, md5 FROM maps WHERE filename = %s", [map_filename]
+                "SELECT id, md5 FROM maps WHERE filename = %s",
+                [map_filename],
             )
         ):
             return (404, b"")  # map not found in sql
@@ -2307,7 +2335,8 @@ async def peppyDMHandler(conn: Connection) -> HTTPResponse:
 @ratelimit(period=300, max_count=15)  # 15 registrations / 5mins
 @acquire_db_conn(aiomysql.Cursor)
 async def register_account(
-    conn: Connection, db_cursor: aiomysql.Cursor
+    conn: Connection,
+    db_cursor: aiomysql.Cursor,
 ) -> HTTPResponse:
     mp_args = conn.multipart_args
 

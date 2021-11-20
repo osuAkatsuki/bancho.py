@@ -48,7 +48,9 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
 
 
 async def ensure_local_osu_file(
-    osu_file_path: Path, bmap_id: int, bmap_md5: str
+    osu_file_path: Path,
+    bmap_id: int,
+    bmap_md5: str,
 ) -> bool:
     """Ensure we have the latest .osu file locally,
     downloading it from the osu!api if required."""
@@ -385,7 +387,8 @@ class Beatmap:
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
                 res = await glob.db.fetch(
-                    "SELECT set_id FROM maps WHERE md5 = %s", [md5]
+                    "SELECT set_id FROM maps WHERE md5 = %s",
+                    [md5],
                 )
 
                 if res:
@@ -515,7 +518,8 @@ class Beatmap:
 
     @staticmethod
     async def _from_md5_cache(
-        md5: str, check_updates: bool = True
+        md5: str,
+        check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by md5."""
         if md5 in glob.cache["beatmap"]:
@@ -528,7 +532,8 @@ class Beatmap:
 
     @staticmethod
     async def _from_bid_cache(
-        bid: int, check_updates: bool = True
+        bid: int,
+        check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by id."""
         if bid in glob.cache["beatmap"]:
@@ -575,7 +580,8 @@ class BeatmapSet:
         self.id = kwargs.get("id", 0)
 
         self.last_osuapi_check: Optional[datetime] = kwargs.get(
-            "last_osuapi_check", None
+            "last_osuapi_check",
+            None,
         )
         self.maps: list[Beatmap] = kwargs.get("maps", [])
 
@@ -677,7 +683,7 @@ class BeatmapSet:
             # i want to see how frequently this happens and see some examples
             # of when it's triggered since i'm not 100% sure about it, cheers.
             await misc.utils.log_strange_occurrence(
-                f"_update_if_available no data, setid: {self.id}"
+                f"_update_if_available no data, setid: {self.id}",
             )
 
     async def _save_to_sql(self) -> None:
@@ -753,7 +759,8 @@ class BeatmapSet:
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                 await db_cursor.execute(
-                    "SELECT last_osuapi_check FROM mapsets WHERE id = %s", [bsid]
+                    "SELECT last_osuapi_check FROM mapsets WHERE id = %s",
+                    [bsid],
                 )
 
                 if db_cursor.rowcount == 0:

@@ -100,7 +100,7 @@ def fmt_bytes(n: Union[int, float]) -> str:
 
 _domain_escaped = domain.replace(".", r"\.")
 DOMAIN_RGX = re.compile(
-    r"^(?P<subdomain>osu|c[e4-6]?|a|s|b|assets)\." rf"(?:ppy\.sh|{_domain_escaped})$"
+    r"^(?P<subdomain>osu|c[e4-6]?|a|s|b|assets)\." rf"(?:ppy\.sh|{_domain_escaped})$",
 )
 
 PACKET_HEADER_FMT = struct.Struct("<HxI")  # header gives us packet id & data length

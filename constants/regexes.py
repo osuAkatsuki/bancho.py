@@ -8,7 +8,7 @@ DOMAIN_ESCAPED = glob.config.domain.replace(".", r"\.")
 
 osu_ver = re.compile(
     r"^b(?P<ver>\d{8})(?:\.(?P<subver>\d))?"
-    r"(?P<stream>beta|cuttingedge|dev|tourney)?$"
+    r"(?P<stream>beta|cuttingedge|dev|tourney)?$",
 )
 
 username = re.compile(r"^[\w \[\]-]{2,15}$")
@@ -18,7 +18,7 @@ now_playing = re.compile(
     r"^\x01ACTION is (?:playing|editing|watching|listening to) "
     rf"\[https://osu\.(?:{DOMAIN_ESCAPED}|ppy\.sh)/beatmapsets/(?P<sid>\d{{1,10}})#/?(?:osu|taiko|fruits|mania)?/(?P<bid>\d{{1,10}})/? .+\]"
     r"(?: <(?P<mode_vn>Taiko|CatchTheBeat|osu!mania)>)?"
-    r"(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$"
+    r"(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$",
 )
 
 scaled_duration = re.compile(r"^(?P<duration>\d{1,6})" r"(?P<scale>s|m|h|d|w)$")
