@@ -1386,7 +1386,7 @@ async def banchoConnect(conn: Connection) -> HTTPResponse:
 
         # NOTE: you can actually return an endpoint here
         # for the client to use as a bancho endpoint.
-        return
+        return b""
 
     # TODO: perhaps handle this..?
     NotImplemented
