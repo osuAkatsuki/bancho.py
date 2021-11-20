@@ -897,106 +897,74 @@ async def osuSubmitModularSelector(
         else:
             achievements_str = ""
 
-        # TODO: some of these don't need to be sent
-        #       depending on the maps ranked status
-        charts = []
+        # create score submission charts for osu! client to display
 
-        # append beatmap info chart (#1)
-        charts.append(
-            f"beatmapId:{score.bmap.id}|"
-            f"beatmapSetId:{score.bmap.set_id}|"
-            f"beatmapPlaycount:{score.bmap.plays}|"
-            f"beatmapPasscount:{score.bmap.passes}|"
+        if score.prev_best:
+            beatmap_ranking_chart_entries = (
+                chart_entry("rank", score.prev_best.rank, score.rank),
+                chart_entry("rankedScore", score.prev_best.score, score.score),
+                chart_entry("totalScore", score.prev_best.score, score.score),
+                chart_entry("maxCombo", score.prev_best.max_combo, score.max_combo),
+                chart_entry(
+                    "accuracy",
+                    f"{score.prev_best.acc:.2f}",
+                    f"{score.acc:.2f}",
+                ),
+                chart_entry("pp", score.prev_best.pp, score.pp),
+            )
+
+            overall_ranking_chart_entries = (
+                chart_entry("rank", prev_stats.rank, stats.rank),
+                chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
+                chart_entry("totalScore", prev_stats.tscore, stats.tscore),
+                chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
+                chart_entry("accuracy", f"{prev_stats.acc:.2f}", f"{stats.acc:.2f}"),
+                chart_entry("pp", prev_stats.pp, stats.pp),
+            )
+        else:
+            # no previous best score
+            beatmap_ranking_chart_entries = (
+                chart_entry("rank", None, score.rank),
+                chart_entry("rankedScore", None, score.score),
+                chart_entry("totalScore", None, score.score),
+                chart_entry("maxCombo", None, score.max_combo),
+                chart_entry("accuracy", None, f"{score.acc:.2f}"),
+                chart_entry("pp", None, score.pp),
+            )
+
+            overall_ranking_chart_entries = (
+                chart_entry("rank", None, stats.rank),
+                chart_entry("rankedScore", None, stats.rscore),
+                chart_entry("totalScore", None, stats.tscore),
+                chart_entry("maxCombo", None, stats.max_combo),
+                chart_entry("accuracy", None, f"{stats.acc:.2f}"),
+                chart_entry("pp", None, stats.pp),
+            )
+
+        submission_charts = [
+            # beatmap info chart
+            f"beatmapId:{score.bmap.id}",
+            f"beatmapSetId:{score.bmap.set_id}",
+            f"beatmapPlaycount:{score.bmap.plays}",
+            f"beatmapPasscount:{score.bmap.passes}",
             f"approvedDate:{score.bmap.last_update}",
-        )
+            "\n",
+            # beatmap ranking chart
+            "chartId:beatmap",
+            f"chartUrl:{score.bmap.set.url}",
+            "chartName:Beatmap Ranking",
+            *beatmap_ranking_chart_entries,
+            f"onlineScoreId:{score.id}",
+            "\n",
+            # overall ranking chart
+            "chartId:overall",
+            f"chartUrl:https://{BASE_DOMAIN}/u/{score.player.id}",
+            "chartName:Overall Ranking",
+            *overall_ranking_chart_entries,
+            f"achievements-new:{achievements_str}",
+        ]
 
-        # append beatmap ranking chart (#2)
-        charts.append(
-            "|".join(
-                (
-                    "chartId:beatmap",
-                    f"chartUrl:{score.bmap.set.url}",
-                    "chartName:Beatmap Ranking",
-                    *(
-                        (
-                            chart_entry("rank", score.prev_best.rank, score.rank),
-                            chart_entry(
-                                "rankedScore",
-                                score.prev_best.score,
-                                score.score,
-                            ),
-                            chart_entry(
-                                "totalScore",
-                                score.prev_best.score,
-                                score.score,
-                            ),
-                            chart_entry(
-                                "maxCombo",
-                                score.prev_best.max_combo,
-                                score.max_combo,
-                            ),
-                            chart_entry(
-                                "accuracy",
-                                round(score.prev_best.acc, 2),
-                                round(score.acc, 2),
-                            ),
-                            chart_entry("pp", score.prev_best.pp, score.pp),
-                        )
-                        if score.prev_best
-                        else (
-                            chart_entry("rank", None, score.rank),
-                            chart_entry("rankedScore", None, score.score),
-                            chart_entry("totalScore", None, score.score),
-                            chart_entry("maxCombo", None, score.max_combo),
-                            chart_entry("accuracy", None, round(score.acc, 2)),
-                            chart_entry("pp", None, score.pp),
-                        )
-                    ),
-                    f"onlineScoreId:{score.id}",
-                ),
-            ),
-        )
-
-        # append overall ranking chart (#3)
-        charts.append(
-            "|".join(
-                (
-                    "chartId:overall",
-                    f"chartUrl:https://{BASE_DOMAIN}/u/{score.player.id}",
-                    "chartName:Overall Ranking",
-                    *(
-                        (
-                            chart_entry("rank", prev_stats.rank, stats.rank),
-                            chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
-                            chart_entry("totalScore", prev_stats.tscore, stats.tscore),
-                            chart_entry(
-                                "maxCombo",
-                                prev_stats.max_combo,
-                                stats.max_combo,
-                            ),
-                            chart_entry(
-                                "accuracy",
-                                round(prev_stats.acc, 2),
-                                round(stats.acc, 2),
-                            ),
-                            chart_entry("pp", prev_stats.pp, stats.pp),
-                        )
-                        if prev_stats
-                        else (
-                            chart_entry("rank", None, stats.rank),
-                            chart_entry("rankedScore", None, stats.rscore),
-                            chart_entry("totalScore", None, stats.tscore),
-                            chart_entry("maxCombo", None, stats.max_combo),
-                            chart_entry("accuracy", None, round(stats.acc, 2)),
-                            chart_entry("pp", None, stats.pp),
-                        )
-                    ),
-                    f"achievements-new:{achievements_str}",
-                ),
-            ),
-        )
-
-        ret = "\n".join(charts).encode()
+        ret = "|".join(submission_charts).encode()
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
