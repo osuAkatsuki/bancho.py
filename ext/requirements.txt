@@ -10,6 +10,7 @@ maniera
 mysql-connector-python
 orjson
 peace_performance_python
+pre-commit
 psutil
 py3rijndael
 uvloop

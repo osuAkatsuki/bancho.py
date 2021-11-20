@@ -53,6 +53,10 @@ python3.9 -m pip install -r ext/requirements.txt
 # build oppai-ng's static library
 cd oppai-ng && ./libbuild && cd ..
 
+# setup pre-commit's git hooks
+# https://pre-commit.com/
+pre-commit install
+
 ######################################
 # NOTE: before continuing, create an #
 # empty database in mysql for gulag  #
