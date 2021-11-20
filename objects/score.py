@@ -266,7 +266,7 @@ class Score:
 
         s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo = map(
             int,
-            data[3:11],
+            data[1:8],
         )
 
         s.perfect = data[9] == "True"
