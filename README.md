@@ -48,7 +48,7 @@ git clone https://github.com/cmyui/gulag.git && cd gulag
 git submodule init && git submodule update
 
 # install gulag requirements w/ pip
-python3.9 -m pip install -r ext/requirements.txt
+python3.9 -m pip install -r requirements.txt
 
 # build oppai-ng's static library
 cd oppai-ng && ./libbuild && cd ..

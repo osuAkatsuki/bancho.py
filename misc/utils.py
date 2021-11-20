@@ -688,7 +688,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
     tuple[str, cmyui.Version, cmyui.Version], None
 ]:
     """Return the current installed & latest version for each dependency."""
-    with open("ext/requirements.txt") as f:
+    with open("requirements.txt") as f:
         dependencies = f.read().splitlines(keepends=False)
 
     for dependency in dependencies:
