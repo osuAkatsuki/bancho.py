@@ -262,6 +262,26 @@ class Score:
     async def from_submission(cls, data: list[str]) -> "Score":
         """Create a score object from an osu! submission string."""
         s = cls()
+
+        """ parse the following format
+        # 0  online_checksum
+        # 1  n300
+        # 2  n100
+        # 3  n50
+        # 4  ngeki
+        # 5  nkatu
+        # 6  nmiss
+        # 7  score
+        # 8  max_combo
+        # 9  perfect
+        # 10 grade
+        # 11 mods
+        # 12 passed
+        # 13 gamemode
+        # 14 play_time # yyMMddHHmmss
+        # 15 osu_version + (" " * client_flags)
+        """
+
         s.online_checksum = data[0]
 
         s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo = map(
@@ -275,7 +295,10 @@ class Score:
         s.passed = data[12] == "True"
         s.mode = GameMode.from_params(int(data[13]), s.mods)
 
-        s.play_time = datetime.now()  # TODO: use data[16]
+        # TODO: we might want to use data[14] to get more
+        #       accurate submission time (client side) but
+        #       we'd probably want to check if it's close.
+        s.play_time = datetime.now()
 
         s.client_flags = ClientFlags(data[15].count(" ") & ~4)
 
