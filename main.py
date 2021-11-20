@@ -40,7 +40,7 @@ if not os.path.exists("config.py"):
 from objects import glob  # (includes config)
 
 # !! review code that uses this before modifying it.
-glob.version = cmyui.Version(3, 6, 0)
+glob.version = cmyui.Version(3, 6, 1)
 
 GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
