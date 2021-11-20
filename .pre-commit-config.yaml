@@ -12,3 +12,7 @@ repos:
     rev: 21.11b1
     hooks:
     -   id: black
+-   repo: https://github.com/asottile/reorder_python_imports
+    rev: v2.6.0
+    hooks:
+    -   id: reorder-python-imports
