@@ -349,14 +349,14 @@ async def lastFM(p: "Player", conn: Connection) -> HTTPResponse:
 
     flags = ClientFlags(int(conn.args["b"][1:]))
 
-    if flags & (ClientFlags.HQAssembly | ClientFlags.HQFile):
+    if flags & (ClientFlags.HQ_ASSEMBLY | ClientFlags.HQ_FILE):
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
         await p.restrict(admin=glob.bot, reason=f"hq!osu running ({flags})")
         return b"-3"
 
-    if flags & ClientFlags.RegistryEdits:
+    if flags & ClientFlags.REGISTRY_EDITS:
         # Player has registry edits left from
         # hq!osu's multiaccounting tool. This
         # does not necessarily mean they are
@@ -587,7 +587,7 @@ async def osuSubmitModularSelector(
         score.player.status.mode = score.mode
 
         if not score.player.restricted:
-            glob.players.enqueue(packets.userStats(score.player))
+            glob.players.enqueue(packets.user_stats(score.player))
 
     scores_table = score.mode.scores_table
     mode_vn = score.mode.as_vanilla
@@ -615,7 +615,7 @@ async def osuSubmitModularSelector(
 
     if (  # check for pp caps on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
-        and not (score.player.priv & Privileges.Whitelisted or score.player.restricted)
+        and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
     ):
         # Get the PP cap for the current context.
         pp_cap = glob.config.autoban_pp[score.mode][score.mods & Mods.FLASHLIGHT != 0]
@@ -636,7 +636,10 @@ async def osuSubmitModularSelector(
             glob.datadog.increment("gulag.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
-            if score.mode < GameMode.rx_std and score.bmap.status == RankedStatus.Loved:
+            if (
+                score.mode < GameMode.RELAX_OSU
+                and score.bmap.status == RankedStatus.Loved
+            ):
                 # use score for vanilla loved only
                 performance = f"{score.score:,} score"
             else:
@@ -660,7 +663,7 @@ async def osuSubmitModularSelector(
                 if score.mods:
                     ann.insert(1, f"+{score.mods!r}")
 
-                scoring_metric = "pp" if score.mode >= GameMode.rx_std else "score"
+                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
                 # If there was previously a score on the map, add old #1.
                 await db_cursor.execute(
@@ -856,7 +859,7 @@ async def osuSubmitModularSelector(
 
     # send any stat changes to sql, and other players
     await db_cursor.execute(stats_query, stats_query_args)
-    glob.players.enqueue(packets.userStats(score.player))
+    glob.players.enqueue(packets.user_stats(score.player))
 
     if not score.player.restricted:
         # update beatmap with new stats
@@ -876,7 +879,7 @@ async def osuSubmitModularSelector(
 
     """ score submission charts """
 
-    if not score.passed or score.mode >= GameMode.rx_std:
+    if not score.passed or score.mode >= GameMode.RELAX_OSU:
         # charts & achievements won't be shown ingame.
         ret = b"error: no"
 
@@ -1104,10 +1107,10 @@ async def getScores(
         p.status.mode = mode
 
         if not p.restricted:
-            glob.players.enqueue(packets.userStats(p))
+            glob.players.enqueue(packets.user_stats(p))
 
     scores_table = mode.scores_table
-    scoring_metric = "pp" if mode >= GameMode.rx_std else "score"
+    scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
 
@@ -1296,9 +1299,9 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
         for cmt in comments:
             # TODO: maybe support player/creator colours?
             # pretty expensive for very low gain, but completion :D
-            if cmt["priv"] & Privileges.Nominator:
+            if cmt["priv"] & Privileges.NOMINATOR:
                 fmt = "bat"
-            elif cmt["priv"] & Privileges.Donator:
+            elif cmt["priv"] & Privileges.DONATOR:
                 fmt = "supporter"
             else:
                 fmt = ""
@@ -1331,7 +1334,7 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
         sttime = mp_args["starttime"]
         comment = mp_args["comment"]
 
-        if "f" in mp_args and p.priv & Privileges.Donator:
+        if "f" in mp_args and p.priv & Privileges.DONATOR:
             # only supporters can use colours.
             # XXX: colour may still be none,
             # since mp_args is a defaultdict.
@@ -1655,7 +1658,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 
         mode = GameMode(mode)
     else:
-        mode = GameMode.vn_std
+        mode = GameMode.VANILLA_OSU
 
     if (mods_arg := conn.args.get("mods", None)) is not None:
         if mods_arg[0] in ("~", "="):  # weak/strong equality
@@ -1765,7 +1768,7 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
 
         mode = GameMode(mode)
     else:
-        mode = GameMode.vn_std
+        mode = GameMode.VANILLA_OSU
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
@@ -1842,7 +1845,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
 
         mode = GameMode(mode)
     else:
-        mode = GameMode.vn_std
+        mode = GameMode.VANILLA_OSU
 
     if (mods_arg := conn.args.get("mods", None)) is not None:
         if mods_arg[0] in ("~", "="):  # weak/strong equality
@@ -1892,7 +1895,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     # unlike /api/get_player_scores, we'll sort by score/pp depending
     # on the mode played, since we want to replicated leaderboards.
     if scope == "best":
-        sort = "pp" if mode >= GameMode.rx_std else "score"
+        sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
     else:  # recent
         sort = "play_time"
 
@@ -2113,7 +2116,7 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
 
         mode = GameMode(mode)
     else:
-        mode = GameMode.vn_std
+        mode = GameMode.VANILLA_OSU
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):

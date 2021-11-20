@@ -34,16 +34,16 @@ gm_sql = (
 @unique
 @pymysql_encode(escape_enum)
 class GameMode(IntEnum):
-    vn_std = 0
-    vn_taiko = 1
-    vn_catch = 2
-    vn_mania = 3
+    VANILLA_OSU = 0
+    VANILLA_TAIKO = 1
+    VANILLA_CATCH = 2
+    VANILLA_MANIA = 3
 
-    rx_std = 4
-    rx_taiko = 5
-    rx_catch = 6
+    RELAX_OSU = 4
+    RELAX_TAIKO = 5
+    RELAX_CATCH = 6
 
-    ap_std = 7
+    AUTOPILOT_OSU = 7
 
     @classmethod
     @functools.lru_cache(maxsize=32)
@@ -62,16 +62,16 @@ class GameMode(IntEnum):
 
     @functools.cached_property
     def scores_table(self) -> str:
-        if self.value < self.rx_std:
+        if self.value < self.RELAX_OSU:
             return "scores_vn"
-        elif self.value < self.ap_std:
+        elif self.value < self.AUTOPILOT_OSU:
             return "scores_rx"
         else:
             return "scores_ap"
 
     @functools.cached_property
     def as_vanilla(self) -> int:
-        if self.value == self.ap_std:
+        if self.value == self.AUTOPILOT_OSU:
             return 0
 
         return self.value % 4

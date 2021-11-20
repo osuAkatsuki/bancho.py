@@ -194,17 +194,17 @@ class Players(list[Player]):
     @property
     def staff(self) -> set[Player]:
         """Return a set of the current staff online."""
-        return {p for p in self if p.priv & Privileges.Staff}
+        return {p for p in self if p.priv & Privileges.STAFF}
 
     @property
     def restricted(self) -> set[Player]:
         """Return a set of the current restricted players."""
-        return {p for p in self if not p.priv & Privileges.Normal}
+        return {p for p in self if not p.priv & Privileges.NORMAL}
 
     @property
     def unrestricted(self) -> set[Player]:
         """Return a set of the current unrestricted players."""
-        return {p for p in self if p.priv & Privileges.Normal}
+        return {p for p in self if p.priv & Privileges.NORMAL}
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
@@ -474,7 +474,7 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
         id=1,
         name=bot_name,
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
-        priv=Privileges.Normal,
+        priv=Privileges.NORMAL,
         bot_client=True,
     )
     glob.players.append(glob.bot)

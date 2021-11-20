@@ -682,11 +682,6 @@ def create_config_from_default() -> None:
     """Create the default config from ext/config.sample.py"""
     shutil.copy("ext/config.sample.py", "config.py")
 
-    log(
-        "A config file has been generated, please configure it to your needs.",
-        Ansi.LRED,
-    )
-
 
 async def _get_latest_dependency_versions() -> AsyncGenerator[
     tuple[str, cmyui.Version, cmyui.Version],

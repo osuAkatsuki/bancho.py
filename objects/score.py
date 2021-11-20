@@ -355,7 +355,7 @@ class Score:
     async def calc_lb_placement(self) -> int:
         scores_table = self.mode.scores_table
 
-        if self.mode >= GameMode.rx_std:
+        if self.mode >= GameMode.RELAX_OSU:
             scoring_metric = "pp"
             score = self.pp
         else:

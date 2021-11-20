@@ -104,7 +104,7 @@ class Status:
     info_text: str = ""
     map_md5: str = ""
     mods: Mods = Mods.NOMOD
-    mode: GameMode = GameMode.vn_std
+    mode: GameMode = GameMode.VANILLA_OSU
     map_id: int = 0
 
 
@@ -369,22 +369,22 @@ class Player:
     def bancho_priv(self) -> ClientPrivileges:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
-        if self.priv & Privileges.Normal:
-            ret |= ClientPrivileges.Player
-        if self.priv & Privileges.Donator:
-            ret |= ClientPrivileges.Supporter
-        if self.priv & Privileges.Mod:
-            ret |= ClientPrivileges.Moderator
-        if self.priv & Privileges.Admin:
-            ret |= ClientPrivileges.Developer
-        if self.priv & Privileges.Dangerous:
-            ret |= ClientPrivileges.Owner
+        if self.priv & Privileges.NORMAL:
+            ret |= ClientPrivileges.PLAYER
+        if self.priv & Privileges.DONATOR:
+            ret |= ClientPrivileges.SUPPORTER
+        if self.priv & Privileges.MODERATOR:
+            ret |= ClientPrivileges.MODERATOR
+        if self.priv & Privileges.ADMINISTRATOR:
+            ret |= ClientPrivileges.DEVELOPER
+        if self.priv & Privileges.DEVELOPER:
+            ret |= ClientPrivileges.OWNER
         return ret
 
     @cached_property
     def restricted(self) -> bool:
         """Return whether the player is restricted."""
-        return not self.priv & Privileges.Normal
+        return not self.priv & Privileges.NORMAL
 
     @property
     def gm_stats(self) -> ModeData:
@@ -488,7 +488,7 @@ class Player:
 
     async def restrict(self, admin: "Player", reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
-        await self.remove_privs(Privileges.Normal)
+        await self.remove_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} restricted for "{reason}".'
         await glob.db.execute(
@@ -517,7 +517,7 @@ class Player:
 
     async def unrestrict(self, admin: "Player", reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
-        await self.add_privs(Privileges.Normal)
+        await self.add_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} unrestricted for "{reason}".'
         await glob.db.execute(
@@ -562,10 +562,10 @@ class Player:
         )
 
         # inform the user's client.
-        self.enqueue(packets.silenceEnd(duration))
+        self.enqueue(packets.silence_end(duration))
 
         # wipe their messages from any channels.
-        glob.players.enqueue(packets.userSilenced(self.id))
+        glob.players.enqueue(packets.user_silenced(self.id))
 
         # remove them from multiplayer match (if any).
         if self.match:
@@ -591,7 +591,7 @@ class Player:
         )
 
         # inform the user's client
-        self.enqueue(packets.silenceEnd(0))
+        self.enqueue(packets.silence_end(0))
 
         log(f"Unsilenced {self}.", Ansi.LCYAN)
 
@@ -599,13 +599,13 @@ class Player:
         """Attempt to add `self` to `m`."""
         if self.match:
             log(f"{self} tried to join multiple matches?")
-            self.enqueue(packets.matchJoinFail())
+            self.enqueue(packets.match_join_fail())
             return False
 
         if self.id in m.tourney_clients:
             # the user is already in the match with a tourney client.
             # users cannot spectate themselves so this is not possible.
-            self.enqueue(packets.matchJoinFail())
+            self.enqueue(packets.match_join_fail())
             return False
 
         if self is not m.host:
@@ -614,11 +614,11 @@ class Player:
             # simply use any to join a pw protected match.
             if passwd != m.passwd and self not in glob.players.staff:
                 log(f"{self} tried to join {m} w/ incorrect pw.", Ansi.LYELLOW)
-                self.enqueue(packets.matchJoinFail())
+                self.enqueue(packets.match_join_fail())
                 return False
             if (slotID := m.get_free()) is None:
                 log(f"{self} tried to join a full match.", Ansi.LYELLOW)
-                self.enqueue(packets.matchJoinFail())
+                self.enqueue(packets.match_join_fail())
                 return False
 
         else:
@@ -642,7 +642,7 @@ class Player:
         slot.player = self
         self.match = m
 
-        self.enqueue(packets.matchJoinSuccess(m))
+        self.enqueue(packets.match_join_success(m))
         m.enqueue_state()
 
         return True
@@ -687,7 +687,7 @@ class Player:
             glob.matches.remove(self.match)
 
             if lobby := glob.channels["#lobby"]:
-                lobby.enqueue(packets.disposeMatch(self.match.id))
+                lobby.enqueue(packets.dispose_match(self.match.id))
 
         else:
             # we may have been host, if so, find another.
@@ -695,7 +695,7 @@ class Player:
                 for s in self.match.slots:
                     if s.status & SlotStatus.has_player:
                         self.match.host = s.player
-                        self.match.host.enqueue(packets.matchTransferHost())
+                        self.match.host.enqueue(packets.match_transfer_host())
                         break
 
             if self in self.match._refs:
@@ -738,9 +738,9 @@ class Player:
         c.append(self)  # add to c.players
         self.channels.append(c)  # add to p.channels
 
-        self.enqueue(packets.channelJoin(c.name))
+        self.enqueue(packets.channel_join(c.name))
 
-        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
+        chan_info_packet = packets.channel_info(c.name, c.topic, len(c.players))
 
         if c.instance:
             # instanced channel, only send the players
@@ -769,9 +769,9 @@ class Player:
         self.channels.remove(c)  # remove from p.channels
 
         if kick:
-            self.enqueue(packets.channelKick(c.name))
+            self.enqueue(packets.channel_kick(c.name))
 
-        chan_info_packet = packets.channelInfo(c.name, c.topic, len(c.players))
+        chan_info_packet = packets.channel_info(c.name, c.topic, len(c.players))
 
         if c.instance:
             # instanced channel, only send the players
@@ -810,17 +810,17 @@ class Player:
             return
 
         if not p.stealth:
-            p_joined = packets.fellowSpectatorJoined(p.id)
+            p_joined = packets.fellow_spectator_joined(p.id)
             for s in self.spectators:
                 s.enqueue(p_joined)
-                p.enqueue(packets.fellowSpectatorJoined(s.id))
+                p.enqueue(packets.fellow_spectator_joined(s.id))
 
-            self.enqueue(packets.spectatorJoined(p.id))
+            self.enqueue(packets.spectator_joined(p.id))
         else:
             # player is admin in stealth, only give
             # other players data to us, not vice-versa.
             for s in self.spectators:
-                p.enqueue(packets.fellowSpectatorJoined(s.id))
+                p.enqueue(packets.fellow_spectator_joined(s.id))
 
         self.spectators.append(p)
         p.spectating = self
@@ -840,15 +840,15 @@ class Player:
             self.leave_channel(c)
         else:
             # send new playercount
-            c_info = packets.channelInfo(c.name, c.topic, len(c.players))
-            fellow = packets.fellowSpectatorLeft(p.id)
+            c_info = packets.channel_info(c.name, c.topic, len(c.players))
+            fellow = packets.fellow_spectator_left(p.id)
 
             self.enqueue(c_info)
 
             for s in self.spectators:
                 s.enqueue(fellow + c_info)
 
-        self.enqueue(packets.spectatorLeft(p.id))
+        self.enqueue(packets.spectator_left(p.id))
         log(f"{p} is no longer spectating {self}.")
 
     async def add_friend(self, p: "Player") -> None:
@@ -1012,7 +1012,7 @@ class Player:
         # wipe any messages the client can see from the bot
         # (including any other channels). perhaps menus can
         # be sent from a separate presence to prevent this?
-        self.enqueue(packets.userSilenced(glob.bot.id))
+        self.enqueue(packets.user_silenced(glob.bot.id))
 
     def send_current_menu(self) -> None:
         """Forward a standardized form of the user's
@@ -1053,7 +1053,7 @@ class Player:
     def send(self, msg: str, sender: "Player", chan: Optional[Channel] = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
-            packets.sendMessage(
+            packets.send_message(
                 sender=sender.name,
                 msg=msg,
                 recipient=(chan or self).name,
@@ -1066,7 +1066,7 @@ class Player:
         bot = glob.bot
 
         self.enqueue(
-            packets.sendMessage(
+            packets.send_message(
                 sender=bot.name,
                 msg=msg,
                 recipient=self.name,

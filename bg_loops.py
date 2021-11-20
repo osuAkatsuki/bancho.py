@@ -42,7 +42,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             p = await glob.players.from_cache_or_sql(id=expired_donor_id)
 
             # TODO: perhaps make a `revoke_donor` method?
-            await p.remove_privs(Privileges.Donator)
+            await p.remove_privs(Privileges.DONATOR)
             await glob.db.execute(
                 "UPDATE users SET donor_end = 0 WHERE id = %s",
                 [p.id],
@@ -73,4 +73,4 @@ async def _reroll_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
-        packets.botStats.cache_clear()
+        packets.bot_stats.cache_clear()

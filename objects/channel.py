@@ -44,8 +44,8 @@ class Channel:
         self,
         name: str,
         topic: str,
-        read_priv: Privileges = Privileges.Normal,
-        write_priv: Privileges = Privileges.Normal,
+        read_priv: Privileges = Privileges.NORMAL,
+        write_priv: Privileges = Privileges.NORMAL,
         auto_join: bool = True,
         instance: bool = False,
     ) -> None:
@@ -91,7 +91,7 @@ class Channel:
 
     def send(self, msg: str, sender: "Player", to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""
-        data = packets.sendMessage(
+        data = packets.send_message(
             sender=sender.name,
             msg=msg,
             recipient=self.name,
@@ -112,7 +112,7 @@ class Channel:
             msg = f"message would have crashed games ({msg_len} chars)"
 
         self.enqueue(
-            packets.sendMessage(
+            packets.send_message(
                 sender=bot.name,
                 msg=msg,
                 recipient=self.name,

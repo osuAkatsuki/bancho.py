@@ -134,7 +134,7 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
     if not player:
         # token not found; chances are that we just restarted
         # the server - tell their client to reconnect immediately.
-        return packets.notification("Server has restarted.") + packets.restartServer(
+        return packets.notification("Server has restarted.") + packets.restart_server(
             0,
         )  # send 0ms since server is up
 
@@ -221,7 +221,7 @@ class ChangeAction(BasePacket):
 
         # broadcast it to all online players.
         if not p.restricted:
-            glob.players.enqueue(packets.userStats(p))
+            glob.players.enqueue(packets.user_stats(p))
 
 
 IGNORED_CHANNELS = ["#highlight", "#userlog"]
@@ -367,7 +367,7 @@ class Logout(BasePacket):
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
 class StatsUpdateRequest(BasePacket):
     async def handle(self, p: Player) -> None:
-        p.enqueue(packets.userStats(p))
+        p.enqueue(packets.user_stats(p))
 
 
 # Some messages to send on welcome/restricted/etc.
@@ -466,7 +466,7 @@ async def login(
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
         if osu_ver_date < (date.today() - DELTA_90_DAYS):
-            return (packets.versionUpdateForced() + packets.userID(-2)), "no"
+            return (packets.version_update_forced() + packets.user_id(-2)), "no"
 
     # ensure utc_offset is a number (negative inclusive).
     if not client_info[1].replace("-", "").isdecimal():
@@ -492,7 +492,7 @@ async def login(
     adapters = [a for a in adapters_str[:-1].split(".") if a]
 
     if not (is_wine or adapters):
-        data = packets.userID(-1) + packets.notification(
+        data = packets.user_id(-1) + packets.notification(
             "Please restart your osu! and try again.",
         )
         return data, "no"
@@ -517,7 +517,7 @@ async def login(
                     p.logout()
                 else:
                     # the user is currently online, send back failure.
-                    data = packets.userID(-1) + packets.notification(
+                    data = packets.user_id(-1) + packets.notification(
                         "User already logged in.",
                     )
 
@@ -535,14 +535,14 @@ async def login(
         # no account by this name exists.
         return (
             packets.notification(f"{BASE_DOMAIN}: Unknown username")
-            + packets.userID(-1),
+            + packets.user_id(-1),
         ), "no"
 
     if using_tourney_client and not (
-        user_info["priv"] & Privileges.Donator and user_info["priv"] & Privileges.Normal
+        user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
     ):
         # trying to use tourney client with insufficient privileges.
-        return packets.userID(-1), "no"
+        return packets.user_id(-1), "no"
 
     # get our bcrypt cache.
     bcrypt_cache = glob.cache["bcrypt"]
@@ -555,13 +555,13 @@ async def login(
         if pw_md5 != bcrypt_cache[pw_bcrypt]:
             return (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.userID(-1),
+                + packets.user_id(-1),
             ), "no"
     else:  # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
             return (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.userID(-1),
+                + packets.user_id(-1),
             ), "no"
 
         bcrypt_cache[pw_bcrypt] = pw_md5
@@ -608,7 +608,7 @@ async def login(
         # we have other accounts with matching hashes
         hw_matches = await db_cursor.fetchall()
 
-        if user_info["priv"] & Privileges.Verified:
+        if user_info["priv"] & Privileges.VERIFIED:
             # TODO: this is a normal, registered & verified player.
             ...
         else:
@@ -617,13 +617,13 @@ async def login(
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
             if not all(
-                [hw_match["priv"] & Privileges.Normal for hw_match in hw_matches],
+                [hw_match["priv"] & Privileges.NORMAL for hw_match in hw_matches],
             ):
                 return (
                     packets.notification(
                         "Please contact staff directly to create an account.",
                     )
-                    + packets.userID(-1),
+                    + packets.user_id(-1),
                 ), "no"
 
     """ All checks passed, player is safe to login """
@@ -671,8 +671,8 @@ async def login(
         tourney_client=using_tourney_client,
     )
 
-    data = bytearray(packets.protocolVersion(19))
-    data += packets.userID(p.id)
+    data = bytearray(packets.protocol_version(19))
+    data += packets.user_id(p.id)
 
     # *real* client privileges are sent with this packet,
     # then the user's apparent privileges are sent in the
@@ -681,7 +681,7 @@ async def login(
     # but not in userPresence (so that only donators
     # show up with the yellow name in-game, but everyone
     # gets osu!direct & other in-game perks).
-    data += packets.banchoPrivileges(p.bancho_priv | ClientPrivileges.Supporter)
+    data += packets.bancho_privileges(p.bancho_priv | ClientPrivileges.SUPPORTER)
 
     data += WELCOME_NOTIFICATION
 
@@ -700,7 +700,7 @@ async def login(
 
         # send chan info to all players who can see
         # the channel (to update their playercounts)
-        chan_info_packet = packets.channelInfo(c._name, c.topic, len(c.players))
+        chan_info_packet = packets.channel_info(c._name, c.topic, len(c.players))
 
         data += chan_info_packet
 
@@ -709,7 +709,7 @@ async def login(
                 o.enqueue(chan_info_packet)
 
     # tells osu! to reorder channels based on config.
-    data += packets.channelInfoEnd()
+    data += packets.channel_info_end()
 
     # fetch some of the player's
     # information from sql to be cached.
@@ -719,12 +719,12 @@ async def login(
 
     # TODO: fetch p.recent_scores from sql
 
-    data += packets.mainMenuIcon()
-    data += packets.friendsList(*p.friends)
-    data += packets.silenceEnd(p.remaining_silence)
+    data += packets.main_menu_icon()
+    data += packets.friends_list(*p.friends)
+    data += packets.silence_end(p.remaining_silence)
 
     # update our new player's stats, and broadcast them.
-    user_data = packets.userPresence(p) + packets.userStats(p)
+    user_data = packets.user_presence(p) + packets.user_stats(p)
 
     data += user_data
 
@@ -736,8 +736,8 @@ async def login(
 
             # enqueue them to us.
             if not o.restricted:
-                data += packets.userPresence(o)
-                data += packets.userStats(o)
+                data += packets.user_presence(o)
+                data += packets.user_stats(o)
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
@@ -754,7 +754,7 @@ async def login(
 
             async for msg in db_cursor:
                 if msg["from"] not in sent_to:
-                    data += packets.sendMessage(
+                    data += packets.send_message(
                         sender=msg["from"],
                         msg="Unread messages",
                         recipient=msg["to"],
@@ -765,31 +765,31 @@ async def login(
                 msg_time = datetime.fromtimestamp(msg["time"])
                 msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
-                data += packets.sendMessage(
+                data += packets.send_message(
                     sender=msg["from"],
                     msg=msg_ts,
                     recipient=msg["to"],
                     sender_id=msg["from_id"],
                 )
 
-        if not p.priv & Privileges.Verified:
+        if not p.priv & Privileges.VERIFIED:
             # this is the player's first login, verify their
             # account & send info about the server/its usage.
-            await p.add_privs(Privileges.Verified)
+            await p.add_privs(Privileges.VERIFIED)
 
             if p.id == 3:
                 # this is the first player registering on
                 # the server, grant them full privileges.
                 await p.add_privs(
-                    Privileges.Staff
-                    | Privileges.Nominator
-                    | Privileges.Whitelisted
-                    | Privileges.Tournament
-                    | Privileges.Donator
-                    | Privileges.Alumni,
+                    Privileges.STAFF
+                    | Privileges.NOMINATOR
+                    | Privileges.WHITELISTED
+                    | Privileges.TOURNAMENT
+                    | Privileges.DONATOR
+                    | Privileges.ALUMNI,
                 )
 
-            data += packets.sendMessage(
+            data += packets.send_message(
                 sender=glob.bot.name,
                 msg=WELCOME_MSG,
                 recipient=p.name,
@@ -800,11 +800,11 @@ async def login(
         # player is restricted, one way data
         for o in glob.players.unrestricted:
             # enqueue them to us.
-            data += packets.userPresence(o)
-            data += packets.userStats(o)
+            data += packets.user_presence(o)
+            data += packets.user_stats(o)
 
-        data += packets.accountRestricted()
-        data += packets.sendMessage(
+        data += packets.account_restricted()
+        data += packets.send_message(
             sender=glob.bot.name,
             msg=RESTRICTED_MSG,
             recipient=p.name,
@@ -849,9 +849,9 @@ class StartSpectating(BasePacket):
                 if not p.stealth:
                     # NOTE: `p` would have already received the other
                     # fellow spectators, so no need to resend them.
-                    new_host.enqueue(packets.spectatorJoined(p.id))
+                    new_host.enqueue(packets.spectator_joined(p.id))
 
-                    p_joined = packets.fellowSpectatorJoined(p.id)
+                    p_joined = packets.fellow_spectator_joined(p.id)
                     for spec in new_host.spectators:
                         if spec is not p:
                             spec.enqueue(p_joined)
@@ -902,7 +902,7 @@ class CantSpectate(BasePacket):
             return
 
         if not p.stealth:
-            data = packets.spectatorCantSpectate(p.id)
+            data = packets.spectator_cant_spectate(p.id)
 
             host = p.spectating
             host.enqueue(data)
@@ -938,14 +938,14 @@ class SendPrivateMessage(BasePacket):
             return
 
         if p.id in t.blocks:
-            p.enqueue(packets.userDMBlocked(t_name))
+            p.enqueue(packets.user_dm_blocked(t_name))
 
             if glob.app.debug:
                 log(f"{p} tried to message {t}, but they have them blocked.")
             return
 
         if t.pm_private and p.id not in t.friends:
-            p.enqueue(packets.userDMBlocked(t_name))
+            p.enqueue(packets.user_dm_blocked(t_name))
 
             if glob.app.debug:
                 log(f"{p} tried to message {t}, but they are blocking dms.")
@@ -953,7 +953,7 @@ class SendPrivateMessage(BasePacket):
 
         if t.silenced:
             # if target is silenced, inform player.
-            p.enqueue(packets.targetSilenced(t_name))
+            p.enqueue(packets.target_silenced(t_name))
 
             if glob.app.debug:
                 log(f"{p} tried to message {t}, but they are silenced.")
@@ -1144,7 +1144,7 @@ class LobbyJoin(BasePacket):
 
         for m in glob.matches:
             if m is not None:
-                p.enqueue(packets.newMatch(m))
+                p.enqueue(packets.new_match(m))
 
 
 @register(ClientPackets.CREATE_MATCH)
@@ -1156,7 +1156,7 @@ class MatchCreate(BasePacket):
         # TODO: match validation..?
         if p.restricted:
             p.enqueue(
-                packets.matchJoinFail()
+                packets.match_join_fail()
                 + packets.notification(
                     "Multiplayer is not available while restricted.",
                 ),
@@ -1165,7 +1165,7 @@ class MatchCreate(BasePacket):
 
         if p.silenced:
             p.enqueue(
-                packets.matchJoinFail()
+                packets.match_join_fail()
                 + packets.notification("Multiplayer is not available while silenced."),
             )
             return
@@ -1173,7 +1173,7 @@ class MatchCreate(BasePacket):
         if not glob.matches.append(self.match):
             # failed to create match (match slots full).
             p.send_bot("Failed to create match (no slots available).")
-            p.enqueue(packets.matchJoinFail())
+            p.enqueue(packets.match_join_fail())
             return
 
         # create the channel and add it
@@ -1240,17 +1240,17 @@ class MatchJoin(BasePacket):
                 # NOTE: this function is unrelated to mp.
                 await execute_menu_option(p, self.match_id)
 
-            p.enqueue(packets.matchJoinFail())
+            p.enqueue(packets.match_join_fail())
             return
 
         if not (m := glob.matches[self.match_id]):
             log(f"{p} tried to join a non-existant mp lobby?")
-            p.enqueue(packets.matchJoinFail())
+            p.enqueue(packets.match_join_fail())
             return
 
         if p.restricted:
             p.enqueue(
-                packets.matchJoinFail()
+                packets.match_join_fail()
                 + packets.notification(
                     "Multiplayer is not available while restricted.",
                 ),
@@ -1259,7 +1259,7 @@ class MatchJoin(BasePacket):
 
         if p.silenced:
             p.enqueue(
-                packets.matchJoinFail()
+                packets.match_join_fail()
                 + packets.notification("Multiplayer is not available while silenced."),
             )
             return
@@ -1535,7 +1535,7 @@ class MatchComplete(BasePacket):
         m.unready_players(expected=SlotStatus.complete)
 
         m.in_progress = False
-        m.enqueue(packets.matchComplete(), lobby=False, immune=not_playing)
+        m.enqueue(packets.match_complete(), lobby=False, immune=not_playing)
         m.enqueue_state()
 
         if m.is_scrimming:
@@ -1592,7 +1592,7 @@ class MatchLoadComplete(BasePacket):
         # check if all players are loaded,
         # if so, tell all players to begin.
         if not any(map(is_playing, m.slots)):
-            m.enqueue(packets.matchAllPlayerLoaded(), lobby=False)
+            m.enqueue(packets.match_all_players_loaded(), lobby=False)
 
 
 @register(ClientPackets.MATCH_NO_BEATMAP)
@@ -1632,7 +1632,7 @@ class MatchFailed(BasePacket):
         slot_id = m.get_slot_id(p)
         assert slot_id is not None
 
-        m.enqueue(packets.matchPlayerFailed(slot_id), lobby=False)
+        m.enqueue(packets.match_player_failed(slot_id), lobby=False)
 
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
@@ -1658,14 +1658,14 @@ class MatchSkipRequest(BasePacket):
         assert slot is not None
 
         slot.skipped = True
-        m.enqueue(packets.matchPlayerSkipped(p.id))
+        m.enqueue(packets.match_player_skipped(p.id))
 
         for slot in m.slots:
             if slot.status == SlotStatus.playing and not slot.skipped:
                 return
 
         # all users have skipped, enqueue a skip.
-        m.enqueue(packets.matchSkip(), lobby=False)
+        m.enqueue(packets.match_skip(), lobby=False)
 
 
 @register(ClientPackets.CHANNEL_JOIN, restricted=True)
@@ -1706,7 +1706,7 @@ class MatchTransferHost(BasePacket):
             return
 
         m.host = t
-        m.host.enqueue(packets.matchTransferHost())
+        m.host.enqueue(packets.match_transfer_host())
         m.enqueue_state()
 
 
@@ -1719,13 +1719,13 @@ class TourneyMatchInfoRequest(BasePacket):
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
-        if not p.priv & Privileges.Donator:
+        if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
         if not (m := glob.matches[self.match_id]):
             return  # match not found
 
-        p.enqueue(packets.updateMatch(m, send_pw=False))
+        p.enqueue(packets.update_match(m, send_pw=False))
 
 
 @register(ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL)
@@ -1737,7 +1737,7 @@ class TourneyMatchJoinChannel(BasePacket):
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
-        if not p.priv & Privileges.Donator:
+        if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
         if not (m := glob.matches[self.match_id]):
@@ -1762,7 +1762,7 @@ class TourneyMatchLeaveChannel(BasePacket):
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
-        if not p.priv & Privileges.Donator:
+        if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
         if not (m := glob.matches[self.match_id]):
@@ -1884,7 +1884,7 @@ class StatsRequest(BasePacket):
 
         for online in filter(is_online, self.user_ids):
             if t := glob.players.get(id=online):
-                p.enqueue(packets.userStats(t))
+                p.enqueue(packets.user_stats(t))
 
 
 @register(ClientPackets.MATCH_INVITE)
@@ -1904,7 +1904,7 @@ class MatchInvite(BasePacket):
             p.send_bot("I'm too busy!")
             return
 
-        t.enqueue(packets.matchInvite(p, t.name))
+        t.enqueue(packets.match_invite(p, t.name))
         p.update_latest_activity()
 
         log(f"{p} invited {t} to their match.")
@@ -1935,7 +1935,7 @@ class UserPresenceRequest(BasePacket):
     async def handle(self, p: Player) -> None:
         for pid in self.user_ids:
             if t := glob.players.get(id=pid):
-                p.enqueue(packets.userPresence(t))
+                p.enqueue(packets.user_presence(t))
 
 
 @register(ClientPackets.USER_PRESENCE_REQUEST_ALL)
@@ -1948,7 +1948,7 @@ class UserPresenceRequestAll(BasePacket):
         # NOTE: this packet is only used when there
         # are >256 players visible to the client.
 
-        p.enqueue(b"".join(map(packets.userPresence, glob.players.unrestricted)))
+        p.enqueue(b"".join(map(packets.user_presence, glob.players.unrestricted)))
 
 
 @register(ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)

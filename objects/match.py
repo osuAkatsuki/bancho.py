@@ -280,7 +280,7 @@ class Match:
         self.prev_map_id = 0  # previously chosen map
 
         self.mods = Mods.NOMOD
-        self.mode = GameMode.vn_std
+        self.mode = GameMode.VANILLA_OSU
         self.freemods = False
 
         self.chat: Optional["Channel"] = None  # multiplayer
@@ -406,10 +406,10 @@ class Match:
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
-        self.chat.enqueue(packets.updateMatch(self, send_pw=True))
+        self.chat.enqueue(packets.update_match(self, send_pw=True))
 
         if lobby and (lchan := glob.channels["#lobby"]) and lchan.players:
-            lchan.enqueue(packets.updateMatch(self, send_pw=False))
+            lchan.enqueue(packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
         """Unready any players in the `expected` state."""
@@ -430,7 +430,7 @@ class Match:
                     no_map.append(s.player.id)
 
         self.in_progress = True
-        self.enqueue(packets.matchStart(self), immune=no_map)
+        self.enqueue(packets.match_start(self), immune=no_map)
         self.enqueue_state()
 
     def reset_scrim(self) -> None:
