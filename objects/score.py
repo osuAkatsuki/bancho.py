@@ -29,50 +29,48 @@ from objects.beatmap import RankedStatus
 if TYPE_CHECKING:
     from objects.player import Player
 
-__all__ = (
-    'Grade',
-    'SubmissionStatus',
-    'Score'
-)
+__all__ = ("Grade", "SubmissionStatus", "Score")
 
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
+BEATMAPS_PATH = Path.cwd() / ".data/osu"
+
 
 @unique
 class Grade(IntEnum):
     # NOTE: these are implemented in the opposite order
     # as osu! to make more sense with <> operators.
-    N  = 0
-    F  = 1
-    D  = 2
-    C  = 3
-    B  = 4
-    A  = 5
-    S  = 6 # S
-    SH = 7 # HD S
-    X  = 8 # SS
-    XH = 9 # HD SS
+    N = 0
+    F = 1
+    D = 2
+    C = 3
+    B = 4
+    A = 5
+    S = 6  # S
+    SH = 7  # HD S
+    X = 8  # SS
+    XH = 9  # HD SS
 
     @classmethod
     @functools.cache
-    def from_str(cls, s: str) -> 'Grade':
+    def from_str(cls, s: str) -> "Grade":
         return {
-            'xh': Grade.XH,
-            'x': Grade.X,
-            'sh': Grade.SH,
-            's': Grade.S,
-            'a': Grade.A,
-            'b': Grade.B,
-            'c': Grade.C,
-            'd': Grade.D,
-            'f': Grade.F,
-            'n': Grade.N
+            "xh": Grade.XH,
+            "x": Grade.X,
+            "sh": Grade.SH,
+            "s": Grade.S,
+            "a": Grade.A,
+            "b": Grade.B,
+            "c": Grade.C,
+            "d": Grade.D,
+            "f": Grade.F,
+            "n": Grade.N,
         }[s.lower()]
 
     def __format__(self, format_spec: str) -> str:
-        if format_spec == 'stats_column':
-            return f'{self.name.lower()}_count'
+        if format_spec == "stats_column":
+            return f"{self.name.lower()}_count"
         else:
-            raise ValueError(f'Invalid format specifier {format_spec}')
+            raise ValueError(f"Invalid format specifier {format_spec}")
+
 
 @unique
 @pymysql_encode(escape_enum)
@@ -83,11 +81,10 @@ class SubmissionStatus(IntEnum):
     BEST = 2
 
     def __repr__(self) -> str:
-        return {
-            self.FAILED: 'Failed',
-            self.SUBMITTED: 'Submitted',
-            self.BEST: 'Best'
-        }[self]
+        return {self.FAILED: "Failed", self.SUBMITTED: "Submitted", self.BEST: "Best"}[
+            self
+        ]
+
 
 class Score:
     """\
@@ -122,22 +119,40 @@ class Score:
         mean the score is our best score on the map! the `status`
         value will always be accurate for any score.
     """
-    __slots__ = (
-        'id', 'bmap', 'player',
-        'mode', 'mods',
-        'pp', 'sr', 'score', 'max_combo', 'acc',
-        'n300', 'n100', 'n50', 'nmiss', 'ngeki', 'nkatu',
-        'grade', 'rank', 'passed', 'perfect', 'status',
-        'play_time', 'time_elapsed',
-        'client_flags', 'online_checksum',
 
-        'prev_best'
+    __slots__ = (
+        "id",
+        "bmap",
+        "player",
+        "mode",
+        "mods",
+        "pp",
+        "sr",
+        "score",
+        "max_combo",
+        "acc",
+        "n300",
+        "n100",
+        "n50",
+        "nmiss",
+        "ngeki",
+        "nkatu",
+        "grade",
+        "rank",
+        "passed",
+        "perfect",
+        "status",
+        "play_time",
+        "time_elapsed",
+        "client_flags",
+        "online_checksum",
+        "prev_best",
     )
 
     def __init__(self):
         self.id: Optional[int] = None
         self.bmap: Optional[Beatmap] = None
-        self.player: Optional['Player'] = None
+        self.player: Optional["Player"] = None
 
         self.mode: Optional[GameMode] = None
         self.mods: Optional[Mods] = None
@@ -151,7 +166,7 @@ class Score:
         # TODO: perhaps abstract these differently
         # since they're mode dependant? feels weird..
         self.n300: Optional[int] = None
-        self.n100: Optional[int] = None # n150 for taiko
+        self.n100: Optional[int] = None  # n150 for taiko
         self.n50: Optional[int] = None
         self.nmiss: Optional[int] = None
         self.ngeki: Optional[int] = None
@@ -172,25 +187,28 @@ class Score:
 
         self.prev_best: Optional[Score] = None
 
-    def __repr__(self) -> str: # maybe shouldn't be so long?
-        return (f'<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M '
-                f'#{self.rank} on {self.bmap.full} for {self.pp:,.2f}pp>')
+    def __repr__(self) -> str:  # maybe shouldn't be so long?
+        return (
+            f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
+            f"#{self.rank} on {self.bmap.full} for {self.pp:,.2f}pp>"
+        )
 
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int, scores_table: str) -> Optional['Score']:
+    async def from_sql(cls, score_id: int, scores_table: str) -> Optional["Score"]:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
         res = await glob.db.fetch(
-            'SELECT id, map_md5, userid, pp, score, '
-            'max_combo, mods, acc, n300, n100, n50, '
-            'nmiss, ngeki, nkatu, grade, perfect, '
-            'status, mode, play_time, '
-            'time_elapsed, client_flags, online_checksum '
-            f'FROM {scores_table} WHERE id = %s',
-            [score_id], _dict=False
+            "SELECT id, map_md5, userid, pp, score, "
+            "max_combo, mods, acc, n300, n100, n50, "
+            "nmiss, ngeki, nkatu, grade, perfect, "
+            "status, mode, play_time, "
+            "time_elapsed, client_flags, online_checksum "
+            f"FROM {scores_table} WHERE id = %s",
+            [score_id],
+            _dict=False,
         )
 
         if not res:
@@ -202,10 +220,27 @@ class Score:
         s.bmap = await Beatmap.from_md5(res[1])
         s.player = await glob.players.from_cache_or_sql(id=res[2])
 
-        (s.pp, s.score, s.max_combo, s.mods, s.acc, s.n300,
-         s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade,
-         s.perfect, s.status, mode_vn, s.play_time,
-         s.time_elapsed, s.client_flags, s.online_checksum) = res[3:]
+        (
+            s.pp,
+            s.score,
+            s.max_combo,
+            s.mods,
+            s.acc,
+            s.n300,
+            s.n100,
+            s.n50,
+            s.nmiss,
+            s.ngeki,
+            s.nkatu,
+            s.grade,
+            s.perfect,
+            s.status,
+            mode_vn,
+            s.play_time,
+            s.time_elapsed,
+            s.client_flags,
+            s.online_checksum,
+        ) = res[3:]
 
         # fix some types
         s.passed = s.status != 0
@@ -222,22 +257,21 @@ class Score:
 
     @classmethod
     async def from_submission(
-        cls, data_b64: str, iv_b64: str,
-        osu_ver: str, pw_md5: str
-    ) -> Optional['Score']:
+        cls, data_b64: str, iv_b64: str, osu_ver: str, pw_md5: str
+    ) -> Optional["Score"]:
         """Create a score object from an osu! submission string."""
         aes = RijndaelCbc(
-            key=f'osu!-scoreburgr---------{osu_ver}'.encode(),
+            key=f"osu!-scoreburgr---------{osu_ver}".encode(),
             iv=b64decode(iv_b64),
             padding=Pkcs7Padding(32),
-            block_size=32
+            block_size=32,
         )
 
         # score data is delimited by colons (:).
-        data = aes.decrypt(b64decode(data_b64)).decode().split(':')
+        data = aes.decrypt(b64decode(data_b64)).decode().split(":")
 
         if len(data) != 18:
-            log('Received an invalid score submission.', Ansi.LRED)
+            log("Received an invalid score submission.", Ansi.LRED)
             return
 
         s = cls()
@@ -246,7 +280,7 @@ class Score:
             return
 
         map_md5 = data[0]
-        pname = data[1].rstrip() # rstrip 1 space if client has supporter
+        pname = data[1].rstrip()  # rstrip 1 space if client has supporter
         s.online_checksum = data[2]
 
         # get the map & player for the score.
@@ -267,21 +301,22 @@ class Score:
 
         # ensure all ints are safe to cast.
         if not all(map(str.isdecimal, data[3:11] + [data[13], data[15]])):
-            log('Invalid parameter passed into submit-modular.', Ansi.LRED)
+            log("Invalid parameter passed into submit-modular.", Ansi.LRED)
             return
 
-        (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss,
-         s.score, s.max_combo) = map(int, data[3:11])
+        (s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo) = map(
+            int, data[3:11]
+        )
 
-        s.perfect = data[11] == 'True'
-        _grade = data[12] # letter grade
+        s.perfect = data[11] == "True"
+        _grade = data[12]  # letter grade
         s.mods = Mods(int(data[13]))
-        s.passed = data[14] == 'True'
+        s.passed = data[14] == "True"
         s.mode = GameMode.from_params(int(data[15]), s.mods)
 
-        s.play_time = datetime.now() # TODO: use data[16]
+        s.play_time = datetime.now()  # TODO: use data[16]
 
-        s.client_flags = ClientFlags(data[17].count(' ') & ~4)
+        s.client_flags = ClientFlags(data[17].count(" ") & ~4)
 
         s.grade = Grade.from_str(_grade) if s.passed else Grade.F
 
@@ -290,7 +325,7 @@ class Score:
         s.calc_accuracy()
 
         if s.bmap:
-            osu_file_path = BEATMAPS_PATH / f'{s.bmap.id}.osu'
+            osu_file_path = BEATMAPS_PATH / f"{s.bmap.id}.osu"
             if await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
                 s.pp, s.sr = s.calc_diff(osu_file_path)
 
@@ -316,29 +351,29 @@ class Score:
         scores_table = self.mode.scores_table
 
         if self.mode >= GameMode.rx_std:
-            scoring_metric = 'pp'
+            scoring_metric = "pp"
             score = self.pp
         else:
-            scoring_metric = 'score'
+            scoring_metric = "score"
             score = self.score
 
         res = await glob.db.fetch(
-            f'SELECT COUNT(*) AS c FROM {scores_table} s '
-            'INNER JOIN users u ON u.id = s.userid '
-            'WHERE s.map_md5 = %s AND s.mode = %s '
-            'AND s.status = 2 AND u.priv & 1 '
-            f'AND s.{scoring_metric} > %s',
-            [self.bmap.md5, self.mode.as_vanilla, score]
+            f"SELECT COUNT(*) AS c FROM {scores_table} s "
+            "INNER JOIN users u ON u.id = s.userid "
+            "WHERE s.map_md5 = %s AND s.mode = %s "
+            "AND s.status = 2 AND u.priv & 1 "
+            f"AND s.{scoring_metric} > %s",
+            [self.bmap.md5, self.mode.as_vanilla, score],
         )
 
-        return res['c'] + 1 if res else 1
+        return res["c"] + 1 if res else 1
 
     def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn == 0: # std
-            with OppaiWrapper('oppai-ng/liboppai.so') as ezpp:
+        if mode_vn == 0:  # std
+            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
 
@@ -346,7 +381,7 @@ class Score:
                     ezpp.set_mode(mode_vn)
 
                 ezpp.set_combo(self.max_combo)
-                ezpp.set_nmiss(self.nmiss) # clobbers acc
+                ezpp.set_nmiss(self.nmiss)  # clobbers acc
                 ezpp.set_accuracy_percent(self.acc)
 
                 ezpp.calculate(osu_file_path)
@@ -358,7 +393,7 @@ class Score:
                     return (0.0, 0.0)
 
                 return (round(pp, 5), ezpp.get_sr())
-        elif mode_vn in (1, 2): # taiko, catch
+        elif mode_vn in (1, 2):  # taiko, catch
             beatmap = PeaceMap(osu_file_path)
             peace = PeaceCalculator()
 
@@ -379,7 +414,7 @@ class Score:
                 return (0.0, 0.0)
 
             return (round(calculated.pp, 5), calculated.stars)
-        elif mode_vn == 3: # mania
+        elif mode_vn == 3:  # mania
             beatmap = PeaceMap(osu_file_path)
             peace = PeaceCalculator()
 
@@ -398,7 +433,7 @@ class Score:
 
             return (round(calculated.pp, 5), calculated.stars)
         else:
-            raise ValueError(f'Invalid vanilla mode {mode_vn}')
+            raise ValueError(f"Invalid vanilla mode {mode_vn}")
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""
@@ -407,21 +442,21 @@ class Score:
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
         res = await glob.db.fetch(
-            f'SELECT id, pp FROM {scores_table} '
-            'WHERE userid = %s AND map_md5 = %s '
-            'AND mode = %s AND status = 2',
-            [self.player.id, self.bmap.md5, self.mode.as_vanilla]
+            f"SELECT id, pp FROM {scores_table} "
+            "WHERE userid = %s AND map_md5 = %s "
+            "AND mode = %s AND status = 2",
+            [self.player.id, self.bmap.md5, self.mode.as_vanilla],
         )
 
         if res:
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res['id'], scores_table)
+            self.prev_best = await Score.from_sql(res["id"], scores_table)
 
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > res['pp']:
+            if self.pp > res["pp"]:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
@@ -434,20 +469,20 @@ class Score:
         """Calculate the accuracy of our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn == 0: # osu!
+        if mode_vn == 0:  # osu!
             total = self.n300 + self.n100 + self.n50 + self.nmiss
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * (
-                (self.n300 * 300.0) +
-                (self.n100 * 100.0) +
-                (self.n50 * 50.0)
-            ) / (total * 300.0)
+            self.acc = (
+                100.0
+                * ((self.n300 * 300.0) + (self.n100 * 100.0) + (self.n50 * 50.0))
+                / (total * 300.0)
+            )
 
-        elif mode_vn == 1: # osu!taiko
+        elif mode_vn == 1:  # osu!taiko
             total = self.n300 + self.n100 + self.nmiss
 
             if total == 0:
@@ -456,9 +491,8 @@ class Score:
 
             self.acc = 100.0 * ((self.n100 * 0.5) + self.n300) / total
 
-        elif mode_vn == 2: # osu!catch
-            total = (self.n300 + self.n100 + self.n50 +
-                     self.nkatu + self.nmiss)
+        elif mode_vn == 2:  # osu!catch
+            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
 
             if total == 0:
                 self.acc = 0.0
@@ -466,17 +500,22 @@ class Score:
 
             self.acc = 100.0 * (self.n300 + self.n100 + self.n50) / total
 
-        elif mode_vn == 3: # osu!mania
-            total = (self.n300 + self.n100 + self.n50 +
-                     self.ngeki + self.nkatu + self.nmiss)
+        elif mode_vn == 3:  # osu!mania
+            total = (
+                self.n300 + self.n100 + self.n50 + self.ngeki + self.nkatu + self.nmiss
+            )
 
             if total == 0:
                 self.acc = 0.0
                 return
 
-            self.acc = 100.0 * (
-                (self.n50 * 50.0) +
-                (self.n100 * 100.0) +
-                (self.nkatu * 200.0) +
-                ((self.n300 + self.ngeki) * 300.0)
-            ) / (total * 300.0)
+            self.acc = (
+                100.0
+                * (
+                    (self.n50 * 50.0)
+                    + (self.n100 * 100.0)
+                    + (self.nkatu * 200.0)
+                    + ((self.n300 + self.ngeki) * 300.0)
+                )
+                / (total * 300.0)
+            )

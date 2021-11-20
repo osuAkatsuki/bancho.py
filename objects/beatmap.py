@@ -1,7 +1,8 @@
 import functools
 import hashlib
 from collections import defaultdict
-#from dataclasses import dataclass
+
+# from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from enum import IntEnum
@@ -21,48 +22,45 @@ from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
 
-__all__ = ('ensure_local_osu_file', 'RankedStatus',
-           'Beatmap', 'BeatmapSet')
+__all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
 BASE_DOMAIN = glob.config.domain
 
-BEATMAPS_PATH = Path.cwd() / '.data/osu'
+BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
-OSUAPI_GET_BEATMAPS = 'https://old.ppy.sh/api/get_beatmaps'
+OSUAPI_GET_BEATMAPS = "https://old.ppy.sh/api/get_beatmaps"
 
 DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
+
 async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if glob.app.debug:
-        log(f'Doing osu!api (getbeatmaps) request {params}', Ansi.LMAGENTA)
+        log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    params['k'] = glob.config.osu_api_key
+    params["k"] = glob.config.osu_api_key
 
     async with glob.http_session.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
-        if (
-            resp and resp.status == 200 and
-            resp.content.total_bytes != 2 # b'[]'
-        ):
+        if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
             return await resp.json()
 
+
 async def ensure_local_osu_file(
-    osu_file_path: Path,
-    bmap_id: int, bmap_md5: str
+    osu_file_path: Path, bmap_id: int, bmap_md5: str
 ) -> bool:
     """Ensure we have the latest .osu file locally,
-       downloading it from the osu!api if required."""
+    downloading it from the osu!api if required."""
     if (
-        not osu_file_path.exists() or
-        hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
+        not osu_file_path.exists()
+        or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
         if glob.app.debug:
-            log(f'Doing osu!api (.osu file) request {bmap_id}', Ansi.LMAGENTA)
+            log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
-        url = f'https://old.ppy.sh/osu/{bmap_id}'
+        url = f"https://old.ppy.sh/osu/{bmap_id}"
         async with glob.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
@@ -74,17 +72,20 @@ async def ensure_local_osu_file(
 
     return True
 
+
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
 # This drives me and probably everyone else pretty insane,
 # but we have nothing to do but deal with it B).
 
+
 @unique
 @pymysql_encode(escape_enum)
 class RankedStatus(IntEnum):
     """Server side osu! beatmap ranked statuses.
-       Same as used in osu!'s /web/getscores.php.
+    Same as used in osu!'s /web/getscores.php.
     """
+
     NotSubmitted = -1
     Pending = 0
     UpdateAvailable = 1
@@ -96,13 +97,13 @@ class RankedStatus(IntEnum):
     @functools.cache
     def __str__(self) -> str:
         return {
-            self.NotSubmitted: 'Unsubmitted',
-            self.Pending: 'Unranked',
-            self.UpdateAvailable: 'Outdated',
-            self.Ranked: 'Ranked',
-            self.Approved: 'Approved',
-            self.Qualified: 'Qualified',
-            self.Loved: 'Loved'
+            self.NotSubmitted: "Unsubmitted",
+            self.Pending: "Unranked",
+            self.UpdateAvailable: "Outdated",
+            self.Ranked: "Ranked",
+            self.Approved: "Approved",
+            self.Qualified: "Qualified",
+            self.Loved: "Loved",
         }[self]
 
     @property
@@ -115,65 +116,69 @@ class RankedStatus(IntEnum):
             self.Ranked: 1,
             self.Approved: 2,
             self.Qualified: 3,
-            self.Loved: 4
+            self.Loved: 4,
         }[self]
 
     @classmethod
     @functools.cache
-    def from_osuapi(cls, osuapi_status: int) -> 'RankedStatus':
+    def from_osuapi(cls, osuapi_status: int) -> "RankedStatus":
         """Convert from osu!api status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable, {
-                -2: cls.Pending, # graveyard
-                -1: cls.Pending, # wip
-                0:  cls.Pending,
-                1:  cls.Ranked,
-                2:  cls.Approved,
-                3:  cls.Qualified,
-                4:  cls.Loved
-            }
+            lambda: cls.UpdateAvailable,
+            {
+                -2: cls.Pending,  # graveyard
+                -1: cls.Pending,  # wip
+                0: cls.Pending,
+                1: cls.Ranked,
+                2: cls.Approved,
+                3: cls.Qualified,
+                4: cls.Loved,
+            },
         )
         return mapping[osuapi_status]
 
     @classmethod
     @functools.cache
-    def from_osudirect(cls, osudirect_status: int) -> 'RankedStatus':
+    def from_osudirect(cls, osudirect_status: int) -> "RankedStatus":
         """Convert from osu!direct status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable, {
+            lambda: cls.UpdateAvailable,
+            {
                 0: cls.Ranked,
                 2: cls.Pending,
                 3: cls.Qualified,
-                #4: all ranked statuses lol
-                5: cls.Pending, # graveyard
-                7: cls.Ranked, # played before
-                8: cls.Loved
-            }
+                # 4: all ranked statuses lol
+                5: cls.Pending,  # graveyard
+                7: cls.Ranked,  # played before
+                8: cls.Loved,
+            },
         )
         return mapping[osudirect_status]
 
     @classmethod
     @functools.cache
-    def from_str(cls, status_str: str) -> 'RankedStatus':
-        """Convert from string value.""" # could perhaps have `'unranked': cls.Pending`?
+    def from_str(cls, status_str: str) -> "RankedStatus":
+        """Convert from string value."""  # could perhaps have `'unranked': cls.Pending`?
         mapping: Mapping[str, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable, {
-                'pending': cls.Pending,
-                'ranked': cls.Ranked,
-                'approved': cls.Approved,
-                'qualified': cls.Qualified,
-                'loved': cls.Loved
-            }
+            lambda: cls.UpdateAvailable,
+            {
+                "pending": cls.Pending,
+                "ranked": cls.Ranked,
+                "approved": cls.Approved,
+                "qualified": cls.Qualified,
+                "loved": cls.Loved,
+            },
         )
         return mapping[status_str]
 
-#@dataclass
-#class BeatmapInfoRequest:
+
+# @dataclass
+# class BeatmapInfoRequest:
 #    filenames: Sequence[str]
 #    ids: Sequence[int]
 
-#@dataclass
-#class BeatmapInfo:
+# @dataclass
+# class BeatmapInfo:
 #    id: int # i16
 #    map_id: int # i32
 #    set_id: int # i32
@@ -184,6 +189,7 @@ class RankedStatus(IntEnum):
 #    taiko_rank: int # u8
 #    mania_rank: int # u8
 #    map_md5: str
+
 
 class Beatmap:
     """A class representing an osu! beatmap.
@@ -230,47 +236,72 @@ class Beatmap:
         Cached pp values to serve when a map is /np'ed.
         PP will be cached for whichever mod combination is requested.
     """
-    __slots__ = ('set', 'md5', 'id', 'set_id',
-                 'artist', 'title', 'version', 'creator',
-                 'last_update', 'total_length',
-                 'max_combo', 'status', 'frozen',
-                 'plays', 'passes', 'mode', 'bpm',
-                 'cs', 'od', 'ar', 'hp', 'diff',
-                 'filename', 'pp_cache')
+
+    __slots__ = (
+        "set",
+        "md5",
+        "id",
+        "set_id",
+        "artist",
+        "title",
+        "version",
+        "creator",
+        "last_update",
+        "total_length",
+        "max_combo",
+        "status",
+        "frozen",
+        "plays",
+        "passes",
+        "mode",
+        "bpm",
+        "cs",
+        "od",
+        "ar",
+        "hp",
+        "diff",
+        "filename",
+        "pp_cache",
+    )
 
     def __init__(self, **kwargs: Any) -> None:
         self.set: Optional[BeatmapSet] = None
 
-        self.md5 = kwargs.get('md5', '')
-        self.id = kwargs.get('id', 0)
-        self.set_id = kwargs.get('set_id', 0)
+        self.md5 = kwargs.get("md5", "")
+        self.id = kwargs.get("id", 0)
+        self.set_id = kwargs.get("set_id", 0)
 
-        self.artist = kwargs.get('artist', '')
-        self.title = kwargs.get('title', '')
-        self.version = kwargs.get('version', '') # diff name
-        self.creator = kwargs.get('creator', '')
+        self.artist = kwargs.get("artist", "")
+        self.title = kwargs.get("title", "")
+        self.version = kwargs.get("version", "")  # diff name
+        self.creator = kwargs.get("creator", "")
 
-        self.last_update = kwargs.get('last_update', DEFAULT_LAST_UPDATE)
-        self.total_length = kwargs.get('total_length', 0)
-        self.max_combo = kwargs.get('max_combo', 0)
+        self.last_update = kwargs.get("last_update", DEFAULT_LAST_UPDATE)
+        self.total_length = kwargs.get("total_length", 0)
+        self.max_combo = kwargs.get("max_combo", 0)
 
-        self.status = RankedStatus(kwargs.get('status', 0))
-        self.frozen = kwargs.get('frozen', False) == 1
+        self.status = RankedStatus(kwargs.get("status", 0))
+        self.frozen = kwargs.get("frozen", False) == 1
 
-        self.plays = kwargs.get('plays', 0)
-        self.passes = kwargs.get('passes', 0)
-        self.mode = GameMode(kwargs.get('mode', 0))
-        self.bpm = kwargs.get('bpm', 0.0)
+        self.plays = kwargs.get("plays", 0)
+        self.passes = kwargs.get("passes", 0)
+        self.mode = GameMode(kwargs.get("mode", 0))
+        self.bpm = kwargs.get("bpm", 0.0)
 
-        self.cs = kwargs.get('cs', 0.0)
-        self.od = kwargs.get('od', 0.0)
-        self.ar = kwargs.get('ar', 0.0)
-        self.hp = kwargs.get('hp', 0.0)
+        self.cs = kwargs.get("cs", 0.0)
+        self.od = kwargs.get("od", 0.0)
+        self.ar = kwargs.get("ar", 0.0)
+        self.hp = kwargs.get("hp", 0.0)
 
-        self.diff = kwargs.get('diff', 0.0)
+        self.diff = kwargs.get("diff", 0.0)
 
-        self.filename = kwargs.get('filename', '')
-        self.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}} # {mode_vn: {mods: (acc/score: pp, ...), ...}}
+        self.filename = kwargs.get("filename", "")
+        self.pp_cache = {
+            0: {},
+            1: {},
+            2: {},
+            3: {},
+        }  # {mode_vn: {mods: (acc/score: pp, ...), ...}}
 
     def __repr__(self) -> str:
         return self.full
@@ -278,56 +309,57 @@ class Beatmap:
     @property
     def full(self) -> str:
         """The full osu! formatted name `self`."""
-        return f'{self.artist} - {self.title} [{self.version}]'
+        return f"{self.artist} - {self.title} [{self.version}]"
 
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f'https://osu.{BASE_DOMAIN}/beatmaps/{self.id}'
+        return f"https://osu.{BASE_DOMAIN}/beatmaps/{self.id}"
 
     @property
     def embed(self) -> str:
         """An osu! chat embed to `self`'s osu! beatmap page."""
-        return f'[{self.url} {self.full}]'
+        return f"[{self.url} {self.full}]"
 
     # TODO: cache these & standardize method for changing status
 
     @property
     def has_leaderboard(self) -> bool:
         """Return whether the map has a ranked leaderboard."""
-        return self.status in (RankedStatus.Ranked,
-                               RankedStatus.Approved,
-                               RankedStatus.Loved)
+        return self.status in (
+            RankedStatus.Ranked,
+            RankedStatus.Approved,
+            RankedStatus.Loved,
+        )
 
     @property
     def awards_ranked_pp(self) -> bool:
         """Return whether the map's status awards ranked pp for scores."""
-        return self.status in (RankedStatus.Ranked,
-                               RankedStatus.Approved)
+        return self.status in (RankedStatus.Ranked, RankedStatus.Approved)
 
-    @property # perhaps worth caching some of?
+    @property  # perhaps worth caching some of?
     def as_dict(self) -> dict[str, object]:
         return {
-            'md5': self.md5,
-            'id': self.id,
-            'set_id': self.set_id,
-            'artist': self.artist,
-            'title': self.title,
-            'version': self.version,
-            'creator': self.creator,
-            'last_update': self.last_update,
-            'total_length': self.total_length,
-            'max_combo': self.max_combo,
-            'status': self.status,
-            'plays': self.plays,
-            'passes': self.passes,
-            'mode': self.mode,
-            'bpm': self.bpm,
-            'cs': self.cs,
-            'od': self.od,
-            'ar': self.ar,
-            'hp': self.hp,
-            'diff': self.diff
+            "md5": self.md5,
+            "id": self.id,
+            "set_id": self.set_id,
+            "artist": self.artist,
+            "title": self.title,
+            "version": self.version,
+            "creator": self.creator,
+            "last_update": self.last_update,
+            "total_length": self.total_length,
+            "max_combo": self.max_combo,
+            "status": self.status,
+            "plays": self.plays,
+            "passes": self.passes,
+            "mode": self.mode,
+            "bpm": self.bpm,
+            "cs": self.cs,
+            "od": self.od,
+            "ar": self.ar,
+            "hp": self.hp,
+            "diff": self.diff,
         }
 
     # TODO: implement some locking for the map fetch methods
@@ -342,7 +374,7 @@ class Beatmap:
     # populating the higher levels of the cache with new maps.
 
     @classmethod
-    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional['Beatmap']:
+    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional["Beatmap"]:
         """Fetch a map from the cache, database, or osuapi by md5."""
         bmap = await cls._from_md5_cache(md5)
 
@@ -353,15 +385,12 @@ class Beatmap:
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
                 res = await glob.db.fetch(
-                    'SELECT set_id '
-                    'FROM maps '
-                    'WHERE md5 = %s',
-                    [md5]
+                    "SELECT set_id " "FROM maps " "WHERE md5 = %s", [md5]
                 )
 
                 if res:
                     # found set id in db
-                    set_id = res['set_id']
+                    set_id = res["set_id"]
                 else:
                     # failed to get from db, try osu!api
                     api_data = await osuapiv1_getbeatmaps(h=md5)
@@ -369,7 +398,7 @@ class Beatmap:
                     if not api_data:
                         return
 
-                    set_id = int(api_data[0]['beatmapset_id'])
+                    set_id = int(api_data[0]["beatmapset_id"])
 
             # we have a valid set id, fetch the whole set.
             if not await BeatmapSet.from_bsid(set_id):
@@ -384,7 +413,7 @@ class Beatmap:
         return bmap
 
     @classmethod
-    async def from_bid(cls, bid: int) -> Optional['Beatmap']:
+    async def from_bid(cls, bid: int) -> Optional["Beatmap"]:
         """Fetch a map from the cache, database, or osuapi by id."""
         bmap = await cls._from_bid_cache(bid)
 
@@ -394,15 +423,12 @@ class Beatmap:
             # cached all at once to minimize osu!api
             # requests overall in the long run
             res = await glob.db.fetch(
-                'SELECT set_id '
-                'FROM maps '
-                'WHERE id = %s',
-                [bid]
+                "SELECT set_id " "FROM maps " "WHERE id = %s", [bid]
             )
 
             if res:
                 # found set id in db
-                set_id = res['set_id']
+                set_id = res["set_id"]
             else:
                 # failed to get from db, try osu!api
                 api_data = await osuapiv1_getbeatmaps(b=bid)
@@ -410,7 +436,7 @@ class Beatmap:
                 if not api_data:
                     return
 
-                set_id = int(api_data[0]['beatmapset_id'])
+                set_id = int(api_data[0]["beatmapset_id"])
 
             # we have a valid set id, fetch the whole set.
             if not await BeatmapSet.from_bsid(set_id):
@@ -434,65 +460,68 @@ class Beatmap:
         """Change internal data with the data in osu!api format."""
         # NOTE: `self` is not guaranteed to have any attributes
         #       initialized when this is called.
-        self.md5 = osuapi_resp['file_md5']
-        #self.id = int(osuapi_resp['beatmap_id'])
-        self.set_id = int(osuapi_resp['beatmapset_id'])
+        self.md5 = osuapi_resp["file_md5"]
+        # self.id = int(osuapi_resp['beatmap_id'])
+        self.set_id = int(osuapi_resp["beatmapset_id"])
 
         self.artist, self.title, self.version, self.creator = (
-            osuapi_resp['artist'], osuapi_resp['title'],
-            osuapi_resp['version'], osuapi_resp['creator']
+            osuapi_resp["artist"],
+            osuapi_resp["title"],
+            osuapi_resp["version"],
+            osuapi_resp["creator"],
         )
 
         self.filename = (
-            '{artist} - {title} ({creator}) [{version}].osu'
-        ).format(**osuapi_resp).translate(IGNORED_BEATMAP_CHARS)
+            ("{artist} - {title} ({creator}) [{version}].osu")
+            .format(**osuapi_resp)
+            .translate(IGNORED_BEATMAP_CHARS)
+        )
 
         # quite a bit faster than using dt.strptime.
-        _last_update = osuapi_resp['last_update']
+        _last_update = osuapi_resp["last_update"]
         self.last_update = datetime(
             year=int(_last_update[0:4]),
             month=int(_last_update[5:7]),
             day=int(_last_update[8:10]),
             hour=int(_last_update[11:13]),
             minute=int(_last_update[14:16]),
-            second=int(_last_update[17:19])
+            second=int(_last_update[17:19]),
         )
 
-        self.total_length = int(osuapi_resp['total_length'])
+        self.total_length = int(osuapi_resp["total_length"])
 
-        if osuapi_resp['max_combo'] is not None:
-            self.max_combo = int(osuapi_resp['max_combo'])
+        if osuapi_resp["max_combo"] is not None:
+            self.max_combo = int(osuapi_resp["max_combo"])
         else:
             self.max_combo = 0
 
         # if a map is 'frozen', we keeps it's status
         # even after an update from the osu!api.
-        if not getattr(self, 'frozen', False):
-            osuapi_status = int(osuapi_resp['approved'])
+        if not getattr(self, "frozen", False):
+            osuapi_status = int(osuapi_resp["approved"])
             self.status = RankedStatus.from_osuapi(osuapi_status)
 
-        self.mode = GameMode(int(osuapi_resp['mode']))
+        self.mode = GameMode(int(osuapi_resp["mode"]))
 
-        if osuapi_resp['bpm'] is not None:
-            self.bpm = float(osuapi_resp['bpm'])
+        if osuapi_resp["bpm"] is not None:
+            self.bpm = float(osuapi_resp["bpm"])
         else:
             self.bpm = 0.0
 
-        self.cs = float(osuapi_resp['diff_size'])
-        self.od = float(osuapi_resp['diff_overall'])
-        self.ar = float(osuapi_resp['diff_approach'])
-        self.hp = float(osuapi_resp['diff_drain'])
+        self.cs = float(osuapi_resp["diff_size"])
+        self.od = float(osuapi_resp["diff_overall"])
+        self.ar = float(osuapi_resp["diff_approach"])
+        self.hp = float(osuapi_resp["diff_drain"])
 
-        self.diff = float(osuapi_resp['difficultyrating'])
+        self.diff = float(osuapi_resp["difficultyrating"])
 
     @staticmethod
     async def _from_md5_cache(
-        md5: str,
-        check_updates: bool = True
-    ) -> Optional['Beatmap']:
+        md5: str, check_updates: bool = True
+    ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by md5."""
-        if md5 in glob.cache['beatmap']:
-            bmap: Beatmap = glob.cache['beatmap'][md5]
+        if md5 in glob.cache["beatmap"]:
+            bmap: Beatmap = glob.cache["beatmap"][md5]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
@@ -501,17 +530,17 @@ class Beatmap:
 
     @staticmethod
     async def _from_bid_cache(
-        bid: int,
-        check_updates: bool = True
-    ) -> Optional['Beatmap']:
+        bid: int, check_updates: bool = True
+    ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by id."""
-        if bid in glob.cache['beatmap']:
-            bmap: Beatmap = glob.cache['beatmap'][bid]
+        if bid in glob.cache["beatmap"]:
+            bmap: Beatmap = glob.cache["beatmap"][bid]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
 
             return bmap
+
 
 class BeatmapSet:
     """A class to represent an osu! beatmap set.
@@ -541,37 +570,39 @@ class BeatmapSet:
       await BeatmapSet._update_if_available() -> None
       await BeatmapSet._save_to_sql() -> None
     """
-    __slots__ = ('id', 'last_osuapi_check', 'maps')
+
+    __slots__ = ("id", "last_osuapi_check", "maps")
 
     def __init__(self, **kwargs) -> None:
-        self.id = kwargs.get('id', 0)
+        self.id = kwargs.get("id", 0)
 
-        self.last_osuapi_check: Optional[datetime] = kwargs.get('last_osuapi_check', None)
-        self.maps: list[Beatmap] = kwargs.get('maps', [])
+        self.last_osuapi_check: Optional[datetime] = kwargs.get(
+            "last_osuapi_check", None
+        )
+        self.maps: list[Beatmap] = kwargs.get("maps", [])
 
     @functools.lru_cache(maxsize=256)
     def __repr__(self) -> str:
         map_names = []
         for bmap in self.maps:
-            name = f'{bmap.artist} - {bmap.title}'
+            name = f"{bmap.artist} - {bmap.title}"
             if name not in map_names:
                 map_names.append(name)
-        return ', '.join(map_names)
+        return ", ".join(map_names)
 
     @property
-    def url(self) -> str: # same as above, just no beatmap id
+    def url(self) -> str:  # same as above, just no beatmap id
         """The online url for this beatmap set."""
-        return f'https://osu.{BASE_DOMAIN}/beatmapsets/{self.id}'
+        return f"https://osu.{BASE_DOMAIN}/beatmapsets/{self.id}"
 
     @functools.cache
     def all_officially_ranked_or_approved(self) -> bool:
         """Whether all of the maps in the set are
-           ranked or approved on official servers."""
+        ranked or approved on official servers."""
         for bmap in self.maps:
             if (
-                bmap.status not in (RankedStatus.Ranked,
-                                    RankedStatus.Approved) or
-                bmap.frozen # ranked/approved, but only on gulag
+                bmap.status not in (RankedStatus.Ranked, RankedStatus.Approved)
+                or bmap.frozen  # ranked/approved, but only on gulag
             ):
                 return False
         return True
@@ -579,18 +610,18 @@ class BeatmapSet:
     @functools.cache
     def all_officially_loved(self) -> bool:
         """Whether all of the maps in the set are
-           loved on official servers."""
+        loved on official servers."""
         for bmap in self.maps:
             if (
-                bmap.status != RankedStatus.Loved or
-                bmap.frozen # loved, but only on gulag
+                bmap.status != RankedStatus.Loved
+                or bmap.frozen  # loved, but only on gulag
             ):
                 return False
         return True
 
     def _cache_expired(self) -> bool:
         """Whether the cached version of the set is
-           expired and needs an update from the osu!api."""
+        expired and needs an update from the osu!api."""
         # ranked & approved maps are update-locked.
         if self.all_officially_ranked_or_approved():
             return False
@@ -618,16 +649,16 @@ class BeatmapSet:
 
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
-           and propogate any update into our cache & database."""
+        and propogate any update into our cache & database."""
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
             current_maps = {bmap.id: bmap for bmap in self.maps}
             self.last_osuapi_check = datetime.now()
 
             for api_bmap in api_data:
-                bmap_id = int(api_bmap['beatmap_id'])
+                bmap_id = int(api_bmap["beatmap_id"])
                 if bmap_id not in current_maps:
                     # we don't have this bmap id, add it to cache & db
-                    bmap: 'Beatmap' = Beatmap.__new__(Beatmap)
+                    bmap: "Beatmap" = Beatmap.__new__(Beatmap)
                     bmap.id = bmap_id
 
                     bmap._parse_from_osuapi_resp(api_bmap)
@@ -637,7 +668,7 @@ class BeatmapSet:
                     bmap.passes = 0
                     bmap.plays = 0
                     bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
-                elif api_bmap['file_md5'] != current_maps[bmap_id].md5:
+                elif api_bmap["file_md5"] != current_maps[bmap_id].md5:
                     # this is a newer version than we have
                     bmap = current_maps[bmap_id]
                     bmap._parse_from_osuapi_resp(api_bmap)
@@ -648,7 +679,7 @@ class BeatmapSet:
             # i want to see how frequently this happens and see some examples
             # of when it's triggered since i'm not 100% sure about it, cheers.
             await misc.utils.log_strange_occurrence(
-                f'_update_if_available no data, setid: {self.id}'
+                f"_update_if_available no data, setid: {self.id}"
             )
 
     async def _save_to_sql(self) -> None:
@@ -656,58 +687,75 @@ class BeatmapSet:
         async with glob.db.pool.acquire() as db_conn:
             async with db_conn.cursor() as db_cursor:
                 await db_cursor.execute(
-                    'REPLACE INTO mapsets '
-                    '(server, id, last_osuapi_check) '
+                    "REPLACE INTO mapsets "
+                    "(server, id, last_osuapi_check) "
                     'VALUES ("osu!", %s, %s)',
-                    [self.id, self.last_osuapi_check]
+                    [self.id, self.last_osuapi_check],
                 )
 
                 await db_cursor.executemany(
-                    'REPLACE INTO maps ('
-                        'server, md5, id, set_id, '
-                        'artist, title, version, creator, '
-                        'filename, last_update, total_length, '
-                        'max_combo, status, frozen, '
-                        'plays, passes, mode, bpm, '
-                        'cs, od, ar, hp, diff'
-                    ') VALUES ('
-                        '"osu!", %s, %s, %s, '
-                        '%s, %s, %s, %s, '
-                        '%s, %s, %s, '
-                        '%s, %s, %s, '
-                        '%s, %s, %s, %s, '
-                        '%s, %s, %s, %s, %s'
-                    ')', [(
-                        bmap.md5, bmap.id, bmap.set_id,
-                        bmap.artist, bmap.title, bmap.version, bmap.creator,
-                        bmap.filename, bmap.last_update, bmap.total_length,
-                        bmap.max_combo, bmap.status, bmap.frozen,
-                        bmap.plays, bmap.passes, bmap.mode, bmap.bpm,
-                        bmap.cs, bmap.od, bmap.ar, bmap.hp, bmap.diff
-                    ) for bmap in self.maps]
+                    "REPLACE INTO maps ("
+                    "server, md5, id, set_id, "
+                    "artist, title, version, creator, "
+                    "filename, last_update, total_length, "
+                    "max_combo, status, frozen, "
+                    "plays, passes, mode, bpm, "
+                    "cs, od, ar, hp, diff"
+                    ") VALUES ("
+                    '"osu!", %s, %s, %s, '
+                    "%s, %s, %s, %s, "
+                    "%s, %s, %s, "
+                    "%s, %s, %s, "
+                    "%s, %s, %s, %s, "
+                    "%s, %s, %s, %s, %s"
+                    ")",
+                    [
+                        (
+                            bmap.md5,
+                            bmap.id,
+                            bmap.set_id,
+                            bmap.artist,
+                            bmap.title,
+                            bmap.version,
+                            bmap.creator,
+                            bmap.filename,
+                            bmap.last_update,
+                            bmap.total_length,
+                            bmap.max_combo,
+                            bmap.status,
+                            bmap.frozen,
+                            bmap.plays,
+                            bmap.passes,
+                            bmap.mode,
+                            bmap.bpm,
+                            bmap.cs,
+                            bmap.od,
+                            bmap.ar,
+                            bmap.hp,
+                            bmap.diff,
+                        )
+                        for bmap in self.maps
+                    ],
                 )
 
     @staticmethod
-    async def _from_bsid_cache(bsid: int) -> Optional['BeatmapSet']:
+    async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the cache by set id."""
-        if bsid in glob.cache['beatmapset']:
-            bmap_set: BeatmapSet = glob.cache['beatmapset'][bsid]
+        if bsid in glob.cache["beatmapset"]:
+            bmap_set: BeatmapSet = glob.cache["beatmapset"][bsid]
 
             if bmap_set._cache_expired():
                 await bmap_set._update_if_available()
 
-            return glob.cache['beatmapset'][bsid]
+            return glob.cache["beatmapset"][bsid]
 
     @classmethod
-    async def _from_bsid_sql(cls, bsid: int) -> Optional['BeatmapSet']:
+    async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                 await db_cursor.execute(
-                    'SELECT last_osuapi_check '
-                    'FROM mapsets '
-                    'WHERE id = %s',
-                    [bsid]
+                    "SELECT last_osuapi_check " "FROM mapsets " "WHERE id = %s", [bsid]
                 )
 
                 if db_cursor.rowcount == 0:
@@ -716,15 +764,15 @@ class BeatmapSet:
                 set_res = await db_cursor.fetchone()
 
                 await db_cursor.execute(
-                    'SELECT md5, id, set_id, '
-                    'artist, title, version, creator, '
-                    'filename, last_update, total_length, '
-                    'max_combo, status, frozen, '
-                    'plays, passes, mode, bpm, '
-                    'cs, od, ar, hp, diff '
-                    'FROM maps '
-                    'WHERE set_id = %s',
-                    [bsid]
+                    "SELECT md5, id, set_id, "
+                    "artist, title, version, creator, "
+                    "filename, last_update, total_length, "
+                    "max_combo, status, frozen, "
+                    "plays, passes, mode, bpm, "
+                    "cs, od, ar, hp, diff "
+                    "FROM maps "
+                    "WHERE set_id = %s",
+                    [bsid],
                 )
 
                 if db_cursor.rowcount == 0:
@@ -739,14 +787,14 @@ class BeatmapSet:
                     # where filenames weren't stored.
                     if not bmap.filename:
                         bmap.filename = (
-                            '{artist} - {title} ({creator}) [{version}].osu'
-                        ).format(**row).translate(IGNORED_BEATMAP_CHARS)
+                            ("{artist} - {title} ({creator}) [{version}].osu")
+                            .format(**row)
+                            .translate(IGNORED_BEATMAP_CHARS)
+                        )
 
                         await glob.db.execute(
-                            'UPDATE maps '
-                            'SET filename = %s '
-                            'WHERE id = %s',
-                            [bmap.filename, bmap.id]
+                            "UPDATE maps " "SET filename = %s " "WHERE id = %s",
+                            [bmap.filename, bmap.id],
                         )
 
                     bmap.set = bmap_set
@@ -755,10 +803,10 @@ class BeatmapSet:
         return bmap_set
 
     @classmethod
-    async def _from_bsid_osuapi(cls, bsid: int) -> Optional['BeatmapSet']:
+    async def _from_bsid_osuapi(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the osu!api by set id."""
         if api_data := await osuapiv1_getbeatmaps(s=bsid):
-            self: 'BeatmapSet' = cls.__new__(cls)
+            self: "BeatmapSet" = cls.__new__(cls)
             self.id = bsid
             self.maps = []
             self.last_osuapi_check = datetime.now()
@@ -767,19 +815,16 @@ class BeatmapSet:
             # select all current beatmaps
             # that're frozen in the db
             res = await glob.db.fetchall(
-                'SELECT id, status '
-                'FROM maps '
-                'WHERE set_id = %s '
-                'AND frozen = 1',
-                [bsid]
+                "SELECT id, status " "FROM maps " "WHERE set_id = %s " "AND frozen = 1",
+                [bsid],
             )
 
-            current_maps = {row['id']: row['status'] for row in res}
+            current_maps = {row["id"]: row["status"] for row in res}
 
             for api_bmap in api_data:
                 # newer version available for this map
-                bmap: 'Beatmap' = Beatmap.__new__(Beatmap)
-                bmap.id = int(api_bmap['beatmap_id'])
+                bmap: "Beatmap" = Beatmap.__new__(Beatmap)
+                bmap.id = int(api_bmap["beatmap_id"])
 
                 if bmap.id in current_maps:
                     # map is currently frozen, keep it's status.
@@ -802,9 +847,9 @@ class BeatmapSet:
             return self
 
     @classmethod
-    async def from_bsid(cls, bsid: int) -> Optional['BeatmapSet']:
+    async def from_bsid(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Cache all maps in a set from the osuapi, optionally
-           returning beatmaps by their md5 or id."""
+        returning beatmaps by their md5 or id."""
         bmap_set = await cls._from_bsid_cache(bsid)
         did_api_request = False
 
@@ -823,8 +868,8 @@ class BeatmapSet:
                 did_api_request = True
 
         # cache the individual maps & set for future requests
-        beatmapset_cache = glob.cache['beatmapset']
-        beatmap_cache = glob.cache['beatmap']
+        beatmapset_cache = glob.cache["beatmapset"]
+        beatmap_cache = glob.cache["beatmap"]
 
         beatmapset_cache[bsid] = bmap_set
 
