@@ -298,10 +298,11 @@ def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str
         }
         for frame in stack[:idx]
     ][
+        # reverse for python-like stacktrace
+        # ordering; puts the most recent
+        # call closest to the command line
         ::-1
-    ]  # reverse for python-like stacktrace
-    # ordering; puts the most recent
-    # call closest to the command line
+    ]
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"

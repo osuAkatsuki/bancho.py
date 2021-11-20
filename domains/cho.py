@@ -825,7 +825,12 @@ async def login(
         glob.datadog.histogram("gulag.login_time", time_taken)
 
     user_os = "unix (wine)" if is_wine else "win32"
-    log(f"{p} logged in with {osu_ver_str} on {user_os}.", Ansi.LCYAN)
+    country_code = p.geoloc["country"]["acronym"].upper()
+
+    log(
+        f"{p} logged in from {country_code} using {osu_ver_str} on {user_os}",
+        Ansi.LCYAN,
+    )
 
     p.update_latest_activity()
     return p.token, bytes(data)
