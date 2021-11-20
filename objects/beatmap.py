@@ -1,8 +1,6 @@
 import functools
 import hashlib
 from collections import defaultdict
-
-# from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from enum import IntEnum
@@ -21,6 +19,8 @@ from constants.gamemodes import GameMode
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
+
+# from dataclasses import dataclass
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 

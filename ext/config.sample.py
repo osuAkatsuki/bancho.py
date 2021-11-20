@@ -1,8 +1,10 @@
-# this file should generally become
-# less useful as you scroll down.
-# except for the bottom one :P <3
+"""
+server settings
 
-""" server settings """
+this file should generally become
+less useful as you scroll down.
+except for the bottom one :P <3
+"""
 # the domain you'd like gulag to be hosted on.
 domain = "cmyui.xyz"  # cmyui.xyz
 

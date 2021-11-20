@@ -20,14 +20,14 @@ from constants.types import osuTypes
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
-
-# from objects.beatmap import BeatmapInfo
 from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
 from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
+
+# from objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
     from objects.player import Player

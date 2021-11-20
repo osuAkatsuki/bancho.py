@@ -1,16 +1,18 @@
 #!/usr/bin/env python3.9
+"""
+gulag - an awesome osu! server implementation from TCP/IP sockets.
 
-# if you're interested in development, my test server is usually
-# up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
-# connection method you would with any other modern server and you
-# should have no problems connecting. registration is done in-game
-# with osu!'s built-in registration (if you're worried about not being
-# properly connected while registering, the server should send back
-# https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login).
+if you're interested in development, my test server is usually
+up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
+connection method you would with any other modern server and you
+should have no problems connecting. registration is done in-game
+with osu!'s built-in registration (if you're worried about not being
+properly connected while registering, the server should send back
+https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login).
 
-# you can also test gulag's rest api using my test server,
-# e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
-
+you can also test gulag's rest api using my test server,
+e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
+"""
 import asyncio
 import os
 import signal
