@@ -53,7 +53,7 @@ class Clan:
         self.members.add(p.id)
 
         await glob.db.execute(
-            "UPDATE users " "SET clan_id = %s, clan_priv = 1 " "WHERE id = %s",
+            "UPDATE users SET clan_id = %s, clan_priv = 1 WHERE id = %s",
             [self.id, p.id],
         )
 
@@ -67,14 +67,14 @@ class Clan:
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor() as db_cursor:
                 await db_cursor.execute(
-                    "UPDATE users " "SET clan_id = 0, clan_priv = 0 " "WHERE id = %s",
+                    "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = %s",
                     [p.id],
                 )
 
                 if not self.members:
                     # no members left, disband clan.
                     await db_cursor.execute(
-                        "DELETE FROM clans " "WHERE id = %s", [self.id]
+                        "DELETE FROM clans WHERE id = %s", [self.id]
                     )
                 elif p.id == self.owner:
                     # owner leaving and members left,
@@ -83,12 +83,12 @@ class Clan:
                     self.owner = next(iter(self.members))
 
                     await db_cursor.execute(
-                        "UPDATE clans " "SET owner = %s " "WHERE id = %s",
+                        "UPDATE clans SET owner = %s WHERE id = %s",
                         [self.owner, self.id],
                     )
 
                     await db_cursor.execute(
-                        "UPDATE users " "SET clan_priv = 3 " "WHERE id = %s",
+                        "UPDATE users SET clan_priv = 3 WHERE id = %s",
                         [self.owner],
                     )
 

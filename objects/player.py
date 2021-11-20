@@ -455,7 +455,7 @@ class Player:
         self.priv = new
 
         await glob.db.execute(
-            "UPDATE users " "SET priv = %s " "WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
         )
 
         if "bancho_priv" in self.__dict__:
@@ -466,7 +466,7 @@ class Player:
         self.priv |= bits
 
         await glob.db.execute(
-            "UPDATE users " "SET priv = %s " "WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
         )
 
         if "bancho_priv" in self.__dict__:
@@ -477,7 +477,7 @@ class Player:
         self.priv &= ~bits
 
         await glob.db.execute(
-            "UPDATE users " "SET priv = %s " "WHERE id = %s", [self.priv, self.id]
+            "UPDATE users SET priv = %s WHERE id = %s", [self.priv, self.id]
         )
 
         if "bancho_priv" in self.__dict__:
@@ -856,7 +856,7 @@ class Player:
 
         self.friends.add(p.id)
         await glob.db.execute(
-            "REPLACE INTO relationships " "VALUES (%s, %s, 'friend')", [self.id, p.id]
+            "REPLACE INTO relationships VALUES (%s, %s, 'friend')", [self.id, p.id]
         )
 
         log(f"{self} friended {p}.")
@@ -869,7 +869,7 @@ class Player:
 
         self.friends.remove(p.id)
         await glob.db.execute(
-            "DELETE FROM relationships " "WHERE user1 = %s AND user2 = %s",
+            "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
             [self.id, p.id],
         )
 
@@ -885,7 +885,7 @@ class Player:
 
         self.blocks.add(p.id)
         await glob.db.execute(
-            "REPLACE INTO relationships " "VALUES (%s, %s, 'block')", [self.id, p.id]
+            "REPLACE INTO relationships VALUES (%s, %s, 'block')", [self.id, p.id]
         )
 
         log(f"{self} blocked {p}.")
@@ -898,7 +898,7 @@ class Player:
 
         self.blocks.remove(p.id)
         await glob.db.execute(
-            "DELETE FROM relationships " "WHERE user1 = %s AND user2 = %s",
+            "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
             [self.id, p.id],
         )
 
@@ -907,7 +907,7 @@ class Player:
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await glob.db.execute(
-            "INSERT INTO user_achievements " "(userid, achid) " "VALUES (%s, %s)",
+            "INSERT INTO user_achievements " "(userid, achid) VALUES (%s, %s)",
             [self.id, a.id],
         )
 
@@ -916,7 +916,7 @@ class Player:
     async def relationships_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve `self`'s relationships from sql."""
         await db_cursor.execute(
-            "SELECT user2, type " "FROM relationships " "WHERE user1 = %s", [self.id]
+            "SELECT user2, type FROM relationships WHERE user1 = %s", [self.id]
         )
 
         async for row in db_cursor:
@@ -1025,7 +1025,7 @@ class Player:
     def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
         task = glob.db.execute(
-            "UPDATE users " "SET latest_activity = UNIX_TIMESTAMP() " "WHERE id = %s",
+            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = %s",
             [self.id],
         )
         glob.loop.create_task(task)

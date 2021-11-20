@@ -125,7 +125,7 @@ def make_safe_name(name: str) -> str:
 
 async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
     """Fetch the bot's name from the database, if available."""
-    await db_cursor.execute("SELECT name " "FROM users " "WHERE id = 1")
+    await db_cursor.execute("SELECT name FROM users WHERE id = 1")
 
     if db_cursor.rowcount == 0:
         log(
@@ -269,7 +269,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{glob.version!r} ran into an issue " "before starting up :(",
+            f"gulag v{glob.version!r} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -656,7 +656,7 @@ def display_startup_dialog() -> None:
     # unnecessary power over the operating system and is not advised.
     if os.geteuid() == 0:
         log(
-            "It is not recommended to run gulag as root, " "especially in production..",
+            "It is not recommended to run gulag as root, especially in production..",
             Ansi.LYELLOW,
         )
 
@@ -669,7 +669,7 @@ def display_startup_dialog() -> None:
 
     if not glob.has_internet:
         log(
-            "Running in offline mode, some features " "will not be available.",
+            "Running in offline mode, some features will not be available.",
             Ansi.LRED,
         )
 
@@ -679,7 +679,7 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
     log(
-        "A config file has been generated, " "please configure it to your needs.",
+        "A config file has been generated, please configure it to your needs.",
         Ansi.LRED,
     )
 

@@ -587,7 +587,7 @@ async def login(
         hw_checks = "h.uninstall_id = %s"
         hw_args = [uninstall_md5]
     else:
-        hw_checks = "h.adapters = %s OR " "h.uninstall_id = %s OR " "h.disk_serial = %s"
+        hw_checks = "h.adapters = %s OR h.uninstall_id = %s OR h.disk_serial = %s"
         hw_args = [adapters_md5, uninstall_md5, disk_sig_md5]
 
     await db_cursor.execute(
@@ -616,7 +616,7 @@ async def login(
             ):
                 return (
                     packets.notification(
-                        "Please contact staff directly " "to create an account."
+                        "Please contact staff directly to create an account."
                     )
                     + packets.userID(-1)
                 ), "no"

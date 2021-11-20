@@ -141,7 +141,7 @@ class MapPool:
     async def maps_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
         await db_cursor.execute(
-            "SELECT map_id, mods, slot " "FROM tourney_pool_maps " "WHERE pool_id = %s",
+            "SELECT map_id, mods, slot FROM tourney_pool_maps WHERE pool_id = %s",
             [self.id],
         )
 
@@ -158,7 +158,7 @@ class MapPool:
                 log(f"Removing {map_id} from pool {self.name} (not found).", Ansi.LRED)
 
                 await db_cursor.execute(
-                    "DELETE FROM tourney_pool_maps " "WHERE map_id = %s", [map_id]
+                    "DELETE FROM tourney_pool_maps WHERE map_id = %s", [map_id]
                 )
                 continue
 

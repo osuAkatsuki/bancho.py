@@ -385,7 +385,7 @@ class Beatmap:
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
                 res = await glob.db.fetch(
-                    "SELECT set_id " "FROM maps " "WHERE md5 = %s", [md5]
+                    "SELECT set_id FROM maps WHERE md5 = %s", [md5]
                 )
 
                 if res:
@@ -422,9 +422,7 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            res = await glob.db.fetch(
-                "SELECT set_id " "FROM maps " "WHERE id = %s", [bid]
-            )
+            res = await glob.db.fetch("SELECT set_id FROM maps WHERE id = %s", [bid])
 
             if res:
                 # found set id in db
@@ -755,7 +753,7 @@ class BeatmapSet:
         async with glob.db.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                 await db_cursor.execute(
-                    "SELECT last_osuapi_check " "FROM mapsets " "WHERE id = %s", [bsid]
+                    "SELECT last_osuapi_check FROM mapsets WHERE id = %s", [bsid]
                 )
 
                 if db_cursor.rowcount == 0:
@@ -793,7 +791,7 @@ class BeatmapSet:
                         )
 
                         await glob.db.execute(
-                            "UPDATE maps " "SET filename = %s " "WHERE id = %s",
+                            "UPDATE maps SET filename = %s WHERE id = %s",
                             [bmap.filename, bmap.id],
                         )
 
@@ -815,7 +813,7 @@ class BeatmapSet:
             # select all current beatmaps
             # that're frozen in the db
             res = await glob.db.fetchall(
-                "SELECT id, status " "FROM maps " "WHERE set_id = %s " "AND frozen = 1",
+                "SELECT id, status FROM maps WHERE set_id = %s AND frozen = 1",
                 [bsid],
             )
 

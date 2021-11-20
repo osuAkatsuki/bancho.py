@@ -257,7 +257,7 @@ async def osuGetBeatmapInfo(
     for idx, map_filename in enumerate(data["Filenames"]):
         # try getting the map from sql
         await db_cursor.execute(
-            "SELECT id, set_id, status, md5 " "FROM maps " "WHERE filename = %s",
+            "SELECT id, set_id, status, md5 FROM maps WHERE filename = %s",
             [map_filename],
         )
 
@@ -304,7 +304,7 @@ async def osuGetBeatmapInfo(
 @get_login(name_p="u", pass_p="h")
 async def osuGetFavourites(p: "Player", conn: Connection) -> HTTPResponse:
     favourites = await glob.db.fetchall(
-        "SELECT setid FROM favourites " "WHERE userid = %s", [p.id]
+        "SELECT setid FROM favourites WHERE userid = %s", [p.id]
     )
 
     return "\n".join(favourites).encode()
@@ -320,14 +320,14 @@ async def osuAddFavourite(p: "Player", conn: Connection) -> HTTPResponse:
 
     # check if they already have this favourited.
     if await glob.db.fetch(
-        "SELECT 1 FROM favourites " "WHERE userid = %s AND setid = %s",
+        "SELECT 1 FROM favourites WHERE userid = %s AND setid = %s",
         [p.id, conn.args["a"]],
     ):
         return b"You've already favourited this beatmap!"
 
     # add favourite
     await glob.db.execute(
-        "INSERT INTO favourites " "VALUES (%s, %s)", [p.id, conn.args["a"]]
+        "INSERT INTO favourites VALUES (%s, %s)", [p.id, conn.args["a"]]
     )
 
 
@@ -585,7 +585,7 @@ async def osuSubmitModularSelector(
 
     # Check for score duplicates
     await db_cursor.execute(
-        f"SELECT 1 FROM {scores_table} " "WHERE online_checksum = %s",
+        f"SELECT 1 FROM {scores_table} WHERE online_checksum = %s",
         [score.online_checksum],
     )
 
@@ -751,7 +751,7 @@ async def osuSubmitModularSelector(
     stats.plays += 1
     stats.tscore += score.score
 
-    stats_query_l = ["UPDATE stats " "SET plays = %s," "playtime = %s," "tscore = %s"]
+    stats_query_l = ["UPDATE stats SET plays = %s,playtime = %s,tscore = %s"]
 
     stats_query_args = [stats.plays, stats.playtime, stats.tscore]
 
@@ -855,7 +855,7 @@ async def osuSubmitModularSelector(
             score.bmap.passes += 1
 
         await db_cursor.execute(
-            "UPDATE maps SET plays = %s, " "passes = %s WHERE md5 = %s",
+            "UPDATE maps SET plays = %s, passes = %s WHERE md5 = %s",
             [score.bmap.plays, score.bmap.passes, score.bmap.md5],
         )
 
@@ -1031,7 +1031,7 @@ async def osuRate(
 
         # osu! client is checking whether we can rate the map or not.
         await db_cursor.execute(
-            "SELECT 1 FROM ratings WHERE " "map_md5 = %s AND userid = %s",
+            "SELECT 1 FROM ratings WHERE map_md5 = %s AND userid = %s",
             [map_md5, p.id],
         )
 
@@ -1045,12 +1045,10 @@ async def osuRate(
             return
 
         await db_cursor.execute(
-            "INSERT INTO ratings " "VALUES (%s, %s, %s)", [p.id, map_md5, int(rating)]
+            "INSERT INTO ratings VALUES (%s, %s, %s)", [p.id, map_md5, int(rating)]
         )
 
-    await db_cursor.execute(
-        "SELECT rating FROM ratings " "WHERE map_md5 = %s", [map_md5]
-    )
+    await db_cursor.execute("SELECT rating FROM ratings WHERE map_md5 = %s", [map_md5])
     ratings = [row[0] async for row in db_cursor]
 
     # send back the average rating
@@ -1147,7 +1145,7 @@ async def getScores(
             # look it up in sql from the filename.
             map_exists = (
                 await glob.db.fetch(
-                    "SELECT 1 FROM maps " "WHERE filename = %s", [map_filename]
+                    "SELECT 1 FROM maps WHERE filename = %s", [map_filename]
                 )
                 is not None
             )
@@ -1212,7 +1210,7 @@ async def getScores(
 
     # fetch beatmap rating from sql
     await db_cursor.execute(
-        "SELECT AVG(rating) rating " "FROM ratings " "WHERE map_md5 = %s", [bmap.md5]
+        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = %s", [bmap.md5]
     )
     rating = (await db_cursor.fetchone())["rating"]
 
@@ -1523,9 +1521,7 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
             return (400, JSON({"status": "Invalid player name."}))
 
         # get their id from username.
-        pid = await glob.db.fetch(
-            "SELECT id FROM users " "WHERE safe_name = %s", [name]
-        )
+        pid = await glob.db.fetch("SELECT id FROM users WHERE safe_name = %s", [name])
 
         if not pid:
             return (404, JSON({"status": "Player not found."}))
@@ -2259,7 +2255,7 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
 
         if not (
             res := await glob.db.fetch(
-                "SELECT id, md5 " "FROM maps " "WHERE filename = %s", [map_filename]
+                "SELECT id, md5 FROM maps WHERE filename = %s", [map_filename]
             )
         ):
             return (404, b"")  # map not found in sql

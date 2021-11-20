@@ -257,7 +257,7 @@ async def changename(ctx: Context) -> Optional[str]:
     safe_name = name.lower().replace(" ", "_")
 
     await glob.db.execute(
-        "UPDATE users " "SET name = %s, safe_name = %s " "WHERE id = %s",
+        "UPDATE users SET name = %s, safe_name = %s WHERE id = %s",
         [name, safe_name, ctx.player.id],
     )
 
@@ -409,7 +409,7 @@ async def _with(ctx: Context) -> Optional[str]:
 
     osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
     if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
-        return "Mapfile could not be found; " "this incident has been reported."
+        return "Mapfile could not be found; this incident has been reported."
 
     mode_vn = ctx.player.last_np["mode_vn"]
 
@@ -576,7 +576,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     ctx.player.api_key = str(uuid.uuid4())
 
     await glob.db.execute(
-        "UPDATE users " "SET api_key = %s " "WHERE id = %s",
+        "UPDATE users SET api_key = %s WHERE id = %s",
         [ctx.player.api_key, ctx.player.id],
     )
     glob.api_keys[ctx.player.api_key] = ctx.player.id
@@ -598,7 +598,7 @@ async def requests(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !requests"
 
     res = await glob.db.fetchall(
-        "SELECT map_id, player_id, datetime " "FROM map_requests WHERE active = 1",
+        "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
         _dict=False,  # return rows as tuples
     )
 
@@ -658,13 +658,13 @@ async def _map(ctx: Context) -> Optional[str]:
             if ctx.args[1] == "set":
                 # update whole set
                 await db_cursor.execute(
-                    "UPDATE maps SET status = %s, " "frozen = 1 WHERE set_id = %s",
+                    "UPDATE maps SET status = %s, frozen = 1 WHERE set_id = %s",
                     [new_status, bmap.set_id],
                 )
 
                 # select all map ids for clearing map requests.
                 await db_cursor.execute(
-                    "SELECT id FROM maps " "WHERE set_id = %s", [bmap.set_id]
+                    "SELECT id FROM maps WHERE set_id = %s", [bmap.set_id]
                 )
                 map_ids = [row[0] async for row in db_cursor]
 
@@ -674,7 +674,7 @@ async def _map(ctx: Context) -> Optional[str]:
             else:
                 # update only map
                 await db_cursor.execute(
-                    "UPDATE maps SET status = %s, " "frozen = 1 WHERE id = %s",
+                    "UPDATE maps SET status = %s, frozen = 1 WHERE id = %s",
                     [new_status, bmap.id],
                 )
 
@@ -686,7 +686,7 @@ async def _map(ctx: Context) -> Optional[str]:
             # deactivate rank requests for all ids
             for map_id in map_ids:
                 await db_cursor.execute(
-                    "UPDATE map_requests " "SET active = 0 " "WHERE map_id = %s",
+                    "UPDATE map_requests SET active = 0 WHERE map_id = %s",
                     [map_id],
                 )
 
@@ -1149,7 +1149,7 @@ async def recalc(ctx: Context) -> Optional[str]:
 
         osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
         if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
-            return "Mapfile could not be found; " "this incident has been reported."
+            return "Mapfile could not be found; this incident has been reported."
 
         async with glob.db.pool.acquire() as conn:
             async with (
@@ -1175,7 +1175,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                             ezpp.calculate(osu_file_path)
 
                             await update_cursor.execute(
-                                f"UPDATE {table} " "SET pp = %s " "WHERE id = %s",
+                                f"UPDATE {table} SET pp = %s WHERE id = %s",
                                 [ezpp.get_pp(), row["id"]],
                             )
 
@@ -1195,7 +1195,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                     conn.cursor(aiomysql.Cursor) as update_cursor,
                 ):
                     await bmap_select_cursor.execute(
-                        "SELECT id, md5 " "FROM maps " "WHERE passes > 0"
+                        "SELECT id, md5 FROM maps WHERE passes > 0"
                     )
 
                     map_count = bmap_select_cursor.rowcount
@@ -1331,7 +1331,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
         async with conn.cursor() as db_cursor:
             for t in ("vn", "rx", "ap"):
                 await db_cursor.execute(
-                    f"DELETE FROM scores_{t} " "WHERE map_md5 = %s", [map_md5]
+                    f"DELETE FROM scores_{t} WHERE map_md5 = %s", [map_md5]
                 )
 
     return "Scores wiped."
@@ -2176,7 +2176,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
     )
 
     # add to cache (get from sql for id & time)
-    res = await glob.db.fetch("SELECT * FROM tourney_pools " "WHERE name = %s", [name])
+    res = await glob.db.fetch("SELECT * FROM tourney_pools WHERE name = %s", [name])
 
     res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
 
@@ -2197,7 +2197,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
         return "Could not find a pool by that name!"
 
     # delete from db
-    await glob.db.execute("DELETE FROM tourney_pools " "WHERE name = %s", [name])
+    await glob.db.execute("DELETE FROM tourney_pools WHERE name = %s", [name])
 
     # remove from cache
     glob.pools.remove(pool)
@@ -2277,7 +2277,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
 
     # delete from db
     await glob.db.execute(
-        "DELETE FROM tourney_pool_maps " "WHERE mods = %s AND slot = %s", [mods, slot]
+        "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s", [mods, slot]
     )
 
     # remove from cache
@@ -2426,7 +2426,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             return "You're not a member of a clan!"
 
     # delete clan from sql
-    await glob.db.execute("DELETE FROM clans " "WHERE id = %s", [clan.id])
+    await glob.db.execute("DELETE FROM clans WHERE id = %s", [clan.id])
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
@@ -2439,7 +2439,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
                 del member.full_name  # wipe cached_property
 
     await glob.db.execute(
-        "UPDATE users " "SET clan_id = 0, " "clan_priv = 0 " "WHERE clan_id = %s",
+        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = %s",
         [clan.id],
     )
 

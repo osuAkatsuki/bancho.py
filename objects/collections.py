@@ -488,8 +488,6 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
         glob.achievements.append(achievement)
 
     # static api keys
-    await db_cursor.execute(
-        "SELECT id, api_key FROM users " "WHERE api_key IS NOT NULL"
-    )
+    await db_cursor.execute("SELECT id, api_key FROM users WHERE api_key IS NOT NULL")
 
     glob.api_keys = {row["api_key"]: row["id"] async for row in db_cursor}
