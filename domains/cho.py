@@ -123,10 +123,10 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
             # invalid login; failed.
             return
 
-        resp, token = login_data
+        token, body = login_data
 
         conn.resp_headers["cho-token"] = token
-        return resp
+        return body
 
     # get the player from the specified osu token.
     player = glob.players.get(token=conn.headers["osu-token"])
@@ -403,7 +403,7 @@ async def login(
     body_view: memoryview,
     ip: IPAddress,
     db_cursor: aiomysql.DictCursor,
-) -> Optional[tuple[bytes, str]]:
+) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
@@ -466,7 +466,7 @@ async def login(
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
         if osu_ver_date < (date.today() - DELTA_90_DAYS):
-            return (packets.version_update_forced() + packets.user_id(-2)), "no"
+            return "no", packets.version_update_forced() + packets.user_id(-2)
 
     # ensure utc_offset is a number (negative inclusive).
     if not client_info[1].replace("-", "").isdecimal():
@@ -495,7 +495,7 @@ async def login(
         data = packets.user_id(-1) + packets.notification(
             "Please restart your osu! and try again.",
         )
-        return data, "no"
+        return "no", data
 
     pm_private = client_info[4] == "1"
 
@@ -521,7 +521,7 @@ async def login(
                         "User already logged in.",
                     )
 
-                    return data, "no"
+                    return "no", data
 
     await db_cursor.execute(
         "SELECT id, name, priv, pw_bcrypt, country, "
@@ -533,16 +533,16 @@ async def login(
 
     if not user_info:
         # no account by this name exists.
-        return (
+        return "no", (
             packets.notification(f"{BASE_DOMAIN}: Unknown username")
-            + packets.user_id(-1),
-        ), "no"
+            + packets.user_id(-1)
+        )
 
     if using_tourney_client and not (
         user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
     ):
         # trying to use tourney client with insufficient privileges.
-        return packets.user_id(-1), "no"
+        return "no", packets.user_id(-1)
 
     # get our bcrypt cache.
     bcrypt_cache = glob.cache["bcrypt"]
@@ -553,16 +553,16 @@ async def login(
     # designed to be slow; we'll cache the results to speed up subsequent logins.
     if pw_bcrypt in bcrypt_cache:  # ~0.01 ms
         if pw_md5 != bcrypt_cache[pw_bcrypt]:
-            return (
+            return "no", (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.user_id(-1),
-            ), "no"
+                + packets.user_id(-1)
+            )
     else:  # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            return (
+            return "no", (
                 packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                + packets.user_id(-1),
-            ), "no"
+                + packets.user_id(-1)
+            )
 
         bcrypt_cache[pw_bcrypt] = pw_md5
 
@@ -619,12 +619,12 @@ async def login(
             if not all(
                 [hw_match["priv"] & Privileges.NORMAL for hw_match in hw_matches],
             ):
-                return (
+                return "no", (
                     packets.notification(
                         "Please contact staff directly to create an account.",
                     )
-                    + packets.user_id(-1),
-                ), "no"
+                    + packets.user_id(-1)
+                )
 
     """ All checks passed, player is safe to login """
 
@@ -828,7 +828,7 @@ async def login(
     log(f"{p} logged in with {osu_ver_str} on {user_os}.", Ansi.LCYAN)
 
     p.update_latest_activity()
-    return bytes(data), p.token
+    return p.token, bytes(data)
 
 
 @register(ClientPackets.START_SPECTATING)
