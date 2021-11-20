@@ -9,6 +9,7 @@ from typing import Optional
 from typing import overload
 from typing import Sequence
 from typing import TYPE_CHECKING
+from typing import TypedDict
 from typing import Union
 
 import aiomysql
@@ -203,11 +204,10 @@ class Slot:
         self.skipped = False
 
 
-StartingTimers = dict[
-    # start         alerts               time
-    str,
-    Optional[Union["TimerHandle", list["TimerHandle"], float]],
-]
+class StartingTimers(TypedDict):
+    start: Optional["TimerHandle"]
+    alerts: Optional[list["TimerHandle"]]
+    time: Optional[float]
 
 
 class Match:

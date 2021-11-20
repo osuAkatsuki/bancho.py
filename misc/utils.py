@@ -366,10 +366,15 @@ def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
+class Country(TypedDict):
+    acronym: str
+    numeric: int
+
+
 class Geolocation(TypedDict):
     latitude: float
     longitude: float
-    country: dict[str, Union[str, int]]
+    country: Country
 
 
 def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
