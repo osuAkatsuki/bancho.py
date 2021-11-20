@@ -219,7 +219,7 @@ class Player:
     )
 
     def __init__(
-        self, id: int, name: str, priv: Union[Privileges, int], **extras: Any
+        self, id: int, name: str, priv: int | Privileges, **extras: Any
     ) -> None:
         self.id = id
         self.name = name

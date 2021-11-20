@@ -364,7 +364,7 @@ def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
     )
 
 
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
 class Country(TypedDict):
@@ -450,7 +450,7 @@ def escape_enum(
     return str(int(val))
 
 
-def shutdown_signal_handler(signum: Union[int, signal.Signals]) -> None:
+def shutdown_signal_handler(signum: int | signal.Signals) -> None:
     """Handle a posix signal, flagging the server to shut down."""
     print("\x1b[2K", end="\r")  # remove ^C from window
 

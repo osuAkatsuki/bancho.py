@@ -540,7 +540,7 @@ class Match:
 
             msg: list[str] = []
 
-            def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
+            def add_suffix(score: int | float) -> str | int | float:
                 if self.use_pp_scoring:
                     return f"{score:.2f}pp"
                 elif self.win_condition == MatchWinConditions.accuracy:

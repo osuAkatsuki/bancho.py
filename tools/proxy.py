@@ -90,7 +90,7 @@ BYTE_ORDER_SUFFIXES = [
 ]
 
 
-def fmt_bytes(n: Union[int, float]) -> str:
+def fmt_bytes(n: int | float) -> str:
     for suffix in BYTE_ORDER_SUFFIXES:
         if n < 1024:
             break

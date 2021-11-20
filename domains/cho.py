@@ -54,7 +54,7 @@ from packets import ClientPackets
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 """ Bancho: handle connections from the osu! client """
 

@@ -34,15 +34,15 @@ if TYPE_CHECKING:
     from packets import BasePacket
     from packets import ClientPackets
 
-    IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+    IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
     class Cache(TypedDict):
         bcrypt: dict[bytes, bytes]
 
         ip: dict[str, "IPAddress"]
 
-        beatmap: dict[str, "Beatmap"]
-        beatmapset: dict[str, "BeatmapSet"]
+        beatmap: dict[str | int, "Beatmap"]  # bid & md5 keys
+        beatmapset: dict[int, "BeatmapSet"]  # bsid keys
 
         unsubmitted: set[str]
         needs_update: set[str]

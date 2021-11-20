@@ -492,7 +492,7 @@ class BanchoPacketReader:
 # write functions
 
 
-def write_uleb128(num: int) -> Union[bytes, bytearray]:
+def write_uleb128(num: int) -> bytes | bytearray:
     """Write `num` into an unsigned LEB128."""
     if num == 0:
         return b"\x00"

@@ -20,10 +20,7 @@ class ClientFlags(IntFlag):
     # flags for timing errors or desync.
     SPEED_HACK_DETECTED = 1 << 1
 
-    # flags when two internal values mismatch.
-    # XXX: this false flags a lot so most code
-    # written around the community just ignores
-    # this bit; i'll investigate a bit i guess.
+    # this is to be ignored by server implementations. osu! team trolling hard
     INCORRECT_MOD_VALUE = 1 << 2
 
     MULTIPLE_OSU_CLIENTS = 1 << 3
