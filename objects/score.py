@@ -304,32 +304,6 @@ class Score:
 
         s.grade = Grade.from_str(_grade) if s.passed else Grade.F
 
-        # all data read from submission.
-        # now we can calculate things based on our data.
-        s.acc = s.calc_accuracy()
-
-        if s.bmap:
-            osu_file_path = BEATMAPS_PATH / f"{s.bmap.id}.osu"
-            if await ensure_local_osu_file(osu_file_path, s.bmap.id, s.bmap.md5):
-                s.pp, s.sr = s.calc_diff(osu_file_path)
-
-                if s.passed:
-                    await s.calc_status()
-
-                    if s.bmap.status != RankedStatus.Pending:
-                        s.rank = await s.calc_lb_placement()
-                else:
-                    s.status = SubmissionStatus.FAILED
-        else:
-            s.pp = s.sr = 0.0
-            if s.passed:
-                s.status = SubmissionStatus.SUBMITTED
-            else:
-                s.status = SubmissionStatus.FAILED
-
-        # NOTE: time_elapsed is sent in multipart params,
-        #       and should be set shortly after return.
-
         return s
 
     """Methods to calculate internal data for a score."""

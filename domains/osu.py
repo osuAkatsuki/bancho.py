@@ -43,6 +43,7 @@ from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
+from objects.beatmap import ensure_local_osu_file
 from objects.beatmap import RankedStatus
 from objects.player import Privileges
 from objects.score import Grade
@@ -595,6 +596,29 @@ async def osuSubmitModularSelector(
     # attach bmap & player
     score.bmap = bmap
     score.player = player
+
+    # all data read from submission.
+    # now we can calculate things based on our data.
+    score.acc = score.calc_accuracy()
+
+    if score.bmap:
+        osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
+        if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
+            score.pp, score.sr = score.calc_diff(osu_file_path)
+
+            if score.passed:
+                await score.calc_status()
+
+                if score.bmap.status != RankedStatus.Pending:
+                    score.rank = await score.calc_lb_placement()
+            else:
+                score.status = SubmissionStatus.FAILED
+    else:
+        score.pp = score.sr = 0.0
+        if score.passed:
+            score.status = SubmissionStatus.SUBMITTED
+        else:
+            score.status = SubmissionStatus.FAILED
 
     # we should update their activity no matter
     # what the result of the score submission is.
