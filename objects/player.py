@@ -9,7 +9,6 @@ from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import Union
 
 import aiomysql
 from cmyui.discord import Webhook

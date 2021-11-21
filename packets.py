@@ -12,7 +12,6 @@ from typing import NamedTuple
 from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
-from typing import Union
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods

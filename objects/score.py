@@ -1,6 +1,5 @@
 import functools
 import math
-from base64 import b64decode
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
@@ -8,13 +7,9 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
-from py3rijndael import Pkcs7Padding
-from py3rijndael import RijndaelCbc
 
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
@@ -23,8 +18,6 @@ from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.beatmap import RankedStatus
 
 if TYPE_CHECKING:
     from objects.player import Player

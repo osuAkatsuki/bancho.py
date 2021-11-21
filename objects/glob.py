@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from typing import Optional
     from typing import Type
     from typing import TypedDict
-    from typing import Union
 
     from aiohttp.client import ClientSession
     from aioredis import Redis

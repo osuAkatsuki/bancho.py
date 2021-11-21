@@ -10,7 +10,6 @@ import struct
 import sys
 from enum import unique
 from enum import IntEnum
-from typing import Union
 
 from cmyui.logging import RGB
 from mitmproxy import http
