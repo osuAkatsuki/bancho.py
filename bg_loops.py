@@ -28,7 +28,8 @@ async def initialize_housekeeping_tasks() -> None:
 async def _remove_expired_donation_privileges(interval: int) -> None:
     """Remove donation privileges from users with expired sessions."""
     while True:
-        log("Removing expired donation privileges.", Ansi.LMAGENTA)
+        if glob.app.debug:
+            log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
         expired_donors = await glob.db.fetchall(
             "SELECT id FROM users "
