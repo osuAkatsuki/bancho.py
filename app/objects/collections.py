@@ -14,8 +14,8 @@ from cmyui.logging import log
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.expression import select
 
-import app.misc.utils
 import app.db_models
+import app.misc.utils
 import app.services
 from app import services
 from app.constants.privileges import Privileges
@@ -254,8 +254,8 @@ class Players(list[Player]):
                         app.db_models.users.c.clan_id,
                         app.db_models.users.c.clan_priv,
                         app.db_models.users.c.api_key,
-                    ]
-                ).where(getattr(app.db_models.users, attr) == val)
+                    ],
+                ).where(getattr(app.db_models.users, attr) == val),
             )
 
             res = player_res.fetchone()
@@ -495,9 +495,9 @@ async def initialize_ram_caches(db_conn: AsyncSession) -> None:
 
     # static api keys
     key_res = await db_conn.execute(
-        select([app.db_models.users.c.id, app.db_models.users.c.api_key,]).where(
+        select([app.db_models.users.c.id, app.db_models.users.c.api_key]).where(
             app.db_models.users.c.api_key != None,
-        )
+        ),
     )
 
     glob.api_keys = {row["api_key"]: row["id"] for row in key_res.fetchall()}

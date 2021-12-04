@@ -6,11 +6,10 @@ from typing import TYPE_CHECKING
 import aiomysql
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
+import app.db_models
+import app.services
 from app.misc.utils import escape_enum
 from app.misc.utils import pymysql_encode
-
-import app.services
-import app.db_models
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -61,8 +60,8 @@ class Clan:
                     values={
                         "clan_id": self.id,
                         "clan_priv": 1,
-                    }
-                ).where(app.db_models.users.c.id == p.id)
+                    },
+                ).where(app.db_models.users.c.id == p.id),
             )
 
         p.clan = self
@@ -78,16 +77,16 @@ class Clan:
                     values={
                         "clan_id": 0,
                         "clan_priv": 0,
-                    }
-                ).where(app.db_models.users.c.id == p.id)
+                    },
+                ).where(app.db_models.users.c.id == p.id),
             )
 
             if not self.members:
                 # no members left, disband clan.
                 await db_conn.execute(
                     app.db_models.clans.delete().where(
-                        app.db_models.clans.c.id == self.id
-                    )
+                        app.db_models.clans.c.id == self.id,
+                    ),
                 )
             elif p.id == self.owner:
                 # owner leaving and members left,
@@ -99,16 +98,16 @@ class Clan:
                     app.db_models.clans.update(
                         values={
                             "owner": self.owner,
-                        }
-                    ).where(app.db_models.clans.c.id == self.id)
+                        },
+                    ).where(app.db_models.clans.c.id == self.id),
                 )
 
                 await db_conn.execute(
                     app.db_models.users.update(
                         values={
                             "clan_priv": 3,
-                        }
-                    ).where(app.db_models.users.c.id == self.owner)
+                        },
+                    ).where(app.db_models.users.c.id == self.owner),
                 )
 
         p.clan = None
@@ -123,8 +122,8 @@ class Clan:
 
         user_res = await db_conn.execute(
             app.db_models.users.select(app.db_models.users.c.id).where(
-                app.db_models.users.c.clan_id == self.id
-            )
+                app.db_models.users.c.clan_id == self.id,
+            ),
         )
 
         for row in user_res.fetchall():
