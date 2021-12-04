@@ -163,6 +163,30 @@ mapsets_columns = (
     Column("last_osuapi_check", DateTime),
 )
 
+channels_columns = (
+    Column("id", INT, primary_key=True),
+    Column("name", VARCHAR(32), unique=True),
+    Column("topic", VARCHAR(256)),
+    Column("read_priv", INT),
+    Column("write_priv", INT),
+    Column("auto_join", SMALLINT),
+)
+
+tourney_pools_columns = (
+    Column("id", INT, primary_key=True, autoincrement=True),
+    Column("name", VARCHAR(16)),
+    Column("created_at", DateTime),
+    Column("created_by", INT),
+)
+
+achievements_columns = (
+    Column("id", INT, primary_key=True, autoincrement=True),
+    Column("file", VARCHAR(128), unique=True),
+    Column("name", VARCHAR(128), unique=True),
+    Column("desc", VARCHAR(256), unique=True),
+    Column("cond", VARCHAR(64)),
+)
+
 maps = Table("maps", metadata, *maps_columns)
 mapsets = Table("mapsets", metadata, *mapsets_columns)
 
@@ -182,7 +206,12 @@ clans = Table("clans", metadata, *clans_columns)
 
 comments = Table("comments", metadata, *comments_columns)
 
+channels = Table("channels", metadata, *channels_columns)
 mail = Table("mail", metadata, *mail_columns)
 
 ingame_logins = Table("ingame_logins", metadata, *ingame_logins_columns)
 client_hashes = Table("client_hashes", metadata, *client_hashes_columns)
+
+tourney_pools = Table("tourney_pools", metadata, *tourney_pools_columns)
+
+achievements = Table("achievements", metadata, *achievements_columns)
