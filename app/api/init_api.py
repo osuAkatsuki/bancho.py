@@ -61,6 +61,8 @@ def init_events(app: FastAPI) -> None:
     @app.on_event("shutdown")
     async def on_shutdown() -> None:
         await services.database.dispose()
+        services.database_session.close_all()
+
         await services.http_session.close()
         services.geoloc_db.close()
 

@@ -15,7 +15,10 @@ from typing import Union
 import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.sql.expression import select
 
+import app.db_models
 import app.settings
 import packets
 from app.constants import regexes
@@ -145,14 +148,19 @@ class MapPool:
     def __repr__(self) -> str:
         return f"<{self.name}>"
 
-    async def maps_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def maps_from_sql(self, db_conn: AsyncSession) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
-        await db_cursor.execute(
-            "SELECT map_id, mods, slot FROM tourney_pool_maps WHERE pool_id = %s",
-            [self.id],
+        map_res = await db_conn.execute(
+            select(
+                [
+                    app.db_models.tourney_pool_maps.c.map_id,
+                    app.db_models.tourney_pool_maps.c.mods,
+                    app.db_models.tourney_pool_maps.c.slot,
+                ],
+            ).where(app.db_models.tourney_pool_maps.c.pool_id == self.id),
         )
 
-        async for row in db_cursor:
+        for row in map_res.fetchall():
             map_id = row["map_id"]
             bmap = await Beatmap.from_bid(map_id)
 
@@ -164,10 +172,12 @@ class MapPool:
                 # TODO: perhaps discord webhook?
                 log(f"Removing {map_id} from pool {self.name} (not found).", Ansi.LRED)
 
-                await db_cursor.execute(
-                    "DELETE FROM tourney_pool_maps WHERE map_id = %s",
-                    [map_id],
+                await db_conn.execute(
+                    app.db_models.tourney_pool_maps.delete().where(
+                        app.db_models.tourney_pool_maps.c.map_id == map_id,
+                    ),
                 )
+
                 continue
 
             key: tuple[Mods, int] = (Mods(row["mods"]), row["slot"])

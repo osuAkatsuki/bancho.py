@@ -187,6 +187,13 @@ achievements_columns = (
     Column("cond", VARCHAR(64)),
 )
 
+tourney_pool_maps_columns = (
+    Column("map_id", INT, primary_key=True),
+    Column("pool_id", INT, primary_key=True),
+    Column("mods", INT),
+    Column("slot", SMALLINT),
+)
+
 maps = Table("maps", metadata, *maps_columns)
 mapsets = Table("mapsets", metadata, *mapsets_columns)
 
@@ -213,5 +220,6 @@ ingame_logins = Table("ingame_logins", metadata, *ingame_logins_columns)
 client_hashes = Table("client_hashes", metadata, *client_hashes_columns)
 
 tourney_pools = Table("tourney_pools", metadata, *tourney_pools_columns)
+tourney_pool_maps = Table("tourney_pool_maps", metadata, *tourney_pool_maps_columns)
 
 achievements = Table("achievements", metadata, *achievements_columns)

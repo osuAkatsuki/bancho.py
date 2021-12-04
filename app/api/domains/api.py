@@ -284,7 +284,7 @@ async def api_get_player_scores(
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
     mode_arg: Optional[int] = Query(..., alias="mode", ge=0, le=7),
-    mods_arg: Optional[str] = Query(..., alias="mods", ge=0, le=7),
+    mods_arg: Optional[str] = Query(..., alias="mods"),
     limit: Optional[int] = Query(..., ge=1, le=100),
     include_loved: Optional[int] = Query(..., ge=0, le=1),
     db_conn: AsyncSession = Depends(acquire_db_conn),
