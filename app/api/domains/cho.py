@@ -13,7 +13,7 @@ from typing import Optional
 from typing import Type
 
 import bcrypt
-from sqlalchemy.ext.asyncio import AsyncSession
+import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -24,8 +24,13 @@ from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import Insert
+from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
 
+import app.db_models
 import app.misc.utils
 import app.services
 import packets
@@ -54,14 +59,6 @@ from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
-
-from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql.expression import Insert
-
-import app.db_models
-
-import sqlalchemy
-from sqlalchemy.sql.expression import select
 
 # HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
@@ -566,6 +563,8 @@ async def login(
             + packets.user_id(-1)
         )
 
+    user_info = dict(user_info)
+
     if using_tourney_client and not (
         user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
     ):
@@ -638,7 +637,7 @@ async def login(
                 app.db_models.client_hashes.c.adapters == adapters_md5,
                 app.db_models.client_hashes.c.uninstall_id == uninstall_md5,
                 app.db_models.client_hashes.c.disk_serial == disk_sig_md5,
-            ]
+            ],
         )
 
     hw_res = await db_conn.execute(
@@ -647,8 +646,8 @@ async def login(
                 app.db_models.users.c.name,
                 app.db_models.users.c.priv,
                 app.db_models.client_hashes.c.occurrences,
-            ]
-        ).where(sqlalchemy.and_(*hw_args))
+            ],
+        ).where(sqlalchemy.and_(*hw_args)),
     )
     hw_matches = hw_res.fetchall()
 
@@ -706,7 +705,7 @@ async def login(
                     values={
                         "country": user_info["geoloc"]["country_code"],
                         "userid": user_info["id"],
-                    }
+                    },
                 ).where(app.db_models.users.c.id == user_info["id"]),
             )
 
@@ -806,13 +805,13 @@ async def login(
                     )
                     .where(app.db_models.users.c.id == app.db_models.mail.c.to_id)
                     .label("to"),
-                ]
+                ],
             ).where(
                 sqlalchemy.and_(
                     app.db_models.mail.c.to_id == p.id,
                     app.db_models.mail.c.read == 0,
-                )
-            )
+                ),
+            ),
         )
 
         for msg in msg_res.fetchall():
@@ -1063,9 +1062,9 @@ class SendPrivateMessage(BasePacket):
                             "from_id": p.id,
                             "to_id": t.id,
                             "msg": msg,
-                            "time": func.unix_timestamp()
-                        }
-                    )
+                            "time": func.unix_timestamp(),
+                        },
+                    ),
                 )
         else:
             # messaging the bot, check for commands & /np.

@@ -3,6 +3,7 @@ from copy import deepcopy
 from sqlalchemy import BIGINT
 from sqlalchemy import CHAR
 from sqlalchemy import Column
+from sqlalchemy import Date
 from sqlalchemy import DateTime
 from sqlalchemy import Enum
 from sqlalchemy import FLOAT
@@ -11,7 +12,6 @@ from sqlalchemy import MetaData
 from sqlalchemy import SMALLINT
 from sqlalchemy import Table
 from sqlalchemy import VARCHAR
-from sqlalchemy import Date
 
 metadata = MetaData()
 

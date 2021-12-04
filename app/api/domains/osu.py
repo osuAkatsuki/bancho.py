@@ -797,7 +797,7 @@ async def osuSubmitModularSelector(
                             app.db_models.users.c.priv & 1,
                         ),
                     )
-                    .order_by(getattr(alchemy_table, scoring_metric).desc())
+                    .order_by(getattr(alchemy_table.c, scoring_metric).desc())
                     .limit(1),
                 )
                 prev_n1 = prev_res.fetchone()
