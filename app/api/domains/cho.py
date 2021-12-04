@@ -15,6 +15,7 @@ from typing import Union
 
 import aiomysql
 import bcrypt
+import databases.core
 import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -30,6 +31,8 @@ from constants.mods import Mods
 from constants.mods import SPEED_CHANGING_MODS
 from constants.privileges import ClientPrivileges
 from constants.privileges import Privileges
+from fastapi.param_functions import Header
+from fastapi.requests import Request
 from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import ensure_local_osu_file
@@ -49,6 +52,7 @@ from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import packets
+from app import services
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
@@ -87,17 +91,29 @@ async def bancho_http_handler() -> Response:
     )
 
 
-@router.route("/", methods=["POST"])
-async def bancho_handler(conn: Connection) -> HTTPResponse:
-    if "CF-Connecting-IP" in conn.headers:
-        ip_str = conn.headers["CF-Connecting-IP"]
+@router.post("/")
+async def bancho_handler(
+    request: Request,
+    response: Response,
+    # TODO: add further validation to these params
+    # forwarded to our server from nginx
+    x_forwarded_for: str = Header(None),
+    x_real_ip: str = Header(None),
+    # forwarded to our server from cloudflare
+    cf_connecting_ip: Optional[str] = Header(None),
+    # sent to our server from the osu! client
+    user_agent: str = Header(None),
+    host: str = Header(None),
+):
+    if cf_connecting_ip is not None:
+        ip_str = cf_connecting_ip
     else:
         # if the request has been forwarded, get the origin
-        forwards = conn.headers["X-Forwarded-For"].split(",")
+        forwards = x_forwarded_for.split(",")
         if len(forwards) != 1:
             ip_str = forwards[0]
         else:
-            ip_str = conn.headers["X-Real-IP"]
+            ip_str = x_real_ip
 
     if ip_str in glob.cache["ip"]:
         ip = glob.cache["ip"][ip_str]
@@ -105,21 +121,20 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         ip = ipaddress.ip_address(ip_str)
         glob.cache["ip"][ip_str] = ip
 
-    if "User-Agent" not in conn.headers or conn.headers["User-Agent"] != "osu!":
-        url = f'{conn.cmd} {conn.headers["Host"]}{conn.path}'
+    if user_agent != "osu!":
+        url = f"{request.method} {host}{request['path']}"
         log(f"[{ip}] {url} missing user-agent.", Ansi.LRED)
         return
 
     # check for 'osu-token' in the headers.
     # if it's not there, this is a login request.
 
-    if "osu-token" not in conn.headers:
+    if "osu-token" not in request.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
             async with services.database.connection() as db_conn:
-                async with db_conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    login_data = await login(conn.body, ip, db_cursor)
+                login_data = await login(await request.body(), ip, db_conn)
 
         if login_data is None:
             # invalid login; failed.
@@ -127,11 +142,11 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
 
         token, body = login_data
 
-        conn.resp_headers["cho-token"] = token
+        response.headers["cho-token"] = token
         return body
 
     # get the player from the specified osu token.
-    player = glob.players.get(token=conn.headers["osu-token"])
+    player = glob.players.get(token=request.headers["osu-token"])
 
     if not player:
         # token not found; chances are that we just restarted
@@ -152,18 +167,20 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
     # NOTE: any unhandled packets will be ignored internally.
 
     packets_handled = []
-    for packet in BanchoPacketReader(conn.body, packet_map):
-        await packet.handle(player)
-        packets_handled.append(packet.__class__.__name__)
 
-    if glob.app.debug:
-        packets_str = ", ".join(packets_handled) or "None"
-        log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
+    with memoryview(await request.body()) as body_view:
+        for packet in BanchoPacketReader(body_view, packet_map):
+            await packet.handle(player)
+            packets_handled.append(packet.__class__.__name__)
+
+        if glob.app.debug:
+            packets_str = ", ".join(packets_handled) or "None"
+            log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
     player.last_recv_time = time.time()
-    conn.resp_headers["Content-Type"] = "text/html; charset=UTF-8"
 
-    return player.dequeue() or b""
+    response.headers["Content-Type"] = "text/html; charset=UTF-8"
+    return player.dequeue()
 
 
 """ Packet logic """
@@ -402,9 +419,9 @@ DELTA_90_DAYS = timedelta(days=90)
 
 
 async def login(
-    body_view: memoryview,
+    body: bytes,
     ip: IPAddress,
-    db_cursor: aiomysql.DictCursor,
+    db_conn: databases.core.Connection,
 ) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
@@ -431,10 +448,6 @@ async def login(
     """
 
     """ Parse data and verify the request is legitimate. """
-    # the body for login requests is quite small
-    # so copying here is fine for simplicity
-    body = body_view.tobytes()
-
     if len(split := body.decode().split("\n")[:-1]) != 3:
         log(f"Invalid login request from {ip}.", Ansi.LRED)
         return  # invalid request
@@ -525,13 +538,16 @@ async def login(
 
                     return "no", data
 
-    await db_cursor.execute(
+    user_info = await db_conn.fetch_one(
         "SELECT id, name, priv, pw_bcrypt, country, "
         "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = %s",
-        [misc.utils.make_safe_name(username)],
+        "FROM users WHERE safe_name = :username",
+        {"username": misc.utils.make_safe_name(username)},
     )
-    user_info = await db_cursor.fetch_one()
+
+    # make user_info mutable
+    # TODO: fix this hackery
+    user_info = dict(user_info)  # type: ignore
 
     if not user_info:
         # no account by this name exists.
@@ -570,46 +586,59 @@ async def login(
 
     """ login credentials verified """
 
-    await db_cursor.execute(
+    await db_conn.execute(
         "INSERT INTO ingame_logins "
         "(userid, ip, osu_ver, osu_stream, datetime) "
-        "VALUES (%s, %s, %s, %s, NOW())",
-        [user_info["id"], str(ip), osu_ver_date, osu_ver_stream],
+        "VALUES (:userid, :ip, :osu_ver, :osu_stream, NOW())",
+        {
+            "userid": user_info["id"],
+            "ip": str(ip),
+            "osu_ver": osu_ver_date,
+            "osu_stream": osu_ver_stream,
+        },
     )
 
-    await db_cursor.execute(
+    await db_conn.execute(
         "INSERT INTO client_hashes "
         "(userid, osupath, adapters, uninstall_id,"
         " disk_serial, latest_time, occurrences) "
-        "VALUES (%s, %s, %s, %s, %s, NOW(), 1) "
+        "VALUES (:userid, :osupath, :adapters, :uninstall, :disk, NOW(), 1) "
         "ON DUPLICATE KEY UPDATE "
         "occurrences = occurrences + 1, "
         "latest_time = NOW() ",
-        [user_info["id"], osu_path_md5, adapters_md5, uninstall_md5, disk_sig_md5],
+        {
+            "userid": user_info["id"],
+            "osupath": osu_path_md5,
+            "adapters": adapters_md5,
+            "uninstall": uninstall_md5,
+            "disk": disk_sig_md5,
+        },
     )
 
     # TODO: store adapters individually
 
     if is_wine:
-        hw_checks = "h.uninstall_id = %s"
-        hw_args = [uninstall_md5]
+        hw_checks = "h.uninstall_id = :uninstall"
+        hw_args = {"uninstall": uninstall_md5}
     else:
-        hw_checks = "h.adapters = %s OR h.uninstall_id = %s OR h.disk_serial = %s"
-        hw_args = [adapters_md5, uninstall_md5, disk_sig_md5]
+        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk"
+        hw_args = {
+            "adapters": adapters_md5,
+            "uninstall": uninstall_md5,
+            "disk": disk_sig_md5,
+        }
 
-    await db_cursor.execute(
+    hw_matches = await db_conn.fetch_all(
         "SELECT u.name, u.priv, h.occurrences "
         "FROM client_hashes h "
         "INNER JOIN users u ON h.userid = u.id "
         "WHERE h.userid != %s AND "
         f"({hw_checks})",
-        [user_info["id"], *hw_args],
+        hw_args | {"userid": user_info["id"]},
     )
 
-    if db_cursor.rowcount != 0:
+    if hw_matches:
         # we have other accounts with matching hashes
-        hw_matches = await db_cursor.fetch_all()
-
         if user_info["priv"] & Privileges.VERIFIED:
             # TODO: this is a normal, registered & verified player.
             ...
@@ -657,9 +686,12 @@ async def login(
             # country wasn't stored on registration.
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
-            await db_cursor.execute(
-                "UPDATE users SET country = %s WHERE id = %s",
-                [user_info["geoloc"]["country"]["acronym"], user_info["id"]],
+            await db_conn.execute(
+                "UPDATE users SET country = :country WHERE id = :userid",
+                {
+                    "country": user_info["geoloc"]["country"]["acronym"],
+                    "userid": user_info["id"],
+                },
             )
 
     p = Player(
@@ -715,9 +747,9 @@ async def login(
 
     # fetch some of the player's
     # information from sql to be cached.
-    await p.achievements_from_sql(db_cursor)
-    await p.stats_from_sql_full(db_cursor)
-    await p.relationships_from_sql(db_cursor)
+    await p.achievements_from_sql(db_conn)
+    await p.stats_from_sql_full(db_conn)
+    await p.relationships_from_sql(db_conn)
 
     # TODO: fetch p.recent_scores from sql
 
@@ -743,7 +775,7 @@ async def login(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        await db_cursor.execute(
+        await db_conn.execute(
             "SELECT m.`msg`, m.`time`, m.`from_id`, "
             "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
             "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
@@ -751,10 +783,10 @@ async def login(
             [p.id],
         )
 
-        if db_cursor.rowcount != 0:
+        if db_conn.rowcount != 0:
             sent_to = set()  # ids
 
-            async for msg in db_cursor:
+            async for msg in db_conn:
                 if msg["from"] not in sent_to:
                     data += packets.send_message(
                         sender=msg["from"],

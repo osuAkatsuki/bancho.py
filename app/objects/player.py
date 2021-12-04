@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import aiomysql
+import databases.core
 import services
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
@@ -454,8 +455,8 @@ class Player:
         self.priv = new
 
         await services.database.execute(
-            "UPDATE users SET priv = %s WHERE id = %s",
-            [self.priv, self.id],
+            "UPDATE users SET priv = :priv WHERE id = :userid",
+            {"priv": self.priv, "userid": self.id},
         )
 
         if "bancho_priv" in self.__dict__:
@@ -466,8 +467,8 @@ class Player:
         self.priv |= bits
 
         await services.database.execute(
-            "UPDATE users SET priv = %s WHERE id = %s",
-            [self.priv, self.id],
+            "UPDATE users SET priv = :priv WHERE id = :userid",
+            {"priv": self.priv, "userid": self.id},
         )
 
         if "bancho_priv" in self.__dict__:
@@ -478,8 +479,8 @@ class Player:
         self.priv &= ~bits
 
         await services.database.execute(
-            "UPDATE users SET priv = %s WHERE id = %s",
-            [self.priv, self.id],
+            "UPDATE users SET priv = :priv WHERE id = :userid",
+            {"priv": self.priv, "userid": self.id},
         )
 
         if "bancho_priv" in self.__dict__:
@@ -493,8 +494,8 @@ class Player:
         await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
-            "VALUES (%s, %s, %s, NOW())",
-            [admin.id, self.id, log_msg],
+            "VALUES (:from, :to, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
         if "restricted" in self.__dict__:
@@ -522,8 +523,8 @@ class Player:
         await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
-            "VALUES (%s, %s, %s, NOW())",
-            [admin.id, self.id, log_msg],
+            "VALUES (:from, :to, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
         if "restricted" in self.__dict__:
@@ -548,16 +549,16 @@ class Player:
         self.silence_end = int(time.time() + duration)
 
         await services.database.execute(
-            "UPDATE users SET silence_end = %s WHERE id = %s",
-            [self.silence_end, self.id],
+            "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
+            {"silence_end": self.silence_end, "userid": self.id},
         )
 
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
-            "VALUES (%s, %s, %s, NOW())",
-            [admin.id, self.id, log_msg],
+            "VALUES (:from, :to, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
         # inform the user's client.
@@ -577,16 +578,16 @@ class Player:
         self.silence_end = int(time.time())
 
         await services.database.execute(
-            "UPDATE users SET silence_end = %s WHERE id = %s",
-            [self.silence_end, self.id],
+            "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
+            {"silence_end": self.silence_end, "userid": self.id},
         )
 
         log_msg = f"{admin} unsilenced."
         await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
-            "VALUES (%s, %s, %s, NOW())",
-            [admin.id, self.id, log_msg],
+            "VALUES (:from, :to, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
         # inform the user's client
@@ -858,8 +859,8 @@ class Player:
 
         self.friends.add(p.id)
         await services.database.execute(
-            "REPLACE INTO relationships VALUES (%s, %s, 'friend')",
-            [self.id, p.id],
+            "REPLACE INTO relationships VALUES (:user1, :user2, 'friend')",
+            {"user1": self.id, "user2": p.id},
         )
 
         log(f"{self} friended {p}.")
@@ -872,8 +873,8 @@ class Player:
 
         self.friends.remove(p.id)
         await services.database.execute(
-            "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
-            [self.id, p.id],
+            "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
+            {"user1": self.id, "user2": p.id},
         )
 
         log(f"{self} unfriended {p}.")
@@ -889,8 +890,8 @@ class Player:
 
         self.blocks.add(p.id)
         await services.database.execute(
-            "REPLACE INTO relationships VALUES (%s, %s, 'block')",
-            [self.id, p.id],
+            "REPLACE INTO relationships VALUES (:user1, :user2, 'block')",
+            {"user1": self.id, "user2": p.id},
         )
 
         log(f"{self} blocked {p}.")
@@ -903,8 +904,8 @@ class Player:
 
         self.blocks.remove(p.id)
         await services.database.execute(
-            "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
-            [self.id, p.id],
+            "DELETE FROM relationships WHERE user1 = :userid AND user2 = :user2",
+            {"userid": self.id, "user2": p.id},
         )
 
         log(f"{self} unblocked {p}.")
@@ -912,20 +913,18 @@ class Player:
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await services.database.execute(
-            "INSERT INTO user_achievements (userid, achid) VALUES (%s, %s)",
-            [self.id, a.id],
+            "INSERT INTO user_achievements (userid, achid) VALUES (:userid, :achid)",
+            {"userid": self.id, "achid": a.id},
         )
 
         self.achievements.add(a)
 
-    async def relationships_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s relationships from sql."""
-        await db_cursor.execute(
-            "SELECT user2, type FROM relationships WHERE user1 = %s",
-            [self.id],
-        )
-
-        async for row in db_cursor:
+        async for row in db_conn.iterate(
+            "SELECT user2, type FROM relationships WHERE user1 = :userid",
+            {"userid": self.id},
+        ):
             if row["type"] == "friend":
                 self.friends.add(row["user2"])
             else:
@@ -934,16 +933,14 @@ class Player:
         # always have bot added to friends.
         self.friends.add(1)
 
-    async def achievements_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s achievements from sql."""
-        await db_cursor.execute(
+        async for row in db_conn.iterate(
             "SELECT ua.achid id FROM user_achievements ua "
             "INNER JOIN achievements a ON a.id = ua.achid "
-            "WHERE ua.userid = %s",
-            [self.id],
-        )
-
-        async for row in db_cursor:
+            "WHERE ua.userid = :userid",
+            {"userid": self.id},
+        ):
             for ach in glob.achievements:
                 if row["id"] == ach.id:
                     self.achievements.add(ach)
@@ -979,18 +976,18 @@ class Player:
         stats.rank = await self.get_global_rank(mode)
         return stats.rank
 
-    async def stats_from_sql_full(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        await db_cursor.execute(
+        rows = await db_conn.fetch_all(
             "SELECT tscore, rscore, pp, acc, "
             "plays, playtime, max_combo, "
             "xh_count, x_count, sh_count, s_count, a_count "
             "FROM stats "
-            "WHERE id = %s",
-            [self.id],
+            "WHERE id = :userid",
+            {"userid": self.id},
         )
 
-        for mode, row in enumerate(await db_cursor.fetch_all()):
+        for mode, row in enumerate([dict(row) for row in rows]):
             # calculate player's rank.
             row["rank"] = await self.get_global_rank(GameMode(mode))
 
@@ -1033,8 +1030,8 @@ class Player:
     def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
         task = services.database.execute(
-            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = %s",
-            [self.id],
+            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :userid",
+            {"userid": self.id},
         )
         glob.loop.create_task(task)
 
