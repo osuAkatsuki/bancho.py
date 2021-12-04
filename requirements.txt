@@ -14,3 +14,6 @@ pre-commit
 psutil
 py3rijndael
 uvloop
+uvicorn
+sqlalchemy
+fastapi

@@ -4,7 +4,6 @@ from typing import Optional
 from typing import TypedDict
 
 import aiohttp
-import databases
 import geoip2.database
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -13,13 +12,17 @@ import app.misc.utils
 import app.settings
 from app.constants.countries import country_codes
 
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
 GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
 # create our sessions
-database = databases.Database(app.settings.DB_DSN)
+database = create_async_engine(app.settings.DB_DSN, future=True)
+database_session = sessionmaker(database, expire_on_commit=False, class_=AsyncSession)
 geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 # TODO: redis
 http_session = aiohttp.ClientSession(

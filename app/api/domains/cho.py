@@ -13,7 +13,6 @@ from typing import Optional
 from typing import Type
 
 import bcrypt
-import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -52,6 +51,8 @@ from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
+
+import sqlalchemy.ext.asyncio
 
 # HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
@@ -129,7 +130,7 @@ async def bancho_handler(
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
-            async with app.services.database.connection() as db_conn:
+            async with app.services.database_session() as db_conn:
                 login_data = await login(await request.body(), ip, db_conn)
 
         if login_data is None:
@@ -417,7 +418,7 @@ DELTA_90_DAYS = timedelta(days=90)
 async def login(
     body: bytes,
     ip: IPAddress,
-    db_conn: databases.core.Connection,
+    db_conn: sqlalchemy.ext.asyncio.AsyncSession,
 ) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
