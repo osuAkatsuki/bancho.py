@@ -8,9 +8,6 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 from cmyui.osu.oppai_ng import OppaiWrapper
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
-
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -18,6 +15,8 @@ from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator as PeaceCalculator
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -194,7 +193,7 @@ class Score:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
-        res = await glob.db.fetch(
+        res = await services.database.fetch_one(
             "SELECT id, map_md5, userid, pp, score, "
             "max_combo, mods, acc, n300, n100, n50, "
             "nmiss, ngeki, nkatu, grade, perfect, "
@@ -311,7 +310,7 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        res = await glob.db.fetch(
+        res = await services.database.fetch_one(
             f"SELECT COUNT(*) AS c FROM {scores_table} s "
             "INNER JOIN users u ON u.id = s.userid "
             "WHERE s.map_md5 = %s AND s.mode = %s "
@@ -395,7 +394,7 @@ class Score:
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
-        res = await glob.db.fetch(
+        res = await services.database.fetch_one(
             f"SELECT id, pp FROM {scores_table} "
             "WHERE userid = %s AND map_md5 = %s "
             "AND mode = %s AND status = 2",

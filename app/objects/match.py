@@ -15,8 +15,6 @@ from typing import Union
 import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
-import packets
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -25,11 +23,13 @@ from misc.utils import pymysql_encode
 from objects import glob
 from objects.beatmap import Beatmap
 
+import packets
+
 if TYPE_CHECKING:
     from asyncio import TimerHandle
 
-    from objects.player import Player
     from objects.channel import Channel
+    from objects.player import Player
 
 __all__ = (
     "SlotStatus",

@@ -9,10 +9,9 @@ from typing import Sequence
 from typing import Union
 
 import aiomysql
+import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
-import misc.utils
 from constants.privileges import Privileges
 from misc.utils import make_safe_name
 from objects import glob
@@ -23,6 +22,8 @@ from objects.clan import ClanPrivileges
 from objects.match import MapPool
 from objects.match import Match
 from objects.player import Player
+
+from app import services
 
 __all__ = (
     "Channels",
@@ -100,12 +101,11 @@ class Channels(list[Channel]):
         if glob.app.debug:
             log(f"{c} removed from channels list.")
 
-    @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "Channels":
+    async def prepare(self, db_cursor: aiomysql.DictCursor) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
         await db_cursor.execute("SELECT * FROM channels")
-        return cls(
+        self.extend(
             [
                 Channel(
                     name=row["name"],
@@ -215,7 +215,7 @@ class Players(list[Player]):
     @staticmethod
     def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("token", "id", "name"):
+        for attr in ("token", "id", "name", "safe_name"):
             if (val := kwargs.pop(attr, None)) is not None:
                 if attr == "name":
                     attr = "safe_name"
@@ -238,11 +238,11 @@ class Players(list[Player]):
         attr, val = self._parse_attr(kwargs)
 
         # try to get from sql.
-        res = await glob.db.fetch(
+        res = await services.database.fetch_one(
             "SELECT id, name, priv, pw_bcrypt, "
             "silence_end, clan_id, clan_priv, api_key "
-            f"FROM users WHERE {attr} = %s",
-            [val],
+            f"FROM users WHERE {attr} = :val",
+            {"val": val},
         )
 
         if not res:
@@ -359,12 +359,11 @@ class MapPools(list[MapPool]):
         if glob.app.debug:
             log(f"{mp} removed from mappools list.")
 
-    @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "MapPools":
+    async def prepare(self, db_cursor: aiomysql.DictCursor) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching mappools from sql.", Ansi.LCYAN)
         await db_cursor.execute("SELECT * FROM tourney_pools")
-        obj = cls(
+        self.extend(
             [
                 MapPool(
                     id=row["id"],
@@ -378,10 +377,8 @@ class MapPools(list[MapPool]):
             ],
         )
 
-        for pool in obj:
+        for pool in self:
             await pool.maps_from_sql(db_cursor)
-
-        return obj
 
 
 class Clans(list[Clan]):
@@ -443,29 +440,22 @@ class Clans(list[Clan]):
         if glob.app.debug:
             log(f"{c} removed from clans list.")
 
-    @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "Clans":
+    async def prepare(self, db_cursor: aiomysql.DictCursor) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         await db_cursor.execute("SELECT * FROM clans")
-        obj = cls([Clan(**row) async for row in db_cursor])
+        self.extend([Clan(**row) async for row in db_cursor])
 
-        for clan in obj:
+        for clan in self:
             await clan.members_from_sql(db_cursor)
-
-        return obj
 
 
 async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache the global collections before listening for connections."""
-    # dynamic (active) sets, only in ram
-    glob.matches = Matches()
-    glob.players = Players()
-
     # static (inactive) sets, in ram & sql
-    glob.channels = await Channels.prepare(db_cursor)
-    glob.clans = await Clans.prepare(db_cursor)
-    glob.pools = await MapPools.prepare(db_cursor)
+    await glob.channels.prepare(db_cursor)
+    await glob.clans.prepare(db_cursor)
+    await glob.pools.prepare(db_cursor)
 
     bot_name = await misc.utils.fetch_bot_name(db_cursor)
 
@@ -478,9 +468,6 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
         bot_client=True,
     )
     glob.players.append(glob.bot)
-
-    # global achievements (sorted by vn gamemodes)
-    glob.achievements = []
 
     await db_cursor.execute("SELECT * FROM achievements")
     async for row in db_cursor:

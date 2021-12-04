@@ -27,13 +27,9 @@ from typing import Union
 
 import aiomysql
 import cmyui.utils
+import misc.utils
 import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
-
-import misc.utils
-import packets
 from constants import regexes
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -54,6 +50,11 @@ from objects.match import MatchWinConditions
 from objects.match import SlotStatus
 from objects.player import Player
 from objects.score import SubmissionStatus
+from peace_performance_python.objects import Beatmap as PeaceMap
+from peace_performance_python.objects import Calculator as PeaceCalculator
+
+import packets
+from app import services
 
 if TYPE_CHECKING:
     from objects.channel import Channel
@@ -255,13 +256,13 @@ async def changename(ctx: Context) -> Optional[str]:
     if name in glob.config.disallowed_names:
         return "Disallowed username; pick another."
 
-    if await glob.db.fetch("SELECT 1 FROM users WHERE name = %s", [name]):
+    if await services.database.fetch_one("SELECT 1 FROM users WHERE name = %s", [name]):
         return "Username already taken by another player."
 
     # all checks passed, update their name
     safe_name = name.lower().replace(" ", "_")
 
-    await glob.db.execute(
+    await services.database.execute(
         "UPDATE users SET name = %s, safe_name = %s WHERE id = %s",
         [name, safe_name, ctx.player.id],
     )
@@ -374,7 +375,7 @@ async def top(ctx: Context) -> Optional[str]:
     mode = ["osu", "taiko", "catch", "mania"].index(mode_str)
     table = f"scores_{special_mode_str}"
 
-    scores = await glob.db.fetchall(
+    scores = await services.database.fetch_all(
         "SELECT *, b.id AS bmapid "
         f"FROM {table} s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
@@ -557,7 +558,7 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    await glob.db.execute(
+    await services.database.execute(
         "INSERT INTO map_requests "
         "(map_id, player_id, datetime, active) "
         "VALUES (%s, %s, NOW(), 1)",
@@ -580,7 +581,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await glob.db.execute(
+    await services.database.execute(
         "UPDATE users SET api_key = %s WHERE id = %s",
         [ctx.player.api_key, ctx.player.id],
     )
@@ -602,7 +603,7 @@ async def requests(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    res = await glob.db.fetchall(
+    res = await services.database.fetch_all(
         "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
         _dict=False,  # return rows as tuples
     )
@@ -658,7 +659,7 @@ async def _map(ctx: Context) -> Optional[str]:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    async with glob.db.pool.acquire() as conn:
+    async with services.database.connection() as conn:
         async with conn.cursor() as db_cursor:
             if ctx.args[1] == "set":
                 # update whole set
@@ -721,7 +722,7 @@ async def notes(ctx: Context) -> Optional[str]:
     elif days <= 0:
         return "Invalid syntax: !notes <name> <days_back>"
 
-    res = await glob.db.fetchall(
+    res = await services.database.fetch_all(
         "SELECT `msg`, `time` "
         "FROM `logs` WHERE `to` = %s "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - %s "
@@ -746,7 +747,7 @@ async def addnote(ctx: Context) -> Optional[str]:
 
     log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
 
-    await glob.db.execute(
+    await services.database.execute(
         "INSERT INTO logs "
         "(`from`, `to`, `msg`, `time`) "
         "VALUES (%s, %s, %s, NOW())",
@@ -1160,7 +1161,7 @@ async def recalc(ctx: Context) -> Optional[str]:
         if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
             return "Mapfile could not be found; this incident has been reported."
 
-        async with glob.db.pool.acquire() as conn:
+        async with services.database.connection() as conn:
             async with (
                 conn.cursor(aiomysql.DictCursor) as select_cursor,
                 conn.cursor(aiomysql.Cursor) as update_cursor,
@@ -1197,7 +1198,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
             st = time.time()
 
-            async with glob.db.pool.acquire() as conn:
+            async with services.database.connection() as conn:
                 async with (
                     conn.cursor(aiomysql.Cursor) as bmap_select_cursor,
                     conn.cursor(aiomysql.DictCursor) as score_select_cursor,
@@ -1338,7 +1339,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    async with glob.db.pool.acquire() as conn:
+    async with services.database.connection() as conn:
         async with conn.cursor() as db_cursor:
             for t in ("vn", "rx", "ap"):
                 await db_cursor.execute(
@@ -2180,7 +2181,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
         return "Pool already exists by that name!"
 
     # insert pool into db
-    await glob.db.execute(
+    await services.database.execute(
         "INSERT INTO tourney_pools "
         "(name, created_at, created_by) "
         "VALUES (%s, NOW(), %s)",
@@ -2188,7 +2189,10 @@ async def pool_create(ctx: Context) -> Optional[str]:
     )
 
     # add to cache (get from sql for id & time)
-    res = await glob.db.fetch("SELECT * FROM tourney_pools WHERE name = %s", [name])
+    res = await services.database.fetch_one(
+        "SELECT * FROM tourney_pools WHERE name = %s",
+        [name],
+    )
 
     res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
 
@@ -2209,7 +2213,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
         return "Could not find a pool by that name!"
 
     # delete from db
-    await glob.db.execute("DELETE FROM tourney_pools WHERE name = %s", [name])
+    await services.database.execute("DELETE FROM tourney_pools WHERE name = %s", [name])
 
     # remove from cache
     glob.pools.remove(pool)
@@ -2251,7 +2255,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
         return "Map is already in the pool!"
 
     # insert into db
-    await glob.db.execute(
+    await services.database.execute(
         "INSERT INTO tourney_pool_maps "
         "(map_id, pool_id, mods, slot) "
         "VALUES (%s, %s, %s, %s)",
@@ -2288,7 +2292,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
         return f"Found no {mods_slot} pick in the pool."
 
     # delete from db
-    await glob.db.execute(
+    await services.database.execute(
         "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s",
         [mods, slot],
     )
@@ -2384,7 +2388,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     created_at = datetime.now()
 
     # add clan to sql (generates id)
-    clan_id = await glob.db.execute(
+    clan_id = await services.database.execute(
         "INSERT INTO clans "
         "(name, tag, created_at, owner) "
         "VALUES (%s, %s, %s, %s)",
@@ -2411,7 +2415,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     if "full_name" in ctx.player.__dict__:
         del ctx.player.full_name  # wipe cached_property
 
-    await glob.db.execute(
+    await services.database.execute(
         "UPDATE users "
         "SET clan_id = %s, "
         "clan_priv = 3 "  # ClanPrivileges.Owner
@@ -2443,7 +2447,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             return "You're not a member of a clan!"
 
     # delete clan from sql
-    await glob.db.execute("DELETE FROM clans WHERE id = %s", [clan.id])
+    await services.database.execute("DELETE FROM clans WHERE id = %s", [clan.id])
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
@@ -2455,7 +2459,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             if "full_name" in member.__dict__:
                 del member.full_name  # wipe cached_property
 
-    await glob.db.execute(
+    await services.database.execute(
         "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = %s",
         [clan.id],
     )
@@ -2483,7 +2487,7 @@ async def clan_info(ctx: Context) -> Optional[str]:
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    res = await glob.db.fetchall(
+    res = await services.database.fetch_all(
         "SELECT name, clan_priv "
         "FROM users "
         "WHERE clan_id = %s "

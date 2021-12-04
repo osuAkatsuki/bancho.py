@@ -1,5 +1,11 @@
 from typing import TYPE_CHECKING
 
+from objects.collections import Channels
+from objects.collections import Clans
+from objects.collections import MapPools
+from objects.collections import Matches
+from objects.collections import Players
+
 import config  # pylint: disable=unused-import
 
 # this file contains no actualy definitions
@@ -7,31 +13,21 @@ if TYPE_CHECKING:
     import asyncio
     import ipaddress
     from datetime import datetime
-    from typing import Optional
-    from typing import Type
-    from typing import TypedDict
+    from typing import Optional, Type, TypedDict
 
+    import geoip2.database
     from aiohttp.client import ClientSession
     from aioredis import Redis
     from cmyui.mysql import AsyncSQLPool
     from cmyui.version import Version
     from cmyui.web import Server
     from datadog import ThreadStats
-    import geoip2.database
-
     from objects.achievement import Achievement
-    from objects.collections import Players
-    from objects.collections import Channels
-    from objects.collections import Matches
-    from objects.beatmap import Beatmap
-    from objects.beatmap import BeatmapSet
-    from objects.collections import Clans
-    from objects.collections import MapPools
+    from objects.beatmap import Beatmap, BeatmapSet
     from objects.player import Player
 
     # from objects.score import Score
-    from packets import BasePacket
-    from packets import ClientPackets
+    from packets import BasePacket, ClientPackets
 
     IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
@@ -75,12 +71,12 @@ __all__ = (
 app: "Server"
 
 # current server state
-players: "Players"
-channels: "Channels"
-matches: "Matches"
-clans: "Clans"
-pools: "MapPools"
-achievements: list["Achievement"]
+players = Players()
+channels = Channels()
+matches = Matches()
+clans = Clans()
+pools = MapPools()
+achievements: list["Achievement"] = []
 
 bot: "Player"
 version: "Version"

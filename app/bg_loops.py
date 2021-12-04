@@ -3,10 +3,11 @@ import time
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
-import packets
 from constants.privileges import Privileges
 from objects import glob
+
+import packets
+from app import services
 
 __all__ = ("initialize_housekeeping_tasks",)
 
@@ -31,21 +32,23 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         if glob.app.debug:
             log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
-        expired_donors = await glob.db.fetchall(
+        expired_donors = await services.database.fetch_all(
             "SELECT id FROM users "
             "WHERE donor_end <= UNIX_TIMESTAMP() "
             "AND priv & 48",  # 48 = Supporter | Premium
-            _dict=False,
         )
 
-        for expired_donor_id in expired_donors:
-            p = await glob.players.from_cache_or_sql(id=expired_donor_id)
+        for expired_donor in expired_donors:
+            p = await glob.players.from_cache_or_sql(id=expired_donor["id"])
+
+            if not p:  # TODO guaranteed return method
+                continue
 
             # TODO: perhaps make a `revoke_donor` method?
             await p.remove_privs(Privileges.DONATOR)
-            await glob.db.execute(
-                "UPDATE users SET donor_end = 0 WHERE id = %s",
-                [p.id],
+            await services.database.execute(
+                "UPDATE users SET donor_end = 0 WHERE id = :id",
+                {"id": p.id},
             )
 
             if p.online:

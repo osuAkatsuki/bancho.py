@@ -11,11 +11,10 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import aiomysql
+import services
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
-import packets
 from constants.gamemodes import GameMode
 from constants.mods import Mods
 from constants.privileges import ClientPrivileges
@@ -37,11 +36,12 @@ from objects.menu import MenuFunction
 from objects.score import Grade
 from objects.score import Score
 
+import packets
+
 if TYPE_CHECKING:
     from objects.achievement import Achievement
     from objects.beatmap import Beatmap
-    from objects.clan import Clan
-    from objects.clan import ClanPrivileges
+    from objects.clan import Clan, ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
@@ -453,7 +453,7 @@ class Player:
         """Update `self`'s privileges to `new`."""
         self.priv = new
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET priv = %s WHERE id = %s",
             [self.priv, self.id],
         )
@@ -465,7 +465,7 @@ class Player:
         """Update `self`'s privileges, adding `bits`."""
         self.priv |= bits
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET priv = %s WHERE id = %s",
             [self.priv, self.id],
         )
@@ -477,7 +477,7 @@ class Player:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET priv = %s WHERE id = %s",
             [self.priv, self.id],
         )
@@ -490,7 +490,7 @@ class Player:
         await self.remove_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} restricted for "{reason}".'
-        await glob.db.execute(
+        await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (%s, %s, %s, NOW())",
@@ -519,7 +519,7 @@ class Player:
         await self.add_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} unrestricted for "{reason}".'
-        await glob.db.execute(
+        await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (%s, %s, %s, NOW())",
@@ -547,13 +547,13 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET silence_end = %s WHERE id = %s",
             [self.silence_end, self.id],
         )
 
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
-        await glob.db.execute(
+        await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (%s, %s, %s, NOW())",
@@ -576,13 +576,13 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET silence_end = %s WHERE id = %s",
             [self.silence_end, self.id],
         )
 
         log_msg = f"{admin} unsilenced."
-        await glob.db.execute(
+        await services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (%s, %s, %s, NOW())",
@@ -857,7 +857,7 @@ class Player:
             return
 
         self.friends.add(p.id)
-        await glob.db.execute(
+        await services.database.execute(
             "REPLACE INTO relationships VALUES (%s, %s, 'friend')",
             [self.id, p.id],
         )
@@ -871,7 +871,7 @@ class Player:
             return
 
         self.friends.remove(p.id)
-        await glob.db.execute(
+        await services.database.execute(
             "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
             [self.id, p.id],
         )
@@ -888,7 +888,7 @@ class Player:
             return
 
         self.blocks.add(p.id)
-        await glob.db.execute(
+        await services.database.execute(
             "REPLACE INTO relationships VALUES (%s, %s, 'block')",
             [self.id, p.id],
         )
@@ -902,7 +902,7 @@ class Player:
             return
 
         self.blocks.remove(p.id)
-        await glob.db.execute(
+        await services.database.execute(
             "DELETE FROM relationships WHERE user1 = %s AND user2 = %s",
             [self.id, p.id],
         )
@@ -911,8 +911,8 @@ class Player:
 
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
-        await glob.db.execute(
-            "INSERT INTO user_achievements " "(userid, achid) VALUES (%s, %s)",
+        await services.database.execute(
+            "INSERT INTO user_achievements (userid, achid) VALUES (%s, %s)",
             [self.id, a.id],
         )
 
@@ -990,7 +990,7 @@ class Player:
             [self.id],
         )
 
-        for mode, row in enumerate(await db_cursor.fetchall()):
+        for mode, row in enumerate(await db_cursor.fetch_all()):
             # calculate player's rank.
             row["rank"] = await self.get_global_rank(GameMode(mode))
 
@@ -1032,7 +1032,7 @@ class Player:
 
     def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
-        task = glob.db.execute(
+        task = services.database.execute(
             "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = %s",
             [self.id],
         )

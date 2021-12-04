@@ -4,7 +4,6 @@ from enum import unique
 from typing import TYPE_CHECKING
 
 import aiomysql
-
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 from objects import glob
@@ -52,7 +51,7 @@ class Clan:
         """Add a given player to the clan's members."""
         self.members.add(p.id)
 
-        await glob.db.execute(
+        await services.database.execute(
             "UPDATE users SET clan_id = %s, clan_priv = 1 WHERE id = %s",
             [self.id, p.id],
         )
@@ -64,7 +63,7 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.members.remove(p.id)
 
-        async with glob.db.pool.acquire() as conn:
+        async with services.database.connection() as conn:
             async with conn.cursor() as db_cursor:
                 await db_cursor.execute(
                     "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = %s",

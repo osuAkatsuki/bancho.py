@@ -35,7 +35,6 @@ from cmyui.logging import printc
 from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
-
 from constants.countries import country_codes
 from objects import glob
 
@@ -138,7 +137,7 @@ async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
         )
         return "BanchoBot"
 
-    return (await db_cursor.fetchone())["name"]
+    return (await db_cursor.fetch_one())["name"]
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
@@ -675,182 +674,6 @@ def _install_debugging_hooks() -> None:
         runtime.setup()
 
 
-def display_startup_dialog() -> None:
-    """Print any general information or warnings to the console."""
-    if glob.config.advanced:
-        log("running in advanced mode", Ansi.LRED)
-
-    # running on root grants the software potentally dangerous and
-    # unnecessary power over the operating system and is not advised.
-    if os.geteuid() == 0:
-        log(
-            "It is not recommended to run gulag as root, especially in production..",
-            Ansi.LYELLOW,
-        )
-
-        if glob.config.advanced:
-            log(
-                "The risk is even greater with features "
-                "such as config.advanced enabled.",
-                Ansi.LRED,
-            )
-
-    if not glob.has_internet:
-        log(
-            "Running in offline mode, some features will not be available.",
-            Ansi.LRED,
-        )
-
-
 def create_config_from_default() -> None:
     """Create the default config from ext/config.sample.py"""
     shutil.copy("ext/config.sample.py", "config.py")
-
-
-async def _get_latest_dependency_versions() -> AsyncGenerator[
-    tuple[str, cmyui.Version, cmyui.Version],
-    None,
-]:
-    """Return the current installed & latest version for each dependency."""
-    with open("requirements.txt") as f:
-        dependencies = f.read().splitlines(keepends=False)
-
-    for dependency in dependencies:
-        current_ver_str = importlib.metadata.version(dependency)
-        current_ver = cmyui.Version.from_str(current_ver_str)
-
-        if not current_ver:
-            # the module uses some more advanced (and often hard to parse)
-            # versioning system, so we won't be able to report updates.
-            continue
-
-        # TODO: split up and do the requests asynchronously
-        url = f"https://pypi.org/pypi/{dependency}/json"
-        async with glob.http_session.get(url) as resp:
-            if resp.status == 200 and (json := await resp.json()):
-                latest_ver = cmyui.Version.from_str(json["info"]["version"])
-
-                if not latest_ver:
-                    # they've started using a more advanced versioning system.
-                    continue
-
-                yield (dependency, latest_ver, current_ver)
-            else:
-                yield (dependency, current_ver, current_ver)
-
-
-async def check_for_dependency_updates() -> None:
-    """Notify the developer of any dependency updates available."""
-    updates_available = False
-
-    async for module, current_ver, latest_ver in _get_latest_dependency_versions():
-        if latest_ver > current_ver:
-            updates_available = True
-            log(
-                f"{module} has an update available "
-                f"[{current_ver!r} -> {latest_ver!r}]",
-                Ansi.LMAGENTA,
-            )
-
-    if updates_available:
-        log(
-            "Python modules can be updated with "
-            "`python3.9 -m pip install -U <modules>`.",
-            Ansi.LMAGENTA,
-        )
-
-
-async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
-    """Get the last launched version of the server."""
-    res = await glob.db.fetch(
-        "SELECT ver_major, ver_minor, ver_micro "
-        "FROM startups ORDER BY datetime DESC LIMIT 1",
-        _dict=False,  # get tuple
-    )
-
-    if res:
-        return cmyui.Version(*map(int, res))
-
-
-async def run_sql_migrations() -> None:
-    """Update the sql structure, if it has changed."""
-    if not (current_ver := await _get_current_sql_structure_version()):
-        return  # already up to date (server has never run before)
-
-    latest_ver = glob.version
-
-    if latest_ver == current_ver:
-        return  # already up to date
-
-    # version changed; there may be sql changes.
-    content = SQL_UPDATES_FILE.read_text()
-
-    queries = []
-    q_lines = []
-
-    update_ver = None
-
-    for line in content.splitlines():
-        if not line:
-            continue
-
-        if line.startswith("#"):
-            # may be normal comment or new version
-            if r_match := VERSION_RGX.fullmatch(line):
-                update_ver = cmyui.Version.from_str(r_match["ver"])
-
-            continue
-        elif not update_ver:
-            continue
-
-        # we only need the updates between the
-        # previous and new version of the server.
-        if current_ver < update_ver <= latest_ver:
-            if line.endswith(";"):
-                if q_lines:
-                    q_lines.append(line)
-                    queries.append(" ".join(q_lines))
-                    q_lines = []
-                else:
-                    queries.append(line)
-            else:
-                q_lines.append(line)
-
-    if not queries:
-        return
-
-    log(
-        "Updating mysql structure " f"(v{current_ver!r} -> v{latest_ver!r}).",
-        Ansi.LMAGENTA,
-    )
-
-    updated = False
-
-    # NOTE: this using a transaction is pretty pointless with mysql since
-    # any structural changes to tables will implciticly commit the changes.
-    # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
-            await conn.begin()
-            for query in queries:
-                try:
-                    await db_cursor.execute(query)
-                except aiomysql.MySQLError:
-                    await conn.rollback()
-                    break
-            else:
-                # all queries ran
-                # without problems.
-                await conn.commit()
-                updated = True
-
-    if not updated:
-        log(f"Failed: {query}", Ansi.GRAY)
-        log(
-            "SQL failed to update - unless you've been "
-            "modifying sql and know what caused this, "
-            "please please contact cmyui#0425.",
-            Ansi.LRED,
-        )
-
-        raise KeyboardInterrupt

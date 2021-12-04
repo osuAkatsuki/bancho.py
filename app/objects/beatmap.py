@@ -11,10 +11,9 @@ from typing import Mapping
 from typing import Optional
 
 import aiomysql
+import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
-import misc.utils
 from constants.gamemodes import GameMode
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
@@ -386,7 +385,7 @@ class Beatmap:
                 # from the db, or the osu!api. we want to get
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
-                res = await glob.db.fetch(
+                res = await services.database.fetch_one(
                     "SELECT set_id FROM maps WHERE md5 = %s",
                     [md5],
                 )
@@ -425,7 +424,10 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            res = await glob.db.fetch("SELECT set_id FROM maps WHERE id = %s", [bid])
+            res = await services.database.fetch_one(
+                "SELECT set_id FROM maps WHERE id = %s",
+                [bid],
+            )
 
             if res:
                 # found set id in db
@@ -688,7 +690,7 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with glob.db.pool.acquire() as db_conn:
+        async with services.database.connection() as db_conn:
             async with db_conn.cursor() as db_cursor:
                 await db_cursor.execute(
                     "REPLACE INTO mapsets "
@@ -756,7 +758,7 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
-        async with glob.db.pool.acquire() as conn:
+        async with services.database.connection() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                 await db_cursor.execute(
                     "SELECT last_osuapi_check FROM mapsets WHERE id = %s",
@@ -766,7 +768,7 @@ class BeatmapSet:
                 if db_cursor.rowcount == 0:
                     return
 
-                set_res = await db_cursor.fetchone()
+                set_res = await db_cursor.fetch_one()
 
                 await db_cursor.execute(
                     "SELECT md5, id, set_id, "
@@ -797,7 +799,7 @@ class BeatmapSet:
                             .translate(IGNORED_BEATMAP_CHARS)
                         )
 
-                        await glob.db.execute(
+                        await services.database.execute(
                             "UPDATE maps SET filename = %s WHERE id = %s",
                             [bmap.filename, bmap.id],
                         )
@@ -819,7 +821,7 @@ class BeatmapSet:
             # XXX: pre-mapset gulag support
             # select all current beatmaps
             # that're frozen in the db
-            res = await glob.db.fetchall(
+            res = await services.database.fetch_all(
                 "SELECT id, status FROM maps WHERE set_id = %s AND frozen = 1",
                 [bsid],
             )
