@@ -20,6 +20,7 @@ from urllib.parse import unquote_plus
 
 import bcrypt
 import orjson
+import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
@@ -40,13 +41,18 @@ from fastapi.responses import Response
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from pydantic import BaseModel
-from sqlalchemy.sql.expression import distinct, insert, join, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import distinct
+from sqlalchemy.sql.expression import insert
+from sqlalchemy.sql.expression import join
+from sqlalchemy.sql.expression import select
+from sqlalchemy.sql.expression import update
 from sqlalchemy.sql.functions import func
 from starlette.responses import RedirectResponse
 
+import app.db_models
 import app.misc.utils
 import app.settings
-import app.db_models
 import packets
 from app import services
 from app.constants import regexes
@@ -63,9 +69,6 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
-
-from sqlalchemy.ext.asyncio import AsyncSession
-import sqlalchemy
 
 if TYPE_CHECKING:
     pass
@@ -261,8 +264,8 @@ async def osuGetBeatmapInfo(
                     app.db_models.maps.c.set_id,
                     app.db_models.maps.c.status,
                     app.db_models.maps.c.md5,
-                ]
-            ).where(app.db_models.maps.c.filename == map_filename)
+                ],
+            ).where(app.db_models.maps.c.filename == map_filename),
         )
         row = res.fetchone()
 
@@ -277,14 +280,14 @@ async def osuGetBeatmapInfo(
 
         score_res = await db_conn.execute(
             select(
-                [app.db_models.scores_rx.c.grade, app.db_models.scores_rx.c.mode]
+                [app.db_models.scores_rx.c.grade, app.db_models.scores_rx.c.mode],
             ).where(
                 sqlalchemy.and_(
                     app.db_models.scores_rx.c.map_md5 == row["md5"],
                     app.db_models.scores_rx.c.userid == player.id,
                     app.db_models.scores_rx.c.status == 2,
-                )
-            )
+                ),
+            ),
         )
 
         scores = score_res.fetchall()
@@ -319,8 +322,8 @@ async def osuGetFavourites(
 
     res = await db_conn.execute(
         app.db_models.favourites.select(app.db_models.favourites.c.setid).where(
-            app.db_models.favourites.c.userid == player.id
-        )
+            app.db_models.favourites.c.userid == player.id,
+        ),
     )
     favourites = res.fetchall()
 
@@ -349,8 +352,8 @@ async def osuAddFavourite(
             sqlalchemy.and_(
                 app.db_models.favourites.c.userid == player.id,
                 app.db_models.favourites.c.setid == map_set_id,
-            )
-        )
+            ),
+        ),
     )
 
     if res.fetchone():
@@ -358,7 +361,7 @@ async def osuAddFavourite(
 
     # add favourite
     await db_conn.execute(
-        insert(app.db_models.favourites).values(id=player.id, setid=map_set_id)
+        insert(app.db_models.favourites).values(id=player.id, setid=map_set_id),
     )
 
 
@@ -589,10 +592,10 @@ async def osuSearchSetHandler(
                 app.db_models.maps.c.status,
                 app.db_models.maps.c.creator,
                 app.db_models.maps.c.last_update,
-            ]
+            ],
         )
         .where(k == v)
-        .distinct()
+        .distinct(),
     )
 
     bmapset = res.fetchone()
@@ -709,8 +712,8 @@ async def osuSubmitModularSelector(
     alchemy_table = getattr(app.db_models, scores_table)
     duplicate_res = await db_conn.execute(
         alchemy_table.select().where(
-            alchemy_table.c.online_checksum == score.online_checksum
-        )
+            alchemy_table.c.online_checksum == score.online_checksum,
+        ),
     )
 
     if duplicate_res.fetchone():
@@ -792,10 +795,10 @@ async def osuSubmitModularSelector(
                             alchemy_table.c.mode == mode_vn,
                             alchemy_table.c.status == 2,
                             app.db_models.users.c.priv & 1,
-                        )
+                        ),
                     )
                     .order_by(getattr(alchemy_table, scoring_metric).desc())
-                    .limit(1)
+                    .limit(1),
                 )
                 prev_n1 = prev_res.fetchone()
 
@@ -817,8 +820,8 @@ async def osuSubmitModularSelector(
                     alchemy_table.c.userid == score.player.id,
                     alchemy_table.c.map_md5 == score.bmap.md5,
                     alchemy_table.c.mode == mode_vn,
-                )
-            )
+                ),
+            ),
         )
 
     insert_res = await db_conn.execute(
@@ -946,9 +949,9 @@ async def osuSubmitModularSelector(
                         alchemy_table.c.mode == mode_vn,
                         alchemy_table.c.status == 2,
                         app.db_models.maps.c.status in (2, 3),
-                    )
+                    ),
                 )
-                .order_by(alchemy_table.pp.desc())
+                .order_by(alchemy_table.pp.desc()),
             )
             rows = plays_res.fetchall()
 
@@ -984,8 +987,8 @@ async def osuSubmitModularSelector(
             sqlalchemy.and_(
                 app.db_models.stats.c.userid == score.player.id,
                 app.db_models.stats.c.mode == score.mode.value,
-            )
-        )
+            ),
+        ),
     )
     glob.players.enqueue(packets.user_stats(score.player))
 
@@ -1002,7 +1005,7 @@ async def osuSubmitModularSelector(
                     "plays": score.bmap.plays,
                     "passes": score.bmap.passes,
                 },
-            ).where(app.db_models.maps.c.md5 == score.bmap.md5)
+            ).where(app.db_models.maps.c.md5 == score.bmap.md5),
         )
 
     # update their recent score
@@ -1174,8 +1177,8 @@ async def osuRate(
                 sqlalchemy.and_(
                     app.db_models.ratings.c.map_md5 == map_md5,
                     app.db_models.ratings.c.userid == player.id,
-                )
-            )
+                ),
+            ),
         )
 
         # the client hasn't rated the map, so simply
@@ -1190,14 +1193,14 @@ async def osuRate(
                     "userid": player.id,
                     "map_md5": map_md5,
                     "rating": rating,
-                }
-            )
+                },
+            ),
         )
 
     ratings_res = await db_conn.execute(
         app.db_models.ratings.select(app.db_models.ratings.c.ratings).where(
-            app.db_models.ratings.c.map_md5 == map_md5
-        )
+            app.db_models.ratings.c.map_md5 == map_md5,
+        ),
     )
     ratings = [rating.rating for rating in ratings_res.fetchall()]
 
@@ -1298,8 +1301,8 @@ async def getScores(
             # look it up in sql from the filename.
             map_res = await db_conn.execute(
                 app.db_models.maps.select().where(
-                    app.db_models.maps.c.filename == map_filename
-                )
+                    app.db_models.maps.c.filename == map_filename,
+                ),
             )
 
             map_exists = map_res.fetchone() is not None
@@ -1352,7 +1355,7 @@ async def getScores(
         params.append(alchemy_table.c.userid in player.friends | {player.id})
     elif leaderboard_type == LeaderboardType.Country:
         params.append(
-            app.db_models.users.c.country == player.geoloc["country"]["acronym"]
+            app.db_models.users.c.country == player.geoloc["country"]["acronym"],
         )
 
     scores_res = await db_conn.execute(
@@ -1378,7 +1381,7 @@ async def getScores(
         .select_from(alchemy_table)
         .where(sqlalchemy.and_(*params))
         .order_by(alchemy_metric.desc())
-        .limit(50)
+        .limit(50),
     )
 
     scores = scores_res.fetchall()
@@ -1392,8 +1395,8 @@ async def getScores(
     # fetch beatmap rating from sql
     rating_res = await db_conn.execute(
         app.db_models.ratings.select(func.avg(app.db_models.ratings.c.rating)).where(
-            app.db_models.ratings.c.map_md5 == map_md5
-        )
+            app.db_models.ratings.c.map_md5 == map_md5,
+        ),
     )
     rating = rating_res.fetchone()
 
@@ -1426,7 +1429,7 @@ async def getScores(
                 alchemy_score_table.c.perfect,
                 alchemy_score_table.c.mods,
                 alchemy_score_table.c.play_time.timestamp(),  # type: ignore
-            ]
+            ],
         )
         .where(
             sqlalchemy.and_(
@@ -1434,10 +1437,10 @@ async def getScores(
                 alchemy_score_table.c.userid == player.id,
                 alchemy_score_table.c.mode == mode_vn,
                 alchemy_score_table.c.status == 2,
-            )
+            ),
         )
         .order_by(alchemy_metric.desc())
-        .limit(1)
+        .limit(1),
     )
     p_best = best_res.fetchone()
 
@@ -1452,9 +1455,9 @@ async def getScores(
                     alchemy_table.c.mode == mode_vn,
                     alchemy_table.c.status == 2,
                     app.db_models.users.c.priv & 1,
-                )
+                ),
             )
-            .select_from(users_join)
+            .select_from(users_join),
         )
         p_best_rank = rank_res.fetchone()[0]
 
@@ -1523,7 +1526,7 @@ async def osuComment(
                     app.db_models.comments.c.colour,
                     app.db_models.comments.c.comment,
                     app.db_models.users.c.priv,
-                ]
+                ],
             )
             .select_from(comment_user_join)
             .where(
@@ -1534,8 +1537,8 @@ async def osuComment(
                     and app.db_models.comments.c.target_id == beatmap_id,
                     app.db_models.comments.c.target_type == "song"
                     and app.db_models.comments.c.target_id == beatmap_set_id,
-                )
-            )
+                ),
+            ),
         )
         comments = comment_res.fetchall()
 
@@ -1588,8 +1591,8 @@ async def osuComment(
                     "start_time": start_time,
                     "comment": comment,
                     "colour": colour,
-                }
-            )
+                },
+            ),
         )
 
         player.update_latest_activity()
@@ -1623,8 +1626,8 @@ async def osuMarkAsRead(
                     app.db_models.mail.c.to_id == player.id,
                     app.db_models.mail.c.from_id == t.id,
                     app.db_models.mail.c.read == 0,
-                )
-            )
+                ),
+            ),
         )
 
 
@@ -1781,8 +1784,8 @@ async def get_updated_beatmap(
 
     res = await db_conn.execute(
         select([app.db_models.maps.c.id, app.db_models.maps.c.md5]).where(
-            app.db_models.maps.c.filename == map_filename
-        )
+            app.db_models.maps.c.filename == map_filename,
+        ),
     )
 
     if not (row := res.fetchone()):
@@ -1864,8 +1867,8 @@ async def register_account(
     if "username" not in errors:
         res = await db_conn.execute(
             app.db_models.users.select().where(
-                app.db_models.users.c.safe_name == safe_name
-            )
+                app.db_models.users.c.safe_name == safe_name,
+            ),
         )
 
         if res.fetchone():
@@ -1878,7 +1881,7 @@ async def register_account(
         errors["user_email"].append("Invalid email syntax.")
     else:
         res = await db_conn.execute(
-            app.db_models.users.select().where(app.db_models.users.c.email == email)
+            app.db_models.users.select().where(app.db_models.users.c.email == email),
         )
 
         if res.fetchone():
@@ -1963,16 +1966,16 @@ async def register_account(
                         "country": country_acronym,
                         "creation_time": func.unix_timestamp(),
                         "latest_activity": func.unix_timestamp(),
-                    }
+                    },
                 )
-                .returning(app.db_models.users.c.id)
+                .returning(app.db_models.users.c.id),
             )
             user_id = user_res.fetchone()[0]
 
             # add to `stats` table.
             for mode in range(8):
                 await db_conn.execute(
-                    app.db_models.stats.insert().values({"id": user_id, "mode": mode})
+                    app.db_models.stats.insert().values({"id": user_id, "mode": mode}),
                 )
 
         if glob.datadog:

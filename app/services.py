@@ -7,13 +7,13 @@ import aiohttp
 import geoip2.database
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 import app.misc.utils
 import app.settings
 from app.constants.countries import country_codes
-
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
 
 GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 

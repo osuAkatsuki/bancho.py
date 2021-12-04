@@ -13,6 +13,7 @@ from typing import Optional
 from typing import Type
 
 import bcrypt
+import sqlalchemy.ext.asyncio
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -51,8 +52,6 @@ from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
-
-import sqlalchemy.ext.asyncio
 
 # HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
