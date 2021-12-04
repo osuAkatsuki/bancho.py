@@ -11,6 +11,7 @@ from sqlalchemy import MetaData
 from sqlalchemy import SMALLINT
 from sqlalchemy import Table
 from sqlalchemy import VARCHAR
+from sqlalchemy import Date
 
 metadata = MetaData()
 
@@ -137,6 +138,25 @@ mail_columns = (
     Column("read", SMALLINT),
 )
 
+ingame_logins_columns = (
+    Column("id", INT, autoincrement=True, primary_key=True),
+    Column("userid", INT),
+    Column("ip", VARCHAR(45)),
+    Column("osu_ver", Date),
+    Column("osu_stream", VARCHAR(11)),
+    Column("datetime", DateTime),
+)
+
+client_hashes_columns = (
+    Column("userid", INT, primary_key=True),
+    Column("osupath", CHAR(32), primary_key=True),
+    Column("adapters", CHAR(32), primary_key=True),
+    Column("uninstall_id", CHAR(32), primary_key=True),
+    Column("disk_serial", CHAR(32), primary_key=True),
+    Column("latest_time", DateTime, primary_key=True),
+    Column("occurrences", INT, primary_key=True),
+)
+
 maps = Table("maps", metadata, *maps_columns)
 
 # XXX: deepcopy since the function takes ownership, and it cannot be used more than once
@@ -156,3 +176,6 @@ clans = Table("clans", metadata, *clans_columns)
 comments = Table("comments", metadata, *comments_columns)
 
 mail = Table("mail", metadata, *mail_columns)
+
+ingame_logins = Table("ingame_logins", metadata, *ingame_logins_columns)
+client_hashes = Table("client_hashes", metadata, *client_hashes_columns)

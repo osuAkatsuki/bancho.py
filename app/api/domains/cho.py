@@ -13,7 +13,7 @@ from typing import Optional
 from typing import Type
 
 import bcrypt
-import sqlalchemy.ext.asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -23,6 +23,8 @@ from fastapi.param_functions import Header
 from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
+from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.sql.functions import func
 
 import app.misc.utils
 import app.services
@@ -52,6 +54,14 @@ from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
+
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import Insert
+
+import app.db_models
+
+import sqlalchemy
+from sqlalchemy.sql.expression import select
 
 # HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
@@ -413,11 +423,19 @@ OFFLINE_NOTIFICATION = packets.notification(
 
 DELTA_90_DAYS = timedelta(days=90)
 
+# allows us to have an duplicate update format
+@compiles(Insert)
+def append_string(insert, compiler, **kw):
+    s = compiler.visit_insert(insert, **kw)
+    if "append_string" in insert.kwargs:
+        return s + " " + insert.kwargs["append_string"]
+    return s
+
 
 async def login(
     body: bytes,
     ip: IPAddress,
-    db_conn: sqlalchemy.ext.asyncio.AsyncSession,
+    db_conn: AsyncSession,
 ) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
@@ -534,16 +552,12 @@ async def login(
 
                     return "no", data
 
-    user_info = await db_conn.fetch_one(
-        "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = :username",
-        {"username": app.misc.utils.make_safe_name(username)},
+    user_res = await db_conn.execute(
+        app.db_models.users.select().where(
+            app.db_models.users.c.safe_name == app.misc.utils.make_safe_name(username),
+        ),
     )
-
-    # make user_info mutable
-    # TODO: fix this hackery
-    user_info = dict(user_info)  # type: ignore
+    user_info = user_res.fetchone()
 
     if not user_info:
         # no account by this name exists.
@@ -583,55 +597,60 @@ async def login(
     """ login credentials verified """
 
     await db_conn.execute(
-        "INSERT INTO ingame_logins "
-        "(userid, ip, osu_ver, osu_stream, datetime) "
-        "VALUES (:userid, :ip, :osu_ver, :osu_stream, NOW())",
-        {
-            "userid": user_info["id"],
-            "ip": str(ip),
-            "osu_ver": osu_ver_date,
-            "osu_stream": osu_ver_stream,
-        },
+        app.db_models.ingame_logins.insert(
+            values={
+                "user_id": user_info["id"],
+                "ip": str(ip),
+                "osu_ver": osu_ver_date,
+                "osu_stream": osu_ver_stream,
+                "datetime": func.now(),
+            },
+        ),
     )
 
     await db_conn.execute(
-        "INSERT INTO client_hashes "
-        "(userid, osupath, adapters, uninstall_id,"
-        " disk_serial, latest_time, occurrences) "
-        "VALUES (:userid, :osupath, :adapters, :uninstall, :disk, NOW(), 1) "
-        "ON DUPLICATE KEY UPDATE "
-        "occurrences = occurrences + 1, "
-        "latest_time = NOW() ",
-        {
-            "userid": user_info["id"],
-            "osupath": osu_path_md5,
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk": disk_sig_md5,
-        },
+        app.db_models.client_hashes.insert(
+            append_string=(  # appending to query string
+                "ON DUPLICATE KEY UPDATE "
+                "occurrences = occurrences + 1, "
+                "latest_time = NOW()"
+            ),
+            values={
+                "userid": user_info["id"],
+                "osupath": osu_path_md5,
+                "adapters": adapters_md5,
+                "uninstall_id": uninstall_md5,
+                "disk_serial": disk_sig_md5,
+            },
+        ),
     )
 
     # TODO: store adapters individually
 
+    hw_args = app.db_models.client_hashes.c.userid != user_info["id"]
     if is_wine:
-        hw_checks = "h.uninstall_id = :uninstall"
-        hw_args = {"uninstall": uninstall_md5}
+        hw_args.append(
+            app.db_models.client_hashes.c.uninstall_id == uninstall_md5,
+        )
     else:
-        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk"
-        hw_args = {
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk": disk_sig_md5,
-        }
+        hw_args.extend(
+            [
+                app.db_models.client_hashes.c.adapters == adapters_md5,
+                app.db_models.client_hashes.c.uninstall_id == uninstall_md5,
+                app.db_models.client_hashes.c.disk_serial == disk_sig_md5,
+            ]
+        )
 
-    hw_matches = await db_conn.fetch_all(
-        "SELECT u.name, u.priv, h.occurrences "
-        "FROM client_hashes h "
-        "INNER JOIN users u ON h.userid = u.id "
-        "WHERE h.userid != %s AND "
-        f"({hw_checks})",
-        hw_args | {"userid": user_info["id"]},
+    hw_res = await db_conn.execute(
+        select(
+            [
+                app.db_models.users.c.name,
+                app.db_models.users.c.priv,
+                app.db_models.client_hashes.c.occurrences,
+            ]
+        ).where(sqlalchemy.and_(*hw_args))
     )
+    hw_matches = hw_res.fetchall()
 
     if hw_matches:
         # we have other accounts with matching hashes
@@ -683,11 +702,12 @@ async def login(
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
             await db_conn.execute(
-                "UPDATE users SET country = :country WHERE id = :userid",
-                {
-                    "country": user_info["geoloc"]["country"]["acronym"],
-                    "userid": user_info["id"],
-                },
+                app.db_models.users.update(
+                    values={
+                        "country": user_info["geoloc"]["country_code"],
+                        "userid": user_info["id"],
+                    }
+                ).where(app.db_models.users.c.id == user_info["id"]),
             )
 
     p = Player(
@@ -770,13 +790,32 @@ async def login(
         # enqueue any messages from their respective authors.
         mail_sent_to = set()  # ids
 
-        async for msg in db_conn.iterate(
-            "SELECT m.`msg`, m.`time`, m.`from_id`, "
-            "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
-            "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = :userid AND m.`read` = 0",
-            {"userid": p.id},
-        ):
+        msg_res = await db_conn.execute(  # wtf is this.
+            select(
+                [
+                    app.db_models.mail.c.msg,
+                    app.db_models.mail.c.time,
+                    app.db_models.mail.c.from_id,
+                    app.db_models.users.select(
+                        app.db_models.users.c.name,
+                    )
+                    .where(app.db_models.users.c.id == app.db_models.mail.c.from_id)
+                    .label("from"),
+                    app.db_models.users.select(
+                        app.db_models.users.c.name,
+                    )
+                    .where(app.db_models.users.c.id == app.db_models.mail.c.to_id)
+                    .label("to"),
+                ]
+            ).where(
+                sqlalchemy.and_(
+                    app.db_models.mail.c.to_id == p.id,
+                    app.db_models.mail.c.read == 0,
+                )
+            )
+        )
+
+        for msg in msg_res.fetchall():
             if msg["from"] not in mail_sent_to:
                 data += packets.send_message(
                     sender=msg["from"],
@@ -1017,12 +1056,17 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await app.services.database.execute(
-                "INSERT INTO `mail` "
-                "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
-                {"from": p.id, "to": t.id, "msg": msg},
-            )
+            async with app.services.database_session() as db_conn:
+                await db_conn.execute(
+                    app.db_models.mail.insert(
+                        values={
+                            "from_id": p.id,
+                            "to_id": t.id,
+                            "msg": msg,
+                            "time": func.unix_timestamp()
+                        }
+                    )
+                )
         else:
             # messaging the bot, check for commands & /np.
             if msg.startswith(glob.config.command_prefix):
