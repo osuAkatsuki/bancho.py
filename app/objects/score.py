@@ -7,10 +7,16 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
+import sqlalchemy
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
+from sqlalchemy.sql.expression import join
+from sqlalchemy.sql.expression import select
+from sqlalchemy.sql.functions import func
 
+import app.db_models
+import app.services
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -194,16 +200,38 @@ class Score:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
-        res = await services.database.fetch_one(
-            "SELECT id, map_md5, userid, pp, score, "
-            "max_combo, mods, acc, n300, n100, n50, "
-            "nmiss, ngeki, nkatu, grade, perfect, "
-            "status, mode, play_time, "
-            "time_elapsed, client_flags, online_checksum "
-            f"FROM {scores_table} WHERE id = %s",
-            [score_id],
-            _dict=False,
-        )
+        async with app.services.database_session() as db_conn:
+            alchemy_table = getattr(app.db_models, scores_table)
+            score_res = await db_conn.execute(
+                select(
+                    [
+                        alchemy_table.c.id,
+                        alchemy_table.c.map_md5,
+                        alchemy_table.c.userid,
+                        alchemy_table.c.pp,
+                        alchemy_table.c.score,
+                        alchemy_table.c.max_combo,
+                        alchemy_table.c.mods,
+                        alchemy_table.c.acc,
+                        alchemy_table.c.n300,
+                        alchemy_table.c.n100,
+                        alchemy_table.c.n50,
+                        alchemy_table.c.nmiss,
+                        alchemy_table.c.ngeki,
+                        alchemy_table.c.nkatu,
+                        alchemy_table.c.grade,
+                        alchemy_table.c.perfect,
+                        alchemy_table.c.status,
+                        alchemy_table.c.mode,
+                        alchemy_table.c.play_time,
+                        alchemy_table.c.time_elapsed,
+                        alchemy_table.c.client_flags,
+                        alchemy_table.c.online_checksum,
+                    ],
+                ).where(alchemy_table.c.id == score_id),
+            )
+
+            res = score_res.fetchone()
 
         if not res:
             return
@@ -311,16 +339,33 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        res = await services.database.fetch_one(
-            f"SELECT COUNT(*) AS c FROM {scores_table} s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = %s AND s.mode = %s "
-            "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > %s",
-            [self.bmap.md5, self.mode.as_vanilla, score],
-        )
+        async with app.services.database_session() as db_conn:
+            alchemy_table = getattr(app.db_models, scores_table)
+            alchemy_metric = getattr(alchemy_table.c, scoring_metric)
 
-        return res["c"] + 1 if res else 1
+            users_join = join(
+                alchemy_table,
+                app.db_models.users,
+                alchemy_table.c.userid == app.db_models.users.c.id,
+            )
+
+            count_res = await db_conn.execute(
+                alchemy_table.select(func.count().label("c") + 1)
+                .select_from(users_join)
+                .where(
+                    sqlalchemy.and_(
+                        alchemy_table.c.map_md5 == self.bmap.md5,
+                        alchemy_table.c.mode == self.mode.as_vanilla,
+                        alchemy_table.c.status == 2,
+                        app.db_models.users.c.priv & 1,
+                        alchemy_metric > score,
+                    ),
+                ),
+            )
+
+            res = count_res.fetchone()
+
+        return res["c"] if res else 1
 
     def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
@@ -395,12 +440,20 @@ class Score:
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
-        res = await services.database.fetch_one(
-            f"SELECT id, pp FROM {scores_table} "
-            "WHERE userid = %s AND map_md5 = %s "
-            "AND mode = %s AND status = 2",
-            [self.player.id, self.bmap.md5, self.mode.as_vanilla],
-        )
+        async with app.services.database_session() as db_conn:
+            alchemy_table = getattr(app.db_models, scores_table)
+            score_res = await db_conn.execute(
+                select([alchemy_table.c.id, alchemy_table.c.pp]).where(
+                    sqlalchemy.and_(
+                        alchemy_table.c.userid == self.player.id,
+                        alchemy_table.c.map_md5 == self.bmap.md5,
+                        alchemy_table.c.mode == self.mode.as_vanilla,
+                        alchemy_table.c.status == 2,
+                    ),
+                ),
+            )
+
+            res = score_res.fetchone()
 
         if res:
             # we have a score on the map.
