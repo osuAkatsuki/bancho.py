@@ -717,7 +717,7 @@ class BeatmapSet:
                         "last_osuapi_check": self.last_osuapi_check,
                     },
                 ).prefix_with(
-                    "OR REPLACE",
+                    "REPLACE OR",
                 ),  # update/insert on case
             )
 
@@ -750,7 +750,7 @@ class BeatmapSet:
                             "diff": bmap.diff,
                         },
                     ).prefix_with(
-                        "OR REPLACE",
+                        "REPLACE OR",
                     ),  # update/insert on case
                 )
 

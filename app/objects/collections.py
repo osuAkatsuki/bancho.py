@@ -496,7 +496,7 @@ async def initialize_ram_caches(db_conn: AsyncSession) -> None:
     # static api keys
     key_res = await db_conn.execute(
         select([app.db_models.users.c.id, app.db_models.users.c.api_key]).where(
-            app.db_models.users.c.api_key != None,
+            app.db_models.users.c.api_key.isnot(None),
         ),
     )
 

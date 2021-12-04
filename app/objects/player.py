@@ -11,10 +11,15 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import databases.core
+import sqlalchemy
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.sql.expression import select
+from sqlalchemy.sql.functions import func
 
+import app.db_models
 import app.services
 import packets
 from app.constants.gamemodes import GameMode
@@ -452,10 +457,12 @@ class Player:
         """Update `self`'s privileges to `new`."""
         self.priv = new
 
-        await app.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :userid",
-            {"priv": self.priv, "userid": self.id},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update(values={"priv": self.priv}).where(
+                    app.db_models.users.c.id == self.id,
+                ),
+            )
 
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
@@ -476,10 +483,12 @@ class Player:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
 
-        await app.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :userid",
-            {"priv": self.priv, "userid": self.id},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update(values={"priv": self.priv}).where(
+                    app.db_models.users.c.id == self.id,
+                ),
+            )
 
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
@@ -489,12 +498,17 @@ class Player:
         await self.remove_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} restricted for "{reason}".'
-        await app.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.logs.insert(
+                    values={
+                        "from": admin.id,
+                        "to": self.id,
+                        "msg": log_msg,
+                        "time": func.now(),
+                    },
+                ),
+            )
 
         if "restricted" in self.__dict__:
             del self.restricted  # wipe cached_property
@@ -517,12 +531,18 @@ class Player:
         await self.add_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} unrestricted for "{reason}".'
-        await app.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
-        )
+
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.logs.insert(
+                    values={
+                        "from": admin.id,
+                        "to": self.id,
+                        "msg": log_msg,
+                        "time": func.now(),
+                    },
+                ),
+            )
 
         if "restricted" in self.__dict__:
             del self.restricted  # wipe cached_property
@@ -544,18 +564,26 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await app.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
-            {"silence_end": self.silence_end, "userid": self.id},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update(
+                    values={
+                        "silence_end": self.silence_end,
+                    },
+                ).where(app.db_models.users.c.id == self.id),
+            )
 
-        log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
-        await app.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
-        )
+            log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
+            await db_conn.execute(
+                app.db_models.logs.insert(
+                    values={
+                        "from": admin.id,
+                        "to": self.id,
+                        "msg": log_msg,
+                        "time": func.now(),
+                    },
+                ),
+            )
 
         # inform the user's client.
         self.enqueue(packets.silence_end(duration))
@@ -573,18 +601,24 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await app.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
-            {"silence_end": self.silence_end, "userid": self.id},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update(
+                    values={"silence_end": self.silence_end},
+                ).where(app.db_models.users.c.id == self.id),
+            )
 
-        log_msg = f"{admin} unsilenced."
-        await app.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
-        )
+            log_msg = f"{admin} unsilenced."
+            await db_conn.execute(
+                app.db_models.logs.insert(
+                    values={
+                        "from": admin.id,
+                        "to": self.id,
+                        "msg": log_msg,
+                        "time": func.now(),
+                    },
+                ),
+            )
 
         # inform the user's client
         self.enqueue(packets.silence_end(0))
@@ -854,10 +888,13 @@ class Player:
             return
 
         self.friends.add(p.id)
-        await app.services.database.execute(
-            "REPLACE INTO relationships VALUES (:user1, :user2, 'friend')",
-            {"user1": self.id, "user2": p.id},
-        )
+
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.relationships.insert(
+                    values={"user1": self.id, "user2": p.id},
+                ),
+            )
 
         log(f"{self} friended {p}.")
 
@@ -868,10 +905,16 @@ class Player:
             return
 
         self.friends.remove(p.id)
-        await app.services.database.execute(
-            "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
-            {"user1": self.id, "user2": p.id},
-        )
+
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.relationships.delete().where(
+                    sqlalchemy.and_(
+                        app.db_models.relationships.c.user1 == self.id,
+                        app.db_models.relationships.c.user2 == p.id,
+                    ),
+                ),
+            )
 
         log(f"{self} unfriended {p}.")
 
@@ -885,10 +928,13 @@ class Player:
             return
 
         self.blocks.add(p.id)
-        await app.services.database.execute(
-            "REPLACE INTO relationships VALUES (:user1, :user2, 'block')",
-            {"user1": self.id, "user2": p.id},
-        )
+
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.relationships.insert(
+                    values={"user1": self.id, "user2": p.id},
+                ).prefix_with("REPLACE OR"),
+            )
 
         log(f"{self} blocked {p}.")
 
@@ -899,28 +945,46 @@ class Player:
             return
 
         self.blocks.remove(p.id)
-        await app.services.database.execute(
-            "DELETE FROM relationships WHERE user1 = :userid AND user2 = :user2",
-            {"userid": self.id, "user2": p.id},
-        )
+
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.relationships.delete().where(
+                    sqlalchemy.and_(
+                        app.db_models.relationships.c.user1 == self.id,
+                        app.db_models.relationships.c.user2 == p.id,
+                    ),
+                ),
+            )
 
         log(f"{self} unblocked {p}.")
 
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
-        await app.services.database.execute(
-            "INSERT INTO user_achievements (userid, achid) VALUES (:userid, :achid)",
-            {"userid": self.id, "achid": a.id},
-        )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.user_achievements.insert(
+                    values={
+                        "userid": self.id,
+                        "achid": a.id,
+                    },
+                ),
+            )
 
         self.achievements.add(a)
 
-    async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
+    async def relationships_from_sql(self, db_conn: AsyncSession) -> None:
         """Retrieve `self`'s relationships from sql."""
-        async for row in db_conn.iterate(
-            "SELECT user2, type FROM relationships WHERE user1 = :userid",
-            {"userid": self.id},
-        ):
+
+        relationships_res = await db_conn.execute(
+            select(
+                [
+                    app.db_models.relationships.c.user2,
+                    app.db_models.relationships.c.type,
+                ],
+            ).where(app.db_models.relationships.c.user1 == self.id),
+        )
+
+        for row in relationships_res.fetchall():
             if row["type"] == "friend":
                 self.friends.add(row["user2"])
             else:
@@ -929,14 +993,15 @@ class Player:
         # always have bot added to friends.
         self.friends.add(1)
 
-    async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
+    async def achievements_from_sql(self, db_conn: AsyncSession) -> None:
         """Retrieve `self`'s achievements from sql."""
-        async for row in db_conn.iterate(
-            "SELECT ua.achid id FROM user_achievements ua "
-            "INNER JOIN achievements a ON a.id = ua.achid "
-            "WHERE ua.userid = :userid",
-            {"userid": self.id},
-        ):
+        achievements_res = await db_conn.execute(
+            app.db_models.user_achievements.select(
+                app.db_models.user_achievements.c.achid.label("id"),
+            ).where(app.db_models.user_achievements.c.userid == self.id),
+        )
+
+        for row in achievements_res.fetchall():
             for ach in glob.achievements:
                 if row["id"] == ach.id:
                     self.achievements.add(ach)
@@ -972,16 +1037,28 @@ class Player:
         stats.rank = await self.get_global_rank(mode)
         return stats.rank
 
-    async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
+    async def stats_from_sql_full(self, db_conn: AsyncSession) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        rows = await db_conn.fetch_all(
-            "SELECT tscore, rscore, pp, acc, "
-            "plays, playtime, max_combo, "
-            "xh_count, x_count, sh_count, s_count, a_count "
-            "FROM stats "
-            "WHERE id = :userid",
-            {"userid": self.id},
+
+        scores_res = await db_conn.execute(
+            select(
+                [
+                    app.db_models.stats.c.tscore,
+                    app.db_models.stats.c.rscore,
+                    app.db_models.stats.c.pp,
+                    app.db_models.stats.c.acc,
+                    app.db_models.stats.c.plays,
+                    app.db_models.stats.c.playtime,
+                    app.db_models.stats.c.max_combo,
+                    app.db_models.stats.c.xh_count,
+                    app.db_models.stats.c.x_count,
+                    app.db_models.stats.c.sh_count,
+                    app.db_models.stats.c.s_count,
+                    app.db_models.stats.c.a_count,
+                ],
+            ).where(app.db_models.stats.c.userid == self.id),
         )
+        rows = scores_res.fetchall()
 
         for mode, row in enumerate([dict(row) for row in rows]):
             # calculate player's rank.
@@ -1023,13 +1100,14 @@ class Player:
         self.send_menu_clear()
         self.send_bot("\n".join(msg))
 
-    def update_latest_activity(self) -> None:
+    async def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
-        task = app.services.database.execute(
-            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :userid",
-            {"userid": self.id},
-        )
-        glob.loop.create_task(task)
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update(
+                    values={"latest_activity": func.unix_timestamp()},
+                ).where(app.db_models.users.c.id == self.id),
+            )
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""

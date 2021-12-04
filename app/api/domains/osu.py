@@ -42,7 +42,6 @@ from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.expression import distinct
 from sqlalchemy.sql.expression import insert
 from sqlalchemy.sql.expression import join
 from sqlalchemy.sql.expression import select
@@ -694,7 +693,7 @@ async def osuSubmitModularSelector(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    score.player.update_latest_activity()
+    await score.player.update_latest_activity()
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -1561,7 +1560,7 @@ async def osuComment(
                 "{time}\t{target_type}\t" "{fmt}\t{comment}".format(fmt=fmt, **cmt),
             )
 
-        player.update_latest_activity()
+        await player.update_latest_activity()
         return "\n".join(ret).encode()
 
     else:  # action == "post":
@@ -1595,7 +1594,7 @@ async def osuComment(
             ),
         )
 
-        player.update_latest_activity()
+        await player.update_latest_activity()
         return  # empty resp is fine
 
 
