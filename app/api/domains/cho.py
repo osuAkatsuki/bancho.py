@@ -407,7 +407,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{glob.version}.",
+    f"Welcome back to {BASE_DOMAIN}!\n",  # f"Running gulag v{glob.version}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -718,9 +718,6 @@ async def login(
     data += packets.bancho_privileges(p.bancho_priv | ClientPrivileges.SUPPORTER)
 
     data += WELCOME_NOTIFICATION
-
-    if not glob.has_internet:
-        data += OFFLINE_NOTIFICATION
 
     # send all appropriate channel info to our player.
     # the osu! client will attempt to join the channels.

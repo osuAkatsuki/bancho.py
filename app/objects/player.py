@@ -23,7 +23,6 @@ from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.misc.utils import escape_enum
-from app.misc.utils import Geolocation
 from app.misc.utils import pymysql_encode
 from app.objects import glob
 from app.objects.channel import Channel
@@ -258,7 +257,7 @@ class Player:
 
         self.achievements: set["Achievement"] = set()
 
-        self.geoloc: Geolocation = extras.get(
+        self.geoloc: app.services.Geolocation = extras.get(
             "geoloc",
             {
                 "latitude": 0.0,
@@ -505,10 +504,9 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if glob.has_internet:
-            if webhook_url := glob.config.webhooks["audit-log"]:
-                webhook = Webhook(webhook_url, content=log_msg)
-                await webhook.post(glob.http_session)
+        if webhook_url := glob.config.webhooks["audit-log"]:
+            webhook = Webhook(webhook_url, content=log_msg)
+            await webhook.post(app.services.http_session)
 
         if self.online:
             # log the user out if they're offline, this
@@ -534,10 +532,9 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if glob.has_internet:
-            if webhook_url := glob.config.webhooks["audit-log"]:
-                webhook = Webhook(webhook_url, content=log_msg)
-                await webhook.post(glob.http_session)
+        if webhook_url := glob.config.webhooks["audit-log"]:
+            webhook = Webhook(webhook_url, content=log_msg)
+            await webhook.post(app.services.http_session)
 
         if self.online:
             # log the user out if they're offline, this

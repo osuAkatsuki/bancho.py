@@ -27,6 +27,7 @@ from typing import Union
 import aiomysql
 import cmyui
 import dill as pickle
+import orjson
 import pymysql
 import requests
 from cmyui.logging import Ansi
@@ -36,8 +37,8 @@ from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
+import app.settings
 from app.constants.countries import country_codes
-from app.objects import glob
 
 __all__ = (
     # TODO: organize/sort these
@@ -75,6 +76,8 @@ __all__ = (
     "check_for_dependency_updates",
     "_get_current_sql_structure_version",
     "run_sql_migrations",
+    "orjson_serialize_to_str",
+    "get_media_type",
 )
 
 DATA_PATH = Path.cwd() / ".data"
@@ -257,43 +260,6 @@ def running_via_asgi_webserver() -> bool:
     return any(map(sys.argv[0].endswith, ("hypercorn", "uvicorn")))
 
 
-def _install_synchronous_excepthook() -> None:
-    """Install a thin wrapper for sys.excepthook to catch gulag-related stuff."""
-    real_excepthook = sys.excepthook  # backup
-
-    def _excepthook(
-        type_: Type[BaseException],
-        value: BaseException,
-        traceback: types.TracebackType,
-    ):
-        if type_ is KeyboardInterrupt:
-            print("\33[2K\r", end="Aborted startup.")
-            return
-        elif type_ is AttributeError and value.args[0].startswith(
-            "module 'config' has no attribute",
-        ):
-            attr_name = value.args[0][34:-1]
-            log(
-                "gulag's config has been updated, and has "
-                f"added a new `{attr_name}` attribute.",
-                Ansi.LMAGENTA,
-            )
-            log(
-                "Please refer to it's value & example in "
-                "ext/config.sample.py for additional info.",
-                Ansi.LCYAN,
-            )
-            return
-
-        printc(
-            f"gulag v{glob.version!r} ran into an issue before starting up :(",
-            Ansi.RED,
-        )
-        real_excepthook(type_, value, traceback)  # type: ignore
-
-    sys.excepthook = _excepthook
-
-
 def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str]]]]:
     """Return information of all frames related to cmyui_pkg and below."""
     stack = inspect.stack()[1:]
@@ -323,52 +289,6 @@ def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
 
-async def log_strange_occurrence(obj: object) -> None:
-    if not glob.has_internet:  # requires internet connection
-        return
-
-    pickled_obj: bytes = pickle.dumps(obj)
-    uploaded = False
-
-    if glob.config.automatically_report_problems:
-        # automatically reporting problems to cmyui's server
-        async with glob.http_session.post(
-            url="https://log.cmyui.xyz/",
-            headers={
-                "Gulag-Version": repr(glob.version),
-                "Gulag-Domain": glob.config.domain,
-            },
-            data=pickled_obj,
-        ) as resp:
-            if resp.status == 200 and (await resp.read()) == b"ok":
-                uploaded = True
-                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-                log("Thank you for your participation! <3", Rainbow)
-            else:
-                log(
-                    f"Autoupload to cmyui's server failed (HTTP {resp.status})",
-                    Ansi.LRED,
-                )
-
-    if not uploaded:
-        # log to a file locally, and prompt the user
-        while True:
-            log_file = STRANGE_LOG_DIR / f"strange_{secrets.token_hex(4)}.db"
-            if not log_file.exists():
-                break
-
-        log_file.touch(exist_ok=False)
-        log_file.write_bytes(pickled_obj)
-
-        log("Logged strange occurrence to", Ansi.LYELLOW, end=" ")
-        printc("/".join(log_file.parts[-4:]), Ansi.LBLUE)
-
-        log(
-            "Greatly appreciated if you could forward this to cmyui#0425 :)",
-            Ansi.LYELLOW,
-        )
-
-
 def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
     """Check whether addr is of type tuple[str, int]."""
     return (
@@ -377,70 +297,6 @@ def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
         and isinstance(addr[0], str)
         and isinstance(addr[1], int)
     )
-
-
-IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
-
-
-class Country(TypedDict):
-    acronym: str
-    numeric: int
-
-
-class Geolocation(TypedDict):
-    latitude: float
-    longitude: float
-    country: Country
-
-
-def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
-    """Fetch geolocation data based on ip (using local db)."""
-    if not glob.geoloc_db:
-        return
-
-    res = glob.geoloc_db.city(ip)
-
-    if res.country.iso_code is not None:
-        acronym = res.country.iso_code.lower()
-    else:
-        acronym = "XX"
-
-    return {
-        "latitude": res.location.latitude or 0.0,
-        "longitude": res.location.longitude or 0.0,
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
-    }
-
-
-async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
-    """Fetch geolocation data based on ip (using ip-api)."""
-    if not glob.has_internet:  # requires internet connection
-        return
-
-    url = f"http://ip-api.com/line/{ip}"
-
-    async with glob.http_session.get(url) as resp:
-        if not resp or resp.status != 200:
-            log("Failed to get geoloc data: request failed.", Ansi.LRED)
-            return
-
-        status, *lines = (await resp.text()).split("\n")
-
-        if status != "success":
-            err_msg = lines[0]
-            if err_msg == "invalid query":
-                err_msg += f" ({url})"
-
-            log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
-            return
-
-    acronym = lines[1].lower()
-
-    return {
-        "latitude": float(lines[6]),
-        "longitude": float(lines[7]),
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
-    }
 
 
 T = TypeVar("T")
@@ -463,86 +319,6 @@ def escape_enum(
     _: Optional[dict[object, object]] = None,
 ) -> str:  # used for ^
     return str(int(val))
-
-
-def shutdown_signal_handler(signum: int | signal.Signals) -> None:
-    """Handle a posix signal, flagging the server to shut down."""
-    print("\x1b[2K", end="\r")  # remove ^C from window
-
-    # TODO: handle SIGUSR1 for restarting
-
-    if glob.shutting_down:
-        return
-
-    log(f"Received {signal.strsignal(signum)}", Ansi.LRED)
-
-    glob.shutting_down = True
-
-
-def _handle_fut_exception(fut: asyncio.Future) -> None:
-    if not fut.cancelled():
-        if exception := fut.exception():
-            glob.loop.call_exception_handler(
-                {
-                    "message": "unhandled exception during loop shutdown",
-                    "exception": exception,
-                    "task": fut,
-                },
-            )
-
-
-def _conn_finished_cb(task: asyncio.Task) -> None:
-    if not task.cancelled():
-        exc = task.exception()
-        if exc is not None and not isinstance(exc, (SystemExit, KeyboardInterrupt)):
-            loop = asyncio.get_running_loop()
-            loop.default_exception_handler({"exception": exc})
-
-    glob.ongoing_conns.remove(task)
-    task.remove_done_callback(_conn_finished_cb)
-
-
-async def await_ongoing_connections(timeout: float) -> None:
-    log(
-        f"-> Allowing up to {timeout:.2f} seconds for "
-        f"{len(glob.ongoing_conns)} ongoing connection(s) to finish.",
-        Ansi.LMAGENTA,
-    )
-
-    done, pending = await asyncio.wait(glob.ongoing_conns, timeout=timeout)
-
-    for task in done:
-        _handle_fut_exception(task)
-
-    if pending:
-        log(
-            f"-> Awaital timeout - cancelling {len(pending)} pending connection(s).",
-            Ansi.LRED,
-        )
-
-        for task in pending:
-            task.cancel()
-
-        await asyncio.gather(*pending, return_exceptions=True)
-
-        for task in pending:
-            _handle_fut_exception(task)
-
-
-async def cancel_housekeeping_tasks() -> None:
-    log(
-        f"-> Cancelling {len(glob.housekeeping_tasks)} housekeeping tasks.",
-        Ansi.LMAGENTA,
-    )
-
-    # cancel housekeeping tasks
-    for task in glob.housekeeping_tasks:
-        task.cancel()
-
-    await asyncio.gather(*glob.housekeeping_tasks, return_exceptions=True)
-
-    for task in glob.housekeeping_tasks:
-        _handle_fut_exception(task)
 
 
 def ensure_supported_platform() -> int:
@@ -568,100 +344,93 @@ def ensure_supported_platform() -> int:
     return 0
 
 
-def ensure_local_services_are_running() -> int:
-    """Ensure all required services (mysql, redis) are running."""
-    # NOTE: if you have any problems with this, please contact me
-    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
-    # how people are using the software so that i can keep it
-    # in mind while developing new features & refactoring.
+# def ensure_local_services_are_running() -> int:
+#     """Ensure all required services (mysql, redis) are running."""
+#     # NOTE: if you have any problems with this, please contact me
+#     # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
+#     # how people are using the software so that i can keep it
+#     # in mind while developing new features & refactoring.
 
-    if glob.config.mysql["host"] in ("localhost", "127.0.0.1", None):
-        # sql server running locally, make sure it's running
-        for service in ("mysqld", "mariadb"):
-            if os.path.exists(f"/var/run/{service}/{service}.pid"):
-                break
-        else:
-            # not found, try pgrep
-            pgrep_exit_code = subprocess.call(
-                ["pgrep", "mysqld"],
-                stdout=subprocess.DEVNULL,
-            )
-            if pgrep_exit_code != 0:
-                log("Please start your mysqld server.", Ansi.LRED)
-                return 1
+#     if glob.config.mysql["host"] in ("localhost", "127.0.0.1", None):
+#         # sql server running locally, make sure it's running
+#         for service in ("mysqld", "mariadb"):
+#             if os.path.exists(f"/var/run/{service}/{service}.pid"):
+#                 break
+#         else:
+#             # not found, try pgrep
+#             pgrep_exit_code = subprocess.call(
+#                 ["pgrep", "mysqld"],
+#                 stdout=subprocess.DEVNULL,
+#             )
+#             if pgrep_exit_code != 0:
+#                 log("Please start your mysqld server.", Ansi.LRED)
+#                 return 1
 
-    if not os.path.exists("/var/run/redis/redis-server.pid"):
-        log("Please start your redis server.", Ansi.LRED)
-        return 1
+#     if not os.path.exists("/var/run/redis/redis-server.pid"):
+#         log("Please start your redis server.", Ansi.LRED)
+#         return 1
 
-    return 0
-
-
-def ensure_directory_structure() -> int:
-    """Ensure the .data directory and git submodules are ready."""
-    # create /.data and its subdirectories.
-    DATA_PATH.mkdir(exist_ok=True)
-
-    for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
-        subdir = DATA_PATH / sub_dir
-        subdir.mkdir(exist_ok=True)
-
-    if not ACHIEVEMENTS_ASSETS_PATH.exists():
-        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
-        download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
-
-    if not DEFAULT_AVATAR_PATH.exists():
-        download_default_avatar(DEFAULT_AVATAR_PATH)
-
-    return 0
+#     return 0
 
 
-def ensure_dependencies_and_requirements() -> int:
-    """Make sure all of gulag's dependencies are ready."""
-    if not OPPAI_PATH.exists():
-        log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["git", "submodule", "init"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to initialize git submodules.", Ansi.LRED)
-            return exit_code
+# def ensure_directory_structure() -> int:
+#     """Ensure the .data directory and git submodules are ready."""
+#     # create /.data and its subdirectories.
+#     DATA_PATH.mkdir(exist_ok=True)
 
-        p = subprocess.Popen(
-            args=["git", "submodule", "update"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to update git submodules.", Ansi.LRED)
-            return exit_code
+#     for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
+#         subdir = DATA_PATH / sub_dir
+#         subdir.mkdir(exist_ok=True)
 
-    if not (OPPAI_PATH / "liboppai.so").exists():
-        log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["./libbuild"],
-            cwd="oppai-ng",
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to build oppai-ng automatically.", Ansi.LRED)
-            return exit_code
+#     if not ACHIEVEMENTS_ASSETS_PATH.exists():
+#         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
+#         download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
 
-    return 0
+#     if not DEFAULT_AVATAR_PATH.exists():
+#         download_default_avatar(DEFAULT_AVATAR_PATH)
+
+#     return 0
+
+
+# def ensure_dependencies_and_requirements() -> int:
+#     """Make sure all of gulag's dependencies are ready."""
+#     if not OPPAI_PATH.exists():
+#         log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
+#         p = subprocess.Popen(
+#             args=["git", "submodule", "init"],
+#             stdout=subprocess.DEVNULL,
+#             stderr=subprocess.DEVNULL,
+#         )
+#         if exit_code := p.wait():
+#             log("Failed to initialize git submodules.", Ansi.LRED)
+#             return exit_code
+
+#         p = subprocess.Popen(
+#             args=["git", "submodule", "update"],
+#             stdout=subprocess.DEVNULL,
+#             stderr=subprocess.DEVNULL,
+#         )
+#         if exit_code := p.wait():
+#             log("Failed to update git submodules.", Ansi.LRED)
+#             return exit_code
+
+#     if not (OPPAI_PATH / "liboppai.so").exists():
+#         log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
+#         p = subprocess.Popen(
+#             args=["./libbuild"],
+#             cwd="oppai-ng",
+#             stdout=subprocess.DEVNULL,
+#             stderr=subprocess.DEVNULL,
+#         )
+#         if exit_code := p.wait():
+#             log("Failed to build oppai-ng automatically.", Ansi.LRED)
+#             return exit_code
+
+#     return 0
 
 
 def setup_runtime_environment() -> None:
     """Configure the server's runtime environment."""
-    # install a hook to catch exceptions outside of the event loop,
-    # which will handle various situations where the error details
-    # can be cleared up for the developer; for example it will explain
-    # that the config has been updated when an unknown attribute is
-    # accessed, so the developer knows what to do immediately.
-    _install_synchronous_excepthook()
-
     # we print utf-8 content quite often, so configure sys.stdout
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -678,3 +447,16 @@ def _install_debugging_hooks() -> None:
 def create_config_from_default() -> None:
     """Create the default config from ext/config.sample.py"""
     shutil.copy("ext/config.sample.py", "config.py")
+
+
+def orjson_serialize_to_str(*args, **kwargs) -> str:
+    return orjson.dumps(*args, **kwargs).decode()
+
+
+def get_media_type(extension: str) -> Optional[str]:
+    if extension in ("jpg", "jpeg"):
+        return "image/jpeg"
+    elif extension == "png":
+        return "image/png"
+
+    # return none, fastapi will attempt to figure it out

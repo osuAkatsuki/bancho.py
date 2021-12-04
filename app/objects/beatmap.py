@@ -15,6 +15,7 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 
 import app.misc.utils
+import app.services
 import app.settings
 from app.constants.gamemodes import GameMode
 from app.misc.utils import escape_enum
@@ -43,7 +44,10 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
 
     params["k"] = glob.config.osu_api_key
 
-    async with glob.http_session.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
+    async with app.services.http_session.get(
+        OSUAPI_GET_BEATMAPS,
+        params=params,
+    ) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
             return await resp.json()
 
@@ -64,7 +68,7 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with glob.http_session.get(url) as r:
+        async with app.services.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
                 stacktrace = app.misc.utils.get_appropriate_stacktrace()
@@ -387,7 +391,7 @@ class Beatmap:
                 # from the db, or the osu!api. we want to get
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
-                res = await services.database.fetch_one(
+                res = await app.services.database.fetch_one(
                     "SELECT set_id FROM maps WHERE md5 = %s",
                     [md5],
                 )
@@ -426,7 +430,7 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            res = await services.database.fetch_one(
+            res = await app.services.database.fetch_one(
                 "SELECT set_id FROM maps WHERE id = %s",
                 [bid],
             )
@@ -692,7 +696,7 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with services.database.connection() as db_conn:
+        async with app.services.database.connection() as db_conn:
             async with db_conn.cursor() as db_cursor:
                 await db_cursor.execute(
                     "REPLACE INTO mapsets "
@@ -760,7 +764,7 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
-        async with services.database.connection() as conn:
+        async with app.services.database.connection() as conn:
             async with conn.cursor(aiomysql.DictCursor) as db_cursor:
                 await db_cursor.execute(
                     "SELECT last_osuapi_check FROM mapsets WHERE id = %s",
@@ -801,7 +805,7 @@ class BeatmapSet:
                             .translate(IGNORED_BEATMAP_CHARS)
                         )
 
-                        await services.database.execute(
+                        await app.services.database.execute(
                             "UPDATE maps SET filename = %s WHERE id = %s",
                             [bmap.filename, bmap.id],
                         )
@@ -823,7 +827,7 @@ class BeatmapSet:
             # XXX: pre-mapset gulag support
             # select all current beatmaps
             # that're frozen in the db
-            res = await services.database.fetch_all(
+            res = await app.services.database.fetch_all(
                 "SELECT id, status FROM maps WHERE set_id = %s AND frozen = 1",
                 [bsid],
             )
@@ -866,9 +870,6 @@ class BeatmapSet:
             bmap_set = await cls._from_bsid_sql(bsid)
 
             if not bmap_set:
-                if not glob.has_internet:
-                    return
-
                 bmap_set = await cls._from_bsid_osuapi(bsid)
 
                 if not bmap_set:

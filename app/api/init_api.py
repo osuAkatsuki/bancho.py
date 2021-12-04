@@ -14,7 +14,6 @@ you can also test gulag's rest api using my test server,
 e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
 """
 import os
-from pathlib import Path
 
 import cmyui
 from cmyui.logging import Ansi
@@ -29,8 +28,6 @@ from app import settings
 from app.objects import glob
 
 # from .domains import map
-
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
 # # !! review code that uses this before modifying it.
 glob.version = cmyui.Version(3, 6, 1)

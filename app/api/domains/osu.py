@@ -13,7 +13,7 @@ from collections import defaultdict
 from enum import IntEnum
 from enum import unique
 from functools import wraps
-from pathlib import Path
+from pathlib import Path as SystemPath
 from typing import Any
 from typing import AsyncIterator
 from typing import Awaitable
@@ -42,16 +42,21 @@ from fastapi import status
 from fastapi.datastructures import UploadFile
 from fastapi.param_functions import File
 from fastapi.param_functions import Form
+from fastapi.param_functions import Header
+from fastapi.param_functions import Path
 from fastapi.param_functions import Query
 from fastapi.requests import Request
+from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from pydantic import BaseModel
+from starlette.responses import RedirectResponse
 
 import app.misc.utils
+import app.settings
 import packets
 from app import services
 from app.constants import regexes
@@ -72,10 +77,10 @@ from app.objects.score import SubmissionStatus
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-AVATARS_PATH = Path.cwd() / ".data/avatars"
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
-REPLAYS_PATH = Path.cwd() / ".data/osr"
-SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
+AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
+BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
+REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
+SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 router = APIRouter()
 
@@ -457,9 +462,6 @@ async def osuSearchHandler(
         # player login incorrect
         return
 
-    if not glob.has_internet:
-        return b"-1\nosu!direct requires an internet connection."
-
     if USING_CHIMU:
         search_url = f"{glob.config.mirror}/search"
     else:
@@ -480,7 +482,7 @@ async def osuSearchHandler(
         status = RankedStatus.from_osudirect(ranked_status)
         params["status"] = status.osu_api
 
-    async with glob.http_session.get(search_url, params=params) as resp:
+    async with services.http_session.get(search_url, params=params) as resp:
         if not resp:
             stacktrace = app.misc.utils.get_appropriate_stacktrace()
             await app.misc.utils.log_strange_occurrence(stacktrace)
@@ -1554,9 +1556,6 @@ async def checkUpdates(
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
 ):
-    if not glob.has_internet:
-        return (503, b"")  # requires internet connection
-
     if action == "error":
         # client is just reporting an error updating
         return
@@ -1568,7 +1567,7 @@ async def checkUpdates(
         return cache[action]
 
     url = "https://old.ppy.sh/web/check-updates.php"
-    async with glob.http_session.get(url, params=request.query_params) as resp:
+    async with services.http_session.get(url, params=request.query_params) as resp:
         if not resp or resp.status != 200:
             return (503, b"")  # failed to get data from osu
 
@@ -1906,7 +1905,7 @@ async def api_get_player_scores(
 
 
 @router.get("/api/get_player_most_played")
-async def api_get_player_most_played(conn: Connection):
+async def api_get_player_most_played():
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
     conn.resp_headers["Content-Type"] = "application/json"
@@ -1977,7 +1976,7 @@ async def api_get_player_most_played(conn: Connection):
 
 
 @router.get("/api/get_map_info")
-async def api_get_map_info(conn: Connection):
+async def api_get_map_info():
     """Return information about a given beatmap."""
     conn.resp_headers["Content-Type"] = "application/json"
     if "id" in conn.args:
@@ -2010,7 +2009,7 @@ async def api_get_map_info(conn: Connection):
 
 
 @router.get("/api/get_map_scores")
-async def api_get_map_scores(conn: Connection):
+async def api_get_map_scores():
     """Return the top n scores on a given beatmap."""
     conn.resp_headers["Content-Type"] = "application/json"
     if "id" in conn.args:
@@ -2123,7 +2122,7 @@ async def api_get_map_scores(conn: Connection):
 
 
 @router.get("/api/get_score_info")
-async def api_get_score_info(conn: Connection):
+async def api_get_score_info():
     """Return information about a given score."""
     conn.resp_headers["Content-Type"] = "application/json"
     if not ("id" in conn.args and conn.args["id"].isdecimal()):
@@ -2165,7 +2164,7 @@ async def api_get_score_info(conn: Connection):
 
 
 @router.get("/api/get_replay")
-async def api_get_replay(conn: Connection):
+async def api_get_replay():
     """Return a given replay (including headers)."""
     conn.resp_headers["Content-Type"] = "application/json"
     if not ("id" in conn.args and conn.args["id"].isdecimal()):
@@ -2306,7 +2305,7 @@ async def api_get_replay(conn: Connection):
 
 
 @router.get("/api/get_match")
-async def api_get_match(conn: Connection):
+async def api_get_match():
     """Return information of a given multiplayer match."""
     conn.resp_headers["Content-Type"] = "application/json"
     # TODO: eventually, this should contain recent score info.
@@ -2361,7 +2360,7 @@ async def api_get_match(conn: Connection):
 
 
 @router.get("/api/get_leaderboard")
-async def api_get_global_leaderboard(conn: Connection):
+async def api_get_global_leaderboard():
     conn.resp_headers["Content-Type"] = "application/json"
 
     if (mode_arg := conn.args.get("mode", None)) is not None:
@@ -2409,171 +2408,199 @@ async def api_get_global_leaderboard(conn: Connection):
     return ORJSONResponse({"status": "success", "leaderboard": res})
 
 
-def requires_api_key(f: Callable) -> Callable:
-    @wraps(f)
-    async def wrapper(conn: Connection):
-        conn.resp_headers["Content-Type"] = "application/json"
-        if "Authorization" not in conn.headers:
-            return ORJSONResponse(
-                {"status": "Must provide authorization token."},
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+# def requires_api_key(f: Callable) -> Callable:
+#     @wraps(f)
+#     async def wrapper():
+#         conn.resp_headers["Content-Type"] = "application/json"
+#         if "Authorization" not in conn.headers:
+#             return ORJSONResponse(
+#                 {"status": "Must provide authorization token."},
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#             )
 
-        api_key = conn.headers["Authorization"]
+#         api_key = conn.headers["Authorization"]
 
-        if api_key not in glob.api_keys:
-            return ORJSONResponse(
-                {"status": "Unknown authorization token."},
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
+#         if api_key not in glob.api_keys:
+#             return ORJSONResponse(
+#                 {"status": "Unknown authorization token."},
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#             )
 
-        # get player from api token
-        player_id = glob.api_keys[api_key]
-        p = await glob.players.from_cache_or_sql(id=player_id)
+#         # get player from api token
+#         player_id = glob.api_keys[api_key]
+#         p = await glob.players.from_cache_or_sql(id=player_id)
 
-        return await f(conn, p)
+#         return await f(conn, p)
 
-    return wrapper
-
-
-# NOTE: `Content-Type = application/json` is applied in the above decorator
-#                                         for the following api handlers.
+#     return wrapper
 
 
-@router.put("/api/set_avatar")
-@requires_api_key
-async def api_set_avatar(conn: Connection, p: "Player"):
-    """Update the tokenholder's avatar to a given file."""
-    if "avatar" not in conn.files:
-        return ORJSONResponse(
-            {"status": "must provide avatar file."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+# # NOTE: `Content-Type = application/json` is applied in the above decorator
+# #                                         for the following api handlers.
 
-    ava_file = conn.files["avatar"]
 
-    # block files over 4MB
-    if len(ava_file) > (4 * 1024 * 1024):
-        return ORJSONResponse(
-            {"status": "avatar file too large (max 4MB)."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+# @router.put("/api/set_avatar")
+# @requires_api_key
+# async def api_set_avatar(p: "Player"):
+#     """Update the tokenholder's avatar to a given file."""
+#     if "avatar" not in conn.files:
+#         return ORJSONResponse(
+#             {"status": "must provide avatar file."},
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#         )
 
-    if ava_file[6:10] in (b"JFIF", b"Exif"):
-        ext = "jpeg"
-    elif ava_file.startswith(b"\211PNG\r\n\032\n"):
-        ext = "png"
-    else:
-        return ORJSONResponse(
-            {"status": "invalid file type."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+#     ava_file = conn.files["avatar"]
 
-    # write to the avatar file
-    (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
-    return ORJSONResponse({"status": "success."})
+#     # block files over 4MB
+#     if len(ava_file) > (4 * 1024 * 1024):
+#         return ORJSONResponse(
+#             {"status": "avatar file too large (max 4MB)."},
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     if ava_file[6:10] in (b"JFIF", b"Exif"):
+#         ext = "jpeg"
+#     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
+#         ext = "png"
+#     else:
+#         return ORJSONResponse(
+#             {"status": "invalid file type."},
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     # write to the avatar file
+#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
+#     return ORJSONResponse({"status": "success."})
 
 
 """ Misc handlers """
 
 if glob.config.redirect_osu_urls:
-    # NOTE: this will likely be removed with the addition of a frontend.
-    @router.route(
-        {
-            re.compile(r"^/beatmapsets/\d{1,10}(?:/discussion)?/?$"),
-            re.compile(r"^/beatmaps/\d{1,10}/?"),
-            re.compile(r"^/community/forums/topics/\d{1,10}/?$"),
-        },
-    )
-    async def osu_redirects(conn: Connection):
-        """Redirect some common url's the client uses to osu!."""
-        conn.resp_headers["Location"] = f"https://osu.ppy.sh{conn.path}"
-        return (301, b"")
+    """Redirect commonly visited osu! pages to osu!'s website."""
+
+    @router.get("/beatmapsets/{map_set_id}")
+    async def mapset_web_handler(
+        request: Request,
+        map_set_id: int = Path(..., ge=0, le=2_147_483_647),
+    ):
+        return RedirectResponse(
+            url=f"https://osu.ppy.sh/{request['path']}",
+            status_code=status.HTTP_301_MOVED_PERMANENTLY,
+        )
+
+    @router.get("/beatmaps/{map_id}")
+    async def map_web_handler(
+        request: Request,
+        map_id: int = Path(..., ge=0, le=2_147_483_647),
+    ):
+        return RedirectResponse(
+            url=f"https://osu.ppy.sh/{request['path']}",
+            status_code=status.HTTP_301_MOVED_PERMANENTLY,
+        )
+
+    @router.get("/community/forums/topics/{topic_id}")
+    async def forum_web_handler(
+        request: Request,
+        topic_id: int = Path(..., ge=0, le=2_147_483_647),
+    ):
+        return RedirectResponse(
+            url=f"https://osu.ppy.sh/{request['path']}",
+            status_code=status.HTTP_301_MOVED_PERMANENTLY,
+        )
 
 
-@router.route(re.compile(r"^/ss/[a-zA-Z0-9-_]{8}\.(png|jpeg)$"))
-async def get_screenshot(conn: Connection):
+@router.get("/ss/{screenshot_id}.{extension}")
+async def get_screenshot(
+    screenshot_id: str = Path(..., regex=r"[a-zA-Z0-9-_]{8}"),
+    extension: Literal["jpg", "jpeg", "png"] = Path(...),
+):
     """Serve a screenshot from the server, by filename."""
-    if len(conn.path) not in (16, 17):
-        return (400, b"Invalid request.")
+    screenshot_path = SCREENSHOTS_PATH / f"{screenshot_id}.{extension}"
 
-    path = SCREENSHOTS_PATH / conn.path[4:]
-
-    if not path.exists():
+    if not screenshot_path.exists():
         return ORJSONResponse(
             {"status": "Screenshot not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return path.read_bytes()
+    return FileResponse(
+        screenshot_path,
+        media_type=app.misc.utils.get_media_type(extension),
+    )
 
 
-@router.route(re.compile(r"^/d/\d{1,10}n?$"))
-async def get_osz(conn: Connection):
+# TODO: this surely doesn't work
+@router.get("/d/{map_set_id}{no_video}")
+async def get_osz(
+    map_set_id: int = Path(..., ge=0, le=2_147_483_647),
+    no_video: Optional[Literal["n"]] = Path(...),
+):
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    set_id = conn.path[3:]
-
-    if no_video := set_id[-1] == "n":
-        set_id = set_id[:-1]
+    download_video = not no_video
 
     if USING_CHIMU:
-        query_str = f"download/{set_id}?n={int(no_video)}"
+        query_str = f"download/{map_set_id}?n={int(not download_video)}"
     else:
-        query_str = f"d/{set_id}"
+        query_str = f"d/{map_set_id}"
 
-    conn.resp_headers["Location"] = f"{glob.config.mirror}/{query_str}"
-    return (301, b"")
+    return RedirectResponse(
+        url=f"{app.settings.MIRROR_URL}/{query_str}",
+        status_code=status.HTTP_301_MOVED_PERMANENTLY,
+    )
 
 
-@router.route(re.compile(r"^/web/maps/"))
-async def get_updated_beatmap(conn: Connection):
+@router.get("/web/maps/{map_filename}")
+async def get_updated_beatmap(
+    request: Request,
+    map_filename: str,
+    host: str = Header(...),
+):
     """Send the latest .osu file the server has for a given map."""
-    if conn.headers["Host"] == "osu.ppy.sh":
-        # server switcher, use old method
-        map_filename = unquote(conn.path[10:])
-
-        if not (
-            res := await services.database.fetch_one(
-                "SELECT id, md5 FROM maps WHERE filename = %s",
-                [map_filename],
-            )
-        ):
-            return (404, b"")  # map not found in sql
-
-        osu_file_path = BEATMAPS_PATH / f'{res["id"]}.osu'
-
-        if (
-            osu_file_path.exists()
-            and res["md5"] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
-        ):
-            # up to date map found on disk.
-            content = osu_file_path.read_bytes()
-        else:
-            if not glob.has_internet:
-                return (503, b"")  # requires internet connection
-
-            # map not found, or out of date; get from osu!
-            url = f"https://old.ppy.sh/osu/{res['id']}"
-
-            async with glob.http_session.get(url) as resp:
-                if not resp or resp.status != 200:
-                    log(f"Could not find map {osu_file_path}!", Ansi.LRED)
-                    return (404, b"")  # couldn't find on osu!'s server
-
-                content = await resp.read()
-
-            # save it to disk for future
-            osu_file_path.write_bytes(content)
-
-        return content
-    else:
+    if host != "osu.ppy.sh":
         # using -devserver, just redirect them to osu
-        conn.resp_headers["Location"] = f"https://osu.ppy.sh{conn.path}"
-        return (301, b"")
+        return RedirectResponse(
+            f"https://osu.ppy.sh{request['path']}",
+            status_code=status.HTTP_301_MOVED_PERMANENTLY,
+        )
+
+    # server switcher, use old method
+    map_filename = unquote(map_filename)
+
+    if not (
+        row := await services.database.fetch_one(
+            "SELECT id, md5 FROM maps WHERE filename = :filename",
+            {"filename": map_filename},
+        )
+    ):
+        return (404, b"")  # map not found in sql
+
+    osu_file_path = BEATMAPS_PATH / f'{row["id"]}.osu'
+
+    if (
+        osu_file_path.exists()
+        and row["md5"] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
+    ):
+        # up to date map found on disk.
+        content = osu_file_path.read_bytes()
+    else:
+        # map not found, or out of date; get from osu!
+        url = f"https://old.ppy.sh/osu/{row['id']}"
+
+        async with services.http_session.get(url) as resp:
+            if not resp or resp.status != 200:
+                log(f"Could not find map {osu_file_path}!", Ansi.LRED)
+                return (404, b"")  # couldn't find on osu!'s server
+
+            content = await resp.read()
+
+        # save it to disk for future
+        osu_file_path.write_bytes(content)
+
+    return content
 
 
 @router.route("/p/doyoureallywanttoaskpeppy")
-async def peppyDMHandler(conn: Connection):
+async def peppyDMHandler():
     return (
         b"This user's ID is usually peppy's (when on bancho), "
         b"and is blocked from being messaged by the osu! client."
@@ -2585,17 +2612,13 @@ async def peppyDMHandler(conn: Connection):
 
 @router.route("/users", methods=["POST"])
 @ratelimit(period=300, max_count=15)  # 15 registrations / 5mins
-@acquire_db_conn(aiomysql.Cursor)
 async def register_account(
-    conn: Connection,
-    db_cursor: aiomysql.Cursor,
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
+    username: str = Form(..., alias="user[username]"),
+    email: str = Form(..., alias="user[user_email]"),
+    pw_plaintext: str = Form(..., alias="user[password]"),
 ):
-    mp_args = conn.multipart_args
-
-    name = mp_args["user[username]"].strip()
-    email = mp_args["user[user_email]"]
-    pw_txt = mp_args["user[password]"]
-    safe_name = safe_name = name.lower().replace(" ", "_")
+    safe_name = username.lower().replace(" ", "_")
 
     if not all((name, email, pw_txt)) or "check" not in mp_args:
         return (400, b"Missing required params")
@@ -2619,8 +2642,8 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        await db_cursor.execute("SELECT 1 FROM users WHERE safe_name = %s", [safe_name])
-        if db_cursor.rowcount != 0:
+        await db_conn.execute("SELECT 1 FROM users WHERE safe_name = %s", [safe_name])
+        if db_conn.rowcount != 0:
             errors["username"].append("Username already taken by another player.")
 
     # Emails must:
@@ -2629,8 +2652,8 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        await db_cursor.execute("SELECT 1 FROM users WHERE email = %s", [email])
-        if db_cursor.rowcount != 0:
+        await db_conn.execute("SELECT 1 FROM users WHERE email = %s", [email])
+        if db_conn.rowcount != 0:
             errors["user_email"].append("Email already taken by another player.")
 
     # Passwords must:
@@ -2701,16 +2724,16 @@ async def register_account(
                     country_acronym = "xx"
 
             # add to `users` table.
-            await db_cursor.execute(
+            await db_conn.execute(
                 "INSERT INTO users "
                 "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
                 "VALUES (%s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
                 [name, safe_name, email, pw_bcrypt, country_acronym],
             )
-            user_id = db_cursor.lastrowid
+            user_id = db_conn.lastrowid
 
             # add to `stats` table.
-            await db_cursor.executemany(
+            await db_conn.executemany(
                 "INSERT INTO stats (id, mode) VALUES (%s, %s)",
                 [(user_id, mode) for mode in range(8)],
             )
@@ -2724,6 +2747,6 @@ async def register_account(
 
 
 @router.route("/difficulty-rating", methods=["POST"])
-async def difficultyRatingHandler(conn: Connection) -> Optional[bytes]:
+async def difficultyRatingHandler() -> Optional[bytes]:
     conn.resp_headers["Location"] = f"https://osu.ppy.sh{conn.path}"
     return (307, b"")
