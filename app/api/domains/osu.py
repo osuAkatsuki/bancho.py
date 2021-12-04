@@ -1,3 +1,5 @@
+""" osu: handle connections from web, api, and beyond? """
+# TODO: remove beyond part from this file
 import copy
 import hashlib
 import ipaddress
@@ -13,6 +15,7 @@ from enum import unique
 from functools import wraps
 from pathlib import Path
 from typing import Any
+from typing import AsyncIterator
 from typing import Awaitable
 from typing import Callable
 from typing import Literal
@@ -38,11 +41,15 @@ from constants import regexes
 from constants.clientflags import ClientFlags
 from constants.gamemodes import GameMode
 from constants.mods import Mods
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import status
 from fastapi.datastructures import UploadFile
 from fastapi.param_functions import File
+from fastapi.param_functions import Form
 from fastapi.param_functions import Query
 from fastapi.requests import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 from misc.utils import escape_enum
@@ -57,6 +64,7 @@ from objects.score import Score
 from objects.score import SubmissionStatus
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
+from pydantic import BaseModel
 
 import packets
 from app import services
@@ -64,106 +72,16 @@ from app import services
 if TYPE_CHECKING:
     from objects.player import Player
 
-HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
-
-""" osu: handle connections from web, api, and beyond? """
-
-BASE_DOMAIN = glob.config.domain
-# router = Domain({f"osu.{BASE_DOMAIN}", "osu.ppy.sh"})
-
-from fastapi import APIRouter
-
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 REPLAYS_PATH = Path.cwd() / ".data/osr"
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 
-""" Some helper decorators (used for /web/ connections) """
-
-ConnectionHandler = Callable[[Connection], Awaitable[HTTPResponse]]
-
 router = APIRouter()
-
-"""
-def _required_args(
-    req_args: set[str],
-    argset: str,
-) -> Callable[[ConnectionHandler], ConnectionHandler]:
-    ""#"Decorator to ensure all required arguments are present."#""
-    # NOTE: this function is not meant to be used directly, but
-    # rather used in the form as the functions below.
-    def wrapper(f: ConnectionHandler) -> ConnectionHandler:
-
-        # modify the handler code to ensure that
-        # all arguments are sent in the request.
-        @wraps(f)
-        async def handler(conn: Connection) -> HTTPResponse:
-            args = getattr(conn, argset)
-
-            if args.keys() >= req_args:
-                # all args given, call the
-                # handler with the conn.
-                return await f(conn)
-
-        return handler
-
-    return wrapper
-
-
-# the decorator above may be used
-# for either args, mpargs, or files.
-def required_args(req_args: set[str]) -> Callable:
-    return _required_args(req_args, argset="args")
-
-
-def required_mpargs(req_args: set[str]) -> Callable:
-    return _required_args(req_args, argset="multipart_args")
-
-
-def required_files(req_args: set[str]) -> Callable:
-    return _required_args(req_args, argset="files")
-"""
-
-"""
-def get_login(name_p: str, pass_p: str, auth_error: bytes = b"") -> Callable:
-    "#""Decorator to ensure a player's login information is correct.""#"
-    # NOTE: this function does NOT verify whether the arguments have
-    # been passed into the connection, and assumes you have already
-    # called the appropriate decorator above, @required_x.
-    def wrapper(f: Callable) -> Callable:
-
-        # modify the handler code to get the player
-        # object before calling the handler itself.
-        @wraps(f)
-        async def handler(conn: Connection) -> HTTPResponse:
-            # args may be provided in regular args
-            # or multipart, but only one at a time.
-            argset = conn.args or conn.multipart_args
-
-            if not (
-                p := await glob.players.from_login(
-                    name=unquote(argset[name_p]),
-                    pw_md5=argset[pass_p],
-                )
-            ):
-                # player login incorrect
-                return auth_error
-
-            # login verified, call the handler
-            return await f(p, conn)
-
-        return handler
-
-    return wrapper
-"""
-
-from typing import AsyncIterator
 
 
 async def acquire_db_conn(f: Callable) -> AsyncIterator[databases.core.Connection]:
-    """Decorator to acquire a single database
-    connection & cursor for a handler."""
-
+    """Decorator to acquire a database connection for a handler."""
     async with services.database.connection() as conn:
         yield conn
 
@@ -179,57 +97,86 @@ async def acquire_db_conn(f: Callable) -> AsyncIterator[databases.core.Connectio
 
 
 @router.post("/web/osu-error.php")
-async def osuError(conn: Connection) -> HTTPResponse:
-    if glob.app.debug:
-        err_args = conn.multipart_args
-        if "u" in err_args and "p" in err_args:
-            if not (
-                p := await glob.players.from_login(
-                    name=unquote(err_args["u"]),
-                    pw_md5=err_args["p"],
-                )
-            ):
-                # player login incorrect
-                await misc.utils.log_strange_occurrence("osu-error auth failed")
-                p = None
-        else:
-            p = None
+async def osuError(
+    username: Optional[str] = Form(None, alias="u"),
+    pw_md5: Optional[str] = Form(None, alias="h"),
+    user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
+    osu_mode: int = Form(..., alias="osumode", ge=0, le=23),
+    game_mode: int = Form(..., alias="gamemode", ge=0, le=3),
+    game_time: int = Form(..., alias="gametime", ge=0),
+    audio_time: int = Form(..., alias="audiotime"),
+    culture: str = Form(..., alias="culture"),
+    map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
+    map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
+    exception: str = Form(..., alias="exception"),
+    feedback: str = Form(..., alias="feedback"),
+    stacktrace: str = Form(..., alias="stacktrace"),
+    soft: bool = Form(..., alias="soft"),
+    map_count: int = Form(..., alias="beatmap_count", ge=0),
+    compatibility: bool = Form(..., alias="compatibility"),
+    ram: int = Form(..., alias="ram"),
+    osu_ver: str = Form(..., alias="version"),
+    exe_hash: str = Form(..., alias="exehash"),
+    config: str = Form(..., alias="config"),
+    screenshot_file: Optional[UploadFile] = File(None, alias="ss"),  # octet stream?
+):
+    """Handle an error submitted from the osu! client."""
+    if not glob.app.debug:
+        # only handle osu-error in debug mode
+        return
 
-        err_desc = "{feedback} ({exception})".format(**err_args)
-        log(f'{p or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
-        printc(err_args["stacktrace"][:-2], Ansi.LMAGENTA)
+    if username and pw_md5:
+        if not (
+            player := await glob.players.from_login(
+                name=unquote(username),
+                pw_md5=pw_md5,
+            )
+        ):
+            # player login incorrect
+            await misc.utils.log_strange_occurrence("osu-error auth failed")
+            player = None
+    else:
+        player = None
 
-    # TODO: save error in db
+    err_desc = f"{feedback} ({exception})"
+    log(f'{player or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
 
+    # NOTE: this stacktrace can be a LOT of data
+    if glob.config.debug and len(stacktrace) < 2000:
+        printc(stacktrace[:-2], Ansi.LMAGENTA)
 
-from fastapi.param_functions import Form, File
+    # TODO: save error in db?
+    pass
 
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
-    u: str = Form(...),
-    p: str = Form(...),
-    v: str = Form(...),
+    username: str = Form(..., alias="u"),
+    pw_md5: str = Form(..., alias="p"),
+    endpoint_version: int = Form(..., alias="v"),
     screenshot_data: bytes = File(..., alias="ss"),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=p,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     ss_data_view = memoryview(screenshot_data).toreadonly()
 
     # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
     if len(ss_data_view) > (4 * 1024 * 1024):
-        return (400, b"Screenshot file too large.")
+        return Response(
+            content=b"Screenshot file too large.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
-    if v != "1":
+    if endpoint_version != 1:
         await misc.utils.log_strange_occurrence(
-            f"v=1 missing from osu-screenshot mp args; ({v})",
+            f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
         )
 
     if ss_data_view[:4] == b"\xff\xd8\xff\xe0" and ss_data_view[6:11] == b"JFIF\x00":
@@ -240,7 +187,10 @@ async def osuScreenshot(
     ):
         extension = "png"
     else:
-        return (400, b"Invalid file type.")
+        return Response(
+            content=b"Invalid file type.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     while True:
         filename = f"{secrets.token_urlsafe(6)}.{extension}"
@@ -256,17 +206,20 @@ async def osuScreenshot(
 
 
 @router.get("/web/osu-getfriends.php")
-async def osuGetFriends(u: str, h: str) -> HTTPResponse:
+async def osuGetFriends(
+    username: str = Form(..., alias="u"),
+    pw_md5: str = Form(..., alias="h"),
+):
     if not (
-        p := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+        player := await glob.players.from_login(
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
-    return "\n".join(map(str, p.friends)).encode()
+    return "\n".join(map(str, player.friends)).encode()
 
 
 _gulag_osuapi_status_map = {0: 0, 2: 1, 3: 2, 4: 3, 5: 4}
@@ -274,10 +227,6 @@ _gulag_osuapi_status_map = {0: 0, 2: 1, 3: 2, 4: 3, 5: 4}
 
 def gulag_to_osuapi_status(s: int) -> int:
     return _gulag_osuapi_status_map[s]
-
-
-from fastapi import Depends
-from pydantic import BaseModel
 
 
 class OsuBeatmapRequestForm(BaseModel):
@@ -288,18 +237,18 @@ class OsuBeatmapRequestForm(BaseModel):
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
     form_data: OsuBeatmapRequestForm,
-    u: str,  # TODO might be in form?
-    h: str,
+    username: str = Form(..., alias="u"),
+    pw_md5: str = Form(..., alias="h"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
@@ -346,17 +295,17 @@ async def osuGetBeatmapInfo(
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
-    u: str,
-    h: str,
-) -> HTTPResponse:
+    username: str = Query(..., alias="u"),
+    pw_md5: str = Query(..., alias="h"),
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     favourites = await services.database.fetch_all(
         "SELECT setid FROM favourites WHERE userid = :userid",
@@ -368,50 +317,61 @@ async def osuGetFavourites(
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
-    u: str,
-    h: str,
-    a: int,
-) -> HTTPResponse:
+    username: str = Query(..., alias="u"),
+    pw_md5: str = Query(..., alias="h"),
+    map_set_id: int = Query(..., alias="a"),
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     # check if they already have this favourited.
     if await services.database.fetch_one(
         "SELECT 1 FROM favourites WHERE userid = :userid AND setid = :setid",
-        {"1": player.id, "setid": a},
+        {"1": player.id, "setid": map_set_id},
     ):
         return b"You've already favourited this beatmap!"
 
     # add favourite
     await services.database.execute(
         "INSERT INTO favourites VALUES (:id, :setid)",
-        {"id": player.id, "setid": a},
+        {"id": player.id, "setid": map_set_id},
     )
 
 
 @router.get("/web/lastfm.php")
-async def lastFM(us: str, ha: str, action: str, b: str) -> HTTPResponse:
+async def lastFM(
+    action: Literal["scrobble", "np"],
+    beatmap_id_or_hidden_flag: str = Query(
+        ...,
+        description=(
+            "This flag is normally a beatmap ID, but is also "
+            "used as a hidden anticheat flag within osu!"
+        ),
+    ),
+    username: str = Query(..., alias="us"),
+    pw_md5: str = Query(..., alias="ha"),
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(us),
-            pw_md5=ha,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
-    if b[0] != "a":
+    if beatmap_id_or_hidden_flag[0] != "a":
         # not anticheat related, tell the
         # client not to send any more for now.
         return b"-3"
 
-    flags = ClientFlags(int(b[1:]))
+    flags = ClientFlags(int(beatmap_id_or_hidden_flag[1:]))
 
     if flags & (ClientFlags.HQ_ASSEMBLY | ClientFlags.HQ_FILE):
         # Player is currently running hq!osu; could possibly
@@ -481,21 +441,21 @@ DIRECT_MAP_INFO_FMTSTR = (
 
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
-    u: str,
-    h: str,
-    r: int,
-    q: str,
-    m: int,
-    p: int,
-) -> HTTPResponse:
+    username: str = Query(..., alias="u"),
+    pw_md5: str = Query(..., alias="h"),
+    ranked_status: int = Query(..., alias="r", ge=0, le=8),
+    query: str = Query(..., alias="q"),
+    mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
+    page_num: int = Query(..., alias="p"),
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     if not glob.has_internet:
         return b"-1\nosu!direct requires an internet connection."
@@ -505,19 +465,19 @@ async def osuSearchHandler(
     else:
         search_url = f"{glob.config.mirror}/api/search"
 
-    params: dict[str, object] = {"amount": 100, "offset": int(p) * 100}
+    params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
 
     # eventually we could try supporting these,
     # but it mostly depends on the mirror.
-    if q not in ("Newest", "Top+Rated", "Most+Played"):
-        params["query"] = q
+    if query not in ("Newest", "Top+Rated", "Most+Played"):
+        params["query"] = query
 
-    if m != "-1":
-        params["mode"] = m
+    if mode != -1:  # -1 for all
+        params["mode"] = mode
 
-    if r != "4":  # 4 = all
+    if ranked_status != 4:  # 4 for all
         # convert to osu!api status
-        status = RankedStatus.from_osudirect(int(r))
+        status = RankedStatus.from_osudirect(ranked_status)
         params["status"] = status.osu_api
 
     async with glob.http_session.get(search_url, params=params) as resp:
@@ -547,10 +507,8 @@ async def osuSearchHandler(
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
             result = result["data"]
 
-    lresult = len(result)  # send over 100 if we receive
-    # 100 matches, so the client
-    # knows there are more to get
-    ret = [f"{'101' if lresult == 100 else lresult}"]
+    # 100 matches, so the client knows there are more to get
+    ret = [f"{'101' if len(result) == 100 else len(result)}"]
 
     for bmap in result:
         if bmap["ChildrenBeatmaps"] is None:
@@ -578,30 +536,30 @@ async def osuSearchHandler(
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
-    u: str,
-    h: str,
-    s: Optional[int] = None,
-    b: Optional[int] = None,
-) -> HTTPResponse:
+    username: str = Query(..., alias="u"),
+    pw_md5: str = Query(..., alias="h"),
+    map_set_id: Optional[int] = Query(None, alias="s"),
+    map_id: Optional[int] = Query(None, alias="b"),
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     # TODO: refactor this to use the new internal bmap(set) api
 
     # Since we only need set-specific data, we can basically
     # just do same same query with either bid or bsid.
 
-    if s is not None:
+    if map_set_id is not None:
         # this is just a normal request
-        k, v = ("set_id", s)
-    elif b is not None:
-        k, v = ("id", b)
+        k, v = ("set_id", map_set_id)
+    elif map_id is not None:
+        k, v = ("id", map_id)
     else:
         return  # invalid args
 
@@ -637,24 +595,24 @@ def chart_entry(name: str, before: Optional[object], after: object) -> str:
 async def osuSubmitModularSelector(
     # TODO: figure out object types/names
     # TODO: do ft & st contain pauses?
-    x: object = Query(...),
+    exited_out: bool = Query(..., alias="x"),
     fail_time: int = Query(..., alias="ft"),
     score_data_b64: str = Query(..., alias="score"),
-    fs: object = Query(...),
+    visual_settings_b64: str = Query(..., alias="fs"),
     bmk: str = Query(...),
     iv_b64: str = Query(...),
-    c1: object = Query(...),
+    unique_id: str = Query(..., alias="c1"),  # TODO: more validaton
     score_time: int = Query(..., alias="st"),  # TODO: is this real name?
     pw_md5: str = Query(..., alias="pass"),
     osu_ver: str = Query(..., alias="osuver"),  # TODO: regex
-    s: object = Query(...),
+    client_hash_b64: str = Query(..., alias="s"),
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
     fl_cheat_screenshot: bytes = File(..., alias="i"),
     # TODO: how am i gonna ban them?
     replay_data: bytes = File(..., alias="score"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
-) -> HTTPResponse:
+):
     # attempt to decrypt score data
     aes = RijndaelCbc(
         key=f"osu!-scoreburgr---------{osu_ver}".encode(),
@@ -808,7 +766,7 @@ async def osuSubmitModularSelector(
                 if prev_n1:
                     if score.player.id != prev_n1["id"]:
                         ann.append(
-                            f"(Previous #1: [https://{BASE_DOMAIN}/u/"
+                            f"(Previous #1: [https://{glob.config.domain}/u/"
                             "{pid} {pname}])".format(**prev_n1),
                         )
 
@@ -1094,7 +1052,7 @@ async def osuSubmitModularSelector(
             "\n",
             # overall ranking chart
             "chartId:overall",
-            f"chartUrl:https://{BASE_DOMAIN}/u/{score.player.id}",
+            f"chartUrl:https://{glob.config.domain}/u/{score.player.id}",
             "chartName:Overall Ranking",
             *overall_ranking_chart_entries,
             f"achievements-new:{achievements_str}",
@@ -1113,19 +1071,19 @@ async def osuSubmitModularSelector(
 
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
-    u: str,
-    h: str,
-    m: object,  # TODO
+    username: str = Query(..., alias="u"),
+    pw_md5: str = Query(..., alias="h"),
+    mode: int = Query(..., ge=0, le=3),
     score_id: int = Query(..., alias="c"),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
-            name=unquote(u),
-            pw_md5=h,
+            name=unquote(username),
+            pw_md5=pw_md5,
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     i64_max = (1 << 63) - 1
 
@@ -1146,7 +1104,7 @@ async def osuRate(
     map_md5: str = Query(..., alias="c", max_length=32, min_length=32),
     rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
             name=unquote(username),
@@ -1217,20 +1175,20 @@ SCORE_LISTING_FMTSTR = (
 
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
-    s: object,
+    get_scores: bool = Query(..., alias="s"),  # NOTE: this is flipped
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: LeaderboardType = Query(..., alias="v"),
     map_md5: str = Query(..., alias="c", max_length=32, min_length=32),
     map_filename: str = Query(..., alias="f"),  # TODO: regex?
-    mode_vn: int = Query(..., alias="m"),
+    mode_vn: int = Query(..., alias="m", ge=0, le=3),
     map_set_id: int = Query(..., alias="i", ge=0, le=2_147_483_647),
     mods: Mods = Query(..., ge=0, le=2_147_483_647),
-    h: object = Query(...),  # TODO
-    a: object = Query(...),  # TODO
+    map_package_hash: str = Query(...),  # TODO: further validation
+    aqn_files_found: bool = Query(..., alias="a"),
     username: str = Query(..., alias="us"),
     pw_md5: str = Query(..., alias="ha"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
             name=unquote(username),
@@ -1238,7 +1196,7 @@ async def getScores(
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     # check if this md5 has already been  cached as
     # unsubmitted/needs update to reduce osu!api spam
@@ -1443,15 +1401,15 @@ async def osuComment(
     pw_md5: str = Query(..., alias="p"),
     beatmap_id: int = Query(..., alias="b"),
     beatmap_set_id: int = Query(..., alias="s"),
-    score_id: int = Query(..., alias="r"),
-    mode_vn: int = Query(..., alias="m"),
+    score_id: int = Query(..., alias="r", ge=0, le=2_147_483_647),
+    mode_vn: int = Query(..., alias="m", ge=0, le=3),
     action: Literal["get", "post"] = Query(..., alias="a"),
     # only sent for post
     target: Optional[Literal["song", "map", "replay"]] = Query(None),
     colour: Optional[str] = Query(None, alias="f", min_length=6, max_length=6),
     start_time: Optional[int] = Query(None, alias="starttime"),
     comment: Optional[str] = Query(None, min_length=1, max_length=80),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
             name=unquote(username),
@@ -1459,7 +1417,7 @@ async def osuComment(
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     if action == "get":
         # client is requesting all comments
@@ -1540,7 +1498,7 @@ async def osuMarkAsRead(
     channel: str,  # TODO: further validation?
     username: str = Query(..., alias="u"),
     pw_md5: str = Query(..., alias="h"),
-) -> HTTPResponse:
+):
     if not (
         player := await glob.players.from_login(
             name=unquote(username),
@@ -1548,7 +1506,7 @@ async def osuMarkAsRead(
         )
     ):
         # player login incorrect
-        return b""
+        return
 
     if not (t_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
@@ -1564,7 +1522,7 @@ async def osuMarkAsRead(
 
 
 @router.get("/web/osu-getseasonal.php")
-async def osuSeasonal() -> HTTPResponse:
+async def osuSeasonal():
     return orjson.dumps(glob.config.seasonal_bgs)
 
 
@@ -1578,7 +1536,7 @@ async def banchoConnect(
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
     client_hash: Optional[str] = Query(None, alias="ch"),
     retrying: Optional[bool] = Query(None, alias="retry"),  # '0' or '1'
-) -> HTTPResponse:
+):
     return b""  # TODO
 
 
@@ -1595,7 +1553,7 @@ async def checkUpdates(
     request: Request,
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
-) -> HTTPResponse:
+):
     if not glob.has_internet:
         return (503, b"")  # requires internet connection
 
@@ -1657,7 +1615,7 @@ SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
 
 
 @router.get("/api/get_player_count")
-async def api_get_player_count() -> Response:
+async def api_get_player_count():
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
@@ -1667,7 +1625,7 @@ async def api_get_player_count() -> Response:
         column=0,
     )
 
-    return JSONResponse(
+    return ORJSONResponse(
         {
             "status": "success",
             "counts": {
@@ -1683,12 +1641,12 @@ async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-) -> JSONResponse:
+):
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     # get user info from username or user id
@@ -1708,9 +1666,9 @@ async def api_get_player_info(
         )
 
     if user_info is None:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Player not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     resolved_user_id: int = user_info["id"]
@@ -1749,19 +1707,19 @@ async def api_get_player_info(
 
         api_data["stats"] = stats_res
 
-    return JSONResponse({"status": "success", "player": api_data})
+    return ORJSONResponse({"status": "success", "player": api_data})
 
 
 @router.get("/api/get_player_status")
 async def api_get_player_status(
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-) -> JSONResponse:
+):
     """Return a players current status, if they are online."""
     if username and user_id:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if username:
@@ -1769,9 +1727,9 @@ async def api_get_player_status(
     elif user_id:
         player = glob.players.get(id=user_id)
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not player:
@@ -1789,12 +1747,12 @@ async def api_get_player_status(
             )
 
         if not row:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Player not found."},
-                status_code=404,
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        return JSONResponse(
+        return ORJSONResponse(
             {
                 "status": "success",
                 "player_status": {"online": False, "last_seen": row["latest_activity"]},
@@ -1806,7 +1764,7 @@ async def api_get_player_status(
     else:
         bmap = None
 
-    return JSONResponse(
+    return ORJSONResponse(
         {
             "status": "success",
             "player_status": {
@@ -1829,12 +1787,12 @@ async def api_get_player_scores(
     scope: Literal["recent", "best"],
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-) -> JSONResponse:
+):
     """Return a list of a given user's recent/best scores."""
     if username and user_id:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if username:
@@ -1842,22 +1800,22 @@ async def api_get_player_scores(
     elif user_id:
         player = await glob.players.from_cache_or_sql(id=user_id)
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not player:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Player not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     if (mode_arg := conn.args.get("mode", None)) is not None:
         if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid mode."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         mode = GameMode(mode)
@@ -1882,9 +1840,9 @@ async def api_get_player_scores(
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid limit."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
         limit = 25
@@ -1944,48 +1902,48 @@ async def api_get_player_scores(
         else None,
     }
 
-    return JSONResponse({"status": "success", "scores": res, "player": player_info})
+    return ORJSONResponse({"status": "success", "scores": res, "player": player_info})
 
 
 @router.get("/api/get_player_most_played")
-async def api_get_player_most_played(conn: Connection) -> JSONResponse:
+async def api_get_player_most_played(conn: Connection):
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
     conn.resp_headers["Content-Type"] = "application/json"
 
     if "id" in conn.args:
         if not conn.args["id"].isdecimal():
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid player id."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         p = await glob.players.from_cache_or_sql(id=int(conn.args["id"]))
     elif "name" in conn.args:
         if not 0 < len(conn.args["name"]) <= 16:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid player name."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         p = await glob.players.from_cache_or_sql(name=conn.args["name"])
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id or name."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not p:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Player not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     # parse args (mode, limit)
 
     if (mode_arg := conn.args.get("mode", None)) is not None:
         if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid mode."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         mode = GameMode(mode)
@@ -1994,9 +1952,9 @@ async def api_get_player_most_played(conn: Connection) -> JSONResponse:
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid limit."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
         limit = 25
@@ -2015,87 +1973,87 @@ async def api_get_player_most_played(conn: Connection) -> JSONResponse:
         [p.id, mode.as_vanilla, limit],
     )
 
-    return JSONResponse({"status": "success", "maps": res})
+    return ORJSONResponse({"status": "success", "maps": res})
 
 
 @router.get("/api/get_map_info")
-async def api_get_map_info(conn: Connection) -> JSONResponse:
+async def api_get_map_info(conn: Connection):
     """Return information about a given beatmap."""
     conn.resp_headers["Content-Type"] = "application/json"
     if "id" in conn.args:
         if not conn.args["id"].isdecimal():
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid map id."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         bmap = await Beatmap.from_bid(int(conn.args["id"]))
     elif "md5" in conn.args:
         if len(conn.args["md5"]) != 32:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid map md5."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         bmap = await Beatmap.from_md5(conn.args["md5"])
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not bmap:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Map not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return JSONResponse({"status": "success", "map": bmap.as_dict})
+    return ORJSONResponse({"status": "success", "map": bmap.as_dict})
 
 
 @router.get("/api/get_map_scores")
-async def api_get_map_scores(conn: Connection) -> JSONResponse:
+async def api_get_map_scores(conn: Connection):
     """Return the top n scores on a given beatmap."""
     conn.resp_headers["Content-Type"] = "application/json"
     if "id" in conn.args:
         if not conn.args["id"].isdecimal():
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid map id."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         bmap = await Beatmap.from_bid(int(conn.args["id"]))
     elif "md5" in conn.args:
         if len(conn.args["md5"]) != 32:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid map md5."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         bmap = await Beatmap.from_md5(conn.args["md5"])
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not bmap:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Map not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     # parse args (scope, mode, mods, limit)
 
     if "scope" not in conn.args or conn.args["scope"] not in ("recent", "best"):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide valid scope (recent/best)."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     scope = conn.args["scope"]
 
     if (mode_arg := conn.args.get("mode", None)) is not None:
         if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid mode."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         mode = GameMode(mode)
@@ -2120,9 +2078,9 @@ async def api_get_map_scores(conn: Connection) -> JSONResponse:
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid limit."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
         limit = 50
@@ -2161,17 +2119,17 @@ async def api_get_map_scores(conn: Connection) -> JSONResponse:
     params.append(limit)
 
     res = await services.database.fetch_all(" ".join(query), params)
-    return JSONResponse({"status": "success", "scores": res})
+    return ORJSONResponse({"status": "success", "scores": res})
 
 
 @router.get("/api/get_score_info")
-async def api_get_score_info(conn: Connection) -> JSONResponse:
+async def api_get_score_info(conn: Connection):
     """Return information about a given score."""
     conn.resp_headers["Content-Type"] = "application/json"
     if not ("id" in conn.args and conn.args["id"].isdecimal()):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide score id."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     score_id = int(conn.args["id"])
@@ -2183,9 +2141,9 @@ async def api_get_score_info(conn: Connection) -> JSONResponse:
     elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
         scores_table = "scores_ap"
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Invalid score id."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     res = await services.database.fetch_one(
@@ -2198,22 +2156,22 @@ async def api_get_score_info(conn: Connection) -> JSONResponse:
     )
 
     if not res:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Score not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return JSONResponse({"status": "success", "score": res})
+    return ORJSONResponse({"status": "success", "score": res})
 
 
 @router.get("/api/get_replay")
-async def api_get_replay(conn: Connection) -> Response:
+async def api_get_replay(conn: Connection):
     """Return a given replay (including headers)."""
     conn.resp_headers["Content-Type"] = "application/json"
     if not ("id" in conn.args and conn.args["id"].isdecimal()):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide score id."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     score_id = int(conn.args["id"])
@@ -2225,17 +2183,17 @@ async def api_get_replay(conn: Connection) -> Response:
     elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
         scores_table = "scores_ap"
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Invalid score id."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
     if not replay_file.exists():
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Replay not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     # read replay frames from file
@@ -2272,9 +2230,9 @@ async def api_get_replay(conn: Connection) -> Response:
 
     if not res:
         # score not found in sql
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Score not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )  # but replay was?
 
     # generate the replay's hash
@@ -2348,7 +2306,7 @@ async def api_get_replay(conn: Connection) -> Response:
 
 
 @router.get("/api/get_match")
-async def api_get_match(conn: Connection) -> JSONResponse:
+async def api_get_match(conn: Connection):
     """Return information of a given multiplayer match."""
     conn.resp_headers["Content-Type"] = "application/json"
     # TODO: eventually, this should contain recent score info.
@@ -2357,18 +2315,18 @@ async def api_get_match(conn: Connection) -> JSONResponse:
         and conn.args["id"].isdecimal()
         and 0 <= (match_id := int(conn.args["id"])) < 64
     ):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Must provide valid match id."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if not (match := glob.matches[match_id]):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Match not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return JSONResponse(
+    return ORJSONResponse(
         {
             "status": "success",
             "match": {
@@ -2403,14 +2361,14 @@ async def api_get_match(conn: Connection) -> JSONResponse:
 
 
 @router.get("/api/get_leaderboard")
-async def api_get_global_leaderboard(conn: Connection) -> JSONResponse:
+async def api_get_global_leaderboard(conn: Connection):
     conn.resp_headers["Content-Type"] = "application/json"
 
     if (mode_arg := conn.args.get("mode", None)) is not None:
         if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid mode."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         mode = GameMode(mode)
@@ -2419,18 +2377,18 @@ async def api_get_global_leaderboard(conn: Connection) -> JSONResponse:
 
     if (limit_arg := conn.args.get("limit", None)) is not None:
         if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid limit."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
         limit = 25
 
     if (sort := conn.args.get("sort", None)) is not None:
         if sort not in ("tscore", "rscore", "pp", "acc"):
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Invalid sort."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
         sort = "pp"
@@ -2448,25 +2406,25 @@ async def api_get_global_leaderboard(conn: Connection) -> JSONResponse:
         {"mode": mode, "limit": limit},
     )
 
-    return JSONResponse({"status": "success", "leaderboard": res})
+    return ORJSONResponse({"status": "success", "leaderboard": res})
 
 
 def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
-    async def wrapper(conn: Connection) -> JSONResponse:
+    async def wrapper(conn: Connection):
         conn.resp_headers["Content-Type"] = "application/json"
         if "Authorization" not in conn.headers:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Must provide authorization token."},
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         api_key = conn.headers["Authorization"]
 
         if api_key not in glob.api_keys:
-            return JSONResponse(
+            return ORJSONResponse(
                 {"status": "Unknown authorization token."},
-                status_code=401,
+                status_code=status.HTTP_401_UNAUTHORIZED,
             )
 
         # get player from api token
@@ -2484,21 +2442,21 @@ def requires_api_key(f: Callable) -> Callable:
 
 @router.put("/api/set_avatar")
 @requires_api_key
-async def api_set_avatar(conn: Connection, p: "Player") -> JSONResponse:
+async def api_set_avatar(conn: Connection, p: "Player"):
     """Update the tokenholder's avatar to a given file."""
     if "avatar" not in conn.files:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "must provide avatar file."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     ava_file = conn.files["avatar"]
 
     # block files over 4MB
     if len(ava_file) > (4 * 1024 * 1024):
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "avatar file too large (max 4MB)."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if ava_file[6:10] in (b"JFIF", b"Exif"):
@@ -2506,14 +2464,14 @@ async def api_set_avatar(conn: Connection, p: "Player") -> JSONResponse:
     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
         ext = "png"
     else:
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "invalid file type."},
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     # write to the avatar file
     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
-    return JSONResponse({"status": "success."})
+    return ORJSONResponse({"status": "success."})
 
 
 """ Misc handlers """
@@ -2527,14 +2485,14 @@ if glob.config.redirect_osu_urls:
             re.compile(r"^/community/forums/topics/\d{1,10}/?$"),
         },
     )
-    async def osu_redirects(conn: Connection) -> HTTPResponse:
+    async def osu_redirects(conn: Connection):
         """Redirect some common url's the client uses to osu!."""
         conn.resp_headers["Location"] = f"https://osu.ppy.sh{conn.path}"
         return (301, b"")
 
 
 @router.route(re.compile(r"^/ss/[a-zA-Z0-9-_]{8}\.(png|jpeg)$"))
-async def get_screenshot(conn: Connection) -> HTTPResponse:
+async def get_screenshot(conn: Connection):
     """Serve a screenshot from the server, by filename."""
     if len(conn.path) not in (16, 17):
         return (400, b"Invalid request.")
@@ -2542,16 +2500,16 @@ async def get_screenshot(conn: Connection) -> HTTPResponse:
     path = SCREENSHOTS_PATH / conn.path[4:]
 
     if not path.exists():
-        return JSONResponse(
+        return ORJSONResponse(
             {"status": "Screenshot not found."},
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     return path.read_bytes()
 
 
 @router.route(re.compile(r"^/d/\d{1,10}n?$"))
-async def get_osz(conn: Connection) -> HTTPResponse:
+async def get_osz(conn: Connection):
     """Handle a map download request (osu.ppy.sh/d/*)."""
     set_id = conn.path[3:]
 
@@ -2568,7 +2526,7 @@ async def get_osz(conn: Connection) -> HTTPResponse:
 
 
 @router.route(re.compile(r"^/web/maps/"))
-async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
+async def get_updated_beatmap(conn: Connection):
     """Send the latest .osu file the server has for a given map."""
     if conn.headers["Host"] == "osu.ppy.sh":
         # server switcher, use old method
@@ -2615,7 +2573,7 @@ async def get_updated_beatmap(conn: Connection) -> HTTPResponse:
 
 
 @router.route("/p/doyoureallywanttoaskpeppy")
-async def peppyDMHandler(conn: Connection) -> HTTPResponse:
+async def peppyDMHandler(conn: Connection):
     return (
         b"This user's ID is usually peppy's (when on bancho), "
         b"and is blocked from being messaged by the osu! client."
@@ -2631,7 +2589,7 @@ async def peppyDMHandler(conn: Connection) -> HTTPResponse:
 async def register_account(
     conn: Connection,
     db_cursor: aiomysql.Cursor,
-) -> HTTPResponse:
+):
     mp_args = conn.multipart_args
 
     name = mp_args["user[username]"].strip()

@@ -1101,11 +1101,10 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
         msg = "Added."
     else:  # remove
-        len_fake_users = len(_fake_users)
-        if amount > len_fake_users:
-            return f"Too many! only {len_fake_users} remaining."
+        if amount > len(_fake_users):
+            return f"Too many! only {len(_fake_users)} remaining."
 
-        to_remove = _fake_users[len_fake_users - amount :]
+        to_remove = _fake_users[len(_fake_users) - amount :]
         logout_packet_header = b"\x0c\x00\x00\x05\x00\x00\x00"
 
         for fake in to_remove:

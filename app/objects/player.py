@@ -1023,9 +1023,9 @@ class Player:
             msg.append(f"[osump://{key}/ {val}]")
 
         chat_height = 10
-        lines_used = len(msg)
-        if lines_used < chat_height:
-            msg += [chr(8192)] * (chat_height - lines_used)
+
+        if len(msg) < chat_height:
+            msg += [chr(8192)] * (chat_height - len(msg))
 
         self.send_menu_clear()
         self.send_bot("\n".join(msg))

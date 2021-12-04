@@ -115,7 +115,6 @@ def response(flow: http.HTTPFlow) -> None:
 
     sys.stdout.write(f"\x1b[0;93m[{flow.request.method}] {flow.request.url}\x1b[0m\n")
     body_view = memoryview(body)
-    body_len = len(body)
 
     if r_match["subdomain"] in ("c", "ce", "c4", "c5", "c6"):
         if flow.request.method == "POST":
@@ -155,14 +154,14 @@ def response(flow: http.HTTPFlow) -> None:
                 and body_view[6:12] == b"SPIFF\x00"
             )
         ):
-            sys.stdout.write(f"[{fmt_bytes(body_len)} jpeg file]\n\n")
+            sys.stdout.write(f"[{fmt_bytes(len(body))} jpeg file]\n\n")
         elif (
             body_view[:8] == b"\x89PNG\r\n\x1a\n"
             and body_view[-8:] == b"\x49END\xae\x42\x60\x82"
         ):
-            sys.stdout.write(f"[{fmt_bytes(body_len)} png file]\n\n")
+            sys.stdout.write(f"[{fmt_bytes(len(body))} png file]\n\n")
         elif body_view[:6] in (b"GIF87a", b"GIF89a") and body_view[-2:] == b"\x00\x3b":
-            sys.stdout.write(f"[{fmt_bytes(body_len)} gif file]\n\n")
+            sys.stdout.write(f"[{fmt_bytes(len(body))} gif file]\n\n")
         else:
             sys.stdout.write(f"{str(body)[2:-1]}\n\n")  # remove b''
 
