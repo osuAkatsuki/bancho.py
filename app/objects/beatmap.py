@@ -11,9 +11,13 @@ from typing import Mapping
 from typing import Optional
 
 import aiomysql
+import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.sql.expression import insert
+from sqlalchemy.sql.expression import select
 
+import app.db_models
 import app.misc.utils
 import app.services
 import app.settings
@@ -391,10 +395,14 @@ class Beatmap:
                 # from the db, or the osu!api. we want to get
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
-                res = await app.services.database.fetch_one(
-                    "SELECT set_id FROM maps WHERE md5 = %s",
-                    [md5],
-                )
+                async with app.services.database_session() as db_conn:
+                    res_query = await db_conn.execute(
+                        app.db_models.maps.select(app.db_models.maps.c.set_id).where(
+                            app.db_models.maps.c.md5 == md5,
+                        ),
+                    )
+
+                    res = res_query.fetchone()
 
                 if res:
                     # found set id in db
@@ -430,10 +438,14 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            res = await app.services.database.fetch_one(
-                "SELECT set_id FROM maps WHERE id = %s",
-                [bid],
-            )
+            async with app.services.database_session() as db_conn:
+                res_query = await db_conn.execute(
+                    app.db_models.maps.select(app.db_models.maps.c.set_id).where(
+                        app.db_models.maps.c.id == bid,
+                    ),
+                )
+
+                res = res_query.fetchone()
 
             if res:
                 # found set id in db
@@ -696,58 +708,50 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with app.services.database.connection() as db_conn:
-            async with db_conn.cursor() as db_cursor:
-                await db_cursor.execute(
-                    "REPLACE INTO mapsets "
-                    "(server, id, last_osuapi_check) "
-                    'VALUES ("osu!", %s, %s)',
-                    [self.id, self.last_osuapi_check],
-                )
+        async with app.services.database_session() as db_conn:
+            await db_conn.execute(
+                app.db_models.mapsets.insert(
+                    values={
+                        "server": "osu!",
+                        "id": self.id,
+                        "last_osuapi_check": self.last_osuapi_check,
+                    },
+                ).prefix_with(
+                    "OR REPLACE",
+                ),  # update/insert on case
+            )
 
-                await db_cursor.executemany(
-                    "REPLACE INTO maps ("
-                    "server, md5, id, set_id, "
-                    "artist, title, version, creator, "
-                    "filename, last_update, total_length, "
-                    "max_combo, status, frozen, "
-                    "plays, passes, mode, bpm, "
-                    "cs, od, ar, hp, diff"
-                    ") VALUES ("
-                    '"osu!", %s, %s, %s, '
-                    "%s, %s, %s, %s, "
-                    "%s, %s, %s, "
-                    "%s, %s, %s, "
-                    "%s, %s, %s, %s, "
-                    "%s, %s, %s, %s, %s"
-                    ")",
-                    [
-                        (
-                            bmap.md5,
-                            bmap.id,
-                            bmap.set_id,
-                            bmap.artist,
-                            bmap.title,
-                            bmap.version,
-                            bmap.creator,
-                            bmap.filename,
-                            bmap.last_update,
-                            bmap.total_length,
-                            bmap.max_combo,
-                            bmap.status,
-                            bmap.frozen,
-                            bmap.plays,
-                            bmap.passes,
-                            bmap.mode,
-                            bmap.bpm,
-                            bmap.cs,
-                            bmap.od,
-                            bmap.ar,
-                            bmap.hp,
-                            bmap.diff,
-                        )
-                        for bmap in self.maps
-                    ],
+            for bmap in self.maps:
+                await db_conn.execute(
+                    app.db_models.maps.insert(
+                        values={
+                            "server": "osu!",
+                            "md5": bmap.md5,
+                            "id": bmap.id,
+                            "set_id": self.id,
+                            "artist": bmap.artist,
+                            "title": bmap.title,
+                            "version": bmap.version,
+                            "creator": bmap.creator,
+                            "filename": bmap.filename,
+                            "last_update": bmap.last_update,
+                            "total_length": bmap.total_length,
+                            "max_combo": bmap.max_combo,
+                            "status": bmap.status,
+                            "frozen": bmap.frozen,
+                            "plays": bmap.plays,
+                            "passes": bmap.passes,
+                            "mode": bmap.mode,
+                            "bpm": bmap.bpm,
+                            "cs": bmap.cs,
+                            "od": bmap.od,
+                            "ar": bmap.ar,
+                            "hp": bmap.hp,
+                            "diff": bmap.diff,
+                        },
+                    ).prefix_with(
+                        "OR REPLACE",
+                    ),  # update/insert on case
                 )
 
     @staticmethod
@@ -764,54 +768,76 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
-        async with app.services.database.connection() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                await db_cursor.execute(
-                    "SELECT last_osuapi_check FROM mapsets WHERE id = %s",
-                    [bsid],
-                )
+        async with app.services.database_session() as db_conn:
+            check_res = await db_conn.execute(
+                app.db_models.mapsets.select(
+                    app.db_models.mapsets.c.last_osuapi_check,
+                ).where(app.db_models.mapsets.c.id == bsid),
+            )
 
-                if db_cursor.rowcount == 0:
-                    return
+            check_row = check_res.fetchone()
 
-                set_res = await db_cursor.fetch_one()
+            if not check_row:
+                return
 
-                await db_cursor.execute(
-                    "SELECT md5, id, set_id, "
-                    "artist, title, version, creator, "
-                    "filename, last_update, total_length, "
-                    "max_combo, status, frozen, "
-                    "plays, passes, mode, bpm, "
-                    "cs, od, ar, hp, diff "
-                    "FROM maps "
-                    "WHERE set_id = %s",
-                    [bsid],
-                )
+            set_rows = await db_conn.execute(
+                select(
+                    [
+                        app.db_models.maps.c.md5,
+                        app.db_models.maps.c.id,
+                        app.db_models.maps.c.set_id,
+                        app.db_models.maps.c.artist,
+                        app.db_models.maps.c.title,
+                        app.db_models.maps.c.version,
+                        app.db_models.maps.c.creator,
+                        app.db_models.maps.c.filename,
+                        app.db_models.maps.c.last_update,
+                        app.db_models.maps.c.total_length,
+                        app.db_models.maps.c.max_combo,
+                        app.db_models.maps.c.status,
+                        app.db_models.maps.c.frozen,
+                        app.db_models.maps.c.plays,
+                        app.db_models.maps.c.passes,
+                        app.db_models.maps.c.mode,
+                        app.db_models.maps.c.bpm,
+                        app.db_models.maps.c.cs,
+                        app.db_models.maps.c.od,
+                        app.db_models.maps.c.ar,
+                        app.db_models.maps.c.hp,
+                        app.db_models.maps.c.diff,
+                    ],
+                ).where(app.db_models.maps.c.set_id == bsid),
+            )
 
-                if db_cursor.rowcount == 0:
-                    return
+            set_res = set_rows.fetchall()
 
-                bmap_set = cls(id=bsid, **set_res)
+            if not set_res:
+                return
 
-                async for row in db_cursor:
-                    bmap = Beatmap(**row)
+            bmap_set = cls(id=bsid, **set_res)
 
-                    # XXX: tempfix for gulag <v3.4.1,
-                    # where filenames weren't stored.
-                    if not bmap.filename:
-                        bmap.filename = (
-                            ("{artist} - {title} ({creator}) [{version}].osu")
-                            .format(**row)
-                            .translate(IGNORED_BEATMAP_CHARS)
-                        )
+            async for row in set_res:
+                bmap = Beatmap(**row)
 
-                        await app.services.database.execute(
-                            "UPDATE maps SET filename = %s WHERE id = %s",
-                            [bmap.filename, bmap.id],
-                        )
+                # XXX: tempfix for gulag <v3.4.1,
+                # where filenames weren't stored.
+                if not bmap.filename:
+                    bmap.filename = (
+                        ("{artist} - {title} ({creator}) [{version}].osu")
+                        .format(**row)
+                        .translate(IGNORED_BEATMAP_CHARS)
+                    )
 
-                    bmap.set = bmap_set
-                    bmap_set.maps.append(bmap)
+                    await db_conn.execute(
+                        app.db_models.maps.update(
+                            values={
+                                "filename": bmap.filename,
+                            },
+                        ).where(app.db_models.maps.c.id == bmap.id),
+                    )
+
+                bmap.set = bmap_set
+                bmap_set.maps.append(bmap)
 
         return bmap_set
 
@@ -827,10 +853,19 @@ class BeatmapSet:
             # XXX: pre-mapset gulag support
             # select all current beatmaps
             # that're frozen in the db
-            res = await app.services.database.fetch_all(
-                "SELECT id, status FROM maps WHERE set_id = %s AND frozen = 1",
-                [bsid],
-            )
+            async with app.services.database_session() as db_conn:
+                map_res = await db_conn.execute(
+                    select(
+                        [app.db_models.maps.c.id, app.db_models.maps.c.status],
+                    ).where(
+                        sqlalchemy.and_(
+                            app.db_models.maps.c.set_id == bsid,
+                            app.db_models.maps.c.frozen == 1,
+                        ),
+                    ),
+                )
+
+                res = map_res.fetchall()
 
             current_maps = {row["id"]: row["status"] for row in res}
 

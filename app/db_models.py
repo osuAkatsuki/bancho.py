@@ -157,7 +157,14 @@ client_hashes_columns = (
     Column("occurrences", INT, primary_key=True),
 )
 
+mapsets_columns = (
+    Column("server", Enum("osu!", "gulag"), primary_key=True),
+    Column("id", INT, primary_key=True, unique=True),
+    Column("last_osuapi_check", DateTime),
+)
+
 maps = Table("maps", metadata, *maps_columns)
+mapsets = Table("mapsets", metadata, *mapsets_columns)
 
 # XXX: deepcopy since the function takes ownership, and it cannot be used more than once
 scores = Table("scores_vn", metadata, *deepcopy(scores_columns))
