@@ -1,7 +1,6 @@
 """ ava: avatar server (for both ingame & external) """
 from pathlib import Path
 from typing import Literal
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Response
@@ -12,7 +11,7 @@ import app.misc.utils
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 DEFAULT_AVATAR = AVATARS_PATH / "default.jpg"
 
-router = APIRouter()
+router = APIRouter(prefix="/ava", tags=["Avatars"])
 
 
 @router.get("/favicon.ico")

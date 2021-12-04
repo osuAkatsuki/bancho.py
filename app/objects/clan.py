@@ -7,7 +7,6 @@ import aiomysql
 
 from app.misc.utils import escape_enum
 from app.misc.utils import pymysql_encode
-from app.objects import glob
 
 if TYPE_CHECKING:
     from app.objects.player import Player

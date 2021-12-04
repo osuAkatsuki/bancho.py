@@ -1,44 +1,27 @@
-import asyncio
-import importlib.metadata
 import inspect
 import io
-import ipaddress
-import os
 import re
-import secrets
 import shutil
-import signal
 import socket
-import subprocess
 import sys
-import types
 import zipfile
 from pathlib import Path
 from typing import Any
-from typing import AsyncGenerator
 from typing import Callable
 from typing import Optional
 from typing import Sequence
-from typing import Type
-from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
 import aiomysql
-import cmyui
-import dill as pickle
 import orjson
 import pymysql
 import requests
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from cmyui.logging import printc
-from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
-import app.settings
-from app.constants.countries import country_codes
 
 __all__ = (
     # TODO: organize/sort these

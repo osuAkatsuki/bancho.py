@@ -1,7 +1,6 @@
 """ cho: handle connections from the osu! client """
 import asyncio
 import ipaddress
-import re
 import struct
 import time
 from datetime import date
@@ -9,11 +8,10 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable
+from typing import Literal
 from typing import Optional
 from typing import Type
-from typing import Union
 
-import aiomysql
 import bcrypt
 import databases.core
 from cmyui.logging import Ansi
@@ -21,16 +19,14 @@ from cmyui.logging import log
 from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
-from cmyui.web import Connection
-from cmyui.web import Domain
 from fastapi.param_functions import Header
 from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import app.misc.utils
+import app.services
 import packets
-from app import services
 from app.constants import commands
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -64,7 +60,7 @@ IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, Response
 
-router = APIRouter()
+router = APIRouter(prefix="/cho", tags=["Bancho API"])
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -102,7 +98,7 @@ async def bancho_handler(
     # forwarded to our server from cloudflare
     cf_connecting_ip: Optional[str] = Header(None),
     # sent to our server from the osu! client
-    user_agent: str = Header(None),
+    user_agent: Literal["osu!"] = Header(...),
     host: str = Header(None),
 ):
     if cf_connecting_ip is not None:
@@ -133,7 +129,7 @@ async def bancho_handler(
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
-            async with services.database.connection() as db_conn:
+            async with app.services.database.connection() as db_conn:
                 login_data = await login(await request.body(), ip, db_conn)
 
         if login_data is None:
@@ -675,11 +671,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.misc.utils.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.services.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.misc.utils.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.services.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when
@@ -772,36 +768,33 @@ async def login(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        await db_conn.execute(
+        mail_sent_to = set()  # ids
+
+        async for msg in db_conn.iterate(
             "SELECT m.`msg`, m.`time`, m.`from_id`, "
             "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
             "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0",
-            [p.id],
-        )
-
-        if db_conn.rowcount != 0:
-            sent_to = set()  # ids
-
-            async for msg in db_conn:
-                if msg["from"] not in sent_to:
-                    data += packets.send_message(
-                        sender=msg["from"],
-                        msg="Unread messages",
-                        recipient=msg["to"],
-                        sender_id=msg["from_id"],
-                    )
-                    sent_to.add(msg["from"])
-
-                msg_time = datetime.fromtimestamp(msg["time"])
-                msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
-
+            "FROM `mail` m WHERE m.`to_id` = :userid AND m.`read` = 0",
+            {"userid": p.id},
+        ):
+            if msg["from"] not in mail_sent_to:
                 data += packets.send_message(
                     sender=msg["from"],
-                    msg=msg_ts,
+                    msg="Unread messages",
                     recipient=msg["to"],
                     sender_id=msg["from_id"],
                 )
+                mail_sent_to.add(msg["from"])
+
+            msg_time = datetime.fromtimestamp(msg["time"])
+            msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
+
+            data += packets.send_message(
+                sender=msg["from"],
+                msg=msg_ts,
+                recipient=msg["to"],
+                sender_id=msg["from_id"],
+            )
 
         if not p.priv & Privileges.VERIFIED:
             # this is the player's first login, verify their
@@ -1024,11 +1017,11 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await services.database.execute(
+            await app.services.database.execute(
                 "INSERT INTO `mail` "
                 "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (%s, %s, %s, UNIX_TIMESTAMP())",
-                [p.id, t.id, msg],
+                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
+                {"from": p.id, "to": t.id, "msg": msg},
             )
         else:
             # messaging the bot, check for commands & /np.

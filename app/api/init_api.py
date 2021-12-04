@@ -20,11 +20,8 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
 
-from .domains import ava
-from .domains import cho
-from .domains import osu
+from . import domains
 from app import services
-from app import settings
 from app.objects import glob
 
 # from .domains import map
@@ -64,16 +61,18 @@ def init_events(app: FastAPI) -> None:
     @app.on_event("shutdown")
     async def on_shutdown() -> None:
         await services.database.disconnect()
+        await services.http_session.close()
+        services.geoloc_db.close()
 
 
 def init_routes(app: FastAPI) -> None:
     """Initialize our app's route endpoints."""
-    for domain in ("ppy.sh", settings.DOMAIN):
-        app.host(f"a.{domain}", ava.router)
-        app.host(f"osu.{domain}", osu.router)
+    app.include_router(domains.ava.router)
+    app.include_router(domains.osu.router)
+    app.include_router(domains.cho.router)
+    app.include_router(domains.map.router)
 
-        for subdomain in ("c", "ce", "c4", "c5", "c6"):
-            app.host(f"{subdomain}.{domain}", cho.router)
+    app.include_router(domains.api.router)
 
 
 def init_api() -> FastAPI:

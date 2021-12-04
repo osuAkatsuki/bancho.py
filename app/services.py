@@ -6,7 +6,6 @@ from typing import TypedDict
 import aiohttp
 import databases
 import geoip2.database
-import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 

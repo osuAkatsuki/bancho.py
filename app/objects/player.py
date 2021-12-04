@@ -10,7 +10,6 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import aiomysql
 import databases.core
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
