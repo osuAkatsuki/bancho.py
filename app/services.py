@@ -1,11 +1,5 @@
 import databases
 
-import config
+import app.settings
 
-DB_DSN = (
-    "User ID={user};Password={password};Server={host};Database={db};Port={port}".format(
-        **config.mysql
-    )
-)
-
-database = databases.Database(DB_DSN)
+database = databases.Database(app.settings.DB_DSN)

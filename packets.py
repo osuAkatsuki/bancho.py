@@ -13,23 +13,23 @@ from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
 
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.types import osuTypes
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.match import Match
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import MatchWinConditions
-from objects.match import ScoreFrame
-from objects.match import SlotStatus
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.types import osuTypes
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
+from app.objects.match import Match
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import MatchWinConditions
+from app.objects.match import ScoreFrame
+from app.objects.match import SlotStatus
 
-# from objects.beatmap import BeatmapInfo
+# from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.

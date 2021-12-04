@@ -12,37 +12,37 @@ from typing import TypedDict
 
 import aiomysql
 import databases.core
-import services
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.privileges import ClientPrivileges
-from constants.privileges import Privileges
-from misc.utils import escape_enum
-from misc.utils import Geolocation
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.channel import Channel
-from objects.match import Match
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import Slot
-from objects.match import SlotStatus
-from objects.menu import Menu
-from objects.menu import menu_keygen
-from objects.menu import MenuCommands
-from objects.menu import MenuFunction
-from objects.score import Grade
-from objects.score import Score
 
+import app.services
 import packets
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.privileges import ClientPrivileges
+from app.constants.privileges import Privileges
+from app.misc.utils import escape_enum
+from app.misc.utils import Geolocation
+from app.misc.utils import pymysql_encode
+from app.objects import glob
+from app.objects.channel import Channel
+from app.objects.match import Match
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import Slot
+from app.objects.match import SlotStatus
+from app.objects.menu import Menu
+from app.objects.menu import menu_keygen
+from app.objects.menu import MenuCommands
+from app.objects.menu import MenuFunction
+from app.objects.score import Grade
+from app.objects.score import Score
 
 if TYPE_CHECKING:
-    from objects.achievement import Achievement
-    from objects.beatmap import Beatmap
-    from objects.clan import Clan, ClanPrivileges
+    from app.objects.achievement import Achievement
+    from app.objects.beatmap import Beatmap
+    from app.objects.clan import Clan, ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
@@ -454,7 +454,7 @@ class Player:
         """Update `self`'s privileges to `new`."""
         self.priv = new
 
-        await services.database.execute(
+        await app.services.database.execute(
             "UPDATE users SET priv = :priv WHERE id = :userid",
             {"priv": self.priv, "userid": self.id},
         )
@@ -466,7 +466,7 @@ class Player:
         """Update `self`'s privileges, adding `bits`."""
         self.priv |= bits
 
-        await services.database.execute(
+        await app.services.database.execute(
             "UPDATE users SET priv = :priv WHERE id = :userid",
             {"priv": self.priv, "userid": self.id},
         )
@@ -478,7 +478,7 @@ class Player:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
 
-        await services.database.execute(
+        await app.services.database.execute(
             "UPDATE users SET priv = :priv WHERE id = :userid",
             {"priv": self.priv, "userid": self.id},
         )
@@ -491,7 +491,7 @@ class Player:
         await self.remove_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} restricted for "{reason}".'
-        await services.database.execute(
+        await app.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (:from, :to, :msg, NOW())",
@@ -520,7 +520,7 @@ class Player:
         await self.add_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} unrestricted for "{reason}".'
-        await services.database.execute(
+        await app.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (:from, :to, :msg, NOW())",
@@ -548,13 +548,13 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await services.database.execute(
+        await app.services.database.execute(
             "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
             {"silence_end": self.silence_end, "userid": self.id},
         )
 
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
-        await services.database.execute(
+        await app.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (:from, :to, :msg, NOW())",
@@ -577,13 +577,13 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await services.database.execute(
+        await app.services.database.execute(
             "UPDATE users SET silence_end = :silence_end WHERE id = :userid",
             {"silence_end": self.silence_end, "userid": self.id},
         )
 
         log_msg = f"{admin} unsilenced."
-        await services.database.execute(
+        await app.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `msg`, `time`) "
             "VALUES (:from, :to, :msg, NOW())",
@@ -858,7 +858,7 @@ class Player:
             return
 
         self.friends.add(p.id)
-        await services.database.execute(
+        await app.services.database.execute(
             "REPLACE INTO relationships VALUES (:user1, :user2, 'friend')",
             {"user1": self.id, "user2": p.id},
         )
@@ -872,7 +872,7 @@ class Player:
             return
 
         self.friends.remove(p.id)
-        await services.database.execute(
+        await app.services.database.execute(
             "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
             {"user1": self.id, "user2": p.id},
         )
@@ -889,7 +889,7 @@ class Player:
             return
 
         self.blocks.add(p.id)
-        await services.database.execute(
+        await app.services.database.execute(
             "REPLACE INTO relationships VALUES (:user1, :user2, 'block')",
             {"user1": self.id, "user2": p.id},
         )
@@ -903,7 +903,7 @@ class Player:
             return
 
         self.blocks.remove(p.id)
-        await services.database.execute(
+        await app.services.database.execute(
             "DELETE FROM relationships WHERE user1 = :userid AND user2 = :user2",
             {"userid": self.id, "user2": p.id},
         )
@@ -912,7 +912,7 @@ class Player:
 
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
-        await services.database.execute(
+        await app.services.database.execute(
             "INSERT INTO user_achievements (userid, achid) VALUES (:userid, :achid)",
             {"userid": self.id, "achid": a.id},
         )
@@ -1029,7 +1029,7 @@ class Player:
 
     def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
-        task = services.database.execute(
+        task = app.services.database.execute(
             "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :userid",
             {"userid": self.id},
         )

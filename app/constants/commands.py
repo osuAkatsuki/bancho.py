@@ -27,37 +27,37 @@ from typing import Union
 
 import aiomysql
 import cmyui.utils
-import misc.utils
 import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.mods import SPEED_CHANGING_MODS
-from constants.privileges import Privileges
-from misc.utils import seconds_readable
-from objects import glob
-from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.beatmap import RankedStatus
-from objects.clan import Clan
-from objects.clan import ClanPrivileges
-from objects.match import MapPool
-from objects.match import Match
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import MatchWinConditions
-from objects.match import SlotStatus
-from objects.player import Player
-from objects.score import SubmissionStatus
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.misc.utils
 import packets
 from app import services
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.privileges import Privileges
+from app.misc.utils import seconds_readable
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import RankedStatus
+from app.objects.clan import Clan
+from app.objects.clan import ClanPrivileges
+from app.objects.match import MapPool
+from app.objects.match import Match
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import MatchWinConditions
+from app.objects.match import SlotStatus
+from app.objects.player import Player
+from app.objects.score import SubmissionStatus
 
 if TYPE_CHECKING:
-    from objects.channel import Channel
+    from app.objects.channel import Channel
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -1253,7 +1253,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         # a second for handling conns.
                         await asyncio.sleep(0.01)
 
-            elapsed = misc.utils.seconds_readable(int(time.time() - st))
+            elapsed = app.misc.utils.seconds_readable(int(time.time() - st))
             staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
 
         glob.loop.create_task(recalc_all())

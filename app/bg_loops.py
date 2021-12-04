@@ -3,11 +3,11 @@ import time
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from constants.privileges import Privileges
-from objects import glob
 
 import packets
 from app import services
+from app.constants.privileges import Privileges
+from app.objects import glob
 
 __all__ = ("initialize_housekeeping_tasks",)
 

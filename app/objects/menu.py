@@ -10,10 +10,10 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
-from objects import glob
+from app.objects import glob
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 
 @unique

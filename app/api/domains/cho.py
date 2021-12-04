@@ -16,7 +16,6 @@ from typing import Union
 import aiomysql
 import bcrypt
 import databases.core
-import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -24,35 +23,36 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from cmyui.web import Connection
 from cmyui.web import Domain
-from constants import commands
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.mods import SPEED_CHANGING_MODS
-from constants.privileges import ClientPrivileges
-from constants.privileges import Privileges
 from fastapi.param_functions import Header
 from fastapi.requests import Request
-from objects import glob
-from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.channel import Channel
-from objects.clan import ClanPrivileges
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import Slot
-from objects.match import SlotStatus
-from objects.menu import Menu
-from objects.menu import MenuCommands
-from objects.menu import MenuFunction
-from objects.player import Action
-from objects.player import Player
-from objects.player import PresenceFilter
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.misc.utils
 import packets
 from app import services
+from app.constants import commands
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.privileges import ClientPrivileges
+from app.constants.privileges import Privileges
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
+from app.objects.channel import Channel
+from app.objects.clan import ClanPrivileges
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import Slot
+from app.objects.match import SlotStatus
+from app.objects.menu import Menu
+from app.objects.menu import MenuCommands
+from app.objects.menu import MenuFunction
+from app.objects.player import Action
+from app.objects.player import Player
+from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
@@ -542,7 +542,7 @@ async def login(
         "SELECT id, name, priv, pw_bcrypt, country, "
         "silence_end, clan_id, clan_priv, api_key "
         "FROM users WHERE safe_name = :username",
-        {"username": misc.utils.make_safe_name(username)},
+        {"username": app.misc.utils.make_safe_name(username)},
     )
 
     # make user_info mutable
@@ -675,11 +675,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = misc.utils.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.misc.utils.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await misc.utils.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.misc.utils.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when

@@ -2,13 +2,12 @@ import functools
 from typing import Sequence
 from typing import TYPE_CHECKING
 
-from constants.privileges import Privileges
-from objects import glob
-
 import packets
+from app.constants.privileges import Privileges
+from app.objects import glob
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 __all__ = ("Channel",)
 

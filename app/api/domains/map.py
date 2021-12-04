@@ -4,7 +4,8 @@ from typing import Union
 
 from cmyui.web import Connection
 from cmyui.web import Domain
-from objects import glob
+
+from app.objects import glob
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 

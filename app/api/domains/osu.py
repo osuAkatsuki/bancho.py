@@ -29,7 +29,6 @@ from urllib.parse import unquote_plus
 import aiomysql
 import bcrypt
 import databases.core
-import misc.utils
 import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -37,10 +36,6 @@ from cmyui.logging import printc
 from cmyui.web import Connection
 from cmyui.web import Domain
 from cmyui.web import ratelimit
-from constants import regexes
-from constants.clientflags import ClientFlags
-from constants.gamemodes import GameMode
-from constants.mods import Mods
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
@@ -52,25 +47,30 @@ from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.beatmap import RankedStatus
-from objects.player import Privileges
-from objects.score import Grade
-from objects.score import Score
-from objects.score import SubmissionStatus
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from pydantic import BaseModel
 
+import app.misc.utils
 import packets
 from app import services
+from app.constants import regexes
+from app.constants.clientflags import ClientFlags
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import RankedStatus
+from app.objects.player import Privileges
+from app.objects.score import Grade
+from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
@@ -133,7 +133,7 @@ async def osuError(
             )
         ):
             # player login incorrect
-            await misc.utils.log_strange_occurrence("osu-error auth failed")
+            await app.misc.utils.log_strange_occurrence("osu-error auth failed")
             player = None
     else:
         player = None
@@ -175,7 +175,7 @@ async def osuScreenshot(
         )
 
     if endpoint_version != 1:
-        await misc.utils.log_strange_occurrence(
+        await app.misc.utils.log_strange_occurrence(
             f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
         )
 
@@ -286,7 +286,7 @@ async def osuGetBeatmapInfo(
         )
 
     if form_data.Ids:  # still have yet to see this used
-        await misc.utils.log_strange_occurrence(
+        await app.misc.utils.log_strange_occurrence(
             f"{player} requested map(s) info by id ({form_data.Ids})",
         )
 
@@ -482,8 +482,8 @@ async def osuSearchHandler(
 
     async with glob.http_session.get(search_url, params=params) as resp:
         if not resp:
-            stacktrace = misc.utils.get_appropriate_stacktrace()
-            await misc.utils.log_strange_occurrence(stacktrace)
+            stacktrace = app.misc.utils.get_appropriate_stacktrace()
+            await app.misc.utils.log_strange_occurrence(stacktrace)
 
         if USING_CHIMU:  # error handling varies
             if resp.status == 404:
@@ -491,8 +491,8 @@ async def osuSearchHandler(
             elif resp.status >= 500:  # chimu server error (happens a lot :/)
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
             elif resp.status != 200:
-                stacktrace = misc.utils.get_appropriate_stacktrace()
-                await misc.utils.log_strange_occurrence(stacktrace)
+                stacktrace = app.misc.utils.get_appropriate_stacktrace()
+                await app.misc.utils.log_strange_occurrence(stacktrace)
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
         else:  # cheesegull
             if resp.status != 200:
@@ -502,8 +502,8 @@ async def osuSearchHandler(
 
         if USING_CHIMU:
             if result["code"] != 0:
-                stacktrace = misc.utils.get_appropriate_stacktrace()
-                await misc.utils.log_strange_occurrence(stacktrace)
+                stacktrace = app.misc.utils.get_appropriate_stacktrace()
+                await app.misc.utils.log_strange_occurrence(stacktrace)
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
             result = result["data"]
 
@@ -698,8 +698,8 @@ async def osuSubmitModularSelector(
     score.time_elapsed = int(time_elapsed)
 
     if fl_cheat_screenshot:
-        stacktrace = misc.utils.get_appropriate_stacktrace()
-        await misc.utils.log_strange_occurrence(stacktrace)
+        stacktrace = app.misc.utils.get_appropriate_stacktrace()
+        await app.misc.utils.log_strange_occurrence(stacktrace)
 
     if (  # check for pp caps on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
@@ -2689,11 +2689,11 @@ async def register_account(
                         # decent case, dev has downloaded a geoloc db from
                         # maxmind, so we can do a local db lookup. (~1-5ms)
                         # https://www.maxmind.com/en/home
-                        geoloc = misc.utils.fetch_geoloc_db(ip)
+                        geoloc = app.misc.utils.fetch_geoloc_db(ip)
                     else:
                         # worst case, we must do an external db lookup
                         # using a public api. (depends, `ping ip-api.com`)
-                        geoloc = await misc.utils.fetch_geoloc_web(ip)
+                        geoloc = await app.misc.utils.fetch_geoloc_web(ip)
 
                     country_acronym = geoloc["country"]["acronym"]
                 else:

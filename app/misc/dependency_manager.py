@@ -4,7 +4,8 @@ from typing import AsyncGenerator
 import cmyui
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from objects import glob
+
+from app.objects import glob
 
 
 async def _get_latest_dependency_versions() -> AsyncGenerator[

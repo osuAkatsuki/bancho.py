@@ -4,12 +4,12 @@ import os
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
-from objects import glob
 
 from .domains import ava
 from .domains import cho
 from .domains import map
 from .domains import osu
+from app.objects import glob
 
 
 def init_domains(app: FastAPI) -> None:
@@ -57,18 +57,18 @@ app = init_api()
 # from cmyui.logging import RGB
 
 # import bg_loops
-# import misc.context
-# import misc.utils
+# import app.misc.context
+# import app.misc.utils
 # import objects.collections
 
 # # set the current working directory to /gulag
 # os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 # if not os.path.exists("config.py"):
-#     misc.utils.create_config_from_default()
+#     app.misc.utils.create_config_from_default()
 #     raise SystemExit(1)
 
-# from objects import glob  # (includes config)
+# from app.objects import glob  # (includes config)
 import cmyui
 
 # # !! review code that uses this before modifying it.
@@ -102,7 +102,7 @@ glob.version = cmyui.Version(3, 6, 1)
 #     glob.app.add_domains({c_ppy_sh, osu_ppy_sh, a_ppy_sh, b_ppy_sh})
 
 #     # support both INET and UNIX sockets
-#     if misc.utils.is_inet_address(glob.config.server_addr):
+#     if app.misc.utils.is_inet_address(glob.config.server_addr):
 #         sock_family = socket.AF_INET
 #     elif isinstance(glob.config.server_addr, str):
 #         sock_family = socket.AF_UNIX
@@ -159,8 +159,8 @@ glob.version = cmyui.Version(3, 6, 1)
 #         misc.context.acquire_mysql_db_pool(glob.config.mysql) as services.database,
 #         misc.context.acquire_redis_db_pool() as glob.redis,
 #     ):
-#         await misc.utils.check_for_dependency_updates()
-#         await misc.utils.run_sql_migrations()
+#         await app.misc.utils.check_for_dependency_updates()
+#         await app.misc.utils.run_sql_migrations()
 
 #         with (
 #             misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
@@ -185,7 +185,7 @@ glob.version = cmyui.Version(3, 6, 1)
 #             await bg_loops.initialize_housekeeping_tasks()
 
 #             # handle signals so we can ensure a graceful shutdown
-#             sig_handler = misc.utils.shutdown_signal_handler
+#             sig_handler = app.misc.utils.shutdown_signal_handler
 #             for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
 #                 glob.loop.add_signal_handler(signum, sig_handler, signum)
 
@@ -199,22 +199,22 @@ glob.version = cmyui.Version(3, 6, 1)
 #             # and shut down any of the housekeeping tasks running in the background.
 
 #             if glob.ongoing_conns:
-#                 await misc.utils.await_ongoing_connections(timeout=5.0)
+#                 await app.misc.utils.await_ongoing_connections(timeout=5.0)
 
-#             await misc.utils.cancel_housekeeping_tasks()
+#             await app.misc.utils.cancel_housekeeping_tasks()
 
 #     return 0
 
 
 # if __name__ == "__main__":
 #     """After basic safety checks, start the event loop and call our async entry point."""
-#     misc.utils.setup_runtime_environment()
+#     app.misc.utils.setup_runtime_environment()
 
 #     for safety_check in (
-#         misc.utils.ensure_supported_platform,  # linux only at the moment
-#         misc.utils.ensure_local_services_are_running,  # mysql (if local)
-#         misc.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
-#         misc.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
+#         app.misc.utils.ensure_supported_platform,  # linux only at the moment
+#         app.misc.utils.ensure_local_services_are_running,  # mysql (if local)
+#         app.misc.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
+#         app.misc.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
 #     ):
 #         if (exit_code := safety_check()) != 0:
 #             raise SystemExit(exit_code)
@@ -225,13 +225,13 @@ glob.version = cmyui.Version(3, 6, 1)
 
 #     # install any debugging hooks from
 #     # _testing/runtime.py, if present
-#     misc.utils._install_debugging_hooks()
+#     app.misc.utils._install_debugging_hooks()
 
 #     # check our internet connection status
-#     glob.has_internet = misc.utils.check_connection(timeout=1.5)
+#     glob.has_internet = app.misc.utils.check_connection(timeout=1.5)
 
 #     # show info & any contextual warnings.
-#     misc.utils.display_startup_dialog()
+#     app.misc.utils.display_startup_dialog()
 
 #     try:
 #         # use uvloop if available
@@ -247,7 +247,7 @@ glob.version = cmyui.Version(3, 6, 1)
 # elif __name__ == "main":
 #     # check specifically for ASGI servers; many related projects use
 #     # them to run in production, and devs may assume we do as well.
-#     if misc.utils.running_via_asgi_webserver():
+#     if app.misc.utils.running_via_asgi_webserver():
 #         raise RuntimeError(
 #             "gulag implements it's own web framework implementation from "
 #             "transport layer (tcp/ip) posix sockets and does not rely on "

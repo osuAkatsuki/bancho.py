@@ -35,8 +35,9 @@ from cmyui.logging import printc
 from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
-from constants.countries import country_codes
-from objects import glob
+
+from app.constants.countries import country_codes
+from app.objects import glob
 
 __all__ = (
     # TODO: organize/sort these

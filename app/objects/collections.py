@@ -9,21 +9,21 @@ from typing import Sequence
 from typing import Union
 
 import aiomysql
-import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from constants.privileges import Privileges
-from misc.utils import make_safe_name
-from objects import glob
-from objects.achievement import Achievement
-from objects.channel import Channel
-from objects.clan import Clan
-from objects.clan import ClanPrivileges
-from objects.match import MapPool
-from objects.match import Match
-from objects.player import Player
 
+import app.misc.utils
 from app import services
+from app.constants.privileges import Privileges
+from app.misc.utils import make_safe_name
+from app.objects import glob
+from app.objects.achievement import Achievement
+from app.objects.channel import Channel
+from app.objects.clan import Clan
+from app.objects.clan import ClanPrivileges
+from app.objects.match import MapPool
+from app.objects.match import Match
+from app.objects.player import Player
 
 __all__ = (
     "Channels",
@@ -457,7 +457,7 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
     await glob.clans.prepare(db_cursor)
     await glob.pools.prepare(db_cursor)
 
-    bot_name = await misc.utils.fetch_bot_name(db_cursor)
+    bot_name = await app.misc.utils.fetch_bot_name(db_cursor)
 
     # create bot & add it to online players
     glob.bot = Player(

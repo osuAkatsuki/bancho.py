@@ -8,18 +8,19 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 from cmyui.osu.oppai_ng import OppaiWrapper
-from constants.clientflags import ClientFlags
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.beatmap import Beatmap
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+from app.constants.clientflags import ClientFlags
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 __all__ = ("Grade", "SubmissionStatus", "Score")
 

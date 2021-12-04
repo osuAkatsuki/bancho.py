@@ -11,19 +11,21 @@ from typing import Mapping
 from typing import Optional
 
 import aiomysql
-import misc.utils
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from constants.gamemodes import GameMode
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
+
+import app.misc.utils
+import app.settings
+from app.constants.gamemodes import GameMode
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
 
 # from dataclasses import dataclass
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.settings.DOMAIN
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -65,8 +67,8 @@ async def ensure_local_osu_file(
         async with glob.http_session.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
-                stacktrace = misc.utils.get_appropriate_stacktrace()
-                await misc.utils.log_strange_occurrence(stacktrace)
+                stacktrace = app.misc.utils.get_appropriate_stacktrace()
+                await app.misc.utils.log_strange_occurrence(stacktrace)
                 return False
 
             osu_file_path.write_bytes(await r.read())

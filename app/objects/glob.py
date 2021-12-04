@@ -1,12 +1,11 @@
 from typing import TYPE_CHECKING
 
-from objects.collections import Channels
-from objects.collections import Clans
-from objects.collections import MapPools
-from objects.collections import Matches
-from objects.collections import Players
-
 import config  # pylint: disable=unused-import
+from app.objects.collections import Channels
+from app.objects.collections import Clans
+from app.objects.collections import MapPools
+from app.objects.collections import Matches
+from app.objects.collections import Players
 
 # this file contains no actualy definitions
 if TYPE_CHECKING:
@@ -22,11 +21,11 @@ if TYPE_CHECKING:
     from cmyui.version import Version
     from cmyui.web import Server
     from datadog import ThreadStats
-    from objects.achievement import Achievement
-    from objects.beatmap import Beatmap, BeatmapSet
-    from objects.player import Player
+    from app.objects.achievement import Achievement
+    from app.objects.beatmap import Beatmap, BeatmapSet
+    from app.objects.player import Player
 
-    # from objects.score import Score
+    # from app.objects.score import Score
     from packets import BasePacket, ClientPackets
 
     IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address

@@ -4,12 +4,13 @@ from enum import unique
 from typing import TYPE_CHECKING
 
 import aiomysql
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
+
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 __all__ = ("Clan", "ClanPrivileges")
 

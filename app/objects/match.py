@@ -15,21 +15,22 @@ from typing import Union
 import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.beatmap import Beatmap
 
+import app.settings
 import packets
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.misc.utils import escape_enum
+from app.misc.utils import pymysql_encode
+from app.objects import glob
+from app.objects.beatmap import Beatmap
 
 if TYPE_CHECKING:
     from asyncio import TimerHandle
 
-    from objects.channel import Channel
-    from objects.player import Player
+    from app.objects.channel import Channel
+    from app.objects.player import Player
 
 __all__ = (
     "SlotStatus",
@@ -43,7 +44,7 @@ __all__ = (
     "Match",
 )
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.settings.DOMAIN
 
 
 @unique

@@ -1,6 +1,7 @@
 """ ava: avatar server (for both ingame & external) """
 from pathlib import Path
 from typing import Literal
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Response
@@ -10,6 +11,15 @@ AVATARS_PATH = Path.cwd() / ".data/avatars"
 DEFAULT_AVATAR = AVATARS_PATH / "default.jpg"
 
 router = APIRouter()
+
+
+def get_media_type(extension: str) -> Optional[str]:
+    if extension in ("jpg", "jpeg"):
+        return "image/jpeg"
+    elif extension == "png":
+        return "image/png"
+
+    # return none, fastapi will attempt to figure it out
 
 
 @router.get("/favicon.ico")
@@ -27,7 +37,7 @@ async def get_avatar(
     if not avatar_path.exists():
         avatar_path = DEFAULT_AVATAR
 
-    return FileResponse(avatar_path, media_type=extension)
+    return FileResponse(avatar_path, media_type=get_media_type(extension))
 
 
 @router.get("/{user_id}")
@@ -36,6 +46,6 @@ async def get_avatar_osu(user_id: int) -> Response:
         avatar_path = AVATARS_PATH / f"{user_id}.{extension}"
 
         if avatar_path.exists():
-            return FileResponse(avatar_path, media_type=extension)
+            return FileResponse(avatar_path, media_type=get_media_type(extension))
 
     return FileResponse(DEFAULT_AVATAR, media_type="image/jpeg")
