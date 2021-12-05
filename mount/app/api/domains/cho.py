@@ -24,7 +24,9 @@ from fastapi.param_functions import Header
 from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
+from sqlalchemy.dialects.mysql.dml import insert
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import and_
 from sqlalchemy.sql.expression import Insert
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
@@ -419,15 +421,6 @@ OFFLINE_NOTIFICATION = packets.notification(
 
 DELTA_90_DAYS = timedelta(days=90)
 
-# allows us to have an duplicate update format
-# TODO: theres probably a better way around this?
-@compiles(Insert)
-def append_string(insert, compiler, **kw):
-    s = compiler.visit_insert(insert, **kw)
-    if "append_string" in insert.kwargs:
-        return s + " " + insert.kwargs["append_string"]
-    return s
-
 
 async def login(
     body: bytes,
@@ -605,18 +598,19 @@ async def login(
     )
 
     await db_conn.execute(
-        db_models.client_hashes.insert(
-            append_string=(  # appending to query string
-                "ON DUPLICATE KEY UPDATE "
-                "occurrences = occurrences + 1, "
-                "latest_time = NOW()"
-            ),
-        ).values(
+        insert(db_models.client_hashes)
+        .values(
             userid=user_info["id"],
             osupath=osu_path_md5,
             adapters=adapters_md5,
             uninstall_id=uninstall_md5,
             disk_serial=disk_sig_md5,
+        )
+        .on_duplicate_key_update(
+            {
+                "occurrences": db_models.client_hashes.c.occurrences + 1,
+                "latest_time": func.now(),
+            },
         ),
     )
 
@@ -643,7 +637,7 @@ async def login(
                 db_models.users.c.priv,
                 db_models.client_hashes.c.occurrences,
             ],
-        ).where(sqlalchemy.and_(*hw_args)),
+        ).where(and_(*hw_args)),
     )
 
     if hw_matches:
@@ -790,19 +784,15 @@ async def login(
                     db_models.mail.c.msg,
                     db_models.mail.c.time,
                     db_models.mail.c.from_id,
-                    db_models.users.select(
-                        db_models.users.c.name,
-                    )
+                    db_models.users.select(db_models.users.c.name)
                     .where(db_models.users.c.id == db_models.mail.c.from_id)
                     .label("from"),
-                    db_models.users.select(
-                        db_models.users.c.name,
-                    )
+                    db_models.users.select(db_models.users.c.name)
                     .where(db_models.users.c.id == db_models.mail.c.to_id)
                     .label("to"),
                 ],
             ).where(
-                sqlalchemy.and_(
+                and_(
                     db_models.mail.c.to_id == p.id,
                     db_models.mail.c.read == 0,
                 ),

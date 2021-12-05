@@ -243,7 +243,7 @@ class Players(list[Player]):
 
         # try to get from sql.
         async with services.database.connection() as db_conn:
-            res = await db_conn.fetch_one(
+            row = await db_conn.fetch_one(
                 select(
                     [
                         db_models.users.c.id,
@@ -255,22 +255,24 @@ class Players(list[Player]):
                         db_models.users.c.clan_priv,
                         db_models.users.c.api_key,
                     ],
-                ).where(getattr(db_models.users, attr) == val),
+                ).where(getattr(db_models.users.c, attr) == val),
             )
 
-        if not res:
+        if not row:
             return
 
+        row = dict(row)
+
         # encode pw_bcrypt from str -> bytes.
-        res["pw_bcrypt"] = res["pw_bcrypt"].encode()
+        row["pw_bcrypt"] = row["pw_bcrypt"].encode()
 
-        if res["clan_id"] != 0:
-            res["clan"] = sessions.clans.get(id=res["clan_id"])
-            res["clan_priv"] = ClanPrivileges(res["clan_priv"])
+        if row["clan_id"] != 0:
+            row["clan"] = sessions.clans.get(id=row["clan_id"])
+            row["clan_priv"] = ClanPrivileges(row["clan_priv"])
         else:
-            res["clan"] = res["clan_priv"] = None
+            row["clan"] = row["clan_priv"] = None
 
-        return Player(**res, token="")
+        return Player(**row, token="")
 
     async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""

@@ -271,10 +271,7 @@ async def changename(ctx: Context) -> Optional[str]:
 
     await services.database.execute(
         db_models.users.update()
-        .values(
-            name=name,
-            safe_name=safe_name,
-        )
+        .values(name=name, safe_name=safe_name)
         .where(db_models.users.c.id == ctx.player.id),
     )
 

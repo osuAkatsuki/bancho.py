@@ -1007,10 +1007,7 @@ async def osuSubmitModularSelector(
 
         await db_conn.execute(
             db_models.maps.update()
-            .values(
-                plays=score.bmap.plays,
-                passes=score.bmap.passes,
-            )
+            .values(plays=score.bmap.plays, passes=score.bmap.passes)
             .where(db_models.maps.c.md5 == score.bmap.md5),
         )
 
@@ -1595,14 +1592,12 @@ async def osuComment(
         # insert into sql
         await db_conn.execute(
             db_models.comments.insert().values(
-                {
-                    "target_id": target_id,
-                    "target": target,
-                    "userid": player.id,
-                    "start_time": start_time,
-                    "comment": comment,
-                    "colour": colour,
-                },
+                target_id=target_id,
+                target=target,
+                userid=player.id,
+                start_time=start_time,
+                comment=comment,
+                colour=colour,
             ),
         )
 
@@ -1980,15 +1975,13 @@ async def register_account(
             user_id = await db_conn.execute(
                 db_models.users.insert()
                 .values(
-                    {
-                        "name": username,
-                        "safe_name": safe_name,
-                        "email": email,
-                        "pw_bcrypt": pw_bcrypt,
-                        "country": country_acronym,
-                        "creation_time": func.unix_timestamp(),
-                        "latest_activity": func.unix_timestamp(),
-                    },
+                    name=username,
+                    safe_name=safe_name,
+                    email=email,
+                    pw_bcrypt=pw_bcrypt,
+                    country=country_acronym,
+                    creation_time=func.unix_timestamp(),
+                    latest_activity=func.unix_timestamp(),
                 )
                 .returning(db_models.users.c.id),
             )

@@ -40,8 +40,8 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         async for expired_donor in services.database.iterate(
             db_models.users.select(db_models.users.c.id).where(
                 sqlalchemy.and_(
-                    db_models.users.c.donor_expire_time <= func.unix_timestamp(),
-                    db_models.users.c.priv & 48,  # 48 = Supporter | Premium
+                    db_models.users.c.donor_end <= func.unix_timestamp(),
+                    db_models.users.c.priv.op("&")(48) == 48,  # Supporter | Premium
                 ),
             ),
         ):

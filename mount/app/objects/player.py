@@ -463,9 +463,7 @@ class Player:
             await db_conn.execute(
                 db_models.users.update()
                 .values(priv=self.priv)
-                .where(
-                    db_models.users.c.id == self.id,
-                ),
+                .where(db_models.users.c.id == self.id),
             )
 
         if "bancho_priv" in self.__dict__:

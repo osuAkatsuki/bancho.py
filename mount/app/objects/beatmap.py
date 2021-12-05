@@ -13,7 +13,7 @@ from typing import Optional
 import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.dialects.mysql.dml import insert
 from sqlalchemy.sql.expression import select
 
 from mount.app import db_models
@@ -435,16 +435,14 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            async with services.database.connection() as db_conn:
-                res = await db_conn.fetch_one(
-                    db_models.maps.select(db_models.maps.c.set_id).where(
-                        db_models.maps.c.id == bid,
-                    ),
-                )
-
-            if res:
+            row = await services.database.fetch_one(
+                db_models.maps.select().where(
+                    db_models.maps.c.id == bid,
+                ),
+            )
+            if row:
                 # found set id in db
-                set_id = res["set_id"]
+                set_id = row["set_id"]
             else:
                 # failed to get from db, try osu!api
                 api_data = await osuapiv1_getbeatmaps(b=bid)
@@ -765,16 +763,19 @@ class BeatmapSet:
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
         async with services.database.connection() as db_conn:
-            check_row = await db_conn.fetch_one(
-                db_models.mapsets.select(
-                    db_models.mapsets.c.last_osuapi_check,
-                ).where(db_models.mapsets.c.id == bsid),
+            last_osuapi_check = await db_conn.fetch_val(
+                select([db_models.mapsets.c.last_osuapi_check]).where(
+                    db_models.mapsets.c.id == bsid,
+                ),
+                column=0,
             )
 
-            if not check_row:
+            if last_osuapi_check is None:
                 return
 
-            set_res = await db_conn.fetch_all(
+            bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
+
+            async for row in db_conn.iterate(
                 select(
                     [
                         db_models.maps.c.md5,
@@ -801,14 +802,7 @@ class BeatmapSet:
                         db_models.maps.c.diff,
                     ],
                 ).where(db_models.maps.c.set_id == bsid),
-            )
-
-            if not set_res:
-                return
-
-            bmap_set = cls(id=bsid, **set_res)
-
-            async for row in set_res:
+            ):
                 bmap = Beatmap(**row)
 
                 # XXX: tempfix for gulag <v3.4.1,
