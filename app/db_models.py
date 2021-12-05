@@ -34,7 +34,7 @@ maps_columns = (
     Column("frozen", Boolean),
     Column("plays", Integer),
     Column("passes", Integer),
-    Column("mode", Boolean),
+    Column("mode", SmallInteger),
     Column("bpm", Float(2)),
     Column("cs", Float(2)),
     Column("ar", Float(2)),
@@ -44,6 +44,7 @@ maps_columns = (
 )
 
 mapsets_columns = (
+    # TODO: enum might need name & server_default
     Column("server", Enum("osu!", "gulag"), primary_key=True),
     Column("id", Integer, primary_key=True, unique=True),
     Column("last_osuapi_check", DateTime),
@@ -67,14 +68,14 @@ scores_columns = (
     Column("ngeki", Integer),
     Column("nkatu", Integer),
     Column("grade", String(2)),
-    Column("status", Boolean),
-    Column("mode", Boolean),
+    Column("status", SmallInteger),
+    Column("mode", SmallInteger),
     Column("play_time", DateTime),
     Column("time_elapsed", Integer),
     Column("client_flags", Integer),
     Column("userid", Integer),
     Column("perfect", Boolean),
-    Column("online_checksum", CHAR(32)),
+    Column("online_checksum", CHAR(32), unique=True),
 )
 
 # XXX: deepcopy since the function takes ownership, and it cannot be used more than once
@@ -101,15 +102,15 @@ users_columns = (
     Column("silence_end", Integer),
     Column("donor_end", Integer),
     Column("creation_time", Integer),
-    Column("latest_acitvity", Integer),
+    Column("latest_activity", Integer),
     Column("clan_id", Integer),
-    Column("clan_priv", Boolean),
+    Column("clan_priv", SmallInteger),
     Column("api_key", CHAR(36), unique=True),
 )
 
 stats_columns = (
     Column("id", Integer, autoincrement=True, primary_key=True),
-    Column("mode", Boolean, primary_key=True),
+    Column("mode", SmallInteger, primary_key=True),
     Column("tscore", BigInteger),
     Column("rscore", BigInteger),
     Column("pp", Integer),
@@ -130,7 +131,7 @@ stats = Table("stats", metadata, *stats_columns)
 ratings_columns = (
     Column("userid", Integer, primary_key=True),
     Column("map_md5", CHAR(32), primary_key=True),
-    Column("rating", Boolean),
+    Column("rating", SmallInteger),
 )
 
 ratings = Table("ratings", metadata, *ratings_columns)
@@ -211,7 +212,7 @@ tourney_pool_maps_columns = (
     Column("map_id", Integer, primary_key=True),
     Column("pool_id", Integer, primary_key=True),
     Column("mods", Integer),
-    Column("slot", Boolean),
+    Column("slot", SmallInteger),
 )
 
 tourney_pools = Table("tourney_pools", metadata, *tourney_pools_columns)
