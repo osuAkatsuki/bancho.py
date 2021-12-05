@@ -13,9 +13,9 @@ from typing import Optional
 from typing import Type
 
 import bcrypt
+import databases.core
 import sqlalchemy
 from cmyui.logging import Ansi
-import databases.core
 from cmyui.logging import log
 from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
@@ -609,7 +609,7 @@ async def login(
                 "ON DUPLICATE KEY UPDATE "
                 "occurrences = occurrences + 1, "
                 "latest_time = NOW()"
-            )
+            ),
         ).values(
             userid=user_info["id"],
             osupath=osu_path_md5,

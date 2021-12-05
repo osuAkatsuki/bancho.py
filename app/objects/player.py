@@ -15,10 +15,9 @@ import sqlalchemy
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
-
-from sqlalchemy.dialects.mysql import insert
 
 import app.db_models
 import app.services
@@ -935,7 +934,7 @@ class Player:
         )
 
         duplicate_format = insert_data.on_duplicate_key_update(
-            data=insert_data.inserted.data, status="U"
+            data=insert_data.inserted.data, status="U",
         )
 
         await app.services.database.execute(duplicate_format)

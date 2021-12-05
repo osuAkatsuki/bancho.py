@@ -25,19 +25,18 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
-import aiomysql
 import cmyui.utils
 import psutil
+import sqlalchemy
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
-import sqlalchemy
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
 
+import app.db_models
 import app.misc.utils
 import app.services
-import app.db_models
 import packets
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -261,7 +260,7 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Disallowed username; pick another."
 
     if await app.services.database.fetch_one(
-        app.db_models.users.select().where(app.db_models.users.c.name == name)
+        app.db_models.users.select().where(app.db_models.users.c.name == name),
     ):
         return "Username already taken by another player."
 
@@ -274,7 +273,7 @@ async def changename(ctx: Context) -> Optional[str]:
             name=name,
             safe_name=safe_name,
         )
-        .where(app.db_models.users.c.id == ctx.player.id)
+        .where(app.db_models.users.c.id == ctx.player.id),
     )
 
     ctx.player.enqueue(
@@ -394,10 +393,10 @@ async def top(ctx: Context) -> Optional[str]:
                 alchemy_table.c.mode == mode,
                 alchemy_table.c.status == 2,
                 app.db_models.maps.c.status in (2, 3),
-            )
+            ),
         )
         .order_by(alchemy_table.c.pp.desc())
-        .limit(10)
+        .limit(10),
     )
 
     if not scores:
@@ -577,7 +576,7 @@ async def request(ctx: Context) -> Optional[str]:
             player_id=ctx.player.id,
             datetime=func.now(),
             active=1,
-        )
+        ),
     )
 
     return "Request submitted."
@@ -599,7 +598,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     await app.services.database.execute(
         app.db_models.users.update()
         .values(api_key=ctx.player.api_key)
-        .where(app.db_models.users.c.id == ctx.player.id)
+        .where(app.db_models.users.c.id == ctx.player.id),
     )
     glob.api_keys[ctx.player.api_key] = ctx.player.id
 
@@ -625,8 +624,8 @@ async def requests(ctx: Context) -> Optional[str]:
                 app.db_models.map_requests.c.map_id,
                 app.db_models.map_requests.c.player_id,
                 app.db_models.map_requests.c.datetime,
-            ]
-        ).where(app.db_models.map_requests.c.active == 1)
+            ],
+        ).where(app.db_models.map_requests.c.active == 1),
     )
 
     if not res:
@@ -686,14 +685,14 @@ async def _map(ctx: Context) -> Optional[str]:
             await db_conn.execute(
                 app.db_models.maps.update()
                 .values(status=new_status.value, frozen=1)
-                .where(app.db_models.maps.c.set_id == bmap.set_id)
+                .where(app.db_models.maps.c.set_id == bmap.set_id),
             )
 
             # select all map ids for clearing map requests.
             maps = await db_conn.fetch_all(
                 app.db_models.maps.select(app.db_models.maps.c.id).where(
-                    app.db_models.maps.c.set_id == bmap.set_id
-                )
+                    app.db_models.maps.c.set_id == bmap.set_id,
+                ),
             )
             map_ids = [row[0] async for row in maps]
 
@@ -705,7 +704,7 @@ async def _map(ctx: Context) -> Optional[str]:
             await db_conn.execute(
                 app.db_models.maps.update()
                 .values(status=new_status.value, frozen=1)
-                .where(app.db_models.maps.c.id == bmap.id)
+                .where(app.db_models.maps.c.id == bmap.id),
             )
 
             map_ids = [bmap.id]
@@ -718,7 +717,7 @@ async def _map(ctx: Context) -> Optional[str]:
             await db_conn.execute(
                 app.db_models.map_requests.update()
                 .values(active=0)
-                .where(app.db_models.map_requests.c.map_id == map_id)
+                .where(app.db_models.map_requests.c.map_id == map_id),
             )
 
     return f"{bmap.embed} updated to {new_status!s}."
@@ -751,16 +750,16 @@ async def notes(ctx: Context) -> Optional[str]:
             [
                 app.db_models.logs.c.msg,
                 app.db_models.logs.c.time,
-            ]
+            ],
         )
         .where(
             sqlalchemy.and_(
                 app.db_models.logs.c.to == t.id,
                 func.unix_timestamp(app.db_models.logs.c.time)
                 >= func.unix_timestamp(func.now()) - days * 86400,
-            )
+            ),
         )
-        .order_by(app.db_models.logs.c.time.asc())
+        .order_by(app.db_models.logs.c.time.asc()),
     )
 
     if not res:
@@ -787,8 +786,8 @@ async def addnote(ctx: Context) -> Optional[str]:
                 "to": t.id,
                 "msg": log_msg,
                 "time": func.now(),
-            }
-        )
+            },
+        ),
     )
 
     return f"Added note to {t}."
@@ -1210,13 +1209,13 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 alchemy_table.c.mods,
                                 alchemy_table.c.max_combo,
                                 alchemy_table.c.nmiss,
-                            ]
+                            ],
                         ).where(
                             sqlalchemy.and_(
                                 alchemy_table.c.map_md5 == bmap.md5,
                                 alchemy_table.c.mode == 0,
-                            )
-                        )
+                            ),
+                        ),
                     ):
                         ezpp.set_mods(row["mods"])
                         ezpp.set_nmiss(row["nmiss"])  # clobbers acc
@@ -1227,8 +1226,8 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                         await db_conn.execute(
                             alchemy_table.update().values(
-                                pp=ezpp.get_pp(), id=row["id"]
-                            )
+                                pp=ezpp.get_pp(), id=row["id"],
+                            ),
                         )
 
         return "Map recalculated."
@@ -1246,8 +1245,8 @@ async def recalc(ctx: Context) -> Optional[str]:
                         [
                             app.db_models.maps.c.id,
                             app.db_models.maps.c.md5,
-                        ]
-                    ).where(app.db_models.maps.c.passes > 0)
+                        ],
+                    ).where(app.db_models.maps.c.passes > 0),
                 )
 
                 staff_chan.send_bot(f"Recalculating {len(maps)} maps.")
@@ -1278,13 +1277,13 @@ async def recalc(ctx: Context) -> Optional[str]:
                                         alchemy_table.c.mods,
                                         alchemy_table.c.max_combo,
                                         alchemy_table.c.nmiss,
-                                    ]
+                                    ],
                                 ).where(
                                     sqlalchemy.and_(
                                         alchemy_table.c.map_md5 == bmap_md5,
                                         alchemy_table.c.mode == 0,
-                                    )
-                                )
+                                    ),
+                                ),
                             ):
                                 ezpp.set_mods(row["mods"])
                                 ezpp.set_nmiss(row["nmiss"])  # clobbers acc
@@ -1295,8 +1294,8 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                                 await db_conn.execute(
                                     alchemy_table.update().values(
-                                        pp=ezpp.get_pp(), id=row["id"]
-                                    )
+                                        pp=ezpp.get_pp(), id=row["id"],
+                                    ),
                                 )
 
                     # leave at least 1/100th of
@@ -1392,7 +1391,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
         for t in ("vn", "rx", "ap"):
             alchemy_table = getattr(app.db_models, f"scores_{t}")
             await db_conn.execute(
-                alchemy_table.delete().where(alchemy_table.c.map_md5 == map_md5)
+                alchemy_table.delete().where(alchemy_table.c.map_md5 == map_md5),
             )
 
     return "Scores wiped."
@@ -2234,14 +2233,14 @@ async def pool_create(ctx: Context) -> Optional[str]:
             name=name,
             created_at=func.now(),
             created_by=ctx.player.id,
-        )
+        ),
     )
 
     # add to cache (get from sql for id & time)
     res = await app.services.database.fetch_one(
         select([app.db_models.tourney_pools]).where(
-            app.db_models.tourney_pools.c.name == name
-        )
+            app.db_models.tourney_pools.c.name == name,
+        ),
     )
 
     res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
@@ -2265,8 +2264,8 @@ async def pool_delete(ctx: Context) -> Optional[str]:
     # delete from db
     await app.services.database.execute(
         app.db_models.tourney_pools.delete().where(
-            app.db_models.tourney_pools.c.name == name
-        )
+            app.db_models.tourney_pools.c.name == name,
+        ),
     )
 
     # remove from cache
@@ -2315,7 +2314,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
             pool_id=pool.id,
             mods=mods,
             slot=slot,
-        )
+        ),
     )
 
     # add to cache
@@ -2353,8 +2352,8 @@ async def pool_remove(ctx: Context) -> Optional[str]:
             sqlalchemy.and_(
                 app.db_models.tourney_pool_maps.c.mods == mods,
                 app.db_models.tourney_pool_maps.c.slot == slot,
-            )
-        )
+            ),
+        ),
     )
 
     # remove from cache
@@ -2454,7 +2453,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
             tag=tag,
             created_at=created_at,
             owner=ctx.player.id,
-        )
+        ),
     )
 
     # add clan to cache
@@ -2480,7 +2479,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     await app.services.database.execute(
         app.db_models.users.update()
         .values(clan_id=clan_id, clan_priv=ClanPrivileges.Owner)
-        .where(app.db_models.users.c.id == ctx.player.id)
+        .where(app.db_models.users.c.id == ctx.player.id),
     )
 
     # announce clan creation
@@ -2508,7 +2507,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
 
     # delete clan from sql
     await app.services.database.execute(
-        app.db_models.clans.delete().where(app.db_models.clans.c.id == clan.id)
+        app.db_models.clans.delete().where(app.db_models.clans.c.id == clan.id),
     )
 
     # remove all members from the clan,
@@ -2524,7 +2523,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     await app.services.database.execute(
         app.db_models.users.update()
         .values(clan_id=0, clan_priv=0)
-        .where(app.db_models.users.c.clan_id == clan.id)
+        .where(app.db_models.users.c.clan_id == clan.id),
     )
 
     # remove clan from cache
@@ -2555,10 +2554,10 @@ async def clan_info(ctx: Context) -> Optional[str]:
             [
                 app.db_models.users.c.name,
                 app.db_models.users.c.clan_priv,
-            ]
+            ],
         )
         .where(app.db_models.users.c.clan_id == clan.id)
-        .order_by(app.db_models.users.c.clan_priv.desc())
+        .order_by(app.db_models.users.c.clan_priv.desc()),
     )
 
     for member_name, clan_priv in res:

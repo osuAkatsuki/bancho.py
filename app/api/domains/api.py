@@ -6,8 +6,8 @@ from typing import AsyncIterator
 from typing import Literal
 from typing import Optional
 
-import sqlalchemy
 import databases.core
+import sqlalchemy
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status

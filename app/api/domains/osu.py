@@ -19,13 +19,13 @@ from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
 import bcrypt
+import databases.core
 import orjson
 import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.web import ratelimit
-import databases.core
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status

@@ -13,8 +13,8 @@ from typing import Optional
 import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.sql.expression import select
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.sql.expression import select
 
 import app.db_models
 import app.misc.utils
@@ -711,7 +711,7 @@ class BeatmapSet:
             )
 
             duplicate_format = insert_data.on_duplicate_key_update(
-                data=insert_data.inserted.data, status="U"
+                data=insert_data.inserted.data, status="U",
             )
             await db_conn.execute(duplicate_format)
 

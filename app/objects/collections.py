@@ -8,9 +8,9 @@ from typing import overload
 from typing import Sequence
 from typing import Union
 
+import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
-import databases.core
 from sqlalchemy.sql.expression import select
 
 import app.db_models
@@ -455,7 +455,7 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         self.extend(
-            [Clan(**row) async for row in db_conn.iterate(app.db_models.clans.select())]
+            [Clan(**row) async for row in db_conn.iterate(app.db_models.clans.select())],
         )
 
         for clan in self:

@@ -8,8 +8,8 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from sqlalchemy.sql.expression import select
 
-import app.services
 import app.db_models
+import app.services
 from app.objects import glob
 
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
@@ -24,10 +24,10 @@ async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
                 app.db_models.startups.c.ver_major,
                 app.db_models.startups.c.ver_minor,
                 app.db_models.startups.c.ver_micro,
-            ]
+            ],
         )
         .order_by(app.db_models.startups.c.datetime.desc())
-        .limit(1)
+        .limit(1),
     )
 
     if row:

@@ -1,14 +1,14 @@
 import asyncio
 import time
 
+import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
-import sqlalchemy
 from sqlalchemy.sql.functions import func
 
+import app.db_models
 import app.services
 import packets
-import app.db_models
 from app.constants.privileges import Privileges
 from app.objects import glob
 
@@ -40,8 +40,8 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
                 sqlalchemy.and_(
                     app.db_models.users.c.donor_expire_time <= func.unix_timestamp(),
                     app.db_models.users.c.priv & 48,  # 48 = Supporter | Premium
-                )
-            )
+                ),
+            ),
         ):
             p = await glob.players.from_cache_or_sql(id=expired_donor["id"])
 
@@ -53,7 +53,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             await app.services.database.execute(
                 app.db_models.users.update()
                 .values(donor_end=0)
-                .where(app.db_models.users.c.id == p.id)
+                .where(app.db_models.users.c.id == p.id),
             )
 
             if p.online:

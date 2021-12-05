@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
+import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
-import databases.core
 from sqlalchemy.sql.expression import select
 
 import app.db_models
