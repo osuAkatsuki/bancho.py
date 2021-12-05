@@ -22,7 +22,12 @@ metadata = MetaData()
 maps = Table(
     "maps",
     metadata,
-    Column("server", Enum, primary_key=True),
+    Column(
+        "server",
+        Enum("osu!", "gulag"),
+        server_default="osu!",
+        primary_key=True,
+    ),
     Column("id", Integer, primary_key=True, unique=True),
     Column("set_id", Integer),
     Column("status", Integer),
@@ -52,7 +57,12 @@ mapsets = Table(
     "mapsets",
     metadata,
     # TODO: enum might need name & server_default
-    Column("server", Enum("osu!", "gulag"), primary_key=True),
+    Column(
+        "server",
+        Enum("osu!", "gulag"),
+        server_default="osu!",
+        primary_key=True,
+    ),
     Column("id", Integer, primary_key=True, unique=True),
     Column("last_osuapi_check", DateTime),
 )
