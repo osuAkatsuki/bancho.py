@@ -44,6 +44,13 @@ glob.version = cmyui.Version(3, 6, 1)
 # - install debugging hooks
 # - uvloop
 
+from app.api import middlewares
+
+
+def init_middlewares(app: FastAPI) -> None:
+    """Initialize our app's middleware stack."""
+    app.add_middleware(middlewares.MetricsMiddleware)
+
 
 def init_events(app: FastAPI) -> None:
     """Initialize our app's event handlers."""
@@ -79,6 +86,7 @@ def init_api() -> FastAPI:
     """Create & initialize our app."""
     app = FastAPI()
 
+    init_middlewares(app)
     init_events(app)
     init_routes(app)
 
