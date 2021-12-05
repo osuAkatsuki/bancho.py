@@ -15,9 +15,13 @@ from sqlalchemy import Table
 from sqlalchemy import Unicode
 from sqlalchemy.sql.sqltypes import SmallInteger
 
+
 metadata = MetaData()
 
-maps_columns = (
+
+maps = Table(
+    "maps",
+    metadata,
     Column("server", Enum, primary_key=True),
     Column("id", Integer, primary_key=True, unique=True),
     Column("set_id", Integer),
@@ -43,16 +47,18 @@ maps_columns = (
     Column("diff", Float(3)),
 )
 
-mapsets_columns = (
+
+mapsets = Table(
+    "mapsets",
+    metadata,
     # TODO: enum might need name & server_default
     Column("server", Enum("osu!", "gulag"), primary_key=True),
     Column("id", Integer, primary_key=True, unique=True),
     Column("last_osuapi_check", DateTime),
 )
 
-maps = Table("maps", metadata, *maps_columns)
-mapsets = Table("mapsets", metadata, *mapsets_columns)
 
+# NOTE: there are 3 (identical) scores tables, both vanilla, relax, and autopilot
 scores_columns = (
     Column("id", BigInteger, primary_key=True, autoincrement=True, nullable=True),
     Column("map_md5", CHAR(32)),
@@ -83,15 +89,18 @@ scores = Table("scores_vn", metadata, *deepcopy(scores_columns))
 scores_rx = Table("scores_rx", metadata, *deepcopy(scores_columns))
 scores_ap = Table("scores_ap", metadata, *deepcopy(scores_columns))
 
-favourites_columns = (
+
+favourites = Table(
+    "favourites",
+    metadata,
     Column("userid", Integer, primary_key=True),
     Column("setid", Integer, primary_key=True),
 )
 
 
-favourites = Table("favourites", metadata, *favourites_columns)
-
-users_columns = (
+users = Table(
+    "users",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("name", Unicode(32), unique=True),
     Column("safe_name", Unicode(32), unique=True),
@@ -108,7 +117,10 @@ users_columns = (
     Column("api_key", CHAR(36), unique=True),
 )
 
-stats_columns = (
+
+stats = Table(
+    "stats",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("mode", SmallInteger, primary_key=True),
     Column("tscore", BigInteger),
@@ -125,18 +137,19 @@ stats_columns = (
     Column("a_count", Integer),
 )
 
-users = Table("users", metadata, *users_columns)
-stats = Table("stats", metadata, *stats_columns)
 
-ratings_columns = (
+ratings = Table(
+    "ratings",
+    metadata,
     Column("userid", Integer, primary_key=True),
     Column("map_md5", CHAR(32), primary_key=True),
     Column("rating", SmallInteger),
 )
 
-ratings = Table("ratings", metadata, *ratings_columns)
 
-clans_columns = (
+clans = Table(
+    "clans",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("name", Unicode(16), unique=True),
     Column("tag", Unicode(6), unique=True),
@@ -144,9 +157,10 @@ clans_columns = (
     Column("created_at", DateTime),
 )
 
-clans = Table("clans", metadata, *clans_columns)
 
-comments_columns = (
+comments = Table(
+    "comments",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("target_id", Integer),
     Column("target_type", Enum("replay", "map", "song")),
@@ -156,9 +170,10 @@ comments_columns = (
     Column("colour", CHAR(6)),
 )
 
-comments = Table("comments", metadata, *comments_columns)
 
-channels_columns = (
+channels = Table(
+    "channels",
+    metadata,
     Column("id", Integer, primary_key=True),
     Column("name", String(32), unique=True),
     Column("topic", String(256)),
@@ -167,7 +182,10 @@ channels_columns = (
     Column("auto_join", Boolean),
 )
 
-mail_columns = (
+
+mail = Table(
+    "mail",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("from_id", Integer),
     Column("to_id", Integer),
@@ -176,10 +194,10 @@ mail_columns = (
     Column("read", Boolean),
 )
 
-channels = Table("channels", metadata, *channels_columns)
-mail = Table("mail", metadata, *mail_columns)
 
-ingame_logins_columns = (
+ingame_logins = Table(
+    "ingame_logins",
+    metadata,
     Column("id", Integer, autoincrement=True, primary_key=True),
     Column("userid", Integer),
     Column("ip", String(45)),
@@ -188,7 +206,10 @@ ingame_logins_columns = (
     Column("datetime", DateTime),
 )
 
-client_hashes_columns = (
+
+client_hashes = Table(
+    "client_hashes",
+    metadata,
     Column("userid", Integer, primary_key=True),
     Column("osupath", CHAR(32), primary_key=True),
     Column("adapters", CHAR(32), primary_key=True),
@@ -198,27 +219,30 @@ client_hashes_columns = (
     Column("occurrences", Integer, primary_key=True),
 )
 
-ingame_logins = Table("ingame_logins", metadata, *ingame_logins_columns)
-client_hashes = Table("client_hashes", metadata, *client_hashes_columns)
 
-tourney_pools_columns = (
+tourney_pools = Table(
+    "tourney_pools",
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(16)),
     Column("created_at", DateTime),
     Column("created_by", Integer),
 )
 
-tourney_pool_maps_columns = (
+
+tourney_pool_maps = Table(
+    "tourney_pool_maps",
+    metadata,
     Column("map_id", Integer, primary_key=True),
     Column("pool_id", Integer, primary_key=True),
     Column("mods", Integer),
     Column("slot", SmallInteger),
 )
 
-tourney_pools = Table("tourney_pools", metadata, *tourney_pools_columns)
-tourney_pool_maps = Table("tourney_pool_maps", metadata, *tourney_pool_maps_columns)
 
-achievements_columns = (
+achievements = Table(
+    "achievements",
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("file", String(128), unique=True),
     Column("name", Unicode(128), unique=True),
@@ -226,9 +250,10 @@ achievements_columns = (
     Column("cond", String(64)),
 )
 
-achievements = Table("achievements", metadata, *achievements_columns)
 
-logs_columns = (
+logs = Table(
+    "logs",
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("from", Integer),
     Column("to", Integer),
@@ -236,24 +261,27 @@ logs_columns = (
     Column("time", DateTime),
 )
 
-logs = Table("logs", metadata, *logs_columns)
 
-relationships_columns = (
+relationships = Table(
+    "relationships",
+    metadata,
     Column("user1", Integer, primary_key=True),
     Column("user2", Integer, primary_key=True),
     Column("type", Enum("friend", "block")),
 )
 
-relationships = Table("relationships", metadata, *relationships_columns)
 
-user_achievements_columns = (
+user_achievements = Table(
+    "user_achievements",
+    metadata,
     Column("userid", Integer, primary_key=True),
     Column("achid", Integer, primary_key=True),
 )
 
-user_achievements = Table("user_achievements", metadata, *user_achievements_columns)
 
-map_requests_columns = (
+map_requests = Table(
+    "map_requests",
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("map_id", Integer),
     Column("player_id", Integer),
@@ -261,14 +289,13 @@ map_requests_columns = (
     Column("active", Boolean),
 )
 
-map_requests = Table("map_requests", metadata, *map_requests_columns)
 
-startups_columns = (
+startups = Table(
+    "startups",
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("ver_major", SmallInteger),
     Column("ver_minor", SmallInteger),
     Column("ver_micro", SmallInteger),
     Column("datetime", DateTime),
 )
-
-startups = Table("startups", metadata, *startups_columns)
