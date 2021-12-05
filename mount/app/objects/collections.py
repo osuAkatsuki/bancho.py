@@ -466,39 +466,40 @@ class Clans(list[Clan]):
             await clan.members_from_sql(db_conn)
 
 
-async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
+async def populate_sessions() -> None:
     """Setup & cache the global collections before listening for connections."""
-    # static (inactive) sets, in ram & sql
-    await sessions.channels.prepare(db_conn)
-    await sessions.clans.prepare(db_conn)
-    await sessions.pools.prepare(db_conn)
+    async with services.database.connection() as db_conn:
+        # fetch all channels, clans, and pools from db
+        await sessions.channels.prepare(db_conn)
+        await sessions.clans.prepare(db_conn)
+        await sessions.pools.prepare(db_conn)
 
-    bot_name = await utils.fetch_bot_name(db_conn)
-
-    # create bot & add it to online players
-    sessions.bot = Player(
-        id=1,
-        name=bot_name,
-        login_time=float(0x7FFFFFFF),  # (never auto-dc)
-        priv=Privileges.NORMAL,
-        bot_client=True,
-    )
-    sessions.players.append(sessions.bot)
-
-    async for row in db_conn.iterate(db_models.achievements.select()):
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
-
-        sessions.achievements.append(achievement)
-
-    # static api keys
-    glob.api_keys = {
-        row["api_key"]: row["id"]
-        async for row in db_conn.iterate(
-            select([db_models.users.c.id, db_models.users.c.api_key]).where(
-                db_models.users.c.api_key.isnot(None),
-            ),
+        # fetch bot information from db
+        bot_name = await utils.fetch_bot_name(db_conn)
+        sessions.bot = Player(
+            id=1,
+            name=bot_name,
+            login_time=float(0x7FFFFFFF),  # (never auto-dc)
+            priv=Privileges.NORMAL,
+            bot_client=True,
         )
-    }
+        sessions.players.append(sessions.bot)
+
+        # fetch all achievements from db
+        async for row in db_conn.iterate(db_models.achievements.select()):
+            # NOTE: achievement conditions are stored as stringified python
+            # expressions in the database to allow for extensive customizability.
+            condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
+            achievement = Achievement(**row, cond=condition)
+
+            sessions.achievements.append(achievement)
+
+        # fetch user api keys from db
+        sessions.api_keys = {
+            row["api_key"]: row["id"]
+            async for row in db_conn.iterate(
+                select([db_models.users.c.id, db_models.users.c.api_key]).where(
+                    db_models.users.c.api_key.isnot(None),
+                ),
+            )
+        }
