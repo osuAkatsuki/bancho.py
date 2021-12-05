@@ -1,11 +1,6 @@
 from typing import TYPE_CHECKING
 
 import config  # pylint: disable=unused-import
-from app.objects.collections import Channels
-from app.objects.collections import Clans
-from app.objects.collections import MapPools
-from app.objects.collections import Matches
-from app.objects.collections import Players
 
 # this file contains no actualy definitions
 if TYPE_CHECKING:
@@ -21,9 +16,7 @@ if TYPE_CHECKING:
     from cmyui.version import Version
     from cmyui.web import Server
     from datadog import ThreadStats
-    from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap, BeatmapSet
-    from app.objects.player import Player
 
     # from app.objects.score import Score
     from packets import BasePacket, ClientPackets
@@ -69,15 +62,6 @@ __all__ = (
 # server object
 app: "Server"
 
-# current server state
-players = Players()
-channels = Channels()
-matches = Matches()
-clans = Clans()
-pools = MapPools()
-achievements: list["Achievement"] = []
-
-bot: "Player"
 version: "Version"
 
 geoloc_db: "Optional[geoip2.database.Reader]"

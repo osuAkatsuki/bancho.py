@@ -21,6 +21,8 @@ from sqlalchemy.sql.functions import func
 
 import app.db_models
 import app.services
+import app.sessions
+import app.settings
 import packets
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -443,13 +445,13 @@ class Player:
 
         # remove from playerlist and
         # enqueue logout to all users.
-        glob.players.remove(self)
+        app.sessions.players.remove(self)
 
         if not self.restricted:
             if glob.datadog:
                 glob.datadog.decrement("gulag.online_players")
 
-            glob.players.enqueue(packets.logout(self.id))
+            app.sessions.players.enqueue(packets.logout(self.id))
 
         log(f"{self} logged out.", Ansi.LYELLOW)
 
@@ -523,7 +525,7 @@ class Player:
 
         if webhook_url := glob.config.webhooks["audit-log"]:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.services.http_session)
+            await webhook.post(app.services.http)
 
         if self.online:
             # log the user out if they're offline, this
@@ -557,7 +559,7 @@ class Player:
 
         if webhook_url := glob.config.webhooks["audit-log"]:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.services.http_session)
+            await webhook.post(app.services.http)
 
         if self.online:
             # log the user out if they're offline, this
@@ -591,7 +593,7 @@ class Player:
         self.enqueue(packets.silence_end(duration))
 
         # wipe their messages from any channels.
-        glob.players.enqueue(packets.user_silenced(self.id))
+        app.sessions.players.enqueue(packets.user_silenced(self.id))
 
         # remove them from multiplayer match (if any).
         if self.match:
@@ -644,7 +646,7 @@ class Player:
             # match already exists, we're simply joining.
             # NOTE: staff members have override to pw and can
             # simply use any to join a pw protected match.
-            if passwd != m.passwd and self not in glob.players.staff:
+            if passwd != m.passwd and self not in app.sessions.players.staff:
                 log(f"{self} tried to join {m} w/ incorrect pw.", Ansi.LYELLOW)
                 self.enqueue(packets.match_join_fail())
                 return False
@@ -661,7 +663,7 @@ class Player:
             log(f"{self} failed to join {m.chat}.", Ansi.LYELLOW)
             return False
 
-        if (lobby := glob.channels["#lobby"]) in self.channels:
+        if (lobby := app.sessions.channels["#lobby"]) in self.channels:
             self.leave_channel(lobby)
 
         slot: Slot = m.slots[0 if slotID == -1 else slotID]
@@ -716,9 +718,9 @@ class Player:
                 self.match.starting["alerts"] = None
                 self.match.starting["time"] = None
 
-            glob.matches.remove(self.match)
+            app.sessions.matches.remove(self.match)
 
-            if lobby := glob.channels["#lobby"]:
+            if lobby := app.sessions.channels["#lobby"]:
                 lobby.enqueue(packets.dispose_match(self.match.id))
 
         else:
@@ -782,7 +784,7 @@ class Player:
         else:
             # normal channel, send to all players who
             # have access to see the channel's usercount.
-            for p in glob.players:
+            for p in app.sessions.players:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
@@ -813,7 +815,7 @@ class Player:
         else:
             # normal channel, send to all players who
             # have access to see the channel's usercount.
-            for p in glob.players:
+            for p in app.sessions.players:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
@@ -824,7 +826,7 @@ class Player:
         """Attempt to add `p` to `self`'s spectators."""
         chan_name = f"#spec_{self.id}"
 
-        if not (spec_chan := glob.channels[chan_name]):
+        if not (spec_chan := app.sessions.channels[chan_name]):
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
                 name=chan_name,
@@ -834,7 +836,7 @@ class Player:
             )
 
             self.join_channel(spec_chan)
-            glob.channels.append(spec_chan)
+            app.sessions.channels.append(spec_chan)
 
         # attempt to join their spectator channel.
         if not p.join_channel(spec_chan):
@@ -864,7 +866,7 @@ class Player:
         self.spectators.remove(p)
         p.spectating = None
 
-        c = glob.channels[f"#spec_{self.id}"]
+        c = app.sessions.channels[f"#spec_{self.id}"]
         p.leave_channel(c)
 
         if not self.spectators:
@@ -934,7 +936,8 @@ class Player:
         )
 
         duplicate_format = insert_data.on_duplicate_key_update(
-            data=insert_data.inserted.data, status="U",
+            data=insert_data.inserted.data,
+            status="U",
         )
 
         await app.services.database.execute(duplicate_format)
@@ -993,7 +996,7 @@ class Player:
                 app.db_models.user_achievements.c.achid.label("id"),
             ).where(app.db_models.user_achievements.c.userid == self.id),
         ):
-            for ach in glob.achievements:
+            for ach in app.sessions.achievements:
                 if row["id"] == ach.id:
                     self.achievements.add(ach)
 
@@ -1001,7 +1004,10 @@ class Player:
         if self.restricted:
             return 0
 
-        rank = await glob.redis.zrevrank(f"gulag:leaderboard:{mode.value}", self.id)
+        rank = await app.services.redis.zrevrank(
+            f"gulag:leaderboard:{mode.value}",
+            self.id,
+        )
         return rank + 1 if rank is not None else 0
 
     async def get_country_rank(self, mode: GameMode) -> int:
@@ -1009,7 +1015,7 @@ class Player:
             return 0
 
         country = self.geoloc["country"]["acronym"]
-        rank = await glob.redis.zrevrank(
+        rank = await app.services.redis.zrevrank(
             f"gulag:leaderboard:{mode.value}:{country}",
             self.id,
         )
@@ -1020,11 +1026,11 @@ class Player:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
 
-        await glob.redis.zadd(
+        await app.services.redis.zadd(
             f"gulag:leaderboard:{mode.value}",
             {self.id: stats.pp},
         )
-        await glob.redis.zadd(
+        await app.services.redis.zadd(
             f"gulag:leaderboard:{mode.value}:{country}",
             {self.id: stats.pp},
         )
@@ -1053,6 +1059,7 @@ class Player:
             ).where(app.db_models.stats.c.userid == self.id),
         )
 
+        # TODO: clean this up
         for mode, row in enumerate([dict(row) for row in rows]):
             # calculate player's rank.
             row["rank"] = await self.get_global_rank(GameMode(mode))
@@ -1074,7 +1081,7 @@ class Player:
         # wipe any messages the client can see from the bot
         # (including any other channels). perhaps menus can
         # be sent from a separate presence to prevent this?
-        self.enqueue(packets.user_silenced(glob.bot.id))
+        self.enqueue(packets.user_silenced(app.sessions.bot.id))
 
     def send_current_menu(self) -> None:
         """Forward a standardized form of the user's
@@ -1128,7 +1135,7 @@ class Player:
 
     def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to `self` from bot."""
-        bot = glob.bot
+        bot = app.sessions.bot
 
         self.enqueue(
             packets.send_message(

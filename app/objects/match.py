@@ -18,6 +18,8 @@ from cmyui.logging import log
 from sqlalchemy.sql.expression import select
 
 import app.db_models
+import app.services
+import app.sessions
 import app.settings
 import packets
 from app.constants import regexes
@@ -25,7 +27,6 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.misc.utils import escape_enum
 from app.misc.utils import pymysql_encode
-from app.objects import glob
 from app.objects.beatmap import Beatmap
 
 if TYPE_CHECKING:
@@ -406,7 +407,7 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        if lobby and (lchan := glob.channels["#lobby"]) and lchan.players:
+        if lobby and (lchan := app.sessions.channels["#lobby"]) and lchan.players:
             lchan.enqueue(data)
 
     def enqueue_state(self, lobby: bool = True) -> None:
@@ -416,7 +417,7 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(packets.update_match(self, send_pw=True))
 
-        if lobby and (lchan := glob.channels["#lobby"]) and lchan.players:
+        if lobby and (lchan := app.sessions.channels["#lobby"]) and lchan.players:
             lchan.enqueue(packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:

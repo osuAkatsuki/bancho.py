@@ -17,12 +17,13 @@ from sqlalchemy.sql.functions import func
 
 import app.db_models
 import app.services
+import app.sessions
+import app.settings
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.misc.utils import escape_enum
 from app.misc.utils import pymysql_encode
-from app.objects import glob
 from app.objects.beatmap import Beatmap
 
 if TYPE_CHECKING:
@@ -237,7 +238,7 @@ class Score:
 
         s.id = res[0]
         s.bmap = await Beatmap.from_md5(res[1])
-        s.player = await glob.players.from_cache_or_sql(id=res[2])
+        s.player = await app.sessions.players.from_cache_or_sql(id=res[2])
 
         s.sr = 0.0  # TODO
 

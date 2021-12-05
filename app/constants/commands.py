@@ -37,6 +37,8 @@ from sqlalchemy.sql.functions import func
 import app.db_models
 import app.misc.utils
 import app.services
+import app.sessions
+import app.settings
 import packets
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -203,12 +205,12 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
     if not target:
         return "User not found."
 
-    if target is glob.bot or target is ctx.player:
+    if target is app.sessions.bot or target is ctx.player:
         return "What?"
 
     if target.id in ctx.player.blocks:
@@ -224,12 +226,12 @@ async def block(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
     if not target:
         return "User not found."
 
-    if target is glob.bot or target is ctx.player:
+    if target is app.sessions.bot or target is ctx.player:
         return "What?"
 
     if target.id not in ctx.player.blocks:
@@ -309,7 +311,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 async def recent(ctx: Context) -> Optional[str]:
     """Show information about a player's most recent score."""
     if ctx.args:
-        if not (target := glob.players.get(name=" ".join(ctx.args))):
+        if not (target := app.sessions.players.get(name=" ".join(ctx.args))):
             return "Player not found."
     else:
         target = ctx.player
@@ -373,7 +375,7 @@ async def top(ctx: Context) -> Optional[str]:
             return "Invalid username."
 
         # specific player provided
-        if not (p := await glob.players.from_cache_or_sql(name=ctx.args[1])):
+        if not (p := await app.sessions.players.from_cache_or_sql(name=ctx.args[1])):
             return "Player not found."
     else:
         # no player provided, use self
@@ -417,7 +419,7 @@ async def top(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, aliases=["w"], hidden=True)
 async def _with(ctx: Context) -> Optional[str]:
     """Specify custom accuracy & mod combinations with `/np`."""
-    if ctx.recipient is not glob.bot:
+    if ctx.recipient is not app.sessions.bot:
         return "This command can only be used in DM with bot."
 
     if time.time() >= ctx.player.last_np["timeout"]:
@@ -585,8 +587,8 @@ async def request(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL)
 async def get_apikey(ctx: Context) -> Optional[str]:
     """Generate a new api key & assign it to the player."""
-    if ctx.recipient is not glob.bot:
-        return f"Command only available in DMs with {glob.bot.name}."
+    if ctx.recipient is not app.sessions.bot:
+        return f"Command only available in DMs with {app.sessions.bot.name}."
 
     # remove old token
     if ctx.player.api_key:
@@ -635,7 +637,7 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in res:
         # find player & map for each row, and add to output.
-        if not (p := await glob.players.from_cache_or_sql(id=player_id)):
+        if not (p := await app.sessions.players.from_cache_or_sql(id=player_id)):
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
@@ -735,7 +737,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 2 or not ctx.args[1].isdecimal():
         return "Invalid syntax: !notes <name> <days_back>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     days = int(ctx.args[1])
@@ -774,7 +776,7 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
@@ -813,7 +815,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -840,7 +842,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !unsilence <name>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if not t.silenced:
@@ -867,7 +869,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+        p = await app.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
         if not p:
             return "Player not found."
@@ -915,7 +917,7 @@ async def restrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !restrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -941,7 +943,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -968,7 +970,7 @@ async def alert(ctx: Context) -> Optional[str]:
 
     notif_txt = " ".join(ctx.args)
 
-    glob.players.enqueue(packets.notification(notif_txt))
+    app.sessions.players.enqueue(packets.notification(notif_txt))
     return "Alert sent."
 
 
@@ -978,7 +980,7 @@ async def alertuser(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !alertu <name> <msg>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     notif_txt = " ".join(ctx.args[1:])
@@ -1028,7 +1030,7 @@ async def shutdown(ctx: Context) -> Optional[str]:
                 f'Reason: {" ".join(ctx.args[1:])}'
             )
 
-            glob.players.enqueue(packets.notification(alert_msg))
+            app.sessions.players.enqueue(packets.notification(alert_msg))
 
         glob.loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f"Enqueued {ctx.trigger}."
@@ -1132,7 +1134,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
         # extend all added fakes to the real list
         _fake_users.extend(new_fakes)
-        glob.players.extend(new_fakes)
+        app.sessions.players.extend(new_fakes)
         del new_fakes
 
         msg = "Added."
@@ -1153,7 +1155,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
             data += fake.id.to_bytes(4, "little")  # 4 bytes pid
             data += b"\x00"  # 1 byte 0
 
-            glob.players.remove(fake)
+            app.sessions.players.remove(fake)
             _fake_users.remove(fake)
 
         msg = "Removed."
@@ -1161,7 +1163,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     data = bytes(data)  # bytearray -> bytes
 
     # only enqueue data to real users.
-    for o in [x for x in glob.players if x.id < FAKE_ID_START]:
+    for o in [x for x in app.sessions.players if x.id < FAKE_ID_START]:
         o.enqueue(data)
 
     return msg
@@ -1226,14 +1228,15 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                         await db_conn.execute(
                             alchemy_table.update().values(
-                                pp=ezpp.get_pp(), id=row["id"],
+                                pp=ezpp.get_pp(),
+                                id=row["id"],
                             ),
                         )
 
         return "Map recalculated."
     else:
         # recalc all plays on the server, on all maps
-        staff_chan = glob.channels["#staff"]  # log any errs here
+        staff_chan = app.sessions.channels["#staff"]  # log any errs here
 
         async def recalc_all() -> None:
             staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
@@ -1294,7 +1297,8 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                                 await db_conn.execute(
                                     alchemy_table.update().values(
-                                        pp=ezpp.get_pp(), id=row["id"],
+                                        pp=ezpp.get_pp(),
+                                        id=row["id"],
                                     ),
                                 )
 
@@ -1348,7 +1352,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
     await t.add_privs(bits)
@@ -1369,7 +1373,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
     await t.remove_privs(bits)
@@ -1528,7 +1532,7 @@ if glob.config.advanced:
         """Allow for (async) access to the python interpreter."""
         # This can be very good for getting used to gulag's API; just look
         # around the codebase and find things to play with in your server.
-        # Ex: !py return (await glob.players.get(name='cmyui')).status.action
+        # Ex: !py return (await app.sessions.players.get(name='cmyui')).status.action
         if not ctx.args:
             return "owo"
 
@@ -1765,7 +1769,7 @@ async def mp_host(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp host <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t is ctx.match.host:
@@ -1793,10 +1797,10 @@ async def mp_invite(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp invite <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t is glob.bot:
+    if t is app.sessions.bot:
         return "I'm too busy!"
 
     if t is ctx.player:
@@ -1812,7 +1816,7 @@ async def mp_addref(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t not in ctx.match:
@@ -1831,7 +1835,7 @@ async def mp_rmref(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t not in ctx.match.refs:
@@ -2039,7 +2043,7 @@ async def mp_force(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp force <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     t.join_match(ctx.match, ctx.match.passwd)
@@ -2060,7 +2064,7 @@ async def mp_loadpool(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if ctx.match.pool is pool:
@@ -2224,7 +2228,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if glob.pools.get_by_name(name):
+    if app.sessions.pools.get_by_name(name):
         return "Pool already exists by that name!"
 
     # insert pool into db
@@ -2243,9 +2247,11 @@ async def pool_create(ctx: Context) -> Optional[str]:
         ),
     )
 
-    res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
+    res["created_by"] = await app.sessions.players.from_cache_or_sql(
+        id=res["created_by"],
+    )
 
-    glob.pools.append(MapPool(**res))
+    app.sessions.pools.append(MapPool(**res))
 
     return f"{name} created."
 
@@ -2258,7 +2264,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     # delete from db
@@ -2269,7 +2275,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
     )
 
     # remove from cache
-    glob.pools.remove(pool)
+    app.sessions.pools.remove(pool)
 
     return f"{name} deleted."
 
@@ -2298,7 +2304,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if (mods, slot) in pool.maps:
@@ -2340,7 +2346,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if (mods, slot) not in pool.maps:
@@ -2365,7 +2371,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
 @pool_commands.add(Privileges.TOURNAMENT, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> Optional[str]:
     """List all existing mappools information."""
-    if not (pools := glob.pools):
+    if not (pools := app.sessions.pools):
         return "There are currently no pools!"
 
     l = [f"Mappools ({len(pools)})"]
@@ -2387,7 +2393,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     _time = pool.created_at.strftime("%H:%M:%S%p")
@@ -2438,10 +2444,10 @@ async def clan_create(ctx: Context) -> Optional[str]:
     if ctx.player.clan:
         return f"You're already a member of {ctx.player.clan}!"
 
-    if glob.clans.get(name=name):
+    if app.sessions.clans.get(name=name):
         return "That name has already been claimed by another clan."
 
-    if glob.clans.get(tag=tag):
+    if app.sessions.clans.get(tag=tag):
         return "That tag has already been claimed by another clan."
 
     created_at = datetime.now()
@@ -2464,7 +2470,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
         created_at=created_at,
         owner=ctx.player.id,
     )
-    glob.clans.append(clan)
+    app.sessions.clans.append(clan)
 
     # set owner's clan & clan priv (cache & sql)
     ctx.player.clan = clan
@@ -2483,7 +2489,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     )
 
     # announce clan creation
-    if announce_chan := glob.channels["#announce"]:
+    if announce_chan := app.sessions.channels["#announce"]:
         msg = f"\x01ACTION founded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
@@ -2495,10 +2501,10 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     """Disband a clan (admins may disband others clans)."""
     if ctx.args:
         # disband a specified clan by tag
-        if ctx.player not in glob.players.staff:
+        if ctx.player not in app.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        if not (clan := glob.clans.get(tag=" ".join(ctx.args).upper())):
+        if not (clan := app.sessions.clans.get(tag=" ".join(ctx.args).upper())):
             return "Could not find a clan by that tag."
     else:
         # disband the player's clan
@@ -2514,7 +2520,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.members:
-        if member := glob.players.get(id=member_id):
+        if member := app.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
             if "full_name" in member.__dict__:
@@ -2527,10 +2533,10 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     )
 
     # remove clan from cache
-    glob.clans.remove(clan)
+    app.sessions.clans.remove(clan)
 
     # announce clan disbanding
-    if announce_chan := glob.channels["#announce"]:
+    if announce_chan := app.sessions.channels["#announce"]:
         msg = f"\x01ACTION disbanded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
@@ -2543,7 +2549,7 @@ async def clan_info(ctx: Context) -> Optional[str]:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    if not (clan := glob.clans.get(tag=" ".join(ctx.args).upper())):
+    if not (clan := app.sessions.clans.get(tag=" ".join(ctx.args).upper())):
         return "Could not find a clan by that tag."
 
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
@@ -2581,12 +2587,12 @@ async def clan_list(ctx: Context) -> Optional[str]:
     else:
         offset = 0
 
-    if offset >= (total_clans := len(glob.clans)):
+    if offset >= (total_clans := len(app.sessions.clans)):
         return "No clans found."
 
     msg = [f"gulag clans listing ({total_clans} total)."]
 
-    for idx, clan in enumerate(glob.clans, offset):
+    for idx, clan in enumerate(app.sessions.clans, offset):
         msg.append(f"{idx + 1}. {clan!r}")
 
     return "\n".join(msg)

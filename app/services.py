@@ -1,11 +1,18 @@
+import importlib.metadata
 import ipaddress
+import pickle
+import secrets
 from pathlib import Path
+from typing import AsyncGenerator
 from typing import Optional
 from typing import TypedDict
 
 import aiohttp
+import aioredis
+import cmyui
 import databases
 import geoip2.database
+from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.logging import Rainbow
@@ -14,18 +21,26 @@ import app.misc.utils
 import app.settings
 from app.constants.countries import country_codes
 
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
-
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
+STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
+GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
-# create our sessions
-database = databases.Database(app.settings.DB_DSN)
-geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
-# TODO: redis
-http_session = aiohttp.ClientSession(
+
+""" session objects """
+
+http = aiohttp.ClientSession(
     json_serialize=app.misc.utils.orjson_serialize_to_str,
 )
+
+database = databases.Database(app.settings.DB_DSN)
+
+redis = aioredis.from_url("redis://localhost")
+
+geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
+
+
+""" session usecases """
 
 
 class Country(TypedDict):
@@ -51,7 +66,10 @@ def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
     return {
         "latitude": res.location.latitude or 0.0,
         "longitude": res.location.longitude or 0.0,
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
+        "country": {
+            "acronym": acronym,
+            "numeric": country_codes[acronym],
+        },
     }
 
 
@@ -59,7 +77,7 @@ async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
     url = f"http://ip-api.com/line/{ip}"
 
-    async with http_session.get(url) as resp:
+    async with http.get(url) as resp:
         if not resp or resp.status != 200:
             log("Failed to get geoloc data: request failed.", Ansi.LRED)
             return
@@ -79,28 +97,24 @@ async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     return {
         "latitude": float(lines[6]),
         "longitude": float(lines[7]),
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
+        "country": {
+            "acronym": acronym,
+            "numeric": country_codes[acronym],
+        },
     }
-
-
-import pickle
-import secrets
-from app.objects import glob
-
-STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
 
 async def log_strange_occurrence(obj: object) -> None:
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
-    if glob.config.automatically_report_problems:
+    if app.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
-        async with http_session.post(
+        async with http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": repr(glob.version),
-                "Gulag-Domain": glob.config.domain,
+                "Gulag-Version": app.settings.VERSION,
+                "Gulag-Domain": app.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:
@@ -134,12 +148,6 @@ async def log_strange_occurrence(obj: object) -> None:
 
 
 # dependency management
-from typing import AsyncGenerator
-
-import cmyui
-from cmyui.logging import Ansi
-from cmyui.logging import log
-import importlib.metadata
 
 
 async def _get_latest_dependency_versions() -> AsyncGenerator[
@@ -161,7 +169,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
 
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency}/json"
-        async with http_session.get(url) as resp:
+        async with http.get(url) as resp:
             if resp.status == 200 and (json := await resp.json()):
                 latest_ver = cmyui.Version.from_str(json["info"]["version"])
 

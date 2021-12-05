@@ -8,6 +8,8 @@ from sqlalchemy.sql.functions import func
 
 import app.db_models
 import app.services
+import app.sessions
+import app.settings
 import packets
 from app.constants.privileges import Privileges
 from app.objects import glob
@@ -32,7 +34,7 @@ async def initialize_housekeeping_tasks() -> None:
 async def _remove_expired_donation_privileges(interval: int) -> None:
     """Remove donation privileges from users with expired sessions."""
     while True:
-        if glob.app.debug:
+        if app.settings.DEBUG:
             log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
         async for expired_donor in app.services.database.iterate(
@@ -43,7 +45,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
                 ),
             ),
         ):
-            p = await glob.players.from_cache_or_sql(id=expired_donor["id"])
+            p = await app.sessions.players.from_cache_or_sql(id=expired_donor["id"])
 
             if not p:  # TODO guaranteed return method
                 continue
@@ -71,7 +73,7 @@ async def _disconnect_ghosts(interval: int) -> None:
         await asyncio.sleep(interval)
         current_time = time.time()
 
-        for p in glob.players:
+        for p in app.sessions.players:
             if current_time - p.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f"Auto-dced {p}.", Ansi.LMAGENTA)
                 p.logout()

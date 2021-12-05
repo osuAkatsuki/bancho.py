@@ -47,7 +47,7 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
 
     params["k"] = glob.config.osu_api_key
 
-    async with app.services.http_session.get(
+    async with app.services.http.get(
         OSUAPI_GET_BEATMAPS,
         params=params,
     ) as resp:
@@ -71,7 +71,7 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.services.http_session.get(url) as r:
+        async with app.services.http.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
                 stacktrace = app.misc.utils.get_appropriate_stacktrace()
@@ -711,7 +711,8 @@ class BeatmapSet:
             )
 
             duplicate_format = insert_data.on_duplicate_key_update(
-                data=insert_data.inserted.data, status="U",
+                data=insert_data.inserted.data,
+                status="U",
             )
             await db_conn.execute(duplicate_format)
 
@@ -820,11 +821,9 @@ class BeatmapSet:
                     )
 
                     await db_conn.execute(
-                        app.db_models.maps.update(
-                            values={
-                                "filename": bmap.filename,
-                            },
-                        ).where(app.db_models.maps.c.id == bmap.id),
+                        app.db_models.maps.update()
+                        .values(filename=bmap.filename)
+                        .where(app.db_models.maps.c.id == bmap.id),
                     )
 
                 bmap.set = bmap_set

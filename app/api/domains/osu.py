@@ -46,12 +46,15 @@ from sqlalchemy.sql.expression import insert
 from sqlalchemy.sql.expression import join
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.expression import update
+from sqlalchemy.sql.functions import coalesce
+from sqlalchemy.sql.functions import concat
 from sqlalchemy.sql.functions import func
 from starlette.responses import RedirectResponse
 
 import app.db_models
 import app.misc.utils
 import app.services
+import app.sessions
 import app.settings
 import packets
 from app.constants import regexes
@@ -127,7 +130,7 @@ async def osuError(
 
     if username and pw_md5:
         if not (
-            player := await glob.players.from_login(
+            player := await app.sessions.players.from_login(
                 name=unquote(username),
                 pw_md5=pw_md5,
             )
@@ -156,7 +159,7 @@ async def osuScreenshot(
     screenshot_data: bytes = File(..., alias="ss"),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -210,7 +213,7 @@ async def osuGetFriends(
     pw_md5: str = Form(..., alias="h"),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -241,7 +244,7 @@ async def osuGetBeatmapInfo(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -312,7 +315,7 @@ async def osuGetFavourites(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -337,7 +340,7 @@ async def osuAddFavourite(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -378,7 +381,7 @@ async def lastFM(
     pw_md5: str = Query(..., alias="ha"),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -397,7 +400,10 @@ async def lastFM(
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
-        await player.restrict(admin=glob.bot, reason=f"hq!osu running ({flags})")
+        await player.restrict(
+            admin=app.sessions.bot,
+            reason=f"hq!osu running ({flags})",
+        )
         return b"-3"
 
     if flags & ClientFlags.REGISTRY_EDITS:
@@ -408,7 +414,7 @@ async def lastFM(
 
         if random.randrange(32) == 0:
             # Random chance (1/32) for a ban.
-            await player.restrict(admin=glob.bot, reason="hq!osu relife 1/32")
+            await player.restrict(admin=app.sessions.bot, reason="hq!osu relife 1/32")
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
@@ -469,7 +475,7 @@ async def osuSearchHandler(
     page_num: int = Query(..., alias="p"),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -497,7 +503,7 @@ async def osuSearchHandler(
         status = RankedStatus.from_osudirect(ranked_status)
         params["status"] = status.osu_api
 
-    async with app.services.http_session.get(search_url, params=params) as resp:
+    async with app.services.http.get(search_url, params=params) as resp:
         if not resp:
             stacktrace = app.misc.utils.get_appropriate_stacktrace()
             await app.services.log_strange_occurrence(stacktrace)
@@ -560,7 +566,7 @@ async def osuSearchSetHandler(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -658,7 +664,7 @@ async def osuSubmitModularSelector(
         return b"error: beatmap"
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
-    if not (player := await glob.players.from_login(username, pw_md5)):
+    if not (player := await app.sessions.players.from_login(username, pw_md5)):
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
@@ -704,7 +710,7 @@ async def osuSubmitModularSelector(
         score.player.status.mode = score.mode
 
         if not score.player.restricted:
-            glob.players.enqueue(packets.user_stats(score.player))
+            app.sessions.players.enqueue(packets.user_stats(score.player))
 
     scores_table = score.mode.scores_table
     mode_vn = score.mode.as_vanilla
@@ -738,7 +744,7 @@ async def osuSubmitModularSelector(
 
         if score.pp > pp_cap:
             await score.player.restrict(
-                admin=glob.bot,
+                admin=app.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
 
@@ -767,7 +773,7 @@ async def osuSubmitModularSelector(
 
             if score.rank == 1 and not score.player.restricted:
                 # this is the new #1, post the play to #announce.
-                announce_chan = glob.channels["#announce"]
+                announce_chan = app.sessions.channels["#announce"]
 
                 # Announce the user's #1 score.
                 # TODO: truncate artist/title/version to fit on screen
@@ -827,7 +833,7 @@ async def osuSubmitModularSelector(
         )
 
     score.id = await db_conn.execute(
-        insert(alchemy_table)
+        alchemy_table.insert()
         .values(
             id=None,
             map_md5=score.bmap.md5,
@@ -861,7 +867,7 @@ async def osuSubmitModularSelector(
         if len(replay_data) < 24 and not score.player.restricted:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
             await score.player.restrict(
-                admin=glob.bot,
+                admin=app.sessions.bot,
                 reason="submitted score with no replay",
             )
         else:
@@ -990,7 +996,7 @@ async def osuSubmitModularSelector(
             ),
         ),
     )
-    glob.players.enqueue(packets.user_stats(score.player))
+    app.sessions.players.enqueue(packets.user_stats(score.player))
 
     if not score.player.restricted:
         # update beatmap with new stats
@@ -1022,7 +1028,7 @@ async def osuSubmitModularSelector(
         # construct and send achievements & ranking charts to the client
         if score.bmap.awards_ranked_pp and not score.player.restricted:
             achievements = []
-            for ach in glob.achievements:
+            for ach in app.sessions.achievements:
                 if ach in score.player.achievements:
                     # player already has this achievement.
                     continue
@@ -1121,7 +1127,7 @@ async def getReplay(
     score_id: int = Query(..., alias="c"),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -1145,12 +1151,12 @@ async def getReplay(
 async def osuRate(
     username: str = Query(..., alias="u"),
     pw_md5: str = Query(..., alias="p"),
-    map_md5: str = Query(..., alias="c", max_length=32, min_length=32),
+    map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -1228,8 +1234,8 @@ SCORE_LISTING_FMTSTR = (
 async def getScores(
     get_scores: bool = Query(..., alias="s"),  # NOTE: this is flipped
     leaderboard_version: int = Query(..., alias="vv"),
-    leaderboard_type: LeaderboardType = Query(..., alias="v"),
-    map_md5: str = Query(..., alias="c", max_length=32, min_length=32),
+    leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
+    map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     map_filename: str = Query(..., alias="f"),  # TODO: regex?
     mode_vn: int = Query(..., alias="m", ge=0, le=3),
     map_set_id: int = Query(..., alias="i", ge=0, le=2_147_483_647),
@@ -1241,7 +1247,7 @@ async def getScores(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -1267,7 +1273,7 @@ async def getScores(
         player.status.mode = mode
 
         if not player.restricted:
-            glob.players.enqueue(packets.user_stats(player))
+            app.sessions.players.enqueue(packets.user_stats(player))
 
     scores_table = mode.scores_table
     scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
@@ -1347,6 +1353,8 @@ async def getScores(
         alchemy_table.c.status == 2,
     ]
 
+    leaderboard_type = LeaderboardType(leaderboard_type)
+
     if leaderboard_type == LeaderboardType.Mods:
         params.append(alchemy_table.c.mods == mods)
     elif leaderboard_type == LeaderboardType.Friends:
@@ -1372,8 +1380,15 @@ async def getScores(
                 alchemy_table.c.mods,
                 alchemy_table.c.play_time.timestamp(),  # type: ignore
                 alchemy_table.c.userid,
-                app.db_models.users.c.name,
-                app.db_models.clans.c.tag,
+                coalesce(
+                    concat(
+                        "[",
+                        app.db_models.clans.c.tag,
+                        "] ",
+                        app.db_models.users.c.name,
+                    ),
+                    app.db_models.users.c.name,
+                ).label("name"),
             ],
         )
         .select_from(alchemy_table)
@@ -1499,7 +1514,7 @@ async def osuComment(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -1596,13 +1611,17 @@ async def osuComment(
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
-    channel: str,  # TODO: further validation?
+    channel: str = Query(
+        ...,
+        min_length=1,
+        max_length=32,
+    ),  # (usernames to 16, channels to 32)
     username: str = Query(..., alias="u"),
     pw_md5: str = Query(..., alias="h"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (
-        player := await glob.players.from_login(
+        player := await app.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
         )
@@ -1613,7 +1632,7 @@ async def osuMarkAsRead(
     if not (t_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    if t := await glob.players.from_cache_or_sql(name=t_name):
+    if t := await app.sessions.players.from_cache_or_sql(name=t_name):
         # mark any unread mail from this user as read.
         await db_conn.execute(
             app.db_models.mail.update()
@@ -1672,7 +1691,7 @@ async def checkUpdates(
         return cache[action]
 
     url = "https://old.ppy.sh/web/check-updates.php"
-    async with app.services.http_session.get(url, params=request.query_params) as resp:
+    async with app.services.http.get(url, params=request.query_params) as resp:
         if not resp or resp.status != 200:
             return (503, b"")  # failed to get data from osu
 
@@ -1742,16 +1761,21 @@ async def get_screenshot(
 
 
 # TODO: this surely doesn't work
-@router.get("/d/{map_set_id}{no_video}")
+@router.get("/d/{map_set_id_and_novideo_flag}")
 async def get_osz(
-    map_set_id: int = Path(..., ge=0, le=2_147_483_647),
-    no_video: Optional[Literal["n"]] = Path(...),
+    map_set_id_and_novideo_flag: str = Path(..., min_length=2, max_length=11),  # 315n?
 ):
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    download_video = not no_video
+    if no_video := map_set_id_and_novideo_flag[-1] == "n":
+        map_set_id_and_novideo_flag = map_set_id_and_novideo_flag[:-1]
+
+    if not map_set_id_and_novideo_flag.isdecimal():
+        return  # invalid set id
+
+    map_set_id = int(map_set_id_and_novideo_flag)
 
     if USING_CHIMU:
-        query_str = f"download/{map_set_id}?n={int(not download_video)}"
+        query_str = f"download/{map_set_id}?n={int(no_video)}"
     else:
         query_str = f"d/{map_set_id}"
 
@@ -1800,7 +1824,7 @@ async def get_updated_beatmap(
         # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{row['id']}"
 
-        async with app.services.http_session.get(url) as resp:
+        async with app.services.http.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f"Could not find map {osu_file_path}!", Ansi.LRED)
                 return (404, b"")  # couldn't find on osu!'s server
@@ -1907,7 +1931,7 @@ async def register_account(
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
-        async with glob.players._lock:
+        async with app.sessions.players._lock:
             pw_md5 = hashlib.md5(pw_plaintext.encode()).hexdigest().encode()
             pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
             glob.cache["bcrypt"][pw_bcrypt] = pw_md5  # cache result for login
@@ -1971,7 +1995,7 @@ async def register_account(
             # add to `stats` table.
             for mode in range(8):
                 await db_conn.execute(
-                    app.db_models.stats.insert().values({"id": user_id, "mode": mode}),
+                    app.db_models.stats.insert().values(id=user_id, mode=mode),
                 )
 
         if glob.datadog:

@@ -2,9 +2,11 @@ import functools
 from typing import Sequence
 from typing import TYPE_CHECKING
 
+import app.services
+import app.sessions
+import app.settings
 import packets
 from app.constants.privileges import Privileges
-from app.objects import glob
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -104,7 +106,7 @@ class Channel:
 
     def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to all connected clients from bot."""
-        bot = glob.bot
+        bot = app.sessions.bot
 
         if len(msg) >= 31979:  # TODO ??????????
             msg = f"message would have crashed games ({len(msg)} chars)"
@@ -141,7 +143,7 @@ class Channel:
             # if it's an instance channel and this
             # is the last member leaving, just remove
             # the channel from the global list.
-            glob.channels.remove(self)
+            app.sessions.channels.remove(self)
 
     def enqueue(self, data: bytes, immune: Sequence[int] = []) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""

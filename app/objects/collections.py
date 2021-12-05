@@ -16,6 +16,8 @@ from sqlalchemy.sql.expression import select
 import app.db_models
 import app.misc.utils
 import app.services
+import app.sessions
+import app.settings
 from app.constants.privileges import Privileges
 from app.misc.utils import make_safe_name
 from app.objects import glob
@@ -263,7 +265,7 @@ class Players(list[Player]):
         res["pw_bcrypt"] = res["pw_bcrypt"].encode()
 
         if res["clan_id"] != 0:
-            res["clan"] = glob.clans.get(id=res["clan_id"])
+            res["clan"] = app.sessions.clans.get(id=res["clan_id"])
             res["clan_priv"] = ClanPrivileges(res["clan_priv"])
         else:
             res["clan"] = res["clan_priv"] = None
@@ -380,7 +382,7 @@ class MapPools(list[MapPool]):
                     id=row["id"],
                     name=row["name"],
                     created_at=row["created_at"],
-                    created_by=await glob.players.from_cache_or_sql(
+                    created_by=await app.sessions.players.from_cache_or_sql(
                         id=row["created_by"],
                     ),
                 )
@@ -455,7 +457,10 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         self.extend(
-            [Clan(**row) async for row in db_conn.iterate(app.db_models.clans.select())],
+            [
+                Clan(**row)
+                async for row in db_conn.iterate(app.db_models.clans.select())
+            ],
         )
 
         for clan in self:
@@ -465,21 +470,21 @@ class Clans(list[Clan]):
 async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
     # static (inactive) sets, in ram & sql
-    await glob.channels.prepare(db_conn)
-    await glob.clans.prepare(db_conn)
-    await glob.pools.prepare(db_conn)
+    await app.sessions.channels.prepare(db_conn)
+    await app.sessions.clans.prepare(db_conn)
+    await app.sessions.pools.prepare(db_conn)
 
     bot_name = await app.misc.utils.fetch_bot_name(db_conn)
 
     # create bot & add it to online players
-    glob.bot = Player(
+    app.sessions.bot = Player(
         id=1,
         name=bot_name,
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
         priv=Privileges.NORMAL,
         bot_client=True,
     )
-    glob.players.append(glob.bot)
+    app.sessions.players.append(app.sessions.bot)
 
     async for row in db_conn.iterate(app.db_models.achievements.select()):
         # NOTE: achievement conditions are stored as stringified python
@@ -487,7 +492,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
         condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
         achievement = Achievement(**row, cond=condition)
 
-        glob.achievements.append(achievement)
+        app.sessions.achievements.append(achievement)
 
     # static api keys
     glob.api_keys = {
