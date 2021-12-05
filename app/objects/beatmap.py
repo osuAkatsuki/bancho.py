@@ -10,12 +10,11 @@ from typing import Any
 from typing import Mapping
 from typing import Optional
 
-import aiomysql
 import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.sql.expression import insert
 from sqlalchemy.sql.expression import select
+from sqlalchemy.dialects.mysql import insert
 
 import app.db_models
 import app.misc.utils
@@ -395,14 +394,12 @@ class Beatmap:
                 # from the db, or the osu!api. we want to get
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
-                async with app.services.database_session() as db_conn:
-                    res_query = await db_conn.execute(
+                async with app.services.database.connection() as db_conn:
+                    res = await db_conn.fetch_one(
                         app.db_models.maps.select(app.db_models.maps.c.set_id).where(
                             app.db_models.maps.c.md5 == md5,
                         ),
                     )
-
-                    res = res_query.fetchone()
 
                 if res:
                     # found set id in db
@@ -438,14 +435,12 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            async with app.services.database_session() as db_conn:
-                res_query = await db_conn.execute(
+            async with app.services.database.connection() as db_conn:
+                res = await db_conn.fetch_one(
                     app.db_models.maps.select(app.db_models.maps.c.set_id).where(
                         app.db_models.maps.c.id == bid,
                     ),
                 )
-
-                res = res_query.fetchone()
 
             if res:
                 # found set id in db
@@ -708,51 +703,51 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.mapsets.insert(
-                    values={
-                        "server": "osu!",
-                        "id": self.id,
-                        "last_osuapi_check": self.last_osuapi_check,
-                    },
-                ).prefix_with(
-                    "REPLACE OR",
-                ),  # update/insert on case
+        async with app.services.database.connection() as db_conn:
+            insert_data = insert(app.db_models.mapsets).values(
+                server="osu!",
+                id=self.id,
+                last_osuapi_check=self.last_osuapi_check,
             )
 
+            duplicate_format = insert_data.on_duplicate_key_update(
+                data=insert_data.inserted.data, status="U"
+            )
+            await db_conn.execute(duplicate_format)
+
             for bmap in self.maps:
-                await db_conn.execute(
-                    app.db_models.maps.insert(
-                        values={
-                            "server": "osu!",
-                            "md5": bmap.md5,
-                            "id": bmap.id,
-                            "set_id": self.id,
-                            "artist": bmap.artist,
-                            "title": bmap.title,
-                            "version": bmap.version,
-                            "creator": bmap.creator,
-                            "filename": bmap.filename,
-                            "last_update": bmap.last_update,
-                            "total_length": bmap.total_length,
-                            "max_combo": bmap.max_combo,
-                            "status": bmap.status,
-                            "frozen": bmap.frozen,
-                            "plays": bmap.plays,
-                            "passes": bmap.passes,
-                            "mode": bmap.mode,
-                            "bpm": bmap.bpm,
-                            "cs": bmap.cs,
-                            "od": bmap.od,
-                            "ar": bmap.ar,
-                            "hp": bmap.hp,
-                            "diff": bmap.diff,
-                        },
-                    ).prefix_with(
-                        "REPLACE OR",
-                    ),  # update/insert on case
+                insert_data = insert(app.db_models.maps).values(
+                    server="osu!",
+                    md5=bmap.md5,
+                    id=bmap.id,
+                    set_id=self.id,
+                    artist=bmap.artist,
+                    title=bmap.title,
+                    version=bmap.version,
+                    creator=bmap.creator,
+                    filename=bmap.filename,
+                    last_update=bmap.last_update,
+                    total_length=bmap.total_length,
+                    max_combo=bmap.max_combo,
+                    status=bmap.status,
+                    frozen=bmap.frozen,
+                    plays=bmap.plays,
+                    passes=bmap.passes,
+                    mode=bmap.mode,
+                    bpm=bmap.bpm,
+                    cs=bmap.cs,
+                    od=bmap.od,
+                    ar=bmap.ar,
+                    hp=bmap.hp,
+                    diff=bmap.diff,
                 )
+
+                duplicate_format = insert_data.on_duplicate_key_update(
+                    data=insert_data.inserted.data,
+                    status="U",
+                )
+
+                await db_conn.execute(duplicate_format)
 
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
@@ -768,19 +763,17 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
-        async with app.services.database_session() as db_conn:
-            check_res = await db_conn.execute(
+        async with app.services.database.connection() as db_conn:
+            check_row = await db_conn.fetch_one(
                 app.db_models.mapsets.select(
                     app.db_models.mapsets.c.last_osuapi_check,
                 ).where(app.db_models.mapsets.c.id == bsid),
             )
 
-            check_row = check_res.fetchone()
-
             if not check_row:
                 return
 
-            set_rows = await db_conn.execute(
+            set_res = await db_conn.fetch_all(
                 select(
                     [
                         app.db_models.maps.c.md5,
@@ -808,8 +801,6 @@ class BeatmapSet:
                     ],
                 ).where(app.db_models.maps.c.set_id == bsid),
             )
-
-            set_res = set_rows.fetchall()
 
             if not set_res:
                 return
@@ -853,8 +844,8 @@ class BeatmapSet:
             # XXX: pre-mapset gulag support
             # select all current beatmaps
             # that're frozen in the db
-            async with app.services.database_session() as db_conn:
-                map_res = await db_conn.execute(
+            async with app.services.database.connection() as db_conn:
+                res = await db_conn.fetch_all(
                     select(
                         [app.db_models.maps.c.id, app.db_models.maps.c.status],
                     ).where(
@@ -864,8 +855,6 @@ class BeatmapSet:
                         ),
                     ),
                 )
-
-                res = map_res.fetchall()
 
             current_maps = {row["id"]: row["status"] for row in res}
 

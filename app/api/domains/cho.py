@@ -15,6 +15,7 @@ from typing import Type
 import bcrypt
 import sqlalchemy
 from cmyui.logging import Ansi
+import databases.core
 from cmyui.logging import log
 from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
@@ -23,8 +24,6 @@ from fastapi.param_functions import Header
 from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
-from sqlalchemy.dialects.mysql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import Insert
 from sqlalchemy.sql.expression import select
@@ -136,7 +135,7 @@ async def bancho_handler(
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with glob.players._lock:
-            async with app.services.database_session() as db_conn:
+            async with app.services.database.connection() as db_conn:
                 login_data = await login(await request.body(), ip, db_conn)
 
         if login_data is None:
@@ -432,7 +431,7 @@ def append_string(insert, compiler, **kw):
 async def login(
     body: bytes,
     ip: IPAddress,
-    db_conn: AsyncSession,
+    db_conn: databases.core.Connection,
 ) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
@@ -549,12 +548,11 @@ async def login(
 
                     return "no", data
 
-    user_res = await db_conn.execute(
+    user_info = await db_conn.fetch_one(
         app.db_models.users.select().where(
             app.db_models.users.c.safe_name == app.misc.utils.make_safe_name(username),
         ),
     )
-    user_info = user_res.fetchone()
 
     if not user_info:
         # no account by this name exists.
@@ -596,14 +594,12 @@ async def login(
     """ login credentials verified """
 
     await db_conn.execute(
-        app.db_models.ingame_logins.insert(
-            values={
-                "user_id": user_info["id"],
-                "ip": str(ip),
-                "osu_ver": osu_ver_date,
-                "osu_stream": osu_ver_stream,
-                "datetime": func.now(),
-            },
+        app.db_models.ingame_logins.insert().values(
+            user_id=user_info["id"],
+            ip=str(ip),
+            osu_ver=osu_ver_date,
+            osu_stream=osu_ver_stream,
+            datetime=func.now(),
         ),
     )
 
@@ -613,14 +609,13 @@ async def login(
                 "ON DUPLICATE KEY UPDATE "
                 "occurrences = occurrences + 1, "
                 "latest_time = NOW()"
-            ),
-            values={
-                "userid": user_info["id"],
-                "osupath": osu_path_md5,
-                "adapters": adapters_md5,
-                "uninstall_id": uninstall_md5,
-                "disk_serial": disk_sig_md5,
-            },
+            )
+        ).values(
+            userid=user_info["id"],
+            osupath=osu_path_md5,
+            adapters=adapters_md5,
+            uninstall_id=uninstall_md5,
+            disk_serial=disk_sig_md5,
         ),
     )
 
@@ -640,7 +635,7 @@ async def login(
             ],
         )
 
-    hw_res = await db_conn.execute(
+    hw_matches = await db_conn.fetch_all(
         select(
             [
                 app.db_models.users.c.name,
@@ -649,7 +644,6 @@ async def login(
             ],
         ).where(sqlalchemy.and_(*hw_args)),
     )
-    hw_matches = hw_res.fetchall()
 
     if hw_matches:
         # we have other accounts with matching hashes
@@ -701,12 +695,12 @@ async def login(
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
             await db_conn.execute(
-                app.db_models.users.update(
-                    values={
-                        "country": user_info["geoloc"]["country_code"],
-                        "userid": user_info["id"],
-                    },
-                ).where(app.db_models.users.c.id == user_info["id"]),
+                app.db_models.users.update()
+                .values(
+                    country=user_info["geoloc"]["country_code"],
+                    userid=user_info["id"],
+                )
+                .where(app.db_models.users.c.id == user_info["id"]),
             )
 
     p = Player(
@@ -789,7 +783,7 @@ async def login(
         # enqueue any messages from their respective authors.
         mail_sent_to = set()  # ids
 
-        msg_res = await db_conn.execute(  # wtf is this.
+        async for msg in db_conn.iterate(  # wtf is this.
             select(
                 [
                     app.db_models.mail.c.msg,
@@ -812,9 +806,7 @@ async def login(
                     app.db_models.mail.c.read == 0,
                 ),
             ),
-        )
-
-        for msg in msg_res.fetchall():
+        ):
             if msg["from"] not in mail_sent_to:
                 data += packets.send_message(
                     sender=msg["from"],
@@ -1055,17 +1047,14 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            async with app.services.database_session() as db_conn:
-                await db_conn.execute(
-                    app.db_models.mail.insert(
-                        values={
-                            "from_id": p.id,
-                            "to_id": t.id,
-                            "msg": msg,
-                            "time": func.unix_timestamp(),
-                        },
-                    ),
-                )
+            await app.services.database.execute(
+                app.db_models.mail.insert().values(
+                    from_id=p.id,
+                    to_id=t.id,
+                    msg=msg,
+                    time=func.unix_timestamp(),
+                ),
+            )
         else:
             # messaging the bot, check for commands & /np.
             if msg.startswith(glob.config.command_prefix):

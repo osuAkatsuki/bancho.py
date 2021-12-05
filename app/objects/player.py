@@ -15,9 +15,10 @@ import sqlalchemy
 from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
+
+from sqlalchemy.dialects.mysql import insert
 
 import app.db_models
 import app.services
@@ -457,9 +458,11 @@ class Player:
         """Update `self`'s privileges to `new`."""
         self.priv = new
 
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
-                app.db_models.users.update(values={"priv": self.priv}).where(
+                app.db_models.users.update()
+                .values(priv=self.priv)
+                .where(
                     app.db_models.users.c.id == self.id,
                 ),
             )
@@ -483,9 +486,11 @@ class Player:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
 
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
-                app.db_models.users.update(values={"priv": self.priv}).where(
+                app.db_models.users.update()
+                .values(priv=self.priv)
+                .where(
                     app.db_models.users.c.id == self.id,
                 ),
             )
@@ -498,10 +503,10 @@ class Player:
         await self.remove_privs(Privileges.NORMAL)
 
         log_msg = f'{admin} restricted for "{reason}".'
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
                 app.db_models.logs.insert(
-                    values={
+                    values={  # TODO
                         "from": admin.id,
                         "to": self.id,
                         "msg": log_msg,
@@ -532,10 +537,10 @@ class Player:
 
         log_msg = f'{admin} unrestricted for "{reason}".'
 
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
                 app.db_models.logs.insert(
-                    values={
+                    values={  # TODO
                         "from": admin.id,
                         "to": self.id,
                         "msg": log_msg,
@@ -564,19 +569,17 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
-                app.db_models.users.update(
-                    values={
-                        "silence_end": self.silence_end,
-                    },
-                ).where(app.db_models.users.c.id == self.id),
+                app.db_models.users.update()
+                .values(silence_end=self.silence_end)
+                .where(app.db_models.users.c.id == self.id),
             )
 
             log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
             await db_conn.execute(
                 app.db_models.logs.insert(
-                    values={
+                    values={  # TODO
                         "from": admin.id,
                         "to": self.id,
                         "msg": log_msg,
@@ -601,17 +604,17 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
-                app.db_models.users.update(
-                    values={"silence_end": self.silence_end},
-                ).where(app.db_models.users.c.id == self.id),
+                app.db_models.users.update()
+                .values(silence_end=self.silence_end)
+                .where(app.db_models.users.c.id == self.id),
             )
 
             log_msg = f"{admin} unsilenced."
             await db_conn.execute(
                 app.db_models.logs.insert(
-                    values={
+                    values={  # TODO
                         "from": admin.id,
                         "to": self.id,
                         "msg": log_msg,
@@ -889,12 +892,9 @@ class Player:
 
         self.friends.add(p.id)
 
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.relationships.insert(
-                    values={"user1": self.id, "user2": p.id},
-                ),
-            )
+        await app.services.database.execute(
+            app.db_models.relationships.insert().values(user1=self.id, user2=p.id),
+        )
 
         log(f"{self} friended {p}.")
 
@@ -906,15 +906,14 @@ class Player:
 
         self.friends.remove(p.id)
 
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.relationships.delete().where(
-                    sqlalchemy.and_(
-                        app.db_models.relationships.c.user1 == self.id,
-                        app.db_models.relationships.c.user2 == p.id,
-                    ),
+        await app.services.database.execute(
+            app.db_models.relationships.delete().where(
+                sqlalchemy.and_(
+                    app.db_models.relationships.c.user1 == self.id,
+                    app.db_models.relationships.c.user2 == p.id,
                 ),
-            )
+            ),
+        )
 
         log(f"{self} unfriended {p}.")
 
@@ -929,12 +928,17 @@ class Player:
 
         self.blocks.add(p.id)
 
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.relationships.insert(
-                    values={"user1": self.id, "user2": p.id},
-                ).prefix_with("REPLACE OR"),
-            )
+        insert_data = insert(app.db_models.relationships).values(
+            user1=self.id,
+            user2=p.id,
+            type="block",
+        )
+
+        duplicate_format = insert_data.on_duplicate_key_update(
+            data=insert_data.inserted.data, status="U"
+        )
+
+        await app.services.database.execute(duplicate_format)
 
         log(f"{self} blocked {p}.")
 
@@ -946,45 +950,35 @@ class Player:
 
         self.blocks.remove(p.id)
 
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.relationships.delete().where(
-                    sqlalchemy.and_(
-                        app.db_models.relationships.c.user1 == self.id,
-                        app.db_models.relationships.c.user2 == p.id,
-                    ),
+        await app.services.database.execute(
+            app.db_models.relationships.delete().where(
+                sqlalchemy.and_(
+                    app.db_models.relationships.c.user1 == self.id,
+                    app.db_models.relationships.c.user2 == p.id,
                 ),
-            )
+            ),
+        )
 
         log(f"{self} unblocked {p}.")
 
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
-        async with app.services.database_session() as db_conn:
-            await db_conn.execute(
-                app.db_models.user_achievements.insert(
-                    values={
-                        "userid": self.id,
-                        "achid": a.id,
-                    },
-                ),
-            )
+        await app.services.database.execute(
+            app.db_models.user_achievements.insert().values(userid=self.id, achid=a.id),
+        )
 
         self.achievements.add(a)
 
-    async def relationships_from_sql(self, db_conn: AsyncSession) -> None:
+    async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s relationships from sql."""
-
-        relationships_res = await db_conn.execute(
+        async for row in db_conn.iterate(
             select(
                 [
                     app.db_models.relationships.c.user2,
                     app.db_models.relationships.c.type,
                 ],
             ).where(app.db_models.relationships.c.user1 == self.id),
-        )
-
-        for row in relationships_res.fetchall():
+        ):
             if row["type"] == "friend":
                 self.friends.add(row["user2"])
             else:
@@ -993,15 +987,13 @@ class Player:
         # always have bot added to friends.
         self.friends.add(1)
 
-    async def achievements_from_sql(self, db_conn: AsyncSession) -> None:
+    async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s achievements from sql."""
-        achievements_res = await db_conn.execute(
+        async for row in db_conn.iterate(
             app.db_models.user_achievements.select(
                 app.db_models.user_achievements.c.achid.label("id"),
             ).where(app.db_models.user_achievements.c.userid == self.id),
-        )
-
-        for row in achievements_res.fetchall():
+        ):
             for ach in glob.achievements:
                 if row["id"] == ach.id:
                     self.achievements.add(ach)
@@ -1029,7 +1021,10 @@ class Player:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
 
-        await glob.redis.zadd(f"gulag:leaderboard:{mode.value}", {self.id: stats.pp})
+        await glob.redis.zadd(
+            f"gulag:leaderboard:{mode.value}",
+            {self.id: stats.pp},
+        )
         await glob.redis.zadd(
             f"gulag:leaderboard:{mode.value}:{country}",
             {self.id: stats.pp},
@@ -1037,10 +1032,10 @@ class Player:
         stats.rank = await self.get_global_rank(mode)
         return stats.rank
 
-    async def stats_from_sql_full(self, db_conn: AsyncSession) -> None:
+    async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
 
-        scores_res = await db_conn.execute(
+        rows = await db_conn.fetch_all(
             select(
                 [
                     app.db_models.stats.c.tscore,
@@ -1058,7 +1053,6 @@ class Player:
                 ],
             ).where(app.db_models.stats.c.userid == self.id),
         )
-        rows = scores_res.fetchall()
 
         for mode, row in enumerate([dict(row) for row in rows]):
             # calculate player's rank.
@@ -1102,11 +1096,13 @@ class Player:
 
     async def update_latest_activity(self) -> None:
         """Update the player's latest activity in the database."""
-        async with app.services.database_session() as db_conn:
+        async with app.services.database.connection() as db_conn:
             await db_conn.execute(
-                app.db_models.users.update(
-                    values={"latest_activity": func.unix_timestamp()},
-                ).where(app.db_models.users.c.id == self.id),
+                app.db_models.users.update()
+                .values(
+                    latest_activity=func.unix_timestamp(),
+                )
+                .where(app.db_models.users.c.id == self.id),
             )
 
     def enqueue(self, data: bytes) -> None:

@@ -13,6 +13,7 @@ from sqlalchemy import MetaData
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import Unicode
+from sqlalchemy.sql.sqltypes import SmallInteger
 
 metadata = MetaData()
 
@@ -250,3 +251,23 @@ user_achievements_columns = (
 )
 
 user_achievements = Table("user_achievements", metadata, *user_achievements_columns)
+
+map_requests_columns = (
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("map_id", Integer),
+    Column("player_id", Integer),
+    Column("datetime", DateTime),
+    Column("active", Boolean),
+)
+
+map_requests = Table("map_requests", metadata, *map_requests_columns)
+
+startups_columns = (
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("ver_major", SmallInteger),
+    Column("ver_minor", SmallInteger),
+    Column("ver_micro", SmallInteger),
+    Column("datetime", DateTime),
+)
+
+startups = Table("startups", metadata, *startups_columns)

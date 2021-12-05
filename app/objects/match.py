@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
-import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.ext.asyncio.session import AsyncSession
+import databases.core
 from sqlalchemy.sql.expression import select
 
 import app.db_models
@@ -148,9 +147,9 @@ class MapPool:
     def __repr__(self) -> str:
         return f"<{self.name}>"
 
-    async def maps_from_sql(self, db_conn: AsyncSession) -> None:
+    async def maps_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
-        map_res = await db_conn.execute(
+        async for row in db_conn.iterate(
             select(
                 [
                     app.db_models.tourney_pool_maps.c.map_id,
@@ -158,9 +157,7 @@ class MapPool:
                     app.db_models.tourney_pool_maps.c.slot,
                 ],
             ).where(app.db_models.tourney_pool_maps.c.pool_id == self.id),
-        )
-
-        for row in map_res.fetchall():
+        ):
             map_id = row["map_id"]
             bmap = await Beatmap.from_bid(map_id)
 

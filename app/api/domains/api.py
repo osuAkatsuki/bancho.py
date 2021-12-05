@@ -7,6 +7,7 @@ from typing import Literal
 from typing import Optional
 
 import sqlalchemy
+import databases.core
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
@@ -14,7 +15,6 @@ from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.expression import join
 from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.functions import func
@@ -71,22 +71,24 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
 
 # TODO: move this into utils?
-async def acquire_db_conn() -> AsyncIterator[AsyncSession]:
+async def acquire_db_conn() -> AsyncIterator[databases.core.Connection]:
     """Decorator to acquire a database connection for a handler."""
-    async with app.services.database_session() as conn:
+    async with app.services.database.connection() as conn:
         yield conn
 
 
 @router.get("/api/get_player_count")
 async def api_get_player_count(
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Get the current amount of online players."""
     # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
     # NOTE: -1 is for the bot, and will have to change
     # if we ever make some sort of bot creation system.
-    total_res = await db_conn.execute(app.db_models.users.select(func.count()))
-    total_users = total_res.fetchone()[0]
+    total_users = await db_conn.fetch_val(
+        app.db_models.users.select(func.count()),
+        column=0,
+    )
 
     return ORJSONResponse(
         {
@@ -104,7 +106,7 @@ async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -115,7 +117,7 @@ async def api_get_player_info(
 
     # get user info from username or user id
     if username:
-        user_res = await db_conn.execute(
+        user_info = await db_conn.fetch_one(
             select(
                 [
                     app.db_models.users.c.id,
@@ -128,7 +130,7 @@ async def api_get_player_info(
             ).where(app.db_models.users.c.safe_name == username.lower()),
         )
     else:  # if user_id
-        user_res = await db_conn.execute(
+        user_info = await db_conn.fetch_one(
             select(
                 [
                     app.db_models.users.c.id,
@@ -140,8 +142,6 @@ async def api_get_player_info(
                 ],
             ).where(app.db_models.users.c.userid == user_id),
         )
-
-    user_info = user_res.fetchone()
 
     if user_info is None:
         return ORJSONResponse(
@@ -161,7 +161,7 @@ async def api_get_player_info(
     # fetch user's stats if requested
     if scope in ("stats", "all"):
         # get all regular stats
-        stats_res = await db_conn.execute(
+        rows = await db_conn.fetch_all(
             select(
                 [
                     app.db_models.stats.c.tscore,
@@ -179,7 +179,6 @@ async def api_get_player_info(
                 ],
             ).where(app.db_models.stats.c.userid == resolved_user_id),
         )
-        rows = stats_res.fetchall()
 
         for idx, mode_stats in enumerate([dict(row) for row in rows]):
             rank = await glob.redis.zrevrank(
@@ -205,7 +204,7 @@ async def api_get_player_info(
 async def api_get_player_status(
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -228,19 +227,17 @@ async def api_get_player_status(
         # no such player online, return their last seen time if they exist in sql
 
         if username:
-            activity_res = await db_conn.execute(
+            row = await db_conn.fetch_one(
                 app.db_models.users.select(app.db_models.users.c.latest_activity).where(
                     app.db_models.users.c.safe_name == username.lower(),
                 ),
             )
         else:  # if user_id
-            activity_res = await db_conn.execute(
+            row = await db_conn.fetch_one(
                 app.db_models.users.select(app.db_models.users.c.latest_activity).where(
                     app.db_models.users.c.id == user_id,
                 ),
             )
-
-        row = activity_res.fetchone()
 
         if not row:
             return ORJSONResponse(
@@ -287,7 +284,7 @@ async def api_get_player_scores(
     mods_arg: Optional[str] = Query(..., alias="mods"),
     limit: Optional[int] = Query(..., ge=1, le=100),
     include_loved: Optional[int] = Query(..., ge=0, le=1),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return a list of a given user's recent/best scores."""
     if username and user_id:
@@ -373,7 +370,7 @@ async def api_get_player_scores(
         app.db_models.maps,
         alchemy_table.c.map_md5 == app.db_models.maps.c.md5,
     )
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_all(
         select(
             [
                 alchemy_table.c.id,
@@ -402,7 +399,6 @@ async def api_get_player_scores(
         .order_by(sort.desc())
         .limit(limit),
     )
-    res = list(res_query.fetchall())
 
     for row in res:
         bmap = await Beatmap.from_md5(row.pop("map_md5"))
@@ -425,7 +421,7 @@ async def api_get_player_most_played(
     username: Optional[str] = Query(..., alias="name", regex=regexes.USERNAME.pattern),
     mode_arg: Optional[int] = Query(..., alias="mode", ge=0, le=7),
     limit: Optional[int] = Query(..., ge=1, le=100),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
@@ -463,7 +459,7 @@ async def api_get_player_most_played(
         app.db_models.maps,
         alchemy_table.c.map_md5 == app.db_models.maps.c.md5,
     )
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_all(
         select(
             [
                 app.db_models.maps.c.md5,
@@ -488,7 +484,6 @@ async def api_get_player_most_played(
         .order_by(func.count().desc())
         .limit(limit),
     )
-    res = list(res_query.fetchall())
 
     return ORJSONResponse({"status": "success", "maps": res})
 
@@ -496,7 +491,7 @@ async def api_get_player_most_played(
 @router.get("/api/get_map_info")
 async def api_get_map_info(
     id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-    md5: Optional[str] = Query(..., alias="md5", eq=32),
+    md5: Optional[str] = Query(..., alias="md5", min_length=32, max_length=32),
 ) -> Response:
     """Return information about a given beatmap."""
     if id is not None:
@@ -520,13 +515,13 @@ async def api_get_map_info(
 
 @router.get("/api/get_map_scores")
 async def api_get_map_scores(
+    scope: Literal["recent", "best"],
     id: Optional[int] = Query(..., alias="id", ge=3, le=2_147_483_647),
-    md5: Optional[str] = Query(..., alias="md5", eq=32),
-    scope: str = Query(..., alias="scope", eq=["recent", "best"]),
+    md5: Optional[str] = Query(..., alias="md5", min_length=32, max_length=32),
     mode_arg: Optional[int] = Query(..., alias="mode", ge=0, le=7),
     mods_arg: Optional[str] = Query(..., alias="mods"),
     limit: Optional[int] = Query(..., ge=1, le=100),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the top n scores on a given beatmap."""
     if id is not None:
@@ -573,18 +568,6 @@ async def api_get_map_scores(
 
     # NOTE: userid will eventually become player_id,
     # along with everywhere else in the codebase.
-    query = [
-        "SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, "
-        "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
-        "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
-        "u.name player_name, "
-        "c.id clan_id, c.name clan_name, c.tag clan_tag "
-        f"FROM {mode.scores_table} s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2",
-    ]
-
     alchemy_table = getattr(app.db_models, mode.scores_table)
 
     params = [
@@ -615,7 +598,7 @@ async def api_get_map_scores(
         app.db_models.clans,
         app.db_models.users.c.clan_id == app.db_models.clans.c.id,
     )
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_all(
         select(
             [
                 alchemy_table.c.map_md5,
@@ -649,14 +632,13 @@ async def api_get_map_scores(
         .limit(limit),
     )
 
-    res = list(res_query.fetchall())
     return ORJSONResponse({"status": "success", "scores": res})
 
 
 @router.get("/api/get_score_info")
 async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return information about a given score."""
 
@@ -673,7 +655,7 @@ async def api_get_score_info(
         )
 
     alchemy_table = getattr(app.db_models, scores_table)
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_one(
         select(
             [
                 alchemy_table.c.map_md5,
@@ -697,21 +679,21 @@ async def api_get_score_info(
             ],
         ).where(alchemy_table.c.id == score_id),
     )
-    res = res_query.fetchone()
+
     if not res:
         return ORJSONResponse(
             {"status": "Score not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return ORJSONResponse({"status": "success", "score": dict(res)})
+    return ORJSONResponse({"status": "success", "score": res})
 
 
 @router.get("/api/get_replay")
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0),
     include_headers: Optional[str] = Query(...),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     """Return a given replay (including headers)."""
     if SCOREID_BORDERS[0] > score_id >= 1:
@@ -762,7 +744,7 @@ async def api_get_replay(
         alchemy_table.c.map_md5 == app.db_models.maps.c.md5,
     )
 
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_one(
         select(
             [
                 app.db_models.users.c.name.label("username"),
@@ -787,7 +769,6 @@ async def api_get_replay(
         .select_from(users_maps_join)
         .where(alchemy_table.c.id == score_id),
     )
-    res = res_query.fetchone()
 
     if not res:
         # score not found in sql
@@ -915,10 +896,10 @@ async def api_get_match(
 
 @router.get("/api/get_leaderboard")
 async def api_get_global_leaderboard(
+    sort: Literal["tscore", "rscore", "pp", "acc"],
     mode_arg: Optional[int] = Query(..., alias="mode", ge=0, le=7),
     limit: int = Query(..., alias="limit", ge=1, le=100),
-    sort: str = Query(..., eq=["tscore", "rscore", "pp", "acc"]),
-    db_conn: AsyncSession = Depends(acquire_db_conn),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ) -> Response:
     if mode_arg is not None:
         mode = GameMode(mode_arg)
@@ -942,7 +923,7 @@ async def api_get_global_leaderboard(
         app.db_models.clans,
         app.db_models.clans.c.id == app.db_models.users.c.clan_id,
     )
-    res_query = await db_conn.execute(
+    res = await db_conn.fetch_all(
         select(
             [
                 app.db_models.users.c.id.label("player_id"),
@@ -977,7 +958,6 @@ async def api_get_global_leaderboard(
         .limit(limit),
     )
 
-    res = list(res_query.fetchone())
     return ORJSONResponse({"status": "success", "leaderboard": res})
 
 

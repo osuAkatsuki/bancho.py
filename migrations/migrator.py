@@ -6,8 +6,10 @@ import aiomysql
 import cmyui
 from cmyui.logging import Ansi
 from cmyui.logging import log
+from sqlalchemy.sql.expression import select
 
-from app import services
+import app.services
+import app.db_models
 from app.objects import glob
 
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
@@ -16,9 +18,16 @@ VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 
 async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
     """Get the last launched version of the server."""
-    row = await services.database.fetch_one(
-        "SELECT ver_major, ver_minor, ver_micro "
-        "FROM startups ORDER BY datetime DESC LIMIT 1",
+    row = await app.services.database.fetch_one(
+        select(
+            [
+                app.db_models.startups.c.ver_major,
+                app.db_models.startups.c.ver_minor,
+                app.db_models.startups.c.ver_micro,
+            ]
+        )
+        .order_by(app.db_models.startups.c.datetime.desc())
+        .limit(1)
     )
 
     if row:
@@ -82,7 +91,7 @@ async def run_sql_migrations() -> None:
     # NOTE: this using a transaction is pretty pointless with mysql since
     # any structural changes to tables will implciticly commit the changes.
     # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with services.database.connection() as conn:
+    async with app.services.database.connection() as conn:
         async with conn.cursor() as db_cursor:
             await conn.begin()
             for query in queries:

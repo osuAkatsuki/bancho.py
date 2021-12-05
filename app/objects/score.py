@@ -200,38 +200,35 @@ class Score:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
-        async with app.services.database_session() as db_conn:
-            alchemy_table = getattr(app.db_models, scores_table)
-            score_res = await db_conn.execute(
-                select(
-                    [
-                        alchemy_table.c.id,
-                        alchemy_table.c.map_md5,
-                        alchemy_table.c.userid,
-                        alchemy_table.c.pp,
-                        alchemy_table.c.score,
-                        alchemy_table.c.max_combo,
-                        alchemy_table.c.mods,
-                        alchemy_table.c.acc,
-                        alchemy_table.c.n300,
-                        alchemy_table.c.n100,
-                        alchemy_table.c.n50,
-                        alchemy_table.c.nmiss,
-                        alchemy_table.c.ngeki,
-                        alchemy_table.c.nkatu,
-                        alchemy_table.c.grade,
-                        alchemy_table.c.perfect,
-                        alchemy_table.c.status,
-                        alchemy_table.c.mode,
-                        alchemy_table.c.play_time,
-                        alchemy_table.c.time_elapsed,
-                        alchemy_table.c.client_flags,
-                        alchemy_table.c.online_checksum,
-                    ],
-                ).where(alchemy_table.c.id == score_id),
-            )
-
-            res = score_res.fetchone()
+        alchemy_table = getattr(app.db_models, scores_table)
+        res = await app.services.database.fetch_one(
+            select(
+                [
+                    alchemy_table.c.id,
+                    alchemy_table.c.map_md5,
+                    alchemy_table.c.userid,
+                    alchemy_table.c.pp,
+                    alchemy_table.c.score,
+                    alchemy_table.c.max_combo,
+                    alchemy_table.c.mods,
+                    alchemy_table.c.acc,
+                    alchemy_table.c.n300,
+                    alchemy_table.c.n100,
+                    alchemy_table.c.n50,
+                    alchemy_table.c.nmiss,
+                    alchemy_table.c.ngeki,
+                    alchemy_table.c.nkatu,
+                    alchemy_table.c.grade,
+                    alchemy_table.c.perfect,
+                    alchemy_table.c.status,
+                    alchemy_table.c.mode,
+                    alchemy_table.c.play_time,
+                    alchemy_table.c.time_elapsed,
+                    alchemy_table.c.client_flags,
+                    alchemy_table.c.online_checksum,
+                ],
+            ).where(alchemy_table.c.id == score_id),
+        )
 
         if not res:
             return
@@ -339,31 +336,28 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        async with app.services.database_session() as db_conn:
-            alchemy_table = getattr(app.db_models, scores_table)
-            alchemy_metric = getattr(alchemy_table.c, scoring_metric)
+        alchemy_table = getattr(app.db_models, scores_table)
+        alchemy_metric = getattr(alchemy_table.c, scoring_metric)
 
-            users_join = join(
-                alchemy_table,
-                app.db_models.users,
-                alchemy_table.c.userid == app.db_models.users.c.id,
-            )
+        users_join = join(
+            alchemy_table,
+            app.db_models.users,
+            alchemy_table.c.userid == app.db_models.users.c.id,
+        )
 
-            count_res = await db_conn.execute(
-                alchemy_table.select(func.count().label("c") + 1)
-                .select_from(users_join)
-                .where(
-                    sqlalchemy.and_(
-                        alchemy_table.c.map_md5 == self.bmap.md5,
-                        alchemy_table.c.mode == self.mode.as_vanilla,
-                        alchemy_table.c.status == 2,
-                        app.db_models.users.c.priv & 1,
-                        alchemy_metric > score,
-                    ),
+        res = await app.services.database.fetch_one(
+            alchemy_table.select(func.count().label("c") + 1)
+            .select_from(users_join)
+            .where(
+                sqlalchemy.and_(
+                    alchemy_table.c.map_md5 == self.bmap.md5,
+                    alchemy_table.c.mode == self.mode.as_vanilla,
+                    alchemy_table.c.status == 2,
+                    app.db_models.users.c.priv & 1,
+                    alchemy_metric > score,
                 ),
-            )
-
-            res = count_res.fetchone()
+            ),
+        )
 
         return res["c"] if res else 1
 
@@ -440,20 +434,17 @@ class Score:
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
-        async with app.services.database_session() as db_conn:
-            alchemy_table = getattr(app.db_models, scores_table)
-            score_res = await db_conn.execute(
-                select([alchemy_table.c.id, alchemy_table.c.pp]).where(
-                    sqlalchemy.and_(
-                        alchemy_table.c.userid == self.player.id,
-                        alchemy_table.c.map_md5 == self.bmap.md5,
-                        alchemy_table.c.mode == self.mode.as_vanilla,
-                        alchemy_table.c.status == 2,
-                    ),
+        alchemy_table = getattr(app.db_models, scores_table)
+        res = await app.services.database.fetch_one(
+            select([alchemy_table.c.id, alchemy_table.c.pp]).where(
+                sqlalchemy.and_(
+                    alchemy_table.c.userid == self.player.id,
+                    alchemy_table.c.map_md5 == self.bmap.md5,
+                    alchemy_table.c.mode == self.mode.as_vanilla,
+                    alchemy_table.c.status == 2,
                 ),
-            )
-
-            res = score_res.fetchone()
+            ),
+        )
 
         if res:
             # we have a score on the map.

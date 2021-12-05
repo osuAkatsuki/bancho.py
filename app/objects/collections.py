@@ -8,16 +8,14 @@ from typing import overload
 from typing import Sequence
 from typing import Union
 
-import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from sqlalchemy.ext.asyncio.session import AsyncSession
+import databases.core
 from sqlalchemy.sql.expression import select
 
 import app.db_models
 import app.misc.utils
 import app.services
-from app import services
 from app.constants.privileges import Privileges
 from app.misc.utils import make_safe_name
 from app.objects import glob
@@ -105,10 +103,10 @@ class Channels(list[Channel]):
         if glob.app.debug:
             log(f"{c} removed from channels list.")
 
-    async def prepare(self, db_conn: AsyncSession) -> None:
+    async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        channel_res = await db_conn.execute(app.db_models.channels.select())
+        channel_res = await db_conn.fetch_all(app.db_models.channels.select())
         self.extend(
             [
                 Channel(
@@ -118,7 +116,7 @@ class Channels(list[Channel]):
                     write_priv=Privileges(row["write_priv"]),
                     auto_join=row["auto_join"] == 1,
                 )
-                for row in channel_res.fetchall()
+                for row in channel_res
             ],
         )
 
@@ -242,8 +240,8 @@ class Players(list[Player]):
         attr, val = self._parse_attr(kwargs)
 
         # try to get from sql.
-        async with app.services.database_session() as db_conn:
-            player_res = await db_conn.execute(
+        async with app.services.database.connection() as db_conn:
+            res = await db_conn.fetch_one(
                 select(
                     [
                         app.db_models.users.c.id,
@@ -257,8 +255,6 @@ class Players(list[Player]):
                     ],
                 ).where(getattr(app.db_models.users, attr) == val),
             )
-
-            res = player_res.fetchone()
 
         if not res:
             return
@@ -374,10 +370,10 @@ class MapPools(list[MapPool]):
         if glob.app.debug:
             log(f"{mp} removed from mappools list.")
 
-    async def prepare(self, db_conn: AsyncSession) -> None:
+    async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching mappools from sql.", Ansi.LCYAN)
-        pool_res = await db_conn.execute(app.db_models.tourney_pools.select())
+        pool_res = await db_conn.fetch_all(app.db_models.tourney_pools.select())
         self.extend(
             [
                 MapPool(
@@ -388,7 +384,7 @@ class MapPools(list[MapPool]):
                         id=row["created_by"],
                     ),
                 )
-                for row in pool_res.fetchall()
+                for row in pool_res
             ],
         )
 
@@ -455,17 +451,18 @@ class Clans(list[Clan]):
         if glob.app.debug:
             log(f"{c} removed from clans list.")
 
-    async def prepare(self, db_conn: AsyncSession) -> None:
+    async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
-        clan_res = await db_conn.execute(app.db_models.clans.select())
-        self.extend([Clan(**row) for row in clan_res.fetchall()])
+        self.extend(
+            [Clan(**row) async for row in db_conn.iterate(app.db_models.clans.select())]
+        )
 
         for clan in self:
             await clan.members_from_sql(db_conn)
 
 
-async def initialize_ram_caches(db_conn: AsyncSession) -> None:
+async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
     # static (inactive) sets, in ram & sql
     await glob.channels.prepare(db_conn)
@@ -484,8 +481,7 @@ async def initialize_ram_caches(db_conn: AsyncSession) -> None:
     )
     glob.players.append(glob.bot)
 
-    ach_res = await db_conn.execute(app.db_models.achievements.select())
-    for row in ach_res.fetchall():
+    async for row in db_conn.iterate(app.db_models.achievements.select()):
         # NOTE: achievement conditions are stored as stringified python
         # expressions in the database to allow for extensive customizability.
         condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
@@ -494,10 +490,11 @@ async def initialize_ram_caches(db_conn: AsyncSession) -> None:
         glob.achievements.append(achievement)
 
     # static api keys
-    key_res = await db_conn.execute(
-        select([app.db_models.users.c.id, app.db_models.users.c.api_key]).where(
-            app.db_models.users.c.api_key.isnot(None),
-        ),
-    )
-
-    glob.api_keys = {row["api_key"]: row["id"] for row in key_res.fetchall()}
+    glob.api_keys = {
+        row["api_key"]: row["id"]
+        async for row in db_conn.iterate(
+            select([app.db_models.users.c.id, app.db_models.users.c.api_key]).where(
+                app.db_models.users.c.api_key.isnot(None),
+            ),
+        )
+    }

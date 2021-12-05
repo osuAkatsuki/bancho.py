@@ -14,6 +14,7 @@ from typing import TypeVar
 from typing import Union
 
 import aiomysql
+from databases.core import Connection
 import orjson
 import pymysql
 import requests
@@ -22,6 +23,7 @@ from cmyui.logging import log
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
+import app.db_models
 
 __all__ = (
     # TODO: organize/sort these
@@ -112,11 +114,16 @@ def make_safe_name(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
-async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
+async def fetch_bot_name(db_cursor: Connection) -> str:
     """Fetch the bot's name from the database, if available."""
-    await db_cursor.execute("SELECT name FROM users WHERE id = 1")
+    bot_name = await db_cursor.fetch_val(
+        app.db_models.users.select(app.db_models.users.c.name).where(
+            app.db_models.users.c.id == 1
+        ),
+        column=0,
+    )
 
-    if db_cursor.rowcount == 0:
+    if not bot_name:
         log(
             "Couldn't find bot account in the database, "
             "defaulting to BanchoBot for their name.",
@@ -124,7 +131,7 @@ async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
         )
         return "BanchoBot"
 
-    return (await db_cursor.fetch_one())["name"]
+    return bot_name
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:

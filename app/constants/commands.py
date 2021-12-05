@@ -31,10 +31,14 @@ import psutil
 from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
+import sqlalchemy
+from sqlalchemy.sql.expression import select
+from sqlalchemy.sql.functions import func
 
 import app.misc.utils
+import app.services
+import app.db_models
 import packets
-from app import services
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -256,15 +260,21 @@ async def changename(ctx: Context) -> Optional[str]:
     if name in glob.config.disallowed_names:
         return "Disallowed username; pick another."
 
-    if await services.database.fetch_one("SELECT 1 FROM users WHERE name = %s", [name]):
+    if await app.services.database.fetch_one(
+        app.db_models.users.select().where(app.db_models.users.c.name == name)
+    ):
         return "Username already taken by another player."
 
     # all checks passed, update their name
     safe_name = name.lower().replace(" ", "_")
 
-    await services.database.execute(
-        "UPDATE users SET name = %s, safe_name = %s WHERE id = %s",
-        [name, safe_name, ctx.player.id],
+    await app.services.database.execute(
+        app.db_models.users.update()
+        .values(
+            name=name,
+            safe_name=safe_name,
+        )
+        .where(app.db_models.users.c.id == ctx.player.id)
     )
 
     ctx.player.enqueue(
@@ -374,17 +384,20 @@ async def top(ctx: Context) -> Optional[str]:
 
     mode = ["osu", "taiko", "catch", "mania"].index(mode_str)
     table = f"scores_{special_mode_str}"
+    alchemy_table = getattr(app.db_models, table)
 
-    scores = await services.database.fetch_all(
-        "SELECT *, b.id AS bmapid "
-        f"FROM {table} s "
-        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-        "WHERE s.userid = %s "
-        "AND s.mode = %s "
-        "AND s.status = 2 "
-        "AND b.status in (2, 3) "
-        "ORDER BY s.pp DESC LIMIT 10",
-        [p.id, mode],
+    scores = await app.services.database.fetch_all(
+        select([alchemy_table, app.db_models.maps.c.id.label("bmapid")])
+        .where(
+            sqlalchemy.and_(
+                alchemy_table.c.userid == p.id,
+                alchemy_table.c.mode == mode,
+                alchemy_table.c.status == 2,
+                app.db_models.maps.c.status in (2, 3),
+            )
+        )
+        .order_by(alchemy_table.c.pp.desc())
+        .limit(10)
     )
 
     if not scores:
@@ -558,11 +571,13 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    await services.database.execute(
-        "INSERT INTO map_requests "
-        "(map_id, player_id, datetime, active) "
-        "VALUES (%s, %s, NOW(), 1)",
-        [bmap.id, ctx.player.id],
+    await app.services.database.execute(
+        app.db_models.map_requests.insert().values(
+            map_id=bmap.id,
+            player_id=ctx.player.id,
+            datetime=func.now(),
+            active=1,
+        )
     )
 
     return "Request submitted."
@@ -581,9 +596,10 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await services.database.execute(
-        "UPDATE users SET api_key = %s WHERE id = %s",
-        [ctx.player.api_key, ctx.player.id],
+    await app.services.database.execute(
+        app.db_models.users.update()
+        .values(api_key=ctx.player.api_key)
+        .where(app.db_models.users.c.id == ctx.player.id)
     )
     glob.api_keys[ctx.player.api_key] = ctx.player.id
 
@@ -603,9 +619,14 @@ async def requests(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    res = await services.database.fetch_all(
-        "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
-        _dict=False,  # return rows as tuples
+    res = await app.services.database.fetch_all(
+        select(
+            [
+                app.db_models.map_requests.c.map_id,
+                app.db_models.map_requests.c.player_id,
+                app.db_models.map_requests.c.datetime,
+            ]
+        ).where(app.db_models.map_requests.c.active == 1)
     )
 
     if not res:
@@ -659,43 +680,46 @@ async def _map(ctx: Context) -> Optional[str]:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    async with services.database.connection() as conn:
-        async with conn.cursor() as db_cursor:
-            if ctx.args[1] == "set":
-                # update whole set
-                await db_cursor.execute(
-                    "UPDATE maps SET status = %s, frozen = 1 WHERE set_id = %s",
-                    [new_status, bmap.set_id],
+    async with app.services.database.connection() as db_conn:
+        if ctx.args[1] == "set":
+            # update whole set
+            await db_conn.execute(
+                app.db_models.maps.update()
+                .values(status=new_status.value, frozen=1)
+                .where(app.db_models.maps.c.set_id == bmap.set_id)
+            )
+
+            # select all map ids for clearing map requests.
+            maps = await db_conn.fetch_all(
+                app.db_models.maps.select(app.db_models.maps.c.id).where(
+                    app.db_models.maps.c.set_id == bmap.set_id
                 )
+            )
+            map_ids = [row[0] async for row in maps]
 
-                # select all map ids for clearing map requests.
-                await db_cursor.execute(
-                    "SELECT id FROM maps WHERE set_id = %s",
-                    [bmap.set_id],
-                )
-                map_ids = [row[0] async for row in db_cursor]
+            for bmap in glob.cache["beatmapset"][bmap.set_id].maps:
+                bmap.status = new_status
 
-                for bmap in glob.cache["beatmapset"][bmap.set_id].maps:
-                    bmap.status = new_status
+        else:
+            # update only map
+            await db_conn.execute(
+                app.db_models.maps.update()
+                .values(status=new_status.value, frozen=1)
+                .where(app.db_models.maps.c.id == bmap.id)
+            )
 
-            else:
-                # update only map
-                await db_cursor.execute(
-                    "UPDATE maps SET status = %s, frozen = 1 WHERE id = %s",
-                    [new_status, bmap.id],
-                )
+            map_ids = [bmap.id]
 
-                map_ids = [bmap.id]
+            if bmap.md5 in glob.cache["beatmap"]:
+                glob.cache["beatmap"][bmap.md5].status = new_status
 
-                if bmap.md5 in glob.cache["beatmap"]:
-                    glob.cache["beatmap"][bmap.md5].status = new_status
-
-            # deactivate rank requests for all ids
-            for map_id in map_ids:
-                await db_cursor.execute(
-                    "UPDATE map_requests SET active = 0 WHERE map_id = %s",
-                    [map_id],
-                )
+        # deactivate rank requests for all ids
+        for map_id in map_ids:
+            await db_conn.execute(
+                app.db_models.map_requests.update()
+                .values(active=0)
+                .where(app.db_models.map_requests.c.map_id == map_id)
+            )
 
     return f"{bmap.embed} updated to {new_status!s}."
 
@@ -722,12 +746,21 @@ async def notes(ctx: Context) -> Optional[str]:
     elif days <= 0:
         return "Invalid syntax: !notes <name> <days_back>"
 
-    res = await services.database.fetch_all(
-        "SELECT `msg`, `time` "
-        "FROM `logs` WHERE `to` = %s "
-        "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - %s "
-        "ORDER BY `time` ASC",
-        [t.id, days * 86400],
+    res = await app.services.database.fetch_all(
+        select(
+            [
+                app.db_models.logs.c.msg,
+                app.db_models.logs.c.time,
+            ]
+        )
+        .where(
+            sqlalchemy.and_(
+                app.db_models.logs.c.to == t.id,
+                func.unix_timestamp(app.db_models.logs.c.time)
+                >= func.unix_timestamp(func.now()) - days * 86400,
+            )
+        )
+        .order_by(app.db_models.logs.c.time.asc())
     )
 
     if not res:
@@ -747,11 +780,15 @@ async def addnote(ctx: Context) -> Optional[str]:
 
     log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
 
-    await services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `msg`, `time`) "
-        "VALUES (%s, %s, %s, NOW())",
-        [ctx.player.id, t.id, log_msg],
+    await app.services.database.execute(
+        app.db_models.logs.insert(
+            values={  # TODO
+                "from": ctx.player.id,
+                "to": t.id,
+                "msg": log_msg,
+                "time": func.now(),
+            }
+        )
     )
 
     return f"Added note to {t}."
@@ -1160,33 +1197,39 @@ async def recalc(ctx: Context) -> Optional[str]:
         if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
             return "Mapfile could not be found; this incident has been reported."
 
-        async with services.database.connection() as conn:
-            async with (
-                conn.cursor(aiomysql.DictCursor) as select_cursor,
-                conn.cursor(aiomysql.Cursor) as update_cursor,
-            ):
-                with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
-                    ezpp.set_mode(0)  # TODO: other modes
-                    for table in ("scores_vn", "scores_rx", "scores_ap"):
-                        await select_cursor.execute(
-                            "SELECT id, acc, mods, max_combo, nmiss "
-                            f"FROM {table} "
-                            "WHERE map_md5 = %s AND mode = 0",  # TODO: ""
-                            [bmap.md5],
-                        )
-
-                        async for row in select_cursor:
-                            ezpp.set_mods(row["mods"])
-                            ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                            ezpp.set_combo(row["max_combo"])
-                            ezpp.set_accuracy_percent(row["acc"])
-
-                            ezpp.calculate(osu_file_path)
-
-                            await update_cursor.execute(
-                                f"UPDATE {table} SET pp = %s WHERE id = %s",
-                                [ezpp.get_pp(), row["id"]],
+        async with app.services.database.connection() as db_conn:
+            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                ezpp.set_mode(0)  # TODO: other modes
+                for table in ("scores_vn", "scores_rx", "scores_ap"):
+                    alchemy_table = getattr(app.db_models, table)
+                    async for row in db_conn.iterate(
+                        select(
+                            [
+                                alchemy_table.c.id,
+                                alchemy_table.c.acc,
+                                alchemy_table.c.mods,
+                                alchemy_table.c.max_combo,
+                                alchemy_table.c.nmiss,
+                            ]
+                        ).where(
+                            sqlalchemy.and_(
+                                alchemy_table.c.map_md5 == bmap.md5,
+                                alchemy_table.c.mode == 0,
                             )
+                        )
+                    ):
+                        ezpp.set_mods(row["mods"])
+                        ezpp.set_nmiss(row["nmiss"])  # clobbers acc
+                        ezpp.set_combo(row["max_combo"])
+                        ezpp.set_accuracy_percent(row["acc"])
+
+                        ezpp.calculate(osu_file_path)
+
+                        await db_conn.execute(
+                            alchemy_table.update().values(
+                                pp=ezpp.get_pp(), id=row["id"]
+                            )
+                        )
 
         return "Map recalculated."
     else:
@@ -1197,61 +1240,68 @@ async def recalc(ctx: Context) -> Optional[str]:
             staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
             st = time.time()
 
-            async with services.database.connection() as conn:
-                async with (
-                    conn.cursor(aiomysql.Cursor) as bmap_select_cursor,
-                    conn.cursor(aiomysql.DictCursor) as score_select_cursor,
-                    conn.cursor(aiomysql.Cursor) as update_cursor,
-                ):
-                    await bmap_select_cursor.execute(
-                        "SELECT id, md5 FROM maps WHERE passes > 0",
-                    )
+            async with app.services.database.connection() as db_conn:
+                maps = await db_conn.fetch_all(
+                    select(
+                        [
+                            app.db_models.maps.c.id,
+                            app.db_models.maps.c.md5,
+                        ]
+                    ).where(app.db_models.maps.c.passes > 0)
+                )
 
-                    map_count = bmap_select_cursor.rowcount
-                    staff_chan.send_bot(f"Recalculating {map_count} maps.")
+                staff_chan.send_bot(f"Recalculating {len(maps)} maps.")
 
-                    async for bmap_row in bmap_select_cursor:
-                        bmap_id, bmap_md5 = bmap_row
+                async for bmap_row in maps:
+                    bmap_id, bmap_md5 = bmap_row
 
-                        osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                        if not await ensure_local_osu_file(
-                            osu_file_path,
-                            bmap_id,
-                            bmap_md5,
-                        ):
-                            staff_chan.send_bot(
-                                "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
-                            )
-                            continue
+                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
+                    if not await ensure_local_osu_file(
+                        osu_file_path,
+                        bmap_id,
+                        bmap_md5,
+                    ):
+                        staff_chan.send_bot(
+                            "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
+                        )
+                        continue
 
-                        with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
-                            ezpp.set_mode(0)  # TODO: other modes
-                            for table in ("scores_vn", "scores_rx", "scores_ap"):
-                                await score_select_cursor.execute(
-                                    "SELECT id, acc, mods, max_combo, nmiss "
-                                    f"FROM {table} "
-                                    "WHERE map_md5 = %s AND mode = 0",  # TODO: ""
-                                    [bmap_md5],
+                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                        ezpp.set_mode(0)  # TODO: other modes
+                        for table in ("scores_vn", "scores_rx", "scores_ap"):
+                            alchemy_table = getattr(app.db_models, table)
+                            async for row in db_conn.iterate(
+                                select(
+                                    [
+                                        alchemy_table.c.id,
+                                        alchemy_table.c.acc,
+                                        alchemy_table.c.mods,
+                                        alchemy_table.c.max_combo,
+                                        alchemy_table.c.nmiss,
+                                    ]
+                                ).where(
+                                    sqlalchemy.and_(
+                                        alchemy_table.c.map_md5 == bmap_md5,
+                                        alchemy_table.c.mode == 0,
+                                    )
+                                )
+                            ):
+                                ezpp.set_mods(row["mods"])
+                                ezpp.set_nmiss(row["nmiss"])  # clobbers acc
+                                ezpp.set_combo(row["max_combo"])
+                                ezpp.set_accuracy_percent(row["acc"])
+
+                                ezpp.calculate(osu_file_path)
+
+                                await db_conn.execute(
+                                    alchemy_table.update().values(
+                                        pp=ezpp.get_pp(), id=row["id"]
+                                    )
                                 )
 
-                                async for row in score_select_cursor:
-                                    ezpp.set_mods(row["mods"])
-                                    ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                                    ezpp.set_combo(row["max_combo"])
-                                    ezpp.set_accuracy_percent(row["acc"])
-
-                                    ezpp.calculate(osu_file_path)
-
-                                    await update_cursor.execute(
-                                        f"UPDATE {table} "
-                                        "SET pp = %s "
-                                        "WHERE id = %s",
-                                        [ezpp.get_pp(), row["id"]],
-                                    )
-
-                        # leave at least 1/100th of
-                        # a second for handling conns.
-                        await asyncio.sleep(0.01)
+                    # leave at least 1/100th of
+                    # a second for handling conns.
+                    await asyncio.sleep(0.01)
 
             elapsed = app.misc.utils.seconds_readable(int(time.time() - st))
             staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
@@ -1338,13 +1388,12 @@ async def wipemap(ctx: Context) -> Optional[str]:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    async with services.database.connection() as conn:
-        async with conn.cursor() as db_cursor:
-            for t in ("vn", "rx", "ap"):
-                await db_cursor.execute(
-                    f"DELETE FROM scores_{t} WHERE map_md5 = %s",
-                    [map_md5],
-                )
+    async with app.services.database.connection() as db_conn:
+        for t in ("vn", "rx", "ap"):
+            alchemy_table = getattr(app.db_models, f"scores_{t}")
+            await db_conn.execute(
+                alchemy_table.delete().where(alchemy_table.c.map_md5 == map_md5)
+            )
 
     return "Scores wiped."
 
@@ -2180,17 +2229,19 @@ async def pool_create(ctx: Context) -> Optional[str]:
         return "Pool already exists by that name!"
 
     # insert pool into db
-    await services.database.execute(
-        "INSERT INTO tourney_pools "
-        "(name, created_at, created_by) "
-        "VALUES (%s, NOW(), %s)",
-        [name, ctx.player.id],
+    await app.services.database.execute(
+        app.db_models.tourney_pools.insert().values(
+            name=name,
+            created_at=func.now(),
+            created_by=ctx.player.id,
+        )
     )
 
     # add to cache (get from sql for id & time)
-    res = await services.database.fetch_one(
-        "SELECT * FROM tourney_pools WHERE name = %s",
-        [name],
+    res = await app.services.database.fetch_one(
+        select([app.db_models.tourney_pools]).where(
+            app.db_models.tourney_pools.c.name == name
+        )
     )
 
     res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
@@ -2212,7 +2263,11 @@ async def pool_delete(ctx: Context) -> Optional[str]:
         return "Could not find a pool by that name!"
 
     # delete from db
-    await services.database.execute("DELETE FROM tourney_pools WHERE name = %s", [name])
+    await app.services.database.execute(
+        app.db_models.tourney_pools.delete().where(
+            app.db_models.tourney_pools.c.name == name
+        )
+    )
 
     # remove from cache
     glob.pools.remove(pool)
@@ -2254,11 +2309,13 @@ async def pool_add(ctx: Context) -> Optional[str]:
         return "Map is already in the pool!"
 
     # insert into db
-    await services.database.execute(
-        "INSERT INTO tourney_pool_maps "
-        "(map_id, pool_id, mods, slot) "
-        "VALUES (%s, %s, %s, %s)",
-        [bmap.id, pool.id, mods, slot],
+    await app.services.database.execute(
+        app.db_models.tourney_pool_maps.insert().values(
+            map_id=bmap.id,
+            pool_id=pool.id,
+            mods=mods,
+            slot=slot,
+        )
     )
 
     # add to cache
@@ -2291,9 +2348,13 @@ async def pool_remove(ctx: Context) -> Optional[str]:
         return f"Found no {mods_slot} pick in the pool."
 
     # delete from db
-    await services.database.execute(
-        "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s",
-        [mods, slot],
+    await app.services.database.execute(
+        app.db_models.tourney_pool_maps.delete().where(
+            sqlalchemy.and_(
+                app.db_models.tourney_pool_maps.c.mods == mods,
+                app.db_models.tourney_pool_maps.c.slot == slot,
+            )
+        )
     )
 
     # remove from cache
@@ -2387,11 +2448,13 @@ async def clan_create(ctx: Context) -> Optional[str]:
     created_at = datetime.now()
 
     # add clan to sql (generates id)
-    clan_id = await services.database.execute(
-        "INSERT INTO clans "
-        "(name, tag, created_at, owner) "
-        "VALUES (%s, %s, %s, %s)",
-        [name, tag, created_at, ctx.player.id],
+    clan_id = await app.services.database.execute(
+        app.db_models.clans.insert().values(
+            name=name,
+            tag=tag,
+            created_at=created_at,
+            owner=ctx.player.id,
+        )
     )
 
     # add clan to cache
@@ -2414,12 +2477,10 @@ async def clan_create(ctx: Context) -> Optional[str]:
     if "full_name" in ctx.player.__dict__:
         del ctx.player.full_name  # wipe cached_property
 
-    await services.database.execute(
-        "UPDATE users "
-        "SET clan_id = %s, "
-        "clan_priv = 3 "  # ClanPrivileges.Owner
-        "WHERE id = %s",
-        [clan_id, ctx.player.id],
+    await app.services.database.execute(
+        app.db_models.users.update()
+        .values(clan_id=clan_id, clan_priv=ClanPrivileges.Owner)
+        .where(app.db_models.users.c.id == ctx.player.id)
     )
 
     # announce clan creation
@@ -2446,7 +2507,9 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             return "You're not a member of a clan!"
 
     # delete clan from sql
-    await services.database.execute("DELETE FROM clans WHERE id = %s", [clan.id])
+    await app.services.database.execute(
+        app.db_models.clans.delete().where(app.db_models.clans.c.id == clan.id)
+    )
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
@@ -2458,9 +2521,10 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             if "full_name" in member.__dict__:
                 del member.full_name  # wipe cached_property
 
-    await services.database.execute(
-        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = %s",
-        [clan.id],
+    await app.services.database.execute(
+        app.db_models.users.update()
+        .values(clan_id=0, clan_priv=0)
+        .where(app.db_models.users.c.clan_id == clan.id)
     )
 
     # remove clan from cache
@@ -2486,13 +2550,15 @@ async def clan_info(ctx: Context) -> Optional[str]:
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    res = await services.database.fetch_all(
-        "SELECT name, clan_priv "
-        "FROM users "
-        "WHERE clan_id = %s "
-        "ORDER BY clan_priv DESC",
-        [clan.id],
-        _dict=False,
+    res = await app.services.database.fetch_all(
+        select(
+            [
+                app.db_models.users.c.name,
+                app.db_models.users.c.clan_priv,
+            ]
+        )
+        .where(app.db_models.users.c.clan_id == clan.id)
+        .order_by(app.db_models.users.c.clan_priv.desc())
     )
 
     for member_name, clan_priv in res:

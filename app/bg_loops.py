@@ -3,9 +3,12 @@ import time
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
+import sqlalchemy
+from sqlalchemy.sql.functions import func
 
+import app.services
 import packets
-from app import services
+import app.db_models
 from app.constants.privileges import Privileges
 from app.objects import glob
 
@@ -32,13 +35,14 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         if glob.app.debug:
             log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
-        expired_donors = await services.database.fetch_all(
-            "SELECT id FROM users "
-            "WHERE donor_end <= UNIX_TIMESTAMP() "
-            "AND priv & 48",  # 48 = Supporter | Premium
-        )
-
-        for expired_donor in expired_donors:
+        async for expired_donor in app.services.database.iterate(
+            app.db_models.users.select(app.db_models.users.c.id).where(
+                sqlalchemy.and_(
+                    app.db_models.users.c.donor_expire_time <= func.unix_timestamp(),
+                    app.db_models.users.c.priv & 48,  # 48 = Supporter | Premium
+                )
+            )
+        ):
             p = await glob.players.from_cache_or_sql(id=expired_donor["id"])
 
             if not p:  # TODO guaranteed return method
@@ -46,9 +50,10 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
 
             # TODO: perhaps make a `revoke_donor` method?
             await p.remove_privs(Privileges.DONATOR)
-            await services.database.execute(
-                "UPDATE users SET donor_end = 0 WHERE id = :id",
-                {"id": p.id},
+            await app.services.database.execute(
+                app.db_models.users.update()
+                .values(donor_end=0)
+                .where(app.db_models.users.c.id == p.id)
             )
 
             if p.online:
