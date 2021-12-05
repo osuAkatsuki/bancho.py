@@ -6,8 +6,9 @@ from typing import TypedDict
 import aiohttp
 import databases
 import geoip2.database
-from cmyui.logging import Ansi
 from cmyui.logging import log
+from cmyui.logging import printc
+from cmyui.logging import Rainbow
 
 import app.misc.utils
 import app.settings
@@ -82,13 +83,62 @@ async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     }
 
 
+import pickle
+import secrets
+from app.objects import glob
+
+STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
+
+
+async def log_strange_occurrence(obj: object) -> None:
+    pickled_obj: bytes = pickle.dumps(obj)
+    uploaded = False
+
+    if glob.config.automatically_report_problems:
+        # automatically reporting problems to cmyui's server
+        async with http_session.post(
+            url="https://log.cmyui.xyz/",
+            headers={
+                "Gulag-Version": repr(glob.version),
+                "Gulag-Domain": glob.config.domain,
+            },
+            data=pickled_obj,
+        ) as resp:
+            if resp.status == 200 and (await resp.read()) == b"ok":
+                uploaded = True
+                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
+                log("Thank you for your participation! <3", Rainbow)
+            else:
+                log(
+                    f"Autoupload to cmyui's server failed (HTTP {resp.status})",
+                    Ansi.LRED,
+                )
+
+    if not uploaded:
+        # log to a file locally, and prompt the user
+        while True:
+            log_file = STRANGE_LOG_DIR / f"strange_{secrets.token_hex(4)}.db"
+            if not log_file.exists():
+                break
+
+        log_file.touch(exist_ok=False)
+        log_file.write_bytes(pickled_obj)
+
+        log("Logged strange occurrence to", Ansi.LYELLOW, end=" ")
+        printc("/".join(log_file.parts[-4:]), Ansi.LBLUE)
+
+        log(
+            "Greatly appreciated if you could forward this to cmyui#0425 :)",
+            Ansi.LYELLOW,
+        )
+
+
 # dependency management
 from typing import AsyncGenerator
 
 import cmyui
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from app import services
 import importlib.metadata
 
 
@@ -111,7 +161,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
 
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency}/json"
-        async with services.http_session.get(url) as resp:
+        async with http_session.get(url) as resp:
             if resp.status == 200 and (json := await resp.json()):
                 latest_ver = cmyui.Version.from_str(json["info"]["version"])
 

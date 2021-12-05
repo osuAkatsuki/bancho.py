@@ -3,8 +3,10 @@ from enum import IntEnum
 from enum import unique
 from typing import TYPE_CHECKING
 
-import aiomysql
+import databases.core
 
+import app.db_models
+import app.services
 from app.misc.utils import escape_enum
 from app.misc.utils import pymysql_encode
 
@@ -51,10 +53,15 @@ class Clan:
         """Add a given player to the clan's members."""
         self.members.add(p.id)
 
-        await services.database.execute(
-            "UPDATE users SET clan_id = %s, clan_priv = 1 WHERE id = %s",
-            [self.id, p.id],
-        )
+        async with app.services.database.connection() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update()
+                .values(
+                    clan_id=self.id,
+                    clan_priv=1,
+                )
+                .where(app.db_models.users.c.id == p.id),
+            )
 
         p.clan = self
         p.clan_priv = ClanPrivileges.Member
@@ -63,47 +70,55 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.members.remove(p.id)
 
-        async with services.database.connection() as conn:
-            async with conn.cursor() as db_cursor:
-                await db_cursor.execute(
-                    "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = %s",
-                    [p.id],
+        async with app.services.database.connection() as db_conn:
+            await db_conn.execute(
+                app.db_models.users.update()
+                .values(clan_id=0, clan_priv=0)
+                .where(app.db_models.users.c.id == p.id),
+            )
+
+            if not self.members:
+                # no members left, disband clan.
+                await db_conn.execute(
+                    app.db_models.clans.delete().where(
+                        app.db_models.clans.c.id == self.id,
+                    ),
+                )
+            elif p.id == self.owner:
+                # owner leaving and members left,
+                # transfer the ownership.
+                # TODO: prefer officers
+                self.owner = next(iter(self.members))
+
+                await db_conn.execute(
+                    app.db_models.clans.update()
+                    .values(owner=self.owner)
+                    .where(app.db_models.clans.c.id == self.id),
                 )
 
-                if not self.members:
-                    # no members left, disband clan.
-                    await db_cursor.execute(
-                        "DELETE FROM clans WHERE id = %s",
-                        [self.id],
+                await db_conn.execute(
+                    app.db_models.users.update()
+                    .values(
+                        clan_priv=3,
                     )
-                elif p.id == self.owner:
-                    # owner leaving and members left,
-                    # transfer the ownership.
-                    # TODO: prefer officers
-                    self.owner = next(iter(self.members))
-
-                    await db_cursor.execute(
-                        "UPDATE clans SET owner = %s WHERE id = %s",
-                        [self.owner, self.id],
-                    )
-
-                    await db_cursor.execute(
-                        "UPDATE users SET clan_priv = 3 WHERE id = %s",
-                        [self.owner],
-                    )
+                    .where(app.db_models.users.c.id == self.owner),
+                )
 
         p.clan = None
         p.clan_priv = None
 
-    async def members_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def members_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Fetch all members from sql."""
         # TODO: in the future, we'll want to add
         # clan 'mods', so fetching rank here may
         # be a good idea to sort people into
         # different roles.
-        await db_cursor.execute("SELECT id FROM users WHERE clan_id = %s", [self.id])
 
-        async for row in db_cursor:
+        async for row in db_conn.iterate(
+            app.db_models.users.select(app.db_models.users.c.id).where(
+                app.db_models.users.c.clan_id == self.id,
+            ),
+        ):
             self.members.add(row["id"])
 
     def __repr__(self) -> str:

@@ -14,6 +14,7 @@ from typing import Type
 
 import bcrypt
 import databases.core
+import sqlalchemy
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -23,7 +24,12 @@ from fastapi.param_functions import Header
 from fastapi.requests import Request
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import Insert
+from sqlalchemy.sql.expression import select
+from sqlalchemy.sql.functions import func
 
+import app.db_models
 import app.misc.utils
 import app.services
 import packets
@@ -358,7 +364,7 @@ class SendMessage(BasePacket):
 
             t_chan.send(msg, sender=p)
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         log(f"{p} @ {t_chan}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -376,7 +382,7 @@ class Logout(BasePacket):
 
         p.logout()
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
 
 
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
@@ -412,6 +418,14 @@ OFFLINE_NOTIFICATION = packets.notification(
 )
 
 DELTA_90_DAYS = timedelta(days=90)
+
+# allows us to have an duplicate update format
+@compiles(Insert)
+def append_string(insert, compiler, **kw):
+    s = compiler.visit_insert(insert, **kw)
+    if "append_string" in insert.kwargs:
+        return s + " " + insert.kwargs["append_string"]
+    return s
 
 
 async def login(
@@ -535,15 +549,10 @@ async def login(
                     return "no", data
 
     user_info = await db_conn.fetch_one(
-        "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = :username",
-        {"username": app.misc.utils.make_safe_name(username)},
+        app.db_models.users.select().where(
+            app.db_models.users.c.safe_name == app.misc.utils.make_safe_name(username),
+        ),
     )
-
-    # make user_info mutable
-    # TODO: fix this hackery
-    user_info = dict(user_info)  # type: ignore
 
     if not user_info:
         # no account by this name exists.
@@ -551,6 +560,8 @@ async def login(
             packets.notification(f"{BASE_DOMAIN}: Unknown username")
             + packets.user_id(-1)
         )
+
+    user_info = dict(user_info)
 
     if using_tourney_client and not (
         user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
@@ -583,54 +594,55 @@ async def login(
     """ login credentials verified """
 
     await db_conn.execute(
-        "INSERT INTO ingame_logins "
-        "(userid, ip, osu_ver, osu_stream, datetime) "
-        "VALUES (:userid, :ip, :osu_ver, :osu_stream, NOW())",
-        {
-            "userid": user_info["id"],
-            "ip": str(ip),
-            "osu_ver": osu_ver_date,
-            "osu_stream": osu_ver_stream,
-        },
+        app.db_models.ingame_logins.insert().values(
+            user_id=user_info["id"],
+            ip=str(ip),
+            osu_ver=osu_ver_date,
+            osu_stream=osu_ver_stream,
+            datetime=func.now(),
+        ),
     )
 
     await db_conn.execute(
-        "INSERT INTO client_hashes "
-        "(userid, osupath, adapters, uninstall_id,"
-        " disk_serial, latest_time, occurrences) "
-        "VALUES (:userid, :osupath, :adapters, :uninstall, :disk, NOW(), 1) "
-        "ON DUPLICATE KEY UPDATE "
-        "occurrences = occurrences + 1, "
-        "latest_time = NOW() ",
-        {
-            "userid": user_info["id"],
-            "osupath": osu_path_md5,
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk": disk_sig_md5,
-        },
+        app.db_models.client_hashes.insert(
+            append_string=(  # appending to query string
+                "ON DUPLICATE KEY UPDATE "
+                "occurrences = occurrences + 1, "
+                "latest_time = NOW()"
+            ),
+        ).values(
+            userid=user_info["id"],
+            osupath=osu_path_md5,
+            adapters=adapters_md5,
+            uninstall_id=uninstall_md5,
+            disk_serial=disk_sig_md5,
+        ),
     )
 
     # TODO: store adapters individually
 
+    hw_args = app.db_models.client_hashes.c.userid != user_info["id"]
     if is_wine:
-        hw_checks = "h.uninstall_id = :uninstall"
-        hw_args = {"uninstall": uninstall_md5}
+        hw_args.append(
+            app.db_models.client_hashes.c.uninstall_id == uninstall_md5,
+        )
     else:
-        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk"
-        hw_args = {
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk": disk_sig_md5,
-        }
+        hw_args.extend(
+            [
+                app.db_models.client_hashes.c.adapters == adapters_md5,
+                app.db_models.client_hashes.c.uninstall_id == uninstall_md5,
+                app.db_models.client_hashes.c.disk_serial == disk_sig_md5,
+            ],
+        )
 
     hw_matches = await db_conn.fetch_all(
-        "SELECT u.name, u.priv, h.occurrences "
-        "FROM client_hashes h "
-        "INNER JOIN users u ON h.userid = u.id "
-        "WHERE h.userid != %s AND "
-        f"({hw_checks})",
-        hw_args | {"userid": user_info["id"]},
+        select(
+            [
+                app.db_models.users.c.name,
+                app.db_models.users.c.priv,
+                app.db_models.client_hashes.c.occurrences,
+            ],
+        ).where(sqlalchemy.and_(*hw_args)),
     )
 
     if hw_matches:
@@ -683,11 +695,12 @@ async def login(
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
             await db_conn.execute(
-                "UPDATE users SET country = :country WHERE id = :userid",
-                {
-                    "country": user_info["geoloc"]["country"]["acronym"],
-                    "userid": user_info["id"],
-                },
+                app.db_models.users.update()
+                .values(
+                    country=user_info["geoloc"]["country_code"],
+                    userid=user_info["id"],
+                )
+                .where(app.db_models.users.c.id == user_info["id"]),
             )
 
     p = Player(
@@ -770,12 +783,29 @@ async def login(
         # enqueue any messages from their respective authors.
         mail_sent_to = set()  # ids
 
-        async for msg in db_conn.iterate(
-            "SELECT m.`msg`, m.`time`, m.`from_id`, "
-            "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
-            "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = :userid AND m.`read` = 0",
-            {"userid": p.id},
+        async for msg in db_conn.iterate(  # wtf is this.
+            select(
+                [
+                    app.db_models.mail.c.msg,
+                    app.db_models.mail.c.time,
+                    app.db_models.mail.c.from_id,
+                    app.db_models.users.select(
+                        app.db_models.users.c.name,
+                    )
+                    .where(app.db_models.users.c.id == app.db_models.mail.c.from_id)
+                    .label("from"),
+                    app.db_models.users.select(
+                        app.db_models.users.c.name,
+                    )
+                    .where(app.db_models.users.c.id == app.db_models.mail.c.to_id)
+                    .label("to"),
+                ],
+            ).where(
+                sqlalchemy.and_(
+                    app.db_models.mail.c.to_id == p.id,
+                    app.db_models.mail.c.read == 0,
+                ),
+            ),
         ):
             if msg["from"] not in mail_sent_to:
                 data += packets.send_message(
@@ -856,7 +886,7 @@ async def login(
         Ansi.LCYAN,
     )
 
-    p.update_latest_activity()
+    await p.update_latest_activity()
     return p.token, bytes(data)
 
 
@@ -1018,10 +1048,12 @@ class SendPrivateMessage(BasePacket):
 
             # insert mail into db, marked as unread.
             await app.services.database.execute(
-                "INSERT INTO `mail` "
-                "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
-                {"from": p.id, "to": t.id, "msg": msg},
+                app.db_models.mail.insert().values(
+                    from_id=p.id,
+                    to_id=t.id,
+                    msg=msg,
+                    time=func.unix_timestamp(),
+                ),
             )
         else:
             # messaging the bot, check for commands & /np.
@@ -1156,7 +1188,7 @@ class SendPrivateMessage(BasePacket):
 
                     p.send(resp_msg, sender=t)
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         log(f"{p} @ {t}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -1218,7 +1250,7 @@ class MatchCreate(BasePacket):
         glob.channels.append(chan)
         self.match.chat = chan
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         p.join_match(self.match, self.match.passwd)
 
         self.match.chat.send_bot(f"Match created by {p.name}.")
@@ -1293,14 +1325,14 @@ class MatchJoin(BasePacket):
             )
             return
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         p.join_match(m, self.match_passwd)
 
 
 @register(ClientPackets.PART_MATCH)
 class MatchPart(BasePacket):
     async def handle(self, p: Player) -> None:
-        p.update_latest_activity()
+        await p.update_latest_activity()
         p.leave_match()
 
 
@@ -1818,7 +1850,7 @@ class FriendAdd(BasePacket):
         if t.id in p.blocks:
             p.blocks.remove(t.id)
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         await p.add_friend(t)
 
 
@@ -1835,7 +1867,7 @@ class FriendRemove(BasePacket):
         if t is glob.bot:
             return
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
         await p.remove_friend(t)
 
 
@@ -1934,7 +1966,7 @@ class MatchInvite(BasePacket):
             return
 
         t.enqueue(packets.match_invite(p, t.name))
-        p.update_latest_activity()
+        await p.update_latest_activity()
 
         log(f"{p} invited {t} to their match.")
 
@@ -1988,4 +2020,4 @@ class ToggleBlockingDMs(BasePacket):
     async def handle(self, p: Player) -> None:
         p.pm_private = self.value == 1
 
-        p.update_latest_activity()
+        await p.update_latest_activity()
