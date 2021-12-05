@@ -13,24 +13,24 @@ from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
 
-import app.sessions  # TODO: move live server stuff out
-import app.settings
-from app.constants.gamemodes import GameMode
-from app.constants.mods import Mods
-from app.constants.types import osuTypes
-from app.misc.utils import escape_enum
-from app.misc.utils import pymysql_encode
-from app.objects.match import Match
-from app.objects.match import MatchTeams
-from app.objects.match import MatchTeamTypes
-from app.objects.match import MatchWinConditions
-from app.objects.match import ScoreFrame
-from app.objects.match import SlotStatus
+from mount.app import sessions  # TODO: move live server stuff out
+from mount.app import settings
+from mount.app.constants.gamemodes import GameMode
+from mount.app.constants.mods import Mods
+from mount.app.constants.types import osuTypes
+from mount.app.objects.match import Match
+from mount.app.objects.match import MatchTeams
+from mount.app.objects.match import MatchTeamTypes
+from mount.app.objects.match import MatchWinConditions
+from mount.app.objects.match import ScoreFrame
+from mount.app.objects.match import SlotStatus
+from mount.app.utils import escape_enum
+from mount.app.utils import pymysql_encode
 
-# from app.objects.beatmap import BeatmapInfo
+# from mount.app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
-    from app.objects.player import Player
+    from mount.app.objects.player import Player
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -438,7 +438,7 @@ class BanchoPacketReader:
                 self.body_view = self.body_view[4:]
 
         host_id = self.read_i32()
-        m.host = app.sessions.players.get(id=host_id)
+        m.host = sessions.players.get(id=host_id)
 
         m.mode = GameMode(self.read_i8())
         m.win_condition = MatchWinConditions(self.read_i8())
@@ -737,7 +737,7 @@ def bot_stats() -> bytes:
 
     return write(
         ServerPackets.USER_STATS,
-        (app.sessions.bot.id, osuTypes.i32),  # id
+        (sessions.bot.id, osuTypes.i32),  # id
         (status_id, osuTypes.u8),  # action
         (status_txt, osuTypes.string),  # info_text
         ("", osuTypes.string),  # map_md5
@@ -755,7 +755,7 @@ def bot_stats() -> bytes:
 
 # packet id: 11
 def user_stats(p: "Player") -> bytes:
-    if p is app.sessions.bot:
+    if p is sessions.bot:
         return bot_stats()
 
     gm_stats = p.gm_stats
@@ -981,7 +981,7 @@ def protocol_version(ver: int) -> bytes:
 def main_menu_icon() -> bytes:
     return write(
         ServerPackets.MAIN_MENU_ICON,
-        ("|".join(app.settings.MAIN_MENU_ICON), osuTypes.string),
+        ("|".join(settings.MAIN_MENU_ICON), osuTypes.string),
     )
 
 
@@ -1013,8 +1013,8 @@ def match_player_skipped(pid: int) -> bytes:
 def bot_presence() -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
-        (app.sessions.bot.id, osuTypes.i32),
-        (app.sessions.bot.name, osuTypes.string),
+        (sessions.bot.id, osuTypes.i32),
+        (sessions.bot.name, osuTypes.string),
         (-5 + 24, osuTypes.u8),
         (245, osuTypes.u8),  # satellite provider
         (31, osuTypes.u8),
@@ -1026,7 +1026,7 @@ def bot_presence() -> bytes:
 
 # packet id: 83
 def user_presence(p: "Player") -> bytes:
-    if p is app.sessions.bot:
+    if p is sessions.bot:
         return bot_presence()
 
     return write(

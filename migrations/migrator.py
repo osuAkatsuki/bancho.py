@@ -8,9 +8,9 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from sqlalchemy.sql.expression import select
 
-import app.db_models
-import app.services
-from app.objects import glob
+from mount.app import db_models
+from mount.app import services
+from mount.app import settings
 
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
@@ -18,15 +18,15 @@ VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 
 async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
     """Get the last launched version of the server."""
-    row = await app.services.database.fetch_one(
+    row = await services.database.fetch_one(
         select(
             [
-                app.db_models.startups.c.ver_major,
-                app.db_models.startups.c.ver_minor,
-                app.db_models.startups.c.ver_micro,
+                db_models.startups.c.ver_major,
+                db_models.startups.c.ver_minor,
+                db_models.startups.c.ver_micro,
             ],
         )
-        .order_by(app.db_models.startups.c.datetime.desc())
+        .order_by(db_models.startups.c.datetime.desc())
         .limit(1),
     )
 
@@ -34,12 +34,12 @@ async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
         return cmyui.Version(*map(int, row.values()))
 
 
-async def run_sql_migrations() -> None:
+async def run_sql_migrations() -> None:  # TODO
     """Update the sql structure, if it has changed."""
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = glob.version
+    latest_ver = settings.VERSION
 
     if latest_ver == current_ver:
         return  # already up to date
@@ -91,7 +91,7 @@ async def run_sql_migrations() -> None:
     # NOTE: this using a transaction is pretty pointless with mysql since
     # any structural changes to tables will implciticly commit the changes.
     # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with app.services.database.connection() as conn:
+    async with services.database.connection() as conn:
         async with conn.cursor() as db_cursor:
             await conn.begin()
             for query in queries:
