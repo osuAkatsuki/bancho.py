@@ -16,5 +16,6 @@ matches = Matches()
 clans = Clans()
 pools = MapPools()
 achievements: list["Achievement"] = []
+api_keys = {}  # TODO: cleanup
 
 bot: "Player"

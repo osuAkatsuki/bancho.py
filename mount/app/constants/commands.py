@@ -589,7 +589,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
 
     # remove old token
     if ctx.player.api_key:
-        glob.api_keys.pop(ctx.player.api_key)
+        sessions.api_keys.pop(ctx.player.api_key)
 
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
@@ -599,7 +599,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
         .values(api_key=ctx.player.api_key)
         .where(db_models.users.c.id == ctx.player.id),
     )
-    glob.api_keys[ctx.player.api_key] = ctx.player.id
+    sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(packets.notification("/savelog & click popup for an easy copy."))
     return f"Your API key is now: {ctx.player.api_key}"
