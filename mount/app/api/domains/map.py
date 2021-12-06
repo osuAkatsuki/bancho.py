@@ -5,7 +5,7 @@ from fastapi.requests import Request
 from fastapi.responses import RedirectResponse
 
 
-router = APIRouter(prefix="/map", tags=["Beatmaps"])
+router = APIRouter(tags=["Beatmaps"])
 
 # for now, just send everything to osu!
 # eventually if we do bmap submission, we'll need this.

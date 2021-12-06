@@ -6,7 +6,7 @@ from the osu! client, and has a developer rest api for programmatic interaction.
 it's asynchronous design allows it to very efficiently manage the io overhead of an
 osu! private server (many external requests to osu!api, mirror, database, etc.),
 and it implements much more effective caching than any competitive implementations.
-it's written in modern, high-level python(3.9) from the transport (tcp/ip) socket
+it's written in modern, high-level python(3.10) from the transport (tcp/ip) socket
 layer directly using my [lightweight web framework](https://github.com/cmyui/cmyui_pkg).
 
 i aim to make this project the ideal choice for running osu! private servers,

@@ -13,7 +13,6 @@ from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
 
-from mount.app import sessions  # TODO: move live server stuff out
 from mount.app import settings
 from mount.app.constants.gamemodes import GameMode
 from mount.app.constants.mods import Mods
@@ -34,6 +33,9 @@ if TYPE_CHECKING:
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
+
+
+BOT_ID = 1  # TODO: dynamic
 
 
 @unique
@@ -437,8 +439,7 @@ class BanchoPacketReader:
                 # we don't need this, ignore it.
                 self.body_view = self.body_view[4:]
 
-        host_id = self.read_i32()
-        m.host = sessions.players.get(id=host_id)
+        m.host_id = self.read_i32()
 
         m.mode = GameMode(self.read_i8())
         m.win_condition = MatchWinConditions(self.read_i8())
@@ -731,13 +732,13 @@ BOT_STATUSES = (
 
 
 @cache
-def bot_stats() -> bytes:
+def bot_stats(p: "Player") -> bytes:
     # pick at random from list of potential statuses.
     status_id, status_txt = random.choice(BOT_STATUSES)
 
     return write(
         ServerPackets.USER_STATS,
-        (sessions.bot.id, osuTypes.i32),  # id
+        (p.id, osuTypes.i32),  # id
         (status_id, osuTypes.u8),  # action
         (status_txt, osuTypes.string),  # info_text
         ("", osuTypes.string),  # map_md5
@@ -755,8 +756,8 @@ def bot_stats() -> bytes:
 
 # packet id: 11
 def user_stats(p: "Player") -> bytes:
-    if p is sessions.bot:
-        return bot_stats()
+    if p.id == BOT_ID:
+        return bot_stats(p)
 
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7FFF:
@@ -1010,11 +1011,11 @@ def match_player_skipped(pid: int) -> bytes:
 # friends list, their presence is requested
 # *very* frequently; only build it once.
 @cache
-def bot_presence() -> bytes:
+def bot_presence(p: "Player") -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
-        (sessions.bot.id, osuTypes.i32),
-        (sessions.bot.name, osuTypes.string),
+        (p.id, osuTypes.i32),
+        (p.name, osuTypes.string),
         (-5 + 24, osuTypes.u8),
         (245, osuTypes.u8),  # satellite provider
         (31, osuTypes.u8),
@@ -1026,8 +1027,8 @@ def bot_presence() -> bytes:
 
 # packet id: 83
 def user_presence(p: "Player") -> bytes:
-    if p is sessions.bot:
-        return bot_presence()
+    if p.id == BOT_ID:
+        return bot_presence(p)
 
     return write(
         ServerPackets.USER_PRESENCE,

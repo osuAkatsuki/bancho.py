@@ -22,6 +22,7 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from fastapi.param_functions import Header
 from fastapi.requests import Request
+from fastapi.responses import StreamingResponse
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 from sqlalchemy.dialects.mysql.dml import insert
@@ -70,7 +71,7 @@ IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, Response
 
-router = APIRouter(prefix="/cho", tags=["Bancho API"])
+router = APIRouter(tags=["Bancho API"])
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -114,7 +115,7 @@ async def bancho_handler(
     else:
         # if the request has been forwarded, get the origin
         forwards = x_forwarded_for.split(",")
-        if len(forwards) != 1:
+        if len(forwards) > 1:
             ip_str = forwards[0]
         else:
             ip_str = x_real_ip
@@ -146,8 +147,7 @@ async def bancho_handler(
 
         token, body = login_data
 
-        response.headers["cho-token"] = token
-        return body
+        return Response(body, headers={"cho-token": token})
 
     # get the player from the specified osu token.
     player = sessions.players.get(token=request.headers["osu-token"])
@@ -183,8 +183,10 @@ async def bancho_handler(
 
     player.last_recv_time = time.time()
 
-    response.headers["Content-Type"] = "text/html; charset=UTF-8"
-    return player.dequeue()
+    return Response(
+        player.dequeue(),
+        headers={"Content-Type": "text/html; charset=UTF-8"},
+    )
 
 
 """ Packet logic """
@@ -247,9 +249,6 @@ class ChangeAction(BasePacket):
             sessions.players.enqueue(packets.user_stats(p))
 
 
-IGNORED_CHANNELS = ["#highlight", "#userlog"]
-
-
 @register(ClientPackets.SEND_PUBLIC_MESSAGE)
 class SendMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
@@ -268,7 +267,7 @@ class SendMessage(BasePacket):
 
         recipient = self.msg.recipient
 
-        if recipient in IGNORED_CHANNELS:
+        if recipient in ("#highlight", "#userlog"):
             return
         elif recipient == "#spectator":
             if p.spectating:
@@ -589,7 +588,7 @@ async def login(
 
     await db_conn.execute(
         db_models.ingame_logins.insert().values(
-            user_id=user_info["id"],
+            userid=user_info["id"],
             ip=str(ip),
             osu_ver=osu_ver_date,
             osu_stream=osu_ver_stream,
@@ -605,6 +604,8 @@ async def login(
             adapters=adapters_md5,
             uninstall_id=uninstall_md5,
             disk_serial=disk_sig_md5,
+            latest_time=func.now(),
+            occurrences=1,
         )
         .on_duplicate_key_update(
             {
@@ -616,11 +617,9 @@ async def login(
 
     # TODO: store adapters individually
 
-    hw_args = db_models.client_hashes.c.userid != user_info["id"]
+    hw_args = [db_models.client_hashes.c.userid != user_info["id"]]
     if is_wine:
-        hw_args.append(
-            db_models.client_hashes.c.uninstall_id == uninstall_md5,
-        )
+        hw_args.append(db_models.client_hashes.c.uninstall_id == uninstall_md5)
     else:
         hw_args.extend(
             [
@@ -784,10 +783,10 @@ async def login(
                     db_models.mail.c.msg,
                     db_models.mail.c.time,
                     db_models.mail.c.from_id,
-                    db_models.users.select(db_models.users.c.name)
+                    select([db_models.users.c.name])
                     .where(db_models.users.c.id == db_models.mail.c.from_id)
                     .label("from"),
-                    db_models.users.select(db_models.users.c.name)
+                    select([db_models.users.c.name])
                     .where(db_models.users.c.id == db_models.mail.c.to_id)
                     .label("to"),
                 ],
@@ -862,12 +861,12 @@ async def login(
     # making them officially logged in.
     sessions.players.append(p)
 
-    if glob.datadog:
+    if services.datadog:
         if not p.restricted:
-            glob.datadog.increment("gulag.online_players")
+            services.datadog.increment("gulag.online_players")
 
         time_taken = time.time() - login_time
-        glob.datadog.histogram("gulag.login_time", time_taken)
+        services.datadog.histogram("gulag.login_time", time_taken)
 
     user_os = "unix (wine)" if is_wine else "win32"
     country_code = p.geoloc["country"]["acronym"].upper()
@@ -1726,7 +1725,7 @@ class ChannelJoin(BasePacket):
         self.name = reader.read_string()
 
     async def handle(self, p: Player) -> None:
-        if self.name in IGNORED_CHANNELS:
+        if self.name in ("#highlight", "#userlog"):
             return
 
         c = sessions.channels[self.name]
@@ -1886,7 +1885,7 @@ class ChannelPart(BasePacket):
         self.name = reader.read_string()
 
     async def handle(self, p: Player) -> None:
-        if self.name in IGNORED_CHANNELS:
+        if self.name in ("#highlight", "#userlog"):
             return
 
         c = sessions.channels[self.name]

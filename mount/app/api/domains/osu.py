@@ -80,7 +80,7 @@ BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
-router = APIRouter(prefix="/osu", tags=["osu! web API"])
+router = APIRouter(tags=["osu! web API"])
 
 
 async def acquire_db_conn() -> AsyncIterator[databases.core.Connection]:
@@ -751,12 +751,12 @@ async def osuSubmitModularSelector(
 
     """ Score submission checks completed; submit the score. """
 
-    if glob.datadog:
-        glob.datadog.increment("gulag.submitted_scores")
+    if services.datadog:
+        services.datadog.increment("gulag.submitted_scores")
 
     if score.status == SubmissionStatus.BEST:
-        if glob.datadog:
-            glob.datadog.increment("gulag.submitted_scores_best")
+        if services.datadog:
+            services.datadog.increment("gulag.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
             if (
@@ -1236,7 +1236,7 @@ async def getScores(
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     map_filename: str = Query(..., alias="f"),  # TODO: regex?
     mode_vn: int = Query(..., alias="m", ge=0, le=3),
-    map_set_id: int = Query(..., alias="i", ge=0, le=2_147_483_647),
+    map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
     mods: Mods = Query(..., ge=0, le=2_147_483_647),
     map_package_hash: str = Query(...),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
@@ -1322,8 +1322,8 @@ async def getScores(
 
     # we've found a beatmap for the request.
 
-    if glob.datadog:
-        glob.datadog.increment("gulag.leaderboards_served")
+    if services.datadog:
+        services.datadog.increment("gulag.leaderboards_served")
 
     if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,
@@ -1992,8 +1992,8 @@ async def register_account(
                     db_models.stats.insert().values(id=user_id, mode=mode),
                 )
 
-        if glob.datadog:
-            glob.datadog.increment("gulag.registrations")
+        if services.datadog:
+            services.datadog.increment("gulag.registrations")
 
         log(f"<{username} ({user_id})> has registered!", Ansi.LGREEN)
 

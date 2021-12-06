@@ -19,6 +19,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         time_elapsed = round((end_time - start_time) / 1e6)
 
         # TODO: add metric to datadog
+        print(f'{request.headers["host"]}{request["path"]} took {time_elapsed:.2f}ms')
 
         response.headers["process-time"] = str(time_elapsed)
         return response

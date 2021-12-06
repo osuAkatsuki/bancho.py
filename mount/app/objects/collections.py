@@ -459,7 +459,7 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         self.extend(
-            [Clan(**row) async for row in db_conn.iterate(db_models.clans.select())],
+            [Clan(**row) for row in await db_conn.fetch_all(db_models.clans.select())],
         )
 
         for clan in self:
@@ -486,7 +486,9 @@ async def populate_sessions() -> None:
         sessions.players.append(sessions.bot)
 
         # fetch all achievements from db
-        async for row in db_conn.iterate(db_models.achievements.select()):
+        for row in [
+            dict(row) async for row in db_conn.iterate(db_models.achievements.select())
+        ]:
             # NOTE: achievement conditions are stored as stringified python
             # expressions in the database to allow for extensive customizability.
             condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')

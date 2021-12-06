@@ -1,4 +1,33 @@
-""" api: gulag's public api for developers """
+""" api: gulag's public api for developers
+
+# NOTE: the api is still under design and is subject to change.
+# to keep up with breaking changes, please either join our discord,
+# or keep up with changes to https://github.com/JKBGL/gulag-api-docs.
+
+# Unauthorized (no api key required)
+# GET /api/get_player_count: return total registered & online player counts.
+# GET /api/get_player_info: return info or stats for a given player.
+# GET /api/get_player_status: return a player's current status, if online.
+# GET /api/get_player_scores: return a list of best or recent scores for a given player.
+# GET /api/get_player_most_played: return a list of maps most played by a given player.
+# GET /api/get_map_info: return information about a given beatmap.
+# GET /api/get_map_scores: return the best scores for a given beatmap & mode.
+# GET /api/get_score_info: return information about a given score.
+# GET /api/get_replay: return the file for a given replay (with or without headers).
+# GET /api/get_match: return information for a given multiplayer match.
+# GET /api/get_leaderboard: return the top players for a given mode & sort condition
+
+# Authorized (requires valid api key, passed as 'Authorization' header)
+# NOTE: authenticated handlers may have privilege requirements.
+
+# [Normal]
+# GET /api/calculate_pp: calculate & return pp for a given beatmap.
+# POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
+
+# TODO handlers
+# GET /api/get_friends: return a list of the player's friends.
+# POST/PUT /api/set_player_info: update user information (updates whatever received).
+"""
 import hashlib
 import struct
 from pathlib import Path as SystemPath
@@ -35,36 +64,7 @@ BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
-router = APIRouter(prefix="/api", tags=["Gulag API"])
-
-
-# NOTE: the api is still under design and is subject to change.
-# to keep up with breaking changes, please either join our discord,
-# or keep up with changes to https://github.com/JKBGL/gulag-api-docs.
-
-# Unauthorized (no api key required)
-# GET /api/get_player_count: return total registered & online player counts.
-# GET /api/get_player_info: return info or stats for a given player.
-# GET /api/get_player_status: return a player's current status, if online.
-# GET /api/get_player_scores: return a list of best or recent scores for a given player.
-# GET /api/get_player_most_played: return a list of maps most played by a given player.
-# GET /api/get_map_info: return information about a given beatmap.
-# GET /api/get_map_scores: return the best scores for a given beatmap & mode.
-# GET /api/get_score_info: return information about a given score.
-# GET /api/get_replay: return the file for a given replay (with or without headers).
-# GET /api/get_match: return information for a given multiplayer match.
-# GET /api/get_leaderboard: return the top players for a given mode & sort condition
-
-# Authorized (requires valid api key, passed as 'Authorization' header)
-# NOTE: authenticated handlers may have privilege requirements.
-
-# [Normal]
-# GET /api/calculate_pp: calculate & return pp for a given beatmap.
-# POST/PUT /api/set_avatar: Update the tokenholder's avatar to a given file.
-
-# TODO handlers
-# GET /api/get_friends: return a list of the player's friends.
-# POST/PUT /api/set_player_info: update user information (updates whatever received).
+router = APIRouter(tags=["Gulag API"])
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))

@@ -45,7 +45,7 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     if settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    params["k"] = glob.config.osu_api_key
+    params["k"] = settings.OSU_API_KEY
 
     async with services.http.get(
         OSUAPI_GET_BEATMAPS,
@@ -274,8 +274,8 @@ class Beatmap:
         "pp_cache",
     )
 
-    def __init__(self, **kwargs: Any) -> None:
-        self.set: Optional[BeatmapSet] = None
+    def __init__(self, bmap_set: "BeatmapSet", **kwargs: Any) -> None:
+        self.set = bmap_set
 
         self.md5 = kwargs.get("md5", "")
         self.id = kwargs.get("id", 0)
@@ -667,7 +667,7 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
         and propogate any update into our cache & database."""
-        if not glob.config.osu_api_key:
+        if not settings.OSU_API_KEY:
             return
 
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
@@ -702,51 +702,58 @@ class BeatmapSet:
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
         async with services.database.connection() as db_conn:
-            insert_data = insert(db_models.mapsets).values(
-                server="osu!",
-                id=self.id,
-                last_osuapi_check=self.last_osuapi_check,
+            # TODO: convert to equivalent sqlalchemy
+            await db_conn.execute(
+                "REPLACE INTO mapsets "
+                "(server, id, last_osuapi_check) "
+                'VALUES ("osu!", :id, :last_osuapi_check)',
+                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
             )
 
-            duplicate_format = insert_data.on_duplicate_key_update(
-                data=insert_data.inserted.data,
-                status="U",
+            await db_conn.execute_many(
+                "REPLACE INTO maps ("
+                "server, md5, id, set_id, "
+                "artist, title, version, creator, "
+                "filename, last_update, total_length, "
+                "max_combo, status, frozen, "
+                "plays, passes, mode, bpm, "
+                "cs, od, ar, hp, diff"
+                ") VALUES ("
+                '"osu!", :md5, :id, :set_id, '
+                ":artist, :title, :version, :creator, "
+                ":filename, :last_update, :total_length, "
+                ":max_combo, :status, :frozen, "
+                ":plays, :passes, :mode, :bpm, "
+                ":cs, :od, :ar, :hp, :diff"
+                ")",
+                [
+                    {
+                        "md5": bmap.md5,
+                        "id": bmap.id,
+                        "set_id": bmap.set_id,
+                        "artist": bmap.artist,
+                        "title": bmap.title,
+                        "version": bmap.version,
+                        "creator": bmap.creator,
+                        "filename": bmap.filename,
+                        "last_update": bmap.last_update,
+                        "total_length": bmap.total_length,
+                        "max_combo": bmap.max_combo,
+                        "status": bmap.status,
+                        "frozen": bmap.frozen,
+                        "plays": bmap.plays,
+                        "passes": bmap.passes,
+                        "mode": bmap.mode,
+                        "bpm": bmap.bpm,
+                        "cs": bmap.cs,
+                        "od": bmap.od,
+                        "ar": bmap.ar,
+                        "hp": bmap.hp,
+                        "diff": bmap.diff,
+                    }
+                    for bmap in self.maps
+                ],
             )
-            await db_conn.execute(duplicate_format)
-
-            for bmap in self.maps:
-                insert_data = insert(db_models.maps).values(
-                    server="osu!",
-                    md5=bmap.md5,
-                    id=bmap.id,
-                    set_id=self.id,
-                    artist=bmap.artist,
-                    title=bmap.title,
-                    version=bmap.version,
-                    creator=bmap.creator,
-                    filename=bmap.filename,
-                    last_update=bmap.last_update,
-                    total_length=bmap.total_length,
-                    max_combo=bmap.max_combo,
-                    status=bmap.status,
-                    frozen=bmap.frozen,
-                    plays=bmap.plays,
-                    passes=bmap.passes,
-                    mode=bmap.mode,
-                    bpm=bmap.bpm,
-                    cs=bmap.cs,
-                    od=bmap.od,
-                    ar=bmap.ar,
-                    hp=bmap.hp,
-                    diff=bmap.diff,
-                )
-
-                duplicate_format = insert_data.on_duplicate_key_update(
-                    data=insert_data.inserted.data,
-                    status="U",
-                )
-
-                await db_conn.execute(duplicate_format)
 
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
@@ -803,7 +810,7 @@ class BeatmapSet:
                     ],
                 ).where(db_models.maps.c.set_id == bsid),
             ):
-                bmap = Beatmap(**row)
+                bmap = Beatmap(**row, bmap_set=bmap_set)
 
                 # XXX: tempfix for gulag <v3.4.1,
                 # where filenames weren't stored.
@@ -820,7 +827,6 @@ class BeatmapSet:
                         .where(db_models.maps.c.id == bmap.id),
                     )
 
-                bmap.set = bmap_set
                 bmap_set.maps.append(bmap)
 
         return bmap_set

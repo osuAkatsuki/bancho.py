@@ -116,10 +116,10 @@ def make_safe_name(name: str) -> str:
 async def fetch_bot_name(db_cursor: Connection) -> str:
     """Fetch the bot's name from the database, if available."""
     bot_name = await db_cursor.fetch_val(
-        db_models.users.select(db_models.users.c.name).where(
+        db_models.users.select().where(
             db_models.users.c.id == 1,
         ),
-        column=0,
+        column=1,
     )
 
     if not bot_name:
@@ -322,10 +322,10 @@ def ensure_supported_platform() -> int:
             )
         return 1
 
-    if sys.version_info < (3, 9):
+    if sys.version_info < (3, 10):
         log(
             "gulag uses many modern python features, "
-            "and the minimum python version is 3.9.",
+            "and the minimum python version is 3.10.",
             Ansi.LRED,
         )
         return 1

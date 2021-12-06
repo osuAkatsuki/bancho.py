@@ -448,8 +448,8 @@ class Player:
         sessions.players.remove(self)
 
         if not self.restricted:
-            if glob.datadog:
-                glob.datadog.decrement("gulag.online_players")
+            if services.datadog:
+                services.datadog.decrement("gulag.online_players")
 
             sessions.players.enqueue(packets.logout(self.id))
 
@@ -989,10 +989,11 @@ class Player:
 
     async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s achievements from sql."""
+
         async for row in db_conn.iterate(
-            db_models.user_achievements.select(
-                db_models.user_achievements.c.achid.label("id"),
-            ).where(db_models.user_achievements.c.userid == self.id),
+            select([db_models.user_achievements.c.achid.label("id")]).where(
+                db_models.user_achievements.c.userid == self.id,
+            ),
         ):
             for ach in sessions.achievements:
                 if row["id"] == ach.id:
@@ -1054,7 +1055,7 @@ class Player:
                     db_models.stats.c.s_count,
                     db_models.stats.c.a_count,
                 ],
-            ).where(db_models.stats.c.userid == self.id),
+            ).where(db_models.stats.c.id == self.id),
         )
 
         # TODO: clean this up

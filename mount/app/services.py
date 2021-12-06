@@ -1,3 +1,4 @@
+import asyncio
 import importlib.metadata
 import ipaddress
 import pickle
@@ -51,6 +52,9 @@ if settings.DATADOG_API_KEY and settings.DATADOG_APP_KEY:
     datadog = datadog_client.ThreadStats()
 else:
     datadog = None
+
+
+housekeeping_tasks: list[asyncio.Task] = []
 
 """ session usecases """
 
@@ -210,6 +214,6 @@ async def check_for_dependency_updates() -> None:
     if updates_available:
         log(
             "Python modules can be updated with "
-            "`python3.9 -m pip install -U <modules>`.",
+            "`python3.10 -m pip install -U <modules>`.",
             Ansi.LMAGENTA,
         )

@@ -12,23 +12,48 @@ from mount.app import services
 from mount.app import sessions
 from mount.app import settings
 from mount.app.constants.privileges import Privileges
-from mount.app.objects import glob
 
 __all__ = ("initialize_housekeeping_tasks",)
 
 OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
 
 
-async def initialize_housekeeping_tasks() -> None:
+async def initialize_housekeeping_tasks() -> list[asyncio.Task]:
     """Create tasks for each housekeeping tasks."""
-    glob.housekeeping_tasks = [
-        glob.loop.create_task(task)
-        for task in (
+    loop = asyncio.get_running_loop()
+
+    return [
+        loop.create_task(coro)
+        for coro in (
             _remove_expired_donation_privileges(interval=30 * 60),
             _reroll_bot_status(interval=5 * 60),
             _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
         )
     ]
+
+
+def _handle_fut_exception(fut: asyncio.Future) -> None:
+    if not fut.cancelled():
+        if exception := fut.exception():
+            loop = asyncio.get_running_loop()
+            loop.call_exception_handler(
+                {
+                    "message": "unhandled exception during loop shutdown",
+                    "exception": exception,
+                    "task": fut,
+                },
+            )
+
+
+async def cancel_tasks(tasks: list[asyncio.Task]) -> None:
+    """Cancel & handle exceptions for a list of tasks."""
+    for task in tasks:
+        task.cancel()
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    for task in tasks:
+        _handle_fut_exception(task)
 
 
 async def _remove_expired_donation_privileges(interval: int) -> None:
@@ -83,4 +108,4 @@ async def _reroll_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
-        packets.bot_stats.cache_clear()
+        # packets.bot_stats.cache_clear()

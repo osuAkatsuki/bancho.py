@@ -11,7 +11,7 @@ from mount.app import utils
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 DEFAULT_AVATAR = AVATARS_PATH / "default.jpg"
 
-router = APIRouter(prefix="/ava", tags=["Avatars"])
+router = APIRouter(tags=["Avatars"])
 
 
 @router.get("/favicon.ico")

@@ -149,7 +149,7 @@ class MapPool:
 
     async def maps_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             select(
                 [
                     db_models.tourney_pool_maps.c.map_id,
@@ -246,7 +246,7 @@ class Match:
         "id",
         "name",
         "passwd",
-        "host",
+        "host_id",
         "_refs",
         "map_id",
         "map_md5",
@@ -279,7 +279,7 @@ class Match:
         self.name = ""
         self.passwd = ""
 
-        self.host: Optional[Player] = None
+        self.host_id = 0
         self._refs: set[Player] = set()
 
         self.map_id = 0
@@ -313,6 +313,10 @@ class Match:
         self.use_pp_scoring = False  # only for scrims
 
         self.tourney_clients: set[int] = set()  # player ids
+
+    @property  # TODO test speed vs cached_property
+    def host(self) -> "Player":
+        return sessions.players.get(id=self.host_id)  # type: ignore
 
     @property
     def url(self) -> str:

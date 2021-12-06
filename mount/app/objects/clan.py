@@ -114,7 +114,7 @@ class Clan:
         # be a good idea to sort people into
         # different roles.
 
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             db_models.users.select(db_models.users.c.id).where(
                 db_models.users.c.clan_id == self.id,
             ),

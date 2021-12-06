@@ -225,8 +225,8 @@ client_hashes = Table(
     Column("adapters", CHAR(32), primary_key=True),
     Column("uninstall_id", CHAR(32), primary_key=True),
     Column("disk_serial", CHAR(32), primary_key=True),
-    Column("latest_time", DateTime, primary_key=True),
-    Column("occurrences", Integer, primary_key=True),
+    Column("latest_time", DateTime),
+    Column("occurrences", Integer, default=0),
 )
 
 
