@@ -725,7 +725,7 @@ async def osuSubmitModularSelector(
                     if score.player.id != prev_n1["id"]:
                         ann.append(
                             f"(Previous #1: [https://{BASE_DOMAIN}/u/"
-                            "{pid} {pname}])".format(**prev_n1),
+                            "{id} {name}])".format(**prev_n1),
                         )
 
                 announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
