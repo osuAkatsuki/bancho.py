@@ -1,10 +1,11 @@
 import re
 
-from objects import glob  # this will 100% become a problem
+import app.state
+from app.objects import glob  # this will 100% become a problem
 
 __all__ = ("OSU_VERSION", "USERNAME", "EMAIL", "NOW_PLAYING", "BEST_OF")
 
-DOMAIN_ESCAPED = glob.config.domain.replace(".", r"\.")
+DOMAIN_ESCAPED = app.state.settings.DOMAIN.replace(".", r"\.")
 
 OSU_VERSION = re.compile(
     r"^b(?P<ver>\d{8})(?:\.(?P<subver>\d))?"

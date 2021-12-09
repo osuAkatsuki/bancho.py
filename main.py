@@ -22,30 +22,26 @@ from pathlib import Path
 
 import aiomysql
 import cmyui
+from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
 
+import app.api
+import app.context
+import app.objects.collections
+import app.state
+import app.utils
 import bg_loops
-import misc.context
-import misc.utils
-import objects.collections
 
 # set the current working directory to /gulag
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 if not os.path.exists("config.py"):
-    misc.utils.create_config_from_default()
+    app.utils.create_config_from_default()
     raise SystemExit(1)
 
-from objects import glob  # (includes config)
 
-# !! review code that uses this before modifying it.
-glob.version = cmyui.Version(3, 6, 1)
-
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
-
-
-async def run_server() -> None:
+async def run_server(server: cmyui.Server) -> None:
     """Begin listening for and handling connections on all endpoints."""
 
     # we'll be working on top of transport layer posix sockets.
@@ -62,144 +58,147 @@ async def run_server() -> None:
 
     # fetch our server's endpoints; gulag supports
     # osu!'s handlers across multiple domains.
-    from domains.cho import domain as c_ppy_sh  # /c[e4-6]?.ppy.sh/
-    from domains.osu import domain as osu_ppy_sh
-    from domains.ava import domain as a_ppy_sh
-    from domains.map import domain as b_ppy_sh
+    from app.api.ava import domain as ava_domain
+    from app.api.cho import domain as cho_domain
+    from app.api.map import domain as map_domain
+    from app.api.osu import domain as osu_domain
 
-    glob.app.add_domains({c_ppy_sh, osu_ppy_sh, a_ppy_sh, b_ppy_sh})
+    server.add_domains({ava_domain, cho_domain, map_domain, osu_domain})
 
     # support both INET and UNIX sockets
-    if misc.utils.is_inet_address(glob.config.server_addr):
+    if app.utils.is_inet_address(app.state.settings.SERVER_ADDR):
         sock_family = socket.AF_INET
-    elif isinstance(glob.config.server_addr, str):
+    elif isinstance(app.state.settings.SERVER_ADDR, str):
         sock_family = socket.AF_UNIX
     else:
         raise ValueError("Invalid socket address.")
 
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem if it exists
-        if os.path.exists(glob.config.server_addr):
-            os.remove(glob.config.server_addr)
+        if os.path.exists(app.state.settings.SERVER_ADDR):
+            os.remove(app.state.settings.SERVER_ADDR)
 
     # create our transport layer socket; osu! uses tcp/ip
     with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
         listening_sock.setblocking(False)  # asynchronous
-        listening_sock.bind(glob.config.server_addr)
+        listening_sock.bind(app.state.settings.SERVER_ADDR)
 
         if sock_family == socket.AF_UNIX:
             # using unix socket - give the socket file
             # appropriate (read, write) permissions
-            os.chmod(glob.config.server_addr, 0o666)
+            os.chmod(app.state.settings.SERVER_ADDR, 0o666)
 
-        listening_sock.listen(glob.config.max_conns)
-        log(f"-> Listening @ {glob.config.server_addr}", RGB(0x00FF7F))
+        listening_sock.listen(10)  # TODO: customizability or autoscale
+        log(f"-> Listening @ {app.state.settings.SERVER_ADDR}", RGB(0x00FF7F))
 
-        glob.ongoing_conns = []
-        glob.shutting_down = False
+        app.state.sessions.ongoing_connections = []
+        app.state.shutting_down = False  # TODO: where to put this
 
-        while not glob.shutting_down:
+        while not app.state.shutting_down:
             # TODO: this timeout based-solution can be heavily
             #       improved and refactored out.
             try:
                 conn, _ = await asyncio.wait_for(
-                    fut=glob.loop.sock_accept(listening_sock),
+                    fut=app.state.loop.sock_accept(listening_sock),
                     timeout=0.25,
                 )
             except asyncio.TimeoutError:
                 pass
             else:
-                task = glob.loop.create_task(glob.app.handle(conn))
-                task.add_done_callback(misc.utils._conn_finished_cb)
-                glob.ongoing_conns.append(task)
+                task = app.state.loop.create_task(server.handle(conn))
+                task.add_done_callback(app.utils._conn_finished_cb)
+                app.state.sessions.ongoing_connections.append(task)
 
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem
-        os.remove(glob.config.server_addr)
+        os.remove(app.state.settings.SERVER_ADDR)
 
 
 async def main() -> int:
     """Initialize, and start up the server."""
-    glob.loop = asyncio.get_running_loop()
+    app.state.loop = asyncio.get_running_loop()
 
     async with (
-        misc.context.acquire_http_session(glob.has_internet) as glob.http_session,
-        misc.context.acquire_mysql_db_pool(glob.config.mysql) as glob.db,
-        misc.context.acquire_redis_db_pool() as glob.redis,
+        app.context.acquire_http_session() as app.state.services.http,
+        app.context.acquire_mysql_db_pool() as app.state.services.database,
+        app.context.acquire_redis_db_pool() as app.state.services.redis,
     ):
-        await misc.utils.check_for_dependency_updates()
-        await misc.utils.run_sql_migrations()
+        await app.state.services.check_for_dependency_updates()
+        await app.utils.run_sql_migrations()
 
         with (
-            misc.context.acquire_geoloc_db_conn(GEOLOC_DB_FILE) as glob.geoloc_db,
-            misc.context.acquire_datadog_client(glob.config.datadog) as glob.datadog,
+            app.context.acquire_geoloc_db_conn() as app.state.services.geoloc_db,
+            app.context.acquire_datadog_client() as app.state.services.datadog,
         ):
             # TODO: refactor debugging so
             # this can be moved to `run_server`.
-            glob.app = cmyui.Server(
-                name=f"gulag v{glob.version}",
+            server = cmyui.Server(
+                name=f"gulag v{app.state.settings.VERSION}",
                 gzip=4,
-                debug=glob.config.debug,
+                debug=app.state.settings.DEBUG,
             )
 
             # prepare our ram caches, populating from sql where necessary.
             # this includes channels, clans, mappools, bot info, etc.
-            async with glob.db.pool.acquire() as conn:
-                async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    await objects.collections.initialize_ram_caches(db_cursor)  # type: ignore
+            async with app.state.services.database.connection() as db_conn:
+                await app.objects.collections.initialize_ram_caches(db_conn)  # type: ignore
 
             # initialize housekeeping tasks to automatically manage
             # and ensure memory on ram & disk are kept up to date.
             await bg_loops.initialize_housekeeping_tasks()
 
             # handle signals so we can ensure a graceful shutdown
-            sig_handler = misc.utils.shutdown_signal_handler
+            sig_handler = app.utils.shutdown_signal_handler
             for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-                glob.loop.add_signal_handler(signum, sig_handler, signum)
+                app.state.loop.add_signal_handler(signum, sig_handler, signum)
 
             # TODO: restart signal handler with SIGUSR1
 
             # run the server, handling connections
             # until a termination signal is received.
-            await run_server()
+            await run_server(server)
 
             # we want to attempt to gracefully finish any ongoing connections
             # and shut down any of the housekeeping tasks running in the background.
 
-            if glob.ongoing_conns:
-                await misc.utils.await_ongoing_connections(timeout=5.0)
+            if app.state.sessions.ongoing_connections:
+                await app.utils.await_ongoing_connections(timeout=5.0)
 
-            await misc.utils.cancel_housekeeping_tasks()
+            await app.utils.cancel_housekeeping_tasks()
 
     return 0
 
 
 if __name__ == "__main__":
     """After basic safety checks, start the event loop and call our async entry point."""
-    misc.utils.setup_runtime_environment()
+    app.utils.setup_runtime_environment()
 
     for safety_check in (
-        misc.utils.ensure_supported_platform,  # linux only at the moment
-        misc.utils.ensure_local_services_are_running,  # mysql (if local)
-        misc.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
-        misc.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
+        app.utils.ensure_supported_platform,  # linux only at the moment
+        app.utils.ensure_local_services_are_running,  # mysql (if local)
+        app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
+        app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
     ):
         if (exit_code := safety_check()) != 0:
             raise SystemExit(exit_code)
 
     """ Server should be safe to start """
 
-    glob.boot_time = datetime.now()
+    # TODO: where to store this
+    # boot_time = datetime.now()
 
     # install any debugging hooks from
     # _testing/runtime.py, if present
-    misc.utils._install_debugging_hooks()
+    app.utils._install_debugging_hooks()
 
     # check our internet connection status
-    glob.has_internet = misc.utils.check_connection(timeout=1.5)
+    has_internet = app.utils.check_connection(timeout=1.5)
+
+    if not has_internet:
+        log("No internet connection found, expect lacking functionality.", Ansi.LYELLOW)
 
     # show info & any contextual warnings.
-    misc.utils.display_startup_dialog()
+    app.utils.display_startup_dialog()
 
     try:
         # use uvloop if available
@@ -215,7 +214,7 @@ if __name__ == "__main__":
 elif __name__ == "main":
     # check specifically for ASGI servers; many related projects use
     # them to run in production, and devs may assume we do as well.
-    if misc.utils.running_via_asgi_webserver():
+    if app.utils.running_via_asgi_webserver():
         raise RuntimeError(
             "gulag implements it's own web framework implementation from "
             "transport layer (tcp/ip) posix sockets and does not rely on "

@@ -10,10 +10,10 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
-from objects import glob
+import app.state
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 
 @unique
@@ -35,5 +35,4 @@ class MenuFunction(NamedTuple):
 
 
 def menu_keygen() -> int:
-    min_key = glob.config.max_multi_matches
-    return random.randint(min_key, 0x7FFFFFFF)
+    return random.randint(64, 0x7FFFFFFF)  # (max_matches, int32_max)

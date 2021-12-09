@@ -19,17 +19,12 @@ if TYPE_CHECKING:
     from datadog import ThreadStats
     import geoip2.database
 
-    from objects.achievement import Achievement
-    from objects.collections import Players
-    from objects.collections import Channels
-    from objects.collections import Matches
-    from objects.beatmap import Beatmap
-    from objects.beatmap import BeatmapSet
-    from objects.collections import Clans
-    from objects.collections import MapPools
-    from objects.player import Player
+    from app.objects.achievement import Achievement
+    from app.objects.beatmap import Beatmap
+    from app.objects.beatmap import BeatmapSet
+    from app.objects.player import Player
 
-    # from objects.score import Score
+    # from app.objects.score import Score
     from packets import BasePacket
     from packets import ClientPackets
 
@@ -75,12 +70,7 @@ __all__ = (
 app: "Server"
 
 # current server state
-players: "Players"
-channels: "Channels"
-matches: "Matches"
-clans: "Clans"
-pools: "MapPools"
-achievements: list["Achievement"]
+achievements: list["Achievement"] = []
 
 bot: "Player"
 version: "Version"

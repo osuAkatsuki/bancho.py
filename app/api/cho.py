@@ -14,6 +14,7 @@ from typing import Union
 
 import aiomysql
 import bcrypt
+import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
@@ -24,30 +25,31 @@ from cmyui.web import Domain
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-import misc.utils
+import app.state
+import app.utils
 import packets
-from constants import commands
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.mods import SPEED_CHANGING_MODS
-from constants.privileges import ClientPrivileges
-from constants.privileges import Privileges
-from objects import glob
-from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.channel import Channel
-from objects.clan import ClanPrivileges
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import Slot
-from objects.match import SlotStatus
-from objects.menu import Menu
-from objects.menu import MenuCommands
-from objects.menu import MenuFunction
-from objects.player import Action
-from objects.player import Player
-from objects.player import PresenceFilter
+from app.constants import commands
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.privileges import ClientPrivileges
+from app.constants.privileges import Privileges
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
+from app.objects.channel import Channel
+from app.objects.clan import ClanPrivileges
+from app.objects.match import Match
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import Slot
+from app.objects.match import SlotStatus
+from app.objects.menu import Menu
+from app.objects.menu import MenuCommands
+from app.objects.menu import MenuFunction
+from app.objects.player import Action
+from app.objects.player import Player
+from app.objects.player import PresenceFilter
 from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
@@ -60,7 +62,7 @@ IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.state.settings.DOMAIN
 _domain_escaped = BASE_DOMAIN.replace(".", r"\.")
 domain = Domain(re.compile(rf"^c[e4-6]?\.(?:{_domain_escaped}|ppy\.sh)$"))
 
@@ -68,14 +70,14 @@ domain = Domain(re.compile(rf"^c[e4-6]?\.(?:{_domain_escaped}|ppy\.sh)$"))
 @domain.route("/")
 async def bancho_http_handler(conn: Connection) -> bytes:
     """Handle a request from a web browser."""
-    packets = glob.bancho_packets["all"]
+    packets = app.state.packets["all"]
 
     return (
         b"<!DOCTYPE html>"
         + "<br>".join(
             (
-                f"Running gulag v{glob.version}",
-                f"Players online: {len(glob.players) - 1}",
+                f"Running gulag v{app.state.settings.VERSION}",
+                f"Players online: {len(app.state.sessions.players) - 1}",
                 '<a href="https://github.com/cmyui/gulag">Source code</a>',
                 "",
                 f"<b>Packets handled ({len(packets)})</b>",
@@ -97,11 +99,11 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         else:
             ip_str = conn.headers["X-Real-IP"]
 
-    if ip_str in glob.cache["ip"]:
-        ip = glob.cache["ip"][ip_str]
+    if ip_str in app.state.cache["ip"]:
+        ip = app.state.cache["ip"][ip_str]
     else:
         ip = ipaddress.ip_address(ip_str)
-        glob.cache["ip"][ip_str] = ip
+        app.state.cache["ip"][ip_str] = ip
 
     if "User-Agent" not in conn.headers or conn.headers["User-Agent"] != "osu!":
         url = f'{conn.cmd} {conn.headers["Host"]}{conn.path}'
@@ -114,10 +116,9 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
     if "osu-token" not in conn.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
-        async with glob.players._lock:
-            async with glob.db.pool.acquire() as db_conn:
-                async with db_conn.cursor(aiomysql.DictCursor) as db_cursor:
-                    login_data = await login(conn.body, ip, db_cursor)
+        async with app.state.sessions.players._lock:
+            async with app.state.services.database.connection() as db_conn:
+                login_data = await login(conn.body, ip, db_conn)
 
         if login_data is None:
             # invalid login; failed.
@@ -129,7 +130,7 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         return body
 
     # get the player from the specified osu token.
-    player = glob.players.get(token=conn.headers["osu-token"])
+    player = app.state.sessions.players.get(token=conn.headers["osu-token"])
 
     if not player:
         # token not found; chances are that we just restarted
@@ -140,9 +141,9 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
 
     # restricted users may only use certain packet handlers.
     if not player.restricted:
-        packet_map = glob.bancho_packets["all"]
+        packet_map = app.state.packets["all"]
     else:
-        packet_map = glob.bancho_packets["restricted"]
+        packet_map = app.state.packets["restricted"]
 
     # bancho connections can be comprised of multiple packets;
     # our reader is designed to iterate through them individually,
@@ -154,7 +155,7 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         await packet.handle(player)
         packets_handled.append(packet.__class__.__name__)
 
-    if glob.app.debug:
+    if app.state.settings.DEBUG:
         packets_str = ", ".join(packets_handled) or "None"
         log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
@@ -166,22 +167,18 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
 
 """ Packet logic """
 
-# restricted users are able to
-# access many less packet handlers.
-glob.bancho_packets = {"all": {}, "restricted": {}}
-
 
 def register(
     packet: ClientPackets,
     restricted: bool = False,
 ) -> Callable[[Type[BasePacket]], Type[BasePacket]]:
-    """Register a handler in `glob.bancho_packets`."""
+    """Register a handler in `app.state.packets`."""
 
     def wrapper(cls: Type[BasePacket]) -> Type[BasePacket]:
-        glob.bancho_packets["all"][packet] = cls
+        app.state.packets["all"][packet] = cls
 
         if restricted:
-            glob.bancho_packets["restricted"][packet] = cls
+            app.state.packets["restricted"][packet] = cls
 
         return cls
 
@@ -221,7 +218,7 @@ class ChangeAction(BasePacket):
 
         # broadcast it to all online players.
         if not p.restricted:
-            glob.players.enqueue(packets.user_stats(p))
+            app.state.sessions.players.enqueue(packets.user_stats(p))
 
 
 IGNORED_CHANNELS = ["#highlight", "#userlog"]
@@ -257,7 +254,7 @@ class SendMessage(BasePacket):
             else:
                 return
 
-            t_chan = glob.channels[f"#spec_{spec_id}"]
+            t_chan = app.state.sessions.channels[f"#spec_{spec_id}"]
         elif recipient == "#multiplayer":
             if not p.match:
                 # they're not in a match?
@@ -265,7 +262,7 @@ class SendMessage(BasePacket):
 
             t_chan = p.match.chat
         else:
-            t_chan = glob.channels[recipient]
+            t_chan = app.state.sessions.channels[recipient]
 
         if not t_chan:
             log(f"{p} wrote to non-existent {recipient}.", Ansi.LYELLOW)
@@ -289,7 +286,7 @@ class SendMessage(BasePacket):
                 ),
             )
 
-        if msg.startswith(glob.config.command_prefix):
+        if msg.startswith(app.state.settings.COMMAND_PREFIX):
             cmd = await commands.process_commands(p, t_chan, msg)
         else:
             cmd = None
@@ -301,12 +298,12 @@ class SendMessage(BasePacket):
                 if cmd["resp"] is not None:
                     t_chan.send_bot(cmd["resp"])
             else:
-                staff = glob.players.staff
+                staff = app.state.sessions.players.staff
                 t_chan.send_selective(msg=msg, sender=p, recipients=staff - {p})
                 if cmd["resp"] is not None:
                     t_chan.send_selective(
                         msg=cmd["resp"],
-                        sender=glob.bot,
+                        sender=app.state.sessions.bot,
                         recipients=staff | {p},
                     )
 
@@ -388,7 +385,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{glob.version}.",
+    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{app.state.settings.VERSION}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -402,14 +399,14 @@ DELTA_90_DAYS = timedelta(days=90)
 async def login(
     body_view: memoryview,
     ip: IPAddress,
-    db_cursor: aiomysql.DictCursor,
+    db_conn: databases.core.Connection,
 ) -> Optional[tuple[str, bytes]]:
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
 
     Some notes:
-      this must be called with glob.players._lock held.
+      this must be called with app.state.sessions.players._lock held.
       we return a tuple of (response_bytes, user_token) on success.
 
     Request format:
@@ -462,7 +459,7 @@ async def login(
     # than three months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
-    if not glob.app.debug:
+    if not app.state.settings.DEBUG:
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
         if osu_ver_date < (date.today() - DELTA_90_DAYS):
@@ -506,7 +503,7 @@ async def login(
     # TODO: improve tourney client support, this is not great.
     if not using_tourney_client:
         # Check if the player is already online
-        if p := glob.players.get(name=username):
+        if p := app.state.sessions.players.get(name=username):
             # player is online, only allow multiple
             # logins if they're on a tourney client.
             if not p.tourney_client:
@@ -523,13 +520,14 @@ async def login(
 
                     return "no", data
 
-    await db_cursor.execute(
+    user_info = await db_conn.fetch_one(
         "SELECT id, name, priv, pw_bcrypt, country, "
         "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = %s",
-        [misc.utils.make_safe_name(username)],
+        "FROM users WHERE safe_name = :name",
+        {"name": app.utils.make_safe_name(username)},
     )
-    user_info = await db_cursor.fetchone()
+
+    user_info = dict(user_info)  # make a mutable copy
 
     if not user_info:
         # no account by this name exists.
@@ -545,7 +543,7 @@ async def login(
         return "no", packets.user_id(-1)
 
     # get our bcrypt cache.
-    bcrypt_cache = glob.cache["bcrypt"]
+    bcrypt_cache = app.state.cache["bcrypt"]
     pw_bcrypt = user_info["pw_bcrypt"].encode()
     user_info["pw_bcrypt"] = pw_bcrypt
 
@@ -568,46 +566,59 @@ async def login(
 
     """ login credentials verified """
 
-    await db_cursor.execute(
+    await db_conn.execute(
         "INSERT INTO ingame_logins "
         "(userid, ip, osu_ver, osu_stream, datetime) "
-        "VALUES (%s, %s, %s, %s, NOW())",
-        [user_info["id"], str(ip), osu_ver_date, osu_ver_stream],
+        "VALUES (:id, :ip, :osu_ver, :osu_stream, NOW())",
+        {
+            "id": user_info["id"],
+            "ip": str(ip),
+            "osu_ver": osu_ver_date,
+            "osu_stream": osu_ver_stream,
+        },
     )
 
-    await db_cursor.execute(
+    await db_conn.execute(
         "INSERT INTO client_hashes "
         "(userid, osupath, adapters, uninstall_id,"
         " disk_serial, latest_time, occurrences) "
-        "VALUES (%s, %s, %s, %s, %s, NOW(), 1) "
+        "VALUES (:id, :osupath, :adapters, :uninstall, :disk_serial, NOW(), 1) "
         "ON DUPLICATE KEY UPDATE "
         "occurrences = occurrences + 1, "
         "latest_time = NOW() ",
-        [user_info["id"], osu_path_md5, adapters_md5, uninstall_md5, disk_sig_md5],
+        {
+            "id": user_info["id"],
+            "osupath": osu_path_md5,
+            "adapters": adapters_md5,
+            "uninstall": uninstall_md5,
+            "disk_serial": disk_sig_md5,
+        },
     )
 
     # TODO: store adapters individually
 
     if is_wine:
-        hw_checks = "h.uninstall_id = %s"
-        hw_args = [uninstall_md5]
+        hw_checks = ":uninstall = %s"
+        hw_args = {"uninstall": uninstall_md5}
     else:
-        hw_checks = "h.adapters = %s OR h.uninstall_id = %s OR h.disk_serial = %s"
-        hw_args = [adapters_md5, uninstall_md5, disk_sig_md5]
+        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk_serial"
+        hw_args = {
+            "adapters": adapters_md5,
+            "uninstall": uninstall_md5,
+            "disk_serial": disk_sig_md5,
+        }
 
-    await db_cursor.execute(
+    hw_matches = await db_conn.fetch_all(
         "SELECT u.name, u.priv, h.occurrences "
         "FROM client_hashes h "
         "INNER JOIN users u ON h.userid = u.id "
-        "WHERE h.userid != %s AND "
+        "WHERE h.userid != :user_id AND "
         f"({hw_checks})",
-        [user_info["id"], *hw_args],
+        {"user_id": user_info["id"], **hw_args},
     )
 
-    if db_cursor.rowcount != 0:
+    if hw_matches:
         # we have other accounts with matching hashes
-        hw_matches = await db_cursor.fetchall()
-
         if user_info["priv"] & Privileges.VERIFIED:
             # TODO: this is a normal, registered & verified player.
             ...
@@ -630,7 +641,7 @@ async def login(
 
     # get clan & clan priv if we're in a clan
     if user_info["clan_id"] != 0:
-        clan = glob.clans.get(id=user_info.pop("clan_id"))
+        clan = app.state.sessions.clans.get(id=user_info.pop("clan_id"))
         clan_priv = ClanPrivileges(user_info.pop("clan_priv"))
     else:
         del user_info["clan_id"]
@@ -640,24 +651,27 @@ async def login(
     db_country = user_info.pop("country")
 
     if not ip.is_private:
-        if glob.geoloc_db is not None:
+        if app.state.services.geoloc_db is not None:
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = misc.utils.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.utils.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await misc.utils.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.utils.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when
             # country wasn't stored on registration.
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
-            await db_cursor.execute(
-                "UPDATE users SET country = %s WHERE id = %s",
-                [user_info["geoloc"]["country"]["acronym"], user_info["id"]],
+            await db_conn.execute(
+                "UPDATE users SET country = :country WHERE id = :user_id",
+                {
+                    "country": user_info["geoloc"]["country"]["acronym"],
+                    "user_id": user_info["id"],
+                },
             )
 
     p = Player(
@@ -685,12 +699,9 @@ async def login(
 
     data += WELCOME_NOTIFICATION
 
-    if not glob.has_internet:
-        data += OFFLINE_NOTIFICATION
-
     # send all appropriate channel info to our player.
     # the osu! client will attempt to join the channels.
-    for c in glob.channels:
+    for c in app.state.sessions.channels:
         if (
             not c.auto_join
             or not c.can_read(p.priv)
@@ -704,7 +715,7 @@ async def login(
 
         data += chan_info_packet
 
-        for o in glob.players:
+        for o in app.state.sessions.players:
             if c.can_read(o.priv):
                 o.enqueue(chan_info_packet)
 
@@ -713,13 +724,16 @@ async def login(
 
     # fetch some of the player's
     # information from sql to be cached.
-    await p.achievements_from_sql(db_cursor)
-    await p.stats_from_sql_full(db_cursor)
-    await p.relationships_from_sql(db_cursor)
+    await p.achievements_from_sql(db_conn)
+    await p.stats_from_sql_full(db_conn)
+    await p.relationships_from_sql(db_conn)
 
     # TODO: fetch p.recent_scores from sql
 
-    data += packets.main_menu_icon()
+    data += packets.main_menu_icon(
+        icon_url=app.state.settings.MENU_ICON_URL,
+        onclick_url=app.state.settings.MENU_ONCLICK_URL,
+    )
     data += packets.friends_list(*p.friends)
     data += packets.silence_end(p.remaining_silence)
 
@@ -730,29 +744,35 @@ async def login(
 
     if not p.restricted:
         # player is unrestricted, two way data
-        for o in glob.players:
+        for o in app.state.sessions.players:
             # enqueue us to them
             o.enqueue(user_data)
 
             # enqueue them to us.
             if not o.restricted:
-                data += packets.user_presence(o)
-                data += packets.user_stats(o)
+                if o is app.state.sessions.bot:
+                    # optimization for bot since it's
+                    # the most frequently requested user
+                    data += packets.bot_presence(o)
+                    data += packets.bot_stats(o)
+                else:
+                    data += packets.user_presence(o)
+                    data += packets.user_stats(o)
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        await db_cursor.execute(
+        mail_rows = await db_conn.fetch_all(
             "SELECT m.`msg`, m.`time`, m.`from_id`, "
             "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
             "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = %s AND m.`read` = 0",
-            [p.id],
+            "FROM `mail` m WHERE m.`to_id` = :to AND m.`read` = 0",
+            {"to": p.id},
         )
 
-        if db_cursor.rowcount != 0:
+        if mail_rows:
             sent_to = set()  # ids
 
-            async for msg in db_cursor:
+            for msg in mail_rows:
                 if msg["from"] not in sent_to:
                     data += packets.send_message(
                         sender=msg["from"],
@@ -790,39 +810,45 @@ async def login(
                 )
 
             data += packets.send_message(
-                sender=glob.bot.name,
+                sender=app.state.sessions.bot.name,
                 msg=WELCOME_MSG,
                 recipient=p.name,
-                sender_id=glob.bot.id,
+                sender_id=app.state.sessions.bot.id,
             )
 
     else:
         # player is restricted, one way data
-        for o in glob.players.unrestricted:
+        for o in app.state.sessions.players.unrestricted:
             # enqueue them to us.
-            data += packets.user_presence(o)
-            data += packets.user_stats(o)
+            if o is app.state.sessions.bot:
+                # optimization for bot since it's
+                # the most frequently requested user
+                data += packets.bot_presence(o)
+                data += packets.bot_stats(o)
+            else:
+                data += packets.user_presence(o)
+                data += packets.user_stats(o)
 
         data += packets.account_restricted()
         data += packets.send_message(
-            sender=glob.bot.name,
+            sender=app.state.sessions.bot.name,
             msg=RESTRICTED_MSG,
             recipient=p.name,
-            sender_id=glob.bot.id,
+            sender_id=app.state.sessions.bot.id,
         )
 
     # TODO: some sort of admin panel for staff members?
 
     # add `p` to the global player list,
     # making them officially logged in.
-    glob.players.append(p)
+    app.state.sessions.players.append(p)
 
-    if glob.datadog:
+    if app.state.services.datadog:
         if not p.restricted:
-            glob.datadog.increment("gulag.online_players")
+            app.state.services.datadog.increment("gulag.online_players")
 
         time_taken = time.time() - login_time
-        glob.datadog.histogram("gulag.login_time", time_taken)
+        app.state.services.datadog.histogram("gulag.login_time", time_taken)
 
     user_os = "unix (wine)" if is_wine else "win32"
     country_code = p.geoloc["country"]["acronym"].upper()
@@ -842,7 +868,7 @@ class StartSpectating(BasePacket):
         self.target_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (new_host := glob.players.get(id=self.target_id)):
+        if not (new_host := app.state.sessions.players.get(id=self.target_id)):
             log(f"{p} tried to spectate nonexistant id {self.target_id}.", Ansi.LYELLOW)
             return
 
@@ -923,7 +949,7 @@ class SendPrivateMessage(BasePacket):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            if glob.app.debug:
+            if app.state.settings.DEBUG:
                 log(f"{p} tried to send a dm while silenced.", Ansi.LYELLOW)
             return
 
@@ -937,22 +963,22 @@ class SendPrivateMessage(BasePacket):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await glob.players.from_cache_or_sql(name=t_name)):
-            if glob.app.debug:
+        if not (t := await app.state.sessions.players.from_cache_or_sql(name=t_name)):
+            if app.state.settings.DEBUG:
                 log(f"{p} tried to write to non-existent user {t_name}.", Ansi.LYELLOW)
             return
 
         if p.id in t.blocks:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if glob.app.debug:
+            if app.state.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they have them blocked.")
             return
 
         if t.pm_private and p.id not in t.friends:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if glob.app.debug:
+            if app.state.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are blocking dms.")
             return
 
@@ -960,7 +986,7 @@ class SendPrivateMessage(BasePacket):
             # if target is silenced, inform player.
             p.enqueue(packets.target_silenced(t_name))
 
-            if glob.app.debug:
+            if app.state.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are silenced.")
             return
 
@@ -978,7 +1004,7 @@ class SendPrivateMessage(BasePacket):
             # send away message if target is afk and has one set.
             p.send(t.away_msg, sender=t)
 
-        if t is not glob.bot:
+        if t is not app.state.sessions.bot:
             # target is not bot, send the message normally if online
             if t.online:
                 t.send(msg, sender=p)
@@ -993,15 +1019,15 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await glob.db.execute(
+            await app.state.services.database.execute(
                 "INSERT INTO `mail` "
                 "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (%s, %s, %s, UNIX_TIMESTAMP())",
-                [p.id, t.id, msg],
+                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
+                {"from": p.id, "to": t.id, "msg": msg},
             )
         else:
             # messaging the bot, check for commands & /np.
-            if msg.startswith(glob.config.command_prefix):
+            if msg.startswith(app.state.settings.COMMAND_PREFIX):
                 cmd = await commands.process_commands(p, t, msg)
             else:
                 cmd = None
@@ -1065,7 +1091,7 @@ class SendPrivateMessage(BasePacket):
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
 
-                                        for acc in glob.config.pp_cached_accs:
+                                        for acc in app.state.settings.PP_CACHED_ACCS:
                                             ezpp.set_accuracy_percent(acc)
 
                                             ezpp.calculate(osu_file_path)
@@ -1080,7 +1106,7 @@ class SendPrivateMessage(BasePacket):
 
                                     peace.set_mode(mode_vn)
 
-                                    for acc in glob.config.pp_cached_accs:
+                                    for acc in app.state.settings.PP_CACHED_ACCS:
                                         peace.set_acc(acc)
 
                                         calc = peace.calculate(beatmap)
@@ -1108,7 +1134,7 @@ class SendPrivateMessage(BasePacket):
 
                                 pp_values = []
 
-                                for score in glob.config.pp_cached_scores:
+                                for score in app.state.settings.PP_CACHED_SCORES:
                                     peace.set_score(int(score))
 
                                     calc = peace.calculate(beatmap)
@@ -1147,7 +1173,7 @@ class LobbyJoin(BasePacket):
     async def handle(self, p: Player) -> None:
         p.in_lobby = True
 
-        for m in glob.matches:
+        for m in app.state.sessions.matches:
             if m is not None:
                 p.enqueue(packets.new_match(m))
 
@@ -1155,7 +1181,7 @@ class LobbyJoin(BasePacket):
 @register(ClientPackets.CREATE_MATCH)
 class MatchCreate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.match = reader.read_match()
+        self.match = Match.from_parsed_match(reader.read_match())
 
     async def handle(self, p: Player) -> None:
         # TODO: match validation..?
@@ -1175,7 +1201,7 @@ class MatchCreate(BasePacket):
             )
             return
 
-        if not glob.matches.append(self.match):
+        if not app.state.sessions.matches.append(self.match):
             # failed to create match (match slots full).
             p.send_bot("Failed to create match (no slots available).")
             p.enqueue(packets.match_join_fail())
@@ -1191,7 +1217,7 @@ class MatchCreate(BasePacket):
             instance=True,
         )
 
-        glob.channels.append(chan)
+        app.state.sessions.channels.append(chan)
         self.match.chat = chan
 
         p.update_latest_activity()
@@ -1208,7 +1234,7 @@ async def execute_menu_option(p: Player, key: int) -> None:
     # this is one of their menu options, execute it.
     cmd, data = p.current_menu.options[key]
 
-    if glob.config.debug:
+    if app.state.settings.DEBUG:
         print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
 
     if cmd == MenuCommands.Reset:
@@ -1238,7 +1264,7 @@ class MatchJoin(BasePacket):
         self.match_passwd = reader.read_string()
 
     async def handle(self, p: Player) -> None:
-        is_menu_request = self.match_id >= glob.config.max_multi_matches
+        is_menu_request = self.match_id >= app.state.settings.MAX_MULTI_MATCHES
 
         if is_menu_request or self.match_id < 0:
             if is_menu_request:
@@ -1248,7 +1274,7 @@ class MatchJoin(BasePacket):
             p.enqueue(packets.match_join_fail())
             return
 
-        if not (m := glob.matches[self.match_id]):
+        if not (m := app.state.sessions.matches[self.match_id]):
             log(f"{p} tried to join a non-existant mp lobby?")
             p.enqueue(packets.match_join_fail())
             return
@@ -1361,7 +1387,7 @@ class MatchLock(BasePacket):
 @register(ClientPackets.MATCH_CHANGE_SETTINGS)
 class MatchChangeSettings(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.new = reader.read_match()
+        self.new = Match.from_parsed_match(reader.read_match())
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
@@ -1682,7 +1708,7 @@ class ChannelJoin(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        c = glob.channels[self.name]
+        c = app.state.sessions.channels[self.name]
 
         if not c or not p.join_channel(c):
             log(f"{p} failed to join {self.name}.", Ansi.LYELLOW)
@@ -1727,7 +1753,7 @@ class TourneyMatchInfoRequest(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := glob.matches[self.match_id]):
+        if not (m := app.state.sessions.matches[self.match_id]):
             return  # match not found
 
         p.enqueue(packets.update_match(m, send_pw=False))
@@ -1745,7 +1771,7 @@ class TourneyMatchJoinChannel(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := glob.matches[self.match_id]):
+        if not (m := app.state.sessions.matches[self.match_id]):
             return  # match not found
 
         for s in m.slots:
@@ -1770,7 +1796,7 @@ class TourneyMatchLeaveChannel(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := glob.matches[self.match_id]):
+        if not (m := app.state.sessions.matches[self.match_id]):
             return  # match not found
 
         # attempt to join match chan
@@ -1784,11 +1810,11 @@ class FriendAdd(BasePacket):
         self.user_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (t := glob.players.get(id=self.user_id)):
+        if not (t := app.state.sessions.players.get(id=self.user_id)):
             log(f"{p} tried to add a user who is not online! ({self.user_id})")
             return
 
-        if t is glob.bot:
+        if t is app.state.sessions.bot:
             return
 
         if t.id in p.blocks:
@@ -1804,11 +1830,11 @@ class FriendRemove(BasePacket):
         self.user_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (t := glob.players.get(id=self.user_id)):
+        if not (t := app.state.sessions.players.get(id=self.user_id)):
             log(f"{p} tried to remove a user who is not online! ({self.user_id})")
             return
 
-        if t is glob.bot:
+        if t is app.state.sessions.bot:
             return
 
         p.update_latest_activity()
@@ -1842,7 +1868,7 @@ class ChannelPart(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        c = glob.channels[self.name]
+        c = app.state.sessions.channels[self.name]
 
         if not c:
             log(f"{p} failed to leave {self.name}.", Ansi.LYELLOW)
@@ -1884,12 +1910,19 @@ class StatsRequest(BasePacket):
         self.user_ids = reader.read_i32_list_i16l()
 
     async def handle(self, p: Player) -> None:
-        unrestrcted_ids = [p.id for p in glob.players.unrestricted]
+        unrestrcted_ids = [p.id for p in app.state.sessions.players.unrestricted]
         is_online = lambda o: o in unrestrcted_ids and o != p.id
 
         for online in filter(is_online, self.user_ids):
-            if t := glob.players.get(id=online):
-                p.enqueue(packets.user_stats(t))
+            if t := app.state.sessions.players.get(id=online):
+                if t is app.state.sessions.bot:
+                    # optimization for bot since it's
+                    # the most frequently requested user
+                    packet = packets.bot_stats(t)
+                else:
+                    packet = packets.user_stats(t)
+
+                p.enqueue(packet)
 
 
 @register(ClientPackets.MATCH_INVITE)
@@ -1901,11 +1934,11 @@ class MatchInvite(BasePacket):
         if not p.match:
             return
 
-        if not (t := glob.players.get(id=self.user_id)):
+        if not (t := app.state.sessions.players.get(id=self.user_id)):
             log(f"{p} tried to invite a user who is not online! ({self.user_id})")
             return
 
-        if t is glob.bot:
+        if t is app.state.sessions.bot:
             p.send_bot("I'm too busy!")
             return
 
@@ -1918,7 +1951,7 @@ class MatchInvite(BasePacket):
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
 class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.match = reader.read_match()
+        self.match = Match.from_parsed_match(reader.read_match())
 
     async def handle(self, p: Player) -> None:
         if not (m := p.match):
@@ -1939,8 +1972,13 @@ class UserPresenceRequest(BasePacket):
 
     async def handle(self, p: Player) -> None:
         for pid in self.user_ids:
-            if t := glob.players.get(id=pid):
-                p.enqueue(packets.user_presence(t))
+            if t := app.state.sessions.players.get(id=pid):
+                if t is app.state.sessions.bot:
+                    packet = packets.bot_presence()
+                else:
+                    packet = packets.user_presence(t)
+
+                p.enqueue(packet)
 
 
 @register(ClientPackets.USER_PRESENCE_REQUEST_ALL)
@@ -1953,7 +1991,11 @@ class UserPresenceRequestAll(BasePacket):
         # NOTE: this packet is only used when there
         # are >256 players visible to the client.
 
-        p.enqueue(b"".join(map(packets.user_presence, glob.players.unrestricted)))
+        p.enqueue(
+            b"".join(
+                map(packets.user_presence, app.state.sessions.players.unrestricted),
+            ),
+        )
 
 
 @register(ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)

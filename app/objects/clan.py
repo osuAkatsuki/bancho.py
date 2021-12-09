@@ -4,13 +4,14 @@ from enum import unique
 from typing import TYPE_CHECKING
 
 import aiomysql
+import databases.core
 
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
+import app.state
+from app.utils import escape_enum
+from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 __all__ = ("Clan", "ClanPrivileges")
 
@@ -52,9 +53,9 @@ class Clan:
         """Add a given player to the clan's members."""
         self.members.add(p.id)
 
-        await glob.db.execute(
-            "UPDATE users SET clan_id = %s, clan_priv = 1 WHERE id = %s",
-            [self.id, p.id],
+        await app.state.services.database.execute(
+            "UPDATE users SET clan_id = :clan_id, clan_priv = 1 WHERE id = :user_id",
+            {"clan_id": self.id, "user_id": p.id},
         )
 
         p.clan = self
@@ -64,47 +65,47 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.members.remove(p.id)
 
-        async with glob.db.pool.acquire() as conn:
-            async with conn.cursor() as db_cursor:
-                await db_cursor.execute(
-                    "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = %s",
-                    [p.id],
+        async with app.state.services.database.connection() as db_conn:
+            await db_conn.execute(
+                "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = :user_id",
+                {"user_id": p.id},
+            )
+
+            if not self.members:
+                # no members left, disband clan.
+                await db_conn.execute(
+                    "DELETE FROM clans WHERE id = :clan_id",
+                    {"clan_id": self.id},
+                )
+            elif p.id == self.owner:
+                # owner leaving and members left,
+                # transfer the ownership.
+                # TODO: prefer officers
+                self.owner = next(iter(self.members))
+
+                await db_conn.execute(
+                    "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
+                    {"user_id": self.owner, "clan_id": self.id},
                 )
 
-                if not self.members:
-                    # no members left, disband clan.
-                    await db_cursor.execute(
-                        "DELETE FROM clans WHERE id = %s",
-                        [self.id],
-                    )
-                elif p.id == self.owner:
-                    # owner leaving and members left,
-                    # transfer the ownership.
-                    # TODO: prefer officers
-                    self.owner = next(iter(self.members))
-
-                    await db_cursor.execute(
-                        "UPDATE clans SET owner = %s WHERE id = %s",
-                        [self.owner, self.id],
-                    )
-
-                    await db_cursor.execute(
-                        "UPDATE users SET clan_priv = 3 WHERE id = %s",
-                        [self.owner],
-                    )
+                await db_conn.execute(
+                    "UPDATE users SET clan_priv = 3 WHERE id = :user_id",
+                    {"user_id": self.owner},
+                )
 
         p.clan = None
         p.clan_priv = None
 
-    async def members_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def members_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Fetch all members from sql."""
         # TODO: in the future, we'll want to add
         # clan 'mods', so fetching rank here may
         # be a good idea to sort people into
         # different roles.
-        await db_cursor.execute("SELECT id FROM users WHERE clan_id = %s", [self.id])
-
-        async for row in db_cursor:
+        for row in await db_conn.fetch_all(
+            "SELECT id FROM users WHERE clan_id = :clan_id",
+            {"clan_id": self.id},
+        ):
             self.members.add(row["id"])
 
     def __repr__(self) -> str:

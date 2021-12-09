@@ -13,23 +13,25 @@ from typing import TypedDict
 from typing import Union
 
 import aiomysql
+import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.state
 import packets
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.beatmap import Beatmap
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+from app.utils import escape_enum
+from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from asyncio import TimerHandle
 
-    from objects.player import Player
-    from objects.channel import Channel
+    from app.objects.player import Player
+    from app.objects.channel import Channel
 
 __all__ = (
     "SlotStatus",
@@ -43,7 +45,7 @@ __all__ = (
     "Match",
 )
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.state.settings.DOMAIN
 
 
 @unique
@@ -98,29 +100,6 @@ class MatchTeamTypes(IntEnum):
     tag_team_vs = 3
 
 
-@dataclass
-class ScoreFrame:
-    time: int
-    id: int
-    num300: int
-    num100: int
-    num50: int
-    num_geki: int
-    num_katu: int
-    num_miss: int
-    total_score: int
-    current_combo: int
-    max_combo: int
-    perfect: bool
-    current_hp: int
-    tag_byte: int
-
-    score_v2: bool
-    # scorev2 only
-    combo_portion: Optional[float] = None
-    bonus_portion: Optional[float] = None
-
-
 class MapPool:
     __slots__ = ("id", "name", "created_at", "created_by", "maps")
 
@@ -144,14 +123,12 @@ class MapPool:
     def __repr__(self) -> str:
         return f"<{self.name}>"
 
-    async def maps_from_sql(self, db_cursor: aiomysql.DictCursor) -> None:
+    async def maps_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve all maps from sql to populate `self.maps`."""
-        await db_cursor.execute(
-            "SELECT map_id, mods, slot FROM tourney_pool_maps WHERE pool_id = %s",
-            [self.id],
-        )
-
-        async for row in db_cursor:
+        for row in await db_conn.fetch_all(
+            "SELECT map_id, mods, slot FROM tourney_pool_maps WHERE pool_id = :pool_id",
+            {"pool_id": self.id},
+        ):
             map_id = row["map_id"]
             bmap = await Beatmap.from_bid(map_id)
 
@@ -163,9 +140,9 @@ class MapPool:
                 # TODO: perhaps discord webhook?
                 log(f"Removing {map_id} from pool {self.name} (not found).", Ansi.LRED)
 
-                await db_cursor.execute(
-                    "DELETE FROM tourney_pool_maps WHERE map_id = %s",
-                    [map_id],
+                await db_conn.execute(
+                    "DELETE FROM tourney_pool_maps WHERE map_id = :map_id",
+                    {"map_id": map_id},
                 )
                 continue
 
@@ -238,7 +215,7 @@ class Match:
         "id",
         "name",
         "passwd",
-        "host",
+        "host_id",
         "_refs",
         "map_id",
         "map_md5",
@@ -271,8 +248,8 @@ class Match:
         self.name = ""
         self.passwd = ""
 
-        self.host: Optional[Player] = None
-        self._refs: set[Player] = set()
+        self.host_id = 0
+        self._refs: set["Player"] = set()
 
         self.map_id = 0
         self.map_md5 = ""
@@ -298,13 +275,53 @@ class Match:
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        self.match_points: dict[Union[MatchTeams, "Player"], int] = defaultdict(int)
         self.bans: set[tuple[Mods, int]] = set()
-        self.winners: list[Union[Player, MatchTeams, None]] = []  # none for tie
+        self.winners: list[Union["Player", MatchTeams, None]] = []  # none for tie
         self.winning_pts = 0
         self.use_pp_scoring = False  # only for scrims
 
         self.tourney_clients: set[int] = set()  # player ids
+
+    @classmethod
+    def from_parsed_match(cls, parsed_match: packets.MultiplayerMatch) -> "Match":
+        obj = cls()
+        obj.mods = Mods(parsed_match.mods)
+
+        obj.name = parsed_match.name
+        obj.passwd = parsed_match.passwd
+
+        obj.map_name = parsed_match.map_name
+        obj.map_id = parsed_match.map_id
+        obj.map_md5 = parsed_match.map_md5
+
+        for slot, status, team, mods in zip(
+            obj.slots,
+            parsed_match.slot_statuses,
+            parsed_match.slot_teams,
+            parsed_match.slot_mods or [0] * 16,
+        ):
+            slot.status = SlotStatus(status)
+            slot.team = MatchTeams(team)
+            slot.mods = Mods(mods)
+
+        # TODO: validate there is no hole here?
+        obj.host_id = parsed_match.host_id
+
+        obj.mode = GameMode(parsed_match.mode)
+        obj.win_condition = MatchWinConditions(parsed_match.win_condition)
+        obj.team_type = MatchTeamTypes(parsed_match.team_type)
+        obj.freemods = parsed_match.freemods
+
+        obj.seed = parsed_match.seed
+
+        return obj
+
+    @property  # TODO: test cache speed
+    def host(self) -> "Player":
+        p = app.state.sessions.players.get(id=self.host_id)
+        assert p is not None
+        return p
 
     @property
     def url(self) -> str:
@@ -398,7 +415,7 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        if lobby and (lchan := glob.channels["#lobby"]) and lchan.players:
+        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
             lchan.enqueue(data)
 
     def enqueue_state(self, lobby: bool = True) -> None:
@@ -408,11 +425,11 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(packets.update_match(self, send_pw=True))
 
-        if lobby and (lchan := glob.channels["#lobby"]) and lchan.players:
+        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
             lchan.enqueue(packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
-        """Unready any players in the `expected` state."""
+        """Unready any players in the `expected` app.state."""
         for s in self.slots:
             if s.status == expected:
                 s.status = SlotStatus.not_ready
@@ -443,7 +460,7 @@ class Match:
         self,
         was_playing: Sequence[Slot],
     ) -> "tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]":
-        """Await score submissions from all players in completed state."""
+        """Await score submissions from all players in completed app.state."""
         scores: "dict[Union[MatchTeams, Player], int]" = defaultdict(int)
         didnt_submit: list["Player"] = []
         time_waited = 0  # allow up to 10s (total, not per player)
@@ -534,7 +551,7 @@ class Match:
                 return self.chat.send_bot("The point has ended in a tie!")
 
             # Find the winner & increment their matchpoints.
-            winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
+            winner: Union["Player", MatchTeams] = max(scores, key=lambda k: scores[k])
             self.winners.append(winner)
             self.match_points[winner] += 1
 

@@ -32,31 +32,32 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-import misc.utils
+import app.state
+import app.utils
 import packets
-from constants import regexes
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.mods import SPEED_CHANGING_MODS
-from constants.privileges import Privileges
-from misc.utils import seconds_readable
-from objects import glob
-from objects.beatmap import Beatmap
-from objects.beatmap import ensure_local_osu_file
-from objects.beatmap import RankedStatus
-from objects.clan import Clan
-from objects.clan import ClanPrivileges
-from objects.match import MapPool
-from objects.match import Match
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import MatchWinConditions
-from objects.match import SlotStatus
-from objects.player import Player
-from objects.score import SubmissionStatus
+from app.constants import regexes
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.privileges import Privileges
+from app.objects import glob
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import RankedStatus
+from app.objects.clan import Clan
+from app.objects.clan import ClanPrivileges
+from app.objects.match import MapPool
+from app.objects.match import Match
+from app.objects.match import MatchTeams
+from app.objects.match import MatchTeamTypes
+from app.objects.match import MatchWinConditions
+from app.objects.match import SlotStatus
+from app.objects.player import Player
+from app.objects.score import SubmissionStatus
+from app.utils import seconds_readable
 
 if TYPE_CHECKING:
-    from objects.channel import Channel
+    from app.objects.channel import Channel
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -162,7 +163,7 @@ def command(
 @command(Privileges.NORMAL, aliases=["", "h"], hidden=True)
 async def _help(ctx: Context) -> Optional[str]:
     """Show all documented commands the player can access."""
-    prefix = glob.config.command_prefix
+    prefix = app.state.settings.COMMAND_PREFIX
     l = ["Individual commands", "-----------"]
 
     for cmd in regular_commands:
@@ -199,12 +200,12 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
     if not target:
         return "User not found."
 
-    if target is glob.bot or target is ctx.player:
+    if target is app.state.sessions.bot or target is ctx.player:
         return "What?"
 
     if target.id in ctx.player.blocks:
@@ -220,12 +221,12 @@ async def block(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
     if not target:
         return "User not found."
 
-    if target is glob.bot or target is ctx.player:
+    if target is app.state.sessions.bot or target is ctx.player:
         return "What?"
 
     if target.id not in ctx.player.blocks:
@@ -252,18 +253,21 @@ async def changename(ctx: Context) -> Optional[str]:
     if "_" in name and " " in name:
         return 'May contain "_" and " ", but not both.'
 
-    if name in glob.config.disallowed_names:
+    if name in app.state.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await glob.db.fetch("SELECT 1 FROM users WHERE name = %s", [name]):
+    if await app.state.services.database.fetch_one(
+        "SELECT 1 FROM users WHERE name = %s",
+        {"name": name},
+    ):
         return "Username already taken by another player."
 
     # all checks passed, update their name
     safe_name = name.lower().replace(" ", "_")
 
-    await glob.db.execute(
-        "UPDATE users SET name = %s, safe_name = %s WHERE id = %s",
-        [name, safe_name, ctx.player.id],
+    await app.state.services.database.execute(
+        "UPDATE users SET name = :name, safe_name = :safe_name WHERE id = :user_id",
+        {"name": name, "safe_name": safe_name, "user_id": ctx.player.id},
     )
 
     ctx.player.enqueue(
@@ -299,7 +303,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 async def recent(ctx: Context) -> Optional[str]:
     """Show information about a player's most recent score."""
     if ctx.args:
-        if not (target := glob.players.get(name=" ".join(ctx.args))):
+        if not (target := app.state.sessions.players.get(name=" ".join(ctx.args))):
             return "Player not found."
     else:
         target = ctx.player
@@ -363,7 +367,9 @@ async def top(ctx: Context) -> Optional[str]:
             return "Invalid username."
 
         # specific player provided
-        if not (p := await glob.players.from_cache_or_sql(name=ctx.args[1])):
+        if not (
+            p := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[1])
+        ):
             return "Player not found."
     else:
         # no player provided, use self
@@ -374,7 +380,7 @@ async def top(ctx: Context) -> Optional[str]:
     mode = ["osu", "taiko", "catch", "mania"].index(mode_str)
     table = f"scores_{special_mode_str}"
 
-    scores = await glob.db.fetchall(
+    scores = await app.state.services.database.fetchall(
         "SELECT *, b.id AS bmapid "
         f"FROM {table} s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
@@ -392,7 +398,7 @@ async def top(ctx: Context) -> Optional[str]:
     return "\n".join(
         [f"Top 10 scores for {p.embed} ({ctx.args[0]})."]
         + [
-            TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=glob.config.domain, **s)
+            TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.state.settings.DOMAIN, **s)
             for idx, s in enumerate(scores)
         ],
     )
@@ -404,7 +410,7 @@ async def top(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, aliases=["w"], hidden=True)
 async def _with(ctx: Context) -> Optional[str]:
     """Specify custom accuracy & mod combinations with `/np`."""
-    if ctx.recipient is not glob.bot:
+    if ctx.recipient is not app.state.sessions.bot:
         return "This command can only be used in DM with bot."
 
     if time.time() >= ctx.player.last_np["timeout"]:
@@ -557,11 +563,11 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    await glob.db.execute(
+    await app.state.services.database.execute(
         "INSERT INTO map_requests "
         "(map_id, player_id, datetime, active) "
-        "VALUES (%s, %s, NOW(), 1)",
-        [bmap.id, ctx.player.id],
+        "VALUES (:map_id, :user_id, NOW(), 1)",
+        {"map_id": bmap.id, "user_id": ctx.player.id},
     )
 
     return "Request submitted."
@@ -570,21 +576,21 @@ async def request(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL)
 async def get_apikey(ctx: Context) -> Optional[str]:
     """Generate a new api key & assign it to the player."""
-    if ctx.recipient is not glob.bot:
-        return f"Command only available in DMs with {glob.bot.name}."
+    if ctx.recipient is not app.state.sessions.bot:
+        return f"Command only available in DMs with {app.state.sessions.bot.name}."
 
     # remove old token
     if ctx.player.api_key:
-        glob.api_keys.pop(ctx.player.api_key)
+        app.state.sessions.api_keys.pop(ctx.player.api_key)
 
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await glob.db.execute(
-        "UPDATE users SET api_key = %s WHERE id = %s",
-        [ctx.player.api_key, ctx.player.id],
+    await app.state.services.database.execute(
+        "UPDATE users SET api_key = :api_key WHERE id = :user_id",
+        {"api_key": ctx.player.api_key, "user_id": ctx.player.id},
     )
-    glob.api_keys[ctx.player.api_key] = ctx.player.id
+    app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(packets.notification("/savelog & click popup for an easy copy."))
     return f"Your API key is now: {ctx.player.api_key}"
@@ -602,7 +608,7 @@ async def requests(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    res = await glob.db.fetchall(
+    res = await app.state.services.database.fetchall(
         "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
         _dict=False,  # return rows as tuples
     )
@@ -614,7 +620,7 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in res:
         # find player & map for each row, and add to output.
-        if not (p := await glob.players.from_cache_or_sql(id=player_id)):
+        if not (p := await app.state.sessions.players.from_cache_or_sql(id=player_id)):
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
@@ -658,7 +664,7 @@ async def _map(ctx: Context) -> Optional[str]:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    async with glob.db.pool.acquire() as conn:
+    async with app.state.services.database.pool.acquire() as conn:
         async with conn.cursor() as db_cursor:
             if ctx.args[1] == "set":
                 # update whole set
@@ -674,7 +680,7 @@ async def _map(ctx: Context) -> Optional[str]:
                 )
                 map_ids = [row[0] async for row in db_cursor]
 
-                for bmap in glob.cache["beatmapset"][bmap.set_id].maps:
+                for bmap in app.state.cache["beatmapset"][bmap.set_id].maps:
                     bmap.status = new_status
 
             else:
@@ -686,8 +692,8 @@ async def _map(ctx: Context) -> Optional[str]:
 
                 map_ids = [bmap.id]
 
-                if bmap.md5 in glob.cache["beatmap"]:
-                    glob.cache["beatmap"][bmap.md5].status = new_status
+                if bmap.md5 in app.state.cache["beatmap"]:
+                    app.state.cache["beatmap"][bmap.md5].status = new_status
 
             # deactivate rank requests for all ids
             for map_id in map_ids:
@@ -711,7 +717,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 2 or not ctx.args[1].isdecimal():
         return "Invalid syntax: !notes <name> <days_back>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     days = int(ctx.args[1])
@@ -721,7 +727,7 @@ async def notes(ctx: Context) -> Optional[str]:
     elif days <= 0:
         return "Invalid syntax: !notes <name> <days_back>"
 
-    res = await glob.db.fetchall(
+    res = await app.state.services.database.fetchall(
         "SELECT `msg`, `time` "
         "FROM `logs` WHERE `to` = %s "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - %s "
@@ -741,16 +747,16 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
 
-    await glob.db.execute(
+    await app.state.services.database.execute(
         "INSERT INTO logs "
         "(`from`, `to`, `msg`, `time`) "
-        "VALUES (%s, %s, %s, NOW())",
-        [ctx.player.id, t.id, log_msg],
+        "VALUES (:from, :to, :msg, NOW())",
+        {"from": ctx.player.id, "to": t.id, "msg": log_msg},
     )
 
     return f"Added note to {t}."
@@ -776,7 +782,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -803,7 +809,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !unsilence <name>"
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if not t.silenced:
@@ -830,7 +836,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await glob.players.from_cache_or_sql(name=" ".join(ctx.args))
+        p = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
 
         if not p:
             return "Player not found."
@@ -878,7 +884,7 @@ async def restrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !restrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -904,7 +910,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -931,7 +937,7 @@ async def alert(ctx: Context) -> Optional[str]:
 
     notif_txt = " ".join(ctx.args)
 
-    glob.players.enqueue(packets.notification(notif_txt))
+    app.state.sessions.players.enqueue(packets.notification(notif_txt))
     return "Alert sent."
 
 
@@ -941,7 +947,7 @@ async def alertuser(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !alertu <name> <msg>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     notif_txt = " ".join(ctx.args[1:])
@@ -991,9 +997,9 @@ async def shutdown(ctx: Context) -> Optional[str]:
                 f'Reason: {" ".join(ctx.args[1:])}'
             )
 
-            glob.players.enqueue(packets.notification(alert_msg))
+            app.state.sessions.players.enqueue(packets.notification(alert_msg))
 
-        glob.loop.call_later(delay, os.kill, os.getpid(), _signal)
+        app.state.loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), _signal)
@@ -1095,7 +1101,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
         # extend all added fakes to the real list
         _fake_users.extend(new_fakes)
-        glob.players.extend(new_fakes)
+        app.state.sessions.players.extend(new_fakes)
         del new_fakes
 
         msg = "Added."
@@ -1117,7 +1123,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
             data += fake.id.to_bytes(4, "little")  # 4 bytes pid
             data += b"\x00"  # 1 byte 0
 
-            glob.players.remove(fake)
+            app.state.sessions.players.remove(fake)
             _fake_users.remove(fake)
 
         msg = "Removed."
@@ -1125,7 +1131,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     data = bytes(data)  # bytearray -> bytes
 
     # only enqueue data to real users.
-    for o in [x for x in glob.players if x.id < FAKE_ID_START]:
+    for o in [x for x in app.state.sessions.players if x.id < FAKE_ID_START]:
         o.enqueue(data)
 
     return msg
@@ -1160,103 +1166,92 @@ async def recalc(ctx: Context) -> Optional[str]:
         if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
             return "Mapfile could not be found; this incident has been reported."
 
-        async with glob.db.pool.acquire() as conn:
-            async with (
-                conn.cursor(aiomysql.DictCursor) as select_cursor,
-                conn.cursor(aiomysql.Cursor) as update_cursor,
-            ):
-                with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
-                    ezpp.set_mode(0)  # TODO: other modes
-                    for table in ("scores_vn", "scores_rx", "scores_ap"):
-                        await select_cursor.execute(
-                            "SELECT id, acc, mods, max_combo, nmiss "
-                            f"FROM {table} "
-                            "WHERE map_md5 = %s AND mode = 0",  # TODO: ""
-                            [bmap.md5],
+        async with (
+            app.state.services.database.connection() as score_select_conn,
+            app.state.services.database.connection() as update_conn,
+        ):
+            ...
+            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                ezpp.set_mode(0)  # TODO: other modes
+                for table in ("scores_vn", "scores_rx", "scores_ap"):
+                    async for row in score_select_conn.iterate(
+                        "SELECT id, acc, mods, max_combo, nmiss "
+                        f"FROM {table} "
+                        "WHERE map_md5 = :map_md5 AND mode = 0",  # TODO: ""
+                        {"map_md5": bmap.md5},
+                    ):
+                        ezpp.set_mods(row["mods"])
+                        ezpp.set_nmiss(row["nmiss"])  # clobbers acc
+                        ezpp.set_combo(row["max_combo"])
+                        ezpp.set_accuracy_percent(row["acc"])
+
+                        ezpp.calculate(osu_file_path)
+
+                        await update_conn.execute(
+                            f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
+                            {"pp": ezpp.get_pp(), "score_id": row["id"]},
                         )
-
-                        async for row in select_cursor:
-                            ezpp.set_mods(row["mods"])
-                            ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                            ezpp.set_combo(row["max_combo"])
-                            ezpp.set_accuracy_percent(row["acc"])
-
-                            ezpp.calculate(osu_file_path)
-
-                            await update_cursor.execute(
-                                f"UPDATE {table} SET pp = %s WHERE id = %s",
-                                [ezpp.get_pp(), row["id"]],
-                            )
 
         return "Map recalculated."
     else:
         # recalc all plays on the server, on all maps
-        staff_chan = glob.channels["#staff"]  # log any errs here
+        staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
 
         async def recalc_all() -> None:
             staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
             st = time.time()
 
-            async with glob.db.pool.acquire() as conn:
-                async with (
-                    conn.cursor(aiomysql.Cursor) as bmap_select_cursor,
-                    conn.cursor(aiomysql.DictCursor) as score_select_cursor,
-                    conn.cursor(aiomysql.Cursor) as update_cursor,
+            async with (
+                app.state.services.database.connection() as bmap_select_conn,
+                app.state.services.database.connection() as score_select_conn,
+                app.state.services.database.connection() as update_conn,
+            ):
+                async for bmap_row in bmap_select_conn.iterate(
+                    "SELECT id, md5 FROM maps WHERE passes > 0",
                 ):
-                    await bmap_select_cursor.execute(
-                        "SELECT id, md5 FROM maps WHERE passes > 0",
-                    )
+                    bmap_id = bmap_row["id"]
+                    bmap_md5 = bmap_row["md5"]
 
-                    map_count = bmap_select_cursor.rowcount
-                    staff_chan.send_bot(f"Recalculating {map_count} maps.")
+                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
+                    if not await ensure_local_osu_file(
+                        osu_file_path,
+                        bmap_id,
+                        bmap_md5,
+                    ):
+                        staff_chan.send_bot(
+                            "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
+                        )
+                        continue
 
-                    async for bmap_row in bmap_select_cursor:
-                        bmap_id, bmap_md5 = bmap_row
+                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                        ezpp.set_mode(0)  # TODO: other modes
+                        for table in ("scores_vn", "scores_rx", "scores_ap"):
+                            async for row in score_select_conn.iterate(
+                                "SELECT id, acc, mods, max_combo, nmiss "
+                                f"FROM {table} "
+                                "WHERE map_md5 = :map_md5 AND mode = 0",  # TODO: ""
+                                {"bmap_md5": bmap_md5},
+                            ):
+                                ezpp.set_mods(row["mods"])
+                                ezpp.set_nmiss(row["nmiss"])  # clobbers acc
+                                ezpp.set_combo(row["max_combo"])
+                                ezpp.set_accuracy_percent(row["acc"])
 
-                        osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                        if not await ensure_local_osu_file(
-                            osu_file_path,
-                            bmap_id,
-                            bmap_md5,
-                        ):
-                            staff_chan.send_bot(
-                                "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
-                            )
-                            continue
+                                ezpp.calculate(osu_file_path)
 
-                        with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
-                            ezpp.set_mode(0)  # TODO: other modes
-                            for table in ("scores_vn", "scores_rx", "scores_ap"):
-                                await score_select_cursor.execute(
-                                    "SELECT id, acc, mods, max_combo, nmiss "
-                                    f"FROM {table} "
-                                    "WHERE map_md5 = %s AND mode = 0",  # TODO: ""
-                                    [bmap_md5],
+                                await update_conn.execute(
+                                    f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
+                                    {"pp": ezpp.get_pp(), "score_id": row["id"]},
                                 )
 
-                                async for row in score_select_cursor:
-                                    ezpp.set_mods(row["mods"])
-                                    ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                                    ezpp.set_combo(row["max_combo"])
-                                    ezpp.set_accuracy_percent(row["acc"])
+                    # leave at least 1/100th of
+                    # a second for handling conns.
+                    await asyncio.sleep(0.01)
 
-                                    ezpp.calculate(osu_file_path)
-
-                                    await update_cursor.execute(
-                                        f"UPDATE {table} "
-                                        "SET pp = %s "
-                                        "WHERE id = %s",
-                                        [ezpp.get_pp(), row["id"]],
-                                    )
-
-                        # leave at least 1/100th of
-                        # a second for handling conns.
-                        await asyncio.sleep(0.01)
-
-            elapsed = misc.utils.seconds_readable(int(time.time() - st))
+            elapsed = app.utils.seconds_readable(int(time.time() - st))
             staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
 
-        glob.loop.create_task(recalc_all())
+        app.state.loop.create_task(recalc_all())
 
         return "Starting a full recalculation."
 
@@ -1264,8 +1259,8 @@ async def recalc(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER, hidden=True)
 async def debug(ctx: Context) -> Optional[str]:
     """Toggle the console's debug setting."""
-    glob.app.debug = not glob.app.debug
-    return f"Toggled {'on' if glob.app.debug else 'off'}."
+    app.state.settings.DEBUG = not app.state.settings.DEBUG
+    return f"Toggled {'on' if app.state.settings.DEBUG else 'off'}."
 
 
 # NOTE: these commands will likely be removed
@@ -1299,7 +1294,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
     await t.add_privs(bits)
@@ -1320,7 +1315,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await glob.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
     await t.remove_privs(bits)
@@ -1338,7 +1333,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    async with glob.db.pool.acquire() as conn:
+    async with app.state.services.database.pool.acquire() as conn:
         async with conn.cursor() as db_cursor:
             for t in ("vn", "rx", "ap"):
                 await db_cursor.execute(
@@ -1386,7 +1381,7 @@ async def reload(ctx: Context) -> Optional[str]:
 async def server(ctx: Context) -> Optional[str]:
     """Retrieve performance data about the server."""
 
-    build_str = f"gulag v{glob.version!r} ({glob.config.domain})"
+    build_str = f"gulag v{app.state.settings.VERSION!r} ({app.state.settings.DOMAIN})"
 
     # get info about this process
     proc = psutil.Process(os.getpid())
@@ -1422,10 +1417,10 @@ async def server(ctx: Context) -> Optional[str]:
     reqs = (Path.cwd() / "requirements.txt").read_text().splitlines()
     pkg_sections = [reqs[i : i + 3] for i in range(0, len(reqs), 3)]
 
-    mirror_url = glob.config.mirror
-    using_osuapi = glob.config.osu_api_key != ""
-    advanced_mode = glob.config.advanced
-    auto_logging = glob.config.automatically_report_problems
+    mirror_url = app.state.settings.MIRROR_URL
+    using_osuapi = app.state.settings.OSU_API_KEY != ""
+    advanced_mode = app.state.settings.ADVANCED
+    auto_logging = app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
     return "\n".join(
         [
@@ -1453,7 +1448,7 @@ async def server(ctx: Context) -> Optional[str]:
 # utilities. Some may give direct access to utilties that could perform
 # harmful tasks to the underlying machine, so use at your own risk.
 
-if glob.config.advanced:
+if app.state.settings.DEVELOPER_MODE:
     from sys import modules as installed_mods
 
     __py_namespace = globals() | {
@@ -1480,7 +1475,7 @@ if glob.config.advanced:
         """Allow for (async) access to the python interpreter."""
         # This can be very good for getting used to gulag's API; just look
         # around the codebase and find things to play with in your server.
-        # Ex: !py return (await glob.players.get(name='cmyui')).status.action
+        # Ex: !py return (await app.state.sessions.players.get(name='cmyui')).status.action
         if not ctx.args:
             return "owo"
 
@@ -1516,7 +1511,7 @@ if glob.config.advanced:
 @mp_commands.add(Privileges.NORMAL, aliases=["h"])
 async def mp_help(ctx: Context) -> Optional[str]:
     """Show all documented multiplayer commands the player can access."""
-    prefix = glob.config.command_prefix
+    prefix = app.state.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in mp_commands.commands:
@@ -1583,9 +1578,9 @@ async def mp_start(ctx: Context) -> Optional[str]:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            ctx.match.starting["start"] = glob.loop.call_later(duration, _start)
+            ctx.match.starting["start"] = app.state.loop.call_later(duration, _start)
             ctx.match.starting["alerts"] = [
-                glob.loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
                 for t in (60, 30, 10, 5, 4, 3, 2, 1)
                 if t < duration
             ]
@@ -1717,7 +1712,7 @@ async def mp_host(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp host <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t is ctx.match.host:
@@ -1745,10 +1740,10 @@ async def mp_invite(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp invite <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t is glob.bot:
+    if t is app.state.sessions.bot:
         return "I'm too busy!"
 
     if t is ctx.player:
@@ -1764,7 +1759,7 @@ async def mp_addref(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t not in ctx.match:
@@ -1783,7 +1778,7 @@ async def mp_rmref(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     if t not in ctx.match.refs:
@@ -1991,7 +1986,7 @@ async def mp_force(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp force <name>"
 
-    if not (t := glob.players.get(name=ctx.args[0])):
+    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
     t.join_match(ctx.match, ctx.match.passwd)
@@ -2012,7 +2007,7 @@ async def mp_loadpool(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.state.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if ctx.match.pool is pool:
@@ -2155,7 +2150,7 @@ async def mp_pick(ctx: Context) -> Optional[str]:
 @pool_commands.add(Privileges.TOURNAMENT, aliases=["h"], hidden=True)
 async def pool_help(ctx: Context) -> Optional[str]:
     """Show all documented mappool commands the player can access."""
-    prefix = glob.config.command_prefix
+    prefix = app.state.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in pool_commands.commands:
@@ -2176,23 +2171,30 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if glob.pools.get_by_name(name):
+    if app.state.sessions.pools.get_by_name(name):
         return "Pool already exists by that name!"
 
     # insert pool into db
-    await glob.db.execute(
+    await app.state.services.database.execute(
         "INSERT INTO tourney_pools "
         "(name, created_at, created_by) "
-        "VALUES (%s, NOW(), %s)",
-        [name, ctx.player.id],
+        "VALUES (:name, NOW(), :user_id)",
+        {"name": name, "user_id": ctx.player.id},
     )
 
     # add to cache (get from sql for id & time)
-    res = await glob.db.fetch("SELECT * FROM tourney_pools WHERE name = %s", [name])
+    row = await app.state.services.database.fetch_one(
+        "SELECT * FROM tourney_pools WHERE name = :name",
+        {"name": name},
+    )
 
-    res["created_by"] = await glob.players.from_cache_or_sql(id=res["created_by"])
+    row = dict(row)  # make mutable copy
 
-    glob.pools.append(MapPool(**res))
+    row["created_by"] = await app.state.sessions.players.from_cache_or_sql(
+        id=row["created_by"],
+    )
+
+    app.state.sessions.pools.append(MapPool(**row))
 
     return f"{name} created."
 
@@ -2205,14 +2207,17 @@ async def pool_delete(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.state.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     # delete from db
-    await glob.db.execute("DELETE FROM tourney_pools WHERE name = %s", [name])
+    await app.state.services.database.execute(
+        "DELETE FROM tourney_pools WHERE name = :name",
+        {"name": name},
+    )
 
     # remove from cache
-    glob.pools.remove(pool)
+    app.state.sessions.pools.remove(pool)
 
     return f"{name} deleted."
 
@@ -2241,7 +2246,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.state.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if (mods, slot) in pool.maps:
@@ -2251,11 +2256,11 @@ async def pool_add(ctx: Context) -> Optional[str]:
         return "Map is already in the pool!"
 
     # insert into db
-    await glob.db.execute(
+    await app.state.services.database.execute(
         "INSERT INTO tourney_pool_maps "
         "(map_id, pool_id, mods, slot) "
-        "VALUES (%s, %s, %s, %s)",
-        [bmap.id, pool.id, mods, slot],
+        "VALUES (:map_id, :pool_id, :mods, :slot)",
+        {"map_id": bmap.id, "pool_id": pool.id, "mods": mods, "slot": slot},
     )
 
     # add to cache
@@ -2281,16 +2286,16 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.state.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     if (mods, slot) not in pool.maps:
         return f"Found no {mods_slot} pick in the pool."
 
     # delete from db
-    await glob.db.execute(
-        "DELETE FROM tourney_pool_maps WHERE mods = %s AND slot = %s",
-        [mods, slot],
+    await app.state.services.database.execute(
+        "DELETE FROM tourney_pool_maps WHERE mods = :mods AND slot = :slot",
+        {"mods": mods, "slot": slot},
     )
 
     # remove from cache
@@ -2302,7 +2307,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
 @pool_commands.add(Privileges.TOURNAMENT, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> Optional[str]:
     """List all existing mappools information."""
-    if not (pools := glob.pools):
+    if not (pools := app.state.sessions.pools):
         return "There are currently no pools!"
 
     l = [f"Mappools ({len(pools)})"]
@@ -2324,7 +2329,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if not (pool := glob.pools.get_by_name(name)):
+    if not (pool := app.state.sessions.pools.get_by_name(name)):
         return "Could not find a pool by that name!"
 
     _time = pool.created_at.strftime("%H:%M:%S%p")
@@ -2347,7 +2352,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 @clan_commands.add(Privileges.NORMAL, aliases=["h"])
 async def clan_help(ctx: Context) -> Optional[str]:
     """Show all documented clan commands the player can access."""
-    prefix = glob.config.command_prefix
+    prefix = app.state.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in clan_commands.commands:
@@ -2375,20 +2380,20 @@ async def clan_create(ctx: Context) -> Optional[str]:
     if ctx.player.clan:
         return f"You're already a member of {ctx.player.clan}!"
 
-    if glob.clans.get(name=name):
+    if app.state.sessions.clans.get(name=name):
         return "That name has already been claimed by another clan."
 
-    if glob.clans.get(tag=tag):
+    if app.state.sessions.clans.get(tag=tag):
         return "That tag has already been claimed by another clan."
 
     created_at = datetime.now()
 
     # add clan to sql (generates id)
-    clan_id = await glob.db.execute(
+    clan_id = await app.state.services.database.execute(
         "INSERT INTO clans "
         "(name, tag, created_at, owner) "
-        "VALUES (%s, %s, %s, %s)",
-        [name, tag, created_at, ctx.player.id],
+        "VALUES (:name, :tag, :created_at, :user_id)",
+        {"name": name, "tag": tag, "created_at": created_at, "user_id": ctx.player.id},
     )
 
     # add clan to cache
@@ -2399,7 +2404,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
         created_at=created_at,
         owner=ctx.player.id,
     )
-    glob.clans.append(clan)
+    app.state.sessions.clans.append(clan)
 
     # set owner's clan & clan priv (cache & sql)
     ctx.player.clan = clan
@@ -2411,16 +2416,16 @@ async def clan_create(ctx: Context) -> Optional[str]:
     if "full_name" in ctx.player.__dict__:
         del ctx.player.full_name  # wipe cached_property
 
-    await glob.db.execute(
+    await app.state.services.database.execute(
         "UPDATE users "
-        "SET clan_id = %s, "
+        "SET clan_id = :clan_id, "
         "clan_priv = 3 "  # ClanPrivileges.Owner
-        "WHERE id = %s",
-        [clan_id, ctx.player.id],
+        "WHERE id = :user_id",
+        {"clan_id": clan_id, "user_id": ctx.player.id},
     )
 
     # announce clan creation
-    if announce_chan := glob.channels["#announce"]:
+    if announce_chan := app.state.sessions.channels["#announce"]:
         msg = f"\x01ACTION founded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
@@ -2432,10 +2437,10 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     """Disband a clan (admins may disband others clans)."""
     if ctx.args:
         # disband a specified clan by tag
-        if ctx.player not in glob.players.staff:
+        if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        if not (clan := glob.clans.get(tag=" ".join(ctx.args).upper())):
+        if not (clan := app.state.sessions.clans.get(tag=" ".join(ctx.args).upper())):
             return "Could not find a clan by that tag."
     else:
         # disband the player's clan
@@ -2443,28 +2448,31 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             return "You're not a member of a clan!"
 
     # delete clan from sql
-    await glob.db.execute("DELETE FROM clans WHERE id = %s", [clan.id])
+    await app.state.services.database.execute(
+        "DELETE FROM clans WHERE id = :clan_id",
+        {"clan_id": clan.id},
+    )
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.members:
-        if member := glob.players.get(id=member_id):
+        if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
             if "full_name" in member.__dict__:
                 del member.full_name  # wipe cached_property
 
-    await glob.db.execute(
-        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = %s",
-        [clan.id],
+    await app.state.services.database.execute(
+        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",
+        {"clan_id": clan.id},
     )
 
     # remove clan from cache
-    glob.clans.remove(clan)
+    app.state.sessions.clans.remove(clan)
 
     # announce clan disbanding
-    if announce_chan := glob.channels["#announce"]:
+    if announce_chan := app.state.sessions.channels["#announce"]:
         msg = f"\x01ACTION disbanded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
@@ -2477,24 +2485,21 @@ async def clan_info(ctx: Context) -> Optional[str]:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    if not (clan := glob.clans.get(tag=" ".join(ctx.args).upper())):
+    if not (clan := app.state.sessions.clans.get(tag=" ".join(ctx.args).upper())):
         return "Could not find a clan by that tag."
 
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    res = await glob.db.fetchall(
+    async for row in app.state.services.database.iterate(
         "SELECT name, clan_priv "
         "FROM users "
-        "WHERE clan_id = %s "
+        "WHERE clan_id = :clan_id "
         "ORDER BY clan_priv DESC",
-        [clan.id],
-        _dict=False,
-    )
-
-    for member_name, clan_priv in res:
-        priv_str = ("Member", "Officer", "Owner")[clan_priv - 1]
-        msg.append(f"[{priv_str}] {member_name}")
+        {"clan_id": clan.id},
+    ):
+        priv_str = ("Member", "Officer", "Owner")[row["clan_priv"] - 1]
+        msg.append(f"[{priv_str}] {row['member_name']}")
 
     return "\n".join(msg)
 
@@ -2513,12 +2518,12 @@ async def clan_list(ctx: Context) -> Optional[str]:
     else:
         offset = 0
 
-    if offset >= (total_clans := len(glob.clans)):
+    if offset >= (total_clans := len(app.state.sessions.clans)):
         return "No clans found."
 
     msg = [f"gulag clans listing ({total_clans} total)."]
 
-    for idx, clan in enumerate(glob.clans, offset):
+    for idx, clan in enumerate(app.state.sessions.clans, offset):
         msg.append(f"{idx + 1}. {clan!r}")
 
     return "\n".join(msg)
@@ -2538,7 +2543,7 @@ async def process_commands(
     # or simply False if we don't have any command hits.
     start_time = clock_ns()
 
-    prefix_len = len(glob.config.command_prefix)
+    prefix_len = len(app.state.settings.COMMAND_PREFIX)
     trigger, *args = msg[prefix_len:].strip().split(" ")
 
     # case-insensitive triggers

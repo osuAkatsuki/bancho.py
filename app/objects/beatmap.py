@@ -14,17 +14,17 @@ import aiomysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import misc.utils
-from constants.gamemodes import GameMode
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
+import app.state
+import app.utils
+from app.constants.gamemodes import GameMode
+from app.utils import escape_enum
+from app.utils import pymysql_encode
 
 # from dataclasses import dataclass
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.state.settings.DOMAIN
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -37,12 +37,12 @@ IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
-    if glob.app.debug:
+    if app.state.settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    params["k"] = glob.config.osu_api_key
+    params["k"] = str(app.state.settings.OSU_API_KEY)
 
-    async with glob.http_session.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
+    async with app.state.services.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
             return await resp.json()
 
@@ -59,15 +59,15 @@ async def ensure_local_osu_file(
         or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
-        if glob.app.debug:
+        if app.state.settings.DEBUG:
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with glob.http_session.get(url) as r:
+        async with app.state.services.http.get(url) as r:
             if not r or r.status != 200:
                 # temporary logging, not sure how possible this is
-                stacktrace = misc.utils.get_appropriate_stacktrace()
-                await misc.utils.log_strange_occurrence(stacktrace)
+                stacktrace = app.utils.get_appropriate_stacktrace()
+                await app.utils.log_strange_occurrence(stacktrace)
                 return False
 
             osu_file_path.write_bytes(await r.read())
@@ -386,9 +386,9 @@ class Beatmap:
                 # from the db, or the osu!api. we want to get
                 # the whole set cached all at once to minimize
                 # osu!api requests overall in the long run.
-                res = await glob.db.fetch(
-                    "SELECT set_id FROM maps WHERE md5 = %s",
-                    [md5],
+                res = await app.state.services.database.fetch_one(
+                    "SELECT set_id FROM maps WHERE md5 = :map_md5",
+                    {"map_md5": md5},
                 )
 
                 if res:
@@ -425,7 +425,10 @@ class Beatmap:
             # or the osu!api. we want to get the whole set
             # cached all at once to minimize osu!api
             # requests overall in the long run
-            res = await glob.db.fetch("SELECT set_id FROM maps WHERE id = %s", [bid])
+            res = await app.state.services.database.fetch_one(
+                "SELECT set_id FROM maps WHERE id = :map_id",
+                {"map_id": bid},
+            )
 
             if res:
                 # found set id in db
@@ -522,8 +525,8 @@ class Beatmap:
         check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by md5."""
-        if md5 in glob.cache["beatmap"]:
-            bmap: Beatmap = glob.cache["beatmap"][md5]
+        if md5 in app.state.cache["beatmap"]:
+            bmap: Beatmap = app.state.cache["beatmap"][md5]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
@@ -536,8 +539,8 @@ class Beatmap:
         check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by id."""
-        if bid in glob.cache["beatmap"]:
-            bmap: Beatmap = glob.cache["beatmap"][bid]
+        if bid in app.state.cache["beatmap"]:
+            bmap: Beatmap = app.state.cache["beatmap"][bid]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
@@ -654,7 +657,7 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
         and propogate any update into our cache & database."""
-        if not glob.config.osu_api_key:
+        if not app.state.settings.OSU_API_KEY:
             return
 
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
@@ -688,122 +691,117 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with glob.db.pool.acquire() as db_conn:
-            async with db_conn.cursor() as db_cursor:
-                await db_cursor.execute(
-                    "REPLACE INTO mapsets "
-                    "(server, id, last_osuapi_check) "
-                    'VALUES ("osu!", %s, %s)',
-                    [self.id, self.last_osuapi_check],
-                )
+        async with app.state.services.database.connection() as db_conn:
+            await db_conn.execute(
+                "REPLACE INTO mapsets "
+                "(server, id, last_osuapi_check) "
+                'VALUES ("osu!", :id, :last_osuapi_check)',
+                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
+            )
 
-                await db_cursor.executemany(
-                    "REPLACE INTO maps ("
-                    "server, md5, id, set_id, "
-                    "artist, title, version, creator, "
-                    "filename, last_update, total_length, "
-                    "max_combo, status, frozen, "
-                    "plays, passes, mode, bpm, "
-                    "cs, od, ar, hp, diff"
-                    ") VALUES ("
-                    '"osu!", %s, %s, %s, '
-                    "%s, %s, %s, %s, "
-                    "%s, %s, %s, "
-                    "%s, %s, %s, "
-                    "%s, %s, %s, %s, "
-                    "%s, %s, %s, %s, %s"
-                    ")",
-                    [
-                        (
-                            bmap.md5,
-                            bmap.id,
-                            bmap.set_id,
-                            bmap.artist,
-                            bmap.title,
-                            bmap.version,
-                            bmap.creator,
-                            bmap.filename,
-                            bmap.last_update,
-                            bmap.total_length,
-                            bmap.max_combo,
-                            bmap.status,
-                            bmap.frozen,
-                            bmap.plays,
-                            bmap.passes,
-                            bmap.mode,
-                            bmap.bpm,
-                            bmap.cs,
-                            bmap.od,
-                            bmap.ar,
-                            bmap.hp,
-                            bmap.diff,
-                        )
-                        for bmap in self.maps
-                    ],
-                )
+            await db_conn.execute_many(
+                "REPLACE INTO maps ("
+                "server, md5, id, set_id, "
+                "artist, title, version, creator, "
+                "filename, last_update, total_length, "
+                "max_combo, status, frozen, "
+                "plays, passes, mode, bpm, "
+                "cs, od, ar, hp, diff"
+                ") VALUES ("
+                '"osu!", :md5, :id, :set_id, '
+                ":artist, :title, :version, :creator, "
+                ":filename, :last_update, :total_length, "
+                ":max_combo, :status, :frozen, "
+                ":plays, :passes, :mode, :bpm, "
+                ":cs, :od, :ar, :hp, :diff"
+                ")",
+                [
+                    {
+                        "md5": bmap.md5,
+                        "id": bmap.id,
+                        "set_id": bmap.set_id,
+                        "artist": bmap.artist,
+                        "title": bmap.title,
+                        "version": bmap.version,
+                        "creator": bmap.creator,
+                        "filename": bmap.filename,
+                        "last_update": bmap.last_update,
+                        "total_length": bmap.total_length,
+                        "max_combo": bmap.max_combo,
+                        "status": bmap.status,
+                        "frozen": bmap.frozen,
+                        "plays": bmap.plays,
+                        "passes": bmap.passes,
+                        "mode": bmap.mode,
+                        "bpm": bmap.bpm,
+                        "cs": bmap.cs,
+                        "od": bmap.od,
+                        "ar": bmap.ar,
+                        "hp": bmap.hp,
+                        "diff": bmap.diff,
+                    }
+                    for bmap in self.maps
+                ],
+            )
 
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the cache by set id."""
-        if bsid in glob.cache["beatmapset"]:
-            bmap_set: BeatmapSet = glob.cache["beatmapset"][bsid]
+        if bsid in app.state.cache["beatmapset"]:
+            bmap_set: BeatmapSet = app.state.cache["beatmapset"][bsid]
 
             if bmap_set._cache_expired():
                 await bmap_set._update_if_available()
 
-            return glob.cache["beatmapset"][bsid]
+            return app.state.cache["beatmapset"][bsid]
 
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
-        async with glob.db.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as db_cursor:
-                await db_cursor.execute(
-                    "SELECT last_osuapi_check FROM mapsets WHERE id = %s",
-                    [bsid],
-                )
+        async with app.state.services.database.connection() as db_conn:
+            last_osuapi_check = await db_conn.fetch_val(
+                "SELECT last_osuapi_check FROM mapsets WHERE id = :set_id",
+                {"set_id": bsid},
+                column=0,  # last_osuapi_check
+            )
 
-                if db_cursor.rowcount == 0:
-                    return
+            if last_osuapi_check is None:
+                return
 
-                set_res = await db_cursor.fetchone()
+            bmap_set = cls(
+                id=bsid,
+                last_osuapi_check=last_osuapi_check,
+            )  # less than ideal
 
-                await db_cursor.execute(
-                    "SELECT md5, id, set_id, "
-                    "artist, title, version, creator, "
-                    "filename, last_update, total_length, "
-                    "max_combo, status, frozen, "
-                    "plays, passes, mode, bpm, "
-                    "cs, od, ar, hp, diff "
-                    "FROM maps "
-                    "WHERE set_id = %s",
-                    [bsid],
-                )
+            async for row in db_conn.iterate(
+                "SELECT md5, id, set_id, "
+                "artist, title, version, creator, "
+                "filename, last_update, total_length, "
+                "max_combo, status, frozen, "
+                "plays, passes, mode, bpm, "
+                "cs, od, ar, hp, diff "
+                "FROM maps "
+                "WHERE set_id = :set_id",
+                {"set_id": bsid},
+            ):
+                bmap = Beatmap(**row)
 
-                if db_cursor.rowcount == 0:
-                    return
+                # XXX: tempfix for gulag <v3.4.1,
+                # where filenames weren't stored.
+                if not bmap.filename:
+                    bmap.filename = (
+                        ("{artist} - {title} ({creator}) [{version}].osu")
+                        .format(**row)
+                        .translate(IGNORED_BEATMAP_CHARS)
+                    )
 
-                bmap_set = cls(id=bsid, **set_res)
+                    await app.state.services.database.execute(
+                        "UPDATE maps SET filename = :filename WHERE id = :map_id",
+                        {"filename": bmap.filename, "map_id": bmap.id},
+                    )
 
-                async for row in db_cursor:
-                    bmap = Beatmap(**row)
-
-                    # XXX: tempfix for gulag <v3.4.1,
-                    # where filenames weren't stored.
-                    if not bmap.filename:
-                        bmap.filename = (
-                            ("{artist} - {title} ({creator}) [{version}].osu")
-                            .format(**row)
-                            .translate(IGNORED_BEATMAP_CHARS)
-                        )
-
-                        await glob.db.execute(
-                            "UPDATE maps SET filename = %s WHERE id = %s",
-                            [bmap.filename, bmap.id],
-                        )
-
-                    bmap.set = bmap_set
-                    bmap_set.maps.append(bmap)
+                bmap.set = bmap_set
+                bmap_set.maps.append(bmap)
 
         return bmap_set
 
@@ -819,9 +817,9 @@ class BeatmapSet:
             # XXX: pre-mapset gulag support
             # select all current beatmaps
             # that're frozen in the db
-            res = await glob.db.fetchall(
-                "SELECT id, status FROM maps WHERE set_id = %s AND frozen = 1",
-                [bsid],
+            res = await app.state.services.database.fetch_all(
+                "SELECT id, status FROM maps WHERE set_id = :set_id AND frozen = 1",
+                {"set_id": bsid},
             )
 
             current_maps = {row["id"]: row["status"] for row in res}
@@ -862,9 +860,6 @@ class BeatmapSet:
             bmap_set = await cls._from_bsid_sql(bsid)
 
             if not bmap_set:
-                if not glob.has_internet:
-                    return
-
                 bmap_set = await cls._from_bsid_osuapi(bsid)
 
                 if not bmap_set:
@@ -873,8 +868,8 @@ class BeatmapSet:
                 did_api_request = True
 
         # cache the individual maps & set for future requests
-        beatmapset_cache = glob.cache["beatmapset"]
-        beatmap_cache = glob.cache["beatmap"]
+        beatmapset_cache = app.state.cache["beatmapset"]
+        beatmap_cache = app.state.cache["beatmap"]
 
         beatmapset_cache[bsid] = bmap_set
 

@@ -26,7 +26,9 @@ from typing import Union
 
 import aiomysql
 import cmyui
+import databases.core
 import dill as pickle
+import orjson
 import pymysql
 import requests
 from cmyui.logging import Ansi
@@ -36,8 +38,8 @@ from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
-from constants.countries import country_codes
-from objects import glob
+import app.state
+from app.constants.countries import country_codes
 
 __all__ = (
     # TODO: organize/sort these
@@ -71,10 +73,9 @@ __all__ = (
     "_install_debugging_hooks",
     "display_startup_dialog",
     "create_config_from_default",
-    "_get_latest_dependency_versions",
-    "check_for_dependency_updates",
     "_get_current_sql_structure_version",
     "run_sql_migrations",
+    "orjson_serialize_to_str",
 )
 
 DATA_PATH = Path.cwd() / ".data"
@@ -126,11 +127,11 @@ def make_safe_name(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
-async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
+async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
     """Fetch the bot's name from the database, if available."""
-    await db_cursor.execute("SELECT name FROM users WHERE id = 1")
+    row = await db_conn.fetch_one("SELECT name FROM users WHERE id = 1")
 
-    if db_cursor.rowcount == 0:
+    if not row:
         log(
             "Couldn't find bot account in the database, "
             "defaulting to BanchoBot for their name.",
@@ -138,7 +139,7 @@ async def fetch_bot_name(db_cursor: aiomysql.DictCursor) -> str:
         )
         return "BanchoBot"
 
-    return (await db_cursor.fetchone())["name"]
+    return row["name"]
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
@@ -286,7 +287,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{glob.version!r} ran into an issue before starting up :(",
+            f"gulag v{app.state.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -324,19 +325,16 @@ STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
 
 async def log_strange_occurrence(obj: object) -> None:
-    if not glob.has_internet:  # requires internet connection
-        return
-
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
-    if glob.config.automatically_report_problems:
+    if app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
-        async with glob.http_session.post(
+        async with app.state.services.http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": repr(glob.version),
-                "Gulag-Domain": glob.config.domain,
+                "Gulag-Version": repr(app.state.settings.VERSION),
+                "Gulag-Domain": app.state.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:
@@ -395,10 +393,10 @@ class Geolocation(TypedDict):
 
 def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using local db)."""
-    if not glob.geoloc_db:
+    if not app.state.services.geoloc_db:
         return
 
-    res = glob.geoloc_db.city(ip)
+    res = app.state.services.geoloc_db.city(ip)
 
     if res.country.iso_code is not None:
         acronym = res.country.iso_code.lower()
@@ -414,12 +412,9 @@ def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
-    if not glob.has_internet:  # requires internet connection
-        return
-
     url = f"http://ip-api.com/line/{ip}"
 
-    async with glob.http_session.get(url) as resp:
+    async with app.state.services.http.get(url) as resp:
         if not resp or resp.status != 200:
             log("Failed to get geoloc data: request failed.", Ansi.LRED)
             return
@@ -471,18 +466,18 @@ def shutdown_signal_handler(signum: int | signal.Signals) -> None:
 
     # TODO: handle SIGUSR1 for restarting
 
-    if glob.shutting_down:
+    if app.state.shutting_down:
         return
 
     log(f"Received {signal.strsignal(signum)}", Ansi.LRED)
 
-    glob.shutting_down = True
+    app.state.shutting_down = True
 
 
 def _handle_fut_exception(fut: asyncio.Future) -> None:
     if not fut.cancelled():
         if exception := fut.exception():
-            glob.loop.call_exception_handler(
+            app.state.loop.call_exception_handler(
                 {
                     "message": "unhandled exception during loop shutdown",
                     "exception": exception,
@@ -498,18 +493,21 @@ def _conn_finished_cb(task: asyncio.Task) -> None:
             loop = asyncio.get_running_loop()
             loop.default_exception_handler({"exception": exc})
 
-    glob.ongoing_conns.remove(task)
+    app.state.sessions.ongoing_connections.remove(task)
     task.remove_done_callback(_conn_finished_cb)
 
 
 async def await_ongoing_connections(timeout: float) -> None:
     log(
         f"-> Allowing up to {timeout:.2f} seconds for "
-        f"{len(glob.ongoing_conns)} ongoing connection(s) to finish.",
+        f"{len(app.state.sessions.ongoing_connections)} ongoing connection(s) to finish.",
         Ansi.LMAGENTA,
     )
 
-    done, pending = await asyncio.wait(glob.ongoing_conns, timeout=timeout)
+    done, pending = await asyncio.wait(
+        app.state.sessions.ongoing_connections,
+        timeout=timeout,
+    )
 
     for task in done:
         _handle_fut_exception(task)
@@ -531,17 +529,17 @@ async def await_ongoing_connections(timeout: float) -> None:
 
 async def cancel_housekeeping_tasks() -> None:
     log(
-        f"-> Cancelling {len(glob.housekeeping_tasks)} housekeeping tasks.",
+        f"-> Cancelling {len(app.state.sessions.housekeeping_tasks)} housekeeping tasks.",
         Ansi.LMAGENTA,
     )
 
     # cancel housekeeping tasks
-    for task in glob.housekeeping_tasks:
+    for task in app.state.sessions.housekeeping_tasks:
         task.cancel()
 
-    await asyncio.gather(*glob.housekeeping_tasks, return_exceptions=True)
+    await asyncio.gather(*app.state.sessions.housekeeping_tasks, return_exceptions=True)
 
-    for task in glob.housekeeping_tasks:
+    for task in app.state.sessions.housekeeping_tasks:
         _handle_fut_exception(task)
 
 
@@ -575,7 +573,7 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if glob.config.mysql["host"] in ("localhost", "127.0.0.1", None):
+    if app.state.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
             if os.path.exists(f"/var/run/{service}/{service}.pid"):
@@ -677,7 +675,7 @@ def _install_debugging_hooks() -> None:
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
-    if glob.config.advanced:
+    if app.state.settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
 
     # running on root grants the software potentally dangerous and
@@ -688,18 +686,12 @@ def display_startup_dialog() -> None:
             Ansi.LYELLOW,
         )
 
-        if glob.config.advanced:
+        if app.state.settings.DEVELOPER_MODE:
             log(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",
                 Ansi.LRED,
             )
-
-    if not glob.has_internet:
-        log(
-            "Running in offline mode, some features will not be available.",
-            Ansi.LRED,
-        )
 
 
 def create_config_from_default() -> None:
@@ -707,65 +699,11 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
 
-async def _get_latest_dependency_versions() -> AsyncGenerator[
-    tuple[str, cmyui.Version, cmyui.Version],
-    None,
-]:
-    """Return the current installed & latest version for each dependency."""
-    with open("requirements.txt") as f:
-        dependencies = f.read().splitlines(keepends=False)
-
-    for dependency in dependencies:
-        current_ver_str = importlib.metadata.version(dependency)
-        current_ver = cmyui.Version.from_str(current_ver_str)
-
-        if not current_ver:
-            # the module uses some more advanced (and often hard to parse)
-            # versioning system, so we won't be able to report updates.
-            continue
-
-        # TODO: split up and do the requests asynchronously
-        url = f"https://pypi.org/pypi/{dependency}/json"
-        async with glob.http_session.get(url) as resp:
-            if resp.status == 200 and (json := await resp.json()):
-                latest_ver = cmyui.Version.from_str(json["info"]["version"])
-
-                if not latest_ver:
-                    # they've started using a more advanced versioning system.
-                    continue
-
-                yield (dependency, latest_ver, current_ver)
-            else:
-                yield (dependency, current_ver, current_ver)
-
-
-async def check_for_dependency_updates() -> None:
-    """Notify the developer of any dependency updates available."""
-    updates_available = False
-
-    async for module, current_ver, latest_ver in _get_latest_dependency_versions():
-        if latest_ver > current_ver:
-            updates_available = True
-            log(
-                f"{module} has an update available "
-                f"[{current_ver!r} -> {latest_ver!r}]",
-                Ansi.LMAGENTA,
-            )
-
-    if updates_available:
-        log(
-            "Python modules can be updated with "
-            "`python3.9 -m pip install -U <modules>`.",
-            Ansi.LMAGENTA,
-        )
-
-
 async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
     """Get the last launched version of the server."""
-    res = await glob.db.fetch(
+    res = await app.state.services.database.fetch_one(
         "SELECT ver_major, ver_minor, ver_micro "
         "FROM startups ORDER BY datetime DESC LIMIT 1",
-        _dict=False,  # get tuple
     )
 
     if res:
@@ -777,7 +715,7 @@ async def run_sql_migrations() -> None:
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = glob.version
+    latest_ver = app.state.settings.VERSION
 
     if latest_ver == current_ver:
         return  # already up to date
@@ -826,26 +764,21 @@ async def run_sql_migrations() -> None:
 
     updated = False
 
-    # NOTE: this using a transaction is pretty pointless with mysql since
-    # any structural changes to tables will implciticly commit the changes.
-    # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
-            await conn.begin()
-            for query in queries:
-                try:
-                    await db_cursor.execute(query)
-                except aiomysql.MySQLError:
-                    await conn.rollback()
-                    break
-            else:
-                # all queries ran
-                # without problems.
-                await conn.commit()
-                updated = True
+    # XXX: so it turns out we can't use a transaction here (at least with mysql)
+    #      to roll back changes, as any structural changes to tables implicitly
+    #      commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
+    async with app.state.services.database.connection() as db_conn:
+        for query in queries:
+            try:
+                await db_conn.execute(query)
+            except pymysql.err.MySQLError:
+                break
+        else:
+            # all queries ran without problems.
+            updated = True
 
     if not updated:
-        log(f"Failed: {query}", Ansi.GRAY)
+        log(f"Failed: {query}", Ansi.GRAY)  # type: ignore
         log(
             "SQL failed to update - unless you've been "
             "modifying sql and know what caused this, "
@@ -854,3 +787,7 @@ async def run_sql_migrations() -> None:
         )
 
         raise KeyboardInterrupt
+
+
+def orjson_serialize_to_str(*args, **kwargs) -> str:
+    return orjson.dumps(*args, **kwargs).decode()
