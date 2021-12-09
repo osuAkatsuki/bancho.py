@@ -47,8 +47,6 @@ if TYPE_CHECKING:
 
 __all__ = ("ModeData", "Status", "Player")
 
-BASE_DOMAIN = app.state.settings.DOMAIN
-
 
 @unique
 @pymysql_encode(escape_enum)
@@ -325,7 +323,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://{BASE_DOMAIN}/u/{self.id}"
+        return f"https://{app.state.settings.DOMAIN}/u/{self.id}"
 
     @cached_property
     def embed(self) -> str:
@@ -341,7 +339,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://a.{BASE_DOMAIN}/{self.id}"
+        return f"https://a.{app.state.settings.DOMAIN}/{self.id}"
 
     @cached_property
     def full_name(self) -> str:

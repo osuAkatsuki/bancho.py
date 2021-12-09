@@ -66,6 +66,14 @@ BASE_DOMAIN = app.state.settings.DOMAIN
 _domain_escaped = BASE_DOMAIN.replace(".", r"\.")
 domain = Domain(re.compile(rf"^c[e4-6]?\.(?:{_domain_escaped}|ppy\.sh)$"))
 
+# TODO: dear god
+NOW_PLAYING_RGX = re.compile(
+    r"^\x01ACTION is (?:playing|editing|watching|listening to) "
+    rf"\[https://osu\.(?:{_domain_escaped}|ppy\.sh)/beatmapsets/(?P<sid>\d{{1,10}})#/?(?:osu|taiko|fruits|mania)?/(?P<bid>\d{{1,10}})/? .+\]"
+    r"(?: <(?P<mode_vn>Taiko|CatchTheBeat|osu!mania)>)?"
+    r"(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$",
+)
+
 
 @domain.route("/")
 async def bancho_http_handler(conn: Connection) -> bytes:
@@ -313,7 +321,7 @@ class SendMessage(BasePacket):
             # check if the user is /np'ing a map.
             # even though this is a public channel,
             # we'll update the player's last np stored.
-            if r_match := regexes.NOW_PLAYING.match(msg):
+            if r_match := NOW_PLAYING_RGX.match(msg):
                 # the player is /np'ing a map.
                 # save it to their player instance
                 # so we can use this elsewhere owo..
@@ -1038,7 +1046,7 @@ class SendPrivateMessage(BasePacket):
                     p.send(cmd["resp"], sender=t)
             else:
                 # no commands triggered.
-                if r_match := regexes.NOW_PLAYING.match(msg):
+                if r_match := NOW_PLAYING_RGX.match(msg):
                     # user is /np'ing a map.
                     # save it to their player instance
                     # so we can use this elsewhere owo..

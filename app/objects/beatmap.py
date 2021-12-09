@@ -24,8 +24,6 @@ from app.utils import pymysql_encode
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
-BASE_DOMAIN = app.state.settings.DOMAIN
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 OSUAPI_GET_BEATMAPS = "https://old.ppy.sh/api/get_beatmaps"
@@ -316,7 +314,7 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f"https://osu.{BASE_DOMAIN}/beatmaps/{self.id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmaps/{self.id}"
 
     @property
     def embed(self) -> str:
@@ -600,7 +598,7 @@ class BeatmapSet:
     @property
     def url(self) -> str:  # same as above, just no beatmap id
         """The online url for this beatmap set."""
-        return f"https://osu.{BASE_DOMAIN}/beatmapsets/{self.id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmapsets/{self.id}"
 
     @functools.cache
     def all_officially_ranked_or_approved(self) -> bool:

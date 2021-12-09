@@ -45,8 +45,6 @@ __all__ = (
     "Match",
 )
 
-BASE_DOMAIN = app.state.settings.DOMAIN
-
 
 @unique
 @pymysql_encode(escape_enum)
@@ -331,7 +329,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f"https://osu.{BASE_DOMAIN}/beatmaps/{self.map_id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmaps/{self.map_id}"
 
     @property
     def embed(self) -> str:
@@ -429,7 +427,7 @@ class Match:
             lchan.enqueue(packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
-        """Unready any players in the `expected` app.state."""
+        """Unready any players in the `expected` state."""
         for s in self.slots:
             if s.status == expected:
                 s.status = SlotStatus.not_ready
@@ -460,7 +458,7 @@ class Match:
         self,
         was_playing: Sequence[Slot],
     ) -> "tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]":
-        """Await score submissions from all players in completed app.state."""
+        """Await score submissions from all players in completed state."""
         scores: "dict[Union[MatchTeams, Player], int]" = defaultdict(int)
         didnt_submit: list["Player"] = []
         time_waited = 0  # allow up to 10s (total, not per player)
