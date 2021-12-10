@@ -34,10 +34,6 @@ import bg_loops
 # set the current working directory to /gulag
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-if not os.path.exists("config.py"):
-    app.utils.create_config_from_default()
-    raise SystemExit(1)
-
 
 async def run_server(server: cmyui.Server) -> None:
     """Begin listening for and handling connections on all endpoints."""
