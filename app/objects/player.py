@@ -504,7 +504,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.WEBHOOKS["audit-log"]:
+        if webhook_url := app.settings.AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
@@ -532,7 +532,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.WEBHOOKS["audit-log"]:
+        if webhook_url := app.settings.AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
