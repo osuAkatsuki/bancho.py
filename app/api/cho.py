@@ -1272,7 +1272,7 @@ class MatchJoin(BasePacket):
         self.match_passwd = reader.read_string()
 
     async def handle(self, p: Player) -> None:
-        is_menu_request = self.match_id >= app.settings.MAX_MULTI_MATCHES
+        is_menu_request = self.match_id >= 64  # max multi matches
 
         if is_menu_request or self.match_id < 0:
             if is_menu_request:
