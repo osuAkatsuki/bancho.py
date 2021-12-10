@@ -1323,6 +1323,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
 @command(Privileges.DEVELOPER)
 async def wipemap(ctx: Context) -> Optional[str]:
+    # (intentionally no docstring)
     if ctx.args:
         return "Invalid syntax: !wipemap"
 
@@ -1417,7 +1418,7 @@ async def server(ctx: Context) -> Optional[str]:
 
     mirror_url = app.settings.MIRROR_URL
     using_osuapi = app.settings.OSU_API_KEY != ""
-    advanced_mode = app.settings.ADVANCED
+    advanced_mode = app.settings.DEVELOPER_MODE
     auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
     return "\n".join(
