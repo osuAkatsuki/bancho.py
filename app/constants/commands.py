@@ -1165,14 +1165,15 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            ...
             with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
                 ezpp.set_mode(0)  # TODO: other modes
                 for table in ("scores_vn", "scores_rx", "scores_ap"):
-                    async for row in score_select_conn.iterate(
+                    for (
+                        row
+                    ) in await score_select_conn.fetch_all(  # TODO: should be aiter
                         "SELECT id, acc, mods, max_combo, nmiss "
                         f"FROM {table} "
-                        "WHERE map_md5 = :map_md5 AND mode = 0",  # TODO: ""
+                        "WHERE map_md5 = :map_md5 AND mode = 0",
                         {"map_md5": bmap.md5},
                     ):
                         ezpp.set_mods(row["mods"])
@@ -1201,7 +1202,9 @@ async def recalc(ctx: Context) -> Optional[str]:
                 app.state.services.database.connection() as score_select_conn,
                 app.state.services.database.connection() as update_conn,
             ):
-                async for bmap_row in bmap_select_conn.iterate(
+                for (
+                    bmap_row
+                ) in await bmap_select_conn.fetch_all(  # TODO: should be aiter
                     "SELECT id, md5 FROM maps WHERE passes > 0",
                 ):
                     bmap_id = bmap_row["id"]
@@ -1221,11 +1224,12 @@ async def recalc(ctx: Context) -> Optional[str]:
                     with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
                         ezpp.set_mode(0)  # TODO: other modes
                         for table in ("scores_vn", "scores_rx", "scores_ap"):
-                            async for row in score_select_conn.iterate(
+                            # TODO: this should probably also be an aiter
+                            for row in await score_select_conn.fetch_all(
                                 "SELECT id, acc, mods, max_combo, nmiss "
                                 f"FROM {table} "
-                                "WHERE map_md5 = :map_md5 AND mode = 0",  # TODO: ""
-                                {"bmap_md5": bmap_md5},
+                                "WHERE map_md5 = :map_md5 AND mode = 0",
+                                {"map_md5": bmap_md5},
                             ):
                                 ezpp.set_mods(row["mods"])
                                 ezpp.set_nmiss(row["nmiss"])  # clobbers acc
