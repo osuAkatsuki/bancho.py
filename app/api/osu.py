@@ -2298,8 +2298,8 @@ if app.settings.REDIRECT_OSU_URLS:
         return (301, b"")
 
     for pattern in (
-        re.compile(r"^/beatmapsets/\d{1,10}(?:/discussion)?/?$"),
-        re.compile(r"^/beatmaps/\d{1,10}/?"),
+        re.compile(r"^/beatmapsets/\d{1,10}/discussion/\d{1,10}/?$"),
+        re.compile(r"^/beatmaps/\d{1,10}/?$"),
         re.compile(r"^/community/forums/topics/\d{1,10}/?$"),
     ):
         domain.route(pattern)(osu_redirect)
