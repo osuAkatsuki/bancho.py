@@ -116,7 +116,9 @@ async def main() -> int:
         app.context.acquire_mysql_db_pool() as app.state.services.database,
         app.context.acquire_redis_db_pool() as app.state.services.redis,
     ):
-        await app.state.services.check_for_dependency_updates()
+        # TODO: do we actually want to do this?
+        # await app.state.services.check_for_dependency_updates()
+
         await app.utils.run_sql_migrations()
 
         with (

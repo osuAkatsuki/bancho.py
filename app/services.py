@@ -157,9 +157,11 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
     with open("requirements.txt") as f:
         dependencies = f.read().splitlines(keepends=False)
 
+    # TODO: use asyncio.gather() to do all requests at once? or chunk them
+
     for dependency in dependencies:
-        current_ver_str = importlib.metadata.version(dependency)
-        current_ver = cmyui.Version.from_str(current_ver_str)
+        dependency_name, _, dependency_ver = dependency.partition("==")
+        current_ver = cmyui.Version.from_str(dependency_ver)
 
         if not current_ver:
             # the module uses some more advanced (and often hard to parse)
@@ -167,7 +169,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
             continue
 
         # TODO: split up and do the requests asynchronously
-        url = f"https://pypi.org/pypi/{dependency}/json"
+        url = f"https://pypi.org/pypi/{dependency_name}/json"
         async with http.get(url) as resp:
             if resp.status == 200 and (json := await resp.json()):
                 latest_ver = cmyui.Version.from_str(json["info"]["version"])
@@ -176,9 +178,9 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
                     # they've started using a more advanced versioning system.
                     continue
 
-                yield (dependency, latest_ver, current_ver)
+                yield (dependency_name, latest_ver, current_ver)
             else:
-                yield (dependency, current_ver, current_ver)
+                yield (dependency_name, current_ver, current_ver)
 
 
 async def check_for_dependency_updates() -> None:
