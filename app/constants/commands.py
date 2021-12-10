@@ -382,7 +382,7 @@ async def top(ctx: Context) -> Optional[str]:
     table = f"scores_{special_mode_str}"
 
     scores = await app.state.services.database.fetch_all(
-        "SELECT *, b.id AS bmapid "
+        "SELECT s.pp, b.artist, b.title, b.version, b.id AS bmapid "
         f"FROM {table} s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
