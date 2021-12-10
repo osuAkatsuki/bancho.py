@@ -4,14 +4,15 @@ from enum import unique
 from misc.utils import escape_enum
 from misc.utils import pymysql_encode
 
-__all__ = ('osuTypes',)
+__all__ = ("osuTypes",)
+
 
 @unique
 @pymysql_encode(escape_enum)
 class osuTypes(IntEnum):
     # integral
-    i8  = 0
-    u8  = 1
+    i8 = 0
+    u8 = 1
     i16 = 2
     u16 = 3
     i32 = 4
@@ -22,16 +23,16 @@ class osuTypes(IntEnum):
     f64 = 9
 
     # osu
-    message           = 11
-    channel           = 12
-    match             = 13
-    scoreframe        = 14
-    mapInfoRequest    = 15
-    mapInfoReply      = 16
+    message = 11
+    channel = 12
+    match = 13
+    scoreframe = 14
+    mapInfoRequest = 15
+    mapInfoReply = 16
     replayFrameBundle = 17
 
     # misc
-    i32_list   = 18 # 2 bytes len
-    i32_list4l = 19 # 4 bytes len
-    string     = 20
-    raw        = 21
+    i32_list = 18  # 2 bytes len
+    i32_list4l = 19  # 4 bytes len
+    string = 20
+    raw = 21

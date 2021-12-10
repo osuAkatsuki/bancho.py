@@ -3,24 +3,24 @@
 #        (https://i.cmyui.xyz/DNnqifKHyBSA9X8NEHg.png)
 #        and run this with `mitmdump -qs tools/proxy.py`
 
-domain = 'cmyui.xyz' # XXX: put your domain here
+domain = "cmyui.xyz"  # XXX: put your domain here
 
 import re
 import struct
 import sys
 from enum import unique
 from enum import IntEnum
-from typing import Union
 
 from cmyui.logging import RGB
 from mitmproxy import http
+
 
 @unique
 class ServerPackets(IntEnum):
     USER_ID = 5
     SEND_MESSAGE = 7
     PONG = 8
-    HANDLE_IRC_CHANGE_USERNAME = 9 # unused
+    HANDLE_IRC_CHANGE_USERNAME = 9  # unused
     HANDLE_IRC_QUIT = 10
     USER_STATS = 11
     USER_LOGOUT = 12
@@ -47,7 +47,7 @@ class ServerPackets(IntEnum):
     MATCH_PLAYER_FAILED = 57
     MATCH_COMPLETE = 58
     MATCH_SKIP = 61
-    UNAUTHORIZED = 62 # unused
+    UNAUTHORIZED = 62  # unused
     CHANNEL_JOIN_SUCCESS = 64
     CHANNEL_INFO = 65
     CHANNEL_KICK = 66
@@ -57,7 +57,7 @@ class ServerPackets(IntEnum):
     FRIENDS_LIST = 72
     PROTOCOL_VERSION = 75
     MAIN_MENU_ICON = 76
-    MONITOR = 80 # unused
+    MONITOR = 80  # unused
     MATCH_PLAYER_SKIPPED = 81
     USER_PRESENCE = 83
     RESTART = 86
@@ -73,49 +73,53 @@ class ServerPackets(IntEnum):
     VERSION_UPDATE_FORCED = 102
     SWITCH_SERVER = 103
     ACCOUNT_RESTRICTED = 104
-    RTX = 105 # unused
+    RTX = 105  # unused
     MATCH_ABORT = 106
     SWITCH_TOURNAMENT_SERVER = 107
 
     def __repr__(self) -> str:
-        return f'<{self.name} ({self.value})>'
+        return f"<{self.name} ({self.value})>"
+
 
 BYTE_ORDER_SUFFIXES = [
-    f'{RGB(0x76eb00)!r}B\x1b[0m',
-    f'{RGB(0xbfbf00)!r}KB\x1b[0m',
-    f'{RGB(0xe98b00)!r}MB\x1b[0m',
-    f'{RGB(0xfd4900)!r}GB\x1b[0m'
+    f"{RGB(0x76eb00)!r}B\x1b[0m",
+    f"{RGB(0xbfbf00)!r}KB\x1b[0m",
+    f"{RGB(0xe98b00)!r}MB\x1b[0m",
+    f"{RGB(0xfd4900)!r}GB\x1b[0m",
 ]
-def fmt_bytes(n: Union[int, float]) -> str:
+
+
+def fmt_bytes(n: int | float) -> str:
     for suffix in BYTE_ORDER_SUFFIXES:
         if n < 1024:
             break
-        n /= 1024 # more to go
-    return f'{n:,.2f}{suffix}'
+        n /= 1024  # more to go
+    return f"{n:,.2f}{suffix}"
 
-_domain_escaped = domain.replace('.', r'\.')
+
+_domain_escaped = domain.replace(".", r"\.")
 DOMAIN_RGX = re.compile(
-    r'^(?P<subdomain>osu|c[e4-6]?|a|s|b|assets)\.'
-    rf'(?:ppy\.sh|{_domain_escaped})$'
+    r"^(?P<subdomain>osu|c[e4-6]?|a|s|b|assets)\." rf"(?:ppy\.sh|{_domain_escaped})$",
 )
 
-PACKET_HEADER_FMT = struct.Struct('<HxI') # header gives us packet id & data length
+PACKET_HEADER_FMT = struct.Struct("<HxI")  # header gives us packet id & data length
 
-print(f'\x1b[0;92mListening (ppy.sh & {domain})\x1b[0m\n')
+print(f"\x1b[0;92mListening (ppy.sh & {domain})\x1b[0m\n")
+
 
 def response(flow: http.HTTPFlow) -> None:
     if not (r_match := DOMAIN_RGX.match(flow.request.host)):
-        return # unrelated request
+        return  # unrelated request
 
     if not (body := flow.response.content):
-        return # empty resp
+        return  # empty resp
 
-    sys.stdout.write(f'\x1b[0;93m[{flow.request.method}] {flow.request.url}\x1b[0m\n')
+    sys.stdout.write(f"\x1b[0;93m[{flow.request.method}] {flow.request.url}\x1b[0m\n")
     body_view = memoryview(body)
     body_len = len(body)
 
-    if r_match['subdomain'] in ('c', 'ce', 'c4', 'c5', 'c6'):
-        if flow.request.method == 'POST':
+    if r_match["subdomain"] in ("c", "ce", "c4", "c5", "c6"):
+        if flow.request.method == "POST":
             packet_num = 1
             while body_view:
                 # read header
@@ -124,44 +128,43 @@ def response(flow: http.HTTPFlow) -> None:
                 body_view = body_view[7:]
 
                 # read data
-                pdata = str(body_view[:plen].tobytes())[2:-1] # remove b''
+                pdata = str(body_view[:plen].tobytes())[2:-1]  # remove b''
                 body_view = body_view[plen:]
 
-                sys.stdout.write(f'[{packet_num}] \x1b[0;95m{pid!r}\x1b[0m {pdata}\n')
+                sys.stdout.write(f"[{packet_num}] \x1b[0;95m{pid!r}\x1b[0m {pdata}\n")
 
                 packet_num += 1
 
-                if packet_num % 5: # don't build up too much in ram
+                if packet_num % 5:  # don't build up too much in ram
                     sys.stdout.flush()
-        sys.stdout.write('\n')
-    else: # format varies per request
-        if (# todo check host
+        sys.stdout.write("\n")
+    else:  # format varies per request
+        if (  # todo check host
             (
                 # jfif, jpe, jpeg, jpg graphics file
-                body_view[:4] == b'\xff\xd8\xff\xe0' and
-                body_view[6:11] == b'JFIF\x00'
-            ) or (
+                body_view[:4] == b"\xff\xd8\xff\xe0"
+                and body_view[6:11] == b"JFIF\x00"
+            )
+            or (
                 # exif digital jpg
-                body_view[:4] == b'\xff\xd8\xff\xe1' and
-                body_view[6:11] == b'Exif\x00'
-            ) or (
+                body_view[:4] == b"\xff\xd8\xff\xe1"
+                and body_view[6:11] == b"Exif\x00"
+            )
+            or (
                 # spiff still picture jpg
-                body_view[:4] == b'\xff\xd8\xff\xe8' and
-                body_view[6:12] == b'SPIFF\x00'
+                body_view[:4] == b"\xff\xd8\xff\xe8"
+                and body_view[6:12] == b"SPIFF\x00"
             )
         ):
-            sys.stdout.write(f'[{fmt_bytes(body_len)} jpeg file]\n\n')
+            sys.stdout.write(f"[{fmt_bytes(body_len)} jpeg file]\n\n")
         elif (
-            body_view[:8] == b'\x89PNG\r\n\x1a\n' and
-            body_view[-8:] == b'\x49END\xae\x42\x60\x82'
+            body_view[:8] == b"\x89PNG\r\n\x1a\n"
+            and body_view[-8:] == b"\x49END\xae\x42\x60\x82"
         ):
-            sys.stdout.write(f'[{fmt_bytes(body_len)} png file]\n\n')
-        elif (
-            body_view[:6] in (b'GIF87a', b'GIF89a') and
-            body_view[-2:] == b'\x00\x3b'
-        ):
-            sys.stdout.write(f'[{fmt_bytes(body_len)} gif file]\n\n')
+            sys.stdout.write(f"[{fmt_bytes(body_len)} png file]\n\n")
+        elif body_view[:6] in (b"GIF87a", b"GIF89a") and body_view[-2:] == b"\x00\x3b":
+            sys.stdout.write(f"[{fmt_bytes(body_len)} gif file]\n\n")
         else:
-            sys.stdout.write(f'{str(body)[2:-1]}\n\n') # remove b''
+            sys.stdout.write(f"{str(body)[2:-1]}\n\n")  # remove b''
 
     sys.stdout.flush()

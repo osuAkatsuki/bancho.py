@@ -35,26 +35,30 @@ especially in performance-critical or code that will be referenced frequently
 Installation Guide
 -------------
 ```sh
-# add ppa for py3.9 (i love asottile)
+# add ppa for py3.10 (i love asottile)
 sudo add-apt-repository ppa:deadsnakes/ppa
 
-# install requirements (py3.9, mysql, nginx, build tools, certbot)
-sudo apt install python3.9 python3.9-dev python3.9-distutils \
-                 mysql-server nginx build-essential certbot
+# install requirements (py3.10, mysql, redis, nginx, build tools, certbot)
+sudo apt install python3.10 python3.10-dev python3.10-distutils \
+                 mysql-server redis-server nginx build-essential certbot
 
-# install pip for py3.9
+# install pip for py3.10
 wget https://bootstrap.pypa.io/get-pip.py
-python3.9 get-pip.py && rm get-pip.py
+python3.10 get-pip.py && rm get-pip.py
 
 # clone the repo & init submodules
 git clone https://github.com/cmyui/gulag.git && cd gulag
 git submodule init && git submodule update
 
 # install gulag requirements w/ pip
-python3.9 -m pip install -r ext/requirements.txt
+python3.10 -m pip install -r requirements.txt
 
 # build oppai-ng's static library
 cd oppai-ng && ./libbuild && cd ..
+
+# setup pre-commit's git hooks
+# https://pre-commit.com/
+pre-commit install
 
 ######################################
 # NOTE: before continuing, create an #
@@ -62,7 +66,7 @@ cd oppai-ng && ./libbuild && cd ..
 ######################################
 
 # import gulag's mysql structure
-mysql -u your_sql_username -p your_db_name < ext/db.sql
+mysql -u your_sql_username -p your_db_name < migrations/base.sql
 
 # generate an ssl certificate for your domain (change email & domain)
 sudo certbot certonly \

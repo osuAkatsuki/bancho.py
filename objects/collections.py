@@ -1,6 +1,5 @@
 # TODO: there is still a lot of inconsistency
 # in a lot of these classes; needs refactor.
-
 import asyncio
 from typing import Any
 from typing import Iterator
@@ -26,16 +25,17 @@ from objects.match import Match
 from objects.player import Player
 
 __all__ = (
-    'Channels',
-    'Matches',
-    'Players',
-    'MapPools',
-    'Clans',
-    'initialize_ram_caches'
+    "Channels",
+    "Matches",
+    "Players",
+    "MapPools",
+    "Clans",
+    "initialize_ram_caches",
 )
 
 # TODO: decorator for these collections which automatically
 # adds debugging to their append/remove/insert/extend methods.
+
 
 class Channels(list[Channel]):
     """The currently active chat channels on the server."""
@@ -52,16 +52,25 @@ class Channels(list[Channel]):
             return super().__contains__(o)
 
     @overload
-    def __getitem__(self, index: int) -> Channel: ...
+    def __getitem__(self, index: int) -> Channel:
+        ...
+
     @overload
-    def __getitem__(self, index: str) -> Channel: ...
+    def __getitem__(self, index: str) -> Channel:
+        ...
+
     @overload
-    def __getitem__(self, index: slice) -> list[Channel]: ...
-    def __getitem__(self, index: Union[int, slice, str]) -> Union[Channel, list[Channel]]:
+    def __getitem__(self, index: slice) -> list[Channel]:
+        ...
+
+    def __getitem__(
+        self,
+        index: Union[int, slice, str],
+    ) -> Union[Channel, list[Channel]]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
-            return self.get_by_name(index) # type: ignore
+            return self.get_by_name(index)  # type: ignore
         else:
             return super().__getitem__(index)
 
@@ -82,29 +91,33 @@ class Channels(list[Channel]):
         super().append(c)
 
         if glob.app.debug:
-            log(f'{c} added to channels list.')
+            log(f"{c} added to channels list.")
 
     def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
         if glob.app.debug:
-            log(f'{c} removed from channels list.')
+            log(f"{c} removed from channels list.")
 
     @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Channels':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "Channels":
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching channels from sql.', Ansi.LCYAN)
-        await db_cursor.execute('SELECT * FROM channels')
-        return cls([
-            Channel(
-                name = row['name'],
-                topic = row['topic'],
-                read_priv = Privileges(row['read_priv']),
-                write_priv = Privileges(row['write_priv']),
-                auto_join = row['auto_join'] == 1
-            ) async for row in db_cursor
-        ])
+        log("Fetching channels from sql.", Ansi.LCYAN)
+        await db_cursor.execute("SELECT * FROM channels")
+        return cls(
+            [
+                Channel(
+                    name=row["name"],
+                    topic=row["topic"],
+                    read_priv=Privileges(row["read_priv"]),
+                    write_priv=Privileges(row["write_priv"]),
+                    auto_join=row["auto_join"] == 1,
+                )
+                async for row in db_cursor
+            ],
+        )
+
 
 class Matches(list[Optional[Match]]):
     """The currently active multiplayer matches on the server."""
@@ -132,11 +145,11 @@ class Matches(list[Optional[Match]]):
             self[free] = m
 
             if glob.app.debug:
-                log(f'{m} added to matches list.')
+                log(f"{m} added to matches list.")
 
             return True
         else:
-            log(f'Match list is full! Could not add {m}.')
+            log(f"Match list is full! Could not add {m}.")
             return False
 
     def remove(self, m: Match) -> None:
@@ -147,11 +160,13 @@ class Matches(list[Optional[Match]]):
                 break
 
         if glob.app.debug:
-            log(f'{m} removed from matches list.')
+            log(f"{m} removed from matches list.")
+
 
 class Players(list[Player]):
     """The currently active players on the server."""
-    __slots__ = ('_lock',)
+
+    __slots__ = ("_lock",)
 
     def __init__(self, *args, **kwargs):
         self._lock = asyncio.Lock()
@@ -179,17 +194,17 @@ class Players(list[Player]):
     @property
     def staff(self) -> set[Player]:
         """Return a set of the current staff online."""
-        return {p for p in self if p.priv & Privileges.Staff}
+        return {p for p in self if p.priv & Privileges.STAFF}
 
     @property
     def restricted(self) -> set[Player]:
         """Return a set of the current restricted players."""
-        return {p for p in self if not p.priv & Privileges.Normal}
+        return {p for p in self if not p.priv & Privileges.NORMAL}
 
     @property
     def unrestricted(self) -> set[Player]:
         """Return a set of the current unrestricted players."""
-        return {p for p in self if p.priv & Privileges.Normal}
+        return {p for p in self if p.priv & Privileges.NORMAL}
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
@@ -200,15 +215,15 @@ class Players(list[Player]):
     @staticmethod
     def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ('token', 'id', 'name'):
+        for attr in ("token", "id", "name"):
             if (val := kwargs.pop(attr, None)) is not None:
-                if attr == 'name':
-                    attr = 'safe_name'
+                if attr == "name":
+                    attr = "safe_name"
                     val = make_safe_name(val)
 
                 return attr, val
         else:
-            raise ValueError('Incorrect call to Players.get()')
+            raise ValueError("Incorrect call to Players.get()")
 
     def get(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
@@ -224,25 +239,25 @@ class Players(list[Player]):
 
         # try to get from sql.
         res = await glob.db.fetch(
-            'SELECT id, name, priv, pw_bcrypt, '
-            'silence_end, clan_id, clan_priv, api_key '
-            f'FROM users WHERE {attr} = %s',
-            [val]
+            "SELECT id, name, priv, pw_bcrypt, "
+            "silence_end, clan_id, clan_priv, api_key "
+            f"FROM users WHERE {attr} = %s",
+            [val],
         )
 
         if not res:
             return
 
         # encode pw_bcrypt from str -> bytes.
-        res['pw_bcrypt'] = res['pw_bcrypt'].encode()
+        res["pw_bcrypt"] = res["pw_bcrypt"].encode()
 
-        if res['clan_id'] != 0:
-            res['clan'] = glob.clans.get(id=res['clan_id'])
-            res['clan_priv'] = ClanPrivileges(res['clan_priv'])
+        if res["clan_id"] != 0:
+            res["clan"] = glob.clans.get(id=res["clan_id"])
+            res["clan_priv"] = ClanPrivileges(res["clan_priv"])
         else:
-            res['clan'] = res['clan_priv'] = None
+            res["clan"] = res["clan_priv"] = None
 
-        return Player(**res, token='')
+        return Player(**res, token="")
 
     async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
@@ -251,25 +266,29 @@ class Players(list[Player]):
         elif p := await self.get_sql(**kwargs):
             return p
 
-    async def from_login(self, name: str, pw_md5: str,
-                        sql: bool = False) -> Optional[Player]:
+    async def from_login(
+        self,
+        name: str,
+        pw_md5: str,
+        sql: bool = False,
+    ) -> Optional[Player]:
         """Return a player with a given name & pw_md5, from cache or sql."""
         if not (p := self.get(name=name)):
-            if not sql: # not to fetch from sql.
+            if not sql:  # not to fetch from sql.
                 return
 
             if not (p := await self.get_sql(name=name)):
                 # no player found in sql either.
                 return
 
-        if glob.cache['bcrypt'][p.pw_bcrypt] == pw_md5.encode():
+        if glob.cache["bcrypt"][p.pw_bcrypt] == pw_md5.encode():
             return p
 
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
             if glob.app.debug:
-                log(f'{p} double-added to global player list?')
+                log(f"{p} double-added to global player list?")
             return
 
         super().append(p)
@@ -278,10 +297,11 @@ class Players(list[Player]):
         """Remove `p` from the list."""
         if p not in self:
             if glob.app.debug:
-                log(f'{p} removed from player list when not online?')
+                log(f"{p} removed from player list when not online?")
             return
 
         super().remove(p)
+
 
 class MapPools(list[MapPool]):
     """The currently active mappools on the server."""
@@ -290,15 +310,24 @@ class MapPools(list[MapPool]):
         return super().__iter__()
 
     @overload
-    def __getitem__(self, index: int) -> MapPool: ...
+    def __getitem__(self, index: int) -> MapPool:
+        ...
+
     @overload
-    def __getitem__(self, index: str) -> MapPool: ...
+    def __getitem__(self, index: str) -> MapPool:
+        ...
+
     @overload
-    def __getitem__(self, index: slice) -> list[MapPool]: ...
-    def __getitem__(self, index: Union[int, slice, str]) -> Union[MapPool, list[MapPool]]:
+    def __getitem__(self, index: slice) -> list[MapPool]:
+        ...
+
+    def __getitem__(
+        self,
+        index: Union[int, slice, str],
+    ) -> Union[MapPool, list[MapPool]]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
-            return self.get_by_name(index) # type: ignore
+            return self.get_by_name(index)  # type: ignore
         else:
             return super().__getitem__(index)
 
@@ -321,33 +350,39 @@ class MapPools(list[MapPool]):
         super().append(mp)
 
         if glob.app.debug:
-            log(f'{mp} added to mappools list.')
+            log(f"{mp} added to mappools list.")
 
     def remove(self, mp: MapPool) -> None:
         """Remove `mp` from the list."""
         super().remove(mp)
 
         if glob.app.debug:
-            log(f'{mp} removed from mappools list.')
+            log(f"{mp} removed from mappools list.")
 
     @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'MapPools':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "MapPools":
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching mappools from sql.', Ansi.LCYAN)
-        await db_cursor.execute('SELECT * FROM tourney_pools')
-        obj = cls([
-            MapPool(
-                id = row['id'],
-                name = row['name'],
-                created_at = row['created_at'],
-                created_by = await glob.players.from_cache_or_sql(id=row['created_by'])
-            ) async for row in db_cursor
-        ])
+        log("Fetching mappools from sql.", Ansi.LCYAN)
+        await db_cursor.execute("SELECT * FROM tourney_pools")
+        obj = cls(
+            [
+                MapPool(
+                    id=row["id"],
+                    name=row["name"],
+                    created_at=row["created_at"],
+                    created_by=await glob.players.from_cache_or_sql(
+                        id=row["created_by"],
+                    ),
+                )
+                async for row in db_cursor
+            ],
+        )
 
         for pool in obj:
             await pool.maps_from_sql(db_cursor)
 
         return obj
+
 
 class Clans(list[Clan]):
     """The currently active clans on the server."""
@@ -356,11 +391,17 @@ class Clans(list[Clan]):
         return super().__iter__()
 
     @overload
-    def __getitem__(self, index: int) -> Clan: ...
+    def __getitem__(self, index: int) -> Clan:
+        ...
+
     @overload
-    def __getitem__(self, index: str) -> Clan: ...
+    def __getitem__(self, index: str) -> Clan:
+        ...
+
     @overload
-    def __getitem__(self, index: slice) -> list[Clan]: ...
+    def __getitem__(self, index: slice) -> list[Clan]:
+        ...
+
     def __getitem__(self, index):
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
@@ -378,11 +419,11 @@ class Clans(list[Clan]):
 
     def get(self, **kwargs: object) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
-        for attr in ('name', 'tag', 'id'):
+        for attr in ("name", "tag", "id"):
             if val := kwargs.pop(attr, None):
                 break
         else:
-            raise ValueError('Incorrect call to Clans.get()')
+            raise ValueError("Incorrect call to Clans.get()")
 
         for c in self:
             if getattr(c, attr) == val:
@@ -393,26 +434,27 @@ class Clans(list[Clan]):
         super().append(c)
 
         if glob.app.debug:
-            log(f'{c} added to clans list.')
+            log(f"{c} added to clans list.")
 
     def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
         if glob.app.debug:
-            log(f'{c} removed from clans list.')
+            log(f"{c} removed from clans list.")
 
     @classmethod
-    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Clans':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> "Clans":
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching clans from sql.', Ansi.LCYAN)
-        await db_cursor.execute('SELECT * FROM clans')
+        log("Fetching clans from sql.", Ansi.LCYAN)
+        await db_cursor.execute("SELECT * FROM clans")
         obj = cls([Clan(**row) async for row in db_cursor])
 
         for clan in obj:
             await clan.members_from_sql(db_cursor)
 
         return obj
+
 
 async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
     """Setup & cache the global collections before listening for connections."""
@@ -428,14 +470,19 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
     bot_name = await misc.utils.fetch_bot_name(db_cursor)
 
     # create bot & add it to online players
-    glob.bot = Player(id=1, name=bot_name, login_time=float(0x7fffffff), # (never auto-dc)
-                      priv=Privileges.Normal, bot_client=True)
+    glob.bot = Player(
+        id=1,
+        name=bot_name,
+        login_time=float(0x7FFFFFFF),  # (never auto-dc)
+        priv=Privileges.NORMAL,
+        bot_client=True,
+    )
     glob.players.append(glob.bot)
 
     # global achievements (sorted by vn gamemodes)
     glob.achievements = []
 
-    await db_cursor.execute('SELECT * FROM achievements')
+    await db_cursor.execute("SELECT * FROM achievements")
     async for row in db_cursor:
         # NOTE: achievement conditions are stored as stringified python
         # expressions in the database to allow for extensive customizability.
@@ -445,12 +492,6 @@ async def initialize_ram_caches(db_cursor: aiomysql.DictCursor) -> None:
         glob.achievements.append(achievement)
 
     # static api keys
-    await db_cursor.execute(
-        'SELECT id, api_key FROM users '
-        'WHERE api_key IS NOT NULL'
-    )
+    await db_cursor.execute("SELECT id, api_key FROM users WHERE api_key IS NOT NULL")
 
-    glob.api_keys = {
-        row['api_key']: row['id']
-        async for row in db_cursor
-    }
+    glob.api_keys = {row["api_key"]: row["id"] async for row in db_cursor}

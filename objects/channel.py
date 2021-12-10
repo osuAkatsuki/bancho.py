@@ -9,7 +9,8 @@ from objects import glob
 if TYPE_CHECKING:
     from objects.player import Player
 
-__all__ = ('Channel',)
+__all__ = ("Channel",)
+
 
 class Channel:
     """An osu! chat channel.
@@ -27,22 +28,34 @@ class Channel:
         Instanced channels are deleted when all players have left;
         this is useful for things like multiplayer, spectator, etc.
     """
-    __slots__ = ('_name', 'name', 'topic', 'players',
-                 'read_priv', 'write_priv',
-                 'auto_join', 'instance')
 
-    def __init__(self, name: str, topic: str,
-                 read_priv: Privileges = Privileges.Normal,
-                 write_priv: Privileges = Privileges.Normal,
-                 auto_join: bool = True,
-                 instance: bool = False) -> None:
+    __slots__ = (
+        "_name",
+        "name",
+        "topic",
+        "players",
+        "read_priv",
+        "write_priv",
+        "auto_join",
+        "instance",
+    )
+
+    def __init__(
+        self,
+        name: str,
+        topic: str,
+        read_priv: Privileges = Privileges.NORMAL,
+        write_priv: Privileges = Privileges.NORMAL,
+        auto_join: bool = True,
+        instance: bool = False,
+    ) -> None:
         # TODO: think of better names than `_name` and `name`
-        self._name = name # 'real' name ('#{multi/spec}_{id}')
+        self._name = name  # 'real' name ('#{multi/spec}_{id}')
 
-        if self._name.startswith('#spec_'):
-            self.name = '#spectator'
-        elif self._name.startswith('#multi_'):
-            self.name = '#multiplayer'
+        if self._name.startswith("#spec_"):
+            self.name = "#spectator"
+        elif self._name.startswith("#multi_"):
+            self.name = "#multiplayer"
         else:
             self.name = self._name
 
@@ -52,12 +65,12 @@ class Channel:
         self.auto_join = auto_join
         self.instance = instance
 
-        self.players: list['Player'] = []
+        self.players: list["Player"] = []
 
     def __repr__(self) -> str:
-        return f'<{self._name}>'
+        return f"<{self._name}>"
 
-    def __contains__(self, p: 'Player') -> bool:
+    def __contains__(self, p: "Player") -> bool:
         return p in self.players
 
     # XXX: should this be cached differently?
@@ -67,30 +80,26 @@ class Channel:
         if not self.read_priv:
             return True
 
-        return priv & self.read_priv
+        return priv & self.read_priv != 0
 
     @functools.cache
     def can_write(self, priv: Privileges) -> bool:
         if not self.write_priv:
             return True
 
-        return priv & self.write_priv
+        return priv & self.write_priv != 0
 
-    def send(self, msg: str, sender: 'Player',
-             to_self: bool = False) -> None:
+    def send(self, msg: str, sender: "Player", to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""
-        data = packets.sendMessage(
+        data = packets.send_message(
             sender=sender.name,
             msg=msg,
             recipient=self.name,
-            sender_id=sender.id
+            sender_id=sender.id,
         )
 
         for p in self.players:
-            if (
-                sender.id not in p.blocks and
-                (to_self or p.id != sender.id)
-            ):
+            if sender.id not in p.blocks and (to_self or p.id != sender.id):
                 p.enqueue(data)
 
     def send_bot(self, msg: str) -> None:
@@ -99,30 +108,34 @@ class Channel:
 
         msg_len = len(msg)
 
-        if msg_len >= 31979: # TODO ??????????
-            msg = f'message would have crashed games ({msg_len} chars)'
+        if msg_len >= 31979:  # TODO ??????????
+            msg = f"message would have crashed games ({msg_len} chars)"
 
         self.enqueue(
-            packets.sendMessage(
+            packets.send_message(
                 sender=bot.name,
                 msg=msg,
                 recipient=self.name,
-                sender_id=bot.id
-            )
+                sender_id=bot.id,
+            ),
         )
 
-    def send_selective(self, msg: str, sender: 'Player',
-                       recipients: set['Player']) -> None:
+    def send_selective(
+        self,
+        msg: str,
+        sender: "Player",
+        recipients: set["Player"],
+    ) -> None:
         """Enqueue `sender`'s `msg` to `recipients`."""
         for p in recipients:
             if p in self:
                 p.send(msg, sender=sender, chan=self)
 
-    def append(self, p: 'Player') -> None:
+    def append(self, p: "Player") -> None:
         """Add `p` to the channel's players."""
         self.players.append(p)
 
-    def remove(self, p: 'Player') -> None:
+    def remove(self, p: "Player") -> None:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
 
