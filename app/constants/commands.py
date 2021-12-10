@@ -846,15 +846,9 @@ async def user(ctx: Context) -> Optional[str]:
         if not p:
             return "Player not found."
 
-    priv_readable = "|".join(
-        reversed(
-            [  # type: ignore
-                priv.name
-                for priv in Privileges
-                if p.priv & priv and bin(priv).count("1") == 1
-            ],
-        ),
-    )
+    priv_list = [
+        priv.name for priv in Privileges if p.priv & priv and bin(priv).count("1") == 1
+    ][::-1]
 
     if time.time() < p.last_np["timeout"]:
         last_np = p.last_np["bmap"].embed
@@ -864,7 +858,7 @@ async def user(ctx: Context) -> Optional[str]:
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
-            f"Privileges: {priv_readable}",
+            f"Privileges: {priv_list}",
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
