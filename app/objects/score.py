@@ -200,7 +200,7 @@ class Score:
             "nmiss, ngeki, nkatu, grade, perfect, "
             "status, mode, play_time, "
             "time_elapsed, client_flags, online_checksum "
-            f"FROM {scores_table} WHERE id = %s",
+            f"FROM {scores_table} WHERE id = :score_id",
             {"score_id": score_id},
         )
 
@@ -310,7 +310,7 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        res = await app.state.services.database.fetch_val(
+        better_scores = await app.state.services.database.fetch_val(
             f"SELECT COUNT(*) AS c FROM {scores_table} s "
             "INNER JOIN users u ON u.id = s.userid "
             "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn "
@@ -324,7 +324,8 @@ class Score:
             column=0,  # COUNT(*)
         )
 
-        return res["c"] + 1 if res else 1
+        # TODO: idk if returns none
+        return better_scores + 1  # if better_scores is not None else 1
 
     def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""

@@ -606,7 +606,7 @@ async def login(
     # TODO: store adapters individually
 
     if is_wine:
-        hw_checks = ":uninstall = %s"
+        hw_checks = "uninstall = :uninstall"
         hw_args = {"uninstall": uninstall_md5}
     else:
         hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk_serial"

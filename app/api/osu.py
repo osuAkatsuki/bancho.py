@@ -314,7 +314,7 @@ async def osuGetBeatmapInfo(
 @get_login(name_p="u", pass_p="h")
 async def osuGetFavourites(p: "Player", conn: Connection) -> HTTPResponse:
     favourites = await app.state.services.database.fetch_all(
-        "SELECT setid FROM favourites WHERE userid = %s",
+        "SELECT setid FROM favourites WHERE userid = :user_id",
         {"user_id": p.id},
     )
 
@@ -863,7 +863,7 @@ async def osuSubmitModularSelector(
             best_scores = await db_conn.fetch_all(
                 f"SELECT s.pp, s.acc FROM {scores_table} s "
                 "INNER JOIN maps m ON s.map_md5 = m.md5 "
-                "WHERE s.userid = %s AND s.mode = %s "
+                "WHERE s.userid = :user_id AND s.mode = :mode_vn "
                 "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
                 "ORDER BY s.pp DESC",
                 {"user_id": score.player.id, "mode_vn": mode_vn},
@@ -1779,7 +1779,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
         "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
         f"FROM {mode.scores_table} t "
         "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = %s AND t.mode = %s",
+        "WHERE t.userid = :user_id AND t.mode = :mode_vn",
     ]
 
     params: dict[str, object] = {"user_id": p.id, "mode_vn": mode.as_vanilla}
@@ -1802,7 +1802,7 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
         if include_loved:
             allowed_statuses.append(5)
 
-        query.append("AND t.status = 2 AND b.status IN %s")
+        query.append("AND t.status = 2 AND b.status IN :statuses")
         params["statuses"] = allowed_statuses
         sort = "t.pp"
     else:
@@ -1972,7 +1972,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         f"FROM {mode.scores_table} s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = %s AND s.mode = %s AND s.status = 2",
+        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn AND s.status = 2",
     ]
     params: dict[str, object] = {"map_md5": bmap.md5, "mode_vn": mode.as_vanilla}
 
@@ -1991,7 +1991,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     else:  # recent
         sort = "play_time"
 
-    query.append(f"ORDER BY {sort} DESC LIMIT %s")
+    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
     params["limit"] = limit
 
     rows = await app.state.services.database.fetch_all(" ".join(query), params)

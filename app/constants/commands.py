@@ -257,7 +257,7 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Disallowed username; pick another."
 
     if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM users WHERE name = %s",
+        "SELECT 1 FROM users WHERE name = :name",
         {"name": name},
     ):
         return "Username already taken by another player."
@@ -667,7 +667,7 @@ async def _map(ctx: Context) -> Optional[str]:
         if ctx.args[1] == "set":
             # update whole set
             await db_conn.execute(
-                "UPDATE maps SET status = %s, frozen = 1 WHERE set_id = %s",
+                "UPDATE maps SET status = :status, frozen = 1 WHERE set_id = :set_id",
                 {"status": new_status, "set_id": bmap.set_id},
             )
 
@@ -675,7 +675,7 @@ async def _map(ctx: Context) -> Optional[str]:
             map_ids = [
                 row[0]
                 for row in await db_conn.fetch_all(
-                    "SELECT id FROM maps WHERE set_id = %s",
+                    "SELECT id FROM maps WHERE set_id = :set_id",
                     {"set_id": bmap.set_id},
                 )
             ]
