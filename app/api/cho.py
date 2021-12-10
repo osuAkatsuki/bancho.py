@@ -535,14 +535,14 @@ async def login(
         {"name": app.utils.make_safe_name(username)},
     )
 
-    user_info = dict(user_info)  # make a mutable copy
-
     if not user_info:
         # no account by this name exists.
         return "no", (
             packets.notification(f"{BASE_DOMAIN}: Unknown username")
             + packets.user_id(-1)
         )
+
+    user_info = dict(user_info)  # make a mutable copy
 
     if using_tourney_client and not (
         user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL

@@ -291,7 +291,8 @@ async def maplink(ctx: Context) -> Optional[str]:
         bmap = await Beatmap.from_md5(spectating.status.map_md5)
     elif time.time() < ctx.player.last_np["timeout"]:
         bmap = ctx.player.last_np["bmap"]
-    else:
+
+    if bmap is None:
         return "No map found!"
 
     # gatari.pw & nerina.pw are pretty much the only
@@ -1755,7 +1756,7 @@ async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
         return "Found no such player in the match."
 
     match.host = t
-    match.host.enqueue(packets.matchTransferHost())
+    match.host.enqueue(packets.match_transfer_host())
     match.enqueue_state(lobby=False)
     return "Match host updated."
 
