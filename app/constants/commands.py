@@ -593,7 +593,11 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     )
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
-    ctx.player.enqueue(packets.notification("/savelog & click popup for an easy copy."))
+    ctx.player.enqueue(
+        packets.notification(
+            "Type /savelog and click the popup for an easy way to copy this.",
+        ),
+    )
     return f"Your API key is now: {ctx.player.api_key}"
 
 
