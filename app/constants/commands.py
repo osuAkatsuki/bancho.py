@@ -1219,7 +1219,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         bmap_md5,
                     ):
                         staff_chan.send_bot(
-                            "[Recalc] Couldn't find " f"{bmap_id} / {bmap_md5}",
+                            f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
                         )
                         continue
 

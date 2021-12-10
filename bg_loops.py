@@ -18,15 +18,15 @@ async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
     loop = asyncio.get_running_loop()
 
-    app.state.sessions.housekeeping_tasks.extend(
-        [
+    app.state.sessions.housekeeping_tasks.update(
+        {
             loop.create_task(task)
             for task in (
                 _remove_expired_donation_privileges(interval=30 * 60),
                 _reroll_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
             )
-        ],
+        },
     )
 
 

@@ -1375,7 +1375,7 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
                 fmt += f'|{cmt["colour"]}'
 
             ret.append(
-                "{time}\t{target_type}\t" "{fmt}\t{comment}".format(fmt=fmt, **cmt),
+                "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
             )
 
         p.update_latest_activity()

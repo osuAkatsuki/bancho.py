@@ -290,7 +290,7 @@ class SendMessage(BasePacket):
             msg = f"{msg[:2000]}... (truncated)"
             p.enqueue(
                 packets.notification(
-                    "Your message was truncated\n" "(exceeded 2000 characters).",
+                    "Your message was truncated\n(exceeded 2000 characters).",
                 ),
             )
 
@@ -393,7 +393,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\n" f"Running gulag v{app.settings.VERSION}.",
+    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{app.settings.VERSION}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -1004,7 +1004,7 @@ class SendPrivateMessage(BasePacket):
             msg = f"{msg[:2000]}... (truncated)"
             p.enqueue(
                 packets.notification(
-                    "Your message was truncated\n" "(exceeded 2000 characters).",
+                    "Your message was truncated\n(exceeded 2000 characters).",
                 ),
             )
 

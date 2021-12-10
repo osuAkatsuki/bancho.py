@@ -756,7 +756,7 @@ async def run_sql_migrations() -> None:
         return
 
     log(
-        "Updating mysql structure " f"(v{current_ver!r} -> v{latest_ver!r}).",
+        "Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
         Ansi.LMAGENTA,
     )
 

@@ -19,7 +19,7 @@ achievements: list["Achievement"] = []
 
 api_keys = {}
 
-ongoing_connections = []
-housekeeping_tasks = []
+ongoing_connections = set()
+housekeeping_tasks = set()
 
 bot: "Player"

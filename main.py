@@ -89,7 +89,6 @@ async def run_server(server: cmyui.Server) -> None:
         listening_sock.listen(10)  # TODO: customizability or autoscale
         log(f"-> Listening @ {app.settings.SERVER_ADDR}", RGB(0x00FF7F))
 
-        app.state.sessions.ongoing_connections = []
         app.state.shutting_down = False  # TODO: where to put this
 
         while not app.state.shutting_down:
@@ -105,7 +104,7 @@ async def run_server(server: cmyui.Server) -> None:
             else:
                 task = app.state.loop.create_task(server.handle(conn))
                 task.add_done_callback(app.utils._conn_finished_cb)
-                app.state.sessions.ongoing_connections.append(task)
+                app.state.sessions.ongoing_connections.add(task)
 
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem
