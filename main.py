@@ -17,10 +17,7 @@ import asyncio
 import os
 import signal
 import socket
-from datetime import datetime
-from pathlib import Path
 
-import aiomysql
 import cmyui
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -29,6 +26,7 @@ from cmyui.logging import RGB
 import app.api
 import app.context
 import app.objects.collections
+import app.settings
 import app.state
 import app.utils
 import bg_loops
@@ -66,30 +64,30 @@ async def run_server(server: cmyui.Server) -> None:
     server.add_domains({ava_domain, cho_domain, map_domain, osu_domain})
 
     # support both INET and UNIX sockets
-    if app.utils.is_inet_address(app.state.settings.SERVER_ADDR):
+    if app.utils.is_inet_address(app.settings.SERVER_ADDR):
         sock_family = socket.AF_INET
-    elif isinstance(app.state.settings.SERVER_ADDR, str):
+    elif isinstance(app.settings.SERVER_ADDR, str):
         sock_family = socket.AF_UNIX
     else:
         raise ValueError("Invalid socket address.")
 
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem if it exists
-        if os.path.exists(app.state.settings.SERVER_ADDR):
-            os.remove(app.state.settings.SERVER_ADDR)
+        if os.path.exists(app.settings.SERVER_ADDR):
+            os.remove(app.settings.SERVER_ADDR)
 
     # create our transport layer socket; osu! uses tcp/ip
     with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
         listening_sock.setblocking(False)  # asynchronous
-        listening_sock.bind(app.state.settings.SERVER_ADDR)
+        listening_sock.bind(app.settings.SERVER_ADDR)
 
         if sock_family == socket.AF_UNIX:
             # using unix socket - give the socket file
             # appropriate (read, write) permissions
-            os.chmod(app.state.settings.SERVER_ADDR, 0o666)
+            os.chmod(app.settings.SERVER_ADDR, 0o666)
 
         listening_sock.listen(10)  # TODO: customizability or autoscale
-        log(f"-> Listening @ {app.state.settings.SERVER_ADDR}", RGB(0x00FF7F))
+        log(f"-> Listening @ {app.settings.SERVER_ADDR}", RGB(0x00FF7F))
 
         app.state.sessions.ongoing_connections = []
         app.state.shutting_down = False  # TODO: where to put this
@@ -111,7 +109,7 @@ async def run_server(server: cmyui.Server) -> None:
 
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem
-        os.remove(app.state.settings.SERVER_ADDR)
+        os.remove(app.settings.SERVER_ADDR)
 
 
 async def main() -> int:
@@ -133,9 +131,9 @@ async def main() -> int:
             # TODO: refactor debugging so
             # this can be moved to `run_server`.
             server = cmyui.Server(
-                name=f"gulag v{app.state.settings.VERSION}",
+                name=f"gulag v{app.settings.VERSION}",
                 gzip=4,
-                debug=app.state.settings.DEBUG,
+                debug=app.settings.DEBUG,
             )
 
             # prepare our ram caches, populating from sql where necessary.

@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 from typing import AsyncIterator
 from typing import Iterator
 from typing import Optional
@@ -14,6 +13,7 @@ import datadog.threadstats.base as datadog_client
 import geoip2.database
 import orjson
 
+import app.settings
 import app.state
 
 
@@ -31,13 +31,13 @@ async def acquire_http_session() -> AsyncIterator[aiohttp.ClientSession]:
 
 @asynccontextmanager
 async def acquire_mysql_db_pool() -> AsyncIterator[databases.Database]:
-    async with databases.Database(app.state.settings.DB_DSN) as db_pool:
+    async with databases.Database(app.settings.DB_DSN) as db_pool:
         yield db_pool
 
 
 @asynccontextmanager
 async def acquire_redis_db_pool() -> AsyncIterator[aioredis.Redis]:
-    db_pool: aioredis.Redis = await aioredis.from_url(app.state.settings.REDIS_DSN)
+    db_pool: aioredis.Redis = await aioredis.from_url(app.settings.REDIS_DSN)
     try:
         yield db_pool
     finally:
@@ -61,10 +61,10 @@ def acquire_geoloc_db_conn() -> Iterator[Optional[geoip2.database.Reader]]:
 
 @contextmanager
 def acquire_datadog_client() -> Iterator[Optional[datadog_client.ThreadStats]]:
-    if app.state.settings.DATADOG_API_KEY and app.state.settings.DATADOG_APP_KEY:
+    if app.settings.DATADOG_API_KEY and app.settings.DATADOG_APP_KEY:
         datadog_module.initialize(
-            api_key=app.state.settings.DATADOG_API_KEY,
-            app_key=app.state.settings.DATADOG_APP_KEY,
+            api_key=app.settings.DATADOG_API_KEY,
+            app_key=app.settings.DATADOG_APP_KEY,
         )
         datadog = datadog_client.ThreadStats()
 

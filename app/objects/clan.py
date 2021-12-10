@@ -3,7 +3,6 @@ from enum import IntEnum
 from enum import unique
 from typing import TYPE_CHECKING
 
-import aiomysql
 import databases.core
 
 import app.state

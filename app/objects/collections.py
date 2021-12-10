@@ -8,15 +8,14 @@ from typing import overload
 from typing import Sequence
 from typing import Union
 
-import aiomysql
 import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.settings
 import app.state
 import app.utils
 from app.constants.privileges import Privileges
-from app.objects import glob
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
 from app.objects.clan import Clan
@@ -92,14 +91,14 @@ class Channels(list[Channel]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{c} added to channels list.")
 
     def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{c} removed from channels list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -144,7 +143,7 @@ class Matches(list[Optional[Match]]):
             m.id = free
             self[free] = m
 
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{m} added to matches list.")
 
             return True
@@ -159,7 +158,7 @@ class Matches(list[Optional[Match]]):
                 self[i] = None
                 break
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{m} removed from matches list.")
 
 
@@ -289,7 +288,7 @@ class Players(list[Player]):
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} double-added to global player list?")
             return
 
@@ -298,7 +297,7 @@ class Players(list[Player]):
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} removed from player list when not online?")
             return
 
@@ -351,14 +350,14 @@ class MapPools(list[MapPool]):
         """Append `mp` to the list."""
         super().append(mp)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{mp} added to mappools list.")
 
     def remove(self, mp: MapPool) -> None:
         """Remove `mp` from the list."""
         super().remove(mp)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{mp} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -431,14 +430,14 @@ class Clans(list[Clan]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{c} added to clans list.")
 
     def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
-        if app.state.settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{c} removed from clans list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:

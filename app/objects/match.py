@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime as datetime
 from datetime import timedelta as timedelta
 from enum import IntEnum
@@ -12,17 +11,16 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
-import aiomysql
 import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.settings
 import app.state
 import packets
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.objects import glob
 from app.objects.beatmap import Beatmap
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -329,7 +327,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f"https://osu.{app.state.settings.DOMAIN}/beatmaps/{self.map_id}"
+        return f"https://osu.{app.settings.DOMAIN}/beatmaps/{self.map_id}"
 
     @property
     def embed(self) -> str:

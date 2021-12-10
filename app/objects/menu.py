@@ -10,7 +10,6 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
-import app.state
 
 if TYPE_CHECKING:
     from app.objects.player import Player

@@ -12,7 +12,6 @@ import aiohttp
 import aioredis
 import cmyui
 import databases
-import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import geoip2.database
 from cmyui.logging import Ansi
