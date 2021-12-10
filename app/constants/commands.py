@@ -1518,8 +1518,8 @@ if app.settings.DEVELOPER_MODE:
 
 
 def ensure_match(
-    f: Callable[..., Awaitable[Optional[R]]],
-) -> Callable[..., Awaitable[Optional[R]]]:
+    f: Callable[[Context, "Match"], Awaitable[Optional[R]]],
+) -> Callable[[Context], Awaitable[Optional[R]]]:
     @wraps(f)
     async def wrapper(ctx: Context) -> Optional[R]:
         match = ctx.player.match
