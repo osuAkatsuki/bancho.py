@@ -1744,7 +1744,7 @@ class MatchTransferHost(BasePacket):
             log(f"{p} tried to transfer host to an empty slot?")
             return
 
-        m.host = t
+        m.host_id = t.id
         m.host.enqueue(packets.match_transfer_host())
         m.enqueue_state()
 

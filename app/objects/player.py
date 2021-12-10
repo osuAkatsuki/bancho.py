@@ -691,7 +691,7 @@ class Player:
             if self is self.match.host:
                 for s in self.match.slots:
                     if s.status & SlotStatus.has_player:
-                        self.match.host = s.player
+                        self.match.host_id = s.player.id
                         self.match.host.enqueue(packets.match_transfer_host())
                         break
 

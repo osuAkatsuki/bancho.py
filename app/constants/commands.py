@@ -1755,7 +1755,8 @@ async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
     if t not in match:
         return "Found no such player in the match."
 
-    match.host = t
+    match.host_id = t.id
+
     match.host.enqueue(packets.match_transfer_host())
     match.enqueue_state(lobby=False)
     return "Match host updated."
@@ -2551,7 +2552,7 @@ async def clan_info(ctx: Context) -> Optional[str]:
         {"clan_id": clan.id},
     ):
         priv_str = ("Member", "Officer", "Owner")[row["clan_priv"] - 1]
-        msg.append(f"[{priv_str}] {row['member_name']}")
+        msg.append(f"[{priv_str}] {row['name']}")
 
     return "\n".join(msg)
 
