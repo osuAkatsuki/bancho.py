@@ -1183,9 +1183,14 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                         ezpp.calculate(osu_file_path)
 
+                        pp = ezpp.get_pp()
+
+                        if math.isinf(pp) or math.isnan(pp):
+                            continue
+
                         await update_conn.execute(
                             f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
-                            {"pp": ezpp.get_pp(), "score_id": row["id"]},
+                            {"pp": pp, "score_id": row["id"]},
                         )
 
         return "Map recalculated."
@@ -1238,9 +1243,14 @@ async def recalc(ctx: Context) -> Optional[str]:
 
                                 ezpp.calculate(osu_file_path)
 
+                                pp = ezpp.get_pp()
+
+                                if math.isinf(pp) or math.isnan(pp):
+                                    continue
+
                                 await update_conn.execute(
                                     f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
-                                    {"pp": ezpp.get_pp(), "score_id": row["id"]},
+                                    {"pp": pp, "score_id": row["id"]},
                                 )
 
                     # leave at least 1/100th of
