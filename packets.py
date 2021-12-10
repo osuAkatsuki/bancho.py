@@ -16,6 +16,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
+from typing import Union
 
 # from app.objects.beatmap import BeatmapInfo
 
@@ -553,7 +554,7 @@ class BanchoPacketReader:
 # write functions
 
 
-def write_uleb128(num: int) -> bytes | bytearray:
+def write_uleb128(num: int) -> Union[bytes, bytearray]:
     """Write `num` into an unsigned LEB128."""
     if num == 0:
         return b"\x00"

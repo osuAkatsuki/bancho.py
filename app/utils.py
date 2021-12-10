@@ -375,7 +375,7 @@ def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
     )
 
 
-IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 class Country(TypedDict):
@@ -458,7 +458,7 @@ def escape_enum(
     return str(int(val))
 
 
-def shutdown_signal_handler(signum: int | signal.Signals) -> None:
+def shutdown_signal_handler(signum: Union[int, signal.Signals]) -> None:
     """Handle a posix signal, flagging the server to shut down."""
     print("\x1b[2K", end="\r")  # remove ^C from window
 
@@ -713,7 +713,7 @@ async def run_sql_migrations() -> None:
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = app.settings.VERSION
+    latest_ver = cmyui.Version.from_str(app.settings.VERSION)
 
     if latest_ver == current_ver:
         return  # already up to date

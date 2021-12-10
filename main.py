@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.10
+#!/usr/bin/env python3.9
 """
 gulag - an awesome osu! server implementation from TCP/IP sockets.
 

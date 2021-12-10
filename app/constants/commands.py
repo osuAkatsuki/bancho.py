@@ -380,16 +380,16 @@ async def top(ctx: Context) -> Optional[str]:
     mode = ["osu", "taiko", "catch", "mania"].index(mode_str)
     table = f"scores_{special_mode_str}"
 
-    scores = await app.state.services.database.fetchall(
+    scores = await app.state.services.database.fetch_all(
         "SELECT *, b.id AS bmapid "
         f"FROM {table} s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-        "WHERE s.userid = %s "
-        "AND s.mode = %s "
+        "WHERE s.userid = :user_id "
+        "AND s.mode = :mode "
         "AND s.status = 2 "
         "AND b.status in (2, 3) "
         "ORDER BY s.pp DESC LIMIT 10",
-        [p.id, mode],
+        {"user_id": p.id, "mode": mode},
     )
 
     if not scores:
@@ -608,17 +608,16 @@ async def requests(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    res = await app.state.services.database.fetchall(
+    rows = await app.state.services.database.fetch_all(
         "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
-        _dict=False,  # return rows as tuples
     )
 
-    if not res:
+    if not rows:
         return "The queue is clean! (0 map request(s))"
 
-    l = [f"Total requests: {len(res)}"]
+    l = [f"Total requests: {len(rows)}"]
 
-    for (map_id, player_id, dt) in res:
+    for (map_id, player_id, dt) in rows:
         # find player & map for each row, and add to output.
         if not (p := await app.state.sessions.players.from_cache_or_sql(id=player_id)):
             l.append(f"Failed to find requesting player ({player_id})?")
@@ -664,43 +663,43 @@ async def _map(ctx: Context) -> Optional[str]:
     # for updating cache would be faster?
     # surely this will not scale as well..
 
-    async with app.state.services.database.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
-            if ctx.args[1] == "set":
-                # update whole set
-                await db_cursor.execute(
-                    "UPDATE maps SET status = %s, frozen = 1 WHERE set_id = %s",
-                    [new_status, bmap.set_id],
-                )
+    async with app.state.services.database.connection() as db_conn:
+        if ctx.args[1] == "set":
+            # update whole set
+            await db_conn.execute(
+                "UPDATE maps SET status = %s, frozen = 1 WHERE set_id = %s",
+                {"status": new_status, "set_id": bmap.set_id},
+            )
 
-                # select all map ids for clearing map requests.
-                await db_cursor.execute(
+            # select all map ids for clearing map requests.
+            map_ids = [
+                row[0]
+                for row in await db_conn.fetch_all(
                     "SELECT id FROM maps WHERE set_id = %s",
-                    [bmap.set_id],
+                    {"set_id": bmap.set_id},
                 )
-                map_ids = [row[0] async for row in db_cursor]
+            ]
 
-                for bmap in app.state.cache["beatmapset"][bmap.set_id].maps:
-                    bmap.status = new_status
+            for bmap in app.state.cache["beatmapset"][bmap.set_id].maps:
+                bmap.status = new_status
 
-            else:
-                # update only map
-                await db_cursor.execute(
-                    "UPDATE maps SET status = %s, frozen = 1 WHERE id = %s",
-                    [new_status, bmap.id],
-                )
+        else:
+            # update only map
+            await db_conn.execute(
+                "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
+                {"status": new_status, "map_id": bmap.id},
+            )
 
-                map_ids = [bmap.id]
+            map_ids = [bmap.id]
 
-                if bmap.md5 in app.state.cache["beatmap"]:
-                    app.state.cache["beatmap"][bmap.md5].status = new_status
+            if bmap.md5 in app.state.cache["beatmap"]:
+                app.state.cache["beatmap"][bmap.md5].status = new_status
 
-            # deactivate rank requests for all ids
-            for map_id in map_ids:
-                await db_cursor.execute(
-                    "UPDATE map_requests SET active = 0 WHERE map_id = %s",
-                    [map_id],
-                )
+        # deactivate rank requests for all ids
+        await db_conn.execute(
+            "UPDATE map_requests SET active = 0 WHERE map_id IN :map_ids",
+            {"map_ids": map_ids},
+        )
 
     return f"{bmap.embed} updated to {new_status!s}."
 
@@ -727,12 +726,12 @@ async def notes(ctx: Context) -> Optional[str]:
     elif days <= 0:
         return "Invalid syntax: !notes <name> <days_back>"
 
-    res = await app.state.services.database.fetchall(
+    res = await app.state.services.database.fetch_all(
         "SELECT `msg`, `time` "
-        "FROM `logs` WHERE `to` = %s "
-        "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - %s "
+        "FROM `logs` WHERE `to` = :to "
+        "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
         "ORDER BY `time` ASC",
-        [t.id, days * 86400],
+        {"to": t.id, "seconds": days * 86400},
     )
 
     if not res:
@@ -1333,13 +1332,12 @@ async def wipemap(ctx: Context) -> Optional[str]:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    async with app.state.services.database.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
-            for t in ("vn", "rx", "ap"):
-                await db_cursor.execute(
-                    f"DELETE FROM scores_{t} WHERE map_md5 = %s",
-                    [map_md5],
-                )
+    async with app.state.services.database.connection() as db_conn:
+        for t in ("vn", "rx", "ap"):
+            await db_conn.execute(
+                f"DELETE FROM scores_{t} WHERE map_md5 = :map_md5",
+                {"map_md5": map_md5},
+            )
 
     return "Scores wiped."
 

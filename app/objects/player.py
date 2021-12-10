@@ -9,6 +9,7 @@ from typing import Any
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
+from typing import Union
 
 import databases.core
 from cmyui.discord import Webhook
@@ -217,7 +218,7 @@ class Player:
     )
 
     def __init__(
-        self, id: int, name: str, priv: int | Privileges, **extras: Any
+        self, id: int, name: str, priv: Union[int, Privileges], **extras: Any
     ) -> None:
         self.id = id
         self.name = name

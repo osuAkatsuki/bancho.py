@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import AsyncGenerator
 from typing import Optional
 from typing import TypedDict
+from typing import Union
 
 import aiohttp
 import aioredis
@@ -22,7 +23,7 @@ from cmyui.logging import Rainbow
 from app import settings
 from app.constants.countries import country_codes
 
-IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
@@ -196,6 +197,6 @@ async def check_for_dependency_updates() -> None:
     if updates_available:
         log(
             "Python modules can be updated with "
-            "`python3.10 -m pip install -U <modules>`.",
+            "`python3.9 -m pip install -U <modules>`.",
             Ansi.LMAGENTA,
         )
