@@ -1768,7 +1768,7 @@ async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
     match.host_id = t.id
 
     match.host.enqueue(packets.match_transfer_host())
-    match.enqueue_state(lobby=False)
+    match.enqueue_state(lobby=True)
     return "Match host updated."
 
 
