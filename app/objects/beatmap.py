@@ -845,7 +845,7 @@ class BeatmapSet:
                 "WHERE set_id = :set_id",
                 {"set_id": bsid},
             ):
-                bmap = Beatmap(**row, set=bmap_set)
+                bmap = Beatmap(**row, map_set=bmap_set)
 
                 # XXX: tempfix for gulag <v3.4.1,
                 # where filenames weren't stored.
