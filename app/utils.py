@@ -48,6 +48,7 @@ __all__ = (
     "download_default_avatar",
     "seconds_readable",
     "check_connection",
+    "processes_listening_on_unix_socket",
     "running_via_asgi_webserver",
     "_install_synchronous_excepthook",
     "get_appropriate_stacktrace",
@@ -250,6 +251,35 @@ def check_connection(timeout: float = 1.0) -> bool:
 
     # all connections failed
     return False
+
+
+def processes_listening_on_unix_socket(socket_path: str) -> int:
+    """Return the number of processes currently listening on this socket."""
+    with open("/proc/net/unix") as f:  # TODO: does this require root privs?
+        unix_socket_data = f.read().splitlines(keepends=False)
+
+    process_count = 0
+
+    for line in unix_socket_data[1:]:
+        # 0000000045fe59d0: 00000002 00000000 00010000 0005 01 17665 /tmp/gulag.sock
+        tokens = line.split()
+
+        # unused params
+        # (
+        #     kernel_table_slot_num,
+        #     ref_count,
+        #     protocol,
+        #     flags,
+        #     sock_type,
+        #     sock_state,
+        #     inode,
+        # )  = tokens[0:7]
+
+        # path may or may not be set
+        if len(tokens) == 8 and tokens[7] == socket_path:
+            process_count += 1
+
+    return process_count
 
 
 def running_via_asgi_webserver() -> bool:

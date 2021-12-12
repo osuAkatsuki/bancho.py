@@ -77,9 +77,23 @@ async def run_server() -> int:
         raise ValueError("Invalid socket address.")
 
     if sock_family == socket.AF_UNIX:
-        # using unix socket - remove from filesystem if it exists
+        # using unix socket
         if os.path.exists(app.settings.SERVER_ADDR):
-            os.remove(app.settings.SERVER_ADDR)
+            if (
+                app.utils.processes_listening_on_unix_socket(app.settings.SERVER_ADDR)
+                != 0
+            ):
+                # server is still running
+                log(
+                    f"There are other processes listening on {app.settings.SERVER_ADDR}.\n"
+                    f"If you've lost it, gulag can be killed gracefully with SIGINT.",
+                    Ansi.LRED,
+                )
+                await app.utils.cancel_housekeeping_tasks()
+                return 1
+            else:
+                # no processes listening on the socket, just remove it's file
+                os.remove(app.settings.SERVER_ADDR)
 
     # create our transport layer socket; osu! uses tcp/ip
     with socket.socket(sock_family, socket.SOCK_STREAM) as listening_sock:
