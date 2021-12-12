@@ -313,12 +313,12 @@ async def osuGetBeatmapInfo(
 @required_args({"u", "h"})
 @get_login(name_p="u", pass_p="h")
 async def osuGetFavourites(p: "Player", conn: Connection) -> HTTPResponse:
-    favourites = await app.state.services.database.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT setid FROM favourites WHERE userid = :user_id",
         {"user_id": p.id},
     )
 
-    return "\n".join(favourites).encode()
+    return "\n".join([str(row[0]) for row in rows]).encode()
 
 
 @domain.route("/web/osu-addfavourite.php")
