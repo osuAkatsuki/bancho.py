@@ -23,7 +23,7 @@ shutting_down = False
 class Cache(TypedDict):
     bcrypt: dict[bytes, bytes]
 
-    ip: dict[str, IPAddress]
+    ip: dict[str, "IPAddress"]
 
     beatmap: dict[Union[str, int], "Beatmap"]  # bid & md5 keys
     beatmapset: dict[int, "BeatmapSet"]  # bsid keys
