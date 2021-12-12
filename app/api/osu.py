@@ -252,6 +252,9 @@ async def osuGetBeatmapInfo(
     conn: Connection,
     db_conn: databases.core.Connection,
 ) -> HTTPResponse:
+    if conn.body is None:
+        return
+
     data = orjson.loads(conn.body)
 
     num_requests = len(data["Filenames"]) + len(data["Ids"])

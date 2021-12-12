@@ -97,6 +97,9 @@ async def bancho_http_handler(conn: Connection) -> bytes:
 
 @domain.route("/", methods=["POST"])
 async def bancho_handler(conn: Connection) -> HTTPResponse:
+    if conn.body is None:
+        return
+
     if "CF-Connecting-IP" in conn.headers:
         ip_str = conn.headers["CF-Connecting-IP"]
     else:
