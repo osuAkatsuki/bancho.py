@@ -659,28 +659,80 @@ class BeatmapSet:
             return
 
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
-            current_maps = {bmap.id: bmap for bmap in self.maps}
+            old_maps = {bmap.id: bmap for bmap in self.maps}
+            new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
+
             self.last_osuapi_check = datetime.now()
 
-            for api_bmap in api_data:
-                bmap_id = int(api_bmap["beatmap_id"])
-                if bmap_id not in current_maps:
-                    # we don't have this bmap id, add it to cache & db
-                    bmap: "Beatmap" = Beatmap.__new__(Beatmap)
-                    bmap.id = bmap_id
+            # delete maps from old_maps where old.id not in new_maps
+            # update maps from old_maps where old.md5 != new.md5
+            # add maps to old_maps where new.id not in old_maps
 
-                    bmap._parse_from_osuapi_resp(api_bmap)
+            updated_maps: list[Beatmap] = []  # TODO: optimize
+            map_md5s_to_delete: set[str] = set()
+
+            # find maps in our current state that've been deleted, or need updates
+            for old_id, old_map in old_maps.items():
+                if old_id not in new_maps:
+                    # delete map from old_maps
+                    map_md5s_to_delete.add(old_map.md5)
+                else:
+                    new_map = new_maps[old_id]
+                    if old_map.md5 != new_map["file_md5"]:
+                        # update map from old_maps
+                        bmap = old_maps[old_id]
+                        bmap._parse_from_osuapi_resp(new_map)
+                        updated_maps.append(bmap)
+                    else:
+                        # map is the same, make no changes
+                        updated_maps.append(old_map)  # TODO: is this needed?
+
+            # find maps that aren't in our current state, and add them
+            for new_id, new_map in new_maps.items():
+                if new_id not in old_maps:
+                    # new map we don't have locally, add it
+                    bmap: "Beatmap" = Beatmap.__new__(Beatmap)
+                    bmap.id = new_id
+
+                    bmap._parse_from_osuapi_resp(new_map)
 
                     # (some gulag-specific stuff not given by api)
                     bmap.frozen = False
                     bmap.passes = 0
                     bmap.plays = 0
                     bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
-                elif api_bmap["file_md5"] != current_maps[bmap_id].md5:
-                    # this is a newer version than we have
-                    bmap = current_maps[bmap_id]
-                    bmap._parse_from_osuapi_resp(api_bmap)
 
+                    updated_maps.append(bmap)
+
+            # save changes to cache
+            self.maps = updated_maps
+
+            # save changes to sql
+
+            if map_md5s_to_delete:
+                # delete maps
+                await app.state.services.database.execute(
+                    "DELETE FROM maps WHERE md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
+
+                # delete scores on the maps
+                # TODO: if we add FKs to db, won't need this?
+                for scores_table in ("scores_vn", "scores_rx", "scores_ap"):
+                    await app.state.services.database.execute(
+                        f"DELETE FROM {scores_table} WHERE map_md5 IN :map_md5s",
+                        {"map_md5s": map_md5s_to_delete},
+                    )
+
+            # update last_osuapi_check
+            await app.state.services.database.execute(
+                "REPLACE INTO mapsets "
+                "(server, id, last_osuapi_check) "
+                'VALUES ("osu!", :id, :last_osuapi_check)',
+                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
+            )
+
+            # update maps in sql
             await self._save_to_sql()
         else:
             # TODO: we have the map on disk but it's
@@ -689,58 +741,50 @@ class BeatmapSet:
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
-        async with app.state.services.database.connection() as db_conn:
-            await db_conn.execute(
-                "REPLACE INTO mapsets "
-                "(server, id, last_osuapi_check) "
-                'VALUES ("osu!", :id, :last_osuapi_check)',
-                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
-            )
-
-            await db_conn.execute_many(
-                "REPLACE INTO maps ("
-                "server, md5, id, set_id, "
-                "artist, title, version, creator, "
-                "filename, last_update, total_length, "
-                "max_combo, status, frozen, "
-                "plays, passes, mode, bpm, "
-                "cs, od, ar, hp, diff"
-                ") VALUES ("
-                '"osu!", :md5, :id, :set_id, '
-                ":artist, :title, :version, :creator, "
-                ":filename, :last_update, :total_length, "
-                ":max_combo, :status, :frozen, "
-                ":plays, :passes, :mode, :bpm, "
-                ":cs, :od, :ar, :hp, :diff"
-                ")",
-                [
-                    {
-                        "md5": bmap.md5,
-                        "id": bmap.id,
-                        "set_id": bmap.set_id,
-                        "artist": bmap.artist,
-                        "title": bmap.title,
-                        "version": bmap.version,
-                        "creator": bmap.creator,
-                        "filename": bmap.filename,
-                        "last_update": bmap.last_update,
-                        "total_length": bmap.total_length,
-                        "max_combo": bmap.max_combo,
-                        "status": bmap.status,
-                        "frozen": bmap.frozen,
-                        "plays": bmap.plays,
-                        "passes": bmap.passes,
-                        "mode": bmap.mode,
-                        "bpm": bmap.bpm,
-                        "cs": bmap.cs,
-                        "od": bmap.od,
-                        "ar": bmap.ar,
-                        "hp": bmap.hp,
-                        "diff": bmap.diff,
-                    }
-                    for bmap in self.maps
-                ],
-            )
+        await app.state.services.database.execute_many(
+            "REPLACE INTO maps ("
+            "server, md5, id, set_id, "
+            "artist, title, version, creator, "
+            "filename, last_update, total_length, "
+            "max_combo, status, frozen, "
+            "plays, passes, mode, bpm, "
+            "cs, od, ar, hp, diff"
+            ") VALUES ("
+            '"osu!", :md5, :id, :set_id, '
+            ":artist, :title, :version, :creator, "
+            ":filename, :last_update, :total_length, "
+            ":max_combo, :status, :frozen, "
+            ":plays, :passes, :mode, :bpm, "
+            ":cs, :od, :ar, :hp, :diff"
+            ")",
+            [
+                {
+                    "md5": bmap.md5,
+                    "id": bmap.id,
+                    "set_id": bmap.set_id,
+                    "artist": bmap.artist,
+                    "title": bmap.title,
+                    "version": bmap.version,
+                    "creator": bmap.creator,
+                    "filename": bmap.filename,
+                    "last_update": bmap.last_update,
+                    "total_length": bmap.total_length,
+                    "max_combo": bmap.max_combo,
+                    "status": bmap.status,
+                    "frozen": bmap.frozen,
+                    "plays": bmap.plays,
+                    "passes": bmap.passes,
+                    "mode": bmap.mode,
+                    "bpm": bmap.bpm,
+                    "cs": bmap.cs,
+                    "od": bmap.od,
+                    "ar": bmap.ar,
+                    "hp": bmap.hp,
+                    "diff": bmap.diff,
+                }
+                for bmap in self.maps
+            ],
+        )
 
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
@@ -844,6 +888,13 @@ class BeatmapSet:
                 bmap.set = self
                 self.maps.append(bmap)
 
+            await app.state.services.database.execute(
+                "REPLACE INTO mapsets "
+                "(server, id, last_osuapi_check) "
+                'VALUES ("osu!", :id, :last_osuapi_check)',
+                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
+            )
+
             await self._save_to_sql()
             return self
 
@@ -865,6 +916,12 @@ class BeatmapSet:
 
                 did_api_request = True
 
+        # TODO: this can be done less often for certain types of maps,
+        # such as ones that're ranked on bancho and won't be updated,
+        # and perhaps ones that haven't been updated in a long time.
+        if not did_api_request and bmap_set._cache_expired():
+            await bmap_set._update_if_available()
+
         # cache the individual maps & set for future requests
         beatmapset_cache = app.state.cache["beatmapset"]
         beatmap_cache = app.state.cache["beatmap"]
@@ -874,11 +931,5 @@ class BeatmapSet:
         for bmap in bmap_set.maps:
             beatmap_cache[bmap.md5] = bmap
             beatmap_cache[bmap.id] = bmap
-
-        # TODO: this can be done less often for certain types of maps,
-        # such as ones that're ranked on bancho and won't be updated,
-        # and perhaps ones that haven't been updated in a long time.
-        if not did_api_request and bmap_set._cache_expired():
-            await bmap_set._update_if_available()
 
         return bmap_set
