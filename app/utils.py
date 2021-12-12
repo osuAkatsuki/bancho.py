@@ -786,11 +786,9 @@ async def run_sql_migrations() -> None:
         return
 
     log(
-        "Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
+        f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
         Ansi.LMAGENTA,
     )
-
-    updated = False
 
     # XXX: so it turns out we can't use a transaction here (at least with mysql)
     #      to roll back changes, as any structural changes to tables implicitly
@@ -799,22 +797,27 @@ async def run_sql_migrations() -> None:
         for query in queries:
             try:
                 await db_conn.execute(query)
-            except pymysql.err.MySQLError:
-                break
+            except pymysql.err.MySQLError as exc:
+                log(f"Failed: {query}", Ansi.GRAY)  # type: ignore
+                log(repr(exc))
+                log(
+                    "SQL failed to update - unless you've been "
+                    "modifying sql and know what caused this, "
+                    "please please contact cmyui#0425.",
+                    Ansi.LRED,
+                )
+                raise KeyboardInterrupt from exc
         else:
-            # all queries ran without problems.
-            updated = True
-
-    if not updated:
-        log(f"Failed: {query}", Ansi.GRAY)  # type: ignore
-        log(
-            "SQL failed to update - unless you've been "
-            "modifying sql and know what caused this, "
-            "please please contact cmyui#0425.",
-            Ansi.LRED,
-        )
-
-        raise KeyboardInterrupt
+            # all queries executed successfully
+            await db_conn.execute(
+                "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
+                "VALUES (:major, :minor, :micro, NOW())",
+                {
+                    "major": latest_ver.major,
+                    "minor": latest_ver.minor,
+                    "micro": latest_ver.micro,
+                },
+            )
 
 
 def orjson_serialize_to_str(*args, **kwargs) -> str:
