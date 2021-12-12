@@ -104,18 +104,16 @@ class Channels(list[Channel]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        self.extend(
-            [
+        for row in await db_conn.fetch_all("SELECT * FROM channels"):
+            self.append(
                 Channel(
                     name=row["name"],
                     topic=row["topic"],
                     read_priv=Privileges(row["read_priv"]),
                     write_priv=Privileges(row["write_priv"]),
                     auto_join=row["auto_join"] == 1,
-                )
-                for row in await db_conn.fetch_all("SELECT * FROM channels")
-            ],
-        )
+                ),
+            )
 
 
 class Matches(list[Optional[Match]]):
@@ -363,22 +361,21 @@ class MapPools(list[MapPool]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching mappools from sql.", Ansi.LCYAN)
-        self.extend(
-            [
-                MapPool(
-                    id=row["id"],
-                    name=row["name"],
-                    created_at=row["created_at"],
-                    created_by=await app.state.sessions.players.from_cache_or_sql(
-                        id=row["created_by"],
-                    ),
-                )
-                for row in await db_conn.fetch_all("SELECT * FROM tourney_pools")
-            ],
-        )
+        for row in await db_conn.fetch_all("SELECT * FROM tourney_pools"):
+            created_by = await app.state.sessions.players.from_cache_or_sql(
+                id=row["created_by"],
+            )
 
-        for pool in self:
+            assert created_by is not None
+
+            pool = MapPool(
+                id=row["id"],
+                name=row["name"],
+                created_at=row["created_at"],
+                created_by=created_by,
+            )
             await pool.maps_from_sql(db_conn)
+            self.append(pool)
 
 
 class Clans(list[Clan]):
@@ -399,7 +396,7 @@ class Clans(list[Clan]):
     def __getitem__(self, index: slice) -> list[Clan]:
         ...
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Union[int, str, slice]):
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
@@ -443,15 +440,10 @@ class Clans(list[Clan]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
-        self.extend(
-            [Clan(**row) for row in await db_conn.fetch_all("SELECT * FROM clans")],
-        )
-
-        for clan in self:
+        for row in await db_conn.fetch_all("SELECT * FROM clans"):
+            clan = Clan(**row)
             await clan.members_from_sql(db_conn)
-
-
-import databases.core
+            self.append(clan)
 
 
 async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
