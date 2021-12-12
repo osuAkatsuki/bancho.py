@@ -2,6 +2,7 @@
 # in a lot of these classes; needs refactor.
 import asyncio
 from typing import Any
+from typing import Iterable
 from typing import Iterator
 from typing import Optional
 from typing import overload
@@ -94,6 +95,13 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{c} added to channels list.")
 
+    def extend(self, cs: Iterable[Channel]) -> None:
+        """Extend the list with `cs`."""
+        super().extend(cs)
+
+        if app.settings.DEBUG:
+            log(f"{cs} added to channels list.")
+
     def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
@@ -148,6 +156,8 @@ class Matches(list[Optional[Match]]):
         else:
             log(f"Match list is full! Could not add {m}.")
             return False
+
+    # TODO: extend
 
     def remove(self, m: Match) -> None:
         """Remove `m` from the list."""
@@ -344,19 +354,26 @@ class MapPools(list[MapPool]):
             if p.name == name:
                 return p
 
-    def append(self, mp: MapPool) -> None:
-        """Append `mp` to the list."""
-        super().append(mp)
+    def append(self, m: MapPool) -> None:
+        """Append `m` to the list."""
+        super().append(m)
 
         if app.settings.DEBUG:
-            log(f"{mp} added to mappools list.")
+            log(f"{m} added to mappools list.")
 
-    def remove(self, mp: MapPool) -> None:
-        """Remove `mp` from the list."""
-        super().remove(mp)
+    def extend(self, ms: Iterable[MapPool]) -> None:
+        """Extend the list with `ms`."""
+        super().extend(ms)
 
         if app.settings.DEBUG:
-            log(f"{mp} removed from mappools list.")
+            log(f"{ms} added to mappools list.")
+
+    def remove(self, m: MapPool) -> None:
+        """Remove `m` from the list."""
+        super().remove(m)
+
+        if app.settings.DEBUG:
+            log(f"{m} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
@@ -429,6 +446,13 @@ class Clans(list[Clan]):
 
         if app.settings.DEBUG:
             log(f"{c} added to clans list.")
+
+    def extend(self, cs: Iterable[Clan]) -> None:
+        """Extend the list with `cs`."""
+        super().extend(cs)
+
+        if app.settings.DEBUG:
+            log(f"{cs} added to clans list.")
 
     def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
