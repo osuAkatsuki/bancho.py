@@ -623,7 +623,7 @@ async def osuSubmitModularSelector(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    score.player.update_latest_activity()
+    score.player.update_latest_activity_soon()
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -1378,7 +1378,7 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
                 "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
             )
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         return "\n".join(ret).encode()
 
     elif action == "post":
@@ -1422,7 +1422,7 @@ async def osuComment(p: "Player", conn: Connection) -> HTTPResponse:
             },
         )
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         return  # empty resp is fine
 
     else:

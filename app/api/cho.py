@@ -348,7 +348,7 @@ class SendMessage(BasePacket):
 
             t_chan.send(msg, sender=p)
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         log(f"{p} @ {t_chan}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -366,7 +366,7 @@ class Logout(BasePacket):
 
         p.logout()
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
 
 
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
@@ -865,7 +865,7 @@ async def login(
         Ansi.LCYAN,
     )
 
-    p.update_latest_activity()
+    p.update_latest_activity_soon()
     return p.token, bytes(data)
 
 
@@ -1165,7 +1165,7 @@ class SendPrivateMessage(BasePacket):
 
                     p.send(resp_msg, sender=t)
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         log(f"{p} @ {t}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -1227,7 +1227,7 @@ class MatchCreate(BasePacket):
         app.state.sessions.channels.append(chan)
         self.match.chat = chan
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         p.join_match(self.match, self.match.passwd)
 
         self.match.chat.send_bot(f"Match created by {p.name}.")
@@ -1302,14 +1302,14 @@ class MatchJoin(BasePacket):
             )
             return
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         p.join_match(m, self.match_passwd)
 
 
 @register(ClientPackets.PART_MATCH)
 class MatchPart(BasePacket):
     async def handle(self, p: Player) -> None:
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         p.leave_match()
 
 
@@ -1827,7 +1827,7 @@ class FriendAdd(BasePacket):
         if t.id in p.blocks:
             p.blocks.remove(t.id)
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         await p.add_friend(t)
 
 
@@ -1844,7 +1844,7 @@ class FriendRemove(BasePacket):
         if t is app.state.sessions.bot:
             return
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
         await p.remove_friend(t)
 
 
@@ -1950,7 +1950,7 @@ class MatchInvite(BasePacket):
             return
 
         t.enqueue(packets.match_invite(p, t.name))
-        p.update_latest_activity()
+        p.update_latest_activity_soon()
 
         log(f"{p} invited {t} to their match.")
 
@@ -2015,4 +2015,4 @@ class ToggleBlockingDMs(BasePacket):
     async def handle(self, p: Player) -> None:
         p.pm_private = self.value == 1
 
-        p.update_latest_activity()
+        p.update_latest_activity_soon()

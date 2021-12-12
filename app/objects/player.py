@@ -1035,7 +1035,7 @@ class Player:
         self.send_menu_clear()
         self.send_bot("\n".join(msg))
 
-    def update_latest_activity(self) -> None:
+    def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
         task = app.state.services.database.execute(
             "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
