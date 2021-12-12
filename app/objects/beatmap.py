@@ -737,7 +737,27 @@ class BeatmapSet:
         else:
             # TODO: we have the map on disk but it's
             #       been removed from the osu!api.
-            ...
+            map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
+
+            # delete maps
+            await app.state.services.database.execute(
+                "DELETE FROM maps WHERE md5 IN :map_md5s",
+                {"map_md5s": map_md5s_to_delete},
+            )
+
+            # delete scores on the maps
+            # TODO: if we add FKs to db, won't need this?
+            for scores_table in ("scores_vn", "scores_rx", "scores_ap"):
+                await app.state.services.database.execute(
+                    f"DELETE FROM {scores_table} WHERE map_md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
+
+            # delete set
+            await app.state.services.database.execute(
+                "DELETE FROM mapsets WHERE id = :set_id",
+                {"set_id": self.id},
+            )
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
