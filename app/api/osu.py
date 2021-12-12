@@ -1449,7 +1449,7 @@ async def osuMarkAsRead(p: "Player", conn: Connection) -> HTTPResponse:
 
 @domain.route("/web/osu-getseasonal.php")
 async def osuSeasonal(conn: Connection) -> HTTPResponse:
-    return orjson.dumps(app.settings.SEASONAL_BGS)
+    return orjson.dumps(app.settings.SEASONAL_BGS._items)
 
 
 @domain.route("/web/bancho_connect.php")
