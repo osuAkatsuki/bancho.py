@@ -443,7 +443,7 @@ class Match:
                     no_map.append(s.player.id)
 
         self.in_progress = True
-        self.enqueue(packets.match_start(self), immune=no_map)
+        self.enqueue(packets.match_start(self), immune=no_map, lobby=False)
         self.enqueue_state()
 
     def reset_scrim(self) -> None:
