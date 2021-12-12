@@ -17,7 +17,16 @@ MIRROR_URL: str = config("MIRROR_URL", default="https://api.chimu.moe/v1")
 
 COMMAND_PREFIX: str = config("COMMAND_PREFIX", default="!")
 
-SEASONAL_BGS: CommaSeparatedStrings = config("SEASONAL_BGS", cast=CommaSeparatedStrings)
+SEASONAL_BGS: CommaSeparatedStrings = config(
+    "SEASONAL_BGS",
+    cast=CommaSeparatedStrings,
+    default=",".join(
+        [
+            "https://akatsuki.pw/static/flower.png",
+            "https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg",
+        ],
+    ),
+)
 
 MENU_ICON_URL: str = config(
     "MENU_ICON_URL",
