@@ -264,8 +264,8 @@ class Beatmap:
         "pp_cache",
     )
 
-    def __init__(self, **kwargs: Any) -> None:
-        self.set: Optional[BeatmapSet] = None
+    def __init__(self, map_set: "BeatmapSet", **kwargs: Any) -> None:
+        self.set = map_set
 
         self.md5 = kwargs.get("md5", "")
         self.id = kwargs.get("id", 0)
@@ -577,14 +577,16 @@ class BeatmapSet:
 
     __slots__ = ("id", "last_osuapi_check", "maps")
 
-    def __init__(self, **kwargs) -> None:
-        self.id = kwargs.get("id", 0)
+    def __init__(
+        self,
+        id: int,
+        last_osuapi_check: datetime,
+        maps: Optional[list[Beatmap]] = None,
+    ) -> None:
+        self.id = id
 
-        self.last_osuapi_check: Optional[datetime] = kwargs.get(
-            "last_osuapi_check",
-            None,
-        )
-        self.maps: list[Beatmap] = kwargs.get("maps", [])
+        self.maps = maps or []
+        self.last_osuapi_check = last_osuapi_check
 
     @functools.lru_cache(maxsize=256)
     def __repr__(self) -> str:
@@ -830,10 +832,7 @@ class BeatmapSet:
             if last_osuapi_check is None:
                 return
 
-            bmap_set = cls(
-                id=bsid,
-                last_osuapi_check=last_osuapi_check,
-            )  # less than ideal
+            bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
             async for row in db_conn.iterate(
                 "SELECT md5, id, set_id, "
@@ -846,7 +845,7 @@ class BeatmapSet:
                 "WHERE set_id = :set_id",
                 {"set_id": bsid},
             ):
-                bmap = Beatmap(**row)
+                bmap = Beatmap(**row, set=bmap_set)
 
                 # XXX: tempfix for gulag <v3.4.1,
                 # where filenames weren't stored.
@@ -862,7 +861,6 @@ class BeatmapSet:
                         {"filename": bmap.filename, "map_id": bmap.id},
                     )
 
-                bmap.set = bmap_set
                 bmap_set.maps.append(bmap)
 
         return bmap_set
@@ -871,10 +869,7 @@ class BeatmapSet:
     async def _from_bsid_osuapi(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the osu!api by set id."""
         if api_data := await osuapiv1_getbeatmaps(s=bsid):
-            self: "BeatmapSet" = cls.__new__(cls)
-            self.id = bsid
-            self.maps = []
-            self.last_osuapi_check = datetime.now()
+            self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset gulag support
             # select all current beatmaps

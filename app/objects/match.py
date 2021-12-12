@@ -37,7 +37,6 @@ __all__ = (
     #'MatchTypes',
     "MatchWinConditions",
     "MatchTeamTypes",
-    "ScoreFrame",
     "MapPool",
     "Slot",
     "Match",
