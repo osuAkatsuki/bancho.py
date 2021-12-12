@@ -1878,7 +1878,7 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
         f"FROM {mode.scores_table} s "
         "INNER JOIN maps m ON m.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
+        "AND s.mode = :mode_vn "
         "GROUP BY s.map_md5 "
         "ORDER BY plays DESC "
         "LIMIT :limit",
