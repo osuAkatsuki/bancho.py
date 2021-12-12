@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.9
 """
-gulag - an awesome osu! server implementation from TCP/IP sockets.
+gulag - a dev-oriented osu! server implementation from TCP/IP sockets.
 
 if you're interested in development, my test server is usually
 up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
@@ -35,27 +35,36 @@ import bg_loops
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 
-async def run_server(server: cmyui.Server) -> None:
-    """Begin listening for and handling connections on all endpoints."""
+async def run_server() -> int:
+    """Begin listening for and handling connections for all endpoints."""
 
-    # we'll be working on top of transport layer posix sockets.
-    # these implement tcp/ip over ethernet for us, and osu!stable
-    # uses http/1.0 ontop of this. we'll need to parse the http data,
-    # find the appropriate handler, and dispatch the connection.
+    # we'll be working on top of giants - most closely linux's
+    # implementation of the bsd tcp/ip socket interface.
+    # python: https://docs.python.org/3/library/socket.html
+    # linux/c: https://man7.org/linux/man-pages/man2/socket.2.html
 
-    # i'll be using my light web framework to handle parsing & dispatching
-    # of connections to their respective handlers; here, we'll just worry
-    # about the socket-level details, like receiving the data from the clients.
+    # these implement tcp/ip over ethernet for us, and osu!stable uses
+    # http1.0 & tls1.0 (ssl) ontop of this. linux will parse the ethernet,
+    # ipv4, and tcp packets for us, giving us the http packet inside.
+    # we'll need to parse the http data, find the appropriate handler
+    # we've made for the job, and dispatch the connection to it.
 
-    # if you're interested in more details, you can see the implementation at
+    # at the moment, much of the web code is imported a python module of mine
+    # though over time code has slowly been trickling into gulag, and perhaps
+    # eventually we will have a full web server implementation in this codebase.
     # https://github.com/cmyui/cmyui_pkg/blob/master/cmyui/web.py
+    server = cmyui.Server(
+        name=f"gulag v{app.settings.VERSION}",
+        gzip=4,
+        debug=app.settings.DEBUG,
+    )
 
     # fetch our server's endpoints; gulag supports
     # osu!'s handlers across multiple domains.
-    from app.api.ava import domain as ava_domain
-    from app.api.cho import domain as cho_domain
-    from app.api.map import domain as map_domain
-    from app.api.osu import domain as osu_domain
+    from app.api.ava import domain as ava_domain  # a.ppy.sh
+    from app.api.cho import domain as cho_domain  # c.ppy.sh
+    from app.api.map import domain as map_domain  # b.ppy.sh
+    from app.api.osu import domain as osu_domain  # osu.ppy.sh
 
     server.add_domains({ava_domain, cho_domain, map_domain, osu_domain})
 
@@ -93,7 +102,7 @@ async def run_server(server: cmyui.Server) -> None:
             try:
                 conn, _ = await asyncio.wait_for(
                     fut=app.state.loop.sock_accept(listening_sock),
-                    timeout=0.25,
+                    timeout=0.50,
                 )
             except asyncio.TimeoutError:
                 pass
@@ -105,6 +114,8 @@ async def run_server(server: cmyui.Server) -> None:
     if sock_family == socket.AF_UNIX:
         # using unix socket - remove from filesystem
         os.remove(app.settings.SERVER_ADDR)
+
+    return 0
 
 
 async def main() -> int:
@@ -125,14 +136,6 @@ async def main() -> int:
             app.context.acquire_geoloc_db_conn() as app.state.services.geoloc_db,
             app.context.acquire_datadog_client() as app.state.services.datadog,
         ):
-            # TODO: refactor debugging so
-            # this can be moved to `run_server`.
-            server = cmyui.Server(
-                name=f"gulag v{app.settings.VERSION}",
-                gzip=4,
-                debug=app.settings.DEBUG,
-            )
-
             # prepare our ram caches, populating from sql where necessary.
             # this includes channels, clans, mappools, bot info, etc.
             async with app.state.services.database.connection() as db_conn:
@@ -151,7 +154,8 @@ async def main() -> int:
 
             # run the server, handling connections
             # until a termination signal is received.
-            await run_server(server)
+            if exit_code := await run_server():
+                return exit_code
 
             # we want to attempt to gracefully finish any ongoing connections
             # and shut down any of the housekeeping tasks running in the background.

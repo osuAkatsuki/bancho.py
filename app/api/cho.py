@@ -791,11 +791,10 @@ async def login(
                     sent_to.add(msg["from"])
 
                 msg_time = datetime.fromtimestamp(msg["time"])
-                msg_ts = f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}'
 
                 data += packets.send_message(
                     sender=msg["from"],
-                    msg=msg_ts,
+                    msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
                     recipient=msg["to"],
                     sender_id=msg["from_id"],
                 )
@@ -1982,7 +1981,9 @@ class UserPresenceRequest(BasePacket):
         for pid in self.user_ids:
             if t := app.state.sessions.players.get(id=pid):
                 if t is app.state.sessions.bot:
-                    packet = packets.bot_presence()
+                    # optimization for bot since it's
+                    # the most frequently requested user
+                    packet = packets.bot_presence(t)
                 else:
                     packet = packets.user_presence(t)
 

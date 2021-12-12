@@ -23,7 +23,7 @@ async def initialize_housekeeping_tasks() -> None:
             loop.create_task(task)
             for task in (
                 _remove_expired_donation_privileges(interval=30 * 60),
-                _reroll_bot_status(interval=5 * 60),
+                _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
             )
         },
@@ -77,7 +77,7 @@ async def _disconnect_ghosts(interval: int) -> None:
                 p.logout()
 
 
-async def _reroll_bot_status(interval: int) -> None:
+async def _update_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
