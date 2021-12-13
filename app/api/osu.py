@@ -1616,7 +1616,7 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
         if not info_res:
             return (404, JSON({"status": "Player not found"}))
 
-        api_data["info"] = info_res
+        api_data["info"] = dict(info_res)
 
     # fetch user's stats if requested
     if conn.args["scope"] in ("stats", "all"):
@@ -1872,7 +1872,7 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
         limit = 25
 
     # fetch & return info from sql
-    res = await app.state.services.database.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT m.md5, m.id, m.set_id, m.status, "
         "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
         f"FROM {mode.scores_table} s "
@@ -1885,7 +1885,7 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
         {"user_id": p.id, "mode_vn": mode.as_vanilla, "limit": limit},
     )
 
-    return JSON({"status": "success", "maps": res})
+    return JSON({"status": "success", "maps": [dict(row) for row in rows]})
 
 
 @domain.route("/api/get_map_info")
@@ -1998,7 +1998,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     params["limit"] = limit
 
     rows = await app.state.services.database.fetch_all(" ".join(query), params)
-    return JSON({"status": "success", "scores": rows})
+    return JSON({"status": "success", "scores": [dict(row) for row in rows]})
 
 
 @domain.route("/api/get_score_info")
@@ -2031,7 +2031,7 @@ async def api_get_score_info(conn: Connection) -> HTTPResponse:
     if not row:
         return (404, JSON({"status": "Score not found."}))
 
-    return JSON({"status": "success", "score": row})
+    return JSON({"status": "success", "score": dict(row)})
 
 
 @domain.route("/api/get_replay")
@@ -2239,7 +2239,7 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
         {"mode": mode, "limit": limit},
     )
 
-    return JSON({"status": "success", "leaderboard": rows})
+    return JSON({"status": "success", "leaderboard": [dict(row) for row in rows]})
 
 
 def requires_api_key(f: Callable) -> Callable:
