@@ -34,7 +34,7 @@ GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 http: "aiohttp.ClientSession"
 database: "databases.Database"
 redis: "aioredis.Redis"
-geoloc_db: "geoip2.database.Reader"
+geoloc_db: Optional["geoip2.database.Reader"]
 datadog: Optional[datadog_client.ThreadStats]
 
 housekeeping_tasks: list[asyncio.Task] = []

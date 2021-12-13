@@ -7,13 +7,12 @@ from . import sessions
 from . import settings
 
 if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
     from asyncio.events import AbstractEventLoop
-
-    from app.objects.beatmap import Beatmap, BeatmapSet
     from ipaddress import IPv4Address, IPv6Address
 
-    IPAddress = Union["IPv4Address", "IPv6Address"]
+    from app.objects.beatmap import Beatmap, BeatmapSet
+
+    IPAddress = Union[IPv4Address, IPv6Address]
 
 loop: "AbstractEventLoop"
 packets = {"all": {}, "restricted": {}}
