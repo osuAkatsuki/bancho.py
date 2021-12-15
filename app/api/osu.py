@@ -1606,29 +1606,31 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
 
     # fetch user's info if requested
     if conn.args["scope"] in ("info", "all"):
-        info_res = await app.state.services.database.fetch_one(
+        info_row = await app.state.services.database.fetch_one(
             "SELECT id, name, safe_name, "
             "priv, country, silence_end "
             "FROM users WHERE id = :user_id",
             {"user_id": pid},
         )
 
-        if not info_res:
+        if not info_row:
             return (404, JSON({"status": "Player not found"}))
 
-        api_data["info"] = dict(info_res)
+        api_data["info"] = dict(info_row)
 
     # fetch user's stats if requested
     if conn.args["scope"] in ("stats", "all"):
         # get all regular stats
-        stats_res = await app.state.services.database.fetch_all(
+        stats_rows = await app.state.services.database.fetch_all(
             "SELECT tscore, rscore, pp, plays, playtime, acc, max_combo, "
             "xh_count, x_count, sh_count, s_count, a_count FROM stats "
             "WHERE id = :user_id",
             {"user_id": pid},
         )
 
-        for idx, row in enumerate(stats_res):
+        stats_rows = [dict(row) for row in stats_rows]
+
+        for idx, row in enumerate(stats_rows):
             row = dict(row)  # make mutable copy
 
             rank = await app.state.services.redis.zrevrank(
@@ -1638,15 +1640,15 @@ async def api_get_player_info(conn: Connection) -> HTTPResponse:
             row["rank"] = rank + 1 if rank else 0
 
             country_rank = await app.state.services.redis.zrevrank(
-                f'gulag:leaderboard:{idx}:{info_res["country"]}',
+                f'gulag:leaderboard:{idx}:{info_row["country"]}',
                 pid,
             )
             row["country_rank"] = country_rank + 1 if country_rank else 0
 
-        if not stats_res:
+        if not stats_rows:
             return (404, JSON({"status": "Player not found"}))
 
-        api_data["stats"] = stats_res
+        api_data["stats"] = stats_rows
 
     return JSON({"status": "success", "player": api_data})
 
