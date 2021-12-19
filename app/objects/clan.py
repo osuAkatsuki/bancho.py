@@ -28,7 +28,7 @@ class ClanPrivileges(IntEnum):
 class Clan:
     """A class to represent a single gulag clan."""
 
-    __slots__ = ("id", "name", "tag", "created_at", "owner", "member_ids")
+    __slots__ = ("id", "name", "tag", "created_at", "owner_id", "member_ids")
 
     def __init__(
         self,
@@ -36,7 +36,7 @@ class Clan:
         name: str,
         tag: str,
         created_at: datetime,
-        owner: int,
+        owner_id: int,
         member_ids: set[int] = set(),
     ) -> None:
         """A class representing one of gulag's clans."""
@@ -45,7 +45,7 @@ class Clan:
         self.tag = tag
         self.created_at = created_at
 
-        self.owner = owner  # userid
+        self.owner_id = owner_id  # userid
         self.member_ids = member_ids  # userids
 
     async def add_member(self, p: "Player") -> None:
@@ -76,20 +76,20 @@ class Clan:
                     "DELETE FROM clans WHERE id = :clan_id",
                     {"clan_id": self.id},
                 )
-            elif p.id == self.owner:
+            elif p.id == self.owner_id:
                 # owner leaving and members left,
                 # transfer the ownership.
                 # TODO: prefer officers
-                self.owner = next(iter(self.member_ids))
+                self.owner_id = next(iter(self.member_ids))
 
                 await db_conn.execute(
                     "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
-                    {"user_id": self.owner, "clan_id": self.id},
+                    {"user_id": self.owner_id, "clan_id": self.id},
                 )
 
                 await db_conn.execute(
                     "UPDATE users SET clan_priv = 3 WHERE id = :user_id",
-                    {"user_id": self.owner},
+                    {"user_id": self.owner_id},
                 )
 
         p.clan = None

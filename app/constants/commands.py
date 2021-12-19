@@ -2482,7 +2482,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
         name=name,
         tag=tag,
         created_at=created_at,
-        owner=ctx.player.id,
+        owner_id=ctx.player.id,
     )
     app.state.sessions.clans.append(clan)
 
@@ -2490,7 +2490,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     ctx.player.clan = clan
     ctx.player.clan_priv = ClanPrivileges.Owner
 
-    clan.owner = ctx.player.id
+    clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
     if "full_name" in ctx.player.__dict__:
