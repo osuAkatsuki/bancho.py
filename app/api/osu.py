@@ -2222,6 +2222,17 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
     else:
         limit = 25
 
+    if "offset" in conn.args:
+        if not conn.args["offset"].isdecimal():
+            return (400, JSON({"status": "Invalid offset."}))
+
+        offset = int(conn.args["offset"])
+
+        if not 0 < offset <= 0x7FFFFFFF:
+            return (400, JSON({"status": "Invalid offset."}))
+    else:
+        offset = 0
+
     if (sort := conn.args.get("sort", None)) is not None:
         if sort not in ("tscore", "rscore", "pp", "acc"):
             return (400, JSON({"status": "Invalid sort."}))
@@ -2237,8 +2248,8 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
         "LEFT JOIN users u USING (id) "
         "LEFT JOIN clans c ON u.clan_id = c.id "
         f"WHERE s.mode = :mode AND u.priv & 1 AND s.{sort} > 0 "
-        f"ORDER BY s.{sort} DESC LIMIT :limit",
-        {"mode": mode, "limit": limit},
+        f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
+        {"mode": mode, "offset": offset, "limit": limit},
     )
 
     return JSON({"status": "success", "leaderboard": [dict(row) for row in rows]})
