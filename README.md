@@ -86,9 +86,9 @@ sudo nano /etc/nginx/sites-enabled/gulag.conf
 # reload the reverse proxy's config
 sudo nginx -s reload
 
-# copy our gulag config to cwd & open for editing
-cp ext/config.sample.py config.py
-nano config.py
+# create a config file from the sample & open it for editing
+cp .env.example .env
+nano .env
 
 ##########################################
 # NOTE: before continuing, make sure you #
