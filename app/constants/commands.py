@@ -255,7 +255,7 @@ async def reconnect(ctx: Context) -> Optional[str]:
     target.logout()
 
 
-@command(Privileges.NORMAL)
+@command(Privileges.DONATOR)
 async def changename(ctx: Context) -> Optional[str]:
     """Change your username."""
     name = " ".join(ctx.args).strip()
