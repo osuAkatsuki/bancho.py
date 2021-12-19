@@ -465,6 +465,8 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         for row in await db_conn.fetch_all("SELECT * FROM clans"):
+            row = dict(row)  # make a mutable copy
+            row["owner_id"] = row.pop("owner")
             clan = Clan(**row)
             await clan.members_from_sql(db_conn)
             self.append(clan)
