@@ -351,6 +351,27 @@ class MapPools(list[MapPool]):
         else:
             return super().__getitem__(index)
 
+    @staticmethod
+    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
+        """Get first matched attr & val from input kwargs. Used in get() methods."""
+        for attr in ("token", "id", "name"):
+            if (val := kwargs.pop(attr, None)) is not None:
+                if attr == "name":
+                    attr = "safe_name"
+                    val = make_safe_name(val)
+
+                return attr, val
+        else:
+            raise ValueError("Incorrect call to MapPools.get()")
+
+    def get(self, **kwargs: object) -> Optional[MapPool]:
+        """Get a mappool by id, or name from cache."""
+        attr, val = self._parse_attr(kwargs)
+
+        for p in self:
+            if getattr(p, attr) == val:
+                return p
+
     def __contains__(self, o: Union[MapPool, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.

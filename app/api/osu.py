@@ -2414,6 +2414,37 @@ async def api_get_clan(conn: Connection) -> HTTPResponse:
     )
 
 
+@domain.route("/api/get_mappool")
+async def api_get_pool(conn: Connection) -> HTTPResponse:
+    """Return information of a given mappool."""
+    conn.resp_headers["Content-Type"] = "application/json"
+
+    # TODO: fetching by name (requires safe_name)
+
+    if not (
+        "id" in conn.args
+        and conn.args["id"].isdecimal()
+        and 0 <= (pool_id := int(conn.args["id"])) < 2_147_483_647
+    ):
+        return (400, JSON({"status": "Must provide valid pool id."}))
+
+    if not (pool := app.state.sessions.pools.get(id=pool_id)):
+        return (404, JSON({"status": "Pool not found."}))
+
+    return JSON(
+        {
+            "id": pool.id,
+            "name": pool.name,
+            "created_at": pool.created_at,
+            "created_by": format_player_basic(pool.created_by),
+            "maps": {
+                f"{mods!r}{slot}": format_map_basic(bmap)
+                for (mods, slot), bmap in pool.maps.items()
+            },
+        },
+    )
+
+
 def requires_api_key(f: Callable) -> Callable:
     @wraps(f)
     async def wrapper(conn: Connection) -> HTTPResponse:
