@@ -834,7 +834,7 @@ class BeatmapSet:
 
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
-            async for row in db_conn.iterate(
+            for row in await db_conn.fetch_all(
                 "SELECT md5, id, set_id, "
                 "artist, title, version, creator, "
                 "filename, last_update, total_length, "
