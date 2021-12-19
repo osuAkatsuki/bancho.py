@@ -706,7 +706,7 @@ class Player:
 
     async def join_clan(self, c: "Clan") -> bool:
         """Attempt to add `self` to `c`."""
-        if self.id in c.members:
+        if self.id in c.member_ids:
             return False
 
         if not "invited":  # TODO

@@ -28,7 +28,7 @@ class ClanPrivileges(IntEnum):
 class Clan:
     """A class to represent a single gulag clan."""
 
-    __slots__ = ("id", "name", "tag", "created_at", "owner", "members")
+    __slots__ = ("id", "name", "tag", "created_at", "owner", "member_ids")
 
     def __init__(
         self,
@@ -37,7 +37,7 @@ class Clan:
         tag: str,
         created_at: datetime,
         owner: int,
-        members: set[int] = set(),
+        member_ids: set[int] = set(),
     ) -> None:
         """A class representing one of gulag's clans."""
         self.id = id
@@ -46,11 +46,11 @@ class Clan:
         self.created_at = created_at
 
         self.owner = owner  # userid
-        self.members = members  # userids
+        self.member_ids = member_ids  # userids
 
     async def add_member(self, p: "Player") -> None:
         """Add a given player to the clan's members."""
-        self.members.add(p.id)
+        self.member_ids.add(p.id)
 
         await app.state.services.database.execute(
             "UPDATE users SET clan_id = :clan_id, clan_priv = 1 WHERE id = :user_id",
@@ -62,7 +62,7 @@ class Clan:
 
     async def remove_member(self, p: "Player") -> None:
         """Remove a given player from the clan's members."""
-        self.members.remove(p.id)
+        self.member_ids.remove(p.id)
 
         async with app.state.services.database.connection() as db_conn:
             await db_conn.execute(
@@ -70,7 +70,7 @@ class Clan:
                 {"user_id": p.id},
             )
 
-            if not self.members:
+            if not self.member_ids:
                 # no members left, disband clan.
                 await db_conn.execute(
                     "DELETE FROM clans WHERE id = :clan_id",
@@ -80,7 +80,7 @@ class Clan:
                 # owner leaving and members left,
                 # transfer the ownership.
                 # TODO: prefer officers
-                self.owner = next(iter(self.members))
+                self.owner = next(iter(self.member_ids))
 
                 await db_conn.execute(
                     "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
@@ -105,7 +105,7 @@ class Clan:
             "SELECT id FROM users WHERE clan_id = :clan_id",
             {"clan_id": self.id},
         ):
-            self.members.add(row["id"])
+            self.member_ids.add(row["id"])
 
     def __repr__(self) -> str:
         return f"[{self.tag}] {self.name}"

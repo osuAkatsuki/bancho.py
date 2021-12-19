@@ -2491,7 +2491,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     ctx.player.clan_priv = ClanPrivileges.Owner
 
     clan.owner = ctx.player.id
-    clan.members.add(ctx.player.id)
+    clan.member_ids.add(ctx.player.id)
 
     if "full_name" in ctx.player.__dict__:
         del ctx.player.full_name  # wipe cached_property
@@ -2536,7 +2536,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
-    for member_id in clan.members:
+    for member_id in clan.member_ids:
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
