@@ -1746,8 +1746,13 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
 
     scope = conn.args["scope"]
 
-    if (mode_arg := conn.args.get("mode", None)) is not None:
-        if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
+    if "mode" in conn.args:
+        if not conn.args["mode"].isdecimal():
+            return (400, JSON({"status": "Invalid mode."}))
+
+        mode = int(conn.args["mode"])
+
+        if not 0 <= mode <= 7:
             return (400, JSON({"status": "Invalid mode."}))
 
         mode = GameMode(mode)
@@ -1770,8 +1775,13 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     else:
         mods = None
 
-    if (limit_arg := conn.args.get("limit", None)) is not None:
-        if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
+    if "limit" in conn.args:
+        if not conn.args["limit"].isdecimal():
+            return (400, JSON({"status": "Invalid limit."}))
+
+        limit = int(conn.args["limit"])
+
+        if not 0 < limit <= 100:
             return (400, JSON({"status": "Invalid limit."}))
     else:
         limit = 25
@@ -1859,16 +1869,26 @@ async def api_get_player_most_played(conn: Connection) -> HTTPResponse:
 
     # parse args (mode, limit)
 
-    if (mode_arg := conn.args.get("mode", None)) is not None:
-        if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
+    if "mode" in conn.args:
+        if not conn.args["mode"].isdecimal():
+            return (400, JSON({"status": "Invalid mode."}))
+
+        mode = int(conn.args["mode"])
+
+        if not 0 <= mode <= 7:
             return (400, JSON({"status": "Invalid mode."}))
 
         mode = GameMode(mode)
     else:
         mode = GameMode.VANILLA_OSU
 
-    if (limit_arg := conn.args.get("limit", None)) is not None:
-        if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
+    if "limit" in conn.args:
+        if not conn.args["limit"].isdecimal():
+            return (400, JSON({"status": "Invalid limit."}))
+
+        limit = int(conn.args["limit"])
+
+        if not 0 < limit <= 100:
             return (400, JSON({"status": "Invalid limit."}))
     else:
         limit = 25
@@ -1936,8 +1956,13 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
 
     scope = conn.args["scope"]
 
-    if (mode_arg := conn.args.get("mode", None)) is not None:
-        if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
+    if "mode" in conn.args:
+        if not conn.args["mode"].isdecimal():
+            return (400, JSON({"status": "Invalid mode."}))
+
+        mode = int(conn.args["mode"])
+
+        if not 0 <= mode <= 7:
             return (400, JSON({"status": "Invalid mode."}))
 
         mode = GameMode(mode)
@@ -1960,8 +1985,13 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
     else:
         mods = None
 
-    if (limit_arg := conn.args.get("limit", None)) is not None:
-        if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
+    if "limit" in conn.args:
+        if not conn.args["limit"].isdecimal():
+            return (400, JSON({"status": "Invalid limit."}))
+
+        limit = int(conn.args["limit"])
+
+        if not 0 < limit <= 100:
             return (400, JSON({"status": "Invalid limit."}))
     else:
         limit = 50
@@ -2208,16 +2238,26 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
 async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
     conn.resp_headers["Content-Type"] = "application/json"
 
-    if (mode_arg := conn.args.get("mode", None)) is not None:
-        if not (mode_arg.isdecimal() and 0 <= (mode := int(mode_arg)) <= 7):
+    if "mode" in conn.args:
+        if not conn.args["mode"].isdecimal():
+            return (400, JSON({"status": "Invalid mode."}))
+
+        mode = int(conn.args["mode"])
+
+        if not 0 <= mode <= 7:
             return (400, JSON({"status": "Invalid mode."}))
 
         mode = GameMode(mode)
     else:
         mode = GameMode.VANILLA_OSU
 
-    if (limit_arg := conn.args.get("limit", None)) is not None:
-        if not (limit_arg.isdecimal() and 0 < (limit := int(limit_arg)) <= 100):
+    if "limit" in conn.args:
+        if not conn.args["limit"].isdecimal():
+            return (400, JSON({"status": "Invalid limit."}))
+
+        limit = int(conn.args["limit"])
+
+        if not 0 < limit <= 100:
             return (400, JSON({"status": "Invalid limit."}))
     else:
         limit = 25
