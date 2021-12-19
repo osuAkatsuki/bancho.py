@@ -2279,6 +2279,23 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
     else:
         sort = "pp"
 
+    if "country" in conn.args:
+        # "CA", "US", "ZW"
+        if len(conn.args["country"]) != 2:
+            # https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+            return (400, JSON({"status": "Invalid country."}))
+
+        country = conn.args["country"]
+    else:
+        country = None
+
+    query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
+    query_parameters: dict[str, object] = {"mode": mode}
+
+    if country is not None:
+        query_conditions.append("u.country = :country")
+        query_parameters["country"] = country
+
     rows = await app.state.services.database.fetch_all(
         "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
         "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
@@ -2287,9 +2304,9 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
         "FROM stats s "
         "LEFT JOIN users u USING (id) "
         "LEFT JOIN clans c ON u.clan_id = c.id "
-        f"WHERE s.mode = :mode AND u.priv & 1 AND s.{sort} > 0 "
+        f"WHERE {' AND '.join(query_conditions)} "
         f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
-        {"mode": mode, "offset": offset, "limit": limit},
+        query_parameters | {"offset": offset, "limit": limit},
     )
 
     return JSON({"status": "success", "leaderboard": [dict(row) for row in rows]})
