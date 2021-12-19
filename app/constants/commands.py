@@ -239,8 +239,20 @@ async def unblock(ctx: Context) -> Optional[str]:
 
 @command(Privileges.NORMAL)
 async def reconnect(ctx: Context) -> Optional[str]:
-    """Disconnect and reconnect to the server."""
-    ctx.player.logout()
+    """Disconnect and reconnect a given player (or self) to the server."""
+    if ctx.args:
+        # !reconnect <player>
+        if not ctx.player.priv & Privileges.ADMINISTRATOR:
+            return  # requires admin
+
+        target = app.state.sessions.players.get(name=" ".join(ctx.args))
+        if not target:
+            return "Player not found"
+    else:
+        # !reconnect
+        target = ctx.player
+
+    target.logout()
 
 
 @command(Privileges.NORMAL)
