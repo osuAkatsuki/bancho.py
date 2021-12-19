@@ -1822,6 +1822,9 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     else:
         sort = "t.play_time"
 
+    if "include_failed" in conn.args and conn.args["include_failed"].lower() == "false":
+        query.append("AND t.status != 0")
+
     query.append(f"ORDER BY {sort} DESC LIMIT :limit")
     params["limit"] = limit
 
