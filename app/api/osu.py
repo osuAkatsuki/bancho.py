@@ -53,6 +53,7 @@ from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.objects.player import Player
+    from app.objects.clan import Clan
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
@@ -1549,6 +1550,50 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
 
 
+def format_clan_basic(clan: "Clan") -> dict[str, object]:
+    return {
+        "id": clan.id,
+        "name": clan.name,
+        "tag": clan.tag,
+        "members": len(clan.member_ids),
+    }
+
+
+def format_player_basic(p: "Player") -> dict[str, object]:
+    return {
+        "id": p.id,
+        "name": p.name,
+        "country": p.geoloc["country"]["acronym"],
+        "clan": format_clan_basic(p.clan) if p.clan else None,
+        "online": p.online,
+    }
+
+
+def format_map_basic(m: Beatmap) -> dict[str, object]:
+    return {
+        "id": m.id,
+        "md5": m.md5,
+        "set_id": m.set_id,
+        "artist": m.artist,
+        "title": m.title,
+        "version": m.version,
+        "creator": m.creator,
+        "last_update": m.last_update,
+        "total_length": m.total_length,
+        "max_combo": m.max_combo,
+        "status": m.status,
+        "plays": m.plays,
+        "passes": m.passes,
+        "mode": m.mode,
+        "bpm": m.bpm,
+        "cs": m.cs,
+        "od": m.od,
+        "ar": m.ar,
+        "hp": m.hp,
+        "diff": m.diff,
+    }
+
+
 @domain.route("/api/get_player_count")
 async def api_get_player_count(conn: Connection) -> HTTPResponse:
     """Get the current amount of online players."""
@@ -1841,7 +1886,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     player_info = {
         "id": p.id,
         "name": p.name,
-        "clan": {"id": p.clan.id, "name": p.clan.name, "tag": p.clan.tag}
+        "clan": {
+            "id": p.clan.id,
+            "name": p.clan.name,
+            "tag": p.clan.tag,
+        }
         if p.clan
         else None,
     }
@@ -2237,7 +2286,7 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
 
 
 @domain.route("/api/get_leaderboard")
-async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
+async def api_get_leaderboard(conn: Connection) -> HTTPResponse:
     conn.resp_headers["Content-Type"] = "application/json"
 
     if "mode" in conn.args:
@@ -2312,6 +2361,57 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
     )
 
     return JSON({"status": "success", "leaderboard": [dict(row) for row in rows]})
+
+
+@domain.route("/api/get_clan")
+async def api_get_clan(conn: Connection) -> HTTPResponse:
+    """Return information of a given clan."""
+    conn.resp_headers["Content-Type"] = "application/json"
+
+    # TODO: fetching by name & tag (requires safe_name, safe_tag)
+
+    if not (
+        "id" in conn.args
+        and conn.args["id"].isdecimal()
+        and 0 <= (clan_id := int(conn.args["id"])) < 2_147_483_647
+    ):
+        return (400, JSON({"status": "Must provide valid match id."}))
+
+    if not (clan := app.state.sessions.clans.get(id=clan_id)):
+        return (404, JSON({"status": "Clan not found."}))
+
+    members: list[Player] = []
+
+    for member_id in clan.member_ids:
+        member = await app.state.sessions.players.from_cache_or_sql(id=member_id)
+        assert member is not None
+        members.append(member)
+
+    owner = await app.state.sessions.players.from_cache_or_sql(id=clan.owner_id)
+    assert owner is not None
+
+    return JSON(
+        {
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
+            "members": [
+                {
+                    "id": member.id,
+                    "name": member.name,
+                    "country": member.geoloc["country"]["acronym"],
+                    "rank": ("Member", "Officer", "Owner")[member.clan_priv - 1],  # type: ignore
+                }
+                for member in members
+            ],
+            "owner": {
+                "id": owner.id,
+                "name": owner.name,
+                "country": owner.geoloc["country"]["acronym"],
+                "rank": "Owner",
+            },
+        },
+    )
 
 
 def requires_api_key(f: Callable) -> Callable:

@@ -16,6 +16,7 @@ from cmyui.logging import log
 import app.settings
 import app.state
 import app.utils
+from app.constants.countries import country_codes
 from app.constants.privileges import Privileges
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
@@ -246,7 +247,7 @@ class Players(list[Player]):
 
         # try to get from sql.
         row = await app.state.services.database.fetch_one(
-            "SELECT id, name, priv, pw_bcrypt, "
+            "SELECT id, name, priv, pw_bcrypt, country, "
             "silence_end, clan_id, clan_priv, api_key "
             f"FROM users WHERE {attr} = :val",
             {"val": val},
@@ -265,6 +266,16 @@ class Players(list[Player]):
             row["clan_priv"] = ClanPrivileges(row["clan_priv"])
         else:
             row["clan"] = row["clan_priv"] = None
+
+        # country from acronym to {acronym, numeric}=
+        row["geoloc"] = {
+            "latitude": 0.0,  # TODO
+            "longitude": 0.0,
+            "country": {
+                "acronym": row["country"],
+                "numeric": country_codes[row["country"]],
+            },
+        }
 
         return Player(**row, token="")
 

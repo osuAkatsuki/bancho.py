@@ -197,7 +197,6 @@ class Player:
         "achievements",
         "recent_scores",
         "last_np",
-        "country",
         "location",
         "utc_offset",
         "pm_private",
