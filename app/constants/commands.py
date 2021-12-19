@@ -2275,8 +2275,13 @@ async def pool_delete(ctx: Context) -> Optional[str]:
 
     # delete from db
     await app.state.services.database.execute(
-        "DELETE FROM tourney_pools WHERE name = :name",
-        {"name": name},
+        "DELETE FROM tourney_pools WHERE id = :pool_id",
+        {"pool_id": pool.id},
+    )
+
+    await app.state.services.database.execute(
+        "DELETE FROM tourney_pool_maps WHERE pool_id = :pool_id",
+        {"pool_id": pool.id},
     )
 
     # remove from cache
