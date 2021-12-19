@@ -782,13 +782,11 @@ async def run_sql_migrations() -> None:
             else:
                 q_lines.append(line)
 
-    if not queries:
-        return
-
-    log(
-        f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
-        Ansi.LMAGENTA,
-    )
+    if queries:
+        log(
+            f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
+            Ansi.LMAGENTA,
+        )
 
     # XXX: so it turns out we can't use a transaction here (at least with mysql)
     #      to roll back changes, as any structural changes to tables implicitly
