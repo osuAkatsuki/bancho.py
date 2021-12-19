@@ -4,9 +4,10 @@ import time
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.settings
+import app.state
 import packets
-from constants.privileges import Privileges
-from objects import glob
+from app.constants.privileges import Privileges
 
 __all__ = ("initialize_housekeeping_tasks",)
 
@@ -15,37 +16,44 @@ OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
 
 async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
-    glob.housekeeping_tasks = [
-        glob.loop.create_task(task)
-        for task in (
-            _remove_expired_donation_privileges(interval=30 * 60),
-            _reroll_bot_status(interval=5 * 60),
-            _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
-        )
-    ]
+    loop = asyncio.get_running_loop()
+
+    app.state.sessions.housekeeping_tasks.update(
+        {
+            loop.create_task(task)
+            for task in (
+                _remove_expired_donation_privileges(interval=30 * 60),
+                _update_bot_status(interval=5 * 60),
+                _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
+            )
+        },
+    )
 
 
 async def _remove_expired_donation_privileges(interval: int) -> None:
     """Remove donation privileges from users with expired sessions."""
     while True:
-        if glob.app.debug:
+        if app.settings.DEBUG:
             log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
-        expired_donors = await glob.db.fetchall(
+        expired_donors = await app.state.services.database.fetch_all(
             "SELECT id FROM users "
             "WHERE donor_end <= UNIX_TIMESTAMP() "
             "AND priv & 48",  # 48 = Supporter | Premium
-            _dict=False,
         )
 
-        for expired_donor_id in expired_donors:
-            p = await glob.players.from_cache_or_sql(id=expired_donor_id)
+        for expired_donor in expired_donors:
+            p = await app.state.sessions.players.from_cache_or_sql(
+                id=expired_donor["id"],
+            )
+
+            assert p is not None
 
             # TODO: perhaps make a `revoke_donor` method?
             await p.remove_privs(Privileges.DONATOR)
-            await glob.db.execute(
-                "UPDATE users SET donor_end = 0 WHERE id = %s",
-                [p.id],
+            await app.state.services.database.execute(
+                "UPDATE users SET donor_end = 0 WHERE id = :id",
+                {"id": p.id},
             )
 
             if p.online:
@@ -63,13 +71,13 @@ async def _disconnect_ghosts(interval: int) -> None:
         await asyncio.sleep(interval)
         current_time = time.time()
 
-        for p in glob.players:
+        for p in app.state.sessions.players:
             if current_time - p.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f"Auto-dced {p}.", Ansi.LMAGENTA)
                 p.logout()
 
 
-async def _reroll_bot_status(interval: int) -> None:
+async def _update_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)

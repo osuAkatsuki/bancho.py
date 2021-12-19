@@ -1,8 +1,8 @@
 from enum import IntFlag
 from enum import unique
 
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
+from app.utils import escape_enum
+from app.utils import pymysql_encode
 
 __all__ = ("ClientFlags",)
 

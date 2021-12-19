@@ -1,6 +1,9 @@
 import random
 import struct
 from abc import ABC
+from abc import abstractmethod
+from dataclasses import dataclass
+from dataclasses import field
 from enum import IntEnum
 from enum import unique
 from functools import cache
@@ -9,34 +12,23 @@ from typing import Any
 from typing import Callable
 from typing import Iterator
 from typing import NamedTuple
+from typing import Optional
 from typing import Sequence
 from typing import Type
 from typing import TYPE_CHECKING
+from typing import Union
 
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from constants.types import osuTypes
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.match import Match
-from objects.match import MatchTeams
-from objects.match import MatchTeamTypes
-from objects.match import MatchWinConditions
-from objects.match import ScoreFrame
-from objects.match import SlotStatus
-
-# from objects.beatmap import BeatmapInfo
+# from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.match import Match
+    from app.objects.player import Player
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
 
 
 @unique
-@pymysql_encode(escape_enum)
 class ClientPackets(IntEnum):
     CHANGE_ACTION = 0
     SEND_PUBLIC_MESSAGE = 1
@@ -93,7 +85,6 @@ class ClientPackets(IntEnum):
 
 
 @unique
-@pymysql_encode(escape_enum)
 class ServerPackets(IntEnum):
     USER_ID = 5
     SEND_MESSAGE = 7
@@ -159,6 +150,37 @@ class ServerPackets(IntEnum):
         return f"<{self.name} ({self.value})>"
 
 
+# TODO: clean this up
+@unique
+class osuTypes(IntEnum):
+    # integral
+    i8 = 0
+    u8 = 1
+    i16 = 2
+    u16 = 3
+    i32 = 4
+    u32 = 5
+    f32 = 6
+    i64 = 7
+    u64 = 8
+    f64 = 9
+
+    # osu
+    message = 11
+    channel = 12
+    match = 13
+    scoreframe = 14
+    mapInfoRequest = 15
+    mapInfoReply = 16
+    replayFrameBundle = 17
+
+    # misc
+    i32_list = 18  # 2 bytes len
+    i32_list4l = 19  # 4 bytes len
+    string = 20
+    raw = 21
+
+
 class Message(NamedTuple):
     sender: str
     text: str
@@ -184,6 +206,30 @@ class ReplayAction(IntEnum):
     WatchingOther = 8
 
 
+@dataclass
+class ScoreFrame:
+    time: int
+    id: int
+    num300: int
+    num100: int
+    num50: int
+    num_geki: int
+    num_katu: int
+    num_miss: int
+    total_score: int
+    current_combo: int
+    max_combo: int
+    perfect: bool
+    current_hp: int
+    tag_byte: int
+
+    score_v2: bool
+
+    # if score_v2:
+    combo_portion: Optional[float] = None
+    bonus_portion: Optional[float] = None
+
+
 class ReplayFrame(NamedTuple):
     button_state: int
     taiko_byte: int  # pre-taiko support (<=2008)
@@ -202,10 +248,41 @@ class ReplayFrameBundle(NamedTuple):
     raw_data: memoryview  # readonly
 
 
+@dataclass
+class MultiplayerMatch:
+    id: int = 0
+    in_progress: bool = False
+
+    powerplay: int = 0  # i8
+    mods: int = 0  # i32
+    name: str = ""
+    passwd: str = ""
+
+    map_name: str = ""
+    map_id: int = 0  # i32
+    map_md5: str = ""
+
+    slot_statuses: list[int] = field(default_factory=list)  # i8
+    slot_teams: list[int] = field(default_factory=list)  # i8
+    slot_ids: list[int] = field(default_factory=list)  # i8
+
+    host_id: int = 0  # i32
+
+    mode: int = 0  # i8
+    win_condition: int = 0  # i8
+    team_type: int = 0  # i8
+
+    freemods: bool = False  # i8
+    slot_mods: list[int] = field(default_factory=list)  # i32
+
+    seed: int = 0  # i32
+
+
 class BasePacket(ABC):
     def __init__(self, reader: "BanchoPacketReader") -> None:
         ...
 
+    @abstractmethod
     async def handle(self, p: "Player") -> None:
         ...
 
@@ -407,51 +484,37 @@ class BanchoPacketReader:
             players=self.read_i32(),
         )
 
-    def read_match(self) -> Match:
+    def read_match(self) -> MultiplayerMatch:
         """Read an osu! match from the internal buffer."""
-        m = Match()
+        m = MultiplayerMatch(
+            id=self.read_i16(),
+            in_progress=self.read_i8() == 1,
+            powerplay=self.read_i8(),
+            mods=self.read_i32(),
+            name=self.read_string(),
+            passwd=self.read_string(),
+            map_name=self.read_string(),
+            map_id=self.read_i32(),
+            map_md5=self.read_string(),
+            slot_statuses=[self.read_i8() for _ in range(16)],
+            slot_teams=[self.read_i8() for _ in range(16)],
+            # ^^ up to slot_ids, as it relies on slot_statuses ^^
+        )
 
-        # ignore match id (i16) and inprogress (i8).
-        self.body_view = self.body_view[3:]
+        for status in m.slot_statuses:
+            if status & 124 != 0:  # slot has a player
+                m.slot_ids.append(self.read_i32())
 
-        self.read_i8()  # powerplay unused
-
-        m.mods = Mods(self.read_i32())
-
-        m.name = self.read_string()
-        m.passwd = self.read_string()
-
-        m.map_name = self.read_string()
-        m.map_id = self.read_i32()
-        m.map_md5 = self.read_string()
-
-        for slot in m.slots:
-            slot.status = SlotStatus(self.read_i8())
-
-        for slot in m.slots:
-            slot.team = MatchTeams(self.read_i8())
-
-        for slot in m.slots:
-            if slot.status & SlotStatus.has_player:
-                # we don't need this, ignore it.
-                self.body_view = self.body_view[4:]
-
-        host_id = self.read_i32()
-        m.host = glob.players.get(id=host_id)
-
-        m.mode = GameMode(self.read_i8())
-        m.win_condition = MatchWinConditions(self.read_i8())
-        m.team_type = MatchTeamTypes(self.read_i8())
+        m.host_id = self.read_i32()
+        m.mode = self.read_i8()
+        m.win_condition = self.read_i8()
+        m.team_type = self.read_i8()
         m.freemods = self.read_i8() == 1
 
-        # if we're in freemods mode,
-        # read individual slot mods.
         if m.freemods:
-            for slot in m.slots:
-                slot.mods = Mods(self.read_i32())
+            m.slot_mods = [self.read_i32() for _ in range(16)]
 
-        # read the seed (used for mania)
-        m.seed = self.read_i32()
+        m.seed = self.read_i32()  # used for mania random mod
 
         return m
 
@@ -491,7 +554,7 @@ class BanchoPacketReader:
 # write functions
 
 
-def write_uleb128(num: int) -> bytes | bytearray:
+def write_uleb128(num: int) -> Union[bytes, bytearray]:
     """Write `num` into an unsigned LEB128."""
     if num == 0:
         return b"\x00"
@@ -563,7 +626,7 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
 #    return ret
 
 
-def write_match(m: Match, send_pw: bool = True) -> bytearray:
+def write_match(m: "Match", send_pw: bool = True) -> bytearray:
     """Write `m` into bytes (osu! match)."""
     # 0 is for match type
     ret = bytearray(struct.pack("<HbbI", m.id, m.in_progress, 0, m.mods))
@@ -587,7 +650,7 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     ret.extend([s.team for s in m.slots])
 
     for s in m.slots:
-        if s.status & SlotStatus.has_player:
+        if s.status & 0b01111100 != 0:  # SlotStatus.has_player
             ret += s.player.id.to_bytes(4, "little")
 
     ret += m.host.id.to_bytes(4, "little")
@@ -730,13 +793,13 @@ BOT_STATUSES = (
 
 
 @cache
-def bot_stats() -> bytes:
+def bot_stats(p: "Player") -> bytes:
     # pick at random from list of potential statuses.
     status_id, status_txt = random.choice(BOT_STATUSES)
 
     return write(
         ServerPackets.USER_STATS,
-        (glob.bot.id, osuTypes.i32),  # id
+        (p.id, osuTypes.i32),  # id
         (status_id, osuTypes.u8),  # action
         (status_txt, osuTypes.string),  # info_text
         ("", osuTypes.string),  # map_md5
@@ -754,9 +817,6 @@ def bot_stats() -> bytes:
 
 # packet id: 11
 def user_stats(p: "Player") -> bytes:
-    if p is glob.bot:
-        return bot_stats()
-
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7FFF:
         # over osu! pp cap, we'll have to
@@ -836,12 +896,12 @@ def notification(msg: str) -> bytes:
 
 
 # packet id: 26
-def update_match(m: Match, send_pw: bool = True) -> bytes:
+def update_match(m: "Match", send_pw: bool = True) -> bytes:
     return write(ServerPackets.UPDATE_MATCH, ((m, send_pw), osuTypes.match))
 
 
 # packet id: 27
-def new_match(m: Match) -> bytes:
+def new_match(m: "Match") -> bytes:
     return write(ServerPackets.NEW_MATCH, ((m, True), osuTypes.match))
 
 
@@ -858,7 +918,7 @@ def toggle_block_non_friend_pm() -> bytes:
 
 
 # packet id: 36
-def match_join_success(m: Match) -> bytes:
+def match_join_success(m: "Match") -> bytes:
     return write(ServerPackets.MATCH_JOIN_SUCCESS, ((m, True), osuTypes.match))
 
 
@@ -881,7 +941,7 @@ def fellow_spectator_left(id: int) -> bytes:
 
 
 # packet id: 46
-def match_start(m: Match) -> bytes:
+def match_start(m: "Match") -> bytes:
     return write(ServerPackets.MATCH_START, ((m, True), osuTypes.match))
 
 
@@ -977,10 +1037,10 @@ def protocol_version(ver: int) -> bytes:
 
 # packet id: 76
 @cache
-def main_menu_icon() -> bytes:
+def main_menu_icon(icon_url: str, onclick_url: str) -> bytes:
     return write(
         ServerPackets.MAIN_MENU_ICON,
-        ("|".join(glob.config.menu_icon), osuTypes.string),
+        (icon_url + "|" + onclick_url, osuTypes.string),
     )
 
 
@@ -1009,11 +1069,11 @@ def match_player_skipped(pid: int) -> bytes:
 # friends list, their presence is requested
 # *very* frequently; only build it once.
 @cache
-def bot_presence() -> bytes:
+def bot_presence(p: "Player") -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
-        (glob.bot.id, osuTypes.i32),
-        (glob.bot.name, osuTypes.string),
+        (p.id, osuTypes.i32),
+        (p.name, osuTypes.string),
         (-5 + 24, osuTypes.u8),
         (245, osuTypes.u8),  # satellite provider
         (31, osuTypes.u8),
@@ -1025,9 +1085,6 @@ def bot_presence() -> bytes:
 
 # packet id: 83
 def user_presence(p: "Player") -> bytes:
-    if p is glob.bot:
-        return bot_presence()
-
     return write(
         ServerPackets.USER_PRESENCE,
         (p.id, osuTypes.i32),

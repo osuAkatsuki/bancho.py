@@ -11,16 +11,16 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-from constants.clientflags import ClientFlags
-from constants.gamemodes import GameMode
-from constants.mods import Mods
-from misc.utils import escape_enum
-from misc.utils import pymysql_encode
-from objects import glob
-from objects.beatmap import Beatmap
+import app.state
+from app.constants.clientflags import ClientFlags
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.objects.beatmap import Beatmap
+from app.utils import escape_enum
+from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
-    from objects.player import Player
+    from app.objects.player import Player
 
 __all__ = ("Grade", "SubmissionStatus", "Score")
 
@@ -194,25 +194,24 @@ class Score:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
-        res = await glob.db.fetch(
+        row = await app.state.services.database.fetch_one(
             "SELECT id, map_md5, userid, pp, score, "
             "max_combo, mods, acc, n300, n100, n50, "
             "nmiss, ngeki, nkatu, grade, perfect, "
             "status, mode, play_time, "
             "time_elapsed, client_flags, online_checksum "
-            f"FROM {scores_table} WHERE id = %s",
-            [score_id],
-            _dict=False,
+            f"FROM {scores_table} WHERE id = :score_id",
+            {"score_id": score_id},
         )
 
-        if not res:
+        if not row:
             return
 
         s = cls()
 
-        s.id = res[0]
-        s.bmap = await Beatmap.from_md5(res[1])
-        s.player = await glob.players.from_cache_or_sql(id=res[2])
+        s.id = row[0]
+        s.bmap = await Beatmap.from_md5(row[1])
+        s.player = await app.state.sessions.players.from_cache_or_sql(id=row[2])
 
         s.sr = 0.0  # TODO
 
@@ -236,7 +235,7 @@ class Score:
             s.time_elapsed,
             s.client_flags,
             s.online_checksum,
-        ) = res[3:]
+        ) = row[3:]
 
         # fix some types
         s.passed = s.status != 0
@@ -311,16 +310,22 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        res = await glob.db.fetch(
+        better_scores = await app.state.services.database.fetch_val(
             f"SELECT COUNT(*) AS c FROM {scores_table} s "
             "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = %s AND s.mode = %s "
+            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn "
             "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > %s",
-            [self.bmap.md5, self.mode.as_vanilla, score],
+            f"AND s.{scoring_metric} > :score",
+            {
+                "map_md5": self.bmap.md5,
+                "mode_vn": self.mode.as_vanilla,
+                "score": score,
+            },
+            column=0,  # COUNT(*)
         )
 
-        return res["c"] + 1 if res else 1
+        # TODO: idk if returns none
+        return better_scores + 1  # if better_scores is not None else 1
 
     def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
@@ -395,11 +400,15 @@ class Score:
 
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
-        res = await glob.db.fetch(
+        res = await app.state.services.database.fetch_one(
             f"SELECT id, pp FROM {scores_table} "
-            "WHERE userid = %s AND map_md5 = %s "
-            "AND mode = %s AND status = 2",
-            [self.player.id, self.bmap.md5, self.mode.as_vanilla],
+            "WHERE userid = :user_id AND map_md5 = :map_md5 "
+            "AND mode = :mode_vn AND status = 2",
+            {
+                "user_id": self.player.id,
+                "map_md5": self.bmap.md5,
+                "mode_vn": self.mode.as_vanilla,
+            },
         )
 
         if res:

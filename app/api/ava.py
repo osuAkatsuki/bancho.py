@@ -6,13 +6,14 @@ from typing import Union
 from cmyui.web import Connection
 from cmyui.web import Domain
 
-from objects import glob
+import app.settings
+import app.state
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
 """ ava: avatar server (for both ingame & external) """
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.settings.DOMAIN
 domain = Domain({f"a.{BASE_DOMAIN}", "a.ppy.sh"})
 
 AVATARS_PATH = Path.cwd() / ".data/avatars"

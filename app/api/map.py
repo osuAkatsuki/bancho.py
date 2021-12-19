@@ -5,13 +5,15 @@ from typing import Union
 from cmyui.web import Connection
 from cmyui.web import Domain
 
-from objects import glob
+import app.settings
+import app.state
+
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
 """ bmap: static beatmap info (thumbnails, previews, etc.) """
 
-BASE_DOMAIN = glob.config.domain
+BASE_DOMAIN = app.settings.DOMAIN
 domain = Domain({f"b.{BASE_DOMAIN}", "b.ppy.sh"})
 
 # for now, just send everything to osu!
