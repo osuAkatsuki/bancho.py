@@ -232,7 +232,7 @@ class Beatmap:
         version is found in the osu!api.
         # XXX: This is set when a map's status is manually changed.
 
-    pp_cache: dict[`Mods`, list[`float`]]
+    _pp_cache: dict[`Mods`, list[`float`]]
         Cached pp values to serve when a map is /np'ed.
         PP will be cached for whichever mod combination is requested.
     """
@@ -261,7 +261,7 @@ class Beatmap:
         "hp",
         "diff",
         "filename",
-        "pp_cache",
+        "_pp_cache",
     )
 
     def __init__(self, map_set: "BeatmapSet", **kwargs: Any) -> None:
@@ -296,7 +296,7 @@ class Beatmap:
         self.diff = kwargs.get("diff", 0.0)
 
         self.filename = kwargs.get("filename", "")
-        self.pp_cache = {
+        self._pp_cache = {
             0: {},
             1: {},
             2: {},
@@ -702,7 +702,7 @@ class BeatmapSet:
                     bmap.frozen = False
                     bmap.passes = 0
                     bmap.plays = 0
-                    bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
+                    bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
 
                     updated_maps.append(bmap)
 
@@ -896,7 +896,7 @@ class BeatmapSet:
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some gulag-specific stuff not given by api)
-                bmap.pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
+                bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
                 bmap.passes = 0
                 bmap.plays = 0
 
