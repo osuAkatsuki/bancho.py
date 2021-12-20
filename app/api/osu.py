@@ -2319,7 +2319,7 @@ async def api_get_leaderboard(conn: Connection) -> HTTPResponse:
 
         offset = int(conn.args["offset"])
 
-        if not 0 < offset <= 0x7FFFFFFF:
+        if not 0 <= offset <= 0x7FFFFFFF:
             return (400, JSON({"status": "Invalid offset."}))
     else:
         offset = 0
