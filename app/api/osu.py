@@ -2068,7 +2068,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         else:
             query.append("AND mods & :mods != 0")
 
-    params["mods"] = mods
+        params["mods"] = mods
 
     # unlike /api/get_player_scores, we'll sort by score/pp depending
     # on the mode played, since we want to replicated leaderboards.
