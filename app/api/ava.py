@@ -7,7 +7,6 @@ from cmyui.web import Connection
 from cmyui.web import Domain
 
 import app.settings
-import app.state
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 

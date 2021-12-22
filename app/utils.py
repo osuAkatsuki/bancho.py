@@ -429,7 +429,7 @@ def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
     if res.country.iso_code is not None:
         acronym = res.country.iso_code.lower()
     else:
-        acronym = "XX"
+        acronym = "xx"
 
     return {
         "latitude": res.location.latitude or 0.0,

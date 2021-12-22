@@ -665,11 +665,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.utils.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.state.services.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.utils.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when

@@ -2682,7 +2682,7 @@ async def register_account(
             if "CF-IPCountry" in conn.headers:
                 # best case, dev has enabled ip geolocation in the
                 # network tab of cloudflare, so it sends the iso code.
-                country_acronym = conn.headers["CF-IPCountry"]
+                country_acronym = conn.headers["CF-IPCountry"].lower()
             else:
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
