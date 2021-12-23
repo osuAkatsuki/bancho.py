@@ -35,7 +35,6 @@ from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
-import app.settings
 import app.state
 from app.constants.countries import country_codes
 
@@ -315,7 +314,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{app.settings.VERSION} ran into an issue before starting up :(",
+            f"gulag v{app.state.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -356,13 +355,13 @@ async def log_strange_occurrence(obj: object) -> None:
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
-    if app.settings.AUTOMATICALLY_REPORT_PROBLEMS:
+    if app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
         async with app.state.services.http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": repr(app.settings.VERSION),
-                "Gulag-Domain": app.settings.DOMAIN,
+                "Gulag-Version": repr(app.state.settings.VERSION),
+                "Gulag-Domain": app.state.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:
@@ -601,7 +600,7 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
+    if app.state.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
             if os.path.exists(f"/var/run/{service}/{service}.pid"):
@@ -703,7 +702,7 @@ def _install_debugging_hooks() -> None:
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
-    if app.settings.DEVELOPER_MODE:
+    if app.state.settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
 
     # running on root grants the software potentally dangerous and
@@ -714,7 +713,7 @@ def display_startup_dialog() -> None:
             Ansi.LYELLOW,
         )
 
-        if app.settings.DEVELOPER_MODE:
+        if app.state.settings.DEVELOPER_MODE:
             log(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",
@@ -743,7 +742,7 @@ async def run_sql_migrations() -> None:
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = cmyui.Version.from_str(app.settings.VERSION)
+    latest_ver = cmyui.Version.from_str(app.state.settings.VERSION)
 
     if latest_ver == current_ver:
         return  # already up to date

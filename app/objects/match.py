@@ -15,7 +15,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import app.settings
 import app.state
 import packets
 from app.constants import regexes
@@ -326,7 +325,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmaps/{self.map_id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmaps/{self.map_id}"
 
     @property
     def embed(self) -> str:

@@ -13,7 +13,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import app.settings
 import app.state
 import app.utils
 from app.constants.countries import country_codes
@@ -93,21 +92,21 @@ class Channels(list[Channel]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} added to channels list.")
 
     def extend(self, cs: Iterable[Channel]) -> None:
         """Extend the list with `cs`."""
         super().extend(cs)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{cs} added to channels list.")
 
     def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} removed from channels list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -150,7 +149,7 @@ class Matches(list[Optional[Match]]):
             m.id = free
             self[free] = m
 
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{m} added to matches list.")
 
             return True
@@ -167,7 +166,7 @@ class Matches(list[Optional[Match]]):
                 self[i] = None
                 break
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} removed from matches list.")
 
 
@@ -301,13 +300,13 @@ class Players(list[Player]):
                 # no player found in sql either.
                 return
 
-        if app.state.cache["bcrypt"][p.pw_bcrypt] == pw_md5.encode():
+        if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
             return p
 
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{p} double-added to global player list?")
             return
 
@@ -316,7 +315,7 @@ class Players(list[Player]):
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{p} removed from player list when not online?")
             return
 
@@ -386,21 +385,21 @@ class MapPools(list[MapPool]):
         """Append `m` to the list."""
         super().append(m)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} added to mappools list.")
 
     def extend(self, ms: Iterable[MapPool]) -> None:
         """Extend the list with `ms`."""
         super().extend(ms)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{ms} added to mappools list.")
 
     def remove(self, m: MapPool) -> None:
         """Remove `m` from the list."""
         super().remove(m)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -472,21 +471,21 @@ class Clans(list[Clan]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} added to clans list.")
 
     def extend(self, cs: Iterable[Clan]) -> None:
         """Extend the list with `cs`."""
         super().extend(cs)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{cs} added to clans list.")
 
     def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} removed from clans list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
