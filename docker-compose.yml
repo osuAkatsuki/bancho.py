@@ -1,0 +1,54 @@
+version: "3"
+
+services:
+  mysql:
+    environment:
+      - MYSQL_ROOT_PASSWORD=lol123
+    image: mysql:8
+    ports:
+      - '3306:3306'
+    restart: always
+    volumes:
+      - ./mysql8:/var/lib/mysql
+
+  redis:
+    command: redis-server
+    image: redis
+    ports:
+      - '6379:6379'
+    restart: always
+
+  gulag:
+    ports:
+      - '1234:80'
+    volumes:
+      - .:/usr/src/app
+    image: gulag:dev
+    links:
+      - mysql
+      - redis
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - SERVER_ADDR=127.0.0.1,1234
+      - DB_DSN=mysql://cmyui:lol123@localhost:3306/gulag_old
+      - REDIS_DSN=redis://localhost
+      - OSU_API_KEY=
+      - DOMAIN=cmyui.xyz
+      - MIRROR_URL=https://api.chimu.moe/v1
+      - COMMAND_PREFIX=!
+      - SEASONAL_BGS=https://akatsuki.pw/static/flower.png,https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg
+      - MENU_ICON_URL=https://akatsuki.pw/static/logos/logo_ingame.png
+      - MENU_ONCLICK_URL=https://akatsuki.pw
+      - DATADOG_API_KEY=
+      - DATADOG_APP_KEY=
+      - DEBUG=True
+      - REDIRECT_OSU_URLS=True
+      - PP_CACHED_ACCS=90,95,98,99,100
+      - PP_CACHED_SCORES=800000,850000,900000,950000,1000000
+      - DISALLOWED_NAMES=mrekk,vaxei,btmc,cookiezi
+      - DISALLOWED_PASSWORDS=password,abc123
+      - DISCORD_AUDIT_LOG_WEBHOOK=
+      - AUTOMATICALLY_REPORT_PROBLEMS=True
+      - DEVELOPER_MODE=True
