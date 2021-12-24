@@ -1,5 +1,4 @@
 import asyncio
-import importlib.metadata
 import ipaddress
 import pickle
 import secrets

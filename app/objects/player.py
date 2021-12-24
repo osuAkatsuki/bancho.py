@@ -908,7 +908,7 @@ class Player:
     async def unlock_achievement(self, a: "Achievement") -> None:
         """Unlock `ach` for `self`, storing in both cache & sql."""
         await app.state.services.database.execute(
-            "INSERT INTO user_achievements (:user_id, :ach_id) VALUES (:user_id, :ach_id)",
+            "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
             {"user_id": self.id, "ach_id": a.id},
         )
 

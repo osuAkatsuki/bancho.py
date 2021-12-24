@@ -2608,7 +2608,7 @@ async def register_account(
     name = mp_args["user[username]"].strip()
     email = mp_args["user[user_email]"]
     pw_txt = mp_args["user[password]"]
-    safe_name = safe_name = name.lower().replace(" ", "_")
+    safe_name = name.lower().replace(" ", "_")
 
     if not all((name, email, pw_txt)) or "check" not in mp_args:
         return (400, b"Missing required params")
