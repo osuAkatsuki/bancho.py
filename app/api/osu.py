@@ -175,7 +175,6 @@ async def osuError(conn: Connection) -> HTTPResponse:
                 )
             ):
                 # player login incorrect
-                await app.utils.log_strange_occurrence("osu-error auth failed")
                 p = None
         else:
             p = None
@@ -454,22 +453,18 @@ async def osuSearchHandler(p: "Player", conn: Connection) -> HTTPResponse:
         params["status"] = status.osu_api
 
     async with app.state.services.http.get(search_url, params=params) as resp:
-        if not resp:
-            stacktrace = app.utils.get_appropriate_stacktrace()
-            await app.utils.log_strange_occurrence(stacktrace)
+        if resp.status != 200:
+            if USING_CHIMU:
+                # chimu uses 404 for no maps found
+                if resp.status == 404:
+                    return b"0"
 
-        if USING_CHIMU:  # error handling varies
-            if resp.status == 404:
-                return b"0"  # no maps found
-            elif resp.status >= 500:  # chimu server error (happens a lot :/)
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-            elif resp.status != 200:
+            if 400 <= resp.status < 500:
+                # client error, report this to cmyui
                 stacktrace = app.utils.get_appropriate_stacktrace()
                 await app.utils.log_strange_occurrence(stacktrace)
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-        else:  # cheesegull
-            if resp.status != 200:
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
+
+            return b"-1\nFailed to retrieve data from the beatmap mirror."
 
         result = await resp.json()
 

@@ -143,13 +143,13 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""
     log("Downloading achievement images from mirror.", Ansi.LCYAN)
-    r = requests.get("https://cmyui.xyz/achievement_images.zip")
+    resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
-    if r.status_code != 200:
+    if resp.status_code != 200:
         log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
         return False
 
-    with io.BytesIO(r.content) as data:
+    with io.BytesIO(resp.content) as data:
         with zipfile.ZipFile(data) as myfile:
             myfile.extractall(achievements_path)
 
@@ -173,12 +173,12 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
     for ach in achs:
-        r = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
-        if r.status_code != 200:
+        resp = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
+        if resp.status_code != 200:
             return False
 
         log(f"Saving achievement: {ach}", Ansi.LCYAN)
-        (achievements_path / ach).write_bytes(r.content)
+        (achievements_path / ach).write_bytes(resp.content)
 
     return True
 
@@ -202,14 +202,14 @@ def download_achievement_images(achievements_path: Path) -> None:
 
 def download_default_avatar(default_avatar_path: Path) -> None:
     """Download an avatar to use as the server's default."""
-    r = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
+    resp = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
 
-    if r.status_code != 200:
+    if resp.status_code != 200:
         log("Failed to fetch default avatar.", Ansi.LRED)
         return
 
     log("Downloaded default avatar.", Ansi.LGREEN)
-    default_avatar_path.write_bytes(r.content)
+    default_avatar_path.write_bytes(resp.content)
 
 
 def seconds_readable(seconds: int) -> str:

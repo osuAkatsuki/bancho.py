@@ -60,14 +60,15 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http.get(url) as r:
-            if not r or r.status != 200:
-                # temporary logging, not sure how possible this is
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.utils.log_strange_occurrence(stacktrace)
+        async with app.state.services.http.get(url) as resp:
+            if resp.status != 200:
+                if 400 <= resp.status < 500:
+                    # client error, report this to cmyui
+                    stacktrace = app.utils.get_appropriate_stacktrace()
+                    await app.utils.log_strange_occurrence(stacktrace)
                 return False
 
-            osu_file_path.write_bytes(await r.read())
+            osu_file_path.write_bytes(await resp.read())
 
     return True
 
