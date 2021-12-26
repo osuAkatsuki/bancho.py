@@ -916,7 +916,7 @@ class Player:
 
     async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s relationships from sql."""
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT user2, type FROM relationships WHERE user1 = :user1",
             {"user1": self.id},
         ):
@@ -930,7 +930,7 @@ class Player:
 
     async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s achievements from sql."""
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT ua.achid id FROM user_achievements ua "
             "INNER JOIN achievements a ON a.id = ua.achid "
             "WHERE ua.userid = :user_id",

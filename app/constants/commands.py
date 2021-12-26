@@ -2570,7 +2570,7 @@ async def clan_info(ctx: Context) -> Optional[str]:
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    async for row in app.state.services.database.iterate(
+    for row in await app.state.services.database.fetch_all(
         "SELECT name, clan_priv "
         "FROM users "
         "WHERE clan_id = :clan_id "

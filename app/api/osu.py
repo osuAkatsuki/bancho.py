@@ -289,7 +289,7 @@ async def osuGetBeatmapInfo(
             {"map_md5": row["md5"], "user_id": p.id},
         )
 
-        async for score in db_conn.iterate(
+        for score in await db_conn.fetch_all(
             "SELECT grade, mode FROM scores_rx "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND status = 2",
@@ -1096,7 +1096,7 @@ async def osuRate(
 
     ratings = [
         row[0]
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT rating FROM ratings WHERE map_md5 = :map_md5",
             {"map_md5": map_md5},
         )

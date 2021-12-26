@@ -519,7 +519,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.players.append(app.state.sessions.bot)
 
     # global achievements (sorted by vn gamemodes)
-    async for row in db_conn.iterate("SELECT * FROM achievements"):
+    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
         # NOTE: achievement conditions are stored as stringified python
         # expressions in the database to allow for extensive customizability.
         row = dict(row)
@@ -531,7 +531,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     # static api keys
     app.state.sessions.api_keys = {
         row["api_key"]: row["id"]
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT id, api_key FROM users WHERE api_key IS NOT NULL",
         )
     }
