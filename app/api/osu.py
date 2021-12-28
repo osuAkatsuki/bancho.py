@@ -2052,7 +2052,10 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         f"FROM {mode.scores_table} s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn AND s.status = 2",
+        "WHERE s.map_md5 = :map_md5 "
+        "AND s.mode = :mode_vn "
+        "AND s.status = 2 "
+        "AND u.priv & 1",
     ]
     params: dict[str, object] = {"map_md5": bmap.md5, "mode_vn": mode.as_vanilla}
 
