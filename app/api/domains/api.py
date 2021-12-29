@@ -277,6 +277,129 @@ async def api_get_player_status(
     )
 
 
+@router.get("/get_player_scores")
+async def api_get_player_scores(
+    scope: Literal["recent", "best"],
+    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    mods_arg: Optional[str] = Query(None, alias="mods"),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    limit: int = Query(25, ge=1, le=100),
+    include_loved: bool = False,
+):
+    """Return a list of a given user's recent/best scores."""
+    if username and user_id:
+        return ORJSONResponse(
+            {"status": "Must provide either id OR name!"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if username:
+        player = app.state.sessions.players.get(name=username)
+    elif user_id:
+        player = app.state.sessions.players.get(id=user_id)
+    else:
+        return ORJSONResponse(
+            {"status": "Must provide either id OR name!"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not player:
+        return ORJSONResponse(
+            {"status": "Player not found."},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    # parse args (scope, mode, mods, limit)
+
+    mode = GameMode(mode_arg)
+
+    if mods_arg is not None:
+        if mods_arg[0] in ("~", "="):  # weak/strong equality
+            strong_equality = mods_arg[0] == "="
+            mods_arg = mods_arg[1:]
+        else:  # use strong as default
+            strong_equality = True
+
+        if mods_arg.isdecimal():
+            # parse from int form
+            mods = Mods(int(mods_arg))
+        else:
+            # parse from string form
+            mods = Mods.from_modstr(mods_arg)
+    else:
+        mods = None
+
+    # build sql query & fetch info
+
+    query = [
+        "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
+        "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
+        "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
+        f"FROM {mode.scores_table} t "
+        "INNER JOIN maps b ON t.map_md5 = b.md5 "
+        "WHERE t.userid = :user_id AND t.mode = :mode_vn",
+    ]
+
+    params: dict[str, object] = {
+        "user_id": player.id,
+        "mode_vn": mode.as_vanilla,
+    }
+
+    if mods is not None:
+        if strong_equality:  # type: ignore
+            query.append("AND t.mods & :mods = :mods")
+        else:
+            query.append("AND t.mods & :mods != 0")
+
+        params["mods"] = mods
+
+    if scope == "best":
+        allowed_statuses = [2, 3]
+
+        if include_loved:
+            allowed_statuses.append(5)
+
+        query.append("AND t.status = 2 AND b.status IN :statuses AND t.status != 0")
+        params["statuses"] = allowed_statuses
+        sort = "t.pp"
+    else:
+        sort = "t.play_time"
+
+    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
+    params["limit"] = limit
+
+    rows = [
+        dict(row)
+        for row in await app.state.services.database.fetch_all(" ".join(query), params)
+    ]
+
+    # fetch & return info from sql
+    for row in rows:
+        bmap = await Beatmap.from_md5(row.pop("map_md5"))
+        row["beatmap"] = bmap.as_dict if bmap else None
+
+    player_info = {
+        "id": player.id,
+        "name": player.name,
+        "clan": {
+            "id": player.clan.id,
+            "name": player.clan.name,
+            "tag": player.clan.tag,
+        }
+        if player.clan
+        else None,
+    }
+
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "scores": rows,
+            "player": player_info,
+        },
+    )
+
+
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
