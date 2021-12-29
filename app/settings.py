@@ -6,6 +6,7 @@ from starlette.datastructures import Secret
 config = Config(".env")
 
 SERVER_ADDR: str = config("SERVER_ADDR")
+SERVER_PORT: int = config("SERVER_PORT", cast=int)
 
 DB_DSN: DatabaseURL = config("DB_DSN", cast=DatabaseURL)
 REDIS_DSN: str = config("REDIS_DSN")
