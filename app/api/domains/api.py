@@ -295,9 +295,9 @@ async def api_get_player_scores(
         )
 
     if username:
-        player = app.state.sessions.players.get(name=username)
+        player = await app.state.sessions.players.from_cache_or_sql(name=username)
     elif user_id:
-        player = app.state.sessions.players.get(id=user_id)
+        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
