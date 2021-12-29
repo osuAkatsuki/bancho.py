@@ -131,8 +131,8 @@ async def api_get_player_count():
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -204,8 +204,8 @@ async def api_get_player_info(
 
 @router.get("/get_player_status")
 async def api_get_player_status(
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -247,7 +247,10 @@ async def api_get_player_status(
         return ORJSONResponse(
             {
                 "status": "success",
-                "player_status": {"online": False, "last_seen": row["latest_activity"]},
+                "player_status": {
+                    "online": False,
+                    "last_seen": row["latest_activity"],
+                },
             },
         )
 
@@ -276,17 +279,17 @@ async def api_get_player_status(
 
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
-    id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-    mode_arg: Optional[int] = Query(None, alias="mode", ge=0, le=7),
-    limit: Optional[int] = Query(None, ge=1, le=100),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    limit: int = Query(25, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
 
-    if id is not None:
-        p = await app.state.sessions.players.from_cache_or_sql(id=id)
+    if user_id is not None:
+        p = await app.state.sessions.players.from_cache_or_sql(id=user_id)
     elif username is not None:
         p = await app.state.sessions.players.from_cache_or_sql(name=username)
     else:
@@ -303,13 +306,7 @@ async def api_get_player_most_played(
 
     # parse args (mode, limit)
 
-    if mode_arg is not None:
-        mode = GameMode(mode_arg)
-    else:
-        mode = GameMode.VANILLA_OSU
-
-    if limit is None:
-        limit = 25
+    mode = GameMode(mode_arg)
 
     # fetch & return info from sql
     rows = await db_conn.fetch_all(
@@ -330,12 +327,12 @@ async def api_get_player_most_played(
 
 @router.get("/get_map_info")
 async def api_get_map_info(
-    id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    map_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
 ):
     """Return information about a given beatmap."""
-    if id is not None:
-        bmap = await Beatmap.from_bid(id)
+    if map_id is not None:
+        bmap = await Beatmap.from_bid(map_id)
     elif md5 is not None:
         bmap = await Beatmap.from_md5(md5)
     else:
@@ -356,18 +353,18 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
-    id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
-    mode_arg: Optional[int] = Query(None, alias="mode", ge=0, le=7),
+    map_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
+    map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: Optional[str] = Query(None, alias="mods"),
-    limit: Optional[int] = Query(None, ge=1, le=100),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    limit: int = Query(50, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the top n scores on a given beatmap."""
-    if id is not None:
-        bmap = await Beatmap.from_bid(id)
-    elif md5 is not None:
-        bmap = await Beatmap.from_md5(md5)
+    if map_id is not None:
+        bmap = await Beatmap.from_bid(map_id)
+    elif map_md5 is not None:
+        bmap = await Beatmap.from_md5(map_md5)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
@@ -382,10 +379,7 @@ async def api_get_map_scores(
 
     # parse args (scope, mode, mods, limit)
 
-    if mode_arg is not None:
-        mode = GameMode(mode_arg)
-    else:
-        mode = GameMode.VANILLA_OSU
+    mode = GameMode(mode_arg)
 
     if mods_arg is not None:
         if mods_arg[0] in ("~", "="):  # weak/strong equality
@@ -402,9 +396,6 @@ async def api_get_map_scores(
             mods = Mods.from_modstr(mods_arg)
     else:
         mods = None
-
-    if limit is None:
-        limit = 50
 
     # NOTE: userid will eventually become player_id,
     # along with everywhere else in the codebase.
@@ -448,7 +439,7 @@ async def api_get_map_scores(
 
 @router.get("/get_score_info")
 async def api_get_score_info(
-    score_id: int = Query(..., alias="id", ge=0),
+    score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return information about a given score."""
@@ -485,8 +476,8 @@ async def api_get_score_info(
 
 @router.get("/get_replay")
 async def api_get_replay(
-    score_id: int = Query(..., alias="id", ge=0),
-    include_headers: Optional[str] = Query(None),
+    score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
+    include_headers: bool = False,
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return a given replay (including headers)."""
@@ -514,7 +505,7 @@ async def api_get_replay(
     # read replay frames from file
     raw_replay_data = replay_file.read_bytes()
 
-    if include_headers and include_headers.lower() == "false":
+    if include_headers:
         return StreamingResponse(
             raw_replay_data,
             media_type="application/octet-stream",
@@ -667,16 +658,13 @@ async def api_get_match(
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
     sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
-    mode_arg: Optional[int] = Query(None, alias="mode", ge=0, le=7),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: Optional[str] = Query(None, min_length=2, max_length=2),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if mode_arg is not None:
-        mode = GameMode(mode_arg)
-    else:
-        mode = GameMode.VANILLA_OSU
+    mode = GameMode(mode_arg)
 
     query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
     query_parameters: dict[str, object] = {"mode": mode}

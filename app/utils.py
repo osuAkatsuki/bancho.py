@@ -1,12 +1,7 @@
-import asyncio
 import inspect
 import io
-import ipaddress
 import os
-import re
-import secrets
 import shutil
-import signal
 import socket
 import subprocess
 import sys
@@ -14,27 +9,23 @@ import types
 import zipfile
 from pathlib import Path
 from typing import Any
-from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
 from typing import Sequence
 from typing import Type
-from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
-import cmyui
 import databases.core
-import dill as pickle
 import orjson
 import pymysql
 import requests
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
-from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
+from fastapi import status
 
 import app.settings
 
@@ -132,7 +123,7 @@ def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     log("Downloading achievement images from mirror.", Ansi.LCYAN)
     resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
-    if resp.status_code != 200:
+    if resp.status_code != status.HTTP_200_OK:
         log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
         return False
 

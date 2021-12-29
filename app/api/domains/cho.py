@@ -1,3 +1,4 @@
+""" cho: handle cho packets from the osu! client """
 import asyncio
 import ipaddress
 import re
@@ -20,6 +21,11 @@ from cmyui.logging import log
 from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
+from fastapi import APIRouter
+from fastapi import Response
+from fastapi.param_functions import Header
+from fastapi.requests import Request
+from fastapi.responses import HTMLResponse
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -55,19 +61,7 @@ from packets import ClientPackets
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
-from fastapi import APIRouter
-from fastapi import Response
-
-from fastapi.param_functions import Header
-from fastapi.requests import Request
-
-from fastapi.responses import HTMLResponse
-
-""" Bancho: handle connections from the osu! client """
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
-
-router = APIRouter(tags=["Bancho API"])
 
 BASE_DOMAIN = app.settings.DOMAIN
 _domain_escaped = BASE_DOMAIN.replace(".", r"\.")
@@ -79,6 +73,8 @@ NOW_PLAYING_RGX = re.compile(
     r"(?: <(?P<mode_vn>Taiko|CatchTheBeat|osu!mania)>)?"
     r"(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$",
 )
+
+router = APIRouter(tags=["Bancho API"])
 
 
 @router.get("/")
@@ -677,11 +673,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.utils.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.state.services.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.utils.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when

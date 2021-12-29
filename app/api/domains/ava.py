@@ -1,7 +1,6 @@
+""" ava: avatar server (for both ingame & external) """
 from pathlib import Path
 from typing import Literal
-from typing import Optional
-from typing import Union
 
 from fastapi import APIRouter
 from fastapi import Response
@@ -10,16 +9,10 @@ from fastapi.responses import FileResponse
 import app.state
 import app.utils
 
-HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
-
-""" ava: avatar server (for both ingame & external) """
+AVATARS_PATH = Path.cwd() / ".data/avatars"
+DEFAULT_AVATAR = AVATARS_PATH / "default.jpg"
 
 router = APIRouter(tags=["Avatars"])
-
-
-AVATARS_PATH = Path.cwd() / ".data/avatars"
-
-DEFAULT_AVATAR = AVATARS_PATH / "default.jpg"
 
 
 @router.get("/favicon.ico")

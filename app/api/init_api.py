@@ -1,24 +1,15 @@
-# #!/usr/bin/env python3.10
-"""
-gulag - the most developed, production-ready osu! server implementation
-if you're interested in development, my test server is usually
-up at https://c.cmyui.xyz. just use the same `-devserver cmyui.xyz`
-connection method you would with any other modern server and you
-should have no problems connecting. registration is done in-game
-with osu!'s built-in registration (if you're worried about not being
-properly connected while registering, the server should send back
-https://i.cmyui.xyz/8-Vzy9NllPBp5K7L.png if you use a random login).
-you can also test gulag's rest api using my test server,
-e.g https://osu.cmyui.xyz/api/get_player_scores?id=3&scope=best
-"""
+# #!/usr/bin/env python3.9
 import asyncio
 import os
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
-from fastapi import Response
+from fastapi import status
 from fastapi.exceptions import RequestValidationError
+from fastapi.requests import Request
+from fastapi.responses import Response
+from starlette.middleware.base import RequestResponseEndpoint
 
 import app.settings
 import app.state
@@ -30,24 +21,40 @@ from app.objects import collections
 
 
 def init_exception_handlers(asgi_app: FastAPI) -> None:
-    @asgi_app.middleware("http")
-    async def wtf(request, call_next):
-        try:
-            return await call_next(request)
-        except RuntimeError as exc:
-            # NOTE: TODO note
-            if exc.args[0] == "No response returned.":
-                return Response("Client is stupppod")
-
-            raise
-
     @asgi_app.exception_handler(RequestValidationError)
-    async def x(r, e):
-        print()
+    async def handle_validation_error(request: Request, exc: RequestValidationError):
+        print(f"Validation error on {request.url}", "\n", exc.errors())
+
+        return Response(
+            content=exc.errors(),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
 
 
 def init_middlewares(asgi_app: FastAPI) -> None:
     """Initialize our app's middleware stack."""
+
+    @asgi_app.middleware("http")
+    async def http_middleware(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        # if an osu! client is waiting on leaderboard data
+        # and switches to another leaderboard, it will cancel
+        # the previous request mid-way, resulting in a large
+        # error in the console. this is to catch that :)
+
+        try:
+            return await call_next(request)
+        except RuntimeError as exc:
+            if exc.args[0] == "No response returned.":
+                # client disconnected from the server
+                # while we were sending the response.
+                return Response("Client is stupppod")
+
+            # unrelated issue, raise normally
+            raise exc
+
     asgi_app.add_middleware(middlewares.MetricsMiddleware)
 
 
@@ -68,7 +75,10 @@ def init_events(asgi_app: FastAPI) -> None:
         await app.state.services.redis.initialize()
 
         if app.state.services.datadog is not None:
-            app.state.services.datadog.start(flush_in_thread=True, flush_interval=15)
+            app.state.services.datadog.start(
+                flush_in_thread=True,
+                flush_interval=15,
+            )
             app.state.services.datadog.gauge("gulag.online_players", 0)
 
         async with app.state.services.database.connection() as db_conn:
@@ -87,7 +97,10 @@ def init_events(asgi_app: FastAPI) -> None:
         await app.state.services.http.close()
         await app.state.services.database.disconnect()
         await app.state.services.redis.close()
-        await app.state.services.http.close()
+
+        if app.state.services.datadog is not None:
+            app.state.services.datadog.stop()
+            app.state.services.datadog.flush()
 
         if app.state.services.geoloc_db is not None:
             app.state.services.geoloc_db.close()

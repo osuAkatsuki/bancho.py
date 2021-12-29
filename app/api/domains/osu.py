@@ -1,3 +1,4 @@
+""" osu: handle connections from web, api, and beyond? """
 import copy
 import hashlib
 import ipaddress
@@ -8,7 +9,11 @@ from base64 import b64decode
 from collections import defaultdict
 from enum import IntEnum
 from enum import unique
+from functools import cache
 from pathlib import Path as SystemPath
+from typing import Any
+from typing import Awaitable
+from typing import Callable
 from typing import Literal
 from typing import Mapping
 from typing import Optional
@@ -17,12 +22,13 @@ from urllib.parse import unquote_plus
 
 import bcrypt
 import databases.core
-import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
+from fastapi import params
 from fastapi import status
 from fastapi.datastructures import UploadFile
+from fastapi.exceptions import HTTPException
 from fastapi.param_functions import Depends
 from fastapi.param_functions import File
 from fastapi.param_functions import Form
@@ -51,6 +57,7 @@ from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.beatmap import RankedStatus
+from app.objects.player import Player
 from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
@@ -60,7 +67,10 @@ from app.utils import escape_enum
 from app.utils import pymysql_encode
 
 
-""" osu: handle connections from web, api, and beyond? """
+AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
+BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
+REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
+SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
 router = APIRouter(
@@ -69,10 +79,30 @@ router = APIRouter(
 )
 
 
-AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
-BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
-REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
-SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
+@cache
+def authenticate_player_session(
+    param_function: Callable[..., Any],
+    username_alias: str = "u",
+    pw_md5_alias: str = "p",
+    err: Optional[Any] = None,
+) -> Callable[[str, str], Awaitable[Player]]:
+    async def wrapper(
+        username: str = param_function(..., alias=username_alias),
+        pw_md5: str = param_function(..., alias=pw_md5_alias),
+    ) -> Player:
+        if player := await app.state.sessions.players.from_login(
+            name=unquote(username),
+            pw_md5=pw_md5,
+        ):
+            return player
+
+        # player login incorrect
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=err,  # TODO: make sure this works
+        )
+
+    return wrapper
 
 
 """ /web/ handlers """
@@ -139,55 +169,47 @@ async def osuError(
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
-    username: str = Form(..., alias="u"),
-    pw_md5: str = Form(..., alias="p"),
+    player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
     endpoint_version: int = Form(..., alias="v"),
-    screenshot_data: UploadFile = File(..., alias="ss"),
+    screenshot_data: bytes = File(..., alias="ss"),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
+    with memoryview(screenshot_data) as ss_data_view:
+        # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
+        if len(ss_data_view) > (4 * 1024 * 1024):
+            return Response(
+                content=b"Screenshot file too large.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-    ss_data_view = memoryview(await screenshot_data.read()).toreadonly()
+        if endpoint_version != 1:
+            await app.state.services.log_strange_occurrence(
+                f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
+            )
 
-    # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-    if len(ss_data_view) > (4 * 1024 * 1024):
-        return Response(
-            content=b"Screenshot file too large.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        if (
+            ss_data_view[:4] == b"\xff\xd8\xff\xe0"
+            and ss_data_view[6:11] == b"JFIF\x00"
+        ):
+            extension = "jpeg"
+        elif (
+            ss_data_view[:8] == b"\x89PNG\r\n\x1a\n"
+            and ss_data_view[-8] == b"\x49END\xae\x42\x60\x82"
+        ):
+            extension = "png"
+        else:
+            return Response(
+                content=b"Invalid file type",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-    if endpoint_version != 1:
-        await app.state.services.log_strange_occurrence(
-            f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
-        )
+        while True:
+            filename = f"{secrets.token_urlsafe(6)}.{extension}"
+            ss_file = SCREENSHOTS_PATH / filename
+            if not ss_file.exists():
+                break
 
-    if ss_data_view[:4] == b"\xff\xd8\xff\xe0" and ss_data_view[6:11] == b"JFIF\x00":
-        extension = "jpeg"
-    elif (
-        ss_data_view[:8] == b"\x89PNG\r\n\x1a\n"
-        and ss_data_view[-8] == b"\x49END\xae\x42\x60\x82"
-    ):
-        extension = "png"
-    else:
-        return Response(
-            content=b"Invalid file type",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    while True:
-        filename = f"{secrets.token_urlsafe(6)}.{extension}"
-        ss_file = SCREENSHOTS_PATH / filename
-        if not ss_file.exists():
-            break
-
-    with ss_file.open("wb") as f:
-        f.write(ss_data_view)
+        with ss_file.open("wb") as f:
+            f.write(ss_data_view)
 
     log(f"{player} uploaded {filename}.")
     return Response(filename.encode())
@@ -195,18 +217,8 @@ async def osuScreenshot(
 
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     return "\n".join(map(str, player.friends)).encode()
 
 
@@ -220,19 +232,9 @@ def gulag_to_osuapi_status(s: int) -> int:
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
-    username: str = Form(..., alias="u"),
-    pw_md5: str = Form(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Form, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
@@ -290,19 +292,9 @@ async def osuGetBeatmapInfo(
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     rows = await db_conn.fetch_all(
         "SELECT setid FROM favourites WHERE userid = :user_id",
         {"user_id": player.id},
@@ -313,20 +305,10 @@ async def osuGetFavourites(
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     # check if they already have this favourited.
     if await app.state.services.database.fetch_one(
         "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
@@ -352,18 +334,8 @@ async def lastFM(
         ),
         alias="b",
     ),
-    username: str = Query(..., alias="us"),
-    pw_md5: str = Query(..., alias="ha"),
+    player: "Player" = Depends(authenticate_player_session(Query, "us", "ha")),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     if beatmap_id_or_hidden_flag[0] != "a":
         # not anticheat related, tell the
         # client not to send any more for now.
@@ -445,22 +417,12 @@ DIRECT_MAP_INFO_FMTSTR = (
 
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     ranked_status: int = Query(..., alias="r", ge=0, le=8),
     query: str = Query(..., alias="q"),
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
     page_num: int = Query(..., alias="p"),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     if USING_CHIMU:
         search_url = f"{app.settings.MIRROR_URL}/search"
     else:
@@ -478,14 +440,13 @@ async def osuSearchHandler(
 
     if ranked_status != 4:  # 4 for all
         # convert to osu!api status
-        status = RankedStatus.from_osudirect(ranked_status)
-        params["status"] = status.osu_api
+        params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
     async with app.state.services.http.get(search_url, params=params) as resp:
-        if resp.status != 200:
+        if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
                 # chimu uses 404 for no maps found
-                if resp.status == 404:
+                if resp.status == status.HTTP_404_NOT_FOUND:
                     return b"0"
 
             if 400 <= resp.status < 500:
@@ -535,21 +496,11 @@ async def osuSearchHandler(
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     # TODO: refactor this to use the new internal bmap(set) api
 
     # Since we only need set-specific data, we can basically
@@ -564,7 +515,7 @@ async def osuSearchSetHandler(
         return  # invalid args
 
     # Get all set data.
-    bmapset = await app.state.services.database.fetch_one(
+    bmapset = await db_conn.fetch_one(
         "SELECT DISTINCT set_id, artist, "
         "title, status, creator, last_update "
         f"FROM maps WHERE {k} = :v",
@@ -1085,42 +1036,22 @@ async def osuSubmitModularSelector(
 
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
-    replay_file = REPLAYS_PATH / f"{score_id}.osr"
-
-    return FileResponse(replay_file)
+    return FileResponse(REPLAYS_PATH / f"{score_id}.osr")
 
 
 @router.get("/web/osu-rate.php")
 async def osuRate(
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="p"),
+    player: "Player" = Depends(
+        authenticate_player_session(Query, "u", "p", err=b"auth fail"),
+    ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return b"auth fail"
-
     if rating is None:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
@@ -1185,6 +1116,7 @@ SCORE_LISTING_FMTSTR = (
 
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
+    player: "Player" = Depends(authenticate_player_session(Query, "us", "ha")),
     get_scores: bool = Query(..., alias="s"),  # NOTE: this is flipped
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
@@ -1195,19 +1127,8 @@ async def getScores(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
-    username: str = Query(..., alias="us"),
-    pw_md5: str = Query(..., alias="ha"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     # check if this md5 has already been  cached as
     # unsubmitted/needs update to reduce osu!api spam
     if map_md5 in app.state.cache.unsubmitted:
@@ -1396,8 +1317,7 @@ async def getScores(
 
 @router.post("/web/osu-comment.php")
 async def osuComment(
-    username: str = Form(..., alias="u"),
-    pw_md5: str = Form(..., alias="p"),
+    player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
     score_id: int = Form(..., alias="r", ge=0, le=2_147_483_647),
@@ -1410,15 +1330,6 @@ async def osuComment(
     comment: Optional[str] = Form(None, min_length=1, max_length=80),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     if action == "get":
         # client is requesting all comments
         comments = await app.state.services.database.fetch_all(
@@ -1495,24 +1406,10 @@ async def osuComment(
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
-    channel: str = Query(
-        ...,
-        min_length=1,
-        max_length=32,
-    ),  # (usernames to 16, channels to 32)
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    channel: str = Query(..., min_length=0, max_length=32),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (
-        player := await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-    ):
-        # player login incorrect
-        return
-
     if not (t_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
@@ -1533,10 +1430,8 @@ async def osuSeasonal():
 
 @router.get("/web/bancho_connect.php")
 async def banchoConnect(
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
-    username: str = Query(..., alias="u"),
-    pw_md5: str = Query(..., alias="h"),
-    #
     active_endpoint: Optional[str] = Query(None, alias="fail"),
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
     client_hash: Optional[str] = Query(None, alias="ch"),
@@ -1664,7 +1559,7 @@ async def get_updated_beatmap(
             {"filename": map_filename},
         )
     ):
-        return Response(content=b"", status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
     osu_file_path = BEATMAPS_PATH / f'{res["id"]}.osu'
 
@@ -1824,11 +1719,11 @@ async def register_account(
                         # decent case, dev has downloaded a geoloc db from
                         # maxmind, so we can do a local db lookup. (~1-5ms)
                         # https://www.maxmind.com/en/home
-                        geoloc = app.utils.fetch_geoloc_db(ip)
+                        geoloc = app.state.services.fetch_geoloc_db(ip)
                     else:
                         # worst case, we must do an external db lookup
                         # using a public api. (depends, `ping ip-api.com`)
-                        geoloc = await app.utils.fetch_geoloc_web(ip)
+                        geoloc = await app.state.services.fetch_geoloc_web(ip)
 
                     if geoloc is not None:
                         country_acronym = geoloc["country"]["acronym"]

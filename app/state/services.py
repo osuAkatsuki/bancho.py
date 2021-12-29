@@ -13,7 +13,6 @@ from typing import Union
 
 import aiohttp
 import aioredis
-import cmyui
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
@@ -53,7 +52,7 @@ if GEOLOC_DB_FILE.exists():
     geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 
 datadog: Optional[datadog_client.ThreadStats] = None
-if app.settings.DATADOG_API_KEY and app.settings.DATADOG_APP_KEY:
+if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
     datadog_module.initialize(
         api_key=str(app.settings.DATADOG_API_KEY),
         app_key=str(app.settings.DATADOG_APP_KEY),
@@ -212,8 +211,51 @@ async def log_strange_occurrence(obj: object) -> None:
 # dependency management
 
 
+class Version:
+    __slots__ = ("major", "minor", "micro")
+
+    def __init__(self, major: int, minor: int, micro: int) -> None:
+        self.major = major
+        self.minor = minor
+        self.micro = micro
+
+    def __repr__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.micro}"
+
+    def __hash__(self) -> int:
+        return self.as_tuple.__hash__()
+
+    def __eq__(self, other: "Version") -> bool:
+        return self.as_tuple == other.as_tuple
+
+    def __lt__(self, other: "Version") -> bool:
+        return self.as_tuple < other.as_tuple
+
+    def __le__(self, other: "Version") -> bool:
+        return self.as_tuple <= other.as_tuple
+
+    def __gt__(self, other: "Version") -> bool:
+        return self.as_tuple > other.as_tuple
+
+    def __ge__(self, other: "Version") -> bool:
+        return self.as_tuple >= other.as_tuple
+
+    @property
+    def as_tuple(self) -> tuple[int, int, int]:
+        return (self.major, self.minor, self.micro)
+
+    @classmethod
+    def from_str(cls, s: str) -> Optional["Version"]:
+        if len(split := s.split(".")) == 3:
+            return cls(
+                major=int(split[0]),
+                minor=int(split[1]),
+                micro=int(split[2]),
+            )
+
+
 async def _get_latest_dependency_versions() -> AsyncGenerator[
-    tuple[str, cmyui.Version, cmyui.Version],
+    tuple[str, Version, Version],
     None,
 ]:
     """Return the current installed & latest version for each dependency."""
@@ -224,7 +266,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
 
     for dependency in dependencies:
         dependency_name, _, dependency_ver = dependency.partition("==")
-        current_ver = cmyui.Version.from_str(dependency_ver)
+        current_ver = Version.from_str(dependency_ver)
 
         if not current_ver:
             # the module uses some more advanced (and often hard to parse)
@@ -235,7 +277,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
         url = f"https://pypi.org/pypi/{dependency_name}/json"
         async with http.get(url) as resp:
             if resp.status == 200 and (json := await resp.json()):
-                latest_ver = cmyui.Version.from_str(json["info"]["version"])
+                latest_ver = Version.from_str(json["info"]["version"])
 
                 if not latest_ver:
                     # they've started using a more advanced versioning system.
@@ -270,7 +312,7 @@ async def check_for_dependency_updates() -> None:
 # sql migrations
 
 
-async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
+async def _get_current_sql_structure_version() -> Optional[Version]:
     """Get the last launched version of the server."""
     res = await app.state.services.database.fetch_one(
         "SELECT ver_major, ver_minor, ver_micro "
@@ -278,7 +320,7 @@ async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
     )
 
     if res:
-        return cmyui.Version(*map(int, res))
+        return Version(*map(int, res))
 
 
 async def run_sql_migrations() -> None:
@@ -286,7 +328,10 @@ async def run_sql_migrations() -> None:
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = cmyui.Version.from_str(app.settings.VERSION)
+    latest_ver = Version.from_str(app.settings.VERSION)
+
+    if latest_ver is None:
+        raise RuntimeError(f"Invalid gulag version '{app.settings.VERSION}'")
 
     if latest_ver == current_ver:
         return  # already up to date
@@ -306,7 +351,7 @@ async def run_sql_migrations() -> None:
         if line.startswith("#"):
             # may be normal comment or new version
             if r_match := VERSION_RGX.fullmatch(line):
-                update_ver = cmyui.Version.from_str(r_match["ver"])
+                update_ver = Version.from_str(r_match["ver"])
 
             continue
         elif not update_ver:
