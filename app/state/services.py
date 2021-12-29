@@ -1,5 +1,4 @@
 import asyncio
-import importlib.metadata
 import ipaddress
 import pickle
 import secrets
@@ -20,7 +19,7 @@ from cmyui.logging import log
 from cmyui.logging import printc
 from cmyui.logging import Rainbow
 
-from app import settings
+import app.state
 from app.constants.countries import country_codes
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -107,13 +106,13 @@ async def log_strange_occurrence(obj: object) -> None:
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
-    if settings.AUTOMATICALLY_REPORT_PROBLEMS:
+    if app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
         async with http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": settings.VERSION,
-                "Gulag-Domain": settings.DOMAIN,
+                "Gulag-Version": app.state.settings.VERSION,
+                "Gulag-Domain": app.state.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:

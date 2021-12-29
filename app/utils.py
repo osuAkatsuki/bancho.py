@@ -35,7 +35,6 @@ from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
-import app.settings
 import app.state
 from app.constants.countries import country_codes
 
@@ -144,13 +143,13 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""
     log("Downloading achievement images from mirror.", Ansi.LCYAN)
-    r = requests.get("https://cmyui.xyz/achievement_images.zip")
+    resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
-    if r.status_code != 200:
+    if resp.status_code != 200:
         log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
         return False
 
-    with io.BytesIO(r.content) as data:
+    with io.BytesIO(resp.content) as data:
         with zipfile.ZipFile(data) as myfile:
             myfile.extractall(achievements_path)
 
@@ -174,12 +173,12 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
     for ach in achs:
-        r = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
-        if r.status_code != 200:
+        resp = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
+        if resp.status_code != 200:
             return False
 
         log(f"Saving achievement: {ach}", Ansi.LCYAN)
-        (achievements_path / ach).write_bytes(r.content)
+        (achievements_path / ach).write_bytes(resp.content)
 
     return True
 
@@ -203,14 +202,14 @@ def download_achievement_images(achievements_path: Path) -> None:
 
 def download_default_avatar(default_avatar_path: Path) -> None:
     """Download an avatar to use as the server's default."""
-    r = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
+    resp = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
 
-    if r.status_code != 200:
+    if resp.status_code != 200:
         log("Failed to fetch default avatar.", Ansi.LRED)
         return
 
     log("Downloaded default avatar.", Ansi.LGREEN)
-    default_avatar_path.write_bytes(r.content)
+    default_avatar_path.write_bytes(resp.content)
 
 
 def seconds_readable(seconds: int) -> str:
@@ -315,7 +314,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{app.settings.VERSION} ran into an issue before starting up :(",
+            f"gulag v{app.state.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -356,13 +355,13 @@ async def log_strange_occurrence(obj: object) -> None:
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
-    if app.settings.AUTOMATICALLY_REPORT_PROBLEMS:
+    if app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
         async with app.state.services.http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": repr(app.settings.VERSION),
-                "Gulag-Domain": app.settings.DOMAIN,
+                "Gulag-Version": repr(app.state.settings.VERSION),
+                "Gulag-Domain": app.state.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:
@@ -429,7 +428,7 @@ def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
     if res.country.iso_code is not None:
         acronym = res.country.iso_code.lower()
     else:
-        acronym = "XX"
+        acronym = "xx"
 
     return {
         "latitude": res.location.latitude or 0.0,
@@ -601,7 +600,7 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
+    if app.state.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
             if os.path.exists(f"/var/run/{service}/{service}.pid"):
@@ -703,7 +702,7 @@ def _install_debugging_hooks() -> None:
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
-    if app.settings.DEVELOPER_MODE:
+    if app.state.settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
 
     # running on root grants the software potentally dangerous and
@@ -714,7 +713,7 @@ def display_startup_dialog() -> None:
             Ansi.LYELLOW,
         )
 
-        if app.settings.DEVELOPER_MODE:
+        if app.state.settings.DEVELOPER_MODE:
             log(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",
@@ -743,7 +742,7 @@ async def run_sql_migrations() -> None:
     if not (current_ver := await _get_current_sql_structure_version()):
         return  # already up to date (server has never run before)
 
-    latest_ver = cmyui.Version.from_str(app.settings.VERSION)
+    latest_ver = cmyui.Version.from_str(app.state.settings.VERSION)
 
     if latest_ver == current_ver:
         return  # already up to date
@@ -782,13 +781,11 @@ async def run_sql_migrations() -> None:
             else:
                 q_lines.append(line)
 
-    if not queries:
-        return
-
-    log(
-        f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
-        Ansi.LMAGENTA,
-    )
+    if queries:
+        log(
+            f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
+            Ansi.LMAGENTA,
+        )
 
     # XXX: so it turns out we can't use a transaction here (at least with mysql)
     #      to roll back changes, as any structural changes to tables implicitly

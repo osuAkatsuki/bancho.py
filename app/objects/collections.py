@@ -13,9 +13,9 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import app.settings
 import app.state
 import app.utils
+from app.constants.countries import country_codes
 from app.constants.privileges import Privileges
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
@@ -92,21 +92,21 @@ class Channels(list[Channel]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} added to channels list.")
 
     def extend(self, cs: Iterable[Channel]) -> None:
         """Extend the list with `cs`."""
         super().extend(cs)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{cs} added to channels list.")
 
     def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} removed from channels list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -149,7 +149,7 @@ class Matches(list[Optional[Match]]):
             m.id = free
             self[free] = m
 
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{m} added to matches list.")
 
             return True
@@ -166,7 +166,7 @@ class Matches(list[Optional[Match]]):
                 self[i] = None
                 break
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} removed from matches list.")
 
 
@@ -246,7 +246,7 @@ class Players(list[Player]):
 
         # try to get from sql.
         row = await app.state.services.database.fetch_one(
-            "SELECT id, name, priv, pw_bcrypt, "
+            "SELECT id, name, priv, pw_bcrypt, country, "
             "silence_end, clan_id, clan_priv, api_key "
             f"FROM users WHERE {attr} = :val",
             {"val": val},
@@ -265,6 +265,16 @@ class Players(list[Player]):
             row["clan_priv"] = ClanPrivileges(row["clan_priv"])
         else:
             row["clan"] = row["clan_priv"] = None
+
+        # country from acronym to {acronym, numeric}=
+        row["geoloc"] = {
+            "latitude": 0.0,  # TODO
+            "longitude": 0.0,
+            "country": {
+                "acronym": row["country"],
+                "numeric": country_codes[row["country"]],
+            },
+        }
 
         return Player(**row, token="")
 
@@ -290,13 +300,13 @@ class Players(list[Player]):
                 # no player found in sql either.
                 return
 
-        if app.state.cache["bcrypt"][p.pw_bcrypt] == pw_md5.encode():
+        if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
             return p
 
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{p} double-added to global player list?")
             return
 
@@ -305,7 +315,7 @@ class Players(list[Player]):
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
-            if app.settings.DEBUG:
+            if app.state.settings.DEBUG:
                 log(f"{p} removed from player list when not online?")
             return
 
@@ -340,6 +350,23 @@ class MapPools(list[MapPool]):
         else:
             return super().__getitem__(index)
 
+    @staticmethod
+    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
+        """Get first matched attr & val from input kwargs. Used in get() methods."""
+        for attr in ("id", "name"):
+            if (val := kwargs.pop(attr, None)) is not None:
+                return attr, val
+        else:
+            raise ValueError("Incorrect call to MapPools.get()")
+
+    def get(self, **kwargs: object) -> Optional[MapPool]:
+        """Get a mappool by id, or name from cache."""
+        attr, val = self._parse_attr(kwargs)
+
+        for p in self:
+            if getattr(p, attr) == val:
+                return p
+
     def __contains__(self, o: Union[MapPool, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
@@ -358,21 +385,21 @@ class MapPools(list[MapPool]):
         """Append `m` to the list."""
         super().append(m)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} added to mappools list.")
 
     def extend(self, ms: Iterable[MapPool]) -> None:
         """Extend the list with `ms`."""
         super().extend(ms)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{ms} added to mappools list.")
 
     def remove(self, m: MapPool) -> None:
         """Remove `m` from the list."""
         super().remove(m)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{m} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -444,21 +471,21 @@ class Clans(list[Clan]):
         """Append `c` to the list."""
         super().append(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} added to clans list.")
 
     def extend(self, cs: Iterable[Clan]) -> None:
         """Extend the list with `cs`."""
         super().extend(cs)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{cs} added to clans list.")
 
     def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"{c} removed from clans list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
@@ -492,7 +519,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.players.append(app.state.sessions.bot)
 
     # global achievements (sorted by vn gamemodes)
-    async for row in db_conn.iterate("SELECT * FROM achievements"):
+    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
         # NOTE: achievement conditions are stored as stringified python
         # expressions in the database to allow for extensive customizability.
         row = dict(row)
@@ -504,7 +531,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     # static api keys
     app.state.sessions.api_keys = {
         row["api_key"]: row["id"]
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT id, api_key FROM users WHERE api_key IS NOT NULL",
         )
     }

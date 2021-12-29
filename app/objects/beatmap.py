@@ -13,7 +13,6 @@ from typing import Optional
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import app.settings
 import app.state
 import app.utils
 from app.constants.gamemodes import GameMode
@@ -35,10 +34,10 @@ IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
-    if app.settings.DEBUG:
+    if app.state.settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    params["k"] = str(app.settings.OSU_API_KEY)
+    params["k"] = str(app.state.settings.OSU_API_KEY)
 
     async with app.state.services.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
@@ -57,18 +56,19 @@ async def ensure_local_osu_file(
         or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
-        if app.settings.DEBUG:
+        if app.state.settings.DEBUG:
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http.get(url) as r:
-            if not r or r.status != 200:
-                # temporary logging, not sure how possible this is
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.utils.log_strange_occurrence(stacktrace)
+        async with app.state.services.http.get(url) as resp:
+            if resp.status != 200:
+                if 400 <= resp.status < 500:
+                    # client error, report this to cmyui
+                    stacktrace = app.utils.get_appropriate_stacktrace()
+                    await app.utils.log_strange_occurrence(stacktrace)
                 return False
 
-            osu_file_path.write_bytes(await r.read())
+            osu_file_path.write_bytes(await resp.read())
 
     return True
 
@@ -314,7 +314,7 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmaps/{self.id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmaps/{self.id}"
 
     @property
     def embed(self) -> str:
@@ -523,8 +523,8 @@ class Beatmap:
         check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by md5."""
-        if md5 in app.state.cache["beatmap"]:
-            bmap: Beatmap = app.state.cache["beatmap"][md5]
+        if md5 in app.state.cache.beatmap:
+            bmap: Beatmap = app.state.cache.beatmap[md5]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
@@ -537,8 +537,8 @@ class Beatmap:
         check_updates: bool = True,
     ) -> Optional["Beatmap"]:
         """Fetch a map from the cache by id."""
-        if bid in app.state.cache["beatmap"]:
-            bmap: Beatmap = app.state.cache["beatmap"][bid]
+        if bid in app.state.cache.beatmap:
+            bmap: Beatmap = app.state.cache.beatmap[bid]
 
             if check_updates and bmap.set._cache_expired():
                 await bmap.set._update_if_available()
@@ -600,7 +600,7 @@ class BeatmapSet:
     @property
     def url(self) -> str:  # same as above, just no beatmap id
         """The online url for this beatmap set."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
+        return f"https://osu.{app.state.settings.DOMAIN}/beatmapsets/{self.id}"
 
     @functools.cache
     def all_officially_ranked_or_approved(self) -> bool:
@@ -657,7 +657,7 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
         and propogate any update into our cache & database."""
-        if not app.settings.OSU_API_KEY:
+        if not app.state.settings.OSU_API_KEY:
             return
 
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
@@ -811,13 +811,13 @@ class BeatmapSet:
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the cache by set id."""
-        if bsid in app.state.cache["beatmapset"]:
-            bmap_set: BeatmapSet = app.state.cache["beatmapset"][bsid]
+        if bsid in app.state.cache.beatmapset:
+            bmap_set: BeatmapSet = app.state.cache.beatmapset[bsid]
 
             if bmap_set._cache_expired():
                 await bmap_set._update_if_available()
 
-            return app.state.cache["beatmapset"][bsid]
+            return app.state.cache.beatmapset[bsid]
 
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
@@ -938,8 +938,8 @@ class BeatmapSet:
             await bmap_set._update_if_available()
 
         # cache the individual maps & set for future requests
-        beatmapset_cache = app.state.cache["beatmapset"]
-        beatmap_cache = app.state.cache["beatmap"]
+        beatmapset_cache = app.state.cache.beatmapset
+        beatmap_cache = app.state.cache.beatmap
 
         beatmapset_cache[bsid] = bmap_set
 

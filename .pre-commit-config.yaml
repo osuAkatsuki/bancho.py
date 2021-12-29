@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v4.1.0
     hooks:
     -   id: check-added-large-files
     -   id: check-ast
@@ -14,7 +14,7 @@ repos:
     -   id: trailing-whitespace
 
 -   repo: https://github.com/psf/black
-    rev: 21.11b1
+    rev: 21.12b0
     hooks:
     -   id: black
 -   repo: https://github.com/asottile/reorder_python_imports

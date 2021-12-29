@@ -33,7 +33,6 @@ from cmyui.web import ratelimit
 from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 
-import app.settings
 import app.state
 import app.utils
 import packets
@@ -53,12 +52,13 @@ from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.objects.player import Player
+    from app.objects.clan import Clan
 
 HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain({f"osu.{app.settings.DOMAIN}", "osu.ppy.sh"})
+domain = Domain({f"osu.{app.state.settings.DOMAIN}", "osu.ppy.sh"})
 
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
@@ -165,7 +165,7 @@ def acquire_db_conn(f: Callable) -> Callable:
 
 @domain.route("/web/osu-error.php", methods=["POST"])
 async def osuError(conn: Connection) -> HTTPResponse:
-    if app.settings.DEBUG:
+    if app.state.settings.DEBUG:
         err_args = conn.multipart_args
         if "u" in err_args and "p" in err_args:
             if not (
@@ -175,7 +175,6 @@ async def osuError(conn: Connection) -> HTTPResponse:
                 )
             ):
                 # player login incorrect
-                await app.utils.log_strange_occurrence("osu-error auth failed")
                 p = None
         else:
             p = None
@@ -290,7 +289,7 @@ async def osuGetBeatmapInfo(
             {"map_md5": row["md5"], "user_id": p.id},
         )
 
-        async for score in db_conn.iterate(
+        for score in await db_conn.fetch_all(
             "SELECT grade, mode FROM scores_rx "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND status = 2",
@@ -411,7 +410,7 @@ async def lastFM(p: "Player", conn: Connection) -> HTTPResponse:
 # gulag supports both cheesegull mirrors & chimu.moe.
 # chimu.moe handles things a bit differently than cheesegull,
 # and has some extra features we'll eventually use more of.
-USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
+USING_CHIMU = "chimu.moe" in app.state.settings.MIRROR_URL
 
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
@@ -434,9 +433,9 @@ async def osuSearchHandler(p: "Player", conn: Connection) -> HTTPResponse:
         return (400, b"")
 
     if USING_CHIMU:
-        search_url = f"{app.settings.MIRROR_URL}/search"
+        search_url = f"{app.state.settings.MIRROR_URL}/search"
     else:
-        search_url = f"{app.settings.MIRROR_URL}/api/search"
+        search_url = f"{app.state.settings.MIRROR_URL}/api/search"
 
     params: dict[str, object] = {"amount": 100, "offset": int(conn.args["p"]) * 100}
 
@@ -454,22 +453,18 @@ async def osuSearchHandler(p: "Player", conn: Connection) -> HTTPResponse:
         params["status"] = status.osu_api
 
     async with app.state.services.http.get(search_url, params=params) as resp:
-        if not resp:
-            stacktrace = app.utils.get_appropriate_stacktrace()
-            await app.utils.log_strange_occurrence(stacktrace)
+        if resp.status != 200:
+            if USING_CHIMU:
+                # chimu uses 404 for no maps found
+                if resp.status == 404:
+                    return b"0"
 
-        if USING_CHIMU:  # error handling varies
-            if resp.status == 404:
-                return b"0"  # no maps found
-            elif resp.status >= 500:  # chimu server error (happens a lot :/)
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-            elif resp.status != 200:
+            if 400 <= resp.status < 500:
+                # client error, report this to cmyui
                 stacktrace = app.utils.get_appropriate_stacktrace()
                 await app.utils.log_strange_occurrence(stacktrace)
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-        else:  # cheesegull
-            if resp.status != 200:
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
+
+            return b"-1\nFailed to retrieve data from the beatmap mirror."
 
         result = await resp.json()
 
@@ -665,7 +660,7 @@ async def osuSubmitModularSelector(
     ):
         # Get the PP cap for the current context.
         """# TODO: find where to put autoban pp
-        pp_cap = app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = app.state.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
             await score.player.restrict(
@@ -726,7 +721,7 @@ async def osuSubmitModularSelector(
                 if prev_n1:
                     if score.player.id != prev_n1["id"]:
                         ann.append(
-                            f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
+                            f"(Previous #1: [https://{app.state.settings.DOMAIN}/u/"
                             "{id} {name}])".format(**prev_n1),
                         )
 
@@ -1017,7 +1012,7 @@ async def osuSubmitModularSelector(
             "\n",
             # overall ranking chart
             "chartId:overall",
-            f"chartUrl:https://{app.settings.DOMAIN}/u/{score.player.id}",
+            f"chartUrl:https://{app.state.settings.DOMAIN}/u/{score.player.id}",
             "chartName:Overall Ranking",
             *overall_ranking_chart_entries,
             f"achievements-new:{achievements_str}",
@@ -1067,10 +1062,10 @@ async def osuRate(
     if "v" not in conn.args:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
-        if map_md5 not in app.state.cache["beatmap"]:
+        if map_md5 not in app.state.cache.beatmap:
             return b"no exist"
 
-        cached = app.state.cache["beatmap"][map_md5]
+        cached = app.state.cache.beatmap[map_md5]
 
         # only allow rating on maps with a leaderboard.
         if cached.status < RankedStatus.Ranked:
@@ -1101,7 +1096,7 @@ async def osuRate(
 
     ratings = [
         row[0]
-        async for row in db_conn.iterate(
+        for row in await db_conn.fetch_all(
             "SELECT rating FROM ratings WHERE map_md5 = :map_md5",
             {"map_md5": map_md5},
         )
@@ -1149,9 +1144,9 @@ async def getScores(
 
     # check if this md5 has already been  cached as
     # unsubmitted/needs update to reduce osu!api spam
-    if map_md5 in app.state.cache["unsubmitted"]:
+    if map_md5 in app.state.cache.unsubmitted:
         return b"-1|false"
-    if map_md5 in app.state.cache["needs_update"]:
+    if map_md5 in app.state.cache.needs_update:
         return b"1|false"
 
     mods = Mods(int(conn.args["mods"]))
@@ -1182,16 +1177,16 @@ async def getScores(
         # map not found, figure out whether it needs an
         # update or isn't submitted using it's filename.
 
-        if has_set_id and map_set_id not in app.state.cache["beatmapset"]:
+        if has_set_id and map_set_id not in app.state.cache.beatmapset:
             # set not cached, it doesn't exist
-            app.state.cache["unsubmitted"].add(map_md5)
+            app.state.cache.unsubmitted.add(map_md5)
             return b"-1|false"
 
         map_filename = unquote(conn.args["f"].replace("+", " "))
 
         if has_set_id:
             # we can look it up in the specific set from cache
-            for bmap in app.state.cache["beatmapset"][map_set_id].maps:
+            for bmap in app.state.cache.beatmapset[map_set_id].maps:
                 if map_filename == bmap.filename:
                     map_exists = True
                     break
@@ -1211,13 +1206,13 @@ async def getScores(
 
         if map_exists:
             # map can be updated.
-            app.state.cache["needs_update"].add(map_md5)
+            app.state.cache.needs_update.add(map_md5)
             return b"1|false"
         else:
             # map is unsubmitted.
             # add this map to the unsubmitted cache, so
             # that we don't have to make this request again.
-            app.state.cache["unsubmitted"].add(map_md5)
+            app.state.cache.unsubmitted.add(map_md5)
             return b"-1|false"
 
     # we've found a beatmap for the request.
@@ -1452,7 +1447,7 @@ async def osuMarkAsRead(p: "Player", conn: Connection) -> HTTPResponse:
 
 @domain.route("/web/osu-getseasonal.php")
 async def osuSeasonal(conn: Connection) -> HTTPResponse:
-    return orjson.dumps(app.settings.SEASONAL_BGS._items)
+    return orjson.dumps(app.state.settings.SEASONAL_BGS._items)
 
 
 @domain.route("/web/bancho_connect.php")
@@ -1547,6 +1542,50 @@ JSON = orjson.dumps
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
+
+
+def format_clan_basic(clan: "Clan") -> dict[str, object]:
+    return {
+        "id": clan.id,
+        "name": clan.name,
+        "tag": clan.tag,
+        "members": len(clan.member_ids),
+    }
+
+
+def format_player_basic(p: "Player") -> dict[str, object]:
+    return {
+        "id": p.id,
+        "name": p.name,
+        "country": p.geoloc["country"]["acronym"],
+        "clan": format_clan_basic(p.clan) if p.clan else None,
+        "online": p.online,
+    }
+
+
+def format_map_basic(m: Beatmap) -> dict[str, object]:
+    return {
+        "id": m.id,
+        "md5": m.md5,
+        "set_id": m.set_id,
+        "artist": m.artist,
+        "title": m.title,
+        "version": m.version,
+        "creator": m.creator,
+        "last_update": m.last_update,
+        "total_length": m.total_length,
+        "max_combo": m.max_combo,
+        "status": m.status,
+        "plays": m.plays,
+        "passes": m.passes,
+        "mode": m.mode,
+        "bpm": m.bpm,
+        "cs": m.cs,
+        "od": m.od,
+        "ar": m.ar,
+        "hp": m.hp,
+        "diff": m.diff,
+    }
 
 
 @domain.route("/api/get_player_count")
@@ -1841,7 +1880,11 @@ async def api_get_player_scores(conn: Connection) -> HTTPResponse:
     player_info = {
         "id": p.id,
         "name": p.name,
-        "clan": {"id": p.clan.id, "name": p.clan.name, "tag": p.clan.tag}
+        "clan": {
+            "id": p.clan.id,
+            "name": p.clan.name,
+            "tag": p.clan.tag,
+        }
         if p.clan
         else None,
     }
@@ -2009,7 +2052,10 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         f"FROM {mode.scores_table} s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn AND s.status = 2",
+        "WHERE s.map_md5 = :map_md5 "
+        "AND s.mode = :mode_vn "
+        "AND s.status = 2 "
+        "AND u.priv & 1",
     ]
     params: dict[str, object] = {"map_md5": bmap.md5, "mode_vn": mode.as_vanilla}
 
@@ -2019,7 +2065,7 @@ async def api_get_map_scores(conn: Connection) -> HTTPResponse:
         else:
             query.append("AND mods & :mods != 0")
 
-    params["mods"] = mods
+        params["mods"] = mods
 
     # unlike /api/get_player_scores, we'll sort by score/pp depending
     # on the mode played, since we want to replicated leaderboards.
@@ -2237,7 +2283,7 @@ async def api_get_match(conn: Connection) -> HTTPResponse:
 
 
 @domain.route("/api/get_leaderboard")
-async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
+async def api_get_leaderboard(conn: Connection) -> HTTPResponse:
     conn.resp_headers["Content-Type"] = "application/json"
 
     if "mode" in conn.args:
@@ -2270,7 +2316,7 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
 
         offset = int(conn.args["offset"])
 
-        if not 0 < offset <= 0x7FFFFFFF:
+        if not 0 <= offset <= 0x7FFFFFFF:
             return (400, JSON({"status": "Invalid offset."}))
     else:
         offset = 0
@@ -2312,6 +2358,88 @@ async def api_get_global_leaderboard(conn: Connection) -> HTTPResponse:
     )
 
     return JSON({"status": "success", "leaderboard": [dict(row) for row in rows]})
+
+
+@domain.route("/api/get_clan")
+async def api_get_clan(conn: Connection) -> HTTPResponse:
+    """Return information of a given clan."""
+    conn.resp_headers["Content-Type"] = "application/json"
+
+    # TODO: fetching by name & tag (requires safe_name, safe_tag)
+
+    if not (
+        "id" in conn.args
+        and conn.args["id"].isdecimal()
+        and 0 <= (clan_id := int(conn.args["id"])) < 2_147_483_647
+    ):
+        return (400, JSON({"status": "Must provide valid match id."}))
+
+    if not (clan := app.state.sessions.clans.get(id=clan_id)):
+        return (404, JSON({"status": "Clan not found."}))
+
+    members: list[Player] = []
+
+    for member_id in clan.member_ids:
+        member = await app.state.sessions.players.from_cache_or_sql(id=member_id)
+        assert member is not None
+        members.append(member)
+
+    owner = await app.state.sessions.players.from_cache_or_sql(id=clan.owner_id)
+    assert owner is not None
+
+    return JSON(
+        {
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
+            "members": [
+                {
+                    "id": member.id,
+                    "name": member.name,
+                    "country": member.geoloc["country"]["acronym"],
+                    "rank": ("Member", "Officer", "Owner")[member.clan_priv - 1],  # type: ignore
+                }
+                for member in members
+            ],
+            "owner": {
+                "id": owner.id,
+                "name": owner.name,
+                "country": owner.geoloc["country"]["acronym"],
+                "rank": "Owner",
+            },
+        },
+    )
+
+
+@domain.route("/api/get_mappool")
+async def api_get_pool(conn: Connection) -> HTTPResponse:
+    """Return information of a given mappool."""
+    conn.resp_headers["Content-Type"] = "application/json"
+
+    # TODO: fetching by name (requires safe_name)
+
+    if not (
+        "id" in conn.args
+        and conn.args["id"].isdecimal()
+        and 0 <= (pool_id := int(conn.args["id"])) < 2_147_483_647
+    ):
+        return (400, JSON({"status": "Must provide valid pool id."}))
+
+    if not (pool := app.state.sessions.pools.get(id=pool_id)):
+        return (404, JSON({"status": "Pool not found."}))
+
+    return JSON(
+        {
+            "id": pool.id,
+            "name": pool.name,
+            "created_at": pool.created_at,
+            "created_by": format_player_basic(pool.created_by),
+            "maps": {
+                f"{mods!r}{slot}": format_map_basic(bmap)
+                for (mods, slot), bmap in pool.maps.items()
+            },
+        },
+    )
 
 
 def requires_api_key(f: Callable) -> Callable:
@@ -2366,7 +2494,7 @@ async def api_set_avatar(conn: Connection, p: "Player") -> HTTPResponse:
 
 """ Misc handlers """
 
-if app.settings.REDIRECT_OSU_URLS:
+if app.state.settings.REDIRECT_OSU_URLS:
     # NOTE: this will likely be removed with the addition of a frontend.
     async def osu_redirect(conn: Connection) -> HTTPResponse:
         conn.resp_headers["Location"] = f"https://osu.ppy.sh{conn.path}"
@@ -2407,7 +2535,7 @@ async def get_osz(conn: Connection) -> HTTPResponse:
     else:
         query_str = f"d/{set_id}"
 
-    conn.resp_headers["Location"] = f"{app.settings.MIRROR_URL}/{query_str}"
+    conn.resp_headers["Location"] = f"{app.state.settings.MIRROR_URL}/{query_str}"
     return (301, b"")
 
 
@@ -2478,7 +2606,7 @@ async def register_account(
     name = mp_args["user[username]"].strip()
     email = mp_args["user[user_email]"]
     pw_txt = mp_args["user[password]"]
-    safe_name = safe_name = name.lower().replace(" ", "_")
+    safe_name = name.lower().replace(" ", "_")
 
     if not all((name, email, pw_txt)) or "check" not in mp_args:
         return (400, b"Missing required params")
@@ -2498,7 +2626,7 @@ async def register_account(
     if "_" in name and " " in name:
         errors["username"].append('May contain "_" and " ", but not both.')
 
-    if name in app.settings.DISALLOWED_NAMES:
+    if name in app.state.settings.DISALLOWED_NAMES:
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
@@ -2530,7 +2658,7 @@ async def register_account(
     if len(set(pw_txt)) <= 3:
         errors["password"].append("Must have more than 3 unique characters.")
 
-    if pw_txt.lower() in app.settings.DISALLOWED_PASSWORDS:
+    if pw_txt.lower() in app.state.settings.DISALLOWED_PASSWORDS:
         errors["password"].append("That password was deemed too simple.")
 
     if errors:
@@ -2546,12 +2674,12 @@ async def register_account(
         async with app.state.sessions.players._lock:
             pw_md5 = hashlib.md5(pw_txt.encode()).hexdigest().encode()
             pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-            app.state.cache["bcrypt"][pw_bcrypt] = pw_md5  # cache result for login
+            app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
 
             if "CF-IPCountry" in conn.headers:
                 # best case, dev has enabled ip geolocation in the
                 # network tab of cloudflare, so it sends the iso code.
-                country_acronym = conn.headers["CF-IPCountry"]
+                country_acronym = conn.headers["CF-IPCountry"].lower()
             else:
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
@@ -2565,11 +2693,11 @@ async def register_account(
                     else:
                         ip_str = conn.headers["X-Real-IP"]
 
-                if ip_str in app.state.cache["ip"]:
-                    ip = app.state.cache["ip"][ip_str]
+                if ip_str in app.state.cache.ip:
+                    ip = app.state.cache.ip[ip_str]
                 else:
                     ip = ipaddress.ip_address(ip_str)
-                    app.state.cache["ip"][ip_str] = ip
+                    app.state.cache.ip[ip_str] = ip
 
                 if not ip.is_private:
                     if app.state.services.geoloc_db is not None:
