@@ -14,6 +14,7 @@ import types
 import zipfile
 from pathlib import Path
 from typing import Any
+from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
 from typing import Sequence
@@ -35,8 +36,7 @@ from cmyui.logging import Rainbow
 from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
-import app.state
-from app.constants.countries import country_codes
+import app.settings
 
 __all__ = (
     # TODO: organize/sort these
@@ -51,18 +51,9 @@ __all__ = (
     "running_via_asgi_webserver",
     "_install_synchronous_excepthook",
     "get_appropriate_stacktrace",
-    "log_strange_occurrence",
     "is_inet_address",
-    "Geolocation",
-    "fetch_geoloc_db",
-    "fetch_geoloc_web",
     "pymysql_encode",
     "escape_enum",
-    "shutdown_signal_handler",
-    "_handle_fut_exception",
-    "_conn_finished_cb",
-    "await_ongoing_connections",
-    "cancel_housekeeping_tasks",
     "ensure_supported_platform",
     "ensure_local_services_are_running",
     "ensure_directory_structure",
@@ -71,9 +62,8 @@ __all__ = (
     "_install_debugging_hooks",
     "display_startup_dialog",
     "create_config_from_default",
-    "_get_current_sql_structure_version",
-    "run_sql_migrations",
     "orjson_serialize_to_str",
+    "get_media_type",
 )
 
 DATA_PATH = Path.cwd() / ".data"
@@ -81,10 +71,7 @@ ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 OPPAI_PATH = Path.cwd() / "oppai-ng"
-SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
-
-VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 
 useful_keys = (Keys.M1, Keys.M2, Keys.K1, Keys.K2)
 
@@ -314,7 +301,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{app.state.settings.VERSION} ran into an issue before starting up :(",
+            f"gulag v{app.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -348,52 +335,6 @@ def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str
     ]
 
 
-STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
-
-
-async def log_strange_occurrence(obj: object) -> None:
-    pickled_obj: bytes = pickle.dumps(obj)
-    uploaded = False
-
-    if app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS:
-        # automatically reporting problems to cmyui's server
-        async with app.state.services.http.post(
-            url="https://log.cmyui.xyz/",
-            headers={
-                "Gulag-Version": repr(app.state.settings.VERSION),
-                "Gulag-Domain": app.state.settings.DOMAIN,
-            },
-            data=pickled_obj,
-        ) as resp:
-            if resp.status == 200 and (await resp.read()) == b"ok":
-                uploaded = True
-                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-                log("Thank you for your participation! <3", Rainbow)
-            else:
-                log(
-                    f"Autoupload to cmyui's server failed (HTTP {resp.status})",
-                    Ansi.LRED,
-                )
-
-    if not uploaded:
-        # log to a file locally, and prompt the user
-        while True:
-            log_file = STRANGE_LOG_DIR / f"strange_{secrets.token_hex(4)}.db"
-            if not log_file.exists():
-                break
-
-        log_file.touch(exist_ok=False)
-        log_file.write_bytes(pickled_obj)
-
-        log("Logged strange occurrence to", Ansi.LYELLOW, end=" ")
-        printc("/".join(log_file.parts[-4:]), Ansi.LBLUE)
-
-        log(
-            "Greatly appreciated if you could forward this to cmyui#0425 :)",
-            Ansi.LYELLOW,
-        )
-
-
 def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
     """Check whether addr is of type tuple[str, int]."""
     return (
@@ -402,67 +343,6 @@ def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
         and isinstance(addr[0], str)
         and isinstance(addr[1], int)
     )
-
-
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
-
-
-class Country(TypedDict):
-    acronym: str
-    numeric: int
-
-
-class Geolocation(TypedDict):
-    latitude: float
-    longitude: float
-    country: Country
-
-
-def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
-    """Fetch geolocation data based on ip (using local db)."""
-    if not app.state.services.geoloc_db:
-        return
-
-    res = app.state.services.geoloc_db.city(ip)
-
-    if res.country.iso_code is not None:
-        acronym = res.country.iso_code.lower()
-    else:
-        acronym = "xx"
-
-    return {
-        "latitude": res.location.latitude or 0.0,
-        "longitude": res.location.longitude or 0.0,
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
-    }
-
-
-async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
-    """Fetch geolocation data based on ip (using ip-api)."""
-    url = f"http://ip-api.com/line/{ip}"
-
-    async with app.state.services.http.get(url) as resp:
-        if not resp or resp.status != 200:
-            log("Failed to get geoloc data: request failed.", Ansi.LRED)
-            return
-
-        status, *lines = (await resp.text()).split("\n")
-
-        if status != "success":
-            err_msg = lines[0]
-            if err_msg == "invalid query":
-                err_msg += f" ({url})"
-
-            log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
-            return
-
-    acronym = lines[1].lower()
-
-    return {
-        "latitude": float(lines[6]),
-        "longitude": float(lines[7]),
-        "country": {"acronym": acronym, "numeric": country_codes[acronym]},
-    }
 
 
 T = TypeVar("T")
@@ -485,89 +365,6 @@ def escape_enum(
     _: Optional[dict[object, object]] = None,
 ) -> str:  # used for ^
     return str(int(val))
-
-
-def shutdown_signal_handler(signum: Union[int, signal.Signals]) -> None:
-    """Handle a posix signal, flagging the server to shut down."""
-    print("\x1b[2K", end="\r")  # remove ^C from window
-
-    # TODO: handle SIGUSR1 for restarting
-
-    if app.state.shutting_down:
-        return
-
-    log(f"Received {signal.strsignal(signum)}", Ansi.LRED)
-
-    app.state.shutting_down = True
-
-
-def _handle_fut_exception(fut: asyncio.Future) -> None:
-    if not fut.cancelled():
-        if exception := fut.exception():
-            app.state.loop.call_exception_handler(
-                {
-                    "message": "unhandled exception during loop shutdown",
-                    "exception": exception,
-                    "task": fut,
-                },
-            )
-
-
-def _conn_finished_cb(task: asyncio.Task) -> None:
-    if not task.cancelled():
-        exc = task.exception()
-        if exc is not None and not isinstance(exc, (SystemExit, KeyboardInterrupt)):
-            loop = asyncio.get_running_loop()
-            loop.default_exception_handler({"exception": exc})
-
-    app.state.sessions.ongoing_connections.remove(task)
-    task.remove_done_callback(_conn_finished_cb)
-
-
-async def await_ongoing_connections(timeout: float) -> None:
-    log(
-        f"-> Allowing up to {timeout:.2f} seconds for "
-        f"{len(app.state.sessions.ongoing_connections)} ongoing connection(s) to finish.",
-        Ansi.LMAGENTA,
-    )
-
-    done, pending = await asyncio.wait(
-        app.state.sessions.ongoing_connections,
-        timeout=timeout,
-    )
-
-    for task in done:
-        _handle_fut_exception(task)
-
-    if pending:
-        log(
-            f"-> Awaital timeout - cancelling {len(pending)} pending connection(s).",
-            Ansi.LRED,
-        )
-
-        for task in pending:
-            task.cancel()
-
-        await asyncio.gather(*pending, return_exceptions=True)
-
-        for task in pending:
-            _handle_fut_exception(task)
-
-
-async def cancel_housekeeping_tasks() -> None:
-    log(
-        f"-> Cancelling {len(app.state.sessions.housekeeping_tasks)} housekeeping tasks.",
-        Ansi.LMAGENTA,
-    )
-
-    # cancel housekeeping tasks
-    for task in app.state.sessions.housekeeping_tasks:
-        task.cancel()
-
-    await asyncio.gather(*app.state.sessions.housekeeping_tasks, return_exceptions=True)
-
-    for task in app.state.sessions.housekeeping_tasks:
-        _handle_fut_exception(task)
 
 
 def ensure_supported_platform() -> int:
@@ -600,7 +397,7 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if app.state.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
+    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
             if os.path.exists(f"/var/run/{service}/{service}.pid"):
@@ -702,7 +499,7 @@ def _install_debugging_hooks() -> None:
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
-    if app.state.settings.DEVELOPER_MODE:
+    if app.settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
 
     # running on root grants the software potentally dangerous and
@@ -713,7 +510,7 @@ def display_startup_dialog() -> None:
             Ansi.LYELLOW,
         )
 
-        if app.state.settings.DEVELOPER_MODE:
+        if app.settings.DEVELOPER_MODE:
             log(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",
@@ -726,96 +523,14 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
 
-async def _get_current_sql_structure_version() -> Optional[cmyui.Version]:
-    """Get the last launched version of the server."""
-    res = await app.state.services.database.fetch_one(
-        "SELECT ver_major, ver_minor, ver_micro "
-        "FROM startups ORDER BY datetime DESC LIMIT 1",
-    )
-
-    if res:
-        return cmyui.Version(*map(int, res))
-
-
-async def run_sql_migrations() -> None:
-    """Update the sql structure, if it has changed."""
-    if not (current_ver := await _get_current_sql_structure_version()):
-        return  # already up to date (server has never run before)
-
-    latest_ver = cmyui.Version.from_str(app.state.settings.VERSION)
-
-    if latest_ver == current_ver:
-        return  # already up to date
-
-    # version changed; there may be sql changes.
-    content = SQL_UPDATES_FILE.read_text()
-
-    queries = []
-    q_lines = []
-
-    update_ver = None
-
-    for line in content.splitlines():
-        if not line:
-            continue
-
-        if line.startswith("#"):
-            # may be normal comment or new version
-            if r_match := VERSION_RGX.fullmatch(line):
-                update_ver = cmyui.Version.from_str(r_match["ver"])
-
-            continue
-        elif not update_ver:
-            continue
-
-        # we only need the updates between the
-        # previous and new version of the server.
-        if current_ver < update_ver <= latest_ver:
-            if line.endswith(";"):
-                if q_lines:
-                    q_lines.append(line)
-                    queries.append(" ".join(q_lines))
-                    q_lines = []
-                else:
-                    queries.append(line)
-            else:
-                q_lines.append(line)
-
-    if queries:
-        log(
-            f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
-            Ansi.LMAGENTA,
-        )
-
-    # XXX: so it turns out we can't use a transaction here (at least with mysql)
-    #      to roll back changes, as any structural changes to tables implicitly
-    #      commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with app.state.services.database.connection() as db_conn:
-        for query in queries:
-            try:
-                await db_conn.execute(query)
-            except pymysql.err.MySQLError as exc:
-                log(f"Failed: {query}", Ansi.GRAY)  # type: ignore
-                log(repr(exc))
-                log(
-                    "SQL failed to update - unless you've been "
-                    "modifying sql and know what caused this, "
-                    "please please contact cmyui#0425.",
-                    Ansi.LRED,
-                )
-                raise KeyboardInterrupt from exc
-        else:
-            # all queries executed successfully
-            await db_conn.execute(
-                "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-                "VALUES (:major, :minor, :micro, NOW())",
-                {
-                    "major": latest_ver.major,
-                    "minor": latest_ver.minor,
-                    "micro": latest_ver.micro,
-                },
-            )
-
-
 def orjson_serialize_to_str(*args, **kwargs) -> str:
     return orjson.dumps(*args, **kwargs).decode()
+
+
+def get_media_type(extension: str) -> Optional[str]:
+    if extension in ("jpg", "jpeg"):
+        return "image/jpeg"
+    elif extension == "png":
+        return "image/png"
+
+    # return none, fastapi will attempt to figure it out

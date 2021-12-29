@@ -8,6 +8,7 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable
+from typing import Literal
 from typing import Optional
 from typing import Type
 from typing import Union
@@ -19,11 +20,10 @@ from cmyui.logging import log
 from cmyui.logging import RGB
 from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
-from cmyui.web import Connection
-from cmyui.web import Domain
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.settings
 import app.state
 import app.utils
 import packets
@@ -53,17 +53,24 @@ from packets import BanchoPacketReader
 from packets import BasePacket
 from packets import ClientPackets
 
-HTTPResponse = Optional[Union[bytes, tuple[int, bytes]]]
-
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+
+from fastapi import APIRouter
+from fastapi import Response
+
+from fastapi.param_functions import Header
+from fastapi.requests import Request
+
+from fastapi.responses import HTMLResponse
 
 """ Bancho: handle connections from the osu! client """
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
-BASE_DOMAIN = app.state.settings.DOMAIN
+router = APIRouter(tags=["Bancho API"])
+
+BASE_DOMAIN = app.settings.DOMAIN
 _domain_escaped = BASE_DOMAIN.replace(".", r"\.")
-domain = Domain(re.compile(rf"^c[e4-6]?\.(?:{_domain_escaped}|ppy\.sh)$"))
 
 # TODO: dear god
 NOW_PLAYING_RGX = re.compile(
@@ -74,40 +81,44 @@ NOW_PLAYING_RGX = re.compile(
 )
 
 
-@domain.route("/")
-async def bancho_http_handler(conn: Connection) -> bytes:
+@router.get("/")
+async def bancho_http_handler():
     """Handle a request from a web browser."""
     packets = app.state.packets["all"]
 
-    return (
+    return HTMLResponse(
         b"<!DOCTYPE html>"
         + "<br>".join(
             (
-                f"Running gulag v{app.state.settings.VERSION}",
+                f"Running gulag v{app.settings.VERSION}",
                 f"Players online: {len(app.state.sessions.players) - 1}",
                 '<a href="https://github.com/cmyui/gulag">Source code</a>',
                 "",
                 f"<b>Packets handled ({len(packets)})</b>",
                 "<br>".join([f"{p.name} ({p.value})" for p in packets]),
             ),
-        ).encode()
+        ).encode(),
     )
 
 
-@domain.route("/", methods=["POST"])
-async def bancho_handler(conn: Connection) -> HTTPResponse:
-    if conn.body is None:
-        return
-
-    if "CF-Connecting-IP" in conn.headers:
-        ip_str = conn.headers["CF-Connecting-IP"]
+@router.post("/")
+async def bancho_handler(
+    request: Request,
+    x_forwarded_for: str = Header(None),
+    x_real_ip: str = Header(None),
+    cf_connecting_ip: Optional[str] = Header(None),
+    user_agent: Literal["osu!"] = Header(...),
+    host: str = Header(None),
+):
+    if cf_connecting_ip is not None:
+        ip_str = cf_connecting_ip
     else:
         # if the request has been forwarded, get the origin
-        forwards = conn.headers["X-Forwarded-For"].split(",")
+        forwards = x_forwarded_for.split(",")
         if len(forwards) != 1:
             ip_str = forwards[0]
         else:
-            ip_str = conn.headers["X-Real-IP"]
+            ip_str = x_real_ip
 
     if ip_str in app.state.cache.ip:
         ip = app.state.cache.ip[ip_str]
@@ -115,20 +126,20 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
         ip = ipaddress.ip_address(ip_str)
         app.state.cache.ip[ip_str] = ip
 
-    if "User-Agent" not in conn.headers or conn.headers["User-Agent"] != "osu!":
-        url = f'{conn.cmd} {conn.headers["Host"]}{conn.path}'
+    if user_agent != "osu!":
+        url = f"{request.method} {host}{request['path']}"
         log(f"[{ip}] {url} missing user-agent.", Ansi.LRED)
         return
 
     # check for 'osu-token' in the headers.
     # if it's not there, this is a login request.
 
-    if "osu-token" not in conn.headers:
+    if "osu-token" not in request.headers:
         # login is a bit of a special case,
         # so we'll handle it separately.
         async with app.state.sessions.players._lock:
             async with app.state.services.database.connection() as db_conn:
-                login_data = await login(conn.body, ip, db_conn)
+                login_data = await login(await request.body(), ip, db_conn)
 
         if login_data is None:
             # invalid login; failed.
@@ -136,17 +147,22 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
 
         token, body = login_data
 
-        conn.resp_headers["cho-token"] = token
-        return body
+        return Response(
+            content=body,
+            headers={"cho-token": token},
+        )
 
     # get the player from the specified osu token.
-    player = app.state.sessions.players.get(token=conn.headers["osu-token"])
+    player = app.state.sessions.players.get(token=request.headers["osu-token"])
 
     if not player:
         # token not found; chances are that we just restarted
         # the server - tell their client to reconnect immediately.
         # (send 0ms restart packet since the server is already up)
-        return packets.notification("Server has restarted.") + packets.restart_server(0)
+        return Response(
+            content=packets.notification("Server has restarted.")
+            + packets.restart_server(0),
+        )
 
     # restricted users may only use certain packet handlers.
     if not player.restricted:
@@ -160,18 +176,18 @@ async def bancho_handler(conn: Connection) -> HTTPResponse:
     # NOTE: any unhandled packets will be ignored internally.
 
     packets_handled = []
-    for packet in BanchoPacketReader(conn.body, packet_map):
-        await packet.handle(player)
-        packets_handled.append(packet.__class__.__name__)
+    with memoryview(await request.body()) as body_view:
+        for packet in BanchoPacketReader(body_view, packet_map):
+            await packet.handle(player)
+            packets_handled.append(packet.__class__.__name__)
 
-    if app.state.settings.DEBUG:
+    if app.settings.DEBUG:
         packets_str = ", ".join(packets_handled) or "None"
         log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
     player.last_recv_time = time.time()
-    conn.resp_headers["Content-Type"] = "text/html; charset=UTF-8"
 
-    return player.dequeue() or b""
+    return Response(content=player.dequeue())
 
 
 """ Packet logic """
@@ -295,7 +311,7 @@ class SendMessage(BasePacket):
                 ),
             )
 
-        if msg.startswith(app.state.settings.COMMAND_PREFIX):
+        if msg.startswith(app.settings.COMMAND_PREFIX):
             cmd = await commands.process_commands(p, t_chan, msg)
         else:
             cmd = None
@@ -394,7 +410,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{app.state.settings.VERSION}.",
+    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{app.settings.VERSION}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -406,7 +422,7 @@ DELTA_90_DAYS = timedelta(days=90)
 
 
 async def login(
-    body_view: memoryview,
+    body: bytes,
     ip: IPAddress,
     db_conn: databases.core.Connection,
 ) -> Optional[tuple[str, bytes]]:
@@ -435,9 +451,6 @@ async def login(
     """
 
     """ Parse data and verify the request is legitimate. """
-    # the body for login requests is quite small
-    # so copying here is fine for simplicity
-    body = body_view.tobytes()
 
     if len(split := body.decode().split("\n")[:-1]) != 3:
         log(f"Invalid login request from {ip}.", Ansi.LRED)
@@ -468,7 +481,7 @@ async def login(
     # than three months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
-    if not app.state.settings.DEBUG:
+    if not app.settings.DEBUG:
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
         if osu_ver_date < (date.today() - DELTA_90_DAYS):
@@ -664,11 +677,11 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.state.services.fetch_geoloc_db(ip)
+            user_info["geoloc"] = app.utils.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
+            user_info["geoloc"] = await app.utils.fetch_geoloc_web(ip)
 
         if db_country == "xx":
             # bugfix for old gulag versions when
@@ -740,8 +753,8 @@ async def login(
     # TODO: fetch p.recent_scores from sql
 
     data += packets.main_menu_icon(
-        icon_url=app.state.settings.MENU_ICON_URL,
-        onclick_url=app.state.settings.MENU_ONCLICK_URL,
+        icon_url=app.settings.MENU_ICON_URL,
+        onclick_url=app.settings.MENU_ONCLICK_URL,
     )
     data += packets.friends_list(*p.friends)
     data += packets.silence_end(p.remaining_silence)
@@ -957,7 +970,7 @@ class SendPrivateMessage(BasePacket):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} tried to send a dm while silenced.", Ansi.LYELLOW)
             return
 
@@ -972,21 +985,21 @@ class SendPrivateMessage(BasePacket):
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
         if not (t := await app.state.sessions.players.from_cache_or_sql(name=t_name)):
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} tried to write to non-existent user {t_name}.", Ansi.LYELLOW)
             return
 
         if p.id in t.blocks:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they have them blocked.")
             return
 
         if t.pm_private and p.id not in t.friends:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are blocking dms.")
             return
 
@@ -994,7 +1007,7 @@ class SendPrivateMessage(BasePacket):
             # if target is silenced, inform player.
             p.enqueue(packets.target_silenced(t_name))
 
-            if app.state.settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are silenced.")
             return
 
@@ -1035,7 +1048,7 @@ class SendPrivateMessage(BasePacket):
             )
         else:
             # messaging the bot, check for commands & /np.
-            if msg.startswith(app.state.settings.COMMAND_PREFIX):
+            if msg.startswith(app.settings.COMMAND_PREFIX):
                 cmd = await commands.process_commands(p, t, msg)
             else:
                 cmd = None
@@ -1099,7 +1112,7 @@ class SendPrivateMessage(BasePacket):
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
 
-                                        for acc in app.state.settings.PP_CACHED_ACCS:
+                                        for acc in app.settings.PP_CACHED_ACCS:
                                             ezpp.set_accuracy_percent(acc)
 
                                             ezpp.calculate(osu_file_path)
@@ -1114,7 +1127,7 @@ class SendPrivateMessage(BasePacket):
 
                                     peace.set_mode(mode_vn)
 
-                                    for acc in app.state.settings.PP_CACHED_ACCS:
+                                    for acc in app.settings.PP_CACHED_ACCS:
                                         peace.set_acc(acc)
 
                                         calc = peace.calculate(beatmap)
@@ -1142,7 +1155,7 @@ class SendPrivateMessage(BasePacket):
 
                                 pp_values = []
 
-                                for score in app.state.settings.PP_CACHED_SCORES:
+                                for score in app.settings.PP_CACHED_SCORES:
                                     peace.set_score(int(score))
 
                                     calc = peace.calculate(beatmap)
@@ -1242,7 +1255,7 @@ async def execute_menu_option(p: Player, key: int) -> None:
     # this is one of their menu options, execute it.
     cmd, data = p.current_menu.options[key]
 
-    if app.state.settings.DEBUG:
+    if app.settings.DEBUG:
         print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
 
     if cmd == MenuCommands.Reset:

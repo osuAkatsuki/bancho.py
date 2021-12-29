@@ -34,6 +34,7 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.settings
 import app.state
 import app.utils
 import packets
@@ -163,7 +164,7 @@ def command(
 @command(Privileges.NORMAL, aliases=["", "h"], hidden=True)
 async def _help(ctx: Context) -> Optional[str]:
     """Show all documented commands the player can access."""
-    prefix = app.state.settings.COMMAND_PREFIX
+    prefix = app.settings.COMMAND_PREFIX
     l = ["Individual commands", "-----------"]
 
     for cmd in regular_commands:
@@ -265,7 +266,7 @@ async def changename(ctx: Context) -> Optional[str]:
     if "_" in name and " " in name:
         return 'May contain "_" and " ", but not both.'
 
-    if name in app.state.settings.DISALLOWED_NAMES:
+    if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
     if await app.state.services.database.fetch_one(
@@ -411,7 +412,7 @@ async def top(ctx: Context) -> Optional[str]:
     return "\n".join(
         [f"Top 10 scores for {p.embed} ({ctx.args[0]})."]
         + [
-            TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.state.settings.DOMAIN, **s)
+            TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.settings.DOMAIN, **s)
             for idx, s in enumerate(scores)
         ],
     )
@@ -1279,8 +1280,8 @@ async def recalc(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER, hidden=True)
 async def debug(ctx: Context) -> Optional[str]:
     """Toggle the console's debug setting."""
-    app.state.settings.DEBUG = not app.state.settings.DEBUG
-    return f"Toggled {'on' if app.state.settings.DEBUG else 'off'}."
+    app.settings.DEBUG = not app.settings.DEBUG
+    return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
 
 
 # NOTE: these commands will likely be removed
@@ -1401,7 +1402,7 @@ async def reload(ctx: Context) -> Optional[str]:
 async def server(ctx: Context) -> Optional[str]:
     """Retrieve performance data about the server."""
 
-    build_str = f"gulag v{app.state.settings.VERSION!r} ({app.state.settings.DOMAIN})"
+    build_str = f"gulag v{app.settings.VERSION!r} ({app.settings.DOMAIN})"
 
     # get info about this process
     proc = psutil.Process(os.getpid())
@@ -1437,10 +1438,10 @@ async def server(ctx: Context) -> Optional[str]:
     reqs = (Path.cwd() / "requirements.txt").read_text().splitlines()
     pkg_sections = [reqs[i : i + 3] for i in range(0, len(reqs), 3)]
 
-    mirror_url = app.state.settings.MIRROR_URL
-    using_osuapi = app.state.settings.OSU_API_KEY != ""
-    advanced_mode = app.state.settings.DEVELOPER_MODE
-    auto_logging = app.state.settings.AUTOMATICALLY_REPORT_PROBLEMS
+    mirror_url = app.settings.MIRROR_URL
+    using_osuapi = app.settings.OSU_API_KEY != ""
+    advanced_mode = app.settings.DEVELOPER_MODE
+    auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
     return "\n".join(
         [
@@ -1560,7 +1561,7 @@ def ensure_match(
 @ensure_match
 async def mp_help(ctx: Context, match: "Match") -> Optional[str]:
     """Show all documented multiplayer commands the player can access."""
-    prefix = app.state.settings.COMMAND_PREFIX
+    prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in mp_commands.commands:
@@ -2224,7 +2225,7 @@ async def mp_pick(ctx: Context, match: "Match") -> Optional[str]:
 @pool_commands.add(Privileges.TOURNAMENT, aliases=["h"], hidden=True)
 async def pool_help(ctx: Context) -> Optional[str]:
     """Show all documented mappool commands the player can access."""
-    prefix = app.state.settings.COMMAND_PREFIX
+    prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in pool_commands.commands:
@@ -2431,7 +2432,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 @clan_commands.add(Privileges.NORMAL, aliases=["h"])
 async def clan_help(ctx: Context) -> Optional[str]:
     """Show all documented clan commands the player can access."""
-    prefix = app.state.settings.COMMAND_PREFIX
+    prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
     for cmd in clan_commands.commands:
@@ -2622,7 +2623,7 @@ async def process_commands(
     # or simply False if we don't have any command hits.
     start_time = clock_ns()
 
-    prefix_len = len(app.state.settings.COMMAND_PREFIX)
+    prefix_len = len(app.settings.COMMAND_PREFIX)
     trigger, *args = msg[prefix_len:].strip().split(" ")
 
     # case-insensitive triggers
