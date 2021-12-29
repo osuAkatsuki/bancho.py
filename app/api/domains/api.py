@@ -170,7 +170,7 @@ async def api_get_player_info(
 
     # fetch user's info if requested
     if scope in ("info", "all"):
-        api_data["info"] = user_info
+        api_data["info"] = dict(user_info)
 
     # fetch user's stats if requested
     if scope in ("stats", "all"):
