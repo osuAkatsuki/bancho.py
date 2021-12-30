@@ -6,6 +6,7 @@ __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"
 __discord__ = "cmyui#0425"
 
+import ipaddress
 import os
 
 import uvicorn
@@ -41,13 +42,28 @@ def main() -> int:
     # show info & any contextual warnings.
     app.utils.display_startup_dialog()
 
-    # if they're using a unix socket, make sure the file does not exist
-    # (uvicorn currently does not do this for us, and will raise an exc)
-    if app.settings.SERVER_PORT is None and app.settings.SERVER_ADDR.endswith(".sock"):
+    # figure out whether we're using an inet, or unix address
+    try:
+        ipaddress.ip_address(app.settings.SERVER_ADDR)
+    except ValueError:
+        if not (
+            app.settings.SERVER_PORT is None
+            and app.settings.SERVER_ADDR.endswith(".sock")
+        ):
+            raise ValueError(
+                "%r does not appear to be an IPv4, IPv6 or Unix address"
+                % app.settings.SERVER_ADDR,
+            ) from None
+
+        # unix address
         server_arguments = {"uds": app.settings.SERVER_ADDR}
+
+        # make sure the socket file does not exist on disk and can be bound
+        # (uvicorn currently does not do this for us, and will raise an exc)
         if os.path.exists(app.settings.SERVER_ADDR):
             os.remove(app.settings.SERVER_ADDR)
     else:
+        # inet address
         server_arguments = {
             "host": app.settings.SERVER_ADDR,
             "port": app.settings.SERVER_PORT,
