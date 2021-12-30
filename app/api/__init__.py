@@ -1,5 +1,4 @@
 # type: ignore
-from . import ava
-from . import cho
-from . import map
-from . import osu
+from . import domains
+from . import init_api
+from . import middlewares

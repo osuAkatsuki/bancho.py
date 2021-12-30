@@ -1,3 +1,5 @@
+from typing import Optional
+
 from databases import DatabaseURL
 from starlette.config import Config
 from starlette.datastructures import CommaSeparatedStrings
@@ -6,6 +8,9 @@ from starlette.datastructures import Secret
 config = Config(".env")
 
 SERVER_ADDR: str = config("SERVER_ADDR")
+SERVER_PORT: Optional[int] = (
+    int(v) if (v := config("SERVER_PORT", default=None)) else None
+)
 
 DB_DSN: DatabaseURL = config("DB_DSN", cast=DatabaseURL)
 REDIS_DSN: str = config("REDIS_DSN")
@@ -82,4 +87,4 @@ DEVELOPER_MODE: bool = config("DEVELOPER_MODE", cast=bool, default=False)
 ## WARNING: only touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.0.2"
+VERSION = "4.1.0"
