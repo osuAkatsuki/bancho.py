@@ -445,7 +445,12 @@ async def api_get_player_most_played(
         {"user_id": p.id, "mode_vn": mode.as_vanilla, "limit": limit},
     )
 
-    return ORJSONResponse({"status": "success", "maps": [dict(row) for row in rows]})
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "maps": [dict(row) for row in rows],
+        },
+    )
 
 
 @router.get("/get_map_info")
@@ -470,7 +475,12 @@ async def api_get_map_info(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return ORJSONResponse({"status": "success", "map": bmap.as_dict})
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "map": bmap.as_dict,
+        },
+    )
 
 
 @router.get("/get_map_scores")
@@ -536,7 +546,10 @@ async def api_get_map_scores(
         "AND s.status = 2 "
         "AND u.priv & 1",
     ]
-    params: dict[str, object] = {"map_md5": bmap.md5, "mode_vn": mode.as_vanilla}
+    params: dict[str, object] = {
+        "map_md5": bmap.md5,
+        "mode_vn": mode.as_vanilla,
+    }
 
     if mods is not None:
         if strong_equality:  # type: ignore
@@ -557,7 +570,13 @@ async def api_get_map_scores(
     params["limit"] = limit
 
     rows = await db_conn.fetch_all(" ".join(query), params)
-    return ORJSONResponse({"status": "success", "scores": [dict(row) for row in rows]})
+
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "scores": [dict(row) for row in rows],
+        },
+    )
 
 
 @router.get("/get_score_info")
