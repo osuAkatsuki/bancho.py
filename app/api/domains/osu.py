@@ -232,7 +232,7 @@ def gulag_to_osuapi_status(s: int) -> int:
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
-    player: "Player" = Depends(authenticate_player_session(Form, "u", "h")),
+    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
