@@ -6,10 +6,11 @@ __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"
 __discord__ = "cmyui#0425"
 
+import os
+
 import uvicorn
 from cmyui.logging import Ansi
 from cmyui.logging import log
-
 import app.settings
 import app.utils
 from app.api.init_api import asgi_app
@@ -40,11 +41,24 @@ def main() -> int:
     # show info & any contextual warnings.
     app.utils.display_startup_dialog()
 
+    # if they're using a unix socket, make sure the file does not exist
+    # (uvicorn currently does not do this for us, and will raise an exc)
+    if app.settings.SERVER_PORT is None and app.settings.SERVER_ADDR.endswith(".sock"):
+        server_arguments = {"uds": app.settings.SERVER_ADDR}
+        if os.path.exists(app.settings.SERVER_ADDR):
+            os.remove(app.settings.SERVER_ADDR)
+    else:
+        server_arguments = {
+            "host": app.settings.SERVER_ADDR,
+            "port": app.settings.SERVER_PORT,
+        }
+
+    # run the server indefinitely
     uvicorn.run(
         app=asgi_app,  # type: ignore
-        host=app.settings.SERVER_ADDR,
-        port=app.settings.SERVER_PORT,
+        **server_arguments,
     )
+
     return 0
 
 
