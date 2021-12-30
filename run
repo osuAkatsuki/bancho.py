@@ -1,0 +1,2 @@
+screen -dmS gulag python3.9 main.py
+screen -x gulag
