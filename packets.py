@@ -307,10 +307,9 @@ class BanchoPacketReader:
         The length in bytes of the packet currently being handled.
 
     Intended Usage:
-    >>> for packet in BanchoPacketReader(conn.body):
-    ...     # once you're ready to handle the packet,
-    ...     # simply call it's handle method.
-    ...     await packet.handle()
+    >>> with memoryview(await request.body()) as body_view:
+    ...     for packet in BanchoPacketReader(conn.body):
+    ...         await packet.handle()
     """
 
     __slots__ = ("body_view", "packet_map", "current_len")

@@ -4,7 +4,6 @@ from typing import TypedDict
 from . import cache
 from . import services
 from . import sessions
-from . import settings
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop

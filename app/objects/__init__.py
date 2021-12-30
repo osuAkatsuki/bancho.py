@@ -6,5 +6,6 @@ from . import clan
 from . import collections
 from . import match
 from . import menu
+from . import models
 from . import player
 from . import score
