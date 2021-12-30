@@ -1,3 +1,5 @@
+from typing import Optional
+
 from databases import DatabaseURL
 from starlette.config import Config
 from starlette.datastructures import CommaSeparatedStrings
@@ -6,7 +8,9 @@ from starlette.datastructures import Secret
 config = Config(".env")
 
 SERVER_ADDR: str = config("SERVER_ADDR")
-SERVER_PORT: int = config("SERVER_PORT", cast=int)
+SERVER_PORT: Optional[int] = (
+    int(v) if (v := config("SERVER_PORT", default=None)) else None
+)
 
 DB_DSN: DatabaseURL = config("DB_DSN", cast=DatabaseURL)
 REDIS_DSN: str = config("REDIS_DSN")
