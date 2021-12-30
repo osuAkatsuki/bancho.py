@@ -20,6 +20,7 @@ from app.api.init_api import asgi_app
 def main() -> int:
     """Ensure runtime environment is ready, and start the server."""
     app.utils.setup_runtime_environment()
+
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
         app.utils.ensure_local_services_are_running,  # mysql (if local)
@@ -27,7 +28,7 @@ def main() -> int:
         app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
     ):
         if (exit_code := safety_check()) != 0:
-            raise SystemExit(exit_code)
+            return exit_code
 
     """ Server should be safe to start """
 
