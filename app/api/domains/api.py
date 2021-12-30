@@ -1,3 +1,4 @@
+""" api: gulag's developer api for interacting with server state """
 import hashlib
 import struct
 from pathlib import Path as SystemPath
