@@ -1462,65 +1462,65 @@ async def server(ctx: Context) -> Optional[str]:
     )
 
 
-""" Advanced commands (only allowed with `advanced = True` in config) """
+if app.settings.DEVELOPER_MODE:
+    """Advanced (& potentially dangerous) commands"""
 
-# NOTE: some of these commands are potentially dangerous, and only
-# really intended for advanced users looking for access to lower level
-# utilities. Some may give direct access to utilties that could perform
-# harmful tasks to the underlying machine, so use at your own risk.
+    # NOTE: some of these commands are potentially dangerous, and only
+    # really intended for advanced users looking for access to lower level
+    # utilities. Some may give direct access to utilties that could perform
+    # harmful tasks to the underlying machine, so use at your own risk.
 
-from sys import modules as installed_mods
+    from sys import modules as installed_mods
 
-__py_namespace = globals() | {
-    mod: __import__(mod)
-    for mod in (
-        "asyncio",
-        "dis",
-        "os",
-        "sys",
-        "struct",
-        "discord",
-        "cmyui",
-        "datetime",
-        "time",
-        "inspect",
-        "math",
-        "importlib",
-    )
-    if mod in installed_mods
-}
+    __py_namespace = globals() | {
+        mod: __import__(mod)
+        for mod in (
+            "asyncio",
+            "dis",
+            "os",
+            "sys",
+            "struct",
+            "discord",
+            "cmyui",
+            "datetime",
+            "time",
+            "inspect",
+            "math",
+            "importlib",
+        )
+        if mod in installed_mods
+    }
 
+    @command(Privileges.DEVELOPER)
+    async def py(ctx: Context) -> Optional[str]:
+        """Allow for (async) access to the python interpreter."""
+        # This can be very good for getting used to gulag's API; just look
+        # around the codebase and find things to play with in your server.
+        # Ex: !py return (await app.state.sessions.players.get(name='cmyui')).status.action
+        if not ctx.args:
+            return "owo"
 
-@command(Privileges.DEVELOPER)
-async def py(ctx: Context) -> Optional[str]:
-    """Allow for (async) access to the python interpreter."""
-    # This can be very good for getting used to gulag's API; just look
-    # around the codebase and find things to play with in your server.
-    # Ex: !py return (await app.state.sessions.players.get(name='cmyui')).status.action
-    if not ctx.args:
-        return "owo"
+        # turn our input args into a coroutine definition string.
+        definition = "\n ".join(["async def __py(ctx):", " ".join(ctx.args)])
 
-    # turn our input args into a coroutine definition string.
-    definition = "\n ".join(["async def __py(ctx):", " ".join(ctx.args)])
+        try:  # def __py(ctx)
+            exec(definition, __py_namespace)  # add to namespace
+            ret = await __py_namespace["__py"](ctx)  # await it's return
+        except Exception as exc:  # return exception in osu! chat
+            ret = f"{exc.__class__}: {exc}"
 
-    try:  # def __py(ctx)
-        exec(definition, __py_namespace)  # add to namespace
-        ret = await __py_namespace["__py"](ctx)  # await it's return
-    except Exception as exc:  # return exception in osu! chat
-        ret = f"{exc.__class__}: {exc}"
+        if "__py" in __py_namespace:
+            del __py_namespace["__py"]
 
-    if "__py" in __py_namespace:
-        del __py_namespace["__py"]
+        if ret is None:
+            return "Success"
 
-    if ret is None:
-        return "Success"
+        # TODO: perhaps size checks?
 
-    # TODO: perhaps size checks?
+        if not isinstance(ret, str):
+            ret = pprint.pformat(ret, compact=True)
 
-    if not isinstance(ret, str):
-        ret = pprint.pformat(ret, compact=True)
-
-    return ret
+        return ret
 
 
 """ Multiplayer commands
