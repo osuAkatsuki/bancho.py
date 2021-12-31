@@ -52,7 +52,7 @@ embed_list = {
     },
     "cmd_admin_channel": {
         "title": "Error",
-        "description": f"Due to security reasons, this command is aviable only in admin channels.",
+        "description": f"For security reasons, this command is aviable only in admin channels.",
         "color": colors.red,
         "footer": "default"
     }

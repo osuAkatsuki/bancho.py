@@ -1,6 +1,7 @@
 import databases
 import discord
 from discord.ext import commands
+from discord.utils import get
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils.manage_commands import create_option, create_choice
 
@@ -83,44 +84,13 @@ class osu(commands.Cog):
                 return await ctx.send(embed=await embutils.emb_gen("restricted_self"))
 
         #* Get user
-        async with app.state.services.database.connection() as db_conn:
-            to_select = "id, name, country, priv, creation_time, latest_activity, clan_id, clan_priv"
-            if user == None: #Self usage
-                user = await app.state.services.database.fetch_one(
-                    "SELECT osu_id FROM discord WHERE discord_id = :userself",
-                    {"userself": ctx.author.id}
-                )
-                if not user:
-                    return await ctx.send("You don't have your discord connected, type `.help link` for more info.")
-                user = await app.state.services.database.fetch_one(
-                    f"SELECT {to_select} FROM users WHERE id = :id",
-                    {"id": user[0]}
-                )
-            elif len(user)<15: #Name on server
-                user = await app.state.services.database.fetch_one(
-                    f"SELECT {to_select} FROM users WHERE name = :name",
-                    {"name": user}
-                )
-                if not user:
-                    return await ctx.send('User not found error')
-            else: #Mention
-                user = user[3:-1]
-                user = await app.state.services.database.fetch_one(
-                    "SELECT osu_id FROM discord WHERE discord_id = :mention",
-                    {"mention": user}
-                )
-                if not user:
-                    return await embutils.emb_gen('usr_not_found')
-                user = await app.state.services.database.fetch_one(
-                    f"SELECT {to_select} FROM users WHERE id = :id",
-                    {"id": user[0]}
-                )
-            #Convert to dict for easier usage
-            user = dict(user)
-        if not user:
-            return await embutils.emb_gen('not_linked')
-        async with app.state.services.database.connection() as db_conn:
-            pass
+        user = await dutils.getUser(
+            ctx, "id, name, country, priv, creation_time, latest_activity, clan_id, clan_priv", user
+        )
+        if 'error' in user:
+            return await ctx.send(embed=await embutils.emb_gen(user['error']))
+        #get mode
+
         return await ctx.send(f"{user=} {mode=} {mods=}")
 
 def setup(client):
