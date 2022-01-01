@@ -1320,7 +1320,7 @@ async def osuComment(
     player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
-    score_id: int = Form(..., alias="r", ge=0, le=2_147_483_647),
+    score_id: int = Form(..., alias="r", ge=0, le=9_223_372_036_854_775_807),
     mode_vn: int = Form(..., alias="m", ge=0, le=3),
     action: Literal["get", "post"] = Form(..., alias="a"),
     # only sent for post
