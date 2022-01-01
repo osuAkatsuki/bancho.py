@@ -296,6 +296,7 @@ create table stats
 	playtime int unsigned default 0 not null,
 	acc float(6,3) default 0.000 not null,
 	max_combo int unsigned default 0 not null,
+	total_hits int unsigned default 0 not null,
 	xh_count int unsigned default 0 not null,
 	x_count int unsigned default 0 not null,
 	sh_count int unsigned default 0 not null,

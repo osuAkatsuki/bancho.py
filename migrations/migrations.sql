@@ -365,3 +365,6 @@ alter table maps add filename varchar(256) charset utf8 not null after creator;
 alter table scores_vn add online_checksum char(32) not null;
 alter table scores_rx add online_checksum char(32) not null;
 alter table scores_ap add online_checksum char(32) not null;
+
+# v4.1.1
+alter table stats add total_hits int unsigned default 0 not null after max_combo;

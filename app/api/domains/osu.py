@@ -807,15 +807,18 @@ async def osuSubmitModularSelector(
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
     stats.tscore += score.score
+    stats.total_hits += score.n300 + score.n100 + score.n50
 
     stats_query_l = [
-        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore",
+        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
+        "total_hits = :total_hits",
     ]
 
     stats_query_args: dict[str, object] = {
         "plays": stats.plays,
         "playtime": stats.playtime,
         "tscore": stats.tscore,
+        "total_hits": stats.total_hits,
     }
 
     if score.passed and score.bmap.has_leaderboard:
