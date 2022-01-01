@@ -371,3 +371,10 @@ alter table stats add total_hits int unsigned default 0 not null after max_combo
 
 # v4.1.2
 alter table stats add replay_views int unsigned default 0 not null after total_hits;
+
+# v4.1.3
+alter table users add preferred_mode int default 0 not null after latest_activity;
+alter table users add play_style int default 0 not null after preferred_mode;
+alter table users add custom_badge_name varchar(16) charset utf8 null after play_style;
+alter table users add custom_badge_icon varchar(64) null after custom_badge_name;
+alter table users add userpage_content varchar(2048) charset utf8 null after custom_badge_icon;

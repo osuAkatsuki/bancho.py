@@ -353,6 +353,11 @@ create table users
 	latest_activity int default 0 not null,
 	clan_id int default 0 not null,
 	clan_priv tinyint(1) default 0 not null,
+	preferred_mode int default 0 not null,
+	play_style int default 0 not null,
+	custom_badge_name varchar(16) charset utf8 null,
+	custom_badge_icon varchar(64) null,
+	userpage_content varchar(2048) charset utf8 null,
 	api_key char(36) null,
 	constraint users_api_key_uindex
 		unique (api_key),
