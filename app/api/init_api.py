@@ -2,6 +2,8 @@
 import asyncio
 import os
 
+import aiohttp
+import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
@@ -71,6 +73,9 @@ def init_events(asgi_app: FastAPI) -> None:
                 Ansi.LRED,
             )
 
+        app.state.services.http = aiohttp.ClientSession(
+            json_serialize=lambda x: orjson.dumps(x).decode(),
+        )
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
 

@@ -11,13 +11,11 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
-import aiohttp
 import aioredis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import geoip2.database
-import orjson
 import pymysql
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -29,6 +27,7 @@ import app.state
 from app.constants.countries import country_codes
 
 if TYPE_CHECKING:
+    import aiohttp
     import databases.core
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -43,7 +42,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 """ session objects """
 
-http = aiohttp.ClientSession(json_serialize=lambda x: orjson.dumps(x).decode())
+http: "aiohttp.ClientSession"
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
