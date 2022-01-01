@@ -25,7 +25,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
-from fastapi import params
 from fastapi import status
 from fastapi.datastructures import UploadFile
 from fastapi.exceptions import HTTPException
