@@ -368,3 +368,6 @@ alter table scores_ap add online_checksum char(32) not null;
 
 # v4.1.1
 alter table stats add total_hits int unsigned default 0 not null after max_combo;
+
+# v4.1.2
+alter table stats add replay_views int unsigned default 0 not null after total_hits;

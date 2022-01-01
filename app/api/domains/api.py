@@ -617,6 +617,8 @@ async def api_get_score_info(
     return ORJSONResponse({"status": "success", "score": dict(row)})
 
 
+# TODO: perhaps we can do something to make these count towards replay views,
+#       but we'll want to make it difficult to spam.
 @router.get("/get_replay")
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),

@@ -1037,13 +1037,34 @@ async def osuSubmitModularSelector(
     return ret
 
 
+SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
+
+
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
     player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    return FileResponse(REPLAYS_PATH / f"{score_id}.osr")
+    if SCOREID_BORDERS[0] > score_id >= 1:
+        scores_table = "scores_vn"
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = "scores_rx"
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = "scores_ap"
+
+    score = await Score.from_sql(score_id, scores_table)  # type: ignore
+    if not score:
+        return
+
+    file = REPLAYS_PATH / f"{score_id}.osr"
+    if not file.exists():
+        return
+
+    # increment replay views for this score
+    app.state.loop.create_task(score.increment_replay_views())
+
+    return FileResponse(file)
 
 
 @router.get("/web/osu-rate.php")

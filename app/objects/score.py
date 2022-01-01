@@ -480,3 +480,16 @@ class Score:
             )
         else:
             raise Exception(f"Invalid vanilla mode {mode_vn}")
+
+    """ Methods for updating a score. """
+
+    async def increment_replay_views(self) -> None:
+        # TODO: move replay views to be per-score rather than per-user
+        assert self.player is not None
+
+        await app.state.services.database.execute(
+            f"UPDATE stats "
+            "SET replay_views = replay_views + 1 "
+            "WHERE id = :user_id AND mode = :mode",
+            {"user_id": self.player.id, "mode": self.mode},
+        )
