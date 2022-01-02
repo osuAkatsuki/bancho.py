@@ -1,6 +1,9 @@
+# gulag - a dev-oriented, production-geared osu! server
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/cmyui/gulag/master.svg)](https://results.pre-commit.ci/latest/github/cmyui/gulag/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-# gulag - a dev-oriented, production-geared osu! server
 gulag is an in-progress osu! server implementation geared towards running production
 servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
 long-term goal being to replace our current [Ripple](https://github.com/osuripple)
