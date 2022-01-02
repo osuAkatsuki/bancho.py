@@ -1,57 +1,34 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-gulag is my implementation of an osu! server's backend; it handles connections
-from the osu! client, and has a developer rest api for programmatic interaction.
+# gulag - a dev-oritented, production-geared osu! server
+gulag is an in-progress osu! server implementation geared towards running production
+servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
+long-term goal being to replace our current [Ripple](https://github.com/osuripple)
+stack with something more easily maintainable, reliable, scalable, and feature-rich.
 
-it's asynchronous design allows it to very efficiently manage the io overhead of an
-osu! private server (many external requests to osu!api, mirror, database, etc.),
-and it implements much more effective caching than any competitive implementations.
-it's written in modern, high-level python(3.9) from the transport (tcp/ip) socket
-layer directly using my [lightweight web framework](https://github.com/cmyui/cmyui_pkg).
-
-i aim to make this project the ideal choice for running osu! private servers,
-in terms of it's featureset, efficiency, safety, development ease and simplicity.
-when production-ready, it will be used on [Akatsuki](https://akatsuki.pw) which
-is currently the most active private server; it should be an ideal test.
-
-gulag seemed to re-spark interest in the osu! server development community,
-so i decided to start a public [Discord](https://discord.gg/ShEQgUx) server where
-more experienced (osu!-related) developers can help out some of the newer ones,
-and i encourage you to join if that sounds interesting! :)
-
-there is no current official frontend project for gulag, but [guweb](https://github.com/Varkaria/guweb)
-is by-far the most serious attempt. the future is undecided in terms of frontend.
-
-Contributing
--------------
-contributions are welcome but please keep consistent with the overall style and
-design choices from the project. i aim to keep all of the code to similar standards,
-especially in performance-critical or code that will be referenced frequently
-(either by the programmer or the system). the diff should be in it's simplest form.
-
-Installation Guide
--------------
+# Setup
 ```sh
-# add ppa for py3.9 (i love asottile)
+# clone the repository & init the submodules
+git clone https://github.com/cmyui/gulag.git && cd gulag
+
+# clone the submodules (oppai-ng)
+git submodule init && git submodule update
+
+# python3.9 is often not available natively
+# https://github.com/deadsnakes/python3.9
 sudo add-apt-repository ppa:deadsnakes/ppa
 
-# install requirements (py3.9, mysql, redis, nginx, build tools, certbot)
+# install project requirements (separate programs)
 sudo apt install python3.9 python3.9-dev python3.9-distutils \
                  mysql-server redis-server nginx build-essential certbot
 
-# install pip for py3.9
+# install pip for python3.9
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
-# clone the repo & init submodules
-git clone https://github.com/cmyui/gulag.git && cd gulag
-git submodule init && git submodule update
-
-# install gulag requirements w/ pip
-python3.9 -m pip install -r requirements.txt
-
-# build oppai-ng's static library
-cd oppai-ng && ./libbuild && cd ..
+# install gulag's python requirements
+python3.9 -m pip install -U pip setuptools \
+                         -r requirements.txt
 
 # setup pre-commit's git hooks
 # https://pre-commit.com/
@@ -99,14 +76,48 @@ nano .env
 ./main.py
 ```
 
-Directory Structure
-------
+# Directory Structure
     .
-    ├── constants  # code representing gamemodes, mods, privileges, and other constants.
-    ├── ext        # external files from gulag's primary operation.
-    ├── objects    # code for representing players, scores, maps, and more.
-    ├── utils      # utility functions used throughout the codebase for general purposes.
-    └── domains    # the route-containing domains accessible to the public web.
-        ├── cho    # (ce|c4|c5|c6).ppy.sh/* routes (bancho connections)
-        ├── osu    # osu.ppy.sh/* routes (mainly /web/ & /api/)
-        └── ava    # a.ppy.sh/* routes (avatars)
+    ├── app                   # the server - logic, classes and objects
+    |   ├── api                 # code related to handling external requests
+    |   |   ├── domains           # endpoints that can be reached from externally
+    |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
+    |   |   |   ├── ava.py        # endpoints available @ https://a.ppy.sh
+    |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
+    |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
+    |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh
+    |   |   |
+    |   |   ├── init_api.py       # logic for putting the server together
+    |   |   └── middlewares.py    # logic that wraps around the endpoints
+    |   |
+    |   ├── constants           # logic & data for constant server-side classes & objects
+    |   |   ├── clientflags.py    # anticheat flags used by the osu! client
+    |   |   ├── commands.py       # commands available in osu!'s chat
+    |   |   ├── gamemodes.py      # osu! gamemodes, with relax/autopilot support
+    |   |   ├── mods.py           # osu! gameplay modifiers
+    |   |   ├── privileges.py     # privileges for players, globally & in clans
+    |   |   └── regexes.py        # regexes used throughout the codebase
+    |   |
+    |   ├── objects             # logic & data for dynamic server-side classes & objects
+    |   |   ├── achievement.py    # rerepsentation of individual achievements
+    |   |   ├── beatmap.py        # rerepsentation of individual map(set)s
+    |   |   ├── channel.py        # rerepsentation of individual chat channels
+    |   |   ├── clan.py           # rerepsentation of individual clans
+    |   |   ├── collection.py     # collections of dynamic objects (for in-memory storage)
+    |   |   ├── match.py          # individual multiplayer matches
+    |   |   ├── menu.py           # (WIP) concept for interactive menus in chat channels
+    |   |   ├── models.py         # structures of api request request bodies
+    |   |   ├── player.py         # rerepsentation of individual players
+    |   |   └── score.py          # rerepsentation of individual scores
+    |   |
+    |   └── state               # objects representing live server-state
+    |       ├── cache             # data saved for optimization purposes
+    |       ├── services          # instances of 3rd-party services (e.g. databases)
+    |       └── sessions          # active sessions (players, channels, matches, etc.)
+    |
+    ├── ext                   # external entities used when running the server
+    ├── migrations            # database migrations - updates to schema
+    ├── tools                 # various tools made throughout gulag's history
+    ├── bg_loops.py           # loops running while the server is running
+    ├── main.py               # an entry point (script) to run the server
+    └── packets.py            # a module for (de)serialization of osu! packets
