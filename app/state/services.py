@@ -24,7 +24,6 @@ from cmyui.logging import Rainbow
 
 import app.settings
 import app.state
-from app.constants.countries import country_codes
 
 if TYPE_CHECKING:
     import aiohttp
