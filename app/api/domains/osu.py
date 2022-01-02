@@ -808,6 +808,11 @@ async def osuSubmitModularSelector(
     stats.tscore += score.score
     stats.total_hits += score.n300 + score.n100 + score.n50
 
+    if mode_vn in (1, 3):
+        # taiko uses geki & katu for hitting big notes with 2 keys
+        # mania uses geki & katu for rainbow 300 & 200
+        stats.total_hits += score.ngeki + score.nkatu
+
     stats_query_l = [
         "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
         "total_hits = :total_hits",
