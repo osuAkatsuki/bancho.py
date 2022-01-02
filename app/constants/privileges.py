@@ -1,10 +1,11 @@
+from enum import IntEnum
 from enum import IntFlag
 from enum import unique
 
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("Privileges", "ClientPrivileges")
+__all__ = ("Privileges", "ClientPrivileges", "ClanPrivileges")
 
 
 @unique
@@ -48,3 +49,13 @@ class ClientPrivileges(IntFlag):
     OWNER = 1 << 3
     DEVELOPER = 1 << 4
     TOURNAMENT = 1 << 5  # NOTE: not used in communications with osu! client
+
+
+@unique
+@pymysql_encode(escape_enum)
+class ClanPrivileges(IntEnum):
+    """A class to represent a clan members privs."""
+
+    Member = 1
+    Officer = 2
+    Owner = 3

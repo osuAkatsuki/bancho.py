@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
-    from app.objects.clan import ClanPrivileges
+    from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 

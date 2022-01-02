@@ -1,28 +1,15 @@
 from datetime import datetime
-from enum import IntEnum
-from enum import unique
 from typing import TYPE_CHECKING
 
 import databases.core
 
 import app.state
-from app.utils import escape_enum
-from app.utils import pymysql_encode
+from app.constants.privileges import ClanPrivileges
 
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-__all__ = ("Clan", "ClanPrivileges")
-
-
-@unique
-@pymysql_encode(escape_enum)
-class ClanPrivileges(IntEnum):
-    """A class to represent a clan members privs."""
-
-    Member = 1
-    Officer = 2
-    Owner = 3
+__all__ = ("Clan",)
 
 
 class Clan:

@@ -16,11 +16,11 @@ from cmyui.logging import log
 import app.settings
 import app.state
 import app.utils
+from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
 from app.objects.clan import Clan
-from app.objects.clan import ClanPrivileges
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
