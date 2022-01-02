@@ -561,8 +561,6 @@ async def osuSubmitModularSelector(
     fl_cheat_screenshot: Optional[bytes] = File(None, alias="i"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    from fastapi.exceptions import ValidationError
-
     try:
         form = await request.form()
         score_parts = form.getlist("score")
@@ -573,7 +571,9 @@ async def osuSubmitModularSelector(
         replay_file = form.getlist("score")[1]
         assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
     except AssertionError as exc:
-        raise ValidationError(exc.args[0])
+        # TODO: log/do more than just this
+        log(f"Assertion on score-submission: ({exc.args[0]})", Ansi.LRED)
+        return
 
     # attempt to decrypt score data
     aes = RijndaelCbc(
@@ -1623,9 +1623,6 @@ async def peppyDMHandler():
 
 
 """ ingame registration """
-
-
-from fastapi.requests import Request
 
 
 @router.post("/users")
