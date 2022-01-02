@@ -1,6 +1,6 @@
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-# gulag - a dev-oritented, production-geared osu! server
+# gulag - a dev-oriented, production-geared osu! server
 gulag is an in-progress osu! server implementation geared towards running production
 servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
 long-term goal being to replace our current [Ripple](https://github.com/osuripple)
@@ -99,16 +99,16 @@ nano .env
     |   |   └── regexes.py        # regexes used throughout the codebase
     |   |
     |   ├── objects             # logic & data for dynamic server-side classes & objects
-    |   |   ├── achievement.py    # rerepsentation of individual achievements
-    |   |   ├── beatmap.py        # rerepsentation of individual map(set)s
-    |   |   ├── channel.py        # rerepsentation of individual chat channels
-    |   |   ├── clan.py           # rerepsentation of individual clans
+    |   |   ├── achievement.py    # representation of individual achievements
+    |   |   ├── beatmap.py        # representation of individual map(set)s
+    |   |   ├── channel.py        # representation of individual chat channels
+    |   |   ├── clan.py           # representation of individual clans
     |   |   ├── collection.py     # collections of dynamic objects (for in-memory storage)
     |   |   ├── match.py          # individual multiplayer matches
     |   |   ├── menu.py           # (WIP) concept for interactive menus in chat channels
-    |   |   ├── models.py         # structures of api request request bodies
-    |   |   ├── player.py         # rerepsentation of individual players
-    |   |   └── score.py          # rerepsentation of individual scores
+    |   |   ├── models.py         # structures of api request bodies
+    |   |   ├── player.py         # representation of individual players
+    |   |   └── score.py          # representation of individual scores
     |   |
     |   └── state               # objects representing live server-state
     |       ├── cache             # data saved for optimization purposes
