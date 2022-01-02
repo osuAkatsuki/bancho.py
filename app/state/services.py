@@ -24,6 +24,7 @@ from cmyui.logging import Rainbow
 
 import app.settings
 import app.state
+from app import constants  # TODO: tempfix for circular import
 
 if TYPE_CHECKING:
     import aiohttp
