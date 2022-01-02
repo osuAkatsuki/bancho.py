@@ -2,6 +2,8 @@
 import asyncio
 import os
 
+import aiohttp
+import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
@@ -71,6 +73,9 @@ def init_events(asgi_app: FastAPI) -> None:
                 Ansi.LRED,
             )
 
+        app.state.services.http = aiohttp.ClientSession(
+            json_serialize=lambda x: orjson.dumps(x).decode(),
+        )
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
 
@@ -80,6 +85,8 @@ def init_events(asgi_app: FastAPI) -> None:
                 flush_interval=15,
             )
             app.state.services.datadog.gauge("gulag.online_players", 0)
+
+        await app.state.services.run_sql_migrations()
 
         async with app.state.services.database.connection() as db_conn:
             await collections.initialize_ram_caches(db_conn)

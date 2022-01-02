@@ -89,6 +89,7 @@ class ModeData:
     plays: int
     playtime: int
     max_combo: int
+    total_hits: int
     rank: int  # global
 
     grades: dict[Grade, int]  # XH, X, SH, S, A
@@ -985,7 +986,7 @@ class Player:
         for mode, row in enumerate(
             await db_conn.fetch_all(
                 "SELECT tscore, rscore, pp, acc, "
-                "plays, playtime, max_combo, "
+                "plays, playtime, max_combo, total_hits, "
                 "xh_count, x_count, sh_count, s_count, a_count "
                 "FROM stats "
                 "WHERE id = :user_id",

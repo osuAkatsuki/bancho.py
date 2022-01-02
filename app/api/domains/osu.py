@@ -25,7 +25,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
-from fastapi import params
 from fastapi import status
 from fastapi.datastructures import UploadFile
 from fastapi.exceptions import HTTPException
@@ -807,15 +806,23 @@ async def osuSubmitModularSelector(
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
     stats.tscore += score.score
+    stats.total_hits += score.n300 + score.n100 + score.n50
+
+    if mode_vn in (1, 3):
+        # taiko uses geki & katu for hitting big notes with 2 keys
+        # mania uses geki & katu for rainbow 300 & 200
+        stats.total_hits += score.ngeki + score.nkatu
 
     stats_query_l = [
-        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore",
+        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
+        "total_hits = :total_hits",
     ]
 
     stats_query_args: dict[str, object] = {
         "plays": stats.plays,
         "playtime": stats.playtime,
         "tscore": stats.tscore,
+        "total_hits": stats.total_hits,
     }
 
     if score.passed and score.bmap.has_leaderboard:
@@ -1034,13 +1041,34 @@ async def osuSubmitModularSelector(
     return ret
 
 
+SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
+
+
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
     player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    return FileResponse(REPLAYS_PATH / f"{score_id}.osr")
+    if SCOREID_BORDERS[0] > score_id >= 1:
+        scores_table = "scores_vn"
+    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
+        scores_table = "scores_rx"
+    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
+        scores_table = "scores_ap"
+
+    score = await Score.from_sql(score_id, scores_table)  # type: ignore
+    if not score:
+        return
+
+    file = REPLAYS_PATH / f"{score_id}.osr"
+    if not file.exists():
+        return
+
+    # increment replay views for this score
+    app.state.loop.create_task(score.increment_replay_views())
+
+    return FileResponse(file)
 
 
 @router.get("/web/osu-rate.php")
@@ -1320,7 +1348,7 @@ async def osuComment(
     player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
-    score_id: int = Form(..., alias="r", ge=0, le=2_147_483_647),
+    score_id: int = Form(..., alias="r", ge=0, le=9_223_372_036_854_775_807),
     mode_vn: int = Form(..., alias="m", ge=0, le=3),
     action: Literal["get", "post"] = Form(..., alias="a"),
     # only sent for post

@@ -16,7 +16,6 @@ from cmyui.logging import log
 import app.settings
 import app.state
 import app.utils
-from app.constants.countries import country_codes
 from app.constants.privileges import Privileges
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
