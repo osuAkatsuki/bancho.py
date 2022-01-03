@@ -24,7 +24,10 @@ from app.objects import collections
 
 def init_exception_handlers(asgi_app: FastAPI) -> None:
     @asgi_app.exception_handler(RequestValidationError)
-    async def handle_validation_error(request: Request, exc: RequestValidationError):
+    async def handle_validation_error(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> Response:
         print(f"Validation error on {request.url}", "\n", exc.errors())
 
         return Response(

@@ -14,7 +14,6 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 import app.settings
 import app.utils
-from app.api.init_api import asgi_app
 
 
 def main() -> int:
@@ -72,8 +71,9 @@ def main() -> int:
 
     # run the server indefinitely
     uvicorn.run(
-        app=asgi_app,  # type: ignore
+        "app.api.init_api:asgi_app",
         **server_arguments,
+        reload=app.settings.DEBUG,
     )
 
     return 0
