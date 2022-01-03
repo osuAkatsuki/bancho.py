@@ -230,7 +230,7 @@ class Score:
             s.grade,
             s.perfect,
             s.status,
-            mode,
+            s.mode,
             s.play_time,
             s.time_elapsed,
             s.client_flags,
@@ -242,7 +242,7 @@ class Score:
         s.status = SubmissionStatus(s.status)
         s.grade = Grade.from_str(s.grade)
         s.mods = Mods(s.mods)
-        s.mode = GameMode(mode)
+        s.mode = GameMode(s.mode)
         s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
