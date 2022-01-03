@@ -114,9 +114,9 @@ nano .env
     |   |   └── score.py          # representation of individual scores
     |   |
     |   └── state               # objects representing live server-state
-    |       ├── cache             # data saved for optimization purposes
-    |       ├── services          # instances of 3rd-party services (e.g. databases)
-    |       └── sessions          # active sessions (players, channels, matches, etc.)
+    |       ├── cache.py           # data saved for optimization purposes
+    |       ├── services.py        # instances of 3rd-party services (e.g. databases)
+    |       └── sessions.py        # active sessions (players, channels, matches, etc.)
     |
     ├── ext                   # external entities used when running the server
     ├── migrations            # database migrations - updates to schema
