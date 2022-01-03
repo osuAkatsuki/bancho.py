@@ -285,12 +285,23 @@ async def api_get_player_scores(
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mods_arg: Optional[str] = Query(None, alias="mods"),
-    mode_arg: Literal[0, 1, 2, 3, 4, 5, 6, 8] = Query(0, alias="mode"),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
 ):
     """Return a list of a given user's recent/best scores."""
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if username and user_id:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
@@ -410,12 +421,22 @@ async def api_get_player_scores(
 async def api_get_player_most_played(
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-    mode_arg: Literal[0, 1, 2, 3, 4, 5, 6, 8] = Query(0, alias="mode"),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     if user_id is not None:
         p = await app.state.sessions.players.from_cache_or_sql(id=user_id)
@@ -495,11 +516,22 @@ async def api_get_map_scores(
     map_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
     map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: Optional[str] = Query(None, alias="mods"),
-    mode_arg: Literal[0, 1, 2, 3, 4, 5, 6, 8] = Query(0, alias="mode"),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the top n scores on a given beatmap."""
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if map_id is not None:
         bmap = await Beatmap.from_bid(map_id)
     elif map_md5 is not None:
@@ -783,12 +815,23 @@ async def api_get_match(
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
     sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
-    mode_arg: Literal[0, 1, 2, 3, 4, 5, 6, 8] = Query(0, alias="mode"),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: Optional[str] = Query(None, min_length=2, max_length=2),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     mode = GameMode(mode_arg)
 
     query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
