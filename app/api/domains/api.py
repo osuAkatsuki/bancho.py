@@ -184,7 +184,7 @@ async def api_get_player_info(
 
         api_data["stats"] = {}
         for idx, mode_stats in enumerate([dict(row) for row in rows]):
-            mode = mode_stats.pop("mode")
+            mode = str(mode_stats.pop("mode"))
             rank = await app.state.services.redis.zrevrank(
                 f"gulag:leaderboard:{idx}",
                 resolved_user_id,
