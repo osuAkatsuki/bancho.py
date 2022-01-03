@@ -767,13 +767,11 @@ async def addnote(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
-    log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
-
     await app.state.services.database.execute(
         "INSERT INTO logs "
         "(`from`, `to`, `action`, `msg`, `time`) "
         "VALUES (:from, :to, 'note', :msg, NOW())",
-        {"from": ctx.player.id, "to": t.id, "msg": log_msg},
+        {"from": ctx.player.id, "to": t.id, "msg": " ".join(ctx.args[1:])},
     )
 
     return f"Added note to {t}."
