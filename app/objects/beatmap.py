@@ -721,11 +721,10 @@ class BeatmapSet:
 
                 # delete scores on the maps
                 # TODO: if we add FKs to db, won't need this?
-                for scores_table in ("scores_vn", "scores_rx", "scores_ap"):
-                    await app.state.services.database.execute(
-                        f"DELETE FROM {scores_table} WHERE map_md5 IN :map_md5s",
-                        {"map_md5s": map_md5s_to_delete},
-                    )
+                await app.state.services.database.execute(
+                    "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
 
             # update last_osuapi_check
             await app.state.services.database.execute(
@@ -750,11 +749,10 @@ class BeatmapSet:
 
             # delete scores on the maps
             # TODO: if we add FKs to db, won't need this?
-            for scores_table in ("scores_vn", "scores_rx", "scores_ap"):
-                await app.state.services.database.execute(
-                    f"DELETE FROM {scores_table} WHERE map_md5 IN :map_md5s",
-                    {"map_md5s": map_md5s_to_delete},
-                )
+            await app.state.services.database.execute(
+                "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                {"map_md5s": map_md5s_to_delete},
+            )
 
             # delete set
             await app.state.services.database.execute(
