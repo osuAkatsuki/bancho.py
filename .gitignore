@@ -6,3 +6,4 @@ _testing/
 *.lprof
 ext/GeoLite2-City.mmdb
 .env
+botconfig.py
