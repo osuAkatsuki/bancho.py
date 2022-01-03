@@ -101,17 +101,17 @@ async def main() -> int:
             # move ap!std stats
             await update_conn.execute("UPDATE stats SET mode = 8 WHERE mode = 7")
 
-        # if (
-        #    input(
-        #        "Does the new database table seem correct?\n"
-        #        "(Should we drop the old ones?) (y/n)"
-        #    )
-        #    .lower()
-        #    .startswith("y")
-        # ):
-        #    for table in ("scores_vn", "scores_rx", "scores_ap"):
-        #        print(f"Dropping {table} scores")
-        #        await update_conn.execute(f"DROP TABLE {table}")
+        if (
+            input(
+                "Does the new database table seem correct?\n"
+                "(Should we drop the old ones?) (y/n)",
+            )
+            .lower()
+            .startswith("y")
+        ):
+            for table in ("scores_vn", "scores_rx", "scores_ap"):
+                print(f"Dropping {table} scores")
+                await update_conn.execute(f"DROP TABLE {table}")
 
     print_rainbow("thanks 4 testing :)", rainbow_end=1 / 2)
 
