@@ -16,7 +16,9 @@ from app.state import services
 
 from discordbot.utils import utils as dutils
 from discordbot.utils import embed_utils as embutils
+from discordbot.utils import constants as dconst
 import discordbot.botconfig as configb
+
 
 class osu(commands.Cog):
     def __init__(self, client):
@@ -85,12 +87,25 @@ class osu(commands.Cog):
 
         #* Get user
         user = await dutils.getUser(
-            ctx, "id, name, country, priv, creation_time, latest_activity, clan_id, clan_priv", user
-        )
+            ctx, "id, name, country, priv, creation_time, "
+            "latest_activity, clan_id, clan_priv", user)
+        #! Return if error occured
         if 'error' in user:
             return await ctx.send(embed=await embutils.emb_gen(user['error']))
-        #get mode
 
+        #* Conversion and syntax checks for mode
+        if mode != None:
+            modestr = dconst.mode_2_str[mode]
+        else:
+            #Get mode default from user's discord
+            async with app.state.services.database.connection() as db_conn:
+                mode = await app.state.services.database.fetch_val(
+                    "SELECT default_mode FROM discord WHERE osu_id = :oid",
+                    {"oid": user['user']['id']}
+                )
+                if not mode:
+                    mode = 0
+                print(mode)
         return await ctx.send(f"{user=} {mode=} {mods=}")
 
 def setup(client):
