@@ -755,7 +755,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if not res:
         return f"No notes found on {t} in the past {days} days."
 
-    return "\n".join(["[{time}] {action} for {msg}".format(**row, msg=row["msg"] or "no reason specified") for row in res])
+    return "\n".join(["[{time}] {action} for {reason}".format(**row, reason=row["msg"] or "no reason specified") for row in res])
 
 
 @command(Privileges.MODERATOR, hidden=True)

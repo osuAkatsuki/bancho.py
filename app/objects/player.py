@@ -488,12 +488,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.NORMAL)
 
-        log_msg = f'{admin} restricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
             "VALUES (:from, :to, 'restrict', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            {"from": admin.id, "to": self.id, "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -516,12 +515,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.NORMAL)
 
-        log_msg = f'{admin} unrestricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
             "VALUES (:from, :to, 'unrestrict', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            {"from": admin.id, "to": self.id, "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -549,12 +547,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
             "VALUES (:from, :to, 'silence', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            {"from": admin.id, "to": self.id, "msg": reason},
         )
 
         # inform the user's client.
@@ -578,12 +575,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        log_msg = f"{admin} unsilenced."
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, 'unsilence', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            "VALUES (:from, :to, 'unsilence', NULL, NOW())",
+            {"from": admin.id, "to": self.id},
         )
 
         # inform the user's client
