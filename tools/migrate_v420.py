@@ -3,7 +3,6 @@ import asyncio
 import os.path
 
 import databases
-from cmyui import print_rainbow
 
 # config (touch this)
 # mysql://{username}:{passwd}@{host}:{port}/{database}
@@ -112,8 +111,6 @@ async def main() -> int:
             for table in ("scores_vn", "scores_rx", "scores_ap"):
                 print(f"Dropping {table} scores")
                 await update_conn.execute(f"DROP TABLE {table}")
-
-    print_rainbow("thanks 4 testing :)", rainbow_end=1 / 2)
 
     return 0
 
