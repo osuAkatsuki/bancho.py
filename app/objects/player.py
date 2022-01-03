@@ -979,17 +979,16 @@ class Player:
 
     async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for mode, row in enumerate(
-            await db_conn.fetch_all(
-                "SELECT tscore, rscore, pp, acc, "
-                "plays, playtime, max_combo, total_hits, "
-                "xh_count, x_count, sh_count, s_count, a_count "
-                "FROM stats "
-                "WHERE id = :user_id",
-                {"user_id": self.id},
-            ),
+        for row in await db_conn.fetch_all(
+            "SELECT mode, tscore, rscore, pp, acc, "
+            "plays, playtime, max_combo, total_hits, "
+            "xh_count, x_count, sh_count, s_count, a_count "
+            "FROM stats "
+            "WHERE id = :user_id",
+            {"user_id": self.id},
         ):
             row = dict(row)  # make mutable copy
+            mode = row.pop("mode")
 
             # calculate player's rank.
             row["rank"] = await self.get_global_rank(GameMode(mode))

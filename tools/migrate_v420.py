@@ -84,7 +84,6 @@ async def main() -> int:
             ):
                 print(f"Moving {table} scores")
                 for row in await select_conn.fetch_all(f"SELECT * FROM {table}"):
-                    print(row["id"])
                     row = dict(row)  # make row mutable
 
                     old_id = row.pop("id")
@@ -94,10 +93,13 @@ async def main() -> int:
 
                     if os.path.exists(f".data/osr/{old_id}.osr"):
                         print(f"Moving {old_id} replay")
-                        os.rename(
+                        os.rename(  # type: ignore
                             f".data/osr/{old_id}.osr",
                             f".data/osr/{new_id}.osr",
                         )
+
+            # move ap!std stats
+            await update_conn.execute("UPDATE stats SET mode = 8 WHERE mode = 7")
 
         # if (
         #    input(
