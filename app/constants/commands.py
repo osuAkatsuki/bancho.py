@@ -732,8 +732,9 @@ ACTION_STRINGS = {
     "unrestrict": "Unrestricted for",
     "silence": "Silenced for",
     "unsilence": "Unsilenced for",
-    "note": "Note added:"
+    "note": "Note added:",
 }
+
 
 @command(Privileges.MODERATOR, hidden=True)
 async def notes(ctx: Context) -> Optional[str]:
@@ -762,15 +763,19 @@ async def notes(ctx: Context) -> Optional[str]:
     if not res:
         return f"No notes found on {t} in the past {days} days."
 
-    return "\n".join(
-        ["[{time}] {action_str} {note} by {logger}".format(
-            time=row["time"],
-            logger=(await app.state.sessions.players.from_cache_or_sql(id=row["from"])).name,  # type: ignore
-            action_str=ACTION_STRINGS.get(row["action"], "Unknown action:"), 
-            note=row["msg"] or "not specified"
-        )
-        for row in res]
-    )
+    notes = []
+    for row in res:
+        logger = await app.state.sessions.players.from_cache_or_sql(id=row["from"])
+        if not logger:
+            continue
+
+        action_str = ACTION_STRINGS.get(row["action"], "Unknown action:")
+        time_str = row["time"]
+        note = row["msg"]
+
+        notes.append(f"[{time_str}] {action_str} {note} by {logger.name}")
+
+    return "\n".join(notes)
 
 
 @command(Privileges.MODERATOR, hidden=True)
