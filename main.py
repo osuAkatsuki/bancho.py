@@ -75,6 +75,8 @@ def main() -> int:
         "app.api.init_api:asgi_app",
         reload=app.settings.DEBUG,
         log_level=logging.WARNING,
+        server_header=False,
+        date_header=False,
         **server_arguments,
     )
 
