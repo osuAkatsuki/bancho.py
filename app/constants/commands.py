@@ -765,7 +765,7 @@ async def notes(ctx: Context) -> Optional[str]:
     return "\n".join(
         ["[{time}] {action_str} {note} by {logger!r}".format(
             time=row["time"],
-            logger=await app.state.sessions.players.from_cache_or_sql(id=row["logger"]),
+            logger=await app.state.sessions.players.from_cache_or_sql(id=row["from"]),
             action_str=ACTION_STRINGS[row["action"]], 
             note=row["msg"] or "not specified"
         )
