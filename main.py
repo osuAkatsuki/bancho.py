@@ -77,6 +77,10 @@ def main() -> int:
         log_level=logging.WARNING,
         server_header=False,
         date_header=False,
+        # TODO: uvicorn calls .lower() on the key & value,
+        #       but i would prefer Gulag-Version to keep
+        #       with standards. perhaps look into this.
+        headers=(("gulag-version", app.settings.VERSION),),
         **server_arguments,
     )
 
