@@ -72,8 +72,8 @@ def main() -> int:
     # run the server indefinitely
     uvicorn.run(
         "app.api.init_api:asgi_app",
-        **server_arguments,
         reload=app.settings.DEBUG,
+        **server_arguments,
     )
 
     return 0
