@@ -752,7 +752,7 @@ async def notes(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !notes <name> <days_back>"
 
     res = await app.state.services.database.fetch_all(
-        "SELECT `action`, `msg`, `time` "
+        "SELECT `action`, `msg`, `time`, `from` "
         "FROM `logs` WHERE `to` = :to "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
         "ORDER BY `time` ASC",
