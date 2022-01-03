@@ -261,17 +261,25 @@ async def osuGetBeatmapInfo(
         grades = ["N", "N", "N", "N"]
 
         await db_conn.execute(
-            "SELECT grade, mode FROM scores_rx "
+            "SELECT grade, mode FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
-            "AND status = 2",
-            {"map_md5": row["md5"], "user_id": player.id},
+            "AND mode = :mode AND status = 2",
+            {
+                "map_md5": row["md5"],
+                "user_id": player.id,
+                "mode": player.status.mode,
+            },
         )
 
         for score in await db_conn.fetch_all(
-            "SELECT grade, mode FROM scores_rx "
+            "SELECT grade, mode FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
-            "AND status = 2",
-            {"map_md5": row["md5"], "user_id": player.id},
+            "AND mode = :mode AND status = 2",
+            {
+                "map_md5": row["md5"],
+                "user_id": player.id,
+                "mode": player.status.mode,
+            },
         ):
             grades[score["mode"]] = score["grade"]
 
@@ -642,12 +650,9 @@ async def osuSubmitModularSelector(
         if not score.player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
-    scores_table = score.mode.scores_table
-    mode_vn = score.mode.as_vanilla
-
     # Check for score duplicates
     if await db_conn.fetch_one(
-        f"SELECT 1 FROM {scores_table} WHERE online_checksum = :checksum",
+        "SELECT 1 FROM scores WHERE online_checksum = :checksum",
         {"checksum": score.online_checksum},
     ):
         log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
@@ -718,11 +723,11 @@ async def osuSubmitModularSelector(
                 # If there was previously a score on the map, add old #1.
                 prev_n1 = await db_conn.fetch_one(
                     "SELECT u.id, name FROM users u "
-                    f"INNER JOIN {scores_table} s ON u.id = s.userid "
-                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn "
+                    "INNER JOIN scores s ON u.id = s.userid "
+                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
                     "AND s.status = 2 AND u.priv & 1 "
                     f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                    {"map_md5": score.bmap.md5, "mode_vn": mode_vn},
+                    {"map_md5": score.bmap.md5, "mode": score.mode},
                 )
 
                 if prev_n1:
@@ -738,19 +743,23 @@ async def osuSubmitModularSelector(
         # update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
         await db_conn.execute(
-            f"UPDATE {scores_table} SET status = 1 "
+            "UPDATE scores SET status = 1 "
             "WHERE status = 2 AND map_md5 = :map_md5 "
-            "AND userid = :user_id AND mode = :mode_vn",
-            {"map_md5": score.bmap.md5, "user_id": score.player.id, "mode_vn": mode_vn},
+            "AND userid = :user_id AND mode = :mode",
+            {
+                "map_md5": score.bmap.md5,
+                "user_id": score.player.id,
+                "mode": score.mode,
+            },
         )
 
     score.id = await db_conn.execute(
-        f"INSERT INTO {scores_table} "
+        "INSERT INTO scores "
         "VALUES (NULL, "
         ":map_md5, :score, :pp, :acc, "
         ":max_combo, :mods, :n300, :n100, "
         ":n50, :nmiss, :ngeki, :nkatu, "
-        ":grade, :status, :mode_vn, :play_time, "
+        ":grade, :status, :mode, :play_time, "
         ":time_elapsed, :client_flags, :user_id, :perfect, "
         ":checksum)",
         {
@@ -768,7 +777,7 @@ async def osuSubmitModularSelector(
             "nkatu": score.nkatu,
             "grade": score.grade.name,
             "status": score.status,
-            "mode_vn": mode_vn,
+            "mode": score.mode,
             "play_time": score.play_time,
             "time_elapsed": score.time_elapsed,
             "client_flags": score.client_flags,
@@ -810,7 +819,7 @@ async def osuSubmitModularSelector(
     stats.tscore += score.score
     stats.total_hits += score.n300 + score.n100 + score.n50
 
-    if mode_vn in (1, 3):
+    if score.mode.as_vanilla in (1, 3):
         # taiko uses geki & katu for hitting big notes with 2 keys
         # mania uses geki & katu for rainbow 300 & 200
         stats.total_hits += score.ngeki + score.nkatu
@@ -873,12 +882,12 @@ async def osuSubmitModularSelector(
             # scores. i'm aware this scales horribly and it'll
             # likely be split into two queries in the future.
             best_scores = await db_conn.fetch_all(
-                f"SELECT s.pp, s.acc FROM {scores_table} s "
+                "SELECT s.pp, s.acc FROM scores s "
                 "INNER JOIN maps m ON s.map_md5 = m.md5 "
-                "WHERE s.userid = :user_id AND s.mode = :mode_vn "
+                "WHERE s.userid = :user_id AND s.mode = :mode "
                 "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
                 "ORDER BY s.pp DESC",
-                {"user_id": score.player.id, "mode_vn": mode_vn},
+                {"user_id": score.player.id, "mode": score.mode},
             )
 
             total_scores = len(best_scores)
@@ -957,7 +966,7 @@ async def osuSubmitModularSelector(
                     # player already has this achievement.
                     continue
 
-                if ach.cond(score, mode_vn):
+                if ach.cond(score, score.mode.as_vanilla):
                     await score.player.unlock_achievement(ach)
                     achievements.append(ach)
 
@@ -1043,23 +1052,13 @@ async def osuSubmitModularSelector(
     return ret
 
 
-SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
-
-
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
     player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    if SCOREID_BORDERS[0] > score_id >= 1:
-        scores_table = "scores_vn"
-    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
-        scores_table = "scores_rx"
-    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
-        scores_table = "scores_ap"
-
-    score = await Score.from_sql(score_id, scores_table)  # type: ignore
+    score = await Score.from_sql(score_id)
     if not score:
         return
 
@@ -1180,7 +1179,6 @@ async def getScores(
         if not player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    scores_table = mode.scores_table
     scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
@@ -1244,14 +1242,14 @@ async def getScores(
         "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
         "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
         "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
-        f"FROM {scores_table} s "
+        "FROM scores s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = :map_md5 AND s.status = 2 "
-        "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode_vn",
+        "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
     ]
 
-    params = {"map_md5": map_md5, "user_id": player.id, "mode_vn": mode_vn}
+    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
 
     if leaderboard_type == LeaderboardType.Mods:
         query.append("AND s.mods = :mods")
@@ -1301,22 +1299,22 @@ async def getScores(
         "max_combo, n50, n100, n300, "
         "nmiss, nkatu, ngeki, perfect, mods, "
         "UNIX_TIMESTAMP(play_time) time "
-        f"FROM {scores_table} "
-        "WHERE map_md5 = :map_md5 AND mode = :mode_vn "
+        "FROM scores "
+        "WHERE map_md5 = :map_md5 AND mode = :mode "
         "AND userid = :user_id AND status = 2 "
         "ORDER BY _score DESC LIMIT 1",
-        {"map_md5": map_md5, "mode_vn": mode_vn, "user_id": player.id},
+        {"map_md5": map_md5, "mode": mode, "user_id": player.id},
     )
 
     if p_best:
         # calculate the rank of the score.
         p_best_rank = 1 + await db_conn.fetch_val(
-            f"SELECT COUNT(*) FROM {scores_table} s "
+            "SELECT COUNT(*) FROM scores s "
             "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn "
+            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
             "AND s.status = 2 AND u.priv & 1 "
             f"AND s.{scoring_metric} > :score",
-            {"map_md5": map_md5, "mode_vn": mode_vn, "score": p_best["_score"]},
+            {"map_md5": map_md5, "mode": mode, "score": p_best["_score"]},
             column=0,  # COUNT(*)
         )
 
