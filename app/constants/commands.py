@@ -745,7 +745,7 @@ async def notes(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !notes <name> <days_back>"
 
     res = await app.state.services.database.fetch_all(
-        "SELECT `msg`, `time` "
+        "SELECT `action`, `msg`, `time` "
         "FROM `logs` WHERE `to` = :to "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
         "ORDER BY `time` ASC",
@@ -755,7 +755,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if not res:
         return f"No notes found on {t} in the past {days} days."
 
-    return "\n".join(["[{time}] {msg}".format(**row) for row in res])
+    return "\n".join(["[{time}] {action} for {msg}".format(**row, msg=row["msg"] or "no reason specified") for row in res])
 
 
 @command(Privileges.MODERATOR, hidden=True)
@@ -771,8 +771,8 @@ async def addnote(ctx: Context) -> Optional[str]:
 
     await app.state.services.database.execute(
         "INSERT INTO logs "
-        "(`from`, `to`, `msg`, `time`) "
-        "VALUES (:from, :to, :msg, NOW())",
+        "(`from`, `to`, `action`, `msg`, `time`) "
+        "VALUES (:from, :to, 'note', :msg, NOW())",
         {"from": ctx.player.id, "to": t.id, "msg": log_msg},
     )
 

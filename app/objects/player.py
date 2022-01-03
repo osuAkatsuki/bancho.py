@@ -491,8 +491,8 @@ class Player:
         log_msg = f'{admin} restricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, 'restrict', :msg, NOW())",
             {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
@@ -519,8 +519,8 @@ class Player:
         log_msg = f'{admin} unrestricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, 'unrestrict', :msg, NOW())",
             {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
@@ -552,8 +552,8 @@ class Player:
         log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, 'silence', :msg, NOW())",
             {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
@@ -581,8 +581,8 @@ class Player:
         log_msg = f"{admin} unsilenced."
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, 'unsilence', :msg, NOW())",
             {"from": admin.id, "to": self.id, "msg": log_msg},
         )
 
