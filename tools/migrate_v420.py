@@ -66,7 +66,7 @@ INSERT INTO scores VALUES (
 
 
 async def main() -> int:
-    async with databases.Database(DB_DSN, min_size=10, max_size=10) as db:
+    async with databases.Database(DB_DSN) as db:
         async with (
             db.connection() as select_conn,
             db.connection() as update_conn,
