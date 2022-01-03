@@ -727,6 +727,13 @@ async def _map(ctx: Context) -> Optional[str]:
 # and are generally for managing players.
 """
 
+ACTION_STRINGS = {
+    "restrict": "Restricted for",
+    "unrestrict": "Unrestricted for",
+    "silence": "Silenced for",
+    "unsilence": "Unsilenced for",
+    "note": "Note added:"
+}
 
 @command(Privileges.MODERATOR, hidden=True)
 async def notes(ctx: Context) -> Optional[str]:
@@ -755,7 +762,17 @@ async def notes(ctx: Context) -> Optional[str]:
     if not res:
         return f"No notes found on {t} in the past {days} days."
 
-    return "\n".join(["[{time}] {action} for {reason}".format(**row, reason=row["msg"] or "no reason specified") for row in res])
+    return "\n".join(
+        ["[{time}] {action_str} {note} by {logger}".format(
+            **row,
+            logger=repr(
+                await app.state.sessions.players.from_cache_or_sql(id=row["logger"])
+            ),
+            action_str=ACTION_STRINGS[row["action"]], 
+            note=row["msg"] or "not specified"
+        )
+        for row in res]
+    )
 
 
 @command(Privileges.MODERATOR, hidden=True)

@@ -99,8 +99,8 @@ create table logs
 		primary key,
 	`from` int not null comment 'both from and to are playerids',
 	`to` int not null,
-	`action` varchar(32) null,
-	msg varchar(2048) charset utf8 not null,
+	`action` varchar(32) not null,
+	msg varchar(2048) charset utf8 null,
 	time datetime not null on update CURRENT_TIMESTAMP
 );
 
