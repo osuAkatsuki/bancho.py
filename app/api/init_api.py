@@ -7,8 +7,6 @@ import orjson
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
-from fastapi import status
-from fastapi.exceptions import RequestValidationError
 from fastapi.requests import Request
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
@@ -20,20 +18,6 @@ import bg_loops
 from app.api import domains
 from app.api import middlewares
 from app.objects import collections
-
-
-def init_exception_handlers(asgi_app: FastAPI) -> None:
-    @asgi_app.exception_handler(RequestValidationError)
-    async def handle_validation_error(
-        request: Request,
-        exc: RequestValidationError,
-    ) -> Response:
-        print(f"Validation error on {request.url}", "\n", exc.errors())
-
-        return Response(
-            content=exc.errors(),
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        )
 
 
 def init_middlewares(asgi_app: FastAPI) -> None:
@@ -136,7 +120,6 @@ def init_api() -> FastAPI:
     asgi_app = FastAPI()
 
     init_middlewares(asgi_app)
-    init_exception_handlers(asgi_app)
     init_events(asgi_app)
     init_routes(asgi_app)
 
