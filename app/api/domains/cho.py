@@ -232,7 +232,7 @@ class ChangeAction(BasePacket):
         if p.status.mods & Mods.RELAX:
             self.mode += 4
         elif p.status.mods & Mods.AUTOPILOT:
-            self.mode = 7
+            self.mode += 8
 
         p.status.mode = GameMode(self.mode)
         p.status.map_id = self.map_id
