@@ -176,13 +176,15 @@ async def api_get_player_info(
     if scope in ("stats", "all"):
         # get all regular stats
         rows = await app.state.services.database.fetch_all(
-            "SELECT tscore, rscore, pp, plays, playtime, acc, max_combo, "
+            "SELECT mode, tscore, rscore, pp, plays, playtime, acc, max_combo, "
             "xh_count, x_count, sh_count, s_count, a_count FROM stats "
             "WHERE id = :userid",
             {"userid": resolved_user_id},
         )
 
+        api_data["stats"] = {}
         for idx, mode_stats in enumerate([dict(row) for row in rows]):
+            mode = mode_stats["mode"]
             rank = await app.state.services.redis.zrevrank(
                 f"gulag:leaderboard:{idx}",
                 resolved_user_id,
@@ -197,7 +199,7 @@ async def api_get_player_info(
                 country_rank + 1 if country_rank is not None else 0
             )
 
-        api_data["stats"] = [dict(row) for row in rows]
+            api_data["stats"][mode] = mode_stats
 
     return ORJSONResponse({"status": "success", "player": api_data})
 
@@ -275,7 +277,6 @@ async def api_get_player_status(
             },
         },
     )
-
 
 @router.get("/get_player_scores")
 async def api_get_player_scores(
