@@ -1149,7 +1149,7 @@ async def getScores(
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     map_filename: str = Query(..., alias="f"),  # TODO: regex?
-    mode_vn: int = Query(..., alias="m", ge=0, le=3),
+    mode_arg: int = Query(..., alias="m", ge=0, le=3),
     map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
@@ -1163,10 +1163,22 @@ async def getScores(
     if map_md5 in app.state.cache.needs_update:
         return b"1|false"
 
-    mods = Mods(mods_arg)
-    mode = GameMode.from_params(mode_vn, mods)
+    mods = mods_arg
+    mode = mode_arg
 
-    has_set_id = map_set_id > 0
+    if mods & Mods.RELAX:
+        if mode == 3:  # rx!mania doesn't exist
+            mods &= ~Mods.RELAX
+        else:
+            mode += 4
+    elif mods & Mods.AUTOPILOT:
+        if mode in (1, 2, 3):  # ap!catch, taiko and mania don't exist
+            mods &= ~Mods.AUTOPILOT
+        else:
+            mode += 8
+
+    mods = Mods(mods)
+    mode = GameMode(mode)
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -1180,6 +1192,7 @@ async def getScores(
     scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
+    has_set_id = map_set_id > 0
 
     if not bmap:
         # map not found, figure out whether it needs an
