@@ -4,8 +4,8 @@ import time
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.packets
 import app.state
-import packets
 import settings
 from app.constants.privileges import Privileges
 
@@ -57,7 +57,9 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             )
 
             if p.online:
-                p.enqueue(packets.notification("Your supporter status has expired."))
+                p.enqueue(
+                    app.packets.notification("Your supporter status has expired."),
+                )
 
             log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
 
@@ -81,4 +83,4 @@ async def _update_bot_status(interval: int) -> None:
     """Reroll the bot's status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
-        packets.bot_stats.cache_clear()
+        app.packets.bot_stats.cache_clear()

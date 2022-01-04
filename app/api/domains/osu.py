@@ -44,9 +44,9 @@ from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+import app.packets
 import app.state
 import app.utils
-import packets
 import settings
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -369,7 +369,7 @@ async def lastFM(
         # TODO: make a tool to remove the flags & send this as a dm.
         #       also add to db so they never are restricted on first one.
         player.enqueue(
-            packets.notification(
+            app.packets.notification(
                 "\n".join(
                     [
                         "Hey!",
@@ -640,7 +640,7 @@ async def osuSubmitModularSelector(
         score.player.status.mode = score.mode
 
         if not score.player.restricted:
-            app.state.sessions.players.enqueue(packets.user_stats(score.player))
+            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
     scores_table = score.mode.scores_table
     mode_vn = score.mode.as_vanilla
@@ -694,7 +694,9 @@ async def osuSubmitModularSelector(
                 performance = f"{score.pp:,.2f}pp"
 
             score.player.enqueue(
-                packets.notification(f"You achieved #{score.rank}! ({performance})"),
+                app.packets.notification(
+                    f"You achieved #{score.rank}! ({performance})",
+                ),
             )
 
             if score.rank == 1 and not score.player.restricted:
@@ -919,7 +921,7 @@ async def osuSubmitModularSelector(
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
-        app.state.sessions.players.enqueue(packets.user_stats(score.player))
+        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
         # update beatmap with new stats
         score.bmap.plays += 1
@@ -1176,7 +1178,7 @@ async def getScores(
         player.status.mode = mode
 
         if not player.restricted:
-            app.state.sessions.players.enqueue(packets.user_stats(player))
+            app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
     scores_table = mode.scores_table
     scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"

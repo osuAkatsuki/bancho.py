@@ -34,9 +34,9 @@ from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.packets
 import app.state
 import app.utils
-import packets
 import settings
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -284,7 +284,7 @@ async def changename(ctx: Context) -> Optional[str]:
     )
 
     ctx.player.enqueue(
-        packets.notification(f"Your username has been changed to {name}!"),
+        app.packets.notification(f"Your username has been changed to {name}!"),
     )
     ctx.player.logout()
 
@@ -607,7 +607,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(
-        packets.notification(
+        app.packets.notification(
             "Type /savelog and click the popup for an easy way to copy this.",
         ),
     )
@@ -967,7 +967,7 @@ async def alert(ctx: Context) -> Optional[str]:
 
     notif_txt = " ".join(ctx.args)
 
-    app.state.sessions.players.enqueue(packets.notification(notif_txt))
+    app.state.sessions.players.enqueue(app.packets.notification(notif_txt))
     return "Alert sent."
 
 
@@ -982,7 +982,7 @@ async def alertuser(ctx: Context) -> Optional[str]:
 
     notif_txt = " ".join(ctx.args[1:])
 
-    t.enqueue(packets.notification(notif_txt))
+    t.enqueue(app.packets.notification(notif_txt))
     return "Alert sent."
 
 
@@ -997,7 +997,7 @@ async def switchserv(ctx: Context) -> Optional[str]:
 
     new_bancho_ip = ctx.args[0]
 
-    ctx.player.enqueue(packets.switch_tournament_server(new_bancho_ip))
+    ctx.player.enqueue(app.packets.switch_tournament_server(new_bancho_ip))
     return "Have a nice journey.."
 
 
@@ -1027,7 +1027,7 @@ async def shutdown(ctx: Context) -> Optional[str]:
                 f'Reason: {" ".join(ctx.args[1:])}'
             )
 
-            app.state.sessions.players.enqueue(packets.notification(alert_msg))
+            app.state.sessions.players.enqueue(app.packets.notification(alert_msg))
 
         app.state.loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f"Enqueued {ctx.trigger}."
@@ -1082,7 +1082,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
             "login_time": 0x7FFFFFFF,  # never auto-dc
         }
 
-        _stats = packets.user_stats(ctx.player)
+        _stats = app.packets.user_stats(ctx.player)
 
         if _fake_users:
             current_fakes = max([x.id for x in _fake_users]) - (FAKE_ID_START - 1)
@@ -1693,7 +1693,7 @@ async def mp_abort(ctx: Context, match: "Match") -> Optional[str]:
     match.unready_players(expected=SlotStatus.playing)
 
     match.in_progress = False
-    match.enqueue(packets.match_abort())
+    match.enqueue(app.packets.match_abort())
     match.enqueue_state()
     return "Match aborted."
 
@@ -1802,7 +1802,7 @@ async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
 
     match.host_id = t.id
 
-    match.host.enqueue(packets.match_transfer_host())
+    match.host.enqueue(app.packets.match_transfer_host())
     match.enqueue_state(lobby=True)
     return "Match host updated."
 
@@ -1831,7 +1831,7 @@ async def mp_invite(ctx: Context, match: "Match") -> Optional[str]:
     if t is ctx.player:
         return "You can't invite yourself!"
 
-    t.enqueue(packets.match_invite(ctx.player, t.name))
+    t.enqueue(app.packets.match_invite(ctx.player, t.name))
     return f"Invited {t} to the match."
 
 

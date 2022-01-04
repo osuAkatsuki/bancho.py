@@ -16,8 +16,8 @@ from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.packets
 import app.state
-import packets
 import settings
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -113,7 +113,7 @@ async def bot_hello(p: "Player") -> None:
 
 
 async def notif_hello(p: "Player") -> None:
-    p.enqueue(packets.notification(f"hello {p.name}!"))
+    p.enqueue(app.packets.notification(f"hello {p.name}!"))
 
 
 MENU2 = Menu(
@@ -444,7 +444,7 @@ class Player:
             if app.state.services.datadog:
                 app.state.services.datadog.decrement("gulag.online_players")
 
-            app.state.sessions.players.enqueue(packets.logout(self.id))
+            app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
         log(f"{self} logged out.", Ansi.LYELLOW)
 
@@ -555,10 +555,10 @@ class Player:
         )
 
         # inform the user's client.
-        self.enqueue(packets.silence_end(duration))
+        self.enqueue(app.packets.silence_end(duration))
 
         # wipe their messages from any channels.
-        app.state.sessions.players.enqueue(packets.user_silenced(self.id))
+        app.state.sessions.players.enqueue(app.packets.user_silenced(self.id))
 
         # remove them from multiplayer match (if any).
         if self.match:
@@ -583,7 +583,7 @@ class Player:
         )
 
         # inform the user's client
-        self.enqueue(packets.silence_end(0))
+        self.enqueue(app.packets.silence_end(0))
 
         log(f"Unsilenced {self}.", Ansi.LCYAN)
 
@@ -591,13 +591,13 @@ class Player:
         """Attempt to add `self` to `m`."""
         if self.match:
             log(f"{self} tried to join multiple matches?")
-            self.enqueue(packets.match_join_fail())
+            self.enqueue(app.packets.match_join_fail())
             return False
 
         if self.id in m.tourney_clients:
             # the user is already in the match with a tourney client.
             # users cannot spectate themselves so this is not possible.
-            self.enqueue(packets.match_join_fail())
+            self.enqueue(app.packets.match_join_fail())
             return False
 
         if self is not m.host:
@@ -606,11 +606,11 @@ class Player:
             # simply use any to join a pw protected match.
             if passwd != m.passwd and self not in app.state.sessions.players.staff:
                 log(f"{self} tried to join {m} w/ incorrect pw.", Ansi.LYELLOW)
-                self.enqueue(packets.match_join_fail())
+                self.enqueue(app.packets.match_join_fail())
                 return False
             if (slotID := m.get_free()) is None:
                 log(f"{self} tried to join a full match.", Ansi.LYELLOW)
-                self.enqueue(packets.match_join_fail())
+                self.enqueue(app.packets.match_join_fail())
                 return False
 
         else:
@@ -634,7 +634,7 @@ class Player:
         slot.player = self
         self.match = m
 
-        self.enqueue(packets.match_join_success(m))
+        self.enqueue(app.packets.match_join_success(m))
         m.enqueue_state()
 
         return True
@@ -679,7 +679,7 @@ class Player:
             app.state.sessions.matches.remove(self.match)
 
             if lobby := app.state.sessions.channels["#lobby"]:
-                lobby.enqueue(packets.dispose_match(self.match.id))
+                lobby.enqueue(app.packets.dispose_match(self.match.id))
 
         else:
             # we may have been host, if so, find another.
@@ -687,7 +687,7 @@ class Player:
                 for s in self.match.slots:
                     if s.status & SlotStatus.has_player:
                         self.match.host_id = s.player.id
-                        self.match.host.enqueue(packets.match_transfer_host())
+                        self.match.host.enqueue(app.packets.match_transfer_host())
                         break
 
             if self in self.match._refs:
@@ -730,9 +730,9 @@ class Player:
         c.append(self)  # add to c.players
         self.channels.append(c)  # add to p.channels
 
-        self.enqueue(packets.channel_join(c.name))
+        self.enqueue(app.packets.channel_join(c.name))
 
-        chan_info_packet = packets.channel_info(c.name, c.topic, len(c.players))
+        chan_info_packet = app.packets.channel_info(c.name, c.topic, len(c.players))
 
         if c.instance:
             # instanced channel, only send the players
@@ -761,9 +761,9 @@ class Player:
         self.channels.remove(c)  # remove from p.channels
 
         if kick:
-            self.enqueue(packets.channel_kick(c.name))
+            self.enqueue(app.packets.channel_kick(c.name))
 
-        chan_info_packet = packets.channel_info(c.name, c.topic, len(c.players))
+        chan_info_packet = app.packets.channel_info(c.name, c.topic, len(c.players))
 
         if c.instance:
             # instanced channel, only send the players
@@ -802,17 +802,17 @@ class Player:
             return
 
         if not p.stealth:
-            p_joined = packets.fellow_spectator_joined(p.id)
+            p_joined = app.packets.fellow_spectator_joined(p.id)
             for s in self.spectators:
                 s.enqueue(p_joined)
-                p.enqueue(packets.fellow_spectator_joined(s.id))
+                p.enqueue(app.packets.fellow_spectator_joined(s.id))
 
-            self.enqueue(packets.spectator_joined(p.id))
+            self.enqueue(app.packets.spectator_joined(p.id))
         else:
             # player is admin in stealth, only give
             # other players data to us, not vice-versa.
             for s in self.spectators:
-                p.enqueue(packets.fellow_spectator_joined(s.id))
+                p.enqueue(app.packets.fellow_spectator_joined(s.id))
 
         self.spectators.append(p)
         p.spectating = self
@@ -832,15 +832,15 @@ class Player:
             self.leave_channel(c)
         else:
             # send new playercount
-            c_info = packets.channel_info(c.name, c.topic, len(c.players))
-            fellow = packets.fellow_spectator_left(p.id)
+            c_info = app.packets.channel_info(c.name, c.topic, len(c.players))
+            fellow = app.packets.fellow_spectator_left(p.id)
 
             self.enqueue(c_info)
 
             for s in self.spectators:
                 s.enqueue(fellow + c_info)
 
-        self.enqueue(packets.spectator_left(p.id))
+        self.enqueue(app.packets.spectator_left(p.id))
         log(f"{p} is no longer spectating {self}.")
 
     async def add_friend(self, p: "Player") -> None:
@@ -1011,7 +1011,7 @@ class Player:
         # wipe any messages the client can see from the bot
         # (including any other channels). perhaps menus can
         # be sent from a separate presence to prevent this?
-        self.enqueue(packets.user_silenced(app.state.sessions.bot.id))
+        self.enqueue(app.packets.user_silenced(app.state.sessions.bot.id))
 
     def send_current_menu(self) -> None:
         """Forward a standardized form of the user's
@@ -1052,7 +1052,7 @@ class Player:
     def send(self, msg: str, sender: "Player", chan: Optional[Channel] = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
-            packets.send_message(
+            app.packets.send_message(
                 sender=sender.name,
                 msg=msg,
                 recipient=(chan or self).name,
@@ -1065,7 +1065,7 @@ class Player:
         bot = app.state.sessions.bot
 
         self.enqueue(
-            packets.send_message(
+            app.packets.send_message(
                 sender=bot.name,
                 msg=msg,
                 recipient=self.name,

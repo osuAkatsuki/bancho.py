@@ -1,8 +1,13 @@
 #!/usr/bin/env python3.9
 import asyncio
+import os
 import re
+import sys
 
 import databases
+
+sys.path.insert(0, os.path.abspath(os.pardir))
+os.chdir(os.path.abspath(os.pardir))
 
 import settings
 
