@@ -27,7 +27,7 @@ from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 from fastapi import status
 
-import app.settings
+import settings
 
 __all__ = (
     # TODO: organize/sort these
@@ -292,7 +292,7 @@ def _install_synchronous_excepthook() -> None:
             return
 
         printc(
-            f"gulag v{app.settings.VERSION} ran into an issue before starting up :(",
+            f"gulag v{settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
@@ -388,7 +388,7 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
-    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
+    if settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
             if os.path.exists(f"/var/run/{service}/{service}.pid"):
@@ -490,7 +490,7 @@ def _install_debugging_hooks() -> None:
 
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
-    if app.settings.DEVELOPER_MODE:
+    if settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
 
     # running on root grants the software potentally dangerous and
@@ -501,7 +501,7 @@ def display_startup_dialog() -> None:
             Ansi.LYELLOW,
         )
 
-        if app.settings.DEVELOPER_MODE:
+        if settings.DEVELOPER_MODE:
             log(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",

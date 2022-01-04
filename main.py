@@ -12,7 +12,7 @@ import os
 import uvicorn
 from cmyui.logging import Ansi
 from cmyui.logging import log
-import app.settings
+import settings
 import app.utils
 
 
@@ -44,36 +44,35 @@ def main() -> int:
 
     # figure out whether we're using an inet, or unix address
     try:
-        ipaddress.ip_address(app.settings.SERVER_ADDR)
+        ipaddress.ip_address(settings.SERVER_ADDR)
     except ValueError:
         if not (
-            app.settings.SERVER_PORT is None
-            and app.settings.SERVER_ADDR.endswith(".sock")
+            settings.SERVER_PORT is None and settings.SERVER_ADDR.endswith(".sock")
         ):
             raise ValueError(
                 "%r does not appear to be an IPv4, IPv6 or Unix address"
-                % app.settings.SERVER_ADDR,
+                % settings.SERVER_ADDR,
             ) from None
 
         # unix address
-        server_arguments = {"uds": app.settings.SERVER_ADDR}
+        server_arguments = {"uds": settings.SERVER_ADDR}
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
-        if os.path.exists(app.settings.SERVER_ADDR):
-            os.remove(app.settings.SERVER_ADDR)
+        if os.path.exists(settings.SERVER_ADDR):
+            os.remove(settings.SERVER_ADDR)
     else:
         # inet address
         server_arguments = {
-            "host": app.settings.SERVER_ADDR,
-            "port": app.settings.SERVER_PORT,
+            "host": settings.SERVER_ADDR,
+            "port": settings.SERVER_PORT,
         }
 
     # run the server indefinitely
     uvicorn.run(
         "app.api.init_api:asgi_app",
         **server_arguments,
-        reload=app.settings.DEBUG,
+        reload=settings.DEBUG,
     )
 
     return 0

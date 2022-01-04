@@ -4,16 +4,15 @@ import re
 
 import databases
 
-# config (touch this)
-# mysql://{username}:{passwd}@{host}:{port}/{database}
-DB_DSN = "mysql://cmyui:lol123@localhost:3306/gulag_old"
+import settings
+
 LOG_REGEX = re.compile(
     r"<(.*)\((.*)\)> (?P<action>unrestricted|restricted|unsilenced|silenced|added note) ?(\((.*)\))? ?(\: (?P<note>.*))? ?(?:for (?P<reason>.*))?",
 )
 
 
 async def main() -> int:
-    async with databases.Database(DB_DSN) as db:
+    async with databases.Database(settings.DB_DSN) as db:
         async with (
             db.connection() as select_conn,
             db.connection() as update_conn,

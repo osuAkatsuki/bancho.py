@@ -29,10 +29,10 @@ from fastapi.responses import HTMLResponse
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
-import app.settings
 import app.state
 import app.utils
 import packets
+import settings
 from app.constants import commands
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -63,7 +63,7 @@ IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
-BASE_DOMAIN = app.settings.DOMAIN
+BASE_DOMAIN = settings.DOMAIN
 _domain_escaped = BASE_DOMAIN.replace(".", r"\.")
 
 # TODO: dear god
@@ -86,7 +86,7 @@ async def bancho_http_handler():
         b"<!DOCTYPE html>"
         + "<br>".join(
             (
-                f"Running gulag v{app.settings.VERSION}",
+                f"Running gulag v{settings.VERSION}",
                 f"Players online: {len(app.state.sessions.players) - 1}",
                 '<a href="https://github.com/cmyui/gulag">Source code</a>',
                 "",
@@ -177,7 +177,7 @@ async def bancho_handler(
             await packet.handle(player)
             packets_handled.append(packet.__class__.__name__)
 
-    if app.settings.DEBUG:
+    if settings.DEBUG:
         packets_str = ", ".join(packets_handled) or "None"
         log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
@@ -307,7 +307,7 @@ class SendMessage(BasePacket):
                 ),
             )
 
-        if msg.startswith(app.settings.COMMAND_PREFIX):
+        if msg.startswith(settings.COMMAND_PREFIX):
             cmd = await commands.process_commands(p, t_chan, msg)
         else:
             cmd = None
@@ -406,7 +406,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{app.settings.VERSION}.",
+    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{settings.VERSION}.",
 )
 
 OFFLINE_NOTIFICATION = packets.notification(
@@ -477,7 +477,7 @@ async def login(
     # than three months old, forcing an update re-check.
     # NOTE: this is disabled on debug since older clients
     #       can sometimes be quite useful when testing.
-    if not app.settings.DEBUG:
+    if not settings.DEBUG:
         # this is currently slow, but asottile is on the
         # case https://bugs.python.org/issue44307 :D
         if osu_ver_date < (date.today() - DELTA_90_DAYS):
@@ -749,8 +749,8 @@ async def login(
     # TODO: fetch p.recent_scores from sql
 
     data += packets.main_menu_icon(
-        icon_url=app.settings.MENU_ICON_URL,
-        onclick_url=app.settings.MENU_ONCLICK_URL,
+        icon_url=settings.MENU_ICON_URL,
+        onclick_url=settings.MENU_ONCLICK_URL,
     )
     data += packets.friends_list(*p.friends)
     data += packets.silence_end(p.remaining_silence)
@@ -966,7 +966,7 @@ class SendPrivateMessage(BasePacket):
 
     async def handle(self, p: Player) -> None:
         if p.silenced:
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{p} tried to send a dm while silenced.", Ansi.LYELLOW)
             return
 
@@ -981,21 +981,21 @@ class SendPrivateMessage(BasePacket):
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
         if not (t := await app.state.sessions.players.from_cache_or_sql(name=t_name)):
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{p} tried to write to non-existent user {t_name}.", Ansi.LYELLOW)
             return
 
         if p.id in t.blocks:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{p} tried to message {t}, but they have them blocked.")
             return
 
         if t.pm_private and p.id not in t.friends:
             p.enqueue(packets.user_dm_blocked(t_name))
 
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are blocking dms.")
             return
 
@@ -1003,7 +1003,7 @@ class SendPrivateMessage(BasePacket):
             # if target is silenced, inform player.
             p.enqueue(packets.target_silenced(t_name))
 
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{p} tried to message {t}, but they are silenced.")
             return
 
@@ -1044,7 +1044,7 @@ class SendPrivateMessage(BasePacket):
             )
         else:
             # messaging the bot, check for commands & /np.
-            if msg.startswith(app.settings.COMMAND_PREFIX):
+            if msg.startswith(settings.COMMAND_PREFIX):
                 cmd = await commands.process_commands(p, t, msg)
             else:
                 cmd = None
@@ -1108,7 +1108,7 @@ class SendPrivateMessage(BasePacket):
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
 
-                                        for acc in app.settings.PP_CACHED_ACCS:
+                                        for acc in settings.PP_CACHED_ACCS:
                                             ezpp.set_accuracy_percent(acc)
 
                                             ezpp.calculate(osu_file_path)
@@ -1123,7 +1123,7 @@ class SendPrivateMessage(BasePacket):
 
                                     peace.set_mode(mode_vn)
 
-                                    for acc in app.settings.PP_CACHED_ACCS:
+                                    for acc in settings.PP_CACHED_ACCS:
                                         peace.set_acc(acc)
 
                                         calc = peace.calculate(beatmap)
@@ -1151,7 +1151,7 @@ class SendPrivateMessage(BasePacket):
 
                                 pp_values = []
 
-                                for score in app.settings.PP_CACHED_SCORES:
+                                for score in settings.PP_CACHED_SCORES:
                                     peace.set_score(int(score))
 
                                     calc = peace.calculate(beatmap)
@@ -1251,7 +1251,7 @@ async def execute_menu_option(p: Player, key: int) -> None:
     # this is one of their menu options, execute it.
     cmd, data = p.current_menu.options[key]
 
-    if app.settings.DEBUG:
+    if settings.DEBUG:
         print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
 
     if cmd == MenuCommands.Reset:
