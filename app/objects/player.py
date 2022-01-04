@@ -16,9 +16,9 @@ from cmyui.discord import Webhook
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
-import app.settings
 import app.state
 import packets
+import settings
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
@@ -322,7 +322,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://{app.settings.DOMAIN}/u/{self.id}"
+        return f"https://{settings.DOMAIN}/u/{self.id}"
 
     @cached_property
     def embed(self) -> str:
@@ -338,7 +338,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://a.{app.settings.DOMAIN}/{self.id}"
+        return f"https://a.{settings.DOMAIN}/{self.id}"
 
     @cached_property
     def full_name(self) -> str:
@@ -488,12 +488,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.NORMAL)
 
-        log_msg = f'{admin} restricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -503,7 +502,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        if webhook_url := settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
@@ -516,12 +515,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.NORMAL)
 
-        log_msg = f'{admin} unrestricted for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -531,7 +529,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        if webhook_url := settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
@@ -549,12 +547,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        log_msg = f'{admin} silenced ({duration}s) for "{reason}".'
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "silence", "msg": reason},
         )
 
         # inform the user's client.
@@ -578,12 +575,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        log_msg = f"{admin} unsilenced."
         await app.state.services.database.execute(
             "INSERT INTO logs "
-            "(`from`, `to`, `msg`, `time`) "
-            "VALUES (:from, :to, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": log_msg},
+            "(`from`, `to`, `action`, `msg`, `time`) "
+            "VALUES (:from, :to, :action, NULL, NOW())",
+            {"from": admin.id, "to": self.id, "action": "unsilence"},
         )
 
         # inform the user's client
@@ -646,7 +642,7 @@ class Player:
     def leave_match(self) -> None:
         """Attempt to remove `self` from their match."""
         if not self.match:
-            if app.settings.DEBUG:
+            if settings.DEBUG:
                 log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
@@ -750,7 +746,7 @@ class Player:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
-        if app.settings.DEBUG:
+        if settings.DEBUG:
             log(f"{self} joined {c}.")
 
         return True
@@ -781,7 +777,7 @@ class Player:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
-        if app.settings.DEBUG:
+        if settings.DEBUG:
             log(f"{self} left {c}.")
 
     def add_spectator(self, p: "Player") -> None:
