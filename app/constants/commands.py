@@ -727,6 +727,14 @@ async def _map(ctx: Context) -> Optional[str]:
 # and are generally for managing players.
 """
 
+ACTION_STRINGS = {
+    "restrict": "Restricted for",
+    "unrestrict": "Unrestricted for",
+    "silence": "Silenced for",
+    "unsilence": "Unsilenced for",
+    "note": "Note added:",
+}
+
 
 @command(Privileges.MODERATOR, hidden=True)
 async def notes(ctx: Context) -> Optional[str]:
@@ -745,7 +753,7 @@ async def notes(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !notes <name> <days_back>"
 
     res = await app.state.services.database.fetch_all(
-        "SELECT `msg`, `time` "
+        "SELECT `action`, `msg`, `time`, `from` "
         "FROM `logs` WHERE `to` = :to "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
         "ORDER BY `time` ASC",
@@ -755,7 +763,19 @@ async def notes(ctx: Context) -> Optional[str]:
     if not res:
         return f"No notes found on {t} in the past {days} days."
 
-    return "\n".join(["[{time}] {msg}".format(**row) for row in res])
+    notes = []
+    for row in res:
+        logger = await app.state.sessions.players.from_cache_or_sql(id=row["from"])
+        if not logger:
+            continue
+
+        action_str = ACTION_STRINGS.get(row["action"], "Unknown action:")
+        time_str = row["time"]
+        note = row["msg"]
+
+        notes.append(f"[{time_str}] {action_str} {note} by {logger.name}")
+
+    return "\n".join(notes)
 
 
 @command(Privileges.MODERATOR, hidden=True)
@@ -767,13 +787,16 @@ async def addnote(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
-    log_msg = f'{ctx.player} added note: {" ".join(ctx.args[1:])}'
-
     await app.state.services.database.execute(
         "INSERT INTO logs "
-        "(`from`, `to`, `msg`, `time`) "
-        "VALUES (:from, :to, :msg, NOW())",
-        {"from": ctx.player.id, "to": t.id, "msg": log_msg},
+        "(`from`, `to`, `action`, `msg`, `time`) "
+        "VALUES (:from, :to, :action, :msg, NOW())",
+        {
+            "from": ctx.player.id,
+            "to": t.id,
+            "action": "note",
+            "msg": " ".join(ctx.args[1:]),
+        },
     )
 
     return f"Added note to {t}."
