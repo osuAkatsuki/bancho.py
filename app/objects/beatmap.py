@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
+from typing import TYPE_CHECKING
+from typing import TypedDict
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -20,7 +22,10 @@ from app.constants.gamemodes import GameMode
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-# from dataclasses import dataclass
+if TYPE_CHECKING:
+    from app.constants.mods import Mods
+    from app.objects.score import Score
+
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
@@ -173,6 +178,7 @@ class RankedStatus(IntEnum):
         return mapping[status_str]
 
 
+# from dataclasses import dataclass
 # @dataclass
 # class BeatmapInfoRequest:
 #    filenames: Sequence[str]
@@ -190,6 +196,79 @@ class RankedStatus(IntEnum):
 #    taiko_rank: int # u8
 #    mania_rank: int # u8
 #    map_md5: str
+
+
+@unique
+@pymysql_encode(escape_enum)
+class LeaderboardType(IntEnum):
+    Local = 0
+    Top = 1
+    Mods = 2
+    Friends = 3
+    Country = 4
+
+
+class Leaderboard:
+    """A class to represent a single osu! leaderboard."""
+
+    __slots__ = (
+        "beatmap",
+        "num_scores",
+        "scores",
+        "personal_bests",
+    )
+
+    def __init__(
+        self,
+        beatmap: "Beatmap",
+        scores: list["Score"],
+        num_scores: int,
+    ) -> None:
+        self.beatmap = beatmap
+
+        self.scores = scores
+        self.num_scores = num_scores
+
+        self.personal_bests = {score.player.id: score for score in scores}  # type: ignore
+
+    def format_for_osu(self, player_id: int) -> bytes:
+        ret = bytearray()
+        # {ranked_status}|{has_osz2}|{map_id}|{set_id}|{len(scores)}
+        ret += (
+            f"{int(self.beatmap.status)}|false|{self.beatmap.id}|"
+            f"{self.beatmap.set_id}|{self.num_scores}\n"
+        ).encode()
+        # {offset}
+        ret += b"0\n"  # TODO: offset
+        # {map_name}
+        ret += f"{self.beatmap.full}\n".encode()
+        # {rating}
+        ret += b"0.0\n"  # f"{self.beatmap.rating}\n".encode()  # TODO
+
+        # {personal_best}
+        if personal_best := self.personal_bests.get(player_id, None):
+            ret += personal_best.format_for_osu(is_requestee=True)
+        ret += b"\n"
+
+        if self.scores:
+            # {scores...}
+            ret += b"\n".join(
+                [
+                    score.format_for_osu(is_requestee=score.player.id == player_id)
+                    for score in self.scores
+                ],
+            )
+        else:
+            ret += b"\n"
+
+        return bytes(ret)
+
+
+class ModeLeaderboard(TypedDict):
+    top: Optional[Leaderboard]
+    mods: dict["Mods", Leaderboard]
+    friends: dict[int, Leaderboard]
+    countries: dict[str, Leaderboard]
 
 
 class Beatmap:
@@ -240,6 +319,7 @@ class Beatmap:
 
     __slots__ = (
         "set",
+        "leaderboards",
         "md5",
         "id",
         "set_id",
@@ -267,6 +347,16 @@ class Beatmap:
 
     def __init__(self, map_set: "BeatmapSet", **kwargs: Any) -> None:
         self.set = map_set
+
+        self.leaderboards: dict[GameMode, ModeLeaderboard] = {
+            mode: {
+                "top": None,
+                "mods": {},
+                "friends": {},
+                "countries": {},
+            }
+            for mode in GameMode
+        }
 
         self.md5 = kwargs.get("md5", "")
         self.id = kwargs.get("id", 0)
@@ -705,6 +795,16 @@ class BeatmapSet:
                     bmap.plays = 0
                     bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
 
+                    bmap.leaderboards = {
+                        mode: {
+                            "top": None,
+                            "mods": {},
+                            "friends": {},
+                            "countries": {},
+                        }
+                        for mode in GameMode
+                    }
+
                     updated_maps.append(bmap)
 
             # save changes to cache
@@ -895,9 +995,20 @@ class BeatmapSet:
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some gulag-specific stuff not given by api)
-                bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
+
                 bmap.passes = 0
                 bmap.plays = 0
+                bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
+
+                bmap.leaderboards = {
+                    mode: {
+                        "top": None,
+                        "mods": {},
+                        "friends": {},
+                        "countries": {},
+                    }
+                    for mode in GameMode
+                }
 
                 bmap.set = self
                 self.maps.append(bmap)

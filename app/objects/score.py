@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -187,7 +188,51 @@ class Score:
             f"#{self.rank} on {self.bmap.full} for {self.pp:,.2f}pp>"
         )
 
+    def format_for_osu(self, is_requestee: bool) -> bytes:
+        assert self.player
+
+        if is_requestee:
+            player_name = self.player.name
+        else:
+            player_name = self.player.full_name
+
+        return (
+            f"{self.id}|{player_name}|{self.score}|{self.max_combo}|"
+            f"{self.n50}|{self.n100}|{self.n300}|{self.nmiss}|{self.nkatu}|{self.ngeki}|"
+            f"{self.perfect}|{self.mods}|{self.player.id}|{self.rank}|{int(self.play_time.timestamp())}|1"  # TODO: has_replay
+        ).encode()
+
     """Classmethods to fetch a score object from various data types."""
+
+    @classmethod
+    def from_row(
+        cls,
+        row: Mapping,
+        beatmap: Beatmap = None,
+        player: "Player" = None,
+        rank: Optional[int] = None,
+    ) -> "Score":
+        self = cls()
+
+        row = dict(row)  # make mutable copy
+
+        for attr in cls.__slots__:  # TODO: improve this?
+            setattr(self, attr, row.get(attr, None))
+
+        self.bmap = beatmap
+        self.player = player
+
+        # fix some types
+        self.passed = self.status != 0
+        self.status = SubmissionStatus(self.status)
+        self.grade = Grade.from_str(self.grade)
+        self.mods = Mods(self.mods)
+        self.mode = GameMode(self.mode)
+        self.client_flags = ClientFlags(self.client_flags)
+
+        self.rank = rank
+
+        return self
 
     @classmethod
     async def from_sql(cls, score_id: int) -> Optional["Score"]:

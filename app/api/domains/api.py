@@ -278,6 +278,7 @@ async def api_get_player_status(
         },
     )
 
+
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],

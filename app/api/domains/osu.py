@@ -1,4 +1,5 @@
 """ osu: handle connections from web, api, and beyond? """
+import bisect
 import copy
 import hashlib
 import ipaddress
@@ -55,6 +56,8 @@ from app.constants.mods import Mods
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import Leaderboard
+from app.objects.beatmap import LeaderboardType
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
 from app.objects.player import Privileges
@@ -689,6 +692,78 @@ async def osuSubmitModularSelector(
             app.state.services.datadog.increment("gulag.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
+
+            scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+
+            """update leaderboard caches"""
+            # top, country, and friend lbs used pp>score
+
+            mode_leaderboards = bmap.leaderboards[score.mode]
+
+            leaderboards: list[Leaderboard] = []
+
+            # top (global) leaderboard
+            if mode_leaderboards["top"] is not None:
+                leaderboards.append(mode_leaderboards["top"])
+
+            # country leaderboard
+            country_code = player.geoloc["country"]["acronym"]
+            if country_code in mode_leaderboards["countries"]:
+                leaderboards.append(mode_leaderboards["countries"][country_code])
+
+            # friends leaderboard
+            if player.id in mode_leaderboards["friends"]:
+                leaderboards.append(mode_leaderboards["friends"][player.id])
+
+            # go through each leaderboard, making the changes
+
+            for leaderboard in leaderboards:
+                # TODO: clean this up into a leaderboard method
+                # check if they have an existing score
+                leaderboard_users = [s.player.id for s in leaderboard.scores]
+
+                if player.id in leaderboard_users:
+                    # user has a score, overwrite their current one
+                    old_idx = leaderboard_users.index(player.id)
+
+                    print(f"removing #{old_idx + 1}")
+                    leaderboard.scores.pop(old_idx)
+                else:
+                    # user does not have a score
+                    leaderboard.num_scores += 1
+
+                    # (we'll want to increment ranks of all other players)
+                    old_idx = len(leaderboard.scores)
+
+                new_idx = len(leaderboard.scores) - bisect.bisect_left(
+                    [getattr(s, scoring_metric) for s in leaderboard.scores][::-1],
+                    getattr(score, scoring_metric),
+                )
+
+                score.rank = new_idx + 1
+
+                # insert new score
+                print(f"adding #{score.rank}")
+                leaderboard.scores.insert(new_idx, score)
+
+                # overwrite personal best
+                leaderboard.personal_bests[player.id] = score
+
+                if old_idx > new_idx:
+                    # they're ascending the leaderboard (rank decrease)
+                    print("rank decreased (old_idx < new_idx)")
+                    for rank in range(new_idx + 1, old_idx + 1):
+                        leaderboard.scores[rank].rank += 1  # type: ignore
+                elif old_idx < new_idx:
+                    # they descending the leaderboard (rank increase)
+                    print("rank increased (new_idx > old_idx)")
+                    for rank in range(old_idx, new_idx):
+                        leaderboard.scores[rank].rank -= 1  # type: ignore
+                else:
+                    # they stayed the same rank
+                    print("no idx change")
+                    pass
+
             if (
                 score.mode < GameMode.RELAX_OSU
                 and score.bmap.status == RankedStatus.Loved
@@ -715,8 +790,6 @@ async def osuSubmitModularSelector(
 
                 if score.mods:
                     ann.insert(1, f"+{score.mods!r}")
-
-                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
                 # If there was previously a score on the map, add old #1.
                 prev_n1 = await db_conn.fetch_one(
@@ -751,6 +824,7 @@ async def osuSubmitModularSelector(
             },
         )
 
+    # TODO: move up
     score.id = await db_conn.execute(
         "INSERT INTO scores "
         "VALUES (NULL, "
@@ -1124,21 +1198,13 @@ async def osuRate(
     return f"alreadyvoted\n{avg}".encode()
 
 
-@unique
-@pymysql_encode(escape_enum)
-class LeaderboardType(IntEnum):
-    Local = 0
-    Top = 1
-    Mods = 2
-    Friends = 3
-    Country = 4
-
-
 SCORE_LISTING_FMTSTR = (
     "{id}|{name}|{score}|{max_combo}|"
     "{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|"
     "{perfect}|{mods}|{userid}|{rank}|{time}|{has_replay}"
 )
+
+SCORES_DISPLAYED_PER_LEADERBOARD = 50  # TODO: move to settings
 
 
 @router.get("/web/osu-osz2-getscores.php")
@@ -1246,38 +1312,118 @@ async def getScores(
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
 
-    # statuses: 0: failed, 1: passed but not top, 2: passed top
-    query = [
-        f"SELECT s.id, s.{scoring_metric} AS _score, "
-        "s.max_combo, s.n50, s.n100, s.n300, "
-        "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
-        "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
-        "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 AND s.status = 2 "
-        "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
-    ]
+    leaderboard_type = LeaderboardType(leaderboard_type)
 
-    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+    if leaderboard_type == LeaderboardType.Top:
+        leaderboard = bmap.leaderboards[mode]["top"]
+    else:
+        # mods, friends, and country leaderboards have subcategories
+        if leaderboard_type == LeaderboardType.Mods:
+            leaderboards = bmap.leaderboards[mode]["mods"]
+            leaderboard_key = mods
+        elif leaderboard_type == LeaderboardType.Friends:
+            leaderboards = bmap.leaderboards[mode]["friends"]
+            leaderboard_key = player.id  # player.friends | {player.id}
+        elif leaderboard_type == LeaderboardType.Country:
+            leaderboards = bmap.leaderboards[mode]["countries"]
+            leaderboard_key = player.geoloc["country"]["acronym"]
+        else:
+            raise Exception
 
-    if leaderboard_type == LeaderboardType.Mods:
-        query.append("AND s.mods = :mods")
-        params["mods"] = mods
-    elif leaderboard_type == LeaderboardType.Friends:
-        query.append("AND s.userid IN :friends")
-        params["friends"] = player.friends | {player.id}
-    elif leaderboard_type == LeaderboardType.Country:
-        query.append("AND u.country = :country")
-        params["country"] = player.geoloc["country"]["acronym"]
+        if leaderboard_key in leaderboards:
+            leaderboard = leaderboards[leaderboard_key]  # type: ignore
+        else:
+            leaderboard = None
 
-    # TODO: customizability of the number of scores
-    query.append("ORDER BY _score DESC LIMIT 50")
+    if leaderboard is None:
+        # cache not available - get it
 
-    scores = await db_conn.fetch_all(" ".join(query), params)
-    num_scores = len(scores)
+        # statuses: 0: failed, 1: passed but not top, 2: passed top
+        query = [
+            f"SELECT s.*, UNIX_TIMESTAMP(s.play_time) time "
+            "FROM scores s "
+            "INNER JOIN users u ON u.id = s.userid "
+            "WHERE s.map_md5 = :map_md5 AND s.status = 2 "
+            "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
+        ]
 
+        params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+
+        if leaderboard_type == LeaderboardType.Mods:
+            query.append("AND s.mods = :mods")
+            params["mods"] = mods
+        elif leaderboard_type == LeaderboardType.Friends:
+            query.append("AND s.userid IN :friends")
+            params["friends"] = player.friends | {player.id}
+        elif leaderboard_type == LeaderboardType.Country:
+            query.append("AND u.country = :country")
+            params["country"] = player.geoloc["country"]["acronym"]
+
+        # TODO: customizability of the number of scores
+        query.append(f"ORDER BY s.{scoring_metric} DESC")
+
+        rows = await db_conn.fetch_all(" ".join(query), params)
+
+        # get the total num of scores,
+        # then retrieve only the top 50
+        num_scores = len(rows)
+        del rows[SCORES_DISPLAYED_PER_LEADERBOARD:]
+
+        scores = []
+
+        for rank, row in enumerate(rows):
+            p = await app.state.sessions.players.from_cache_or_sql(id=row["userid"])
+            scores.append(Score.from_row(row, beatmap=bmap, player=p, rank=rank + 1))
+
+        leaderboard = Leaderboard(
+            beatmap=bmap,
+            scores=scores,
+            num_scores=num_scores,
+        )
+
+        # insert into beatmap object
+        if leaderboard_type == LeaderboardType.Top:
+            bmap.leaderboards[mode]["top"] = leaderboard
+        else:
+            leaderboards[leaderboard_key] = leaderboard  # type: ignore
+
+    if (
+        player.id not in leaderboard.personal_bests
+        and leaderboard.num_scores >= SCORES_DISPLAYED_PER_LEADERBOARD
+    ):
+        # fetch player's personal best score
+        p_best_row = await db_conn.fetch_one(
+            f"SELECT *, {scoring_metric} AS _score, "
+            "UNIX_TIMESTAMP(play_time) time "
+            "FROM scores "
+            "WHERE map_md5 = :map_md5 AND mode = :mode "
+            "AND userid = :user_id AND status = 2 "
+            "ORDER BY _score DESC LIMIT 1",
+            {"map_md5": map_md5, "mode": mode, "user_id": player.id},
+        )
+
+        if p_best_row:
+            # calculate the rank of the score.
+            p_best_rank = 1 + await db_conn.fetch_val(
+                "SELECT COUNT(*) FROM scores s "
+                "INNER JOIN users u ON u.id = s.userid "
+                "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+                "AND s.status = 2 AND u.priv & 1 "
+                f"AND s.{scoring_metric} > :score",
+                {"map_md5": map_md5, "mode": mode, "score": p_best_row["_score"]},
+                column=0,  # COUNT(*)
+            )
+
+            leaderboard.personal_bests[player.id] = Score.from_row(
+                p_best_row,
+                bmap,
+                player,
+                rank=p_best_rank,
+            )
+
+    return leaderboard.format_for_osu(player.id)
+
+    """
     l: list[str] = []
 
     # ranked status, serv has osz2, bid, bsid, len(scores)
@@ -1332,7 +1478,7 @@ async def getScores(
         l.append(
             SCORE_LISTING_FMTSTR.format(
                 **p_best,
-                name=player.full_name,
+                name=player.name,
                 userid=player.id,
                 score=int(p_best["_score"]),
                 has_replay="1",
@@ -1352,6 +1498,7 @@ async def getScores(
     )
 
     return "\n".join(l).encode()
+    """
 
 
 @router.post("/web/osu-comment.php")
