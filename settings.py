@@ -45,6 +45,17 @@ DATADOG_APP_KEY: Secret = config("DATADOG_APP_KEY", cast=Secret)
 DEBUG: bool = config("DEBUG", cast=bool, default=False)
 REDIRECT_OSU_URLS: bool = config("REDIRECT_OSU_URLS", cast=bool, default=True)
 
+CORS_ORIGINS: CommaSeparatedStrings = config(
+    "CORS_ORIGINS",
+    cast=CommaSeparatedStrings,
+    default=",".join(
+        [
+            "http://localhost:3000",
+            "http://cmyui.xyz",
+        ],
+    ),
+)
+
 PP_CACHED_ACCS: list[int] = [
     int(acc)
     for acc in config(
