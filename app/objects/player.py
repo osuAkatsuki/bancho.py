@@ -491,8 +491,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, 'restrict', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": reason},
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -518,8 +518,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, 'unrestrict', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": reason},
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
         )
 
         if "restricted" in self.__dict__:
@@ -550,8 +550,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, 'silence', :msg, NOW())",
-            {"from": admin.id, "to": self.id, "msg": reason},
+            "VALUES (:from, :to, :action, :msg, NOW())",
+            {"from": admin.id, "to": self.id, "action": "silence", "msg": reason},
         )
 
         # inform the user's client.
@@ -578,8 +578,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, 'unsilence', NULL, NOW())",
-            {"from": admin.id, "to": self.id},
+            "VALUES (:from, :to, :action, NULL, NOW())",
+            {"from": admin.id, "to": self.id, "action": "unsilence"},
         )
 
         # inform the user's client
