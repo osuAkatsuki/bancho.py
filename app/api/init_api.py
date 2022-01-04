@@ -13,10 +13,10 @@ from fastapi.requests import Request
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 
-import app.settings
 import app.state
 import app.utils
 import bg_loops
+import settings
 from app.api import domains
 from app.api import middlewares
 from app.objects import collections
@@ -118,7 +118,7 @@ def init_events(asgi_app: FastAPI) -> None:
 
 def init_routes(asgi_app: FastAPI) -> None:
     """Initialize our app's route endpoints."""
-    for domain in ("ppy.sh", app.settings.DOMAIN):
+    for domain in ("ppy.sh", settings.DOMAIN):
         asgi_app.host(f"a.{domain}", domains.ava.router)
 
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
