@@ -95,7 +95,6 @@ nano .env
     |   |
     |   ├── constants           # logic & data for constant server-side classes & objects
     |   |   ├── clientflags.py    # anticheat flags used by the osu! client
-    |   |   ├── commands.py       # commands available in osu!'s chat
     |   |   ├── gamemodes.py      # osu! gamemodes, with relax/autopilot support
     |   |   ├── mods.py           # osu! gameplay modifiers
     |   |   ├── privileges.py     # privileges for players, globally & in clans
@@ -113,15 +112,17 @@ nano .env
     |   |   ├── player.py         # representation of individual players
     |   |   └── score.py          # representation of individual scores
     |   |
-    |   └── state               # objects representing live server-state
-    |       ├── cache             # data saved for optimization purposes
-    |       ├── services          # instances of 3rd-party services (e.g. databases)
-    |       └── sessions          # active sessions (players, channels, matches, etc.)
+    |   ├── state               # objects representing live server-state
+    |   |   ├── cache             # data saved for optimization purposes
+    |   |   ├── services          # instances of 3rd-party services (e.g. databases)
+    |   |   └── sessions          # active sessions (players, channels, matches, etc.)
+    |   |
+    |   ├── bg_loops.py           # loops running while the server is running
+    |   ├── commands.py           # commands available in osu!'s chat
+    |   └── packets.py            # a module for (de)serialization of osu! packets
     |
     ├── ext                   # external entities used when running the server
     ├── migrations            # database migrations - updates to schema
     ├── tools                 # various tools made throughout gulag's history
-    ├── bg_loops.py           # loops running while the server is running
     ├── main.py               # an entry point (script) to run the server
-    ├── packets.py            # a module for (de)serialization of osu! packets
     └── settings.py           # manages configuration values from the user
