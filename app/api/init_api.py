@@ -9,9 +9,9 @@ from cmyui.logging import log
 from fastapi import FastAPI
 from fastapi import status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
 from fastapi.responses import Response
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 
 import app.bg_loops
