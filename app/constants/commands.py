@@ -2589,16 +2589,13 @@ async def clan_leave(ctx: Context):
     """Leaves the clan you're in."""
     p = await app.state.sessions.players.from_cache_or_sql(name=ctx.player.name)
 
-    if p.clan == None:
+    if not p.clan:
         return "You're not in a clan."
-    elif p.clan_priv != 3:
-        return "You must pass the clan ownership before leaving it. Alternatively you can use !clan disband."
+    elif p.clan_priv == ClanPrivileges.Owner:
+        return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    await app.state.services.database.execute(
-        "UPDATE users SET clan_id=0, clan_priv=0 WHERE id = :uid", {"uid": p.id},
-    )
     p.clan.remove_member(p)
-    return "You have successfully left your clan."
+    return f"You have successfully left {p.clan!r}."
 
 
 # TODO: !clan inv, !clan join, !clan leave
