@@ -791,7 +791,12 @@ async def addnote(ctx: Context) -> Optional[str]:
         "INSERT INTO logs "
         "(`from`, `to`, `action`, `msg`, `time`) "
         "VALUES (:from, :to, :action, :msg, NOW())",
-        {"from": ctx.player.id, "to": t.id, "action": "note", "msg": " ".join(ctx.args[1:])},
+        {
+            "from": ctx.player.id,
+            "to": t.id,
+            "action": "note",
+            "msg": " ".join(ctx.args[1:]),
+        },
     )
 
     return f"Added note to {t}."
