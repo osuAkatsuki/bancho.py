@@ -1,4 +1,4 @@
-""" cho: handle cho app.packets from the osu! client """
+""" cho: handle cho packets from the osu! client """
 import asyncio
 import ipaddress
 import re
@@ -80,7 +80,7 @@ router = APIRouter(tags=["Bancho API"])
 @router.get("/")
 async def bancho_http_handler():
     """Handle a request from a web browser."""
-    app.packets = app.state.packets["all"]
+    packets = app.state.packets["all"]
 
     return HTMLResponse(
         b"<!DOCTYPE html>"
@@ -90,8 +90,8 @@ async def bancho_http_handler():
                 f"Players online: {len(app.state.sessions.players) - 1}",
                 '<a href="https://github.com/cmyui/gulag">Source code</a>',
                 "",
-                f"<b>app.packets handled ({len(app.packets)})</b>",
-                "<br>".join([f"{p.name} ({p.value})" for p in app.packets]),
+                f"<b>packets handled ({len(packets)})</b>",
+                "<br>".join([f"{p.name} ({p.value})" for p in packets]),
             ),
         ).encode(),
     )
@@ -166,20 +166,20 @@ async def bancho_handler(
     else:
         packet_map = app.state.packets["restricted"]
 
-    # bancho connections can be comprised of multiple app.packets;
+    # bancho connections can be comprised of multiple packets;
     # our reader is designed to iterate through them individually,
     # allowing logic to be implemented around the actual handler.
-    # NOTE: any unhandled app.packets will be ignored internally.
+    # NOTE: any unhandled packets will be ignored internally.
 
-    app.packets_handled = []
+    packets_handled = []
     with memoryview(await request.body()) as body_view:
         for packet in BanchoPacketReader(body_view, packet_map):
             await packet.handle(player)
-            app.packets_handled.append(packet.__class__.__name__)
+            packets_handled.append(packet.__class__.__name__)
 
     if settings.DEBUG:
-        app.packets_str = ", ".join(app.packets_handled) or "None"
-        log(f"[BANCHO] {player} | {app.packets_str}.", RGB(0xFF68AB))
+        packets_str = ", ".join(packets_handled) or "None"
+        log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
     player.last_recv_time = time.time()
 
@@ -708,7 +708,7 @@ async def login(
 
     # *real* client privileges are sent with this packet,
     # then the user's apparent privileges are sent in the
-    # userPresence app.packets to other players. we'll send
+    # userPresence packets to other players. we'll send
     # supporter along with the user's privileges here,
     # but not in userPresence (so that only donators
     # show up with the yellow name in-game, but everyone
