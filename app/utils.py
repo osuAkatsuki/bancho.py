@@ -60,7 +60,7 @@ DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
-OPPAI_PATH = Path.cwd() / "oppai-ng"
+OPPAI_PATH = Path.cwd() / "oppai_ng"
 
 
 useful_keys = (Keys.M1, Keys.M2, Keys.K1, Keys.K2)
@@ -450,11 +450,11 @@ def ensure_dependencies_and_requirements() -> int:
             log("Failed to update git submodules.", Ansi.LRED)
             return exit_code
 
-    if not (OPPAI_PATH / "liboppai.so").exists():
+    if not any(Path(OPPAI_PATH).glob("*.so")):
         log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
         p = subprocess.Popen(
-            args=["./libbuild"],
-            cwd="oppai-ng",
+            args=["./build"],
+            cwd="oppai_ng",
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
