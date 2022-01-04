@@ -31,7 +31,7 @@ def init_exception_handlers(asgi_app: FastAPI) -> None:
         print(f"Validation error on {request.url}", "\n", exc.errors())
 
         return Response(
-            content=exc.errors(),
+            content=orjson.dumps(exc.errors()),
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
