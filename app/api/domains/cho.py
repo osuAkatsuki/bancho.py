@@ -80,7 +80,7 @@ router = APIRouter(tags=["Bancho API"])
 @router.get("/")
 async def bancho_http_handler():
     """Handle a request from a web browser."""
-    app.packets = app.state.app.packets["all"]
+    app.packets = app.state.packets["all"]
 
     return HTMLResponse(
         b"<!DOCTYPE html>"
@@ -162,9 +162,9 @@ async def bancho_handler(
 
     # restricted users may only use certain packet handlers.
     if not player.restricted:
-        packet_map = app.state.app.packets["all"]
+        packet_map = app.state.packets["all"]
     else:
-        packet_map = app.state.app.packets["restricted"]
+        packet_map = app.state.packets["restricted"]
 
     # bancho connections can be comprised of multiple app.packets;
     # our reader is designed to iterate through them individually,
@@ -193,7 +193,7 @@ def register(
     packet: ClientPackets,
     restricted: bool = False,
 ) -> Callable[[Type[BasePacket]], Type[BasePacket]]:
-    """Register a handler in `app.state.app.packets`."""
+    """Register a handler in `app.state.packets`."""
 
     def wrapper(cls: Type[BasePacket]) -> Type[BasePacket]:
         app.state.packets["all"][packet] = cls
