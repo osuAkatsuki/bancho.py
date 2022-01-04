@@ -35,9 +35,8 @@ async def main() -> int:
 
                 note_match = LOG_REGEX.match(row["msg"])
                 if not note_match:
-                    raise Exception(f"Invalid note: {note}")
+                    continue
 
-                action = note_match["action"]
                 reason = note_match["reason"]
                 note = note_match["note"]
 
@@ -47,15 +46,31 @@ async def main() -> int:
                 elif note:
                     msg = note
 
+                if note:
+                    action = "note"
+                else:
+                    action = (
+                        note_match["action"][:-2]
+                        if "silence" not in note_match["reason"]
+                        else note_match["action"][:-1]
+                    )
+
                 await update_conn.execute(
-                    "UPDATE logs SET action = :action, msg = :msg WHERE id = :id",
-                    {"action": action, "msg": msg, "id": row["id"]},
+                    "UPDATE logs SET action = :action, msg = :msg, time = :time WHERE id = :id",
+                    {
+                        "action": action,
+                        "msg": msg,
+                        "id": row["id"],
+                        "time": row["time"],
+                    },
                 )
 
             # change action column to not null
             await update_conn.execute(
                 "ALTER TABLE `logs` MODIFY `action` VARCHAR(32) not null",
             )
+
+            print("Finished migrating logs!")
 
     return 0
 
