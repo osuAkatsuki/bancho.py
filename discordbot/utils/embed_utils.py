@@ -55,6 +55,18 @@ embed_list = {
         "description": f"For security reasons, this command is aviable only in admin channels.",
         "color": colors.red,
         "footer": "default"
+    },
+    "rx_mania": {
+        "title": "Error",
+        "description": f"Relax can not be used with mania.",
+        "color": colors.red,
+        "footer": "default"
+    },
+    "ap_no_std": {
+        "title": "Error",
+        "description": f"Autopilot can be used only with standard.",
+        "color": colors.red,
+        "footer": "default"
     }
 }
 default_footer = f"Version {dbot.botversion} | Bot Creator: def750"

@@ -13,9 +13,9 @@ from fastapi.requests import Request
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 
+import app.bg_loops
 import app.state
 import app.utils
-import bg_loops
 import settings
 from app.api import domains
 from app.api import middlewares
@@ -31,7 +31,7 @@ def init_exception_handlers(asgi_app: FastAPI) -> None:
         print(f"Validation error on {request.url}", "\n", exc.errors())
 
         return Response(
-            content=exc.errors(),
+            content=orjson.dumps(exc.errors()),
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
@@ -94,7 +94,7 @@ def init_events(asgi_app: FastAPI) -> None:
         async with app.state.services.database.connection() as db_conn:
             await collections.initialize_ram_caches(db_conn)
 
-        await bg_loops.initialize_housekeeping_tasks()
+        await app.bg_loops.initialize_housekeeping_tasks()
 
     @asgi_app.on_event("shutdown")
     async def on_shutdown() -> None:

@@ -2,8 +2,8 @@ import functools
 from typing import Sequence
 from typing import TYPE_CHECKING
 
+import app.packets
 import app.state
-import packets
 from app.constants.privileges import Privileges
 
 if TYPE_CHECKING:
@@ -91,7 +91,7 @@ class Channel:
 
     def send(self, msg: str, sender: "Player", to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""
-        data = packets.send_message(
+        data = app.packets.send_message(
             sender=sender.name,
             msg=msg,
             recipient=self.name,
@@ -112,7 +112,7 @@ class Channel:
             msg = f"message would have crashed games ({msg_len} chars)"
 
         self.enqueue(
-            packets.send_message(
+            app.packets.send_message(
                 sender=bot.name,
                 msg=msg,
                 recipient=self.name,

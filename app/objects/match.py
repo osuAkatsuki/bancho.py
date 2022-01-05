@@ -15,8 +15,8 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.packets
 import app.state
-import packets
 import settings
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -279,7 +279,7 @@ class Match:
         self.tourney_clients: set[int] = set()  # player ids
 
     @classmethod
-    def from_parsed_match(cls, parsed_match: packets.MultiplayerMatch) -> "Match":
+    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> "Match":
         obj = cls()
         obj.mods = Mods(parsed_match.mods)
 
@@ -418,10 +418,10 @@ class Match:
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
-        self.chat.enqueue(packets.update_match(self, send_pw=True))
+        self.chat.enqueue(app.packets.update_match(self, send_pw=True))
 
         if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
-            lchan.enqueue(packets.update_match(self, send_pw=False))
+            lchan.enqueue(app.packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
         """Unready any players in the `expected` state."""
@@ -442,7 +442,7 @@ class Match:
                     no_map.append(s.player.id)
 
         self.in_progress = True
-        self.enqueue(packets.match_start(self), immune=no_map, lobby=False)
+        self.enqueue(app.packets.match_start(self), immune=no_map, lobby=False)
         self.enqueue_state()
 
     def reset_scrim(self) -> None:

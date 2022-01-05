@@ -68,3 +68,26 @@ async def getUser(ctx: commands.Context, to_select:str, user):
         #Convert to dict for easier usage
         user = dict(user)
         return {"user": user, "self_exec": self_exec}
+
+mode2gulag = {
+    "0.vn": 0,
+    "1.vn": 1,
+    "2.vn": 2,
+    "3.vn": 3,
+    "0.rx": 4,
+    "1.rx": 5,
+    "2.rx": 6,
+    "0.ap": 7,
+}
+
+def convert_rx(mode: int, rx: int) -> int:
+    if mode == 3:
+        return 3
+
+    if rx == "rx":
+        return mode + 4
+
+    if rx == "ap":
+        return 8
+
+    return mode

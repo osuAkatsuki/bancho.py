@@ -13,8 +13,8 @@ from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
 
+import app.packets
 import app.state
-import packets
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -707,9 +707,9 @@ async def api_get_replay(
 
     # pack first section of headers.
     replay_data += struct.pack("<Bi", row["mode"], 20200207)  # TODO: osuver
-    replay_data += packets.write_string(row["map_md5"])
-    replay_data += packets.write_string(row["username"])
-    replay_data += packets.write_string(replay_md5)
+    replay_data += app.packets.write_string(row["map_md5"])
+    replay_data += app.packets.write_string(row["username"])
+    replay_data += app.packets.write_string(replay_md5)
     replay_data += struct.pack(
         "<hhhhhhihBi",
         row["n300"],

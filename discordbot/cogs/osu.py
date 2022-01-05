@@ -88,25 +88,30 @@ class osu(commands.Cog):
         #* Get user
         user = await dutils.getUser(
             ctx, "id, name, country, priv, creation_time, "
-            "latest_activity, clan_id, clan_priv", user)
+            "latest_activity, clan_id, clan_priv, preferred_mode", user)
         #! Return if error occured
         if 'error' in user:
             return await ctx.send(embed=await embutils.emb_gen(user['error']))
 
+        #* Reassign user
+        user = user['user']
+
         #* Conversion and syntax checks for mode
         if mode != None:
-            modestr = dconst.mode_2_str[mode]
+            modestr = dconst.mode_2_str[int(mode)]
         else:
             #Get mode default from user's discord
-            async with app.state.services.database.connection() as db_conn:
-                mode = await app.state.services.database.fetch_val(
-                    "SELECT default_mode FROM discord WHERE osu_id = :oid",
-                    {"oid": user['user']['id']}
-                )
-                if not mode:
-                    mode = 0
-                print(mode)
-        return await ctx.send(f"{user=} {mode=} {mods=}")
+            mode = dutils.convert_rx(mode, mods)
+        mode = int(mode)
+        #* Get Mods and do syntax checks
+        if mods == "rx" and mode == 3:
+            return await ctx.send(embed=embutils.emb_gen("rx_mania"))
+        elif mods == "ap" and mode != 0:
+            return await ctx.send(embed=embutils.embgen("ap_no_std"))
+        else:
+            gulagmode = dutils.mode2gulag[f"{mode}.{mods}"]
+
+        return await ctx.send(f"{user=} {mode=} {mods=} {modestr=} {gulagmode=}")
 
 def setup(client):
     client.add_cog(osu(client))
