@@ -3,21 +3,11 @@ import time
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from cmyui import Version
-from cmyui import AsyncSQLPool
-import os
 
 import app.packets
 import app.state
 import settings
 from app.constants.privileges import Privileges
-
-
-import discordbot.botconfig as configb
-import discord
-from discord.ext import commands
-from discord_slash import SlashCommand
-import app.state.discordbot as dbot
 
 __all__ = ("initialize_housekeeping_tasks",)
 
@@ -35,7 +25,6 @@ async def initialize_housekeeping_tasks() -> None:
                 _remove_expired_donation_privileges(interval=30 * 60),
                 _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
-                _bot_runner()
             )
         },
     )
@@ -95,60 +84,3 @@ async def _update_bot_status(interval: int) -> None:
     while True:
         await asyncio.sleep(interval)
         app.packets.bot_stats.cache_clear()
-
-async def _bot_runner() -> None:
-    dbot.botversion = Version(2, 0, 0)
-    intents = discord.Intents.all()
-    #-> Define bot
-    client = commands.Bot(command_prefix=configb.PREFIX, intents=intents, case_insensitive=True)
-    slash = SlashCommand(client, sync_commands=True, debug_guild=893809157080223784, sync_on_cog_reload=True)
-    dbot.client = client
-    dbot.slash = slash
-
-    #-> Cog loading
-    for filename in os.listdir(f'{configb.PATH_TO_FILES}cogs'):
-        filename1 = filename
-        if filename.endswith('.py'):
-            print(f"Loading {filename1}...")
-            client.load_extension(f'discordbot.cogs.{filename[:-3]}')
-            print(f'Loaded {filename1}')
-
-    @client.event
-    async def on_ready() -> None:
-        log("Bot logged in", Ansi.GREEN)
-        log(f"Bot name: {client.user.name}")
-        log(f"Bot ID: {client.user.id}")
-        log(f"Bot Version: {dbot.botversion}\n")
-
-        @client.command()
-        async def rlc(ctx, cog):
-            if ctx.author.id not in configb.BOT_OWNERS:
-                return await ctx.send("You're not an owner")
-            try:
-                client.unload_extension(f'discordbot.cogs.{cog}')
-                client.load_extension(f'discordbot.cogs.{cog}')
-                log(f"{ctx.author.name}#{ctx.author.discriminator} reloaded cog {cog}", Ansi.YELLOW)
-            except Exception as e:
-                log(f"{ctx.author.name}#{ctx.author.discriminator} tried to reload cog {cog} but error occured", Ansi.YELLOW)
-                log(e, Ansi.RED)
-                return await ctx.send(f"Error occured while reloading cog\n```{e}```", delete_after=10)
-            return await ctx.send("Reloaded Cog")
-
-        @client.command()
-        async def load(ctx, cog):
-            if ctx.author.id not in configb.BOT_OWNERS:
-                return await ctx.send("You're not an owner")
-            try:
-                client.load_extension(f'discordbot.cogs.{cog}')
-                log(f"{ctx.author.name}#{ctx.author.discriminator} loaded cog {cog}", Ansi.YELLOW)
-            except Exception as e:
-                log(f"{ctx.author.name}#{ctx.author.discriminator} tried to load cog {cog} but error occured", Ansi.YELLOW)
-                log(e, Ansi.RED)
-                return await ctx.send(f"Error occured while loading cog\n```{e}```", delete_after=10)
-            return await ctx.send("Loaded Cog")
-
-    try:
-        await client.start(configb.TOKEN)
-    finally:
-        await client.close()
-        log('Bot Connection Closed', Ansi.RED)
