@@ -495,7 +495,7 @@ async def _with(ctx: Context) -> Optional[str]:
                     ezpp.set_accuracy_percent(acc)
                     msg.append(f"{acc:.2f}%")
 
-                ezpp.calculate(osu_file_path)
+                ezpp.calculate(str(osu_file_path))
                 pp, sr = ezpp.get_pp(), ezpp.get_sr()
 
                 return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
@@ -1215,7 +1215,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         ezpp.set_combo(row["max_combo"])
                         ezpp.set_accuracy_percent(row["acc"])
 
-                        ezpp.calculate(osu_file_path)
+                        ezpp.calculate(str(osu_file_path))
 
                         pp = ezpp.get_pp()
 
@@ -1275,7 +1275,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 ezpp.set_combo(row["max_combo"])
                                 ezpp.set_accuracy_percent(row["acc"])
 
-                                ezpp.calculate(osu_file_path)
+                                ezpp.calculate(str(osu_file_path))
 
                                 pp = ezpp.get_pp()
 

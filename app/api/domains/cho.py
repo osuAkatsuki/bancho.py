@@ -1120,7 +1120,7 @@ class SendPrivateMessage(BasePacket):
                                         for acc in settings.PP_CACHED_ACCS:
                                             ezpp.set_accuracy_percent(acc)
 
-                                            ezpp.calculate(osu_file_path)
+                                            ezpp.calculate(str(osu_file_path))
 
                                             pp_values.append((acc, ezpp.get_pp()))
                                 else:

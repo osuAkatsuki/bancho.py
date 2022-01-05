@@ -345,7 +345,7 @@ class Score:
                 ezpp.set_nmiss(self.nmiss)  # clobbers acc
                 ezpp.set_accuracy_percent(self.acc)
 
-                ezpp.calculate(osu_file_path)
+                ezpp.calculate(str(osu_file_path))
 
                 pp = ezpp.get_pp()
 
