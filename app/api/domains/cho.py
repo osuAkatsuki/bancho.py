@@ -56,7 +56,11 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
-from oppai_ng.oppai import OppaiWrapper
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 

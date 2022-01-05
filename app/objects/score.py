@@ -17,7 +17,11 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-from oppai_ng.oppai import OppaiWrapper
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.player import Player

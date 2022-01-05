@@ -57,7 +57,11 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.utils import seconds_readable
-from oppai_ng.oppai import OppaiWrapper
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel

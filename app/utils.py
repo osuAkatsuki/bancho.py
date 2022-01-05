@@ -441,7 +441,7 @@ def ensure_dependencies_and_requirements() -> int:
             log("Failed to get git submodules.", Ansi.LRED)
             return exit_code
 
-    if not any(Path(OPPAI_PATH).glob("*.so")):
+    if not any(Path(OPPAI_PATH).glob("*.so")):  # TODO: could not be .so if windows?
         log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
         p = subprocess.Popen(
             args=["./build"],
@@ -452,6 +452,12 @@ def ensure_dependencies_and_requirements() -> int:
         if exit_code := p.wait():
             log("Failed to build oppai-ng automatically.", Ansi.LRED)
             return exit_code
+
+        log(
+            "oppai-ng built, please start gulag again!",
+            Ansi.LMAGENTA,
+        )  # restart is required to fix imports
+        return 1
 
     return 0
 
