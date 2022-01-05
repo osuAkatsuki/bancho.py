@@ -22,7 +22,7 @@ git submodule init && git submodule update
 sudo add-apt-repository ppa:deadsnakes/ppa
 
 # install project requirements (separate programs)
-sudo apt install python3.9 python3.9-dev python3.9-distutils \
+sudo apt install python3.9 python3.9-dev python3.9-distutils cmake \
                  mysql-server redis-server nginx build-essential certbot
 
 # install pip for python3.9
