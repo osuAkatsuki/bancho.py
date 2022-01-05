@@ -30,7 +30,6 @@ from typing import Union
 import cmyui.utils
 import psutil
 import timeago
-from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -58,6 +57,7 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.utils import seconds_readable
+from oppai_ng.oppai import OppaiWrapper
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -474,7 +474,7 @@ async def _with(ctx: Context) -> Optional[str]:
         msg = []
 
         if mode_vn == 0:
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 if mods is not None:
                     ezpp.set_mods(int(mods))
                     msg.append(f"{mods!r}")
@@ -1196,7 +1196,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 ezpp.set_mode(0)  # TODO: other modes
                 for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
                     # TODO: this should be using an async generator
@@ -1256,7 +1256,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                    with OppaiWrapper() as ezpp:
                         ezpp.set_mode(0)  # TODO: other modes
                         for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
                             # TODO: this should be using an async generator

@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -18,6 +17,7 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.utils import escape_enum
 from app.utils import pymysql_encode
+from oppai_ng.oppai import OppaiWrapper
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -330,7 +330,7 @@ class Score:
         mode_vn = self.mode.as_vanilla
 
         if mode_vn == 0:  # std
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
 

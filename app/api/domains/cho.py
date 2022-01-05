@@ -18,7 +18,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
-from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from fastapi import APIRouter
 from fastapi import Response
@@ -57,6 +56,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from oppai_ng.oppai import OppaiWrapper
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
@@ -1109,7 +1109,7 @@ class SendPrivateMessage(BasePacket):
                                 pp_values = []  # [(acc, pp), ...]
 
                                 if mode_vn == 0:
-                                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                                    with OppaiWrapper() as ezpp:
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
 

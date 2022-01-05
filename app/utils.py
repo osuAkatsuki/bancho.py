@@ -433,21 +433,12 @@ def ensure_dependencies_and_requirements() -> int:
     if not OPPAI_PATH.exists():
         log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
         p = subprocess.Popen(
-            args=["git", "submodule", "init"],
+            args=["git", "submodule", "update", "--init", "--recursive"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         if exit_code := p.wait():
-            log("Failed to initialize git submodules.", Ansi.LRED)
-            return exit_code
-
-        p = subprocess.Popen(
-            args=["git", "submodule", "update"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to update git submodules.", Ansi.LRED)
+            log("Failed to get git submodules.", Ansi.LRED)
             return exit_code
 
     if not any(Path(OPPAI_PATH).glob("*.so")):
