@@ -109,7 +109,7 @@ class osu(commands.Cog):
         elif mods == "ap" and mode != 0:
             return await ctx.send(embed=embutils.embgen("ap_no_std"))
         else:
-            gulagmode = dutils.mode2gulag[f"{mode}.{mods}"]
+            gulagmode = dconst.mode2gulag[f"{mode}.{mods}"]
 
         return await ctx.send(f"{user=} {mode=} {mods=} {modestr=} {gulagmode=}")
 
