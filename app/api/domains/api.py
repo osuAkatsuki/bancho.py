@@ -362,7 +362,7 @@ async def api_get_player_scores(
         if include_loved:
             allowed_statuses.append(5)
 
-        query.append("AND t.status = 2 AND b.status IN :statuses AND t.status != 0")
+        query.append("AND t.status = 2 AND b.status IN :statuses")
         params["statuses"] = allowed_statuses
         sort = "t.pp"
     else:
