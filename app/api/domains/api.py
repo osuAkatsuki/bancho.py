@@ -367,7 +367,7 @@ async def api_get_player_scores(
         sort = "t.pp"
     else:
         if not include_failed:
-            query.append("AND t.grade != 'F'")
+            query.append("AND t.status != 0")
 
         sort = "t.play_time"
 
