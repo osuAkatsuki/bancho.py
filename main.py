@@ -61,7 +61,15 @@ def main() -> int:
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
         if os.path.exists(settings.SERVER_ADDR):
-            os.remove(settings.SERVER_ADDR)
+            if app.utils.processes_listening_on_unix_socket(settings.SERVER_ADDR) != 0:
+                log(
+                    f"There are other processes listening on {settings.SERVER_ADDR}.\n"
+                    f"If you've lost it, gulag can be killed gracefully with SIGINT.",
+                    Ansi.LRED,
+                )
+                return 1
+            else:
+                os.remove(settings.SERVER_ADDR)
     else:
         # inet address
         server_arguments = {
