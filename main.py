@@ -9,6 +9,7 @@ __discord__ = "cmyui#0425"
 import ipaddress
 import os
 
+import logging
 import uvicorn
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -73,6 +74,7 @@ def main() -> int:
         "app.api.init_api:asgi_app",
         **server_arguments,
         reload=settings.DEBUG,
+        log_level=logging.WARNING,
     )
 
     return 0
