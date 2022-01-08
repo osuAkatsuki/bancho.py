@@ -75,6 +75,8 @@ def main() -> int:
         **server_arguments,
         reload=settings.DEBUG,
         log_level=logging.WARNING,
+        server_header=False,
+        date_header=False,
     )
 
     return 0
