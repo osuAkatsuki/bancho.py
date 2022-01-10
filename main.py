@@ -7,14 +7,15 @@ __email__ = "cmyuiosu@gmail.com"
 __discord__ = "cmyui#0425"
 
 import ipaddress
+import logging
 import os
 
-import logging
 import uvicorn
 from cmyui.logging import Ansi
 from cmyui.logging import log
-import settings
+
 import app.utils
+import settings
 
 
 def main() -> int:
