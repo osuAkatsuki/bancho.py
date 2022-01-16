@@ -287,6 +287,7 @@ async def api_get_player_scores(
     mode_arg: int = Query(0, alias="mode", ge=0, le=7),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
+    include_failed: bool = True,
 ):
     """Return a list of a given user's recent/best scores."""
     if username and user_id:
@@ -361,10 +362,13 @@ async def api_get_player_scores(
         if include_loved:
             allowed_statuses.append(5)
 
-        query.append("AND t.status = 2 AND b.status IN :statuses AND t.status != 0")
+        query.append("AND t.status = 2 AND b.status IN :statuses")
         params["statuses"] = allowed_statuses
         sort = "t.pp"
     else:
+        if not include_failed:
+            query.append("AND t.status != 0")
+
         sort = "t.play_time"
 
     query.append(f"ORDER BY {sort} DESC LIMIT :limit")

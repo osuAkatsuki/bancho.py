@@ -266,7 +266,7 @@ class Players(list[Player]):
         else:
             row["clan"] = row["clan_priv"] = None
 
-        # country from acronym to {acronym, numeric}=
+        # country from acronym to {acronym, numeric}
         row["geoloc"] = {
             "latitude": 0.0,  # TODO
             "longitude": 0.0,
