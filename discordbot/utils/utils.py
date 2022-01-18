@@ -1,6 +1,9 @@
+from app.objects.player import Player
 import app.state
 import discord
 from discord.ext import commands
+from app.commands import str_priv_dict
+from app.constants.privileges import Privileges
 
 import discordbot.utils.embed_utils as embutils
 def argparse(args:list, allowed_args:list):
@@ -80,3 +83,16 @@ def convert_rx(mode: int, rx: int) -> int:
         return 8
 
     return mode
+
+
+def getPrivList(player: Player, format:str=""):
+    priv_list = [
+        priv.name for priv in Privileges if player.priv & priv and bin(priv).count("1") == 1
+    ][::-1]
+    str = ""
+    if player.id in [3,4]:
+        str += format + "Owner" + format + " "
+    for el in priv_list:
+        str += format + el.capitalize() + format + " "
+
+    return str

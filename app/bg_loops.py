@@ -107,7 +107,7 @@ async def _bot_runner() -> None:
     #-> Cog loading
     for filename in os.listdir(f'{configb.PATH_TO_FILES}cogs'):
         filename1 = filename
-        if filename.endswith('.py'):
+        if filename.endswith('.py') and not filename.startswith('_'):
             print(f"Loading {filename1}...")
             client.load_extension(f'discordbot.cogs.{filename[:-3]}')
             print(f'Loaded {filename1}')

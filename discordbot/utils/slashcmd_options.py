@@ -12,22 +12,10 @@ profile = [
         option_type=3,
         required=False,
         choices=[
-            create_choice(
-                name="Standard",
-                value="0"
-            ),
-            create_choice(
-                name="Taiko",
-                value="1"
-            ),
-            create_choice(
-                name="Catch",
-                value="2"
-            ),
-            create_choice(
-                name="Mania",
-                value="3"
-            ),
+            create_choice(name="Standard", value="0"),
+            create_choice(name="Taiko", value="1"),
+            create_choice(name="Catch", value="2"),
+            create_choice(name="Mania", value="3"),
         ]
     ),
     create_option(
@@ -36,18 +24,19 @@ profile = [
         option_type=3,
         required=False,
         choices=[
-            create_choice(
-                name="Vanilla",
-                value="vn"
-            ),
-            create_choice(
-                name="Relax",
-                value="rx"
-            ),
-            create_choice(
-                name="Autopilot",
-                value="ap"
-            )
+            create_choice(name="Vanilla", value="vn"),
+            create_choice(name="Relax", value="rx"),
+            create_choice(name="Autopilot", value="ap")
         ]
-    )
+    ),
+    create_option(
+        name="size",
+        description="Do you want to see all info or only basic",
+        option_type=3,
+        required=False,
+        choices=[
+            create_choice(name="Basic", value="basic"),
+            create_choice(name="Full", value="full"),
+        ]
+    ),
 ]

@@ -28,7 +28,7 @@ class osu(commands.Cog):
     @cog_ext.cog_slash(name="profile", description="Check user profile in specified mode with specfied mods.",
             options=sopt.profile
         )
-    async def _profile(self, ctx: SlashContext, user:str=None, mode:str=None, mods:str=None):
+    async def _profile(self, ctx: SlashContext, user:str=None, mode:str=None, mods:str=None, size:str="basic"):
         #* Permission and access checks
         for role in ctx.author.roles:           #getting all roles of member
             if role.id == int(configb.ROLES['restricted']):
@@ -37,7 +37,7 @@ class osu(commands.Cog):
 
 
         #* Get user
-        user = await dutils.getUser(ctx, "id, name, country, preferred_mode", user)
+        user = await dutils.getUser(ctx, "id, name, country, preferred_mode, creation_time, latest_activity", user)
 
         #! Return if error occured
         if 'error' in user:
@@ -65,7 +65,6 @@ class osu(commands.Cog):
 
         #* Get modestr and gulagmode with it's object
         modeobj = dconst.modemods2object[f"{mode}.{mods}"]
-        modestr = dconst.mode_2_str[mode]
 
         #* Get player stats
         stats = await app.state.services.database.fetch_one(
@@ -76,25 +75,16 @@ class osu(commands.Cog):
         #* Get player status and convert it
         status = player.status
 
-        #TODO: Recalc Rank
         #TODO: Calculate player's level
-
 
         #! Assign vars and send embed
         #* Value reassignment
         author_name = f"{user['name']}'s Profile In osu!{dconst.mode_2_str[mode].capitalize()}"
-        field1_desc =  f"▸ **Global Rank:** #{await player.get_global_rank(modeobj)} **Country Rank:** #{await player.get_country_rank(modeobj)} {player.geoloc['country']['acronym'].upper()}"
-        field1_desc += f"\n▸ **PP:** {round(stats['pp'], 2)} **Accuracy:** {round(stats['acc'], 2)}%"
-        field1_desc += f"\n▸ A S SH SS SSH"
-        field1_desc += f"\n▸ **Max Combo:** {stats['max_combo']}"
-        field1_desc += f"\n▸ **Ranked Score:** {stats['rscore']} **Total Score:** {stats['tscore']}"
-        field1_desc += f"\n▸ **Playcount:** {stats['plays']} **Playtime:** {stats['playtime']}"
-
         if mods != "vn":
             author_name += f" with {dconst.mods2str[mods].capitalize()}"
 
-
-
+        #TODO: Fix it, currently displays weird time format (Ex.: 1 day, 13:17:27)
+        playtime = datetime.timedelta(seconds=stats['playtime'])
 
         embed = discord.Embed(
             color=ctx.author.color,
@@ -108,11 +98,32 @@ class osu(commands.Cog):
             url=f"https://a.{settings.DOMAIN}/{player.id}"
         )
         embed.add_field(
-            name="User Information",
-            value=field1_desc
+            name="Stats",
+            value=f"▸ **Global Rank:** {await player.get_global_rank(modeobj)} "
+                  f"**Country Rank:** {await player.get_country_rank(modeobj)}\n"
+                  f"▸ **PP:** {stats['pp']} **ACC:** {stats['acc']}\n"
+                  f"▸ **Max Combo:** {stats['max_combo']}\n"
+                  f"▸ **Ranked Score:** {stats['rscore']} "
+                  f"▸ **Total Score:** {stats['tscore']}\n"
+                  f"▸ **Playcount:** {stats['plays']} **Playtime:** {playtime}\n"
+                  f"▸ **Ranks:** {dconst.emotes['XH']} `{stats['xh_count']}` "
+                  f"{dconst.emotes['X']} `{stats['x_count']}` {dconst.emotes['SH']} "
+                  f"`{stats['sh_count']}` {dconst.emotes['S']} `{stats['s_count']}` "
+                  f"{dconst.emotes['A']} `{stats['a_count']}`",
+            inline=False
         )
+        if size=="full":
+            registerDate = datetime.datetime.fromtimestamp(int(user['creation_time'])).strftime("%m.%d.%Y %H:%M:%S")
+            lastSeen = datetime.datetime.fromtimestamp(int(user['latest_activity'])).strftime("%m.%d.%Y %H:%M:%S")
+            embed.add_field(
+                name="User Information",
+                value=f"▸ **User ID:** {player.id}\n"
+                      f"▸ **User groups:** {dutils.getPrivList(player, '`')}\n"
+                      f"▸ **Registration date:** {registerDate}\n"
+                      f"▸ **Last seen date:** {lastSeen}",
+                inline=False
+            )
         return await ctx.send(embed=embed)
-
 
 def setup(client):
     client.add_cog(osu(client))
