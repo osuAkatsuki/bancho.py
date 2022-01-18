@@ -1,23 +1,24 @@
+import datetime
+from asyncio.proactor_events import constants
+
+import app.state
+import cmyui
 import databases
 import discord
-from discord.ext import commands
-from discord.utils import get
-from discord_slash import cog_ext, SlashContext
-from discord_slash.utils.manage_commands import create_option, create_choice
-
-import cmyui
-import datetime
-
+import settings
+import discordbot.botconfig as configb
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import Privileges
 from app.objects.player import Player
-import app.state
 from app.state import services
-
-from discordbot.utils import utils as dutils
-from discordbot.utils import embed_utils as embutils
+from discord.ext import commands
+from discord.utils import get
+from discord_slash import SlashContext, cog_ext
+from discord_slash.utils.manage_commands import create_choice, create_option
 from discordbot.utils import constants as dconst
-import discordbot.botconfig as configb
+from discordbot.utils import embed_utils as embutils
+from discordbot.utils import utils as dutils
+from discordbot.utils import slashcmd_options as sopt
 
 
 class osu(commands.Cog):
@@ -25,58 +26,7 @@ class osu(commands.Cog):
         self.client = client
 
     @cog_ext.cog_slash(name="profile", description="Check user profile in specified mode with specfied mods.",
-            options=[
-                create_option(
-                    name="user",
-                    description="Select user.",
-                    option_type=3,
-                    required=False,
-                ),
-                create_option(
-                    name="mode",
-                    description="Select mode.",
-                    option_type=3,
-                    required=False,
-                    choices=[
-                        create_choice(
-                            name="Standard",
-                            value="0"
-                        ),
-                        create_choice(
-                            name="Taiko",
-                            value="1"
-                        ),
-                        create_choice(
-                            name="Catch",
-                            value="2"
-                        ),
-                        create_choice(
-                            name="Mania",
-                            value="3"
-                        ),
-                    ]
-                ),
-                create_option(
-                    name="mods",
-                    description="Select mods.",
-                    option_type=3,
-                    required=False,
-                    choices=[
-                        create_choice(
-                            name="Vanilla",
-                            value="vn"
-                        ),
-                        create_choice(
-                            name="Relax",
-                            value="rx"
-                        ),
-                        create_choice(
-                            name="Autopilot",
-                            value="ap"
-                        )
-                    ]
-                )
-            ]
+            options=sopt.profile
         )
     async def _profile(self, ctx: SlashContext, user:str=None, mode:str=None, mods:str=None):
         #* Permission and access checks
@@ -85,10 +35,10 @@ class osu(commands.Cog):
                 #? THIS CODE CHECKS FOR ROLE, NOT PERMS
                 return await ctx.send(embed=await embutils.emb_gen("restricted_self"))
 
+
         #* Get user
-        user = await dutils.getUser(
-            ctx, "id, name, country, priv, creation_time, "
-            "latest_activity, clan_id, clan_priv, preferred_mode", user)
+        user = await dutils.getUser(ctx, "id, name, country, preferred_mode", user)
+
         #! Return if error occured
         if 'error' in user:
             return await ctx.send(embed=await embutils.emb_gen(user['error']))
@@ -96,22 +46,79 @@ class osu(commands.Cog):
         #* Reassign user
         user = user['user']
 
-        #* Conversion and syntax checks for mode
-        if mode != None:
-            modestr = dconst.mode_2_str[int(mode)]
-        else:
-            #Get mode default from user's discord
-            mode = dutils.convert_rx(mode, mods)
-        mode = int(mode)
-        #* Get Mods and do syntax checks
-        if mods == "rx" and mode == 3:
-            return await ctx.send(embed=embutils.emb_gen("rx_mania"))
-        elif mods == "ap" and mode != 0:
-            return await ctx.send(embed=embutils.embgen("ap_no_std"))
-        else:
-            gulagmode = dconst.mode2gulag[f"{mode}.{mods}"]
+        #* Get player object
+        player: Player = await app.state.sessions.players.from_cache_or_sql(name=user['name'])
 
-        return await ctx.send(f"{user=} {mode=} {mods=} {modestr=} {gulagmode=}")
+
+        #* Get mode and mods
+        if mode == None:
+            mode = user['preferred_mode']
+            if mode == None:
+                mode = 0
+            else:
+                mode = dconst.gulag2mode[int(mode)]
+        else:
+            mode = int(mode)
+
+        if mods == None:
+            mods = "vn"
+        else:
+            if mods == "rx" and mode == 3:
+                return await ctx.send(embed=await embutils.emb_gen('rx_mania'))
+            elif mods == "ap" and mode != 0:
+                return await ctx.send(embed= await embutils.emb_gen('ap_no_std'))
+
+
+        #* Get modestr and gulagmode with it's object
+        modeobj = dconst.modemods2object[f"{mode}.{mods}"]
+        modestr = dconst.mode_2_str[mode]
+
+        #* Get player stats
+        stats = await app.state.services.database.fetch_one(
+            "SELECT * FROM stats WHERE id = :uid AND mode = :mode",
+            {"uid": player.id, "mode": dconst.mode2gulag[f"{mode}.{mods}"]})
+        stats = dict(stats)
+
+        #* Get player status and convert it
+        status = player.status
+
+        #TODO: Recalc Rank
+        #TODO: Calculate player's level
+
+
+        #! Assign vars and send embed
+        #* Value reassignment
+        author_name = f"{user['name']}'s Profile In osu!{dconst.mode_2_str[mode].capitalize()}"
+        field1_desc =  f"▸ **Global Rank:** #{await player.get_global_rank(modeobj)} **Country Rank:** #{await player.get_country_rank(modeobj)} {player.geoloc['country']['acronym'].upper()}"
+        field1_desc += f"\n▸ **PP:** {round(stats['pp'], 2)} **Accuracy:** {round(stats['acc'], 2)}%"
+        field1_desc += f"\n▸ A S SH SS SSH"
+        field1_desc += f"\n▸ **Max Combo:** {stats['max_combo']}"
+        field1_desc += f"\n▸ **Ranked Score:** {stats['rscore']} **Total Score:** {stats['tscore']}"
+        field1_desc += f"\n▸ **Playcount:** {stats['plays']} **Playtime:** {stats['playtime']}"
+
+        if mods != "vn":
+            author_name += f" with {dconst.mods2str[mods].capitalize()}"
+
+
+
+
+        embed = discord.Embed(
+            color=ctx.author.color,
+        )
+        embed.set_author(
+            name=author_name,
+            icon_url=f"https://{settings.DOMAIN}/static/images/flags/{user['country'].upper()}.png",
+            url=f"https://{settings.DOMAIN}/u/{player.id}"
+        )
+        embed.set_thumbnail(
+            url=f"https://a.{settings.DOMAIN}/{player.id}"
+        )
+        embed.add_field(
+            name="User Information",
+            value=field1_desc
+        )
+        return await ctx.send(embed=embed)
+
 
 def setup(client):
     client.add_cog(osu(client))

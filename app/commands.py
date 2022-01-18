@@ -58,6 +58,7 @@ from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.utils import seconds_readable
 
+from cmyui.logging import log
 if TYPE_CHECKING:
     from app.objects.channel import Channel
 
@@ -182,6 +183,33 @@ async def _help(ctx: Context) -> Optional[str]:
 
     return "\n".join(l)
 
+
+@command(Privileges.NORMAL, hidden=True)
+async def link(ctx: Context):
+    """Link your discord account"""
+    discord_tag = " ".join(ctx.args[0:])
+    if not discord_tag:
+        return "Please enter your discord tag.\nExample usage: !link def750#0947"
+    if ctx.recipient.id == app.state.sessions.bot.id:
+        return "This command is only aviable in DMs with Ż Bot. (in game)"
+
+    the_code = random.randrange(100000, 999999)
+    if not await app.state.services.database.fetch_val(
+        "SELECT id FROM discord WHERE osu_id = :oid", {"oid": ctx.player.id}):
+        await app.state.services.database.execute(
+            "INSERT INTO discord (osu_id, discord_tag, code)"
+            "VALUES (:oid, :dtag, :code}",
+            {"oid": ctx.player.id, "dtag": discord_tag, "code": the_code}
+        )
+    else:
+        await app.state.services.database.execute(
+            "UPDATE discord SET "
+            "SET discord_tag = :dtag, code = :code "
+			"WHERE osu_id = :oid",
+            {"oid": ctx.player.id, "dtag": discord_tag, "code": the_code}
+        )
+    log(f"{ctx.player} Used link command with code {the_code} and discord tag {discord_tag}")
+    return f"Your profile got linked, code: {the_code}. Discord tag used: {discord_tag}.\n If the tag is wrong simply correct it and re-run command."
 
 @command(Privileges.NORMAL)
 async def roll(ctx: Context) -> Optional[str]:
