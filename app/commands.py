@@ -220,7 +220,7 @@ async def roll(ctx: Context) -> Optional[str]:
         max_roll = 100
 
     if max_roll == 0:
-        return "Roll what?"
+        return "Roll what?" #Jajco
 
     points = random.randrange(0, max_roll)
     return f"{ctx.player.name} rolls {points} points!"

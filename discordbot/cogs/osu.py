@@ -51,16 +51,10 @@ class osu(commands.Cog):
 
 
         #* Get mode and mods
-        if mode == None:
-            mode = user['preferred_mode']
-            if mode == None:
-                mode = 0
-            else:
-                mode = dconst.gulag2mode[int(mode)]
-        else:
-            mode = int(mode)
+        if not mode:
+            mode = user['preferred_mode'] if user['preferred_mode'] else 0 #Cleanup by tsunyoku, thx <3
 
-        if mods == None:
+        if not mods:
             mods = "vn"
         else:
             if mods == "rx" and mode == 3:
