@@ -64,7 +64,7 @@ def init_middlewares(asgi_app: FastAPI) -> None:
     # cors middleware
     asgi_app.add_middleware(
         CORSMiddleware,
-        allow_origins=app.settings.CORS_ORIGINS,
+        allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
