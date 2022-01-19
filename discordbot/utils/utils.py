@@ -85,7 +85,7 @@ def convert_rx(mode: int, rx: int) -> int:
     return mode
 
 
-def getPrivList(player: Player, format:str=""):
+def getprivlist(player: Player, format:str=""):
     priv_list = [
         priv.name for priv in Privileges if player.priv & priv and bin(priv).count("1") == 1
     ][::-1]

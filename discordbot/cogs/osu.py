@@ -74,12 +74,13 @@ class osu(commands.Cog):
 
         #* Get player status and convert it
         status = player.status
+        status = player.status
 
         #TODO: Calculate player's level
 
         #! Assign vars and send embed
         #* Value reassignment
-        author_name = f"{user['name']}'s Profile In osu!{dconst.mode_2_str[mode].capitalize()}"
+        author_name = f"{user['name']}'s Profile In osu!{dconst.mode_2_str[int(mode)].capitalize()}"
         if mods != "vn":
             author_name += f" with {dconst.mods2str[mods].capitalize()}"
 
@@ -103,8 +104,8 @@ class osu(commands.Cog):
                   f"**Country Rank:** {await player.get_country_rank(modeobj)}\n"
                   f"▸ **PP:** {stats['pp']} **ACC:** {stats['acc']}\n"
                   f"▸ **Max Combo:** {stats['max_combo']}\n"
-                  f"▸ **Ranked Score:** {stats['rscore']} "
-                  f"▸ **Total Score:** {stats['tscore']}\n"
+                  f"▸ **Ranked Score:** {stats['rscore']:,} "
+                  f"▸ **Total Score:** {stats['tscore']:,}\n"
                   f"▸ **Playcount:** {stats['plays']} **Playtime:** {playtime}\n"
                   f"▸ **Ranks:** {dconst.emotes['XH']} `{stats['xh_count']}` "
                   f"{dconst.emotes['X']} `{stats['x_count']}` {dconst.emotes['SH']} "
@@ -113,14 +114,14 @@ class osu(commands.Cog):
             inline=False
         )
         if size=="full":
-            registerDate = datetime.datetime.fromtimestamp(int(user['creation_time'])).strftime("%m.%d.%Y %H:%M:%S")
-            lastSeen = datetime.datetime.fromtimestamp(int(user['latest_activity'])).strftime("%m.%d.%Y %H:%M:%S")
+            register_date = datetime.datetime.fromtimestamp(int(user['creation_time'])).strftime("%m.%d.%Y %H:%M:%S")
+            last_seen = datetime.datetime.fromtimestamp(int(user['latest_activity'])).strftime("%m.%d.%Y %H:%M:%S")
             embed.add_field(
                 name="User Information",
                 value=f"▸ **User ID:** {player.id}\n"
-                      f"▸ **User groups:** {dutils.getPrivList(player, '`')}\n"
-                      f"▸ **Registration date:** {registerDate}\n"
-                      f"▸ **Last seen date:** {lastSeen}",
+                      f"▸ **User groups:** {dutils.getprivlist(player, '`')}\n"
+                      f"▸ **Registration date:** {register_date}\n"
+                      f"▸ **Last seen date:** {last_seen}",
                 inline=False
             )
         return await ctx.send(embed=embed)
