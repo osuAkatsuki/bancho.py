@@ -2,10 +2,9 @@ import discord
 from discord.ext import commands
 import app.state.discordbot as dbot
 import discordbot.botconfig as configb
+from discordbot.utils.constants import colors
 
 prefix = configb.PREFIX
-class colors:
-    red = 0xe74c3c
 
 embed_list = {
     "permission_view_restrict": {
@@ -65,6 +64,18 @@ embed_list = {
     "ap_no_std": {
         "title": "Error",
         "description": f"Autopilot can be used only with standard.",
+        "color": colors.red,
+        "footer": "default"
+    },
+    "alr_restricted": {
+        "title": "Error",
+        "description": f"This player is already restricted.",
+        "color": colors.red,
+        "footer": "default"
+    },
+    "no_perms_admin": {
+        "title": "Error",
+        "description": f"You must be an admin or higher to use this command.",
         "color": colors.red,
         "footer": "default"
     }

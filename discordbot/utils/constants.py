@@ -54,3 +54,7 @@ emotes = {
     "X": "<:rankx:853753898817028147>",
     "XH": "<:rankxh:853753899206311976>",
 }
+
+class colors:
+    red = 0xe74c3c
+    purple = 0x8e44ad

@@ -60,7 +60,7 @@ class osu(commands.Cog):
             if mods == "rx" and mode == 3:
                 return await ctx.send(embed=await embutils.emb_gen('rx_mania'))
             elif mods == "ap" and mode != 0:
-                return await ctx.send(embed= await embutils.emb_gen('ap_no_std'))
+                return await ctx.send(embed=await embutils.emb_gen('ap_no_std'))
 
 
         #* Get modestr and gulagmode with it's object
