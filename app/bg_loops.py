@@ -119,32 +119,32 @@ async def _bot_runner() -> None:
         log(f"Bot ID: {client.user.id}")
         log(f"Bot Version: {dbot.botversion}\n")
 
-        @client.command()
-        async def rlc(ctx, cog):
-            if ctx.author.id not in configb.BOT_OWNERS:
-                return await ctx.send("You're not an owner")
-            try:
-                client.unload_extension(f'discordbot.cogs.{cog}')
-                client.load_extension(f'discordbot.cogs.{cog}')
-                log(f"{ctx.author.name}#{ctx.author.discriminator} reloaded cog {cog}", Ansi.YELLOW)
-            except Exception as e:
-                log(f"{ctx.author.name}#{ctx.author.discriminator} tried to reload cog {cog} but error occured", Ansi.YELLOW)
-                log(e, Ansi.RED)
-                return await ctx.send(f"Error occured while reloading cog\n```{e}```", delete_after=10)
-            return await ctx.send("Reloaded Cog")
+    @client.command()
+    async def rlc(ctx, cog):
+        if ctx.author.id not in configb.BOT_OWNERS:
+            return await ctx.send("You're not an owner")
+        try:
+            client.unload_extension(f'discordbot.cogs.{cog}')
+            client.load_extension(f'discordbot.cogs.{cog}')
+            log(f"{ctx.author.name}#{ctx.author.discriminator} reloaded cog {cog}", Ansi.YELLOW)
+        except Exception as e:
+            log(f"{ctx.author.name}#{ctx.author.discriminator} tried to reload cog {cog} but error occured", Ansi.YELLOW)
+            log(e, Ansi.RED)
+            return await ctx.send(f"Error occured while reloading cog\n```{e}```", delete_after=10)
+        return await ctx.send("Reloaded Cog")
 
-        @client.command()
-        async def load(ctx, cog):
-            if ctx.author.id not in configb.BOT_OWNERS:
-                return await ctx.send("You're not an owner")
-            try:
-                client.load_extension(f'discordbot.cogs.{cog}')
-                log(f"{ctx.author.name}#{ctx.author.discriminator} loaded cog {cog}", Ansi.YELLOW)
-            except Exception as e:
-                log(f"{ctx.author.name}#{ctx.author.discriminator} tried to load cog {cog} but error occured", Ansi.YELLOW)
-                log(e, Ansi.RED)
-                return await ctx.send(f"Error occured while loading cog\n```{e}```", delete_after=10)
-            return await ctx.send("Loaded Cog")
+    @client.command()
+    async def load(ctx, cog):
+        if ctx.author.id not in configb.BOT_OWNERS:
+            return await ctx.send("You're not an owner")
+        try:
+            client.load_extension(f'discordbot.cogs.{cog}')
+            log(f"{ctx.author.name}#{ctx.author.discriminator} loaded cog {cog}", Ansi.YELLOW)
+        except Exception as e:
+            log(f"{ctx.author.name}#{ctx.author.discriminator} tried to load cog {cog} but error occured", Ansi.YELLOW)
+            log(e, Ansi.RED)
+            return await ctx.send(f"Error occured while loading cog\n```{e}```", delete_after=10)
+        return await ctx.send("Loaded Cog")
 
     try:
         await client.start(configb.TOKEN)
