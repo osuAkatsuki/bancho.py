@@ -72,8 +72,7 @@ class osu(commands.Cog):
             {"uid": player.id, "mode": dconst.mode2gulag[f"{mode}.{mods}"]})
         stats = dict(stats)
 
-        #* Get player status and convert it
-        status = player.status
+        #TODO: Get player status and convert it
         status = player.status
 
         #TODO: Calculate player's level

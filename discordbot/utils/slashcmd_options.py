@@ -40,3 +40,18 @@ profile = [
         ]
     ),
 ]
+
+restrict = [
+    create_option(
+        name="user",
+        description="Specify user by their name.",
+        option_type=3,
+        required=True,
+    ),
+    create_option(
+        name="reason",
+        description="Specify Reason",
+        option_type=3,
+        required=True,
+    ),
+]
