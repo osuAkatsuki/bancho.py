@@ -58,3 +58,15 @@ emotes = {
 class colors:
     red = 0xe74c3c
     purple = 0x8e44ad
+    blue = 0x2980b9
+    teal = 0x16a085
+    green = 0x27ae60
+    yellow = 0xf1c40f
+
+ACTION_STRINGS = {
+    "restrict": "Restricted for",
+    "unrestrict": "Unrestricted for",
+    "silence": "Silenced for",
+    "unsilence": "Unsilenced for",
+    "note": "Note added:",
+}

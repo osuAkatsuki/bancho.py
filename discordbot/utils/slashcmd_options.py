@@ -55,3 +55,60 @@ restrict = [
         required=True,
     ),
 ]
+
+# silence = [
+#     create_option(
+#         name="user",
+#         description="Specify user by their name.",
+#         option_type=3,
+#         required=True
+#     ),
+#     create_option(
+#         name="duration",
+#         description="Specify duration of silence, by number followed by time unit, e.g. 7d for 7 days.",
+#         option_type=3,
+#         required=True
+#     ),
+#     create_option(
+#         name="reason",
+#         description="Specify reason",
+#         option_type=3,
+#         required=True
+#     ),
+# ]
+
+addnote = [
+    create_option(
+        name="user",
+        description="Specify user by their name.",
+        option_type=3,
+        required=True
+    ),
+    create_option(
+        name="note_content",
+        description="Note message, the title is pretty self explainatory",
+        option_type=3,
+        required=True
+    ),
+]
+
+checknotes = [
+    create_option(
+        name="target",
+        description="Specify target user by their name.",
+        option_type=3,
+        required=False
+    ),
+    create_option(
+        name="author",
+        description="Specify admin by their name.",
+        option_type=3,
+        required=False
+    ),
+    create_option(
+        name="page",
+        description="Specify page",
+        option_type=3,
+        required=False
+    )
+]

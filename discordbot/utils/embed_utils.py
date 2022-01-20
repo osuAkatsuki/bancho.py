@@ -73,9 +73,27 @@ embed_list = {
         "color": colors.red,
         "footer": "default"
     },
+        "not_restricted": {
+        "title": "Error",
+        "description": f"This player is not restricted.",
+        "color": colors.red,
+        "footer": "default"
+    },
     "no_perms_admin": {
         "title": "Error",
         "description": f"You must be an admin or higher to use this command.",
+        "color": colors.red,
+        "footer": "default"
+    },
+    "no_perms_gmt": {
+        "title": "Error",
+        "description": f"You must be an GMT or higher to use this command.",
+        "color": colors.red,
+        "footer": "default"
+    },
+    "page_not_num": {
+        "title": "Error",
+        "description": f"Page must be a __whole__ number.",
         "color": colors.red,
         "footer": "default"
     }
