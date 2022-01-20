@@ -2,6 +2,7 @@ from datetime import datetime
 
 import app.state
 import discord
+from discordbot.utils.utils import checkPerms
 import settings
 from app.constants.privileges import Privileges
 from app.objects.player import Player
@@ -15,6 +16,7 @@ from discordbot.utils import constants as dconst
 from discordbot.utils import embed_utils as embutils
 from discordbot.utils import slashcmd_options as sopt
 from discordbot.utils.embed_utils import emb_gen
+from discordbot.utils import utils as dutils
 
 
 
@@ -26,25 +28,17 @@ class admin(commands.Cog):
             options=sopt.restrict)
     async def _restrict(self, ctx: SlashContext, user=None, reason:str=None):
         #TODO: Send dm to user about restriction
-        # Check author and it's perms
-        a = await app.state.services.database.fetch_val(
-            "SELECT osu_id FROM discord WHERE discord_id = :dscid",
-            {"dscid": ctx.author.id})
-        if not a:
-            return await ctx.send(embed=await embutils.emb_gen('not_linked_self'))
-        a = await app.state.services.database.fetch_one(
-            "SELECT name, priv, country FROM users WHERE id = :oid",
-            {"oid": a})
-        if not a:
-            return await ctx.send("Critical error no1")
+        a = await dutils.checkperms(ctx, [Privileges.ADMINISTRATOR])
+        if 'error' in a:
+            return await ctx.send(embed=await embutils.emb_gen(a['error']))
+        else:
+            a = a['author']
 
         # Get users objects
         aobj: Player = await app.state.sessions.players.from_cache_or_sql(name=a['name'])
         t: Player = await app.state.sessions.players.from_cache_or_sql(name=user)
 
-        # Check if author has admnin perms
-        if Privileges.ADMINISTRATOR not in aobj.priv:
-            return await ctx.send(embed=await embutils.emb_gen('no_perms_admin'))
+        # Check if author has admin perms
         if ctx.channel_id != dconf.channels.admin:
             return await ctx.send(embed=await embutils.emb_gen('cmd_admin_channel'))
         # Check target
@@ -87,24 +81,17 @@ class admin(commands.Cog):
     async def _unrestrict(self, ctx: SlashContext, user=None, reason:str=None):
         #TODO: Send dm to user about unrestriction
         # Check author and it's perms
-        a = await app.state.services.database.fetch_val(
-            "SELECT osu_id FROM discord WHERE discord_id = :dscid",
-            {"dscid": ctx.author.id})
-        if not a:
-            return await ctx.send(embed=await embutils.emb_gen('not_linked_self'))
-        a = await app.state.services.database.fetch_one(
-            "SELECT name, priv, country FROM users WHERE id = :oid",
-            {"oid": a})
-        if not a:
-            return await ctx.send("Critical error no1")
+        a = await dutils.checkperms(ctx, [Privileges.ADMINISTRATOR])
+        if 'error' in a:
+            return await ctx.send(embed=await embutils.emb_gen(a['error']))
+        else:
+            a = a['author']
 
         # Get users objects
         aobj: Player = await app.state.sessions.players.from_cache_or_sql(name=a['name'])
         t: Player = await app.state.sessions.players.from_cache_or_sql(name=user)
 
         # Check if author has admnin perms
-        if Privileges.ADMINISTRATOR not in aobj.priv:
-            return await ctx.send(embed=await embutils.emb_gen('no_perms_admin'))
         if ctx.channel_id != dconf.channels.admin:
             return await ctx.send(embed=await embutils.emb_gen('cmd_admin_channel'))
         # Check target
@@ -203,16 +190,11 @@ class admin(commands.Cog):
     @cog_ext.cog_slash(name="addnotes", description="Adds a note to specified User.", options=sopt.addnote)
     async def _addnote(self, ctx: SlashContext, user=None, note_contents:str=None):
         # Check author and it's perms
-        a = await app.state.services.database.fetch_val(
-            "SELECT osu_id FROM discord WHERE discord_id = :dscid",
-            {"dscid": ctx.author.id})
-        if not a:
-            return await ctx.send(embed=await embutils.emb_gen('not_linked_self'))
-        a = await app.state.services.database.fetch_one(
-            "SELECT name, priv, country FROM users WHERE id = :oid",
-            {"oid": a})
-        if not a:
-            return await ctx.send("Critical error no1")
+        a = await dutils.checkperms(ctx, [Privileges.MODERATOR, Privileges.ADMINISTRATOR])
+        if 'error' in a:
+            return await ctx.send(embed=await embutils.emb_gen(a['error']))
+        else:
+            a = a['author']
 
         # Get users objects
         aobj: Player = await app.state.sessions.players.from_cache_or_sql(name=a['name'])
@@ -266,16 +248,11 @@ class admin(commands.Cog):
     @cog_ext.cog_slash(name="check_notes", description="Check notes of a selected Player.", options=sopt.checknotes)
     async def _checknotes(self, ctx: SlashContext, target=None, author=None, page=1):
         # Check author and it's perms
-        a = await app.state.services.database.fetch_val(
-            "SELECT osu_id FROM discord WHERE discord_id = :dscid",
-            {"dscid": ctx.author.id})
-        if not a:
-            return await ctx.send(embed=await embutils.emb_gen('not_linked_self'))
-        a = await app.state.services.database.fetch_one(
-            "SELECT name, priv, country FROM users WHERE id = :oid",
-            {"oid": a})
-        if not a:
-            return await ctx.send("Critical error no1")
+        a = await dutils.checkperms(ctx, [Privileges.MODERATOR, Privileges.ADMINISTRATOR])
+        if 'error' in a:
+            return await ctx.send(embed=await embutils.emb_gen(a['error']))
+        else:
+            a = a['author']
 
         # Permission Checks
         apriv = int(a['priv']) # Author Privileges
@@ -285,6 +262,7 @@ class admin(commands.Cog):
         #Channel Check
         if ctx.channel.id not in [dconf.channels.gmt, dconf.channels.admin]:
             return await ctx.send(embed=await embutils.emb_gen('cmd_admin_channel'))
+
 
         # Syntax Checks
         if page != None:

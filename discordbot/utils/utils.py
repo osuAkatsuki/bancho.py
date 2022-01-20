@@ -96,3 +96,28 @@ def getprivlist(player: Player, format:str=""):
         str += format + el.capitalize() + format + " "
 
     return str
+
+async def checkperms(ctx: commands.Context, perms:list):
+    # Check author and it's perms
+    a = await app.state.services.database.fetch_val(
+        "SELECT osu_id FROM discord WHERE discord_id = :dscid",
+        {"dscid": ctx.author.id})
+    if not a:
+        return {"error": "not_linked_self"}
+    a = await app.state.services.database.fetch_one(
+        "SELECT name, priv, country FROM users WHERE id = :oid",
+        {"oid": a})
+    if not a:
+        return {"error": "discord_no_osu"}
+    a = dict(a)
+
+    # Check perms
+    success_checks = 0
+    for x in perms:
+        if x in Privileges(int(a['priv'])):
+            success_checks += 1
+
+    if success_checks > 0:
+        return {"author": a}
+    else:
+        return {"error": 'no_perms'}

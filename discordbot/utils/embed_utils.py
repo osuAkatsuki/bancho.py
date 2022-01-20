@@ -85,9 +85,9 @@ embed_list = {
         "color": colors.red,
         "footer": "default"
     },
-    "no_perms_gmt": {
+    "no_perms": {
         "title": "Error",
-        "description": f"You must be an GMT or higher to use this command.",
+        "description": f"You don't have permissions to use this command.",
         "color": colors.red,
         "footer": "default"
     },
@@ -95,6 +95,12 @@ embed_list = {
         "title": "Error",
         "description": f"Page must be a __whole__ number.",
         "color": colors.red,
+        "footer": "default"
+    },
+    "discord_no_osu": {
+        "title": "Critical Error",
+        "description": f"Your discord is linked but there's no ID entry mtching your id in users table, report that to admins now.",
+        "color": 0xFF0000,
         "footer": "default"
     }
 }
