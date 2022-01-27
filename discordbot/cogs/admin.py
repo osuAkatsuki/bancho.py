@@ -2,7 +2,6 @@ from datetime import datetime
 
 import app.state
 import discord
-from discordbot.utils.utils import checkPerms
 import settings
 from app.constants.privileges import Privileges
 from app.objects.player import Player
@@ -200,9 +199,6 @@ class admin(commands.Cog):
         aobj: Player = await app.state.sessions.players.from_cache_or_sql(name=a['name'])
         t: Player = await app.state.sessions.players.from_cache_or_sql(name=user)
 
-        # Check if author has admnin perms
-        if Privileges.ADMINISTRATOR not in aobj.priv:
-            return await ctx.send(embed=await embutils.emb_gen('no_perms_admin'))
         if ctx.channel_id != dconf.channels.admin:
             return await ctx.send(embed=await embutils.emb_gen('cmd_admin_channel'))
         # Check target
