@@ -43,17 +43,18 @@ class osu(commands.Cog):
         if 'error' in user:
             return await ctx.send(embed=await embutils.emb_gen(user['error']))
 
-        #* Reassign user
+        #* Reassign user and get player object
         user = user['user']
-
-        #* Get player object
         player: Player = await app.state.sessions.players.from_cache_or_sql(name=user['name'])
 
+        #* Check target user perms
+        if Privileges.NORMAL not in player.priv and ctx.channel.id not in [
+            configb.channels.gmt, configb.channels.admin]:
+            return await ctx.send(embed=await embutils.emb_gen('permission_view_restrict'))
 
         #* Get mode and mods
         if not mode:
             mode = user['preferred_mode'] if user['preferred_mode'] else 0 #Cleanup by tsunyoku, thx <3
-
         if not mods:
             mods = "vn"
         else:
@@ -62,11 +63,8 @@ class osu(commands.Cog):
             elif mods == "ap" and mode != 0:
                 return await ctx.send(embed=await embutils.emb_gen('ap_no_std'))
 
-
-        #* Get modestr and gulagmode with it's object
+        #* Get modestr and gulagmode with it's object and player stats
         modeobj = dconst.modemods2object[f"{mode}.{mods}"]
-
-        #* Get player stats
         stats = await app.state.services.database.fetch_one(
             "SELECT * FROM stats WHERE id = :uid AND mode = :mode",
             {"uid": player.id, "mode": dconst.mode2gulag[f"{mode}.{mods}"]})

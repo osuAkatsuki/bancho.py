@@ -9,7 +9,7 @@ prefix = configb.PREFIX
 embed_list = {
     "permission_view_restrict": {
         "title": "Error",
-        "description": f"Only staff members can view profiles of restricted users.",
+        "description": f"Due to security reasons, viewing profiles of restricted users is only available in staff channels.",
         "color": colors.red,
         "footer": "default"
     },
@@ -51,7 +51,7 @@ embed_list = {
     },
     "cmd_admin_channel": {
         "title": "Error",
-        "description": f"For security reasons, this command is aviable only in admin channels.",
+        "description": f"For security reasons, this command is available only in admin channels.",
         "color": colors.red,
         "footer": "default"
     },

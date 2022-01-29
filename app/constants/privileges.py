@@ -59,3 +59,13 @@ class ClanPrivileges(IntEnum):
     Member = 1
     Officer = 2
     Owner = 3
+
+@unique
+@pymysql_encode(escape_enum)
+class BNPriv(IntEnum):
+    """A class to represent a bn types."""
+
+    STD = 1 << 0
+    TAIKO = 1 << 1
+    CATCH = 1 << 2
+    MANIA = 1 << 3
