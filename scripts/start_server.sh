@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euxo pipefail
 
 echo "waiting for mysql server"
 while ! nc -z localhost 3306; do
