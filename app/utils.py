@@ -12,7 +12,6 @@ from typing import Any
 from typing import Callable
 from typing import Optional
 from typing import Sequence
-from typing import Type
 from typing import TypeVar
 from typing import Union
 
@@ -268,7 +267,7 @@ def _install_synchronous_excepthook() -> None:
     real_excepthook = sys.excepthook  # backup
 
     def _excepthook(
-        type_: Type[BaseException],
+        type_: type[BaseException],
         value: BaseException,
         traceback: types.TracebackType,
     ):

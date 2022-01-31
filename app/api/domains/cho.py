@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Callable
 from typing import Literal
 from typing import Optional
-from typing import Type
 from typing import Union
 
 import bcrypt
@@ -192,10 +191,10 @@ async def bancho_handler(
 def register(
     packet: ClientPackets,
     restricted: bool = False,
-) -> Callable[[Type[BasePacket]], Type[BasePacket]]:
+) -> Callable[[type[BasePacket]], type[BasePacket]]:
     """Register a handler in `app.state.packets`."""
 
-    def wrapper(cls: Type[BasePacket]) -> Type[BasePacket]:
+    def wrapper(cls: type[BasePacket]) -> type[BasePacket]:
         app.state.packets["all"][packet] = cls
 
         if restricted:

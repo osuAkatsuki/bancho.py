@@ -14,7 +14,6 @@ from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
-from typing import Type
 from typing import TYPE_CHECKING
 from typing import Union
 
@@ -287,7 +286,7 @@ class BasePacket(ABC):
         ...
 
 
-PacketMap = dict[ClientPackets, Type[BasePacket]]
+PacketMap = dict[ClientPackets, type[BasePacket]]
 
 
 class BanchoPacketReader:
