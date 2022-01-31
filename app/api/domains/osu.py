@@ -170,11 +170,11 @@ async def osuError(
 async def osuScreenshot(
     player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
     endpoint_version: int = Form(..., alias="v"),
-    screenshot_data: bytes = File(..., alias="ss"),
+    screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
 ):
-    with memoryview(screenshot_data) as ss_data_view:
+    with memoryview(await screenshot_file.read()) as screenshot_data_view:  # type: ignore
         # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-        if len(ss_data_view) > (4 * 1024 * 1024):
+        if len(screenshot_data_view) > (4 * 1024 * 1024):
             return Response(
                 content=b"Screenshot file too large.",
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -186,13 +186,13 @@ async def osuScreenshot(
             )
 
         if (
-            ss_data_view[:4] == b"\xff\xd8\xff\xe0"
-            and ss_data_view[6:11] == b"JFIF\x00"
+            screenshot_data_view[:4] == b"\xff\xd8\xff\xe0"
+            and screenshot_data_view[6:11] == b"JFIF\x00"
         ):
             extension = "jpeg"
         elif (
-            ss_data_view[:8] == b"\x89PNG\r\n\x1a\n"
-            and ss_data_view[-8] == b"\x49END\xae\x42\x60\x82"
+            screenshot_data_view[:8] == b"\x89PNG\r\n\x1a\n"
+            and screenshot_data_view[-8] == b"\x49END\xae\x42\x60\x82"
         ):
             extension = "png"
         else:
@@ -208,7 +208,7 @@ async def osuScreenshot(
                 break
 
         with ss_file.open("wb") as f:
-            f.write(ss_data_view)
+            f.write(screenshot_data_view)
 
     log(f"{player} uploaded {filename}.")
     return Response(filename.encode())
