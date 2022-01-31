@@ -78,6 +78,15 @@ def main() -> int:
             "port": settings.SERVER_PORT,
         }
 
+    if settings.DEBUG:
+        # if debugpy is installed, run a server on :5678
+        try:
+            import debugpy
+
+            debugpy.listen(("0.0.0.0", 5678))
+        except ModuleNotFoundError:
+            pass
+
     # run the server indefinitely
     uvicorn.run(
         "app.api.init_api:asgi_app",
