@@ -23,23 +23,26 @@ class misc(commands.Cog):
     async def _profile(self, ctx: SlashContext):
         #* Pings
         st = ""
-        async with session.get(f"https://c.{settings.DOMAIN}/") as r:
+        async with session.get(f"https://c.seventwentyseven.xyz/") as r:
             if r.status == 200:
                 st += f"\n▸ **Bancho** {dconst.emotes['online']}"
             else:
                 st += f"\n▸ **Bancho** {dconst.emotes['offline']}"
             del(r)
-        async with session.get(f"https://a.{settings.DOMAIN}/1") as r:
+        async with session.get(f"https://a.seventwentyseven.xyz/1") as r:
             if r.status == 200:
                 st += f"\n▸ **Avatar Server** {dconst.emotes['online']}"
             else:
                 st += f"\n▸ **Avatar Server** {dconst.emotes['offline']}"
             del(r)
-        async with session.get(f"https://api.{settings.DOMAIN}/") as r:
+        async with session.get(f"https://api.seventwentyseven.xyz/get_player_count") as r:
             if r.status == 200:
                 st += f"\n▸ **API** {dconst.emotes['online']}"
+                resp = await r.json()
+                resp = resp['counts']['online']
             else:
                 st += f"\n▸ **API** {dconst.emotes['offline']}"
+                resp = 0
             del(r)
         async with session.get(f"http://localhost:8000/") as r:
             if r.status == 200:
@@ -52,7 +55,7 @@ class misc(commands.Cog):
         #Embed
         embed = discord.Embed(
             title="Server status",
-            description=f"▸ **Users Online:** {len(app.state.sessions.players.unrestricted) - 1}\n" + st,
+            description=f"▸ **Users Online:** {resp} \n {st}",
             color=dconst.colors.blue
         )
         return await ctx.send(embed=embed)
