@@ -1,4 +1,4 @@
-cd ./zenith/static/styles/
+cd ./zenith/styles/
 screen -dmS tailwind npx tailwindcss --postcss postcss.config.js -i ./src/main.css -o /opt/gulag/zenith/static/css/style.css -w
 cd ..
 sleep 0.1s
