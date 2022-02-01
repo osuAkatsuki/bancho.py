@@ -1,24 +1,21 @@
 import datetime
-from asyncio.proactor_events import constants
 
 import app.state
 import cmyui
-import databases
 import discord
-import settings
 import discordbot.botconfig as configb
+import settings
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import Privileges
 from app.objects.player import Player
-from app.state import services
 from discord.ext import commands
 from discord.utils import get
 from discord_slash import SlashContext, cog_ext
 from discord_slash.utils.manage_commands import create_choice, create_option
 from discordbot.utils import constants as dconst
 from discordbot.utils import embed_utils as embutils
-from discordbot.utils import utils as dutils
 from discordbot.utils import slashcmd_options as sopt
+from discordbot.utils import utils as dutils
 
 
 class osu(commands.Cog):
@@ -26,8 +23,8 @@ class osu(commands.Cog):
         self.client = client
 
     @cog_ext.cog_slash(name="profile", description="Check user profile in specified mode with specfied mods.",
-            options=sopt.profile
-        )
+                       options=sopt.profile
+    )
     async def _profile(self, ctx: SlashContext, user:str=None, mode:str=None, mods:str=None, size:str="basic"):
         #* Permission and access checks
         for role in ctx.author.roles:           #getting all roles of member
@@ -115,6 +112,34 @@ class osu(commands.Cog):
                 inline=False
             )
         return await ctx.send(embed=embed)
+        
+    #! dzifors code pls dont hit me
+    
+    @cog_ext.cog_slash(name="scores", description="Shows scores of player", options=sopt.scores)
+    async def _scores(self, ctx: SlashContext, user:str=None, type:str=None):
+        user = await dutils.getUser(ctx, "id, name, preferred_mode", user)
+        #! Return if error occured
+        if 'error' in user:
+            return await ctx.send(embed=await embutils.emb_gen(user['error']))
+        
+        if not type:
+            type = "best"
+        
+        user = user['user']
+        
+        
+        # #? arguments passthrough to see if we have what we wanted, feel free to delete it later i guess
+        # return await ctx.send(
+        #     embed=await embutils.emb_gen(
+        #         embed_name = "embed_FromCog",
+        #         args = {
+        #             "title": "sad nigger",
+        #             "description": f"user id: {user['user']['id']}\ntype: {type}\nmode: {user['user']['preferred_mode']}\nauthor role color: {ctx.author.color}",
+        #             "color": ctx.author.color
+        #         }
+        #     )
+        # )
+        
 
 def setup(client):
     client.add_cog(osu(client))

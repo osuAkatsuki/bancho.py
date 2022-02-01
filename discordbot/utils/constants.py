@@ -1,4 +1,5 @@
 from app.constants.gamemodes import GameMode
+
 mode_2_str = {
     0: "standard",
     1: "taiko",
@@ -53,6 +54,8 @@ emotes = {
     "SH": "<:ranksh:853753899072094208>",
     "X": "<:rankx:853753898817028147>",
     "XH": "<:rankxh:853753899206311976>",
+    "offline": "<:status_offline:938167346873380874>",
+    "online": "<:status_online:906478682967793705>",
 }
 
 class colors:

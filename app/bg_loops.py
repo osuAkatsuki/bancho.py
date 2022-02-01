@@ -120,13 +120,13 @@ async def _bot_runner() -> None:
     for filename in os.listdir(f'{configb.PATH_TO_FILES}cogs'):
         filename1 = filename
         if filename.endswith('.py') and not filename.startswith('_'):
-            print(f"Ż-BOT: Loading {filename1}...")
+            print(f"[Ż-BOT] Loading {filename1}...")
             client.load_extension(f'discordbot.cogs.{filename[:-3]}')
-            print(f'Ż-BOT: Loaded {filename1}')
+            print(f'[Ż-BOT] Loaded {filename1}')
 
     @client.event
     async def on_ready() -> None:
-        log("Ż-BOT: Bot logged in", Ansi.GREEN)
+        log("[Ż-BOT] Bot logged in", Ansi.GREEN)
         log(f"Bot name: {client.user.name}")
         log(f"Bot ID: {client.user.id}")
         log(f"Bot Version: {dbot.botversion}\n")

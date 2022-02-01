@@ -112,3 +112,22 @@ checknotes = [
         required=False
     )
 ]
+
+scores = [
+    create_option(
+        name="user",
+        description="Specify user by their name. You can omit this if you are discord connected.",
+        option_type=3,
+        required=False
+    ),
+    create_option(
+        name = "type",
+        description = "Specify score type(best/recent).",
+        option_type=3,
+        required=False,
+        choices = [
+            create_choice(name="Best", value="best"),
+            create_choice(name="Recent", value="recent")
+        ]
+    ),
+]
