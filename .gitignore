@@ -7,3 +7,8 @@ _testing/
 ext/GeoLite2-City.mmdb
 .env
 botconfig.py
+zconfig.py
+/zenith/.data
+.env.save
+/zenith/static/styles/*
+/zenith/static/css/style.css
