@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <head>
+        <!--* Favicon *-->
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+        <link rel="manifest" href="/static/favicon/site.webmanifest">
+        <link rel="mask-icon" href="/static/favicon/safari-pinned-tab.svg" color="#d55b9e">
+        <link rel="shortcut icon" href="/static/favicon/favicon.ico">
+        <meta name="msapplication-TileColor" content="#000000">
+        <meta name="msapplication-config" content="/static/favicon/browserconfig.xml">
+        <meta name="theme-color" content="#000000">
+      
+        <!--* Title *-->
+        <title>{{ appName() }} - {% block title %}{% endblock %}</title>
+      
+        <!--* Style *-->
+        <link rel="stylesheet" href="/static/css/style.css">
+        <link rel="stylesheet" href="/static/css/osuicons.css">
+      
+        <!--* JS LIBS *-->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/2.3.0/alpine.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.slim.min.js"
+          integrity="sha512-/DXTXr6nQodMUiq+IUJYCt2PPOUjrHJ9wFrqpJ3XkgPNOZVfMok7cRw6CSxyCQxXn6ozlESsSh1/sMCTF1rL/g=="
+          crossorigin="anonymous"></script>
+        <script src="/static/js/frameworks/vue.js"></script>
+        <script src="/static/js/frameworks/vue-axios.js"></script>
+      
+        <!--* Font awesome *-->
+        <script src="https://kit.fontawesome.com/e5971878b8.js" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="/static/css/osuicons.css">
+      
+        <!--* Metadata -->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+      
+        {% block header %}
+        {% endblock %}
+      </head>
+</head>
+<body>
+{% block content %}
+{% endblock %}
+</body>
+</html>

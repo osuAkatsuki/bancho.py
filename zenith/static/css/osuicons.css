@@ -1,0 +1,34 @@
+@font-face {
+    font-family: osu-mode;
+    src: url(/static/fonts/extra.ttf) format("truetype")
+  }
+  .mode-icon {
+    font-family: osu-mode;
+    font-size: 20px;
+    font-weight: 400;
+    font-style: initial;
+  }
+
+  .osu::before {
+    content: "\E800";
+    position: relative;
+    margin: 0px;
+  }
+
+  .catch::before {
+    content: "\E801";
+    position: relative;
+    margin: 0px;
+  }
+
+  .mania::before {
+    content: "\E802";
+    position: relative;
+    margin: 0px;
+  }
+
+  .taiko::before {
+    content: "\E803";
+    position: relative;
+    margin: 0px;
+  }

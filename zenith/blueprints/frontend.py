@@ -15,10 +15,11 @@ from quart import request
 from quart import session
 from quart import send_file
 
+from app.objects.player import Player
 
 
 frontend = Blueprint('frontend', __name__)
 
 @frontend.route('/')
 async def home():
-    return "Test"
+    return await render_template('home.html')
