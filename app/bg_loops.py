@@ -45,7 +45,7 @@ async def initialize_housekeeping_tasks() -> None:
                 _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
                 #def750's xD moment
-                _bot_runner(),
+                #_bot_runner(),
                 _website()
             )
         },
@@ -215,16 +215,20 @@ async def _website() -> None:
 
     from zenith.blueprints.frontend import frontend
     app.register_blueprint(frontend)
-
+    from zenith.blueprints.api import api
+    app.register_blueprint(api, url_prefix="/wapi")
+    
     @app.errorhandler(404)
     async def page_not_found(e):
         # NOTE: we set the 404 status explicitly
         return (await render_template(f'errors/404.html'), 404)
 
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
     #app.run(debug=zconf.debug) # blocking call
     def getappobj():
         return app
+
     if __name__ == "app.bg_loops":
         await serve(app, Config(), shutdown_trigger=lambda: asyncio.Future())
         

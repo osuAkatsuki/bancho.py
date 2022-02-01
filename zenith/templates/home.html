@@ -1,20 +1,59 @@
 {% extends 'base.html' %}
 {% block title %}{% endblock %}
 
-{% block header%}{% endblock %}
+{% block header%}
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+{% endblock %}
 
 {% block content %}
 {% include 'components/navbar.html' %}
-<br><br>
-<div class="h-8 w-8 bg-hsl-90 flex content-center items-center justify-center justify-items-center">90</div>
-<div class="h-8 w-8 bg-hsl-80 flex content-center items-center justify-center justify-items-center">80</div>
-<div class="h-8 w-8 bg-hsl-70 flex content-center items-center justify-center justify-items-center">70</div>
-<div class="h-8 w-8 bg-hsl-60 flex content-center items-center justify-center justify-items-center">60</div>
-<div class="h-8 w-8 bg-hsl-50 flex content-center items-center justify-center justify-items-center">50</div>
-<div class="h-8 w-8 bg-hsl-40 flex content-center items-center justify-center justify-items-center">40</div>
-<div class="h-8 w-8 bg-hsl-30 flex content-center items-center justify-center justify-items-center">30</div>
-<div class="h-8 w-8 bg-hsl-20 flex content-center items-center justify-center justify-items-center">20</div>
-<div class="h-8 w-8 bg-hsl-10 flex content-center items-center justify-center justify-items-center">10</div>
-<div class="h-8 w-8 bg-hsl-5 flex content-center items-center justify-center justify-items-center">5</div>
+<script>
+    axios.get('https://api.{{ domain() }}/get_player_count')
+    .then((response) => {
+      document.getElementById('users-online').innerHTML = response.data.counts.online;
+      document.getElementById('users-registered').innerHTML = response.data.counts.total;
+    });
+</script>
+<section id="top" 
+         style="background: linear-gradient(hsl(var(--main), 15%, 15%, 0.5),
+              hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
+                background-position: center; background-size: cover;"
+         class="bg-center h-screen w-full bg-contain bg-opacity-30 flex items-center justify-items-center">
+    <div class="flex flex-col items-center w-full">
+        <div class="flex flex-col md:flex-row items-center justify-center 
+                    text-5xl lg:text-6xl font-extrabold">
+            <span class="mx-2">Seven</span>
+            <span class="mx-2">Twenty</span>
+            <span class="mx-2">Seven</span>
+        </div>
+        <span class="text-4xl font-bold mt-2">Insert le motto here.</span>
+        <div class="flex items-center w-auto rounded-full bg-hsl-10 px-3 py-1.5 mt-5 text-sm">
+            <span class="mr-1">Registered Users</span>
+            <span id="users-registered" class="font-semibold text-pink-600 mr-1">X</span>
+            <span class="mx-1">Users Online </span>
+            <span id="users-online" class="font-semibold text-green-600">D</span>
+        </div>
+    </div>
+</section>
+<section id="guest" class="h-64">
+    <div class="h-64">
+        <p>
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+            Nulla mattis consequat elit a convallis. Quisque ac ornare odio. 
+            Nunc pulvinar dictum libero, quis laoreet nisi eleifend non. 
+            Quisque porttitor lectus iaculis molestie faucibus. In odio libero, 
+            aliquet ut faucibus ac, vulputate quis metus. Donec elementum volutpat 
+            condimentum. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            Nullam eu consectetur ex, at imperdiet risus. Donec elit tellus,
+            convallis suscipit gravida ac, aliquam in augue. In hac habitasse
+            platea dictumst. Vivamus ut imperdiet dui, sit amet tincidunt justo.
+            Suspendisse non urna nibh. Mauris at nisi sapien. Maecenas eu ex eget 
+            metus commodo dapibus.
+        </p>
+        
+    </div>
+</section>
+<section id="top-scores-recent">
 
+</section>
 {% endblock %}

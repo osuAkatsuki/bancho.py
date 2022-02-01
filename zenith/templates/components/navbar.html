@@ -18,11 +18,18 @@
             </div>
         </div>
         <div class="">
-            {% if 'authenticated' in session %}
+            {% if 'authenticated' not in session %}
+            <div class="flex flex-row items-center justify-items-center">
+                <img src="https://a.seventwentyseven.xyz/4" class="h-8 w-8 mr-3 rounded-full">
+                <a href="/u/4">
+                    <span class="font-medium mr-1">def750</span><i class="fas fa-chevron-down"></i>
+                </a>
+            </div>
             {% else %}
-            <a href="/register" class="py-">
-                <span>Sign Up</span>
-            </a>
+            <button class="mx-2 bg-hsl-60 hover:bg-hsl-40 text-white font-bold py-2 px-4 rounded transform duration-200">
+                Sign Up
+            </button>
+
             <a href="/login">
                 <span>Login</span>
             </a>
