@@ -492,6 +492,8 @@ def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if settings.DEVELOPER_MODE:
         log("running in advanced mode", Ansi.LRED)
+    if settings.DEBUG:
+        log("running in debug mode", Ansi.LMAGENTA)
 
     # running on root grants the software potentally dangerous and
     # unnecessary power over the operating system and is not advised.
