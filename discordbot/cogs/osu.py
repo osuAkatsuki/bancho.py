@@ -38,7 +38,6 @@ class osu(commands.Cog):
 
         #* Get user
         user = await dutils.getUser(ctx, "id, name, country, preferred_mode, creation_time, latest_activity", user)
-
         #! Return if error occured
         if 'error' in user:
             return await ctx.send(embed=await embutils.emb_gen(user['error']))
@@ -53,22 +52,16 @@ class osu(commands.Cog):
             return await ctx.send(embed=await embutils.emb_gen('permission_view_restrict'))
 
         #* Get mode and mods
-        if not mode:
-            mode = user['preferred_mode'] if user['preferred_mode'] else 0 #Cleanup by tsunyoku, thx <3
-        if not mods:
-            mods = "vn"
-        else:
-            if mods == "rx" and mode == 3:
-                return await ctx.send(embed=await embutils.emb_gen('rx_mania'))
-            elif mods == "ap" and mode != 0:
-                return await ctx.send(embed=await embutils.emb_gen('ap_no_std'))
+        m = await dutils.getmodemods(user, mode, mods)
+        if 'error' in m:
+            return await ctx.send(embed=await embutils.emb_gen(m['error']))
+        mode = m['mode']
+        mods = m['mods']
+        del(m)
 
         #* Get modestr and gulagmode with it's object and player stats
         modeobj = dconst.modemods2object[f"{mode}.{mods}"]
-        stats = await app.state.services.database.fetch_one(
-            "SELECT * FROM stats WHERE id = :uid AND mode = :mode",
-            {"uid": player.id, "mode": dconst.mode2gulag[f"{mode}.{mods}"]})
-        stats = dict(stats)
+        stats = await dutils.getstats(player, mode, mods)
 
         #TODO: Get player status and convert it
         status = player.status

@@ -3,6 +3,7 @@ import app.state
 import discord
 from discord.ext import commands
 from app.commands import str_priv_dict
+from discordbot.utils import constants as dconst
 from app.constants.privileges import Privileges
 
 import discordbot.utils.embed_utils as embutils
@@ -121,3 +122,22 @@ async def checkperms(ctx: commands.Context, perms:list):
         return {"author": a}
     else:
         return {"error": 'no_perms'}
+
+async def getmodemods(user:dict, mode, mods:str):
+    if not mode:
+        mode = user['preferred_mode'] if user['preferred_mode'] else 0 #Cleanup by tsunyoku, thx <3
+    if not mods:
+        mods = "vn"
+    else:
+        if mods == "rx" and mode == 3:
+            return {'error':'rx_mania'}
+        elif mods == "ap" and mode != 0:
+            return {'error':'ap_no_std'}
+    
+    return {'mode': mode, 'mods': mods}
+
+async def getstats(player: Player, mode, mods):
+    stats = await app.state.services.database.fetch_one(
+    "SELECT * FROM stats WHERE id = :uid AND mode = :mode",
+    {"uid": player.id, "mode": dconst.mode2gulag[f"{mode}.{mods}"]})
+    return dict(stats)

@@ -18,6 +18,16 @@ import app.state.discordbot as dbot
 from cmyui import Version
 import os
 
+#Website imports
+import aiohttp
+import orjson
+from quart import Quart
+from quart import render_template
+from cmyui.logging import Ansi, log
+import zenith.zconfig as zconf
+from app.state import website as zglob
+from hypercorn.asyncio import serve
+from hypercorn.config import Config
 __all__ = ("initialize_housekeeping_tasks",)
 
 OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
@@ -35,6 +45,7 @@ async def initialize_housekeeping_tasks() -> None:
                 _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
                 _bot_runner(),
+                _website()
             )
         },
     )
@@ -108,13 +119,13 @@ async def _bot_runner() -> None:
     for filename in os.listdir(f'{configb.PATH_TO_FILES}cogs'):
         filename1 = filename
         if filename.endswith('.py') and not filename.startswith('_'):
-            print(f"Loading {filename1}...")
+            print(f"Ż-BOT: Loading {filename1}...")
             client.load_extension(f'discordbot.cogs.{filename[:-3]}')
-            print(f'Loaded {filename1}')
+            print(f'Ż-BOT: Loaded {filename1}')
 
     @client.event
     async def on_ready() -> None:
-        log("Bot logged in", Ansi.GREEN)
+        log("Ż-BOT: Bot logged in", Ansi.GREEN)
         log(f"Bot name: {client.user.name}")
         log(f"Bot ID: {client.user.id}")
         log(f"Bot Version: {dbot.botversion}\n")
@@ -150,4 +161,61 @@ async def _bot_runner() -> None:
         await client.start(configb.TOKEN)
     finally:
         await client.close()
-        log('Bot Connection Closed', Ansi.RED)
+        log('Ż-BOT: Bot Connection Closed', Ansi.RED)
+
+async def _website() -> None:
+    app = Quart(__name__)
+
+    version = Version(0, 0, 1)
+
+    # used to secure session data.
+    # we recommend using a long randomly generated ascii string.
+    app.secret_key = zconf.secret_key
+
+    @app.before_serving
+    async def http_conn() -> None:
+        zglob.http = aiohttp.ClientSession(json_serialize=orjson.dumps)
+        log('ZENITH: Got our Client Session!', Ansi.LGREEN)
+
+    # globals which can be used in template code
+    _version = repr(version)
+    @app.before_serving
+    @app.template_global()
+    def appVersion() -> str:
+        return _version
+
+    _app_name = zconf.app_name_short
+    @app.before_serving
+    @app.template_global()
+    def appName() -> str:
+        return _app_name
+
+    _app_name_l = zconf.app_name_long
+    @app.before_serving
+    @app.template_global()
+    def appNameLong() -> str:
+        return _app_name_l
+
+    _captcha_key = zconf.hCaptcha_sitekey
+    @app.before_serving
+    @app.template_global()
+    def captchaKey() -> str:
+        return _captcha_key
+
+    _domain = zconf.domain
+    @app.before_serving
+    @app.template_global()
+    def domain() -> str:
+        return _domain
+
+    from zenith.blueprints.frontend import frontend
+    app.register_blueprint(frontend)
+
+    @app.errorhandler(404)
+    async def page_not_found(e):
+        # NOTE: we set the 404 status explicitly
+        return (await render_template('/errors/404.html'), 404)
+
+    os.chdir(os.path.dirname(os.path.realpath(__file__)))
+    #app.run(debug=zconf.debug) # blocking call
+    await serve(app, Config())
