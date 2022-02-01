@@ -1,5 +1,33 @@
 <nav>
-<div class="h-12 bg-hsl">
-
+<div class="w-full bg-hsl-50">
+    <div class="flex flex-row items-center justify-between h-14 mx-6">
+        <div class="flex flex-row items-center font-medium">
+            <div class="mx-2">
+                <a href="/" class="transform transition hover:scale-110 duration-300 text-lg">
+                    <span class="font-semibold">727</span><span class="font-medium text-gray-300">.xyz</span>
+                </a>
+            </div>
+            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+                <a href="/leaderboards">Leaderboards</a>
+            </div>
+            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+                <a href="/leaderboards">Clans</a>
+            </div>
+            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+                <a href="/leaderboards">Docs</a>
+            </div>
+        </div>
+        <div class="">
+            {% if 'authenticated' in session %}
+            {% else %}
+            <a href="/register" class="py-">
+                <span>Sign Up</span>
+            </a>
+            <a href="/login">
+                <span>Login</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
 </div>
 </nav>
