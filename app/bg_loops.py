@@ -214,8 +214,9 @@ async def _website() -> None:
     @app.errorhandler(404)
     async def page_not_found(e):
         # NOTE: we set the 404 status explicitly
-        return (await render_template('/errors/404.html'), 404)
+        return (await render_template(f'../zenith/templates/errors/404.html'), 404)
 
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     #app.run(debug=zconf.debug) # blocking call
-    await serve(app, Config())
+    if __name__ == "app.bg_loops":
+        await serve(app, Config())
