@@ -44,6 +44,7 @@ async def initialize_housekeeping_tasks() -> None:
                 _remove_expired_donation_privileges(interval=30 * 60),
                 _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
+                #def750's xD moment
                 _bot_runner(),
                 _website()
             )
@@ -164,7 +165,11 @@ async def _bot_runner() -> None:
         log('Ż-BOT: Bot Connection Closed', Ansi.RED)
 
 async def _website() -> None:
-    app = Quart(__name__)
+    app = Quart(__name__, 
+                template_folder='/opt/gulag/zenith/templates/',
+                root_path='/opt/gulag/zenith/',
+                static_folder='/opt/gulag/zenith/static/',
+                instance_path='/opt/gulag/zenith/')
 
     version = Version(0, 0, 1)
 
@@ -214,9 +219,12 @@ async def _website() -> None:
     @app.errorhandler(404)
     async def page_not_found(e):
         # NOTE: we set the 404 status explicitly
-        return (await render_template(f'../zenith/templates/errors/404.html'), 404)
+        return (await render_template(f'errors/404.html'), 404)
 
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     #app.run(debug=zconf.debug) # blocking call
+    def getappobj():
+        return app
     if __name__ == "app.bg_loops":
-        await serve(app, Config())
+        await serve(app, Config(), shutdown_trigger=lambda: asyncio.Future())
+        
