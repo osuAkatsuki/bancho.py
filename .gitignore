@@ -10,5 +10,5 @@ botconfig.py
 zconfig.py
 /zenith/.data
 .env.save
-/zenith/static/styles/*
+/zenith/styles/*
 /zenith/static/css/style.css
