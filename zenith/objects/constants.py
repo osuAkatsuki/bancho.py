@@ -19,3 +19,14 @@ mode_gulag_rev = {
     6: 2,
     7: 0
 }
+
+mode2str = {
+    0: "std_vn",
+    1: "taiko_vn",
+    2: "catch_vn",
+    3: "mania_vn",
+    4: "std_rx",
+    5: "taiko_rx",
+    6: "catch_rx",
+    7: "std_ap",
+}

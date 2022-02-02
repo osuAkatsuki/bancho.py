@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block header%}
 <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
@@ -14,11 +14,12 @@
       document.getElementById('users-registered').innerHTML = response.data.counts.total;
     });
 </script>
+
 <section id="top" 
          style="background: linear-gradient(hsl(var(--main), 15%, 15%, 0.5),
               hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
                 background-position: center; background-size: cover;"
-         class="bg-center h-screen w-full bg-contain bg-opacity-30 flex items-center justify-items-center">
+         class="bg-center h-screen w-full bg-contain flex items-center justify-items-center -mt-14">
     <div class="flex flex-col items-center w-full">
         <div class="flex flex-col md:flex-row items-center justify-center 
                     text-5xl lg:text-6xl font-extrabold">
@@ -26,34 +27,158 @@
             <span class="mx-2">Twenty</span>
             <span class="mx-2">Seven</span>
         </div>
-        <span class="text-4xl font-bold mt-2">Insert le motto here.</span>
+        <span class="text-4xl font-bold mt-2 text-center">The place where you reach your zenith.</span>
         <div class="flex items-center w-auto rounded-full bg-hsl-10 px-3 py-1.5 mt-5 text-sm">
-            <span class="mr-1">Registered Users</span>
+            <span class="mr-1">Registered</span>
             <span id="users-registered" class="font-semibold text-pink-600 mr-1">X</span>
-            <span class="mx-1">Users Online </span>
+            <span class="mx-1">Online </span>
             <span id="users-online" class="font-semibold text-green-600">D</span>
         </div>
     </div>
 </section>
-<section id="guest" class="h-64">
-    <div class="h-64">
-        <p>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-            Nulla mattis consequat elit a convallis. Quisque ac ornare odio. 
-            Nunc pulvinar dictum libero, quis laoreet nisi eleifend non. 
-            Quisque porttitor lectus iaculis molestie faucibus. In odio libero, 
-            aliquet ut faucibus ac, vulputate quis metus. Donec elementum volutpat 
-            condimentum. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-            Nullam eu consectetur ex, at imperdiet risus. Donec elit tellus,
-            convallis suscipit gravida ac, aliquam in augue. In hac habitasse
-            platea dictumst. Vivamus ut imperdiet dui, sit amet tincidunt justo.
-            Suspendisse non urna nibh. Mauris at nisi sapien. Maecenas eu ex eget 
-            metus commodo dapibus.
-        </p>
-        
+<section id="server-info" class="h-auto">
+    <div class="h-full my-10">
+        <div class="flex flex-col mx-7 md:mx-10 lg:mx-14">
+            <div class="w-full">
+                <div class="flex flex-row w-full justify-center lg:justify-between">
+                    <div class="flex flex-col w-full md:w-11/12 lg:w-8/12">
+                        <div class="w-full">
+                            <p class="text-lg w-11/12 text-center">
+                                <span class="text-4xl font-bold">New Here? Come join us!</span>
+                                <br><br>
+                                Seven Twenty Seven is an osu! server built on gulag with many unique features and
+                                very friendly community. We're trying our best to develop and mantain this server.<br>
+                                Also, we're fully open source, here's our 
+                                <a href="https://github.com/seventwentyseven" class="text-hsl-70 hover:text-hsl-80 transform duration-200">
+                                    Github page
+                                </a>
+                                <br>
+                                <br>
+                                <b class="text-lg font-bold">Here are some of our coolest features:</b>
+                            </p>
+                        </div>
+                        <div class="flex flex-col mt-4 items-center w-full">
+                            <div class="flex flex-col md:flex-row mt-4 justify-between content-center">
+                                <div class="flex flex-col w-full md:w-3/12 items-center text-center">
+                                    <i class="fas fa-trophy fa-2x"></i>
+                                    <span class="text-lg font-semibold">PP For relax and autopilot</span>
+                                    <p class="text-gray-300">
+                                        Our server has unique pp formula for relax and autopilot.
+                                        Good at waving your cursor or just smashing your keyboard? 
+                                        Join seventwentyseven and get a fair reward for your skills!
+                                    </p>
+                                </div>
+                                <div class="flex flex-col w-full md:w-3/12 items-center text-center">
+                                    <i class="fa fa-angle-double-up fa-2x"></i>
+                                    <span class="text-lg font-semibold">Custom Rankeds</span>
+                                    <p class="text-gray-300">
+                                        We have lots of custom ranked and loved maps.
+                                        Additionally, our BN's are active so there's a good
+                                        chance the map you like could be ranked, especially 
+                                        since we don't have strict ranking criteria!
+                                    </p>
+                                </div>
+                                <div class="flex flex-col w-full md:w-3/12 items-center text-center">
+                                    <i class="fas fa-robot fa-2x"></i>
+                                    <span class="text-lg font-semibold">Discord BOT</span>
+                                    <p class="text-gray-300">
+                                        Our server has a self-made and advanced discord bot.
+                                        Without going to the site you can check your profile
+                                        scores and much more!
+                                    </p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    <div class="w-0 lg:w-4/12 bg-contain bg-center bg-no-repeat -ml-15 invisible lg:visible"
+                         style="background-image: url(/static/images/rocket.png); height: auto;">
+                    </div>
+                </div>
+                {% if 'authenticated' not in session %}
+                <div class="flex flex-row h-24 w-full mt-4 items-center justify-center">
+                    <button class="p-1 px-3 bg-transparent border-2 border-hsl-60 text-hsl-60 text-lg
+                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60 
+                                 hover:text-gray-100 mx-2"
+                            onclick="location.href = '/login';">
+                        Login
+                    </button>
+                    <button class="p-1 px-3 bg-transparent border-2 border-hsl-60 text-hsl-60 text-lg
+                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60 
+                                 hover:text-gray-100 mx-2"
+                            onclick="location.href = '/register';">
+                        Register
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </section>
-<section id="top-scores-recent">
+<section id="server-stats" class="bg-hsl-25-10 h-full w-full">
+    <div class="py-8">
+        <div class="container relative mx-auto mt-6 lg:max-w-screen-xl">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div class="lg:col-span-2" id="records">
+                    <div class ="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-2" id="top-scores-parent">
+                        <div id="score-0"></div>
+                        <div id="score-1"></div>
+                        <div id="score-2"></div>
+                        <div id="score-3"></div>
+                        <div id="score-4"></div>
+                        <div id="score-5"></div>
+                        <div id="score-6"></div>
+                        <div id="score-7"></div>
+                    </div>
+                </div>
 
+                <div class="w-full p-4 rounded-md bg-hsl-15 mb-4 lg:mb-0">
+                    <div class="flex items-center gap-2 mb-3 text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <h1 class="text-xl">Recent Users</h1>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
 </section>
+<script>
+    axios.get('https://{{ domain() }}/wapi/get_records')
+    .then((resp) => {
+        var r = resp.data.records;
+        var records = [r.std_vn, r.std_rx, r.std_ap, r.taiko_vn, r.taiko_rx, r.catch_vn, r.catch_rx, r.mania_vn];
+        let i = 0
+        for (el of records) {
+            document.getElementById('score-' + i).innerHTML = `
+                <div class="w-auto p-4 rounded-md" 
+                     style="background: linear-gradient(hsl(var(--main), 20%, 20%, 0.9),
+                            hsl(var(--main), 20%, 20%, 0.8)), url(https://assets.ppy.sh/beatmaps/${el.set_id}/covers/cover.jpg);
+                            background-size: cover; background-position: center;">
+                    <div class="flex items-center gap-2 mb-2 text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                        </svg>
+                        <a href="/score/${el.id}">
+                            <h1 class="text-xl hover:text-hsl-70 transform duration-200">${el.mode_str} Record</h1>
+                        </a>
+                    </div>
+                    <div class="flex beatmap-stats">
+                        <div class="beatmap-image">
+                            <img class="w-12 h-auto mr-2 rounded-md" src="https://a.{{ domain() }}/${el.userid}" 
+                                 onerror="this.src='/static/images/avatar_notwork.png';"></img>
+                        </div>
+                        <div class="beatmap-infomation">
+                            <h1 class="text-xl text-gray-300">${el.pp} <span class="font-bold">PP</span></h1>
+                        </div>
+                    </div>
+                    <h4 class="mt-2 text-xs text-gray-300">Played by <a href="/u/${el.userid}"><span class="font-bold hover:text-hsl-70 transform duration-200">${el.name}</span></a></h4>
+                </div>
+            `
+            i++
+        }
+    });
+</script>
 {% endblock %}

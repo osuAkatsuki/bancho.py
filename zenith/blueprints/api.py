@@ -17,16 +17,26 @@ from quart import session
 from quart import send_file
 
 from app.objects.player import Player
-from zenith.objects.constants import tables, mode_gulag_rev
+from zenith.objects.constants import tables, mode_gulag_rev, mode2str
 
 api = Blueprint('api', __name__)
-
+MODE_CONVERT = {
+    0: "osu!Standard",
+    1: "osu!Taiko",
+    2: "osu!Catch",
+    3: "osu!Mania",
+    4: "osu!Standard with Relax",
+    5: "osu!Taiko with Relax",
+    6: "osu!Catch with Relax",
+    7: "osu!Standard with AutoPilot",
+}
 @api.route('/')
 async def main():
     return {'success': False, 'msg': 'Please specify route'}
 
 @api.route('/get_records')
 async def get_records():
+    #TODO: Make it faster
     records = {}
     for i in range(0, 8):
         record = await app.state.services.database.fetch_one(
@@ -36,7 +46,11 @@ async def get_records():
             f'maps.md5 WHERE {tables[i]}.mode = {mode_gulag_rev[i]} && maps.status=2 '
              '&& users.priv & 1 ORDER BY pp DESC LIMIT 1;'
         )
-        records[i] = dict(record)
+        record = dict(record)
+        record['id'] = str(record['id'])
+        record['mode_str'] = MODE_CONVERT[i]
+        records[mode2str[i]] = record
+
     return {"success": True, "records": records}
 
 @api.route('/remove_relationship')

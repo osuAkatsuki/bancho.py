@@ -40,6 +40,28 @@
       </head>
 </head>
 <body class="text-white bg-hsl-15">
+  <style>
+    /* width */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    /* Track */
+    ::-webkit-scrollbar-track {
+      background: hsl(var(--main), 10%, 10%);
+    }
+
+    /* Handle */
+    ::-webkit-scrollbar-thumb {
+      background: hsl(var(--main), 40%, 40%);
+      border-radius: 9001px;
+    }
+
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+      background: hsl(var(--main), 30%, 30%);
+    }
+  </style>
 {% block content %}
 {% endblock %}
 </body>
