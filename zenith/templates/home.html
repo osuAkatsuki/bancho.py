@@ -6,15 +6,6 @@
 {% endblock %}
 
 {% block content %}
-{% include 'components/navbar.html' %}
-<script>
-    axios.get('https://api.{{ domain() }}/get_player_count')
-    .then((response) => {
-      document.getElementById('users-online').innerHTML = response.data.counts.online;
-      document.getElementById('users-registered').innerHTML = response.data.counts.total;
-    });
-</script>
-
 <section id="top" 
          style="background: linear-gradient(hsl(var(--main), 15%, 15%, 0.5),
               hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
@@ -117,8 +108,8 @@
 </section>
 <section id="server-stats" class="bg-hsl-25-10 h-full w-full">
     <div class="py-8">
-        <div class="container relative mx-auto mt-6 lg:max-w-screen-xl">
-            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div class="relative mx-auto mt-6 lg:max-w-screen-xl">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3 mx-2 md:mx-0">
                 <div class="lg:col-span-2" id="records">
                     <div class ="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-2" id="top-scores-parent">
                         <div id="score-0"></div>
@@ -138,14 +129,37 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                         </svg>
                         <h1 class="text-xl">Recent Users</h1>
+                        
+                    </div>
+                    <div id="recent-users-parent">
+                        <!-- XD -->
+                        <div id="r-user-0"></div>
+                        <div id="r-user-1"></div>
+                        <div id="r-user-2"></div>
+                        <div id="r-user-3"></div>
+                        <div id="r-user-4"></div>
+                        <div id="r-user-5"></div>
+                        <div id="r-user-6"></div>
+                        <div id="r-user-7"></div>
+                        <div id="r-user-8"></div>
+                        <div id="r-user-9"></div>
+                        <div id="r-user-10"></div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 </section>
 <script>
+    // Trolley notice
+    axios.get('https://api.ipify.org/?format=json')
+    .then((r) => {
+        console.log("HEY YOU! Our website and the rest of our code is " +
+        "under the MIT license. If you want to use it remember " +
+        `to mention us ;) Or else ${r.data.ip}`)
+    })
+
+    // Top scores
     axios.get('https://{{ domain() }}/wapi/get_records')
     .then((resp) => {
         var r = resp.data.records;
@@ -180,5 +194,45 @@
             i++
         }
     });
+
+    // Online and registered
+    axios.get('https://api.{{ domain() }}/get_player_count')
+    .then((response) => {
+      document.getElementById('users-online').innerHTML = response.data.counts.online;
+      document.getElementById('users-registered').innerHTML = response.data.counts.total;
+    });
+
+    // Delete color from navbar
+    document.getElementById("navbar-colourer").classList.remove("bg-hsl-50");
+
+    // Recent users
+    axios.get('https://{{ domain() }}/wapi/get_last_registered')
+    .then((r) => {
+        var r = r.data.users
+        var r = [r.el0, r.el1, r.el2, r.el3, r.el4, r.el5, r.el6, r.el7, r.el8, r.el9, r.el10]
+        var i = 0
+        for (el of r) {
+            node = `
+            <div class="mt-2">
+                <div class="flex w-full h-10 rounded-md" style="background: linear-gradient(hsl(275, 20%, 20%, 0.8), hsl(275, 20%, 20%, 0.8)), url(https://osu.ppy.sh/images/headers/profile-covers/c2.jpg);">
+                    <img src="https://a.{{ domain() }}/${el.id}" class="w-10 h-10 rounded-md" alt="/static/images/avatar_notwork.png">
+                    <div class="grid place-items-stretch w-full grid-cols-2 ml-2 font-medium text-white">
+                        <a href="/u/${el.id}" class="flex items-center">
+                            <img class="h-5 w-8 mr-1.5" src="/static/images/flags/${el.country.toUpperCase()}.png" alt="/static/images/flags/XX.png">
+                            <h1 class="hover:text-hsl-80 transform duration-200">${el.name}</h1>
+                        </a>
+                        <div class="flex items-center content-end ml-auto">
+                            <h1 class="mr-4 text-sm font-medium text-right text-gray-300">${el.creation_time}</h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `
+            // XD
+            document.getElementById('r-user-' + i).innerHTML = node
+            i++
+        }
+    })
 </script>
+
 {% endblock %}

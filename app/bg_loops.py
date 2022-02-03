@@ -45,7 +45,7 @@ async def initialize_housekeeping_tasks() -> None:
                 _update_bot_status(interval=5 * 60),
                 _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
                 #def750's xD moment
-                #_bot_runner(),
+                _bot_runner(),
                 _website()
             )
         },
@@ -120,13 +120,13 @@ async def _bot_runner() -> None:
     for filename in os.listdir(f'{configb.PATH_TO_FILES}cogs'):
         filename1 = filename
         if filename.endswith('.py') and not filename.startswith('_'):
-            print(f"[Ż-BOT] Loading {filename1}...")
+            print(f"[DISCORD BOT] Loading {filename1}...")
             client.load_extension(f'discordbot.cogs.{filename[:-3]}')
-            print(f'[Ż-BOT] Loaded {filename1}')
+            print(f'[DISCORD BOT] Loaded {filename1}')
 
     @client.event
     async def on_ready() -> None:
-        log("[Ż-BOT] Bot logged in", Ansi.GREEN)
+        log("[DISCORD BOT] Bot logged in", Ansi.GREEN)
         log(f"Bot name: {client.user.name}")
         log(f"Bot ID: {client.user.id}")
         log(f"Bot Version: {dbot.botversion}\n")
@@ -138,9 +138,9 @@ async def _bot_runner() -> None:
         try:
             client.unload_extension(f'discordbot.cogs.{cog}')
             client.load_extension(f'discordbot.cogs.{cog}')
-            log(f"{ctx.author.name}#{ctx.author.discriminator} reloaded cog {cog}", Ansi.YELLOW)
+            log(f"[DISCORD BOT] {ctx.author.name}#{ctx.author.discriminator} reloaded cog {cog}", Ansi.YELLOW)
         except Exception as e:
-            log(f"{ctx.author.name}#{ctx.author.discriminator} tried to reload cog {cog} but error occured", Ansi.YELLOW)
+            log(f"[DISCORD BOT] {ctx.author.name}#{ctx.author.discriminator} tried to reload cog {cog} but error occured", Ansi.YELLOW)
             log(e, Ansi.RED)
             return await ctx.send(f"Error occured while reloading cog\n```{e}```", delete_after=10)
         return await ctx.send("Reloaded Cog")
@@ -151,9 +151,9 @@ async def _bot_runner() -> None:
             return await ctx.send("You're not an owner")
         try:
             client.load_extension(f'discordbot.cogs.{cog}')
-            log(f"{ctx.author.name}#{ctx.author.discriminator} loaded cog {cog}", Ansi.YELLOW)
+            log(f"[DISCORD BOT] {ctx.author.name}#{ctx.author.discriminator} loaded cog {cog}", Ansi.YELLOW)
         except Exception as e:
-            log(f"{ctx.author.name}#{ctx.author.discriminator} tried to load cog {cog} but error occured", Ansi.YELLOW)
+            log(f"[DISCORD BOT] {ctx.author.name}#{ctx.author.discriminator} tried to load cog {cog} but error occured", Ansi.YELLOW)
             log(e, Ansi.RED)
             return await ctx.send(f"Error occured while loading cog\n```{e}```", delete_after=10)
         return await ctx.send("Loaded Cog")
@@ -162,7 +162,7 @@ async def _bot_runner() -> None:
         await client.start(configb.TOKEN)
     finally:
         await client.close()
-        log('Ż-BOT: Bot Connection Closed', Ansi.RED)
+        log('[DISCORD BOT] Bot Connection Closed', Ansi.RED)
 
 async def _website() -> None:
     app = Quart(__name__, 
@@ -223,12 +223,11 @@ async def _website() -> None:
         # NOTE: we set the 404 status explicitly
         return (await render_template(f'errors/404.html'), 404)
 
-    os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 
     #app.run(debug=zconf.debug) # blocking call
     def getappobj():
         return app
-
     if __name__ == "app.bg_loops":
         await serve(app, Config(), shutdown_trigger=lambda: asyncio.Future())
         

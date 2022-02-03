@@ -2,12 +2,14 @@
 
 __all__ = ()
 
+from curses.ascii import isdigit
 import bcrypt
 import hashlib
 import os
 import time
 import datetime
 import app.state.services
+from pandas import to_datetime
 
 from quart import Blueprint
 from quart import redirect
@@ -18,6 +20,7 @@ from quart import send_file
 
 from app.objects.player import Player
 from zenith.objects.constants import tables, mode_gulag_rev, mode2str
+from zenith.objects.utils import *
 
 api = Blueprint('api', __name__)
 MODE_CONVERT = {
@@ -30,6 +33,7 @@ MODE_CONVERT = {
     6: "osu!Catch with Relax",
     7: "osu!Standard with AutoPilot",
 }
+
 @api.route('/')
 async def main():
     return {'success': False, 'msg': 'Please specify route'}
@@ -90,3 +94,25 @@ async def remove_relationship():
                          (session['user_data']['id'], target, r_type))
 
     return {"success": True, "msg": f"Successfully deleted {target} from {r_type} list"}
+
+@api.route('/get_last_registered', methods=["GET"])
+async def getLastRegistered():
+
+    res = await app.state.services.database.fetch_all(
+        "SELECT id, name, country, creation_time "
+        "FROM users WHERE priv & 1 "
+        "ORDER BY creation_time DESC "
+        "LIMIT 12",
+    )
+    i = 0
+    res_n = {}
+    for el in res:
+        el = dict(el)
+        el['creation_time'] = time_ago(datetime.datetime.utcnow(),
+                        to_datetime(datetime.datetime.fromtimestamp(int(el['creation_time'])),
+                        format="%Y-%m-%d %H:%M:%S"), time_limit=1) + "ago"
+        res_n[f"el{i}"] = el
+        i += 1
+    del(res)
+
+    return {"success": True, "users": res_n}

@@ -39,30 +39,40 @@
         {% endblock %}
       </head>
 </head>
-<body class="text-white bg-hsl-15">
-  <style>
-    /* width */
-    ::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    /* Track */
-    ::-webkit-scrollbar-track {
-      background: hsl(var(--main), 10%, 10%);
-    }
-
-    /* Handle */
-    ::-webkit-scrollbar-thumb {
-      background: hsl(var(--main), 40%, 40%);
-      border-radius: 9001px;
-    }
-
-    /* Handle on hover */
-    ::-webkit-scrollbar-thumb:hover {
-      background: hsl(var(--main), 30%, 30%);
-    }
-  </style>
-{% block content %}
-{% endblock %}
+<body class="text-white bg-hsl-15" style="max-width: 100vw;">
+  {% include 'components/navbar.html' %}
+  <div class="flex flex-col">
+    <div class="min-h-screen mt-14">
+      <!--! Content -->
+      {% block content %}
+      {% endblock %}
+    </div>
+    <div class="flex-none">
+      <!--! Footer -->
+      {% include 'components/footer.html' %}
+    </div>
+  </div>
 </body>
+<style>
+  /* width */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  /* Track */
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--main), 10%, 10%);
+  }
+
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--main), 40%, 40%);
+    border-radius: 9001px;
+  }
+
+  /* Handle on hover */
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--main), 30%, 30%);
+  }
+</style>
 </html>

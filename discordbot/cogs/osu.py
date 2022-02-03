@@ -1,3 +1,10 @@
+# le dzifors
+from cmyui.logging import log
+from cmyui.logging import Ansi
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+from app.objects.beatmap import Beatmap
+
 import datetime
 
 import app.state
@@ -116,30 +123,159 @@ class osu(commands.Cog):
     #! dzifors code pls dont hit me
     
     @cog_ext.cog_slash(name="scores", description="Shows scores of player", options=sopt.scores)
-    async def _scores(self, ctx: SlashContext, user:str=None, type:str=None):
+    async def _scores(self, ctx: SlashContext, user:str=None, type:str=None, mode:str=None, mods:str="ignore", limit:str=None):
+        if user == None:
+            self_executed = True
+        else:
+            self_executed = False
         user = await dutils.getUser(ctx, "id, name, preferred_mode", user)
         #! Return if error occured
         if 'error' in user:
-            return await ctx.send(embed=await embutils.emb_gen(user['error']))
+            cmyui.log(f"DISCORD BOT: {ctx.author} tried using /scores but got an error: {user['error']}", Ansi.RED)
+            return await ctx.send(embed = await embutils.emb_gen(user['error']))
         
         if not type:
             type = "best"
         
+        #TODO: i dont like this part but i dont got no idea on how to make it more clean without all this mess
+
         user = user['user']
+        name = user['name']
+        uid = user['id']
         
+        # I totally did NOT copy this from the api, but anyways; this is the part where we set gamemode and mods
+        if mode is None:
+            mode = GameMode(user['preferred_mode'])
+        else:
+            mode = GameMode(int(mode))
         
-        # #? arguments passthrough to see if we have what we wanted, feel free to delete it later i guess
-        # return await ctx.send(
-        #     embed=await embutils.emb_gen(
-        #         embed_name = "embed_FromCog",
-        #         args = {
-        #             "title": "sad nigger",
-        #             "description": f"user id: {user['user']['id']}\ntype: {type}\nmode: {user['user']['preferred_mode']}\nauthor role color: {ctx.author.color}",
-        #             "color": ctx.author.color
-        #         }
-        #     )
-        # )
+        if mods is not None:
+            if mods[0] in ("~", "="):  # weak/strong equality
+                strong_equality = mods[0] == "="
+                mods = mods[1:]
+            else:  # use strong as default
+                strong_equality = True
+
+            if mods.isdecimal():
+                # parse from int form
+                mods = Mods(int(mods))
+            else:
+                # parse from string form
+                mods = Mods.from_modstr(mods)
         
+        player = await app.state.sessions.players.from_cache_or_sql(id = uid)
+
+        #? build sql query & fetch info
+
+        query = [
+            "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
+            "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
+            "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
+            f"FROM {mode.scores_table} t "
+            "INNER JOIN maps b ON t.map_md5 = b.md5 "
+            "WHERE t.userid = :user_id AND t.mode = :mode_vn",
+        ]
+
+        params: dict[str, object] = {
+            "user_id": player.id,
+            "mode_vn": mode.as_vanilla,
+        }
+
+        if mods is not None:
+            if strong_equality:  # type: ignore
+                query.append("AND t.mods & :mods = :mods")
+            else:
+                query.append("AND t.mods & :mods != 0")
+
+            params["mods"] = mods
+
+        if type == "best":
+            allowed_statuses = [2, 3]
+
+            query.append("AND t.status = 2 AND b.status IN :statuses")
+            params["statuses"] = allowed_statuses
+            sort = "t.pp"
+        else:
+            sort = "t.play_time"
+
+        query.append(f"ORDER BY {sort} DESC LIMIT :limit")
+        try: 
+            if limit is not None:
+                if int(limit) > 100 or int(limit) < 1:
+                    return await ctx.send(embed=await embutils.emb_gen("scores_over_limit"))
+                else:
+                    params["limit"] = int(limit)
+            else:
+                params["limit"] = 5
+        except:
+            return await ctx.send(embed=await embutils.emb_gen("not_integer"))
+
+        rows = [
+            dict(row)
+            for row in await app.state.services.database.fetch_all(" ".join(query), params)
+            
+        ]
+
+        #? fetch & return info from sql
+        for row in rows:
+            bmap = await Beatmap.from_md5(row.pop("map_md5"))
+            row["beatmap"] = bmap.as_dict if bmap else None
+
+        player_info = {
+            "id": player.id,
+            "name": player.name,
+            "clan": {
+                "id": player.clan.id,
+                "name": player.clan.name,
+                "tag": player.clan.tag,
+            }
+            if player.clan
+            else None,
+        }
+
+        rows_real = {
+            "scores": rows,
+            "player": player_info
+        }
+
+        #TODO Again, maybe I'll fix that in the future but yeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeea
+        #! Currently, the limit argument, will only select which best number is going to be displayed, when i learn Python, ill do it like it should be.
+        username = user['name']
+        score_count = len(rows_real['scores'])
+        if not score_count:
+            if self_executed:
+                return await ctx.send(await embutils.emb_gen("no_scores_self"))
+            else:
+                return await ctx.send(
+                    embed = discord.Embed(
+                        title = f"No scores found for {username}",
+                        description = f"{username} ain't got no scores. Tell them to set some and come back when they do.",
+                        color = embutils.colors.red
+                    )
+                )
+
+        if score_count != limit:
+            if self_executed:
+                await ctx.send(await embutils.emb_gen("not_enough_scores_self"))
+            else:
+                await ctx.send(
+                    embed = discord.Embed(
+                        title = f"{username} doesn't have enough scores!",
+                        description = f"{username} doesn't have {limit} scores, but I will show you the score I found is the last, which is nr. {score_count}",
+                        color = embutils.colors.red
+                    )
+                )
+
+        
+        return await ctx.send(
+            embed = discord.Embed(
+                title="This Worked",
+                description=f"Your Arguments:\nplayer: {player}\nmode: {mode}\nmods: {params['mods']}\nlimit: {params['limit']}\nlimit check: {score_count}\nplayer info: {player_info}", 
+                color=ctx.author.color
+            )
+        )
+
+
 
 def setup(client):
     client.add_cog(osu(client))

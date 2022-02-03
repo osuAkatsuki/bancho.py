@@ -1,5 +1,6 @@
-<nav>
-<div class="w-full bg-hsl-50">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/2.3.0/alpine.js"></script>
+<nav class="absolute w-full">
+<div class="bg-hsl-50" id="navbar-colourer">
     <div class="flex flex-row items-center justify-between h-14 mx-6">
         <div class="flex flex-row items-center font-medium">
             <div class="mx-2">
@@ -7,18 +8,18 @@
                     <span class="font-semibold">727</span><span class="font-medium text-gray-300">.xyz</span>
                 </a>
             </div>
-            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+            <div class="invisible w-0 sm:visible sm:w-auto mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
                 <a href="/leaderboards">Leaderboards</a>
             </div>
-            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+            <div class="invisible w-0 sm:visible sm:w-auto mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
                 <a href="/leaderboards">Clans</a>
             </div>
-            <div class="mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
+            <div class="invisible w-0 sm:visible sm:w-auto mx-2 transform transition hover:scale-105 hover:text-gray-300 duration-200">
                 <a href="/leaderboards">Docs</a>
             </div>
         </div>
-        <div class="">
-            {% if 'authenticated' not in session %}
+        <div class="invisible w-0 sm:visible sm:w-auto">
+            {% if 'authenticated' in session %}
             <div class="flex flex-row items-center justify-items-center">
                 <img src="https://a.seventwentyseven.xyz/4" class="h-8 w-8 mr-3 rounded-full"
                      alt="https://a.seventwentyseven.xyz/1">
@@ -27,14 +28,27 @@
                 </a>
             </div>
             {% else %}
-            <button class="mx-2 bg-hsl-60 hover:bg-hsl-40 text-white font-bold py-2 px-4 rounded transform duration-200">
+            <button class="mx-2 bg-hsl-60 hover:bg-hsl-40 text-white font-bold py-2 px-4
+                           rounded transform duration-200 focus:border-3 focus:border-hsl-40
+                           focus:bg-white focus:text-hsl-40"
+                           onclick="location.href = '/register';">
                 Sign Up
             </button>
 
-            <a href="/login">
-                <span>Login</span>
-            </a>
+            <button class="mx-2 bg-white hover:bg-gray-300 text-gray-700 font-bold py-2
+                           px-4 rounded transform duration-200 focus:border-3 focus:border-white
+                           focus:bg-hsl-40 focus:text-white"
+                           onclick="location.href = '/login';">
+                Log In
+            </button>
             {% endif %}
+        </div>
+        <div class="flex sm:hidden">
+            <button @click="isOpen = !isOpen" type="button" class="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300" aria-label="toggle menu">
+                <svg viewBox="0 0 24 24" class="h-6 w-6 fill-current">
+                    <path fill-rule="evenodd" d="M4 5h16a1 1 0 0 1 0 2H4a1 1 0 1 1 0-2zm0 6h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2zm0 6h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2z"></path>
+                </svg>
+            </button>
         </div>
     </div>
 </div>
