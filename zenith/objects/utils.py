@@ -10,7 +10,6 @@ def time_ago(time1, time2, time_limit:int=0):
     """Calculate time ago between two dates"""
     time_diff = time1 - time2
     timeago = datetime.datetime(1,1,1) + time_diff
-    time_limit = time_limit
     time_ago = ""
     if timeago.year-1 != 0:
         time_ago += "{} Year{} ".format(timeago.year-1, determine_plural(timeago.year-1))
