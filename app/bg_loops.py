@@ -226,8 +226,6 @@ async def _website() -> None:
 
 
     #app.run(debug=zconf.debug) # blocking call
-    def getappobj():
-        return app
     if __name__ == "app.bg_loops":
         await serve(app, Config(), shutdown_trigger=lambda: asyncio.Future())
         
