@@ -8,7 +8,7 @@
 {% block content %}
 <section id="top" 
          style="background: linear-gradient(hsl(var(--main), 15%, 15%, 0.5),
-              hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
+                hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
                 background-position: center; background-size: cover;"
          class="bg-center h-screen w-full bg-contain flex items-center justify-items-center -mt-14">
     <div class="flex flex-col items-center w-full">
@@ -109,7 +109,7 @@
 <section id="server-stats" class="bg-hsl-25-10 h-full w-full">
     <div class="py-8">
         <div class="relative mx-auto mt-6 lg:max-w-screen-xl">
-            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3 mx-2 md:mx-0">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3 mx-2">
                 <div class="lg:col-span-2" id="records">
                     <div class ="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-2" id="top-scores-parent">
                         <div id="score-0"></div>
@@ -219,7 +219,7 @@
                     <div class="grid place-items-stretch w-full grid-cols-2 ml-2 font-medium text-white">
                         <a href="/u/${el.id}" class="flex items-center">
                             <img class="h-5 w-8 mr-1.5" src="/static/images/flags/${el.country.toUpperCase()}.png" alt="/static/images/flags/XX.png">
-                            <h1 class="hover:text-hsl-80 transform duration-200">${el.name}</h1>
+                            <h1 class="hover:text-hsl-80 transform duration-200 truncate">${el.name}</h1>
                         </a>
                         <div class="flex items-center content-end ml-auto">
                             <h1 class="mr-4 text-sm font-medium text-right text-gray-300">${el.creation_time}</h1>

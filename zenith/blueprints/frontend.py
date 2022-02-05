@@ -27,3 +27,7 @@ async def home():
 @frontend.route('/test')
 async def test():
     return await render_template('test.html')
+
+@frontend.route('/login')
+async def login():
+    return await render_template('login.html')

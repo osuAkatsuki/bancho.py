@@ -28,10 +28,10 @@ MODE_CONVERT = {
     1: "osu!Taiko",
     2: "osu!Catch",
     3: "osu!Mania",
-    4: "osu!Standard with Relax",
-    5: "osu!Taiko with Relax",
-    6: "osu!Catch with Relax",
-    7: "osu!Standard with AutoPilot",
+    4: "osu!Standard+RX",
+    5: "osu!Taiko+RX",
+    6: "osu!Catch+RX",
+    7: "osu!Standard+AP",
 }
 
 @api.route('/')
