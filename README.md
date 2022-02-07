@@ -1,7 +1,7 @@
 # gulag - a dev-oriented, production-geared osu! server
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/cmyui/gulag/master.svg)](https://results.pre-commit.ci/latest/github/cmyui/gulag/master)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/gulag/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/gulag/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
 gulag is an in-progress osu! server implementation geared towards running production
@@ -12,7 +12,7 @@ stack with something more easily maintainable, reliable, scalable, and feature-r
 # Setup
 ```sh
 # clone the repository & init the submodules
-git clone https://github.com/cmyui/gulag.git && cd gulag
+git clone https://github.com/osuAkatsuki/gulag.git && cd gulag
 
 # clone the submodules (oppai-ng)
 git submodule init && git submodule update
