@@ -1320,7 +1320,7 @@ str_priv_dict = {
     "nominator": Privileges.NOMINATOR,
     "mod": Privileges.MODERATOR,
     "admin": Privileges.ADMINISTRATOR,
-    "dangerous": Privileges.DEVELOPER,
+    "developer": Privileges.DEVELOPER,
 }
 
 
