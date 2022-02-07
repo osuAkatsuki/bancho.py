@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Register{% endblock %}
+
+{% block header %}
+<meta charset="UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+{% endblock %}
+
+
+{% block content %}
+<div class="w-full h-screen flex -mt-14 overflow-x-clip"
+     style="background: linear-gradient(hsl(var(--main), 10%, 10%, 0.65),
+            hsl(var(--main), 10%, 10%, 0.65)), url(/static/images/home-bg-1.jpg);
+            background-position: center; background-size: cover;">
+    <div class="w-full absolute">
+    {% with custom=True %}
+        {% include 'components/navbar.html' %}
+    {% endwith %}
+    </div>
+    <div class="w-full sm:ml-auto sm:w-6/12 md:w-5/12 lg:w-4/12 static bg-hsl-10"
+         style="background: linear-gradient(hsl(var(--main), 10%, 10%, 0.8),
+                hsl(var(--main), 10%, 10%, 0.8))">
+        <div class="h-full w-full">
+            <div class="flex flex-col h-full w-full mt-8 text-center">
+                <div class="w-full mt-4 text-3xl md:text-4xl font-bold">Hello There!</div>
+                <div class="w-full mt-2 text-2xl md:text-3xl font-thin">Please register.</div>
+                <form class="mt-5 w-10/12 mx-auto" method="POST" autocomplete="off">
+                    {% if message['name'] %}
+                    <span class="text-red-500 font-thin italic">{{ message['name'] }}</span>
+                    {% endif %}
+                    <input id="username" type="text" name="username" placeholder="Username" autocomplete="username"
+                        class="block w-full py-3 px-1 mt-2
+                        text-gray-200 appearance-none
+                        border-b-3 border-hsl-50
+                        focus:text-white focus:outline-none focus:border-hsl-80
+                        bg-transparent
+                        transition duration-500"
+                        required />
+
+                    {% if message['email'] %}
+                    <span class="text-red-500 font-thin italic">{{ message['email'] }}</span>
+                    {% endif %}
+                    <input id="email" type="email" name="email" placeholder="Email" autocomplete="email"
+                        class="block w-full py-3 px-1 mt-4 mb-4
+                        text-gray-200 appearance-none
+                        border-b-3 border-hsl-50
+                        focus:text-white focus:outline-none focus:border-hsl-80
+                        bg-transparent
+                        transition duration-500"
+                        required />
+
+
+                    <!-- Password Input -->
+                    {% if message['password'] %}
+                    <span class="text-red-500 font-thin italic" id="error-password">{{ message['password'] }}</span>
+                    {% endif %}
+                    <span id="message" class="text-left italic text-red-500 text-sm -mb-3"></span>
+                    <div class="flex justify-between mb-3">
+                        <input id="password" type="password" name="password" placeholder="Password" autocomplete="password" onkeyup='check();'
+                            class="block w-47% py-3 px-1 mb-4
+                            text-gray-200 appearance-none
+                            border-b-3 border-hsl-50
+                            focus:text-white focus:outline-none focus:border-hsl-80
+                            bg-transparent
+                            transition duration-500"
+                            required />
+                        <!-- Password Input -->
+                        <input id="password-confirm" type="password" name="password-confirm" placeholder="Confirm Password" autocomplete="password-confirm" onkeyup='check();'
+                            class="block w-47% py-3 px-1 mb-4
+                            text-gray-200 appearance-none
+                            border-b-3 border-hsl-50
+                            focus:text-white focus:outline-none focus:border-hsl-80
+                            bg-transparent
+                            transition duration-500"
+                            required />
+                    </div>
+
+                    {% if not captchaKey() == 'changeme' %}
+                    {% if message['captcha'] %}
+                    <span class="text-red-500 font-thin italic">{{ message['captcha'] }}</span>
+                    {% endif %}
+                    <!-- H captcha -->
+                    <div class="field w-full h-auto">
+                        <div class="h-captcha" data-sitekey="{{ captchaKey() }}" data-theme="dark" style="display: flex; justify-content: center;"></div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Auth Buttton -->
+                    <button type="submit"
+                        class="w-full py-3 mt-8 bg-hsl-50 rounded-md
+                        font-medium text-white uppercase
+                        focus:outline-none hover:bg-hsl-60 hover:shadow-none">
+                        Register
+                    </button>
+
+                    <!-- Bottom Text -->
+                    <div class="sm:flex flex-col sm:flex-wrap mt-6 sm:mb-4 text-sm text-center w-full">
+                        <a href="/login" class="flex-2 mx-auto">
+                            Already have an account?
+                        </a>
+                        <p class="mt-1 text-center">
+                            <span>By registering you accept our </span>
+                            <a href="/docs/privacy_policy" class="flex-2 mx-auto text-hsl-50 hover:text-hsl-60 transform duration-200">
+                                Privacy Policy
+                            </a>
+                            <span> and </span>
+                            <a href="/docs/rules" class="flex-2 mx-auto text-hsl-50 hover:text-hsl-60 transform duration-200">
+                                Rules
+                            </a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block bottom %}
+<style>
+  /* Change Autocomplete styles in Chrome*/
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    box-shadow: 0 0 0px 1000px rgba(0,0,0,0) inset;
+    -webkit-text-fill-color: white;
+    -webkit-box-shadow: 0 0 0px 1000px rgba(0,0,0,0) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+</style>
+<script>
+    document.getElementById("navbar").remove()
+    document.getElementById("navbar-button-reg").remove()
+    document.getElementById("navbar-button-log").remove()
+
+    // Delete color from navbar
+    document.getElementById("navbar-colourer").classList.remove("bg-hsl-50");
+    // Move footer 14rem up
+    document.getElementById("footer").classList.add("-mt-14")
+
+    // Password confirmation
+    var check = function() {
+        if (document.getElementById('password').value ==
+          document.getElementById('password-confirm').value) {
+          document.getElementById('message').innerHTML = '';
+        } else {
+          document.getElementById('message').innerHTML = "Passwords don't match";
+        }
+        document.getElementById('error-password').remove()
+    }
+</script>
+{% endblock %}

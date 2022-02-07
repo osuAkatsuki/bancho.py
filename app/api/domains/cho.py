@@ -649,7 +649,7 @@ async def login(
             ):
                 return "no", (
                     app.packets.notification(
-                        "Please contact staff directly to create an account.",
+                        "Multiaccount detected. Please contact staff directly to create an account if you belive this is an error.",
                     )
                     + app.packets.user_id(-1)
                 )

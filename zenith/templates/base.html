@@ -12,34 +12,34 @@
         <meta name="msapplication-TileColor" content="#000000">
         <meta name="msapplication-config" content="/static/favicon/browserconfig.xml">
         <meta name="theme-color" content="#000000">
-      
+
         <!--* Title *-->
         <title>{{ appName() }} - {% block title %}{% endblock %}</title>
-      
+
         <!--* Style *-->
         <link rel="stylesheet" href="/static/css/style.css">
         <link rel="stylesheet" href="/static/css/osuicons.css">
-      
+
         <!--* JS LIBS *-->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/2.3.0/alpine.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.3.5/dist/alpine.min.js" defer></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.slim.min.js"
           integrity="sha512-/DXTXr6nQodMUiq+IUJYCt2PPOUjrHJ9wFrqpJ3XkgPNOZVfMok7cRw6CSxyCQxXn6ozlESsSh1/sMCTF1rL/g=="
           crossorigin="anonymous"></script>
         <script src="/static/js/frameworks/vue.js"></script>
         <script src="/static/js/frameworks/vue-axios.js"></script>
-      
+
         <!--* Font awesome *-->
         <script src="https://kit.fontawesome.com/e5971878b8.js" crossorigin="anonymous"></script>
         <link rel="stylesheet" href="/static/css/osuicons.css">
-      
+
         <!--* Metadata -->
         <meta name="viewport" content="width=device-width, initial-scale=1">
-      
+
         {% block header %}
         {% endblock %}
       </head>
 </head>
-<body class="text-white bg-hsl-15" style="max-width: 100vw;">
+<body class="text-white bg-hsl-15 overflow-x-hidden" style="max-width: 100%;">
   {% include 'components/navbar.html' %}
   <div class="flex flex-col">
     <div class="min-h-screen mt-14">

@@ -6,13 +6,13 @@
 {% endblock %}
 
 {% block content %}
-<section id="top" 
+<section id="top"
          style="background: linear-gradient(hsl(var(--main), 15%, 15%, 0.5),
                 hsl(var(--main), 15%, 15%, 0.5)), url(/static/images/home-bg.png);
                 background-position: center; background-size: cover;"
          class="bg-center h-screen w-full bg-contain flex items-center justify-items-center -mt-14">
     <div class="flex flex-col items-center w-full">
-        <div class="flex flex-col md:flex-row items-center justify-center 
+        <div class="flex flex-col md:flex-row items-center justify-center
                     text-5xl lg:text-6xl font-extrabold">
             <span class="mx-2">Seven</span>
             <span class="mx-2">Twenty</span>
@@ -32,14 +32,14 @@
         <div class="flex flex-col mx-7 md:mx-10 lg:mx-14">
             <div class="w-full">
                 <div class="flex flex-row w-full justify-center lg:justify-between">
-                    <div class="flex flex-col w-full md:w-11/12 lg:w-8/12">
+                    <div class="flex flex-col w-full md:w-11/12 mx-auto lg:w-8/12">
                         <div class="w-full">
-                            <p class="text-lg w-11/12 text-center">
+                            <p class="text-lg w-11/12 mx-auto text-center">
                                 <span class="text-4xl font-bold">New Here? Come join us!</span>
                                 <br><br>
                                 Seven Twenty Seven is an osu! server built on gulag with many unique features and
                                 very friendly community. We're trying our best to develop and mantain this server.<br>
-                                Also, we're fully open source, here's our 
+                                Also, we're fully open source, here's our
                                 <a href="https://github.com/seventwentyseven" class="text-hsl-70 hover:text-hsl-80 transform duration-200">
                                     Github page
                                 </a>
@@ -55,7 +55,7 @@
                                     <span class="text-lg font-semibold">PP For relax and autopilot</span>
                                     <p class="text-gray-300">
                                         Our server has unique pp formula for relax and autopilot.
-                                        Good at waving your cursor or just smashing your keyboard? 
+                                        Good at waving your cursor or just smashing your keyboard?
                                         Join seventwentyseven and get a fair reward for your skills!
                                     </p>
                                 </div>
@@ -65,7 +65,7 @@
                                     <p class="text-gray-300">
                                         We have lots of custom ranked and loved maps.
                                         Additionally, our BN's are active so there's a good
-                                        chance the map you like could be ranked, especially 
+                                        chance the map you like could be ranked, especially
                                         since we don't have strict ranking criteria!
                                     </p>
                                 </div>
@@ -89,13 +89,13 @@
                 {% if 'authenticated' not in session %}
                 <div class="flex flex-row h-24 w-full mt-4 items-center justify-center">
                     <button class="p-1 px-3 bg-transparent border-2 border-hsl-60 text-hsl-60 text-lg
-                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60 
+                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60
                                  hover:text-gray-100 mx-2"
                             onclick="location.href = '/login';">
                         Login
                     </button>
                     <button class="p-1 px-3 bg-transparent border-2 border-hsl-60 text-hsl-60 text-lg
-                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60 
+                                   rounded-lg transition-colors duration-300 transform hover:bg-hsl-60
                                  hover:text-gray-100 mx-2"
                             onclick="location.href = '/register';">
                         Register
@@ -129,7 +129,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                         </svg>
                         <h1 class="text-xl">Recent Users</h1>
-                        
                     </div>
                     <div id="recent-users-parent">
                         <!-- XD -->
@@ -167,7 +166,7 @@
         let i = 0
         for (el of records) {
             document.getElementById('score-' + i).innerHTML = `
-                <div class="w-auto p-4 rounded-md" 
+                <div class="w-auto p-4 rounded-md"
                      style="background: linear-gradient(hsl(var(--main), 20%, 20%, 0.9),
                             hsl(var(--main), 20%, 20%, 0.8)), url(https://assets.ppy.sh/beatmaps/${el.set_id}/covers/cover.jpg);
                             background-size: cover; background-position: center;">
@@ -181,7 +180,7 @@
                     </div>
                     <div class="flex beatmap-stats">
                         <div class="beatmap-image">
-                            <img class="w-12 h-auto mr-2 rounded-md" src="https://a.{{ domain() }}/${el.userid}" 
+                            <img class="w-12 h-auto mr-2 rounded-md" src="https://a.{{ domain() }}/${el.userid}"
                                  onerror="this.src='/static/images/avatar_notwork.png';"></img>
                         </div>
                         <div class="beatmap-infomation">

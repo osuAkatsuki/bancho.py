@@ -1,7 +1,7 @@
 {% if custom == True %}
-<nav class="absolute w-full" id="navbar-c">
+<nav class="absolute w-full overflow-x-clip" id="navbar-c">
 {% else %}
-<nav class="absolute w-full" id="navbar">
+<nav class="absolute w-full overflow-x-clip" id="navbar">
 {% endif %}
 <div class="bg-hsl-50" id="navbar-colourer">
     <div class="flex flex-row items-center justify-between h-14 mx-6">
@@ -19,9 +19,9 @@
                 <button @click="open = true" class="flex items-center rounded-md px-3 py-2 pd-3.5 h-auto font-medium text-white hover:text-gray-300">
                     <span class="mr-2.5">Clans</span> <i class="fas fa-chevron-down"></i>
                 </button>
-  
+
                 <!-- Dropdown menu -->
-                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms 
+                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms
                      class="absolute right-0 w-48 py-2 mt-5 bg-hsl-10 rounded-md shadow-xl">
                     <a href="/clans/leaderboards" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
                         Clan Leaderboards
@@ -38,9 +38,9 @@
                 <button @click="open = true" class="flex items-center rounded-md px-3 py-2 pd-3.5 h-auto font-medium text-white hover:text-gray-300">
                     <span class="mr-2.5">Beatmaps</span> <i class="fas fa-chevron-down"></i>
                 </button>
-  
+
                 <!-- Dropdown menu -->
-                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms 
+                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms
                      class="absolute right-0 w-48 py-2 mt-5 bg-hsl-10 rounded-md shadow-xl">
                     <a href="/beatmaps" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
                         Beatmap Listing
@@ -49,15 +49,15 @@
                         Request Ranking
                     </a>
                 </div>
-            </div>  
+            </div>
             <div x-data="{ open: false }" @click.away="open = false" class="relative invisible w-0 sm:visible sm:w-auto">
                 <!-- Dropdown toggle button -->
                 <button @click="open = true" class="flex items-center rounded-md px-3 py-2 pd-3.5 h-auto font-medium text-white hover:text-gray-300">
                     <span class="mr-2.5">Docs</span> <i class="fas fa-chevron-down"></i>
                 </button>
-  
+
                 <!-- Dropdown menu -->
-                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms 
+                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms
                      class="absolute right-0 w-48 py-2 mt-5 bg-hsl-10 rounded-md shadow-xl">
                     <a href="/docs/rules" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
                         Rules
@@ -72,30 +72,35 @@
                         Team
                     </a>
                 </div>
-            </div> 
+            </div>
         </div>
-        <div class="invisible w-0 sm:visible sm:w-auto">
+        <div class="invisible w-0 sm:visible sm:w-auto ml-auto">
             {% if 'authenticated' in session %}
-            <!--
-            <div class="flex flex-row items-center justify-items-center">
-                <img src="https://a.seventwentyseven.xyz/4" class="h-8 w-8 mr-3 rounded-full"
-                     alt="https://a.seventwentyseven.xyz/1">
-                <a href="/u/4">
-                    <span class="font-medium mr-1">def750</span><i class="fas fa-chevron-down"></i>
-                </a>
-            </div>-->
-            <button @click="open = true" class="flex items-center rounded-md px-3 py-2 pd-3.5 h-auto font-medium text-white hover:text-gray-300">
-                <img src="https://a.seventwentyseven.xyz/4" class="h-8 w-8 mr-3 rounded-full"
-                     alt="https://a.seventwentyseven.xyz/1">
-                <span class="font-medium mr-1">def750</span><i class="fas fa-chevron-down"></i>
-            </button>
+            <div x-data="{ open: false }" @click.away="open = false" class="relative invisible w-0 sm:visible sm:w-auto">
+                <!-- Dropdown toggle button -->
+                <button @click="open = true" class="flex items-center rounded-md px-3 py-2 pd-3.5 h-auto font-medium text-white hover:text-gray-300">
+                    <div class="flex flex-row items-center justify-items-center">
+                        <img src="https://a.seventwentyseven.xyz/{{ session['user_data']['id'] }}" class="h-8 w-8 mr-3 rounded-full">
+                        <span class="font-medium mr-1">{{ session['user_data']['name'] }}</span><i class="fas fa-chevron-down"></i>
+                    </div>
+                </button>
 
-            <!-- Dropdown menu -->
-            <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms 
-                 class="absolute right-0 w-48 py-2 mt-5 bg-hsl-10 rounded-md shadow-xl">
-                <a href="/docs/rules" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
-                    Rules
-                </a>
+                <!-- Dropdown menu -->
+                <div x-show="open" x-transition:enter.duration.500ms x-transition:leave.duration.800ms
+                     class="absolute right-0 w-48 py-2 mt-5 bg-hsl-10 rounded-md shadow-xl">
+                    <a href="/u/{{ session['user_data']['id'] }}" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
+                        Profile
+                    </a>
+                    <a href="/relationships" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
+                        Friends
+                    </a>
+                    <a href="/settings" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
+                        Settings
+                    </a>
+                    <a href="/logout" class="block bg-hsl-10 hover:bg-hsl-20 px-4 py-2 text-sm text-gray-200 hover:text-hsl-70 border-l-2 border-transparent hover:border-hsl-60">
+                        Log out
+                    </a>
+                </div>
             </div>
             {% else %}
             <button class="mx-2 bg-hsl-60 hover:bg-hsl-40 text-white font-bold py-2 px-4
@@ -115,13 +120,11 @@
             </button>
             {% endif %}
         </div>
-        <div class="flex sm:hidden">
-            <button @click="isOpen = !isOpen" type="button" class="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300" aria-label="toggle menu">
-                <svg viewBox="0 0 24 24" class="h-6 w-6 fill-current">
-                    <path fill-rule="evenodd" d="M4 5h16a1 1 0 0 1 0 2H4a1 1 0 1 1 0-2zm0 6h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2zm0 6h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2z"></path>
-                </svg>
-            </button>
-        </div>
     </div>
 </div>
+<!-- Jak to zadziała to ja jestem kurwa bogiem xDDD -->
+<!-- UPDATE: DZIAŁA XDDDDDD -->
+{% if tohome == True %}
+{% include 'components/flashes.html' %}
+{% endif %}
 </nav>
