@@ -277,7 +277,7 @@ func main() {
 		wg.Add(1)
 		go func(chunk []Score) {
 			defer wg.Done()
-			recalculate_chunk(chunk, "scores_ap", 4)
+			recalculate_chunk(chunk, "scores_ap", 8)
 		}(ap_chunk)
 	}
 
