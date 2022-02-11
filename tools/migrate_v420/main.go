@@ -189,8 +189,8 @@ func main() {
 
 	vn_scores := []Score{}
 	vn_rows, err := DB.Queryx(`
-	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
-	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_vn`)
 	if err != nil {
 		fmt.Println(err)
@@ -217,8 +217,8 @@ func main() {
 
 	rx_scores := []Score{}
 	rx_rows, err := DB.Queryx(`
-	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
-	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_rx`)
 	if err != nil {
 		fmt.Println(err)
@@ -244,8 +244,8 @@ func main() {
 
 	ap_scores := []Score{}
 	ap_rows, err := DB.Queryx(`
-	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
-	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_ap`)
 	if err != nil {
 		fmt.Println(err)
