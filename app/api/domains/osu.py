@@ -1547,13 +1547,14 @@ async def get_screenshot(
     )
 
 
-@router.get("/d/{map_set_id}{no_video_arg}")
+@router.get("/d/{map_set_id}")
 async def get_osz(
-    map_set_id: int = Path(..., ge=0, le=2_147_483_647),
-    no_video_arg: Optional[str] = Path(None, max_length=1, min_length=1),
+    map_set_id: str = Path(...),
 ):
     """Handle a map download request (osu.ppy.sh/d/*)."""
-    no_video = not no_video_arg
+    no_video = map_set_id[-1] == "n"
+    if no_video:
+        map_set_id = map_set_id[:-1]
 
     if USING_CHIMU:
         query_str = f"download/{map_set_id}?n={int(not no_video)}"
