@@ -271,16 +271,17 @@ func main() {
 
 	wg.Wait()
 
-	fmt.Printf("Scores finished migrating. Do you wish to drop the old tables? (y/n)")
+	elapsed := time.Since(start)
+	fmt.Printf("Score migrator took %s\n", elapsed)
+
+	fmt.Printf("Do you wish to drop the old tables? (y/n)\n>> ")
 	var res string
 	fmt.Scanln(&res)
+	res = strings.ToLower(res)
 
 	if res == "y" {
 		DB.MustExec("drop table scores_vn")
 		DB.MustExec("drop table scores_rx")
 		DB.MustExec("drop table scores_ap")
 	}
-
-	elapsed := time.Since(start)
-	fmt.Printf("Score migrator took %s\n", elapsed)
 }
