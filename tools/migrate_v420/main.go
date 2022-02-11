@@ -189,8 +189,8 @@ func main() {
 
 	vn_scores := []Score{}
 	vn_rows, err := DB.Queryx(`
-	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
-	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_vn`)
 	if err != nil {
 		fmt.Println(err)
@@ -217,8 +217,8 @@ func main() {
 
 	rx_scores := []Score{}
 	rx_rows, err := DB.Queryx(`
-	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
-	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_rx`)
 	if err != nil {
 		fmt.Println(err)
@@ -242,7 +242,45 @@ func main() {
 		}(rx_chunk)
 	}
 
+	ap_scores := []Score{}
+	ap_rows, err := DB.Queryx(`
+	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100, 
+	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time, 
+	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_ap`)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for ap_rows.Next() {
+		score := Score{}
+		err := ap_rows.StructScan(&score)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		ap_scores = append(ap_scores, score)
+	}
+
+	for _, ap_chunk := range SplitToChunks(ap_scores, 10000).([][]Score) {
+		wg.Add(1)
+		go func(chunk []Score) {
+			defer wg.Done()
+			recalculate_chunk(chunk, "scores_ap", 4)
+		}(ap_chunk)
+	}
+
 	wg.Wait()
+
+	fmt.Printf("Scores finished migrating. Do you wish to drop the old tables? (y/n)")
+	var res string
+	fmt.Scanln(&res)
+
+	if res == "y" {
+		DB.MustExec("drop table scores_vn")
+		DB.MustExec("drop table scores_rx")
+		DB.MustExec("drop table scores_ap")
+	}
+
 	elapsed := time.Since(start)
 	fmt.Printf("Score migrator took %s\n", elapsed)
 }
