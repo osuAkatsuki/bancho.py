@@ -1165,22 +1165,19 @@ async def getScores(
     if map_md5 in app.state.cache.needs_update:
         return b"1|false"
 
-    mods = mods_arg
-    mode = mode_arg
-
-    if mods & Mods.RELAX:
-        if mode == 3:  # rx!mania doesn't exist
-            mods &= ~Mods.RELAX
+    if mods_arg & Mods.RELAX:
+        if mode_arg == 3:  # rx!mania doesn't exist
+            mods_arg &= ~Mods.RELAX
         else:
-            mode += 4
-    elif mods & Mods.AUTOPILOT:
-        if mode in (1, 2, 3):  # ap!catch, taiko and mania don't exist
-            mods &= ~Mods.AUTOPILOT
+            mode_arg += 4
+    elif mods_arg & Mods.AUTOPILOT:
+        if mode_arg in (1, 2, 3):  # ap!catch, taiko and mania don't exist
+            mods_arg &= ~Mods.AUTOPILOT
         else:
-            mode += 8
+            mode_arg += 8
 
-    mods = Mods(mods)
-    mode = GameMode(mode)
+    mods = Mods(mods_arg)
+    mode = GameMode(mode_arg)
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
