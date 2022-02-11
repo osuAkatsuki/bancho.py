@@ -7,19 +7,19 @@ import (
 	"database/sql"
 
 	"fmt"
-	"time"
-	"sync"
 	"os"
+	"sync"
+	"time"
 
 	"reflect"
 )
 
-var SQLUsername string = "gulag"
-var SQLPassword string = "a6t5PLM3wc4wksdQ"
-var SQLDatabase string = "gulag"
+var SQLUsername string = "cmyui"
+var SQLPassword string = "lol123"
+var SQLDatabase string = "gulag_old"
 var SQLHost 	string = "127.0.0.1"
 var SQLPort 	string = "3306"
-var GulagPath	string = "/home/james/gulag" // NOTE: no fucking trailing slash!!!!
+var GulagPath	string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!!!!
 
 
 var DB *sqlx.DB

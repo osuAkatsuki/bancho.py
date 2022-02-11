@@ -6,3 +6,4 @@ _testing/
 *.lprof
 ext/GeoLite2-City.mmdb
 .env
+tools/migrate_v420/go.sum
