@@ -366,6 +366,14 @@ async def top(ctx: Context) -> Optional[str]:
     if ctx.args[0] not in GAMEMODE_REPR_LIST:
         return f'Valid gamemodes: {", ".join(GAMEMODE_REPR_LIST)}.'
 
+    if ctx.args[0] in (
+        "rx!mania",
+        "ap!taiko",
+        "ap!catch",
+        "ap!mania",
+    ):
+        return "Impossible gamemode combination."
+
     if args_len == 2:
         if not regexes.USERNAME.match(ctx.args[1]):
             return "Invalid username."
