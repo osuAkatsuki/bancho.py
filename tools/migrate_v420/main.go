@@ -1,5 +1,17 @@
 package main
 
+/*
+# first install golang & dependencies
+$ apt install golang
+$ go get github.com/go-sql-driver/mysql
+$ go get github.com/jmoiron/sqlx
+
+# next, configure parameters in this file (lines 29-34)
+
+# then, build & run the binary
+$ go run .
+*/
+
 import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -8,10 +20,10 @@ import (
 
 	"fmt"
 	"os"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
-
-	"reflect"
 )
 
 var SQLUsername string = "cmyui"
