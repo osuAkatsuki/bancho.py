@@ -109,7 +109,7 @@ async def main() -> int:
             .startswith("y")
         ):
             for table in ("scores_vn", "scores_rx", "scores_ap"):
-                print(f"Dropping {table} scores")
+                print(f"Dropping {table} table")
                 await update_conn.execute(f"DROP TABLE {table}")
 
     return 0
