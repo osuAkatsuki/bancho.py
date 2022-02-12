@@ -5,6 +5,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"database/sql"
+	"sync/atomic"
 
 	"fmt"
 	"os"
@@ -112,6 +113,8 @@ INSERT INTO scores VALUES (
     :online_checksum
 )`
 
+var replays_moved int32
+
 func recalculate_chunk(chunk []Score, table string, increase int) {
 	tx := DB.MustBegin()
 	batch := 1
@@ -145,6 +148,7 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 		} else {
 			new_replay_path := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
 			os.Rename(replay_path, new_replay_path)
+			atomic.AddInt32(&replays_moved, 1)
 		}
 
 		if batch == 3000 {
@@ -281,6 +285,7 @@ func main() {
 
 	elapsed := time.Since(start)
 	fmt.Printf("Score migrator took %s\n", elapsed)
+	fmt.Printf("Moved %d replays\n", replays_moved)
 
 	fmt.Printf("Do you wish to drop the old tables? (y/n)\n>> ")
 	var res string
