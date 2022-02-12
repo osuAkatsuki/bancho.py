@@ -447,9 +447,11 @@ def ensure_dependencies_and_requirements() -> int:
             args=["./build"],
             cwd="oppai_ng",
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
         if exit_code := p.wait():
+            _, stderr = p.communicate()
+            print(stderr.decode())
             log("Failed to build oppai-ng automatically.", Ansi.LRED)
             return exit_code
 
