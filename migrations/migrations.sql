@@ -379,4 +379,6 @@ alter table users add custom_badge_name varchar(16) charset utf8 null after play
 alter table users add custom_badge_icon varchar(64) null after custom_badge_name;
 alter table users add userpage_content varchar(2048) charset utf8 null after custom_badge_icon;
 
-# please refer to tools/migrate_v420.py for migrating to v4.2.0
+# please refer to tools/migrate_v420 for further v4.2.0 migrations
+# v4.2.0
+alter table stats set mode = 8 where mode = 7;
