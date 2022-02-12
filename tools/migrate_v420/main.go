@@ -190,7 +190,7 @@ func main() {
 
 	db, err := sqlx.Open("mysql", fmt.Sprintf("%s:%s@(%s:%s)/%s", SQLUsername, SQLPassword, SQLHost, SQLPort, SQLDatabase))
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	DB = db
@@ -205,14 +205,14 @@ func main() {
 	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_vn`)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	for vn_rows.Next() {
 		score := Score{}
 		err := vn_rows.StructScan(&score)
 		if err != nil {
-			fmt.Println(err)
+			panic(err)
 		}
 
 		vn_scores = append(vn_scores, score)
@@ -224,7 +224,6 @@ func main() {
 			defer wg.Done()
 			recalculate_chunk(chunk, "scores_vn", 0)
 		}(vn_chunk)
-
 	}
 
 	rx_scores := []Score{}
@@ -233,14 +232,14 @@ func main() {
 	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_rx`)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	for rx_rows.Next() {
 		score := Score{}
 		err := rx_rows.StructScan(&score)
 		if err != nil {
-			fmt.Println(err)
+			panic(err)
 		}
 
 		rx_scores = append(rx_scores, score)
@@ -260,14 +259,14 @@ func main() {
 	n50, nmiss, ngeki, nkatu, grade, status, mode, UNIX_TIMESTAMP(play_time) AS play_time,
 	time_elapsed, client_flags, userid, perfect, online_checksum FROM scores_ap`)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	for ap_rows.Next() {
 		score := Score{}
 		err := ap_rows.StructScan(&score)
 		if err != nil {
-			fmt.Println(err)
+			panic(err)
 		}
 
 		ap_scores = append(ap_scores, score)
