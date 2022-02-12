@@ -1,17 +1,5 @@
 package main
 
-/*
-# first install golang & dependencies
-$ apt install golang
-$ go get github.com/go-sql-driver/mysql
-$ go get github.com/jmoiron/sqlx
-
-# next, configure parameters in this file (lines 29-34)
-
-# then, build & run the binary
-$ go run .
-*/
-
 import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -26,13 +14,22 @@ import (
 	"time"
 )
 
+/// MIGRATIONS INSTRUCTIONS ///
+// first install golang & dependencies
+// $ apt install golang
+// $ go get github.com/go-sql-driver/mysql
+// $ go get github.com/jmoiron/sqlx
+
+// next, configure these parameters
 var SQLUsername string = "cmyui"
 var SQLPassword string = "lol123"
 var SQLDatabase string = "gulag_old"
 var SQLHost 	string = "127.0.0.1"
 var SQLPort 	string = "3306"
-var GulagPath	string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!!!!
+var GulagPath	string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!
 
+// then, build & run the binary
+// $ go run .
 
 var DB *sqlx.DB
 
