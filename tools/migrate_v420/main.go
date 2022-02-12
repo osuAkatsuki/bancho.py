@@ -113,7 +113,7 @@ INSERT INTO scores VALUES (
     :online_checksum
 )`
 
-var replays_moved int32
+var replaysMoved int32
 
 func recalculate_chunk(chunk []Score, table string, increase int) {
 	tx := DB.MustBegin()
@@ -142,13 +142,13 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 			continue
 		}
 
-		replay_path := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, score.ID)
-		if _, err := os.Stat(replay_path); os.IsNotExist(err) {
+		oldReplayPath := fmt.Sprintf("/tmp/gulag_replays/%d.osr", score.ID)
+		if _, err := os.Stat(oldReplayPath); os.IsNotExist(err) {
 			fmt.Printf("Warning: replay file for old ID %d could not be found\n", score.ID)
 		} else {
-			new_replay_path := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
-			os.Rename(replay_path, new_replay_path)
-			atomic.AddInt32(&replays_moved, 1)
+			newReplayPath := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
+			os.Rename(oldReplayPath, newReplayPath)
+			atomic.AddInt32(&replaysMoved, 1)
 		}
 
 		if batch == 3000 {
@@ -190,6 +190,16 @@ func main() {
 	}
 
 	db, err := sqlx.Open("mysql", fmt.Sprintf("%s:%s@(%s:%s)/%s", SQLUsername, SQLPassword, SQLHost, SQLPort, SQLDatabase))
+	if err != nil {
+		panic(err)
+	}
+
+	err = os.Rename(fmt.Sprintf("%s/.data/osr", GulagPath), "/tmp/gulag_replays")
+	if err != nil {
+		panic(err)
+	}
+
+	err = os.Mkdir(fmt.Sprintf("%s/.data/osr", GulagPath), 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -283,9 +293,14 @@ func main() {
 
 	wg.Wait()
 
+	err = os.Remove("/tmp/gulag_replays")
+	if err != nil {
+		fmt.Println("There are some replays files for which scores could not be found in the database. They have been left at /tmp/gulag_replays.")
+	}
+
 	elapsed := time.Since(start)
 	fmt.Printf("Score migrator took %s\n", elapsed)
-	fmt.Printf("Moved %d replays\n", replays_moved)
+	fmt.Printf("Moved %d replays\n", replaysMoved)
 
 	fmt.Printf("Do you wish to drop the old tables? (y/n)\n>> ")
 	var res string
@@ -293,8 +308,11 @@ func main() {
 	res = strings.ToLower(res)
 
 	if res == "y" {
+		fmt.Println("Dropping old tables")
 		DB.MustExec("drop table scores_vn")
 		DB.MustExec("drop table scores_rx")
 		DB.MustExec("drop table scores_ap")
+	} else {
+		fmt.Println("Not dropping old tables")
 	}
 }
