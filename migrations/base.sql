@@ -195,63 +195,9 @@ create table ratings
 	primary key (userid, map_md5)
 );
 
-create table scores_ap
+create table scores
 (
-	id bigint(20) unsigned auto_increment
-		primary key,
-	map_md5 char(32) not null,
-	score int not null,
-	pp float(7,3) not null,
-	acc float(6,3) not null,
-	max_combo int not null,
-	mods int not null,
-	n300 int not null,
-	n100 int not null,
-	n50 int not null,
-	nmiss int not null,
-	ngeki int not null,
-	nkatu int not null,
-	grade varchar(2) default 'N' not null,
-	status tinyint not null,
-	mode tinyint not null,
-	play_time datetime not null,
-	time_elapsed int not null,
-	client_flags int not null,
-	userid int not null,
-	perfect tinyint(1) not null,
-	online_checksum char(32) not null
-);
-
-create table scores_rx
-(
-	id bigint(20) unsigned auto_increment
-		primary key,
-	map_md5 char(32) not null,
-	score int not null,
-	pp float(7,3) not null,
-	acc float(6,3) not null,
-	max_combo int not null,
-	mods int not null,
-	n300 int not null,
-	n100 int not null,
-	n50 int not null,
-	nmiss int not null,
-	ngeki int not null,
-	nkatu int not null,
-	grade varchar(2) default 'N' not null,
-	status tinyint not null,
-	mode tinyint not null,
-	play_time datetime not null,
-	time_elapsed int not null,
-	client_flags int not null,
-	userid int not null,
-	perfect tinyint(1) not null,
-	online_checksum char(32) not null
-);
-
-create table scores_vn
-(
-	id bigint(20) unsigned auto_increment
+	id bigint unsigned auto_increment
 		primary key,
 	map_md5 char(32) not null,
 	score int not null,
@@ -374,18 +320,15 @@ insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bc
 values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@gulag.ca',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
-INSERT INTO stats (id, mode) VALUES (1, 0);
-INSERT INTO stats (id, mode) VALUES (1, 1);
-INSERT INTO stats (id, mode) VALUES (1, 2);
-INSERT INTO stats (id, mode) VALUES (1, 3);
-INSERT INTO stats (id, mode) VALUES (1, 4);
-INSERT INTO stats (id, mode) VALUES (1, 5);
-INSERT INTO stats (id, mode) VALUES (1, 6);
-INSERT INTO stats (id, mode) VALUES (1, 7);
+INSERT INTO stats (id, mode) VALUES (1, 0); # vn!std
+INSERT INTO stats (id, mode) VALUES (1, 1); # vn!taiko
+INSERT INTO stats (id, mode) VALUES (1, 2); # vn!catch
+INSERT INTO stats (id, mode) VALUES (1, 3); # vn!mania
+INSERT INTO stats (id, mode) VALUES (1, 4); # rx!std
+INSERT INTO stats (id, mode) VALUES (1, 5); # rx!taiko
+INSERT INTO stats (id, mode) VALUES (1, 6); # rx!catch
+INSERT INTO stats (id, mode) VALUES (1, 8); # ap!std
 
-# offset score ids to avoid replay file collisions.
-alter table scores_rx auto_increment = 3074457345618258602;
-alter table scores_ap auto_increment = 6148914691236517204;
 
 # userid 2 is reserved for ppy in osu!, and the
 # client will not allow users to pm this id.

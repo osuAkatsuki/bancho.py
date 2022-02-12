@@ -60,7 +60,6 @@ router = APIRouter(tags=["gulag API"])
 # POST/PUT /set_player_info: update user information (updates whatever received).
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
-SCOREID_BORDERS = tuple((((1 << 63) - 1) // 3) * i for i in range(1, 4))
 
 
 def format_clan_basic(clan: "Clan") -> dict[str, object]:
@@ -286,12 +285,23 @@ async def api_get_player_scores(
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mods_arg: Optional[str] = Query(None, alias="mods"),
-    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
 ):
     """Return a list of a given user's recent/best scores."""
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if username and user_id:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
@@ -340,14 +350,14 @@ async def api_get_player_scores(
         "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
         "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
         "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
-        f"FROM {mode.scores_table} t "
+        "FROM scores t "
         "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = :user_id AND t.mode = :mode_vn",
+        "WHERE t.userid = :user_id AND t.mode = :mode",
     ]
 
     params: dict[str, object] = {
         "user_id": player.id,
-        "mode_vn": mode.as_vanilla,
+        "mode": mode,
     }
 
     if mods is not None:
@@ -411,12 +421,22 @@ async def api_get_player_scores(
 async def api_get_player_most_played(
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     if user_id is not None:
         p = await app.state.sessions.players.from_cache_or_sql(id=user_id)
@@ -442,14 +462,14 @@ async def api_get_player_most_played(
     rows = await db_conn.fetch_all(
         "SELECT m.md5, m.id, m.set_id, m.status, "
         "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
-        f"FROM {mode.scores_table} s "
+        "FROM scores s "
         "INNER JOIN maps m ON m.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
-        "AND s.mode = :mode_vn "
+        "AND s.mode = :mode "
         "GROUP BY s.map_md5 "
         "ORDER BY plays DESC "
         "LIMIT :limit",
-        {"user_id": p.id, "mode_vn": mode.as_vanilla, "limit": limit},
+        {"user_id": p.id, "mode": mode, "limit": limit},
     )
 
     return ORJSONResponse(
@@ -496,11 +516,22 @@ async def api_get_map_scores(
     map_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
     map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: Optional[str] = Query(None, alias="mods"),
-    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the top n scores on a given beatmap."""
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if map_id is not None:
         bmap = await Beatmap.from_bid(map_id)
     elif map_md5 is not None:
@@ -545,17 +576,17 @@ async def api_get_map_scores(
         "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
         "u.name player_name, "
         "c.id clan_id, c.name clan_name, c.tag clan_tag "
-        f"FROM {mode.scores_table} s "
+        "FROM scores s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
         "WHERE s.map_md5 = :map_md5 "
-        "AND s.mode = :mode_vn "
+        "AND s.mode = :mode "
         "AND s.status = 2 "
         "AND u.priv & 1",
     ]
     params: dict[str, object] = {
         "map_md5": bmap.md5,
-        "mode_vn": mode.as_vanilla,
+        "mode": mode,
     }
 
     if mods is not None:
@@ -592,24 +623,11 @@ async def api_get_score_info(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return information about a given score."""
-
-    if SCOREID_BORDERS[0] > score_id >= 1:
-        scores_table = "scores_vn"
-    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
-        scores_table = "scores_rx"
-    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
-        scores_table = "scores_ap"
-    else:
-        return ORJSONResponse(
-            {"status": "Invalid score id."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
     row = await db_conn.fetch_one(
         "SELECT map_md5, score, pp, acc, max_combo, mods, "
         "n300, n100, n50, nmiss, ngeki, nkatu, grade, status, "
         "mode, play_time, time_elapsed, perfect "
-        f"FROM {scores_table} "
+        "FROM scores "
         "WHERE id = :score_id",
         {"score_id": score_id},
     )
@@ -632,18 +650,6 @@ async def api_get_replay(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return a given replay (including headers)."""
-
-    if SCOREID_BORDERS[0] > score_id >= 1:
-        scores_table = "scores_vn"
-    elif SCOREID_BORDERS[1] > score_id >= SCOREID_BORDERS[0]:
-        scores_table = "scores_rx"
-    elif SCOREID_BORDERS[2] > score_id >= SCOREID_BORDERS[1]:
-        scores_table = "scores_ap"
-    else:
-        return ORJSONResponse(
-            {"status": "Invalid score id."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
 
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
@@ -675,7 +681,7 @@ async def api_get_replay(
         "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
         "s.nkatu, s.nmiss, s.score, s.max_combo, "
         "s.perfect, s.mods, s.play_time "
-        f"FROM {scores_table} s "
+        "FROM scores s "
         "INNER JOIN users u ON u.id = s.userid "
         "INNER JOIN maps m ON m.md5 = s.map_md5 "
         "WHERE s.id = :score_id",
@@ -809,12 +815,23 @@ async def api_get_match(
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
     sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
-    mode_arg: int = Query(0, alias="mode", ge=0, le=7),
+    mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: Optional[str] = Query(None, min_length=2, max_length=2),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
+    if mode_arg in (
+        GameMode.RELAX_MANIA,
+        GameMode.AUTOPILOT_CATCH,
+        GameMode.AUTOPILOT_TAIKO,
+        GameMode.AUTOPILOT_MANIA,
+    ):
+        return ORJSONResponse(
+            {"status": "Invalid gamemode."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     mode = GameMode(mode_arg)
 
     query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
