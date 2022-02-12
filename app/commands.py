@@ -30,7 +30,6 @@ from typing import Union
 import cmyui.utils
 import psutil
 import timeago
-from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -58,6 +57,11 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.utils import seconds_readable
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -474,7 +478,7 @@ async def _with(ctx: Context) -> Optional[str]:
         msg = []
 
         if mode_vn == 0:
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 if mods is not None:
                     ezpp.set_mods(int(mods))
                     msg.append(f"{mods!r}")
@@ -491,7 +495,7 @@ async def _with(ctx: Context) -> Optional[str]:
                     ezpp.set_accuracy_percent(acc)
                     msg.append(f"{acc:.2f}%")
 
-                ezpp.calculate(osu_file_path)
+                ezpp.calculate(str(osu_file_path))
                 pp, sr = ezpp.get_pp(), ezpp.get_sr()
 
                 return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
@@ -1196,7 +1200,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 ezpp.set_mode(0)  # TODO: other modes
                 for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
                     # TODO: this should be using an async generator
@@ -1211,7 +1215,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         ezpp.set_combo(row["max_combo"])
                         ezpp.set_accuracy_percent(row["acc"])
 
-                        ezpp.calculate(osu_file_path)
+                        ezpp.calculate(str(osu_file_path))
 
                         pp = ezpp.get_pp()
 
@@ -1256,7 +1260,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                    with OppaiWrapper() as ezpp:
                         ezpp.set_mode(0)  # TODO: other modes
                         for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
                             # TODO: this should be using an async generator
@@ -1271,7 +1275,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 ezpp.set_combo(row["max_combo"])
                                 ezpp.set_accuracy_percent(row["acc"])
 
-                                ezpp.calculate(osu_file_path)
+                                ezpp.calculate(str(osu_file_path))
 
                                 pp = ezpp.get_pp()
 

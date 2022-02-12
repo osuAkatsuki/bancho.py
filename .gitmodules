@@ -1,3 +1,3 @@
-[submodule "oppai-ng"]
-	path = oppai-ng
-	url = https://github.com/cmyui/oppai-ng
+[submodule "oppai_ng"]
+	path = oppai_ng
+	url = https://github.com/tsunyoku/oppai_ng
