@@ -430,7 +430,7 @@ def ensure_directory_structure() -> int:
 
 def ensure_dependencies_and_requirements() -> int:
     """Make sure all of gulag's dependencies are ready."""
-    if not OPPAI_PATH.exists() or not any(OPPAI_PATH.iterdir()):
+    if not OPPAI_PATH.exists() or not any((OPPAI_PATH / "pybind11").iterdir()):
         log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
         p = subprocess.Popen(
             args=["git", "submodule", "update", "--init", "--recursive"],
@@ -441,7 +441,7 @@ def ensure_dependencies_and_requirements() -> int:
             log("Failed to get git submodules.", Ansi.LRED)
             return exit_code
 
-    if not any(Path(OPPAI_PATH).glob("*.so")):  # TODO: could not be .so if windows?
+    if not (OPPAI_PATH / "oppai.so").exists():
         log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
         p = subprocess.Popen(
             args=["./build"],
