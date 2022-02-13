@@ -381,4 +381,4 @@ alter table users add userpage_content varchar(2048) charset utf8 null after cus
 
 # please refer to tools/migrate_v420 for further v4.2.0 migrations
 # v4.2.0
-alter table stats set mode = 8 where mode = 7;
+update stats set mode = 8 where mode = 7;
