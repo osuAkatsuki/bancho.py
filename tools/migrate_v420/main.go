@@ -142,6 +142,8 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 			continue
 		}
 
+		if score.Status != 0 {
+			// this is a submitted score, move the replay file as well
 		oldReplayPath := fmt.Sprintf("/tmp/gulag_replays/%d.osr", score.ID)
 		if _, err := os.Stat(oldReplayPath); os.IsNotExist(err) {
 			fmt.Printf("Warning: replay file for old ID %d could not be found\n", score.ID)
@@ -149,6 +151,7 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 			newReplayPath := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
 			os.Rename(oldReplayPath, newReplayPath)
 			atomic.AddInt32(&replaysMoved, 1)
+			}
 		}
 
 		if batch == 3000 {
