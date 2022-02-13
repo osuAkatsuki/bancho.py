@@ -30,7 +30,7 @@ async def home():
 
 @frontend.route('/test')
 async def test():
-    return await render_template('register.html', flash={"msg":"Invalid username or password."})
+    return await render_template('verify.html')
 
 @frontend.route('/login', methods=['GET'])
 async def login():

@@ -1,1 +1,41 @@
-Hello there
+{% extends 'base.html' %}
+{% block title %}Test{% endblock %}
+
+{% block header %}{% endblock %}
+
+
+{% block content %}
+<div class="flex h-auto w-full items-center justify-center min-h-screen"
+     style="background: linear-gradient(hsl(var(--main), 10%, 10%, 0.65),
+            hsl(var(--main), 10%, 10%, 0.65)), url(/static/images/home-bg-1.jpg);
+            background-position: center; background-size: cover;">
+
+    <div class="flex flex-col w-11/12 mx-auto md:w-11/12 lg:w-10/12 h-5/6">
+        <!--* Header *-->
+        <div class="backdrop-blur w-full h-14 text-xl font-medium rounded-t-lg md:rounded-t-xl
+                    flex items-center"
+             style="background: linear-gradient(hsl(var(--main), 10%, 10%, 0.9),
+                    hsl(var(--main), 15%, 10%, 0.9))">
+            <p class="flex items-center justify-items-center ml-2 sm:ml-4 md:ml-6">
+                <i class="fas fa-circle-notch fa-spin mr-1.5"></i>
+                Please activate your account
+            </p>
+        </div>
+        <div class="backdrop-blur-xl w-full h-full rounded-b-md md:rounded-b-lg"
+             style="background: linear-gradient(hsl(var(--main), 10%, 10%, 0.7),
+                    hsl(var(--main), 10%, 10%, 0.7))">
+            <div class="grid grid-rows-auto groc-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3
+                        w-11/12 md:w-10/12
+                        mx-auto mt-5 bg-hsl-30">
+                <div class="col-span-1 row-span-1 bg-hsl-50">
+                    JZ
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block bottom %}
+
+{% endblock %}
