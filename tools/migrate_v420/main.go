@@ -25,9 +25,9 @@ import (
 var SQLUsername string = "cmyui"
 var SQLPassword string = "lol123"
 var SQLDatabase string = "gulag_old"
-var SQLHost 	string = "127.0.0.1"
-var SQLPort 	string = "3306"
-var GulagPath	string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!
+var SQLHost string = "127.0.0.1"
+var SQLPort string = "3306"
+var GulagPath string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!
 
 // then, build & run the binary
 // $ go run .
@@ -35,27 +35,27 @@ var GulagPath	string = "/home/cmyui/programming/gulag" // NOTE: no trailing slas
 var DB *sqlx.DB
 
 type Score struct {
-	ID int64
-	MapMD5 string `db:"map_md5"`
-	Score int
-	PP float32
-	Acc float32
-	MaxCombo int `db:"max_combo"`
-	Mods int
-	N300 int
-	N100 int
-	N50 int
-	Nmiss int
-	Ngeki int
-	Nkatu int
-	Grade string
-	Status int
-	Mode int
-	PlayTime int64 `db:"play_time"`
-	TimeElapsed int `db:"time_elapsed"`
-	ClientFlags int `db:"client_flags"`
-	UserID int64 `db:"userid"`
-	Perfect int
+	ID             int64
+	MapMD5         string `db:"map_md5"`
+	Score          int
+	PP             float32
+	Acc            float32
+	MaxCombo       int `db:"max_combo"`
+	Mods           int
+	N300           int
+	N100           int
+	N50            int
+	Nmiss          int
+	Ngeki          int
+	Nkatu          int
+	Grade          string
+	Status         int
+	Mode           int
+	PlayTime       int64 `db:"play_time"`
+	TimeElapsed    int   `db:"time_elapsed"`
+	ClientFlags    int   `db:"client_flags"`
+	UserID         int64 `db:"userid"`
+	Perfect        int
 	OnlineChecksum sql.NullString `db:"online_checksum"`
 }
 
@@ -122,7 +122,9 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 	for _, score := range chunk {
 		score.Mode += increase
 
-		if batch == 0 { tx = DB.MustBegin() }
+		if batch == 0 {
+			tx = DB.MustBegin()
+		}
 		batch++
 
 		if !score.OnlineChecksum.Valid {
@@ -144,13 +146,13 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 
 		if score.Status != 0 {
 			// this is a submitted score, move the replay file as well
-		oldReplayPath := fmt.Sprintf("/tmp/gulag_replays/%d.osr", score.ID)
-		if _, err := os.Stat(oldReplayPath); os.IsNotExist(err) {
-			fmt.Printf("Warning: replay file for old ID %d could not be found\n", score.ID)
-		} else {
-			newReplayPath := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
-			os.Rename(oldReplayPath, newReplayPath)
-			atomic.AddInt32(&replaysMoved, 1)
+			oldReplayPath := fmt.Sprintf("/tmp/gulag_replays/%d.osr", score.ID)
+			if _, err := os.Stat(oldReplayPath); os.IsNotExist(err) {
+				fmt.Printf("Warning: replay file for old ID %d could not be found\n", score.ID)
+			} else {
+				newReplayPath := fmt.Sprintf("%s/.data/osr/%d.osr", GulagPath, new_id)
+				os.Rename(oldReplayPath, newReplayPath)
+				atomic.AddInt32(&replaysMoved, 1)
 			}
 		}
 
@@ -160,31 +162,33 @@ func recalculate_chunk(chunk []Score, table string, increase int) {
 		}
 	}
 
-	if batch != 0 { tx.Commit() }
+	if batch != 0 {
+		tx.Commit()
+	}
 }
 
 func SplitToChunks(slice interface{}, chunkSize int) interface{} {
-    sliceType := reflect.TypeOf(slice)
-    sliceVal := reflect.ValueOf(slice)
-    length := sliceVal.Len()
-    if sliceType.Kind() != reflect.Slice {
-        panic("parameter must be []T")
-    }
-    n := 0
-    if length%chunkSize > 0 {
-        n = 1
-    }
-    SST := reflect.MakeSlice(reflect.SliceOf(sliceType), 0, length/chunkSize+n)
-    st, ed := 0, 0
-    for st < length {
-        ed = st + chunkSize
-        if ed > length {
-            ed = length
-        }
-        SST = reflect.Append(SST, sliceVal.Slice(st, ed))
-        st = ed
-    }
-    return SST.Interface()
+	sliceType := reflect.TypeOf(slice)
+	sliceVal := reflect.ValueOf(slice)
+	length := sliceVal.Len()
+	if sliceType.Kind() != reflect.Slice {
+		panic("parameter must be []T")
+	}
+	n := 0
+	if length%chunkSize > 0 {
+		n = 1
+	}
+	SST := reflect.MakeSlice(reflect.SliceOf(sliceType), 0, length/chunkSize+n)
+	st, ed := 0, 0
+	for st < length {
+		ed = st + chunkSize
+		if ed > length {
+			ed = length
+		}
+		SST = reflect.Append(SST, sliceVal.Slice(st, ed))
+		st = ed
+	}
+	return SST.Interface()
 }
 
 func main() {
