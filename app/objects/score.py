@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -18,6 +17,11 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.utils import escape_enum
 from app.utils import pymysql_encode
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -190,7 +194,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int, scores_table: str) -> Optional["Score"]:
+    async def from_sql(cls, score_id: int) -> Optional["Score"]:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -200,7 +204,7 @@ class Score:
             "nmiss, ngeki, nkatu, grade, perfect, "
             "status, mode, play_time, "
             "time_elapsed, client_flags, online_checksum "
-            f"FROM {scores_table} WHERE id = :score_id",
+            "FROM scores WHERE id = :score_id",
             {"score_id": score_id},
         )
 
@@ -230,7 +234,7 @@ class Score:
             s.grade,
             s.perfect,
             s.status,
-            mode_vn,
+            s.mode,
             s.play_time,
             s.time_elapsed,
             s.client_flags,
@@ -242,7 +246,7 @@ class Score:
         s.status = SubmissionStatus(s.status)
         s.grade = Grade.from_str(s.grade)
         s.mods = Mods(s.mods)
-        s.mode = GameMode.from_params(mode_vn, s.mods)
+        s.mode = GameMode(s.mode)
         s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
@@ -301,8 +305,6 @@ class Score:
     """Methods to calculate internal data for a score."""
 
     async def calc_lb_placement(self) -> int:
-        scores_table = self.mode.scores_table
-
         if self.mode >= GameMode.RELAX_OSU:
             scoring_metric = "pp"
             score = self.pp
@@ -311,14 +313,14 @@ class Score:
             score = self.score
 
         better_scores = await app.state.services.database.fetch_val(
-            f"SELECT COUNT(*) AS c FROM {scores_table} s "
+            "SELECT COUNT(*) AS c FROM scores s "
             "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode_vn "
+            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
             "AND s.status = 2 AND u.priv & 1 "
             f"AND s.{scoring_metric} > :score",
             {
                 "map_md5": self.bmap.md5,
-                "mode_vn": self.mode.as_vanilla,
+                "mode": self.mode,
                 "score": score,
             },
             column=0,  # COUNT(*)
@@ -332,7 +334,7 @@ class Score:
         mode_vn = self.mode.as_vanilla
 
         if mode_vn == 0:  # std
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 if self.mods:
                     ezpp.set_mods(int(self.mods))
 
@@ -343,7 +345,7 @@ class Score:
                 ezpp.set_nmiss(self.nmiss)  # clobbers acc
                 ezpp.set_accuracy_percent(self.acc)
 
-                ezpp.calculate(osu_file_path)
+                ezpp.calculate(str(osu_file_path))
 
                 pp = ezpp.get_pp()
 
@@ -396,25 +398,23 @@ class Score:
 
     async def calc_status(self) -> None:
         """Calculate the submission status of a submitted score."""
-        scores_table = self.mode.scores_table
-
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
         res = await app.state.services.database.fetch_one(
-            f"SELECT id, pp FROM {scores_table} "
+            "SELECT id, pp FROM scores "
             "WHERE userid = :user_id AND map_md5 = :map_md5 "
-            "AND mode = :mode_vn AND status = 2",
+            "AND mode = :mode AND status = 2",
             {
                 "user_id": self.player.id,
                 "map_md5": self.bmap.md5,
-                "mode_vn": self.mode.as_vanilla,
+                "mode": self.mode,
             },
         )
 
         if res:
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res["id"], scores_table)
+            self.prev_best = await Score.from_sql(res["id"])
 
             # if our new score is better, update
             # both of our score's submission statuses.

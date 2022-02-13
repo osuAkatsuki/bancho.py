@@ -30,7 +30,6 @@ from typing import Union
 import cmyui.utils
 import psutil
 import timeago
-from cmyui.osu.oppai_ng import OppaiWrapper
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
@@ -40,6 +39,7 @@ import app.utils
 import settings
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
+from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
@@ -59,6 +59,11 @@ from app.objects.score import SubmissionStatus
 from app.utils import seconds_readable
 
 from cmyui.logging import log
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
+
 if TYPE_CHECKING:
     from app.objects.channel import Channel
 
@@ -377,17 +382,6 @@ async def recent(ctx: Context) -> Optional[str]:
     return " | ".join(l)
 
 
-GAMEMODE_STRINGS = (
-    "osu!vn",
-    "taiko!vn",
-    "catch!vn",
-    "mania!vn",
-    "osu!rx",
-    "taiko!rx",
-    "catch!rx",
-    "osu!ap",
-)
-
 TOP_SCORE_FMTSTR = (
     "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmaps/{bmapid} "
     "{artist} - {title} [{version}]]"
@@ -401,8 +395,16 @@ async def top(ctx: Context) -> Optional[str]:
     if (args_len := len(ctx.args)) not in (1, 2):
         return "Invalid syntax: !top <mode> (player)"
 
-    if ctx.args[0] not in GAMEMODE_STRINGS:
-        return f'Valid gamemodes: {", ".join(GAMEMODE_STRINGS)}.'
+    if ctx.args[0] not in GAMEMODE_REPR_LIST:
+        return f'Valid gamemodes: {", ".join(GAMEMODE_REPR_LIST)}.'
+
+    if ctx.args[0] in (
+        "rx!mania",
+        "ap!taiko",
+        "ap!catch",
+        "ap!mania",
+    ):
+        return "Impossible gamemode combination."
 
     if args_len == 2:
         if not regexes.USERNAME.match(ctx.args[1]):
@@ -417,14 +419,12 @@ async def top(ctx: Context) -> Optional[str]:
         # no player provided, use self
         p = ctx.player
 
-    mode_str, _, special_mode_str = ctx.args[0].partition("!")
-
-    mode = ["osu", "taiko", "catch", "mania"].index(mode_str)
-    table = f"scores_{special_mode_str}"
+    # !top rx!std
+    mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
     scores = await app.state.services.database.fetch_all(
         "SELECT s.pp, b.artist, b.title, b.version, b.id AS bmapid "
-        f"FROM {table} s "
+        "FROM scores s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
         "AND s.mode = :mode "
@@ -506,7 +506,7 @@ async def _with(ctx: Context) -> Optional[str]:
         msg = []
 
         if mode_vn == 0:
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 if mods is not None:
                     ezpp.set_mods(int(mods))
                     msg.append(f"{mods!r}")
@@ -523,7 +523,7 @@ async def _with(ctx: Context) -> Optional[str]:
                     ezpp.set_accuracy_percent(acc)
                     msg.append(f"{acc:.2f}%")
 
-                ezpp.calculate(osu_file_path)
+                ezpp.calculate(str(osu_file_path))
                 pp, sr = ezpp.get_pp(), ezpp.get_sr()
 
                 return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
@@ -1228,23 +1228,22 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+            with OppaiWrapper() as ezpp:
                 ezpp.set_mode(0)  # TODO: other modes
-                for table in ("scores_vn", "scores_rx", "scores_ap"):
-                    for (
-                        row
-                    ) in await score_select_conn.fetch_all(  # TODO: should be aiter
+                for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
+                    # TODO: this should be using an async generator
+                    for row in await score_select_conn.fetch_all(
                         "SELECT id, acc, mods, max_combo, nmiss "
-                        f"FROM {table} "
-                        "WHERE map_md5 = :map_md5 AND mode = 0",
-                        {"map_md5": bmap.md5},
+                        "FROM scores "
+                        "WHERE map_md5 = :map_md5 AND mode = :mode",
+                        {"map_md5": bmap.md5, "mode": mode},
                     ):
                         ezpp.set_mods(row["mods"])
                         ezpp.set_nmiss(row["nmiss"])  # clobbers acc
                         ezpp.set_combo(row["max_combo"])
                         ezpp.set_accuracy_percent(row["acc"])
 
-                        ezpp.calculate(osu_file_path)
+                        ezpp.calculate(str(osu_file_path))
 
                         pp = ezpp.get_pp()
 
@@ -1252,7 +1251,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                             continue
 
                         await update_conn.execute(
-                            f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
+                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
                             {"pp": pp, "score_id": row["id"]},
                         )
 
@@ -1289,22 +1288,22 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                    with OppaiWrapper() as ezpp:
                         ezpp.set_mode(0)  # TODO: other modes
-                        for table in ("scores_vn", "scores_rx", "scores_ap"):
-                            # TODO: this should probably also be an aiter
+                        for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
+                            # TODO: this should be using an async generator
                             for row in await score_select_conn.fetch_all(
                                 "SELECT id, acc, mods, max_combo, nmiss "
-                                f"FROM {table} "
-                                "WHERE map_md5 = :map_md5 AND mode = 0",
-                                {"map_md5": bmap_md5},
+                                "FROM scores "
+                                "WHERE map_md5 = :map_md5 AND mode = :mode",
+                                {"map_md5": bmap_md5, "mode": mode},
                             ):
                                 ezpp.set_mods(row["mods"])
                                 ezpp.set_nmiss(row["nmiss"])  # clobbers acc
                                 ezpp.set_combo(row["max_combo"])
                                 ezpp.set_accuracy_percent(row["acc"])
 
-                                ezpp.calculate(osu_file_path)
+                                ezpp.calculate(str(osu_file_path))
 
                                 pp = ezpp.get_pp()
 
@@ -1312,7 +1311,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                                     continue
 
                                 await update_conn.execute(
-                                    f"UPDATE {table} SET pp = :pp WHERE id = :score_id",
+                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
                                     {"pp": pp, "score_id": row["id"]},
                                 )
 
@@ -1406,12 +1405,10 @@ async def wipemap(ctx: Context) -> Optional[str]:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    async with app.state.services.database.connection() as db_conn:
-        for t in ("vn", "rx", "ap"):
-            await db_conn.execute(
-                f"DELETE FROM scores_{t} WHERE map_md5 = :map_md5",
-                {"map_md5": map_md5},
-            )
+    await app.state.services.database.execute(
+        "DELETE FROM scores WHERE map_md5 = :map_md5",
+        {"map_md5": map_md5},
+    )
 
     return "Scores wiped."
 

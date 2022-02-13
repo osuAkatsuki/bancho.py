@@ -6,9 +6,12 @@ from app.constants.mods import Mods
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("GameMode",)
+__all__ = (
+    "GAMEMODE_REPR_LIST",
+    "GameMode",
+)
 
-gm_str = (
+GAMEMODE_REPR_LIST = (
     "vn!std",
     "vn!taiko",
     "vn!catch",
@@ -16,18 +19,11 @@ gm_str = (
     "rx!std",
     "rx!taiko",
     "rx!catch",
+    "rx!mania",  # unused
     "ap!std",
-)
-
-gm_sql = (
-    "vn_std",
-    "vn_taiko",
-    "vn_catch",
-    "vn_mania",
-    "rx_std",
-    "rx_taiko",
-    "rx_catch",
-    "ap_std",
+    "ap!taiko",  # unused
+    "ap!catch",  # unused
+    "ap!mania",  # unused
 )
 
 
@@ -42,47 +38,34 @@ class GameMode(IntEnum):
     RELAX_OSU = 4
     RELAX_TAIKO = 5
     RELAX_CATCH = 6
+    RELAX_MANIA = 7  # unused
 
-    AUTOPILOT_OSU = 7
+    AUTOPILOT_OSU = 8
+    AUTOPILOT_TAIKO = 9  # unused
+    AUTOPILOT_CATCH = 10  # unused
+    AUTOPILOT_MANIA = 11  # unused
 
     @classmethod
     @functools.lru_cache(maxsize=32)
     def from_params(cls, mode_vn: int, mods: Mods) -> "GameMode":
         mode = mode_vn
-        if mods & Mods.RELAX:
+
+        if mods & Mods.AUTOPILOT:
+            mode += 8
+        elif mods & Mods.RELAX:
             mode += 4
-
-        elif mods & Mods.AUTOPILOT:
-            mode += 7
-
-        if mode > 7:  # don't apply mods if invalid
-            return cls(mode_vn)
 
         return cls(mode)
 
     @functools.cached_property
-    def scores_table(self) -> str:
-        if self.value < self.RELAX_OSU:
-            return "scores_vn"
-        elif self.value < self.AUTOPILOT_OSU:
-            return "scores_rx"
-        else:
-            return "scores_ap"
-
-    @functools.cached_property
     def as_vanilla(self) -> int:
-        if self.value == self.AUTOPILOT_OSU:
-            return 0
-
-        return self.value % 4
+        if self.value & self.AUTOPILOT_OSU:
+            return self.value - 8
+        elif self.value & self.RELAX_OSU:
+            return self.value - 4
+        else:
+            return self.value
 
     @functools.cache
     def __repr__(self) -> str:
-        return gm_str[self.value]
-
-    @functools.cache
-    def __format__(self, fmt: str) -> str:
-        if fmt == "sql":
-            return gm_sql[self.value]
-        else:
-            return str(self.value)
+        return GAMEMODE_REPR_LIST[self.value]

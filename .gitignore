@@ -12,3 +12,5 @@ zconfig.py
 .env.save
 /zenith/styles/*
 /zenith/static/css/style.css
+tools/migrate_v420/go.sum
+tools/migrate_v420/scoreMigrator

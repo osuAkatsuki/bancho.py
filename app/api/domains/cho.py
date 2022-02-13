@@ -18,7 +18,6 @@ import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import RGB
-from cmyui.osu.oppai_ng import OppaiWrapper
 from cmyui.utils import magnitude_fmt_time
 from fastapi import APIRouter
 from fastapi import Response
@@ -57,6 +56,11 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+
+try:
+    from oppai_ng.oppai import OppaiWrapper
+except ModuleNotFoundError:
+    pass  # utils will handle this for us
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
@@ -217,8 +221,20 @@ class ChangeAction(BasePacket):
         self.action = reader.read_u8()
         self.info_text = reader.read_string()
         self.map_md5 = reader.read_string()
+
         self.mods = reader.read_u32()
         self.mode = reader.read_u8()
+        if self.mods & Mods.RELAX:
+            if self.mode == 3:  # rx!mania doesn't exist
+                self.mods &= ~Mods.RELAX
+            else:
+                self.mode += 4
+        elif self.mods & Mods.AUTOPILOT:
+            if self.mode in (1, 2, 3):  # ap!catch, taiko and mania don't exist
+                self.mods &= ~Mods.AUTOPILOT
+            else:
+                self.mode += 8
+
         self.map_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
@@ -227,12 +243,6 @@ class ChangeAction(BasePacket):
         p.status.info_text = self.info_text
         p.status.map_md5 = self.map_md5
         p.status.mods = Mods(self.mods)
-
-        if p.status.mods & Mods.RELAX:
-            self.mode += 4
-        elif p.status.mods & Mods.AUTOPILOT:
-            self.mode = 7
-
         p.status.mode = GameMode(self.mode)
         p.status.map_id = self.map_id
 
@@ -1103,14 +1113,14 @@ class SendPrivateMessage(BasePacket):
                                 pp_values = []  # [(acc, pp), ...]
 
                                 if mode_vn == 0:
-                                    with OppaiWrapper("oppai-ng/liboppai.so") as ezpp:
+                                    with OppaiWrapper() as ezpp:
                                         if mods is not None:
                                             ezpp.set_mods(int(mods))
 
                                         for acc in settings.PP_CACHED_ACCS:
                                             ezpp.set_accuracy_percent(acc)
 
-                                            ezpp.calculate(osu_file_path)
+                                            ezpp.calculate(str(osu_file_path))
 
                                             pp_values.append((acc, ezpp.get_pp()))
                                 else:

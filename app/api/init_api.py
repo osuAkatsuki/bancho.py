@@ -1,6 +1,7 @@
 # #!/usr/bin/env python3.9
 import asyncio
 import os
+import pprint
 
 import aiohttp
 import orjson
@@ -8,8 +9,10 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from fastapi import FastAPI
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.requests import Request
+from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 
@@ -28,10 +31,12 @@ def init_exception_handlers(asgi_app: FastAPI) -> None:
         request: Request,
         exc: RequestValidationError,
     ) -> Response:
-        print(f"Validation error on {request.url}", "\n", exc.errors())
+        """Wrapper around 422 validation errors to print out info for devs."""
+        log(f"Validation error on {request.url}", Ansi.LRED)
+        pprint.pprint(exc.errors())
 
-        return Response(
-            content=orjson.dumps(exc.errors()),
+        return ORJSONResponse(
+            content={"detail": jsonable_encoder(exc.errors())},
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
