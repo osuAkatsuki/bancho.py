@@ -15,11 +15,11 @@ import (
 	"time"
 )
 
-/// MIGRATIONS INSTRUCTIONS ///
-// first install golang & dependencies
-// $ apt install golang
-// $ go get github.com/go-sql-driver/mysql
-// $ go get github.com/jmoiron/sqlx
+/// MIGRATION TOOL INSTRUCTIONS ///
+// first install golang from https://go.dev/doc/install
+
+// next, install the dependencies for running this tool
+// $ go get
 
 // next, configure these parameters
 var SQLUsername string = "cmyui"
@@ -29,7 +29,15 @@ var SQLHost string = "127.0.0.1"
 var SQLPort string = "3306"
 var GulagPath string = "/home/cmyui/programming/gulag" // NOTE: no trailing slash!
 
-// then, build & run the binary
+// then, build & run the binary. this will create the new
+// scores table, move all scores to the new tables, and
+// move all existing replays to their new locations.
+// NOTE: at the end, you will be prompted to delete the old
+//       scores tables. you should only do this once you are
+//       certain the migration ran without any issues.
+// NOTE: you may want to back up your gulag/.data/osr folder
+//       which contains the server's replays, just in case
+//       there are any issues.
 // $ go run .
 
 var DB *sqlx.DB
@@ -192,31 +200,36 @@ func SplitToChunks(slice interface{}, chunkSize int) interface{} {
 }
 
 func main() {
+	// start migration timer
+	start := time.Now()
+
+	// ensure gulag path exists
 	if _, err := os.Stat(GulagPath); os.IsNotExist(err) {
 		panic("Gulag path is invalid")
 	}
 
-	db, err := sqlx.Open("mysql", fmt.Sprintf("%s:%s@(%s:%s)/%s", SQLUsername, SQLPassword, SQLHost, SQLPort, SQLDatabase))
+	// connect to the database
+	dbDSN := fmt.Sprintf("%s:%s@(%s:%s)/%s", SQLUsername, SQLPassword, SQLHost, SQLPort, SQLDatabase)
+	DB = sqlx.MustConnect("mysql", dbDSN)
+
+	// move replays to temp directory
+	err := os.Rename(fmt.Sprintf("%s/.data/osr", GulagPath), "/tmp/gulag_replays")
 	if err != nil {
 		panic(err)
 	}
 
-	err = os.Rename(fmt.Sprintf("%s/.data/osr", GulagPath), "/tmp/gulag_replays")
-	if err != nil {
-		panic(err)
-	}
-
+	// create new replay directory in gulag/.data
 	err = os.Mkdir(fmt.Sprintf("%s/.data/osr", GulagPath), 0755)
 	if err != nil {
 		panic(err)
 	}
 
-	DB = db
 	var wg sync.WaitGroup
 
+	// create new scores table
 	DB.MustExec(create_scores)
-	start := time.Now()
 
+	// migrate vn_scores table
 	vn_scores := []Score{}
 	vn_rows, err := DB.Queryx(`
 	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
@@ -244,6 +257,7 @@ func main() {
 		}(vn_chunk)
 	}
 
+	// migrate rx_scores table
 	rx_scores := []Score{}
 	rx_rows, err := DB.Queryx(`
 	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
@@ -271,6 +285,7 @@ func main() {
 		}(rx_chunk)
 	}
 
+	// migrate ap_scores table
 	ap_scores := []Score{}
 	ap_rows, err := DB.Queryx(`
 	SELECT id, map_md5, score, pp, acc, max_combo, mods, n300, n100,
@@ -298,18 +313,22 @@ func main() {
 		}(ap_chunk)
 	}
 
+	// wait for all migrations to complete
 	wg.Wait()
 
+	// attempt to remove the temp replays directory
 	err = os.Remove("/tmp/gulag_replays")
 	if err != nil {
 		fmt.Println("There are some replays files for which scores could not be found in the database. They have been left at /tmp/gulag_replays.")
 	}
 
+	// print elapsed time spent migrating
 	elapsed := time.Since(start)
 	fmt.Printf("Score migrator took %s\n", elapsed)
 	fmt.Printf("Moved %d replays\n", replaysMoved)
 
-	fmt.Printf("Do you wish to drop the old tables? (y/n)\n>> ")
+	// prompt user to delete the old scores tables if they're certain everything is successful
+	fmt.Printf("Do you wish to drop the old tables? [only do this if you're certain migrations have been successful] (y/n)\n>> ")
 	var res string
 	fmt.Scanln(&res)
 	res = strings.ToLower(res)
