@@ -536,14 +536,14 @@ class Player:
             async with app.state.services.database.connection() as db_conn:
                 await self.stats_from_sql_full(db_conn)
 
-        for idx, mode_stat in enumerate(self.stats.values()):
+        for mode, stats in self.stats.items():
             await app.state.services.redis.zadd(
-                f"gulag:leaderboard:{idx}",
-                {self.id: mode_stat.pp},
+                f"gulag:leaderboard:{mode.value}",
+                {self.id: stats.pp},
             )
             await app.state.services.redis.zadd(
-                f"gulag:leaderboard:{idx}:{self.geoloc['country']['acronym']}",
-                {self.id: mode_stat.pp},
+                f"gulag:leaderboard:{mode.value}:{self.geoloc['country']['acronym']}",
+                {self.id: stats.pp},
             )
 
         if "restricted" in self.__dict__:
