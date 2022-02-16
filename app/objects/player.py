@@ -495,7 +495,7 @@ class Player:
             {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
         )
 
-        for mode in range(8):
+        for mode in (0, 1, 2, 3, 4, 5, 6, 8):
             await app.state.services.redis.zrem(
                 f"gulag:leaderboard:{mode}",
                 self.id,
