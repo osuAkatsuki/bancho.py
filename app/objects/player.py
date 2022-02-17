@@ -495,6 +495,16 @@ class Player:
             {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
         )
 
+        for mode in (0, 1, 2, 3, 4, 5, 6, 8):
+            await app.state.services.redis.zrem(
+                f"gulag:leaderboard:{mode}",
+                self.id,
+            )
+            await app.state.services.redis.zrem(
+                f'gulag:leaderboard:{mode}:{self.geoloc["country"]["acronym"]}',
+                self.id,
+            )
+
         if "restricted" in self.__dict__:
             del self.restricted  # wipe cached_property
 
@@ -521,6 +531,20 @@ class Player:
             "VALUES (:from, :to, :action, :msg, NOW())",
             {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
         )
+
+        if not self.stats:
+            async with app.state.services.database.connection() as db_conn:
+                await self.stats_from_sql_full(db_conn)
+
+        for mode, stats in self.stats.items():
+            await app.state.services.redis.zadd(
+                f"gulag:leaderboard:{mode.value}",
+                {self.id: stats.pp},
+            )
+            await app.state.services.redis.zadd(
+                f"gulag:leaderboard:{mode.value}:{self.geoloc['country']['acronym']}",
+                {self.id: stats.pp},
+            )
 
         if "restricted" in self.__dict__:
             del self.restricted  # wipe cached_property
