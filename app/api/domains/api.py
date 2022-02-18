@@ -187,13 +187,13 @@ async def api_get_player_info(
         for idx, mode_stats in enumerate([dict(row) for row in rows]):
             rank = await app.state.services.redis.zrevrank(
                 f"gulag:leaderboard:{idx}",
-                resolved_user_id,
+                str(resolved_user_id),
             )
             mode_stats["rank"] = rank + 1 if rank is not None else 0
 
             country_rank = await app.state.services.redis.zrevrank(
                 f"gulag:leaderboard:{idx}:{resolved_country}",
-                resolved_user_id,
+                str(resolved_user_id),
             )
             mode_stats["country_rank"] = (
                 country_rank + 1 if country_rank is not None else 0
