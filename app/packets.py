@@ -10,10 +10,10 @@ from functools import cache
 from functools import lru_cache
 from typing import Any
 from typing import Callable
+from typing import Collection
 from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
-from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import Union
 
@@ -581,7 +581,7 @@ def write_string(s: str) -> bytes:
     return ret
 
 
-def write_i32_list(l: Sequence[int]) -> bytearray:
+def write_i32_list(l: Collection[int]) -> bytearray:
     """Write `l` into bytes (int32 list)."""
     ret = bytearray(len(l).to_bytes(2, "little"))
 
@@ -703,7 +703,7 @@ _noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
     osuTypes.string: write_string,
     osuTypes.i32_list: write_i32_list,
     osuTypes.scoreframe: write_scoreframe,
-    # TODO: write replayframe & bundle?
+    # TODO: write replayframe & bundle
 }
 
 _expand_types: dict[osuTypes, Callable[..., bytearray]] = {
@@ -735,9 +735,11 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 # packets
 #
 
+# TODO: fix consistency of parameter names
+
 # packet id: 5
 @cache
-def user_id(id: int) -> bytes:
+def user_id(user_id: int) -> bytes:
     # id responses:
     # -1: authentication failed
     # -2: old client
@@ -748,7 +750,7 @@ def user_id(id: int) -> bytes:
     # -7: password reset
     # -8: requires verification
     # ??: valid id
-    return write(ServerPackets.USER_ID, (id, osuTypes.i32))
+    return write(ServerPackets.USER_ID, (user_id, osuTypes.i32))
 
 
 # packet id: 7
@@ -814,11 +816,51 @@ def bot_stats(p: "Player") -> bytes:
 
 
 # packet id: 11
+def _user_stats(
+    user_id: int,
+    action: int,
+    info_text: str,
+    map_md5: str,
+    mods: int,
+    mode: int,
+    map_id: int,
+    ranked_score: int,
+    accuracy: float,
+    plays: int,
+    total_score: int,
+    global_rank: int,
+    pp: int,
+) -> bytes:
+    if pp > 0x7FFF:
+        # HACK: if pp is over osu!'s ingame cap,
+        # we can instead display it as ranked score
+        ranked_score = pp
+        pp = 0
+
+    return write(
+        ServerPackets.USER_STATS,
+        (user_id, osuTypes.i32),
+        (action, osuTypes.u8),
+        (info_text, osuTypes.string),
+        (map_md5, osuTypes.string),
+        (mods, osuTypes.i32),
+        (mode, osuTypes.u8),
+        (map_id, osuTypes.i32),
+        (ranked_score, osuTypes.i64),
+        (accuracy / 100.0, osuTypes.f32),
+        (plays, osuTypes.i32),
+        (total_score, osuTypes.i64),
+        (global_rank, osuTypes.i32),
+        (pp, osuTypes.i16),  # why not u16 peppy :(
+    )
+
+
+# TODO: this is gulag-specific, move it out
 def user_stats(p: "Player") -> bytes:
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7FFF:
-        # over osu! pp cap, we'll have to
-        # show their pp as ranked score.
+        # HACK: if pp is over osu!'s ingame cap,
+        # we can instead display it as ranked score
         rscore = gm_stats.pp
         pp = 0
     else:
@@ -845,20 +887,20 @@ def user_stats(p: "Player") -> bytes:
 
 # packet id: 12
 @cache
-def logout(userID: int) -> bytes:
-    return write(ServerPackets.USER_LOGOUT, (userID, osuTypes.i32), (0, osuTypes.u8))
+def logout(user_id: int) -> bytes:
+    return write(ServerPackets.USER_LOGOUT, (user_id, osuTypes.i32), (0, osuTypes.u8))
 
 
 # packet id: 13
 @cache
-def spectator_joined(id: int) -> bytes:
-    return write(ServerPackets.SPECTATOR_JOINED, (id, osuTypes.i32))
+def spectator_joined(user_id: int) -> bytes:
+    return write(ServerPackets.SPECTATOR_JOINED, (user_id, osuTypes.i32))
 
 
 # packet id: 14
 @cache
-def spectator_left(id: int) -> bytes:
-    return write(ServerPackets.SPECTATOR_LEFT, (id, osuTypes.i32))
+def spectator_left(user_id: int) -> bytes:
+    return write(ServerPackets.SPECTATOR_LEFT, (user_id, osuTypes.i32))
 
 
 # packet id: 15
@@ -877,8 +919,8 @@ def version_update() -> bytes:
 
 # packet id: 22
 @cache
-def spectator_cant_spectate(id: int) -> bytes:
-    return write(ServerPackets.SPECTATOR_CANT_SPECTATE, (id, osuTypes.i32))
+def spectator_cant_spectate(user_id: int) -> bytes:
+    return write(ServerPackets.SPECTATOR_CANT_SPECTATE, (user_id, osuTypes.i32))
 
 
 # packet id: 23
@@ -911,7 +953,7 @@ def dispose_match(id: int) -> bytes:
 
 # packet id: 34
 @cache
-def toggle_block_non_friend_pm() -> bytes:
+def toggle_block_non_friend_dm() -> bytes:
     return write(ServerPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)
 
 
@@ -928,14 +970,14 @@ def match_join_fail() -> bytes:
 
 # packet id: 42
 @cache
-def fellow_spectator_joined(id: int) -> bytes:
-    return write(ServerPackets.FELLOW_SPECTATOR_JOINED, (id, osuTypes.i32))
+def fellow_spectator_joined(user_id: int) -> bytes:
+    return write(ServerPackets.FELLOW_SPECTATOR_JOINED, (user_id, osuTypes.i32))
 
 
 # packet id: 43
 @cache
-def fellow_spectator_left(id: int) -> bytes:
-    return write(ServerPackets.FELLOW_SPECTATOR_LEFT, (id, osuTypes.i32))
+def fellow_spectator_left(user_id: int) -> bytes:
+    return write(ServerPackets.FELLOW_SPECTATOR_LEFT, (user_id, osuTypes.i32))
 
 
 # packet id: 46
@@ -1023,7 +1065,7 @@ def bancho_privileges(priv: int) -> bytes:
 
 
 # packet id: 72
-def friends_list(*friends: int) -> bytes:
+def friends_list(friends: Collection[int]) -> bytes:
     return write(ServerPackets.FRIENDS_LIST, (friends, osuTypes.i32_list))
 
 
@@ -1058,8 +1100,8 @@ def monitor() -> bytes:
 
 # packet id: 81
 @cache
-def match_player_skipped(pid: int) -> bytes:
-    return write(ServerPackets.MATCH_PLAYER_SKIPPED, (pid, osuTypes.i32))
+def match_player_skipped(user_id: int) -> bytes:
+    return write(ServerPackets.MATCH_PLAYER_SKIPPED, (user_id, osuTypes.i32))
 
 
 # since the bot is always online and is
@@ -1082,6 +1124,31 @@ def bot_presence(p: "Player") -> bytes:
 
 
 # packet id: 83
+def _user_presence(
+    user_id: int,
+    name: str,
+    utc_offset: int,
+    country_code: int,
+    bancho_privileges: int,
+    mode: int,
+    latitude: int,
+    longitude: int,
+    global_rank: int,
+) -> bytes:
+    return write(
+        ServerPackets.USER_PRESENCE,
+        (user_id, osuTypes.i32),
+        (name, osuTypes.string),
+        (utc_offset + 24, osuTypes.u8),
+        (country_code, osuTypes.u8),
+        (bancho_privileges | (mode << 5), osuTypes.u8),
+        (longitude, osuTypes.f32),
+        (latitude, osuTypes.f32),
+        (global_rank, osuTypes.i32),
+    )
+
+
+# TODO: this is gulag-specific, move it out
 def user_presence(p: "Player") -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
@@ -1129,21 +1196,21 @@ def silence_end(delta: int) -> bytes:
 
 # packet id: 94
 @cache
-def user_silenced(pid: int) -> bytes:
-    return write(ServerPackets.USER_SILENCED, (pid, osuTypes.i32))
+def user_silenced(user_id: int) -> bytes:
+    return write(ServerPackets.USER_SILENCED, (user_id, osuTypes.i32))
 
 
 """ not sure why 95 & 96 exist? unused in gulag """
 
 # packet id: 95
 @cache
-def user_presence_single(pid: int) -> bytes:
-    return write(ServerPackets.USER_PRESENCE_SINGLE, (pid, osuTypes.i32))
+def user_presence_single(user_id: int) -> bytes:
+    return write(ServerPackets.USER_PRESENCE_SINGLE, (user_id, osuTypes.i32))
 
 
 # packet id: 96
-def user_presence_bundle(pid_list: list[int]) -> bytes:
-    return write(ServerPackets.USER_PRESENCE_BUNDLE, (pid_list, osuTypes.i32_list))
+def user_presence_bundle(user_ids: Collection[int]) -> bytes:
+    return write(ServerPackets.USER_PRESENCE_BUNDLE, (user_ids, osuTypes.i32_list))
 
 
 # packet id: 100

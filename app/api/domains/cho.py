@@ -761,7 +761,7 @@ async def login(
         icon_url=settings.MENU_ICON_URL,
         onclick_url=settings.MENU_ONCLICK_URL,
     )
-    data += app.packets.friends_list(*p.friends)
+    data += app.packets.friends_list(p.friends)
     data += app.packets.silence_end(p.remaining_silence)
 
     # update our new player's stats, and broadcast them.
@@ -2025,7 +2025,10 @@ class UserPresenceRequestAll(BasePacket):
 
         p.enqueue(
             b"".join(
-                map(app.packets.user_presence, app.state.sessions.players.unrestricted),
+                map(
+                    app.packets.user_presence,
+                    app.state.sessions.players.unrestricted,
+                ),
             ),
         )
 
