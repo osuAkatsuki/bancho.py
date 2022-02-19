@@ -15,23 +15,23 @@ stack with something more easily maintainable, reliable, scalable, and feature-r
 git clone https://github.com/osuAkatsuki/gulag.git && cd gulag
 
 # clone the submodules (oppai-ng)
-git submodule init && git submodule update
+git submodule update --init
 
 # python3.9 is often not available natively
 # https://github.com/deadsnakes/python3.9
-sudo add-apt-repository ppa:deadsnakes/ppa
+sudo add-apt-repository ppa:deadsnakes
 
 # install project requirements (separate programs)
-sudo apt install python3.9 python3.9-dev python3.9-distutils cmake \
-                 mysql-server redis-server nginx build-essential certbot
+sudo apt install python3.9-dev python3.9-distutils cmake build-essential \
+                 mysql-server redis-server nginx certbot
 
 # install pip for python3.9
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # install gulag's python requirements
-python3.9 -m pip install -U pip setuptools \
-                         -r requirements.txt
+python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -r requirements.txt
 
 # setup pre-commit's git hooks
 # https://pre-commit.com/
