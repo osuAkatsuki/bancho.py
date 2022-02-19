@@ -43,6 +43,7 @@ def init_exception_handlers(asgi_app: FastAPI) -> None:
 
 def init_middlewares(asgi_app: FastAPI) -> None:
     """Initialize our app's middleware stack."""
+    asgi_app.add_middleware(middlewares.MetricsMiddleware)
 
     @asgi_app.middleware("http")
     async def http_middleware(
@@ -64,8 +65,6 @@ def init_middlewares(asgi_app: FastAPI) -> None:
 
             # unrelated issue, raise normally
             raise exc
-
-    asgi_app.add_middleware(middlewares.MetricsMiddleware)
 
 
 def init_events(asgi_app: FastAPI) -> None:
