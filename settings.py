@@ -25,7 +25,7 @@ COMMAND_PREFIX: str = config("COMMAND_PREFIX", default="!")
 SEASONAL_BGS: CommaSeparatedStrings = config(
     "SEASONAL_BGS",
     cast=CommaSeparatedStrings,
-    default=",".join(
+    default=CommaSeparatedStrings(
         [
             "https://akatsuki.pw/static/flower.png",
             "https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg",
