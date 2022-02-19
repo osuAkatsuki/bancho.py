@@ -1,5 +1,6 @@
 import inspect
 import io
+import ipaddress
 import os
 import shutil
 import socket
@@ -41,7 +42,8 @@ __all__ = (
     "running_via_asgi_webserver",
     "_install_synchronous_excepthook",
     "get_appropriate_stacktrace",
-    "is_inet_address",
+    "is_valid_inet_address",
+    "is_valid_unix_address",
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
@@ -325,14 +327,19 @@ def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str
     ]
 
 
-def is_inet_address(addr: Union[tuple[str, int], str]) -> bool:
-    """Check whether addr is of type tuple[str, int]."""
-    return (
-        isinstance(addr, tuple)
-        and len(addr) == 2
-        and isinstance(addr[0], str)
-        and isinstance(addr[1], int)
-    )
+def is_valid_inet_address(address: str) -> bool:
+    """Check whether address is a valid ipv(4/6) address."""
+    try:
+        ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    else:
+        return True
+
+
+def is_valid_unix_address(address: str) -> bool:
+    """Check whether address is a valid unix address."""
+    return address.endswith(".sock")  # TODO: improve
 
 
 T = TypeVar("T")

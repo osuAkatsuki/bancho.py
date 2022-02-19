@@ -6,7 +6,6 @@ __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"
 __discord__ = "cmyui#0425"
 
-import ipaddress
 import logging
 import os
 
@@ -44,20 +43,23 @@ def main() -> int:
     # show info & any contextual warnings.
     app.utils.display_startup_dialog()
 
-    # figure out whether we're using an inet, or unix address
-    try:
-        ipaddress.ip_address(settings.SERVER_ADDR)
-    except ValueError:
-        if not (
-            settings.SERVER_PORT is None and settings.SERVER_ADDR.endswith(".sock")
-        ):
-            raise ValueError(
-                "%r does not appear to be an IPv4, IPv6 or Unix address"
-                % settings.SERVER_ADDR,
-            ) from None
+    # the server supports both inet and unix sockets.
 
-        # unix address
-        server_arguments = {"uds": settings.SERVER_ADDR}
+    if (
+        app.utils.is_valid_inet_address(settings.SERVER_ADDR)
+        and settings.SERVER_PORT is not None
+    ):
+        server_arguments = {
+            "host": settings.SERVER_ADDR,
+            "port": settings.SERVER_PORT,
+        }
+    elif (
+        app.utils.is_valid_unix_address(settings.SERVER_ADDR)
+        and settings.SERVER_PORT is None
+    ):
+        server_arguments = {
+            "uds": settings.SERVER_ADDR,
+        }
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
@@ -72,11 +74,10 @@ def main() -> int:
             else:
                 os.remove(settings.SERVER_ADDR)
     else:
-        # inet address
-        server_arguments = {
-            "host": settings.SERVER_ADDR,
-            "port": settings.SERVER_PORT,
-        }
+        raise ValueError(
+            "%r does not appear to be an IPv4, IPv6 or Unix address"
+            % settings.SERVER_ADDR,
+        ) from None
 
     # run the server indefinitely
     uvicorn.run(
