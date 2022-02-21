@@ -6,8 +6,12 @@ __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"
 __discord__ = "cmyui#0425"
 
-import logging
 import os
+
+# set working directory to the gulag/ directory.
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
+import logging
 
 import uvicorn
 from cmyui.logging import Ansi
