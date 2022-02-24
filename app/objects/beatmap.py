@@ -38,6 +38,9 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     if settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
+    if not settings.OSU_API_KEY:
+        return
+
     params["k"] = str(settings.OSU_API_KEY)
 
     async with app.state.services.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
