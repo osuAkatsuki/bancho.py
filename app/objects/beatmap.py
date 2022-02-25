@@ -28,14 +28,12 @@ __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
-OSUAPI_GET_BEATMAPS = "https://old.ppy.sh/api/get_beatmaps"
-
 DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
+async def osuapiv1_getbeatmaps(**params: str) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if app.settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
@@ -45,7 +43,11 @@ async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
 
     params["k"] = str(app.settings.OSU_API_KEY)
 
-    async with app.state.services.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
+    # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
+    async with app.state.services.http.get(
+        url="https://old.ppy.sh/api/get_beatmaps",
+        params=params,
+    ) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
             return await resp.json()
 
