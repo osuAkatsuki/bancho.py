@@ -1047,9 +1047,9 @@ _fake_users = []
 @command(Privileges.DEVELOPER, aliases=["fu"])
 async def fakeusers(ctx: Context) -> Optional[str]:
     """Add fake users to the online player list (for testing)."""
-    # NOTE: this is mostly just for speedtesting things
-    # regarding presences/stats. it's implementation is
-    # indeed quite cursed, but rather efficient.
+    # NOTE: this function is *very* performance-oriented.
+    #       the implementation is pretty cursed.
+
     if (
         len(ctx.args) != 2
         or ctx.args[0] not in ("add", "rm")
@@ -1060,7 +1060,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     action = ctx.args[0]
     amount = int(ctx.args[1])
     if not 0 < amount <= 100_000:
-        return "Amount must be in range 0-100k."
+        return "Amount must be in range 1-100k."
 
     # we start at half way through
     # the i32 space for fake user ids.
@@ -1071,61 +1071,70 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     data = bytearray()
 
     if action == "add":
-        const_uinfo = {  # non important stuff
-            "utc_offset": 0,
-            "osu_ver": "dn",
-            "pm_private": False,
-            "clan": None,
-            "clan_priv": None,
-            "priv": Privileges.NORMAL | Privileges.VERIFIED,
-            "silence_end": 0,
-            "login_time": 0x7FFFFFFF,  # never auto-dc
-        }
+        ## create static data - no need to redo everything for each iteration
+        # NOTE: this is where most of the efficiency of this command comes from
 
-        _stats = app.packets.user_stats(ctx.player)
+        static_player = Player(
+            id=0,
+            name="",
+            utc_offset=0,
+            osu_ver="",
+            pm_private=False,
+            clan=None,
+            clan_priv=None,
+            priv=Privileges.NORMAL | Privileges.VERIFIED,
+            silence_end=0,
+            login_time=0x7FFFFFFF,  # never auto-dc
+        )
 
+        static_player.stats[GameMode.VANILLA_OSU] = copy.copy(
+            ctx.player.stats[GameMode.VANILLA_OSU],
+        )
+
+        static_presence = struct.pack(
+            "<BBBffi",
+            -5 + 24,  # timezone (-5 GMT: EST)
+            38,  # country (canada)
+            0b11111,  # all in-game privs
+            0.0,  # latitude
+            0.0,  # longitude
+            1,  # global rank
+        )
+
+        static_stats = app.packets.user_stats(ctx.player)
+
+        ## create new fake players
+        new_fakes = []
+
+        # get the current number of fake users
         if _fake_users:
             current_fakes = max([x.id for x in _fake_users]) - (FAKE_ID_START - 1)
         else:
             current_fakes = 0
 
-        start_id = FAKE_ID_START + current_fakes
-        end_id = start_id + amount
-        vn_std = GameMode.VANILLA_OSU
+        start_user_id = FAKE_ID_START + current_fakes
+        end_user_id = start_user_id + amount
 
-        base_player = Player(id=0, name="", **const_uinfo)
-        base_player.stats[vn_std] = copy.copy(ctx.player.stats[vn_std])
-        new_fakes = []
+        # XXX: very hot (blocking) loop, can run up to 100k times.
+        #      performance improvements are very welcome!
+        for fake_user_id in range(start_user_id, end_user_id):
+            # create new fake player, using the static data as a base
+            fake = copy.copy(static_player)
+            fake.id = fake_user_id
+            fake.name = (name := f"fake #{fake_user_id - (FAKE_ID_START - 1)}")
 
-        # static part of the presence packet,
-        # no need to redo this every iteration.
-        static_presence = struct.pack(
-            "<BBBffi",
-            19,  # -5 (EST) + 24
-            38,  # country (canada)
-            0b11111,  # all in-game privs
-            0.0,
-            0.0,  # lat, lon
-            1,  # rank #1
-        )
-
-        for i in range(start_id, end_id):
-            # create new fake player from base
-            name = f"fake #{i - (FAKE_ID_START - 1)}"
-            fake = copy.copy(base_player)
-            fake.id = i
-            fake.name = name
+            name_len = len(name)
 
             # append userpresence packet
             data += struct.pack(
                 "<HxIi",
-                83,
-                21 + len(name),
-                i,  # packetid  # packet len  # userid
+                83,  # packetid
+                21 + name_len,  # packet len
+                fake_user_id,  # userid
             )
-            data += f"\x0b{chr(len(name))}{name}".encode()
+            data += f"\x0b{chr(name_len)}{name}".encode()  # username (hacky uleb)
             data += static_presence
-            data += _stats
+            data += static_stats
 
             new_fakes.append(fake)
 
@@ -1138,7 +1147,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     else:  # remove
         len_fake_users = len(_fake_users)
         if amount > len_fake_users:
-            return f"Too many! only {len_fake_users} remaining."
+            return f"Too many! Only {len_fake_users} fake users remain."
 
         to_remove = _fake_users[len_fake_users - amount :]
         logout_packet_header = b"\x0c\x00\x00\x05\x00\x00\x00"
