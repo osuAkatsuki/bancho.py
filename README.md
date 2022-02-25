@@ -119,10 +119,10 @@ nano .env
     |   |
     |   ├── bg_loops.py           # loops running while the server is running
     |   ├── commands.py           # commands available in osu!'s chat
-    |   └── packets.py            # a module for (de)serialization of osu! packets
+    |   ├── packets.py            # a module for (de)serialization of osu! packets
+    |   └── settings.py           # manages configuration values from the user
     |
     ├── ext                   # external entities used when running the server
     ├── migrations            # database migrations - updates to schema
     ├── tools                 # various tools made throughout gulag's history
-    ├── main.py               # an entry point (script) to run the server
-    └── settings.py           # manages configuration values from the user
+    └── main.py               # an entry point (script) to run the server

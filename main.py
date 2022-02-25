@@ -18,7 +18,7 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 
 import app.utils
-import settings
+import app.settings
 
 
 def main() -> int:
@@ -50,50 +50,53 @@ def main() -> int:
     # the server supports both inet and unix sockets.
 
     if (
-        app.utils.is_valid_inet_address(settings.SERVER_ADDR)
-        and settings.SERVER_PORT is not None
+        app.utils.is_valid_inet_address(app.settings.SERVER_ADDR)
+        and app.settings.SERVER_PORT is not None
     ):
         server_arguments = {
-            "host": settings.SERVER_ADDR,
-            "port": settings.SERVER_PORT,
+            "host": app.settings.SERVER_ADDR,
+            "port": app.settings.SERVER_PORT,
         }
     elif (
-        app.utils.is_valid_unix_address(settings.SERVER_ADDR)
-        and settings.SERVER_PORT is None
+        app.utils.is_valid_unix_address(app.settings.SERVER_ADDR)
+        and app.settings.SERVER_PORT is None
     ):
         server_arguments = {
-            "uds": settings.SERVER_ADDR,
+            "uds": app.settings.SERVER_ADDR,
         }
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
-        if os.path.exists(settings.SERVER_ADDR):
-            if app.utils.processes_listening_on_unix_socket(settings.SERVER_ADDR) != 0:
+        if os.path.exists(app.settings.SERVER_ADDR):
+            if (
+                app.utils.processes_listening_on_unix_socket(app.settings.SERVER_ADDR)
+                != 0
+            ):
                 log(
-                    f"There are other processes listening on {settings.SERVER_ADDR}.\n"
+                    f"There are other processes listening on {app.settings.SERVER_ADDR}.\n"
                     f"If you've lost it, gulag can be killed gracefully with SIGINT.",
                     Ansi.LRED,
                 )
                 return 1
             else:
-                os.remove(settings.SERVER_ADDR)
+                os.remove(app.settings.SERVER_ADDR)
     else:
         raise ValueError(
             "%r does not appear to be an IPv4, IPv6 or Unix address"
-            % settings.SERVER_ADDR,
+            % app.settings.SERVER_ADDR,
         ) from None
 
     # run the server indefinitely
     uvicorn.run(
         "app.api.init_api:asgi_app",
-        reload=settings.DEBUG,
+        reload=app.settings.DEBUG,
         log_level=logging.WARNING,
         server_header=False,
         date_header=False,
         # TODO: uvicorn calls .lower() on the key & value,
         #       but i would prefer Gulag-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("gulag-version", settings.VERSION),),
+        headers=(("gulag-version", app.settings.VERSION),),
         **server_arguments,
     )
 

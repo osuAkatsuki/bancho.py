@@ -17,8 +17,8 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 
 import app.packets
+import app.settings
 import app.state
-import settings
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
@@ -322,7 +322,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://{settings.DOMAIN}/u/{self.id}"
+        return f"https://{app.settings.DOMAIN}/u/{self.id}"
 
     @cached_property
     def embed(self) -> str:
@@ -338,7 +338,7 @@ class Player:
         # NOTE: this is currently never wiped because
         # domain & id cannot be changed in-game; if this
         # ever changes, it will need to be wiped.
-        return f"https://a.{settings.DOMAIN}/{self.id}"
+        return f"https://a.{app.settings.DOMAIN}/{self.id}"
 
     @cached_property
     def full_name(self) -> str:
@@ -512,7 +512,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
@@ -553,7 +553,7 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http)
 
@@ -666,7 +666,7 @@ class Player:
     def leave_match(self) -> None:
         """Attempt to remove `self` from their match."""
         if not self.match:
-            if settings.DEBUG:
+            if app.settings.DEBUG:
                 log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
@@ -770,7 +770,7 @@ class Player:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
-        if settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{self} joined {c}.")
 
         return True
@@ -801,7 +801,7 @@ class Player:
                 if c.can_read(p.priv):
                     p.enqueue(chan_info_packet)
 
-        if settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"{self} left {c}.")
 
     def add_spectator(self, p: "Player") -> None:

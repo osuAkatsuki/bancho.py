@@ -13,9 +13,9 @@ from typing import Optional
 from cmyui.logging import Ansi
 from cmyui.logging import log
 
+import app.settings
 import app.state
 import app.utils
-import settings
 from app.constants.gamemodes import GameMode
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -35,13 +35,13 @@ IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 async def osuapiv1_getbeatmaps(**params) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
-    if settings.DEBUG:
+    if app.settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    if not settings.OSU_API_KEY:
+    if not app.settings.OSU_API_KEY:
         return
 
-    params["k"] = str(settings.OSU_API_KEY)
+    params["k"] = str(app.settings.OSU_API_KEY)
 
     async with app.state.services.http.get(OSUAPI_GET_BEATMAPS, params=params) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
@@ -60,7 +60,7 @@ async def ensure_local_osu_file(
         or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
-        if settings.DEBUG:
+        if app.settings.DEBUG:
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
@@ -318,7 +318,7 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f"https://osu.{settings.DOMAIN}/beatmaps/{self.id}"
+        return f"https://osu.{app.settings.DOMAIN}/beatmaps/{self.id}"
 
     @property
     def embed(self) -> str:
@@ -604,7 +604,7 @@ class BeatmapSet:
     @property
     def url(self) -> str:  # same as above, just no beatmap id
         """The online url for this beatmap set."""
-        return f"https://osu.{settings.DOMAIN}/beatmapsets/{self.id}"
+        return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
 
     @functools.cache
     def all_officially_ranked_or_approved(self) -> bool:
@@ -661,7 +661,7 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch newest data from the osu!api, check for differences
         and propogate any update into our cache & database."""
-        if not settings.OSU_API_KEY:
+        if not app.settings.OSU_API_KEY:
             return
 
         if api_data := await osuapiv1_getbeatmaps(s=self.id):
