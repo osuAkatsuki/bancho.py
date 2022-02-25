@@ -310,10 +310,10 @@ class Beatmap:
         }  # {mode_vn: {mods: (acc/score: pp, ...), ...}}
 
     def __repr__(self) -> str:
-        return self.full
+        return self.full_name
 
     @property
-    def full(self) -> str:
+    def full_name(self) -> str:
         """The full osu! formatted name `self`."""
         return f"{self.artist} - {self.title} [{self.version}]"
 
@@ -325,7 +325,7 @@ class Beatmap:
     @property
     def embed(self) -> str:
         """An osu! chat embed to `self`'s osu! beatmap page."""
-        return f"[{self.url} {self.full}]"
+        return f"[{self.url} {self.full_name}]"
 
     # TODO: cache these & standardize method for changing status
 

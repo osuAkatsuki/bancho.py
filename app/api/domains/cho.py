@@ -1476,7 +1476,7 @@ class MatchChangeSettings(BasePacket):
             if bmap:
                 m.map_id = bmap.id
                 m.map_md5 = bmap.md5
-                m.map_name = bmap.full
+                m.map_name = bmap.full_name
                 m.mode = bmap.mode
             else:
                 m.map_id = self.new.map_id

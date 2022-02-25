@@ -317,7 +317,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 
     # gatari.pw & nerina.pw are pretty much the only
     # reliable mirrors i know of? perhaps beatconnect
-    return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full}]"
+    return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full_name}]"
 
 
 @command(Privileges.NORMAL, aliases=["last", "r"])
@@ -1723,7 +1723,7 @@ async def mp_map(ctx: Context, match: "Match") -> Optional[str]:
 
     match.map_id = bmap.id
     match.map_md5 = bmap.md5
-    match.map_name = bmap.full
+    match.map_name = bmap.full_name
 
     match.mode = bmap.mode
 
@@ -2226,7 +2226,7 @@ async def mp_pick(ctx: Context, match: "Match") -> Optional[str]:
     bmap = match.pool.maps[(mods, slot)]
     match.map_md5 = bmap.md5
     match.map_id = bmap.id
-    match.map_name = bmap.full
+    match.map_name = bmap.full_name
 
     # TODO: some kind of abstraction allowing
     # for something like !mp pick fm.

@@ -1297,7 +1297,7 @@ async def getScores(
 
     # TODO: we could have server-specific offsets for
     # maps that mods could set for incorrectly timed maps.
-    l.append(f"0\n{bmap.full}\n{rating}")  # offset, name, rating
+    l.append(f"0\n{bmap.full_name}\n{rating}")  # offset, name, rating
 
     if not scores:
         # simply return an empty set.
