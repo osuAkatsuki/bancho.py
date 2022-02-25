@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.9
 """gulag - a fully-featured, dev-centered osu! server implementation
 made for running production-quality osu! private servers."""
+from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"

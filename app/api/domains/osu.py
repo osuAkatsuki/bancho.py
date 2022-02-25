@@ -1,4 +1,6 @@
 """ osu: handle connections from web, api, and beyond? """
+from __future__ import annotations
+
 import copy
 import hashlib
 import ipaddress

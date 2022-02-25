@@ -1,5 +1,7 @@
 # TODO: there is still a lot of inconsistency
 # in a lot of these classes; needs refactor.
+from __future__ import annotations
+
 import asyncio
 from typing import Any
 from typing import Iterable

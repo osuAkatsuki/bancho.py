@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 from enum import IntFlag
 from enum import unique

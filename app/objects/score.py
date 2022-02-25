@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import math
 from datetime import datetime

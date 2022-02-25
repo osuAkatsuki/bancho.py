@@ -1,4 +1,6 @@
 """ cho: handle cho packets from the osu! client """
+from __future__ import annotations
+
 import asyncio
 import ipaddress
 import re

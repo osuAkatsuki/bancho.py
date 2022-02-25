@@ -3,6 +3,8 @@
 tool to merge from gulag 3.5.2 stats to 3.5.3 stats
 this tool is destructive, don't run it if you don't know why it exists :)
 """
+from __future__ import annotations
+
 import asyncio
 
 import aiomysql

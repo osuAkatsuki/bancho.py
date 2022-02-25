@@ -1,4 +1,6 @@
 # #!/usr/bin/env python3.9
+from __future__ import annotations
+
 import asyncio
 import os
 import pprint
