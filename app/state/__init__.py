@@ -9,6 +9,6 @@ from . import sessions
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
 
-loop: "AbstractEventLoop"
+loop: AbstractEventLoop
 packets = {"all": {}, "restricted": {}}
 shutting_down = False

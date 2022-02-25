@@ -62,7 +62,7 @@ class Mods(IntFlag):
 
         return "".join(mod_str)
 
-    def filter_invalid_combos(self, mode_vn: int) -> "Mods":
+    def filter_invalid_combos(self, mode_vn: int) -> Mods:
         """Remove any invalid mod combinations."""
 
         # 1. mode-inspecific mod conflictions
@@ -127,7 +127,7 @@ class Mods(IntFlag):
 
     @classmethod
     @functools.lru_cache(maxsize=64)
-    def from_modstr(cls, s: str) -> "Mods":
+    def from_modstr(cls, s: str) -> Mods:
         # from fmt: `HDDTRX`
         mods = cls.NOMOD
         _dict = modstr2mod_dict  # global
@@ -146,7 +146,7 @@ class Mods(IntFlag):
 
     @classmethod
     @functools.lru_cache(maxsize=64)
-    def from_np(cls, s: str, mode_vn: int) -> "Mods":
+    def from_np(cls, s: str, mode_vn: int) -> Mods:
         mods = cls.NOMOD
         _dict = npstr2mod_dict  # global
 

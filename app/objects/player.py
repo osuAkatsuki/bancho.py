@@ -137,7 +137,7 @@ MAIN_MENU = Menu(
 
 
 class LastNp(TypedDict):
-    bmap: "Beatmap"
+    bmap: Beatmap
     mode_vn: int
     timeout: float
 
@@ -253,10 +253,10 @@ class Player:
         self.match: Optional[Match] = None
         self.stealth = False
 
-        self.clan: Optional["Clan"] = extras.get("clan", None)
-        self.clan_priv: Optional["ClanPrivileges"] = extras.get("clan_priv", None)
+        self.clan: Optional[Clan] = extras.get("clan", None)
+        self.clan_priv: Optional[ClanPrivileges] = extras.get("clan_priv", None)
 
-        self.achievements: set["Achievement"] = set()
+        self.achievements: set[Achievement] = set()
 
         self.geoloc: app.state.services.Geolocation = extras.get(
             "geoloc",
@@ -806,7 +806,7 @@ class Player:
         if app.settings.DEBUG:
             log(f"{self} left {c}.")
 
-    def add_spectator(self, p: "Player") -> None:
+    def add_spectator(self, p: Player) -> None:
         """Attempt to add `p` to `self`'s spectators."""
         chan_name = f"#spec_{self.id}"
 
@@ -845,7 +845,7 @@ class Player:
 
         log(f"{p} is now spectating {self}.")
 
-    def remove_spectator(self, p: "Player") -> None:
+    def remove_spectator(self, p: Player) -> None:
         """Attempt to remove `p` from `self`'s spectators."""
         self.spectators.remove(p)
         p.spectating = None
@@ -1074,7 +1074,7 @@ class Player:
             self._queue.clear()
             return data
 
-    def send(self, msg: str, sender: "Player", chan: Optional[Channel] = None) -> None:
+    def send(self, msg: str, sender: Player, chan: Optional[Channel] = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             app.packets.send_message(

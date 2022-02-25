@@ -21,13 +21,13 @@ channels = Channels()
 pools = MapPools()
 clans = Clans()
 matches = Matches()
-achievements: list["Achievement"] = []
+achievements: list[Achievement] = []
 
 api_keys = {}
 
 housekeeping_tasks: set[asyncio.Task] = set()
 
-bot: "Player"
+bot: Player
 
 
 # usecases

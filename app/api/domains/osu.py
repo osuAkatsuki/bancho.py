@@ -897,7 +897,7 @@ async def osuSubmitModularSelector(
 
             # calculate new total weighted accuracy
             weighted_acc = sum(
-                [row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)],
+                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
             )
             bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
             stats.acc = (weighted_acc * bonus_acc) / 100
@@ -907,9 +907,7 @@ async def osuSubmitModularSelector(
             stats_query_args["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                [row["pp"] * 0.95**i for i, row in enumerate(top_100_pp)],
-            )
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
             bonus_pp = 416.6667 * (1 - 0.95**total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
 

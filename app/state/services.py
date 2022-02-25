@@ -43,11 +43,11 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 """ session objects """
 
-http: "aiohttp.ClientSession"
+http: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
-geoloc_db: Optional["geoip2.database.Reader"] = None
+geoloc_db: Optional[geoip2.database.Reader] = None
 if GEOLOC_DB_FILE.exists():
     geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 
@@ -225,19 +225,19 @@ class Version:
     def __hash__(self) -> int:
         return self.as_tuple.__hash__()
 
-    def __eq__(self, other: "Version") -> bool:
+    def __eq__(self, other: Version) -> bool:
         return self.as_tuple == other.as_tuple
 
-    def __lt__(self, other: "Version") -> bool:
+    def __lt__(self, other: Version) -> bool:
         return self.as_tuple < other.as_tuple
 
-    def __le__(self, other: "Version") -> bool:
+    def __le__(self, other: Version) -> bool:
         return self.as_tuple <= other.as_tuple
 
-    def __gt__(self, other: "Version") -> bool:
+    def __gt__(self, other: Version) -> bool:
         return self.as_tuple > other.as_tuple
 
-    def __ge__(self, other: "Version") -> bool:
+    def __ge__(self, other: Version) -> bool:
         return self.as_tuple >= other.as_tuple
 
     @property
@@ -245,7 +245,7 @@ class Version:
         return (self.major, self.minor, self.micro)
 
     @classmethod
-    def from_str(cls, s: str) -> Optional["Version"]:
+    def from_str(cls, s: str) -> Optional[Version]:
         if len(split := s.split(".")) == 3:
             return cls(
                 major=int(split[0]),

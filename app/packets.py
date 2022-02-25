@@ -280,7 +280,7 @@ class MultiplayerMatch:
 
 
 class BasePacket(ABC):
-    def __init__(self, reader: "BanchoPacketReader") -> None:
+    def __init__(self, reader: BanchoPacketReader) -> None:
         ...
 
     @abstractmethod
@@ -626,7 +626,7 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
 #    return ret
 
 
-def write_match(m: "Match", send_pw: bool = True) -> bytearray:
+def write_match(m: Match, send_pw: bool = True) -> bytearray:
     """Write `m` into bytes (osu! match)."""
     # 0 is for match type
     ret = bytearray(struct.pack("<HbbI", m.id, m.in_progress, 0, m.mods))
@@ -795,7 +795,7 @@ BOT_STATUSES = (
 
 
 @cache
-def bot_stats(p: "Player") -> bytes:
+def bot_stats(p: Player) -> bytes:
     # pick at random from list of potential statuses.
     status_id, status_txt = random.choice(BOT_STATUSES)
 
@@ -858,7 +858,7 @@ def _user_stats(
 
 
 # TODO: this is gulag-specific, move it out
-def user_stats(p: "Player") -> bytes:
+def user_stats(p: Player) -> bytes:
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7FFF:
         # HACK: if pp is over osu!'s ingame cap,
@@ -938,12 +938,12 @@ def notification(msg: str) -> bytes:
 
 
 # packet id: 26
-def update_match(m: "Match", send_pw: bool = True) -> bytes:
+def update_match(m: Match, send_pw: bool = True) -> bytes:
     return write(ServerPackets.UPDATE_MATCH, ((m, send_pw), osuTypes.match))
 
 
 # packet id: 27
-def new_match(m: "Match") -> bytes:
+def new_match(m: Match) -> bytes:
     return write(ServerPackets.NEW_MATCH, ((m, True), osuTypes.match))
 
 
@@ -960,7 +960,7 @@ def toggle_block_non_friend_dm() -> bytes:
 
 
 # packet id: 36
-def match_join_success(m: "Match") -> bytes:
+def match_join_success(m: Match) -> bytes:
     return write(ServerPackets.MATCH_JOIN_SUCCESS, ((m, True), osuTypes.match))
 
 
@@ -983,7 +983,7 @@ def fellow_spectator_left(user_id: int) -> bytes:
 
 
 # packet id: 46
-def match_start(m: "Match") -> bytes:
+def match_start(m: Match) -> bytes:
     return write(ServerPackets.MATCH_START, ((m, True), osuTypes.match))
 
 
@@ -1111,7 +1111,7 @@ def match_player_skipped(user_id: int) -> bytes:
 # friends list, their presence is requested
 # *very* frequently; only build it once.
 @cache
-def bot_presence(p: "Player") -> bytes:
+def bot_presence(p: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
         (p.id, osuTypes.i32),
@@ -1151,7 +1151,7 @@ def _user_presence(
 
 
 # TODO: this is gulag-specific, move it out
-def user_presence(p: "Player") -> bytes:
+def user_presence(p: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
         (p.id, osuTypes.i32),
@@ -1172,7 +1172,7 @@ def restart_server(ms: int) -> bytes:
 
 
 # packet id: 88
-def match_invite(p: "Player", t_name: str) -> bytes:
+def match_invite(p: Player, t_name: str) -> bytes:
     msg = f"Come join my game: {p.match.embed}."
     return write(
         ServerPackets.MATCH_INVITE,

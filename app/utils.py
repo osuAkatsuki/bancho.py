@@ -226,7 +226,7 @@ def check_connection(timeout: float = 1.0) -> bool:
             try:
                 sock.connect((addr, 53))
                 return True
-            except socket.error:
+            except OSError:
                 continue
 
     # all connections failed

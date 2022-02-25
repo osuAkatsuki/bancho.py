@@ -79,7 +79,7 @@ class Context:
     trigger: str
     args: Sequence[str]
 
-    recipient: Union["Channel", Player]
+    recipient: Union[Channel, Player]
 
 
 Callback = Callable[[Context], Awaitable[Optional[str]]]
@@ -1110,7 +1110,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
         # get the current number of fake users
         if _fake_users:
-            current_fakes = max([x.id for x in _fake_users]) - (FAKE_ID_START - 1)
+            current_fakes = max(x.id for x in _fake_users) - (FAKE_ID_START - 1)
         else:
             current_fakes = 0
 
@@ -1561,7 +1561,7 @@ if app.settings.DEVELOPER_MODE:
 
 
 def ensure_match(
-    f: Callable[[Context, "Match"], Awaitable[Optional[R]]],
+    f: Callable[[Context, Match], Awaitable[Optional[R]]],
 ) -> Callable[[Context], Awaitable[Optional[R]]]:
     @wraps(f)
     async def wrapper(ctx: Context) -> Optional[R]:

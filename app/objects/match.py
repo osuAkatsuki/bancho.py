@@ -105,7 +105,7 @@ class MapPool:
         id: int,
         name: str,
         created_at: datetime,
-        created_by: "Player",
+        created_by: Player,
     ) -> None:
         self.id = id
         self.name = name
@@ -153,7 +153,7 @@ class Slot:
     __slots__ = ("player", "status", "team", "mods", "loaded", "skipped")
 
     def __init__(self) -> None:
-        self.player: Optional["Player"] = None
+        self.player: Optional[Player] = None
         self.status = SlotStatus.open
         self.team = MatchTeams.neutral
         self.mods = Mods.NOMOD
@@ -163,7 +163,7 @@ class Slot:
     def empty(self) -> bool:
         return self.player is None
 
-    def copy_from(self, other: "Slot") -> None:
+    def copy_from(self, other: Slot) -> None:
         self.player = other.player
         self.status = other.status
         self.team = other.team
@@ -179,8 +179,8 @@ class Slot:
 
 
 class StartingTimers(TypedDict):
-    start: Optional["TimerHandle"]
-    alerts: Optional[list["TimerHandle"]]
+    start: Optional[TimerHandle]
+    alerts: Optional[list[TimerHandle]]
     time: Optional[float]
 
 
@@ -246,7 +246,7 @@ class Match:
         self.passwd = ""
 
         self.host_id = 0
-        self._refs: set["Player"] = set()
+        self._refs: set[Player] = set()
 
         self.map_id = 0
         self.map_md5 = ""
@@ -257,7 +257,7 @@ class Match:
         self.mode = GameMode.VANILLA_OSU
         self.freemods = False
 
-        self.chat: Optional["Channel"] = None  # multiplayer
+        self.chat: Optional[Channel] = None  # multiplayer
         self.slots = [Slot() for _ in range(16)]
 
         # self.type = MatchTypes.standard
@@ -272,16 +272,16 @@ class Match:
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points: dict[Union[MatchTeams, "Player"], int] = defaultdict(int)
+        self.match_points: dict[Union[MatchTeams, Player], int] = defaultdict(int)
         self.bans: set[tuple[Mods, int]] = set()
-        self.winners: list[Union["Player", MatchTeams, None]] = []  # none for tie
+        self.winners: list[Union[Player, MatchTeams, None]] = []  # none for tie
         self.winning_pts = 0
         self.use_pp_scoring = False  # only for scrims
 
         self.tourney_clients: set[int] = set()  # player ids
 
     @classmethod
-    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> "Match":
+    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> Match:
         obj = cls()
         obj.mods = Mods(parsed_match.mods)
 
@@ -315,7 +315,7 @@ class Match:
         return obj
 
     @property  # TODO: test cache speed
-    def host(self) -> "Player":
+    def host(self) -> Player:
         p = app.state.sessions.players.get(id=self.host_id)
         assert p is not None
         return p
@@ -341,7 +341,7 @@ class Match:
         return f"[{self.map_url} {self.map_name}]"
 
     @property
-    def refs(self) -> set["Player"]:
+    def refs(self) -> set[Player]:
         """Return all players with referee permissions."""
         refs = self._refs
 
@@ -350,7 +350,7 @@ class Match:
 
         return refs
 
-    def __contains__(self, p: "Player") -> bool:
+    def __contains__(self, p: Player) -> bool:
         return p in {s.player for s in self.slots}
 
     @overload
@@ -367,13 +367,13 @@ class Match:
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
-    def get_slot(self, p: "Player") -> Optional[Slot]:
+    def get_slot(self, p: Player) -> Optional[Slot]:
         """Return the slot containing a given player."""
         for s in self.slots:
             if p is s.player:
                 return s
 
-    def get_slot_id(self, p: "Player") -> Optional[int]:
+    def get_slot_id(self, p: Player) -> Optional[int]:
         """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
             if p is s.player:
@@ -391,7 +391,7 @@ class Match:
             if s.status & SlotStatus.has_player and s.player is self.host:
                 return s
 
-    def copy(self, m: "Match") -> None:
+    def copy(self, m: Match) -> None:
         """Fully copy the data of another match obj."""
         self.map_id = m.map_id
         self.map_md5 = m.map_md5
@@ -458,8 +458,8 @@ class Match:
         was_playing: Sequence[Slot],
     ) -> "tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]":
         """Await score submissions from all players in completed state."""
-        scores: "dict[Union[MatchTeams, Player], int]" = defaultdict(int)
-        didnt_submit: list["Player"] = []
+        scores: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        didnt_submit: list[Player] = []
         time_waited = 0  # allow up to 10s (total, not per player)
 
         ffa = self.team_type in (MatchTeamTypes.head_to_head, MatchTeamTypes.tag_coop)
@@ -548,7 +548,7 @@ class Match:
                 return self.chat.send_bot("The point has ended in a tie!")
 
             # Find the winner & increment their matchpoints.
-            winner: Union["Player", MatchTeams] = max(scores, key=lambda k: scores[k])
+            winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
             self.winners.append(winner)
             self.match_points[winner] += 1
 

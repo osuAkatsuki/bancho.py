@@ -50,7 +50,7 @@ class Grade(IntEnum):
 
     @classmethod
     @functools.cache
-    def from_str(cls, s: str) -> "Grade":
+    def from_str(cls, s: str) -> Grade:
         return {
             "xh": Grade.XH,
             "x": Grade.X,
@@ -152,7 +152,7 @@ class Score:
         # TODO: check whether the reamining Optional's should be
         self.id: Optional[int] = None
         self.bmap: Optional[Beatmap] = None
-        self.player: Optional["Player"] = None
+        self.player: Optional[Player] = None
 
         self.mode: GameMode
         self.mods: Mods

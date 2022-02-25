@@ -67,12 +67,12 @@ class Channel:
         self.auto_join = auto_join
         self.instance = instance
 
-        self.players: list["Player"] = []
+        self.players: list[Player] = []
 
     def __repr__(self) -> str:
         return f"<{self._name}>"
 
-    def __contains__(self, p: "Player") -> bool:
+    def __contains__(self, p: Player) -> bool:
         return p in self.players
 
     # XXX: should this be cached differently?
@@ -91,7 +91,7 @@ class Channel:
 
         return priv & self.write_priv != 0
 
-    def send(self, msg: str, sender: "Player", to_self: bool = False) -> None:
+    def send(self, msg: str, sender: Player, to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""
         data = app.packets.send_message(
             sender=sender.name,
@@ -125,19 +125,19 @@ class Channel:
     def send_selective(
         self,
         msg: str,
-        sender: "Player",
-        recipients: set["Player"],
+        sender: Player,
+        recipients: set[Player],
     ) -> None:
         """Enqueue `sender`'s `msg` to `recipients`."""
         for p in recipients:
             if p in self:
                 p.send(msg, sender=sender, chan=self)
 
-    def append(self, p: "Player") -> None:
+    def append(self, p: Player) -> None:
         """Add `p` to the channel's players."""
         self.players.append(p)
 
-    def remove(self, p: "Player") -> None:
+    def remove(self, p: Player) -> None:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
 

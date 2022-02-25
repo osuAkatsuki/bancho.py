@@ -64,7 +64,7 @@ router = APIRouter(tags=["gulag API"])
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 
-def format_clan_basic(clan: "Clan") -> dict[str, object]:
+def format_clan_basic(clan: Clan) -> dict[str, object]:
     return {
         "id": clan.id,
         "name": clan.name,
@@ -73,7 +73,7 @@ def format_clan_basic(clan: "Clan") -> dict[str, object]:
     }
 
 
-def format_player_basic(p: "Player") -> dict[str, object]:
+def format_player_basic(p: Player) -> dict[str, object]:
     return {
         "id": p.id,
         "name": p.name,

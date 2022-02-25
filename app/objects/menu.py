@@ -27,12 +27,12 @@ class MenuCommands(IntEnum):
 
 class Menu(NamedTuple):
     name: str
-    options: "dict[int, tuple[MenuCommands, Optional[Union[Menu, MenuFunction]]]]"
+    options: dict[int, tuple[MenuCommands, Optional[Union[Menu, MenuFunction]]]]
 
 
 class MenuFunction(NamedTuple):
     name: str
-    callback: Callable[["Player"], Awaitable[None]]
+    callback: Callable[[Player], Awaitable[None]]
 
 
 def menu_keygen() -> int:

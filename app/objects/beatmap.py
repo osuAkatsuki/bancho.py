@@ -127,7 +127,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     @functools.cache
-    def from_osuapi(cls, osuapi_status: int) -> "RankedStatus":
+    def from_osuapi(cls, osuapi_status: int) -> RankedStatus:
         """Convert from osu!api status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
             lambda: cls.UpdateAvailable,
@@ -145,7 +145,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     @functools.cache
-    def from_osudirect(cls, osudirect_status: int) -> "RankedStatus":
+    def from_osudirect(cls, osudirect_status: int) -> RankedStatus:
         """Convert from osu!direct status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
             lambda: cls.UpdateAvailable,
@@ -163,7 +163,7 @@ class RankedStatus(IntEnum):
 
     @classmethod
     @functools.cache
-    def from_str(cls, status_str: str) -> "RankedStatus":
+    def from_str(cls, status_str: str) -> RankedStatus:
         """Convert from string value."""  # could perhaps have `'unranked': cls.Pending`?
         mapping: Mapping[str, RankedStatus] = defaultdict(
             lambda: cls.UpdateAvailable,
@@ -270,7 +270,7 @@ class Beatmap:
         "_pp_cache",
     )
 
-    def __init__(self, map_set: "BeatmapSet", **kwargs: Any) -> None:
+    def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
         self.set = map_set
 
         self.md5 = kwargs.get("md5", "")
@@ -643,7 +643,7 @@ class BeatmapSet:
 
         # the delta between cache invalidations will increase depending
         # on how long it's been since the map was last updated on osu!
-        last_map_update = max([bmap.last_update for bmap in self.maps])
+        last_map_update = max(bmap.last_update for bmap in self.maps)
         update_delta = current_datetime - last_map_update
 
         # with a minimum of 2 hours, add 5 hours per year since it's update.
@@ -699,7 +699,7 @@ class BeatmapSet:
             for new_id, new_map in new_maps.items():
                 if new_id not in old_maps:
                     # new map we don't have locally, add it
-                    bmap: "Beatmap" = Beatmap.__new__(Beatmap)
+                    bmap: Beatmap = Beatmap.__new__(Beatmap)
                     bmap.id = new_id
 
                     bmap._parse_from_osuapi_resp(new_map)
@@ -887,7 +887,7 @@ class BeatmapSet:
 
             for api_bmap in api_data:
                 # newer version available for this map
-                bmap: "Beatmap" = Beatmap.__new__(Beatmap)
+                bmap: Beatmap = Beatmap.__new__(Beatmap)
                 bmap.id = int(api_bmap["beatmap_id"])
 
                 if bmap.id in current_maps:
