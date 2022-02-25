@@ -1653,7 +1653,7 @@ async def register_account(
 ):
     safe_name = username.lower().replace(" ", "_")
 
-    if not all((username, email, pw_plaintext, check)):
+    if not all((username, email, pw_plaintext)):
         return Response(
             content=b"Missing required params",
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1718,7 +1718,7 @@ async def register_account(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if check:
+    if check == 0:
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
