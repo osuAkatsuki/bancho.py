@@ -192,7 +192,7 @@ async def _help(ctx: Context) -> Optional[str]:
 
 @command(Privileges.NORMAL)
 async def roll(ctx: Context) -> Optional[str]:
-    """Roll an n-sided die where n is the number you write (100 default)."""
+    """Roll an n-sided dice where n is the number you write (100 default)."""
     if ctx.args and ctx.args[0].isdecimal():
         max_roll = min(int(ctx.args[0]), 0x7FFF)
     else:
