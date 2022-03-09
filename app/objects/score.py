@@ -211,7 +211,7 @@ class Score:
         )
 
         if not row:
-            return
+            return None
 
         s = cls()
 

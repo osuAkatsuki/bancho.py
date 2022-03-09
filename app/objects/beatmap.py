@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
+from typing import Union
 
 from cmyui.logging import Ansi
 from cmyui.logging import log
@@ -33,13 +34,15 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def osuapiv1_getbeatmaps(**params: str) -> Optional[list[dict[str, Any]]]:
+async def osuapiv1_getbeatmaps(
+    **params: Union[str, int]
+) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
     if app.settings.DEBUG:
         log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
     if not app.settings.OSU_API_KEY:
-        return
+        return None
 
     params["k"] = str(app.settings.OSU_API_KEY)
 
@@ -50,6 +53,8 @@ async def osuapiv1_getbeatmaps(**params: str) -> Optional[list[dict[str, Any]]]:
     ) as resp:
         if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
             return await resp.json()
+
+    return None
 
 
 async def ensure_local_osu_file(
@@ -237,10 +242,6 @@ class Beatmap:
         Whether the beatmap's status is to be kept when a newer
         version is found in the osu!api.
         # XXX: This is set when a map's status is manually changed.
-
-    _pp_cache: dict[`Mods`, list[`float`]]
-        Cached pp values to serve when a map is /np'ed.
-        PP will be cached for whichever mod combination is requested.
     """
 
     __slots__ = (
@@ -267,7 +268,6 @@ class Beatmap:
         "hp",
         "diff",
         "filename",
-        "_pp_cache",
     )
 
     def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
@@ -302,12 +302,6 @@ class Beatmap:
         self.diff = kwargs.get("diff", 0.0)
 
         self.filename = kwargs.get("filename", "")
-        self._pp_cache = {
-            0: {},
-            1: {},
-            2: {},
-            3: {},
-        }  # {mode_vn: {mods: (acc/score: pp, ...), ...}}
 
     def __repr__(self) -> str:
         return self.full_name
@@ -403,19 +397,19 @@ class Beatmap:
                     api_data = await osuapiv1_getbeatmaps(h=md5)
 
                     if not api_data:
-                        return
+                        return None
 
                     set_id = int(api_data[0]["beatmapset_id"])
 
             # we have a valid set id, fetch the whole set.
             if not await BeatmapSet.from_bsid(set_id):
-                return
+                return None
 
             # fetching the set will put all maps in cache
             bmap = await cls._from_md5_cache(md5, check_updates=False)
 
             if not bmap:
-                return
+                return None
 
         return bmap
 
@@ -442,19 +436,19 @@ class Beatmap:
                 api_data = await osuapiv1_getbeatmaps(b=bid)
 
                 if not api_data:
-                    return
+                    return None
 
                 set_id = int(api_data[0]["beatmapset_id"])
 
             # we have a valid set id, fetch the whole set.
             if not await BeatmapSet.from_bsid(set_id):
-                return
+                return None
 
             # fetching the set will put all maps in cache
             bmap = await cls._from_bid_cache(bid, check_updates=False)
 
             if not bmap:
-                return
+                return None
 
         return bmap
 
@@ -537,6 +531,8 @@ class Beatmap:
 
             return bmap
 
+        return None
+
     @staticmethod
     async def _from_bid_cache(
         bid: int,
@@ -550,6 +546,8 @@ class Beatmap:
                 await bmap.set._update_if_available()
 
             return bmap
+
+        return None
 
 
 class BeatmapSet:
@@ -705,7 +703,6 @@ class BeatmapSet:
                     bmap.frozen = False
                     bmap.passes = 0
                     bmap.plays = 0
-                    bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
 
                     updated_maps.append(bmap)
 
@@ -820,6 +817,8 @@ class BeatmapSet:
 
             return app.state.cache.beatmapset[bsid]
 
+        return None
+
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Fetch a mapset from the database by set id."""
@@ -831,7 +830,7 @@ class BeatmapSet:
             )
 
             if last_osuapi_check is None:
-                return
+                return None
 
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
@@ -897,7 +896,6 @@ class BeatmapSet:
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some gulag-specific stuff not given by api)
-                bmap._pp_cache = {0: {}, 1: {}, 2: {}, 3: {}}
                 bmap.passes = 0
                 bmap.plays = 0
 
@@ -914,6 +912,8 @@ class BeatmapSet:
             await self._save_to_sql()
             return self
 
+        return None
+
     @classmethod
     async def from_bsid(cls, bsid: int) -> Optional["BeatmapSet"]:
         """Cache all maps in a set from the osuapi, optionally
@@ -928,7 +928,7 @@ class BeatmapSet:
                 bmap_set = await cls._from_bsid_osuapi(bsid)
 
                 if not bmap_set:
-                    return
+                    return None
 
                 did_api_request = True
 

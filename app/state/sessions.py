@@ -23,7 +23,7 @@ clans = Clans()
 matches = Matches()
 achievements: list[Achievement] = []
 
-api_keys = {}
+api_keys: dict[str, int] = {}
 
 housekeeping_tasks: set[asyncio.Task] = set()
 

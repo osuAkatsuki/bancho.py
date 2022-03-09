@@ -373,11 +373,15 @@ class Match:
             if p is s.player:
                 return s
 
+        return None
+
     def get_slot_id(self, p: Player) -> Optional[int]:
         """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
             if p is s.player:
                 return idx
+
+        return None
 
     def get_free(self) -> Optional[int]:
         """Return the first unoccupied slot in multi, if any."""
@@ -385,11 +389,15 @@ class Match:
             if s.status == SlotStatus.open:
                 return idx
 
+        return None
+
     def get_host_slot(self) -> Optional[Slot]:
         """Return the slot containing the host."""
         for s in self.slots:
             if s.status & SlotStatus.has_player and s.player is self.host:
                 return s
+
+        return None
 
     def copy(self, m: Match) -> None:
         """Fully copy the data of another match obj."""
@@ -545,7 +553,8 @@ class Match:
             # all scores are equal, it was a tie.
             if len(scores) != 1 and len(set(scores.values())) == 1:
                 self.winners.append(None)
-                return self.chat.send_bot("The point has ended in a tie!")
+                self.chat.send_bot("The point has ended in a tie!")
+                return None
 
             # Find the winner & increment their matchpoints.
             winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])

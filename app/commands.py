@@ -19,6 +19,7 @@ from functools import wraps
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
+from typing import Any
 from typing import Awaitable
 from typing import Callable
 from typing import NamedTuple
@@ -250,7 +251,7 @@ async def reconnect(ctx: Context) -> Optional[str]:
     if ctx.args:
         # !reconnect <player>
         if not ctx.player.priv & Privileges.ADMINISTRATOR:
-            return  # requires admin
+            return None  # requires admin
 
         target = app.state.sessions.players.get(name=" ".join(ctx.args))
         if not target:
@@ -260,6 +261,8 @@ async def reconnect(ctx: Context) -> Optional[str]:
         target = ctx.player
 
     target.logout()
+
+    return None
 
 
 @command(Privileges.DONATOR)
@@ -294,6 +297,8 @@ async def changename(ctx: Context) -> Optional[str]:
         app.packets.notification(f"Your username has been changed to {name}!"),
     )
     ctx.player.logout()
+
+    return None
 
 
 @command(Privileges.NORMAL, aliases=["bloodcat", "beatconnect", "chimu", "q"])
@@ -1043,7 +1048,7 @@ async def shutdown(ctx: Context) -> Optional[str]:
 # simply not useful for any other roles.
 """
 
-_fake_users = []
+_fake_users: list[Player] = []
 
 
 @command(Privileges.DEVELOPER, aliases=["fu"])
@@ -1401,6 +1406,8 @@ async def menu(ctx: Context) -> Optional[str]:
     """Temporary command to illustrate the menu option idea."""
     ctx.player.send_current_menu()
 
+    return None
+
 
 @command(Privileges.DEVELOPER, aliases=["re"])
 async def reload(ctx: Context) -> Optional[str]:
@@ -1503,7 +1510,7 @@ if app.settings.DEVELOPER_MODE:
 
     from sys import modules as installed_mods
 
-    __py_namespace = globals() | {
+    __py_namespace: dict[str, Any] = globals() | {
         mod: __import__(mod)
         for mod in (
             "asyncio",
@@ -1571,17 +1578,17 @@ def ensure_match(
         # as we do some additional checks.
         if match is None:
             # player not in a match
-            return
+            return None
 
         if ctx.recipient is not match.chat:
             # message not in match channel
-            return
+            return None
 
         if f is not mp_help and (
             ctx.player not in match.refs and not ctx.player.priv & Privileges.TOURNAMENT
         ):
             # doesn't have privs to use !mp commands (allow help).
-            return
+            return None
 
         return await f(ctx, match)
 
@@ -2710,3 +2717,5 @@ async def process_commands(
             else:
                 # no message to return
                 return {"resp": None, "hidden": False}
+
+    return None

@@ -219,7 +219,11 @@ class Player:
     )
 
     def __init__(
-        self, id: int, name: str, priv: Union[int, Privileges], **extras: Any
+        self,
+        id: int,
+        name: str,
+        priv: Union[int, Privileges],
+        **extras: Any,
     ) -> None:
         self.id = id
         self.name = name
@@ -295,7 +299,7 @@ class Player:
 
         # TODO: document
         self.current_menu = MAIN_MENU
-        self.previous_menus = []
+        self.previous_menus: list[Menu] = []
 
         # subject to possible change in the future,
         # although if anything, bot accounts will
@@ -1073,6 +1077,8 @@ class Player:
             data = bytes(self._queue)
             self._queue.clear()
             return data
+
+        return None
 
     def send(self, msg: str, sender: Player, chan: Optional[Channel] = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""

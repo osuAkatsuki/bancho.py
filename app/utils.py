@@ -273,7 +273,7 @@ def _install_synchronous_excepthook() -> None:
     def _excepthook(
         type_: type[BaseException],
         value: BaseException,
-        traceback: types.TracebackType,
+        traceback: Optional[types.TracebackType],
     ):
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")

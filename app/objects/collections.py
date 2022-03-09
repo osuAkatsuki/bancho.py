@@ -90,6 +90,8 @@ class Channels(list[Channel]):
             if c._name == name:
                 return c
 
+        return None
+
     def append(self, c: Channel) -> None:
         """Append `c` to the list."""
         super().append(c)
@@ -143,6 +145,8 @@ class Matches(list[Optional[Match]]):
         for idx, m in enumerate(self):
             if m is None:
                 return idx
+
+        return None
 
     def append(self, m: Match) -> bool:
         """Append `m` to the list."""
@@ -242,6 +246,8 @@ class Players(list[Player]):
             if getattr(p, attr) == val:
                 return p
 
+        return None
+
     async def get_sql(self, **kwargs: object) -> Optional[Player]:
         """Get a player by token, id, or name from sql."""
         attr, val = self._parse_attr(kwargs)
@@ -255,7 +261,7 @@ class Players(list[Player]):
         )
 
         if not row:
-            return
+            return None
 
         row = dict(row)
 
@@ -287,6 +293,8 @@ class Players(list[Player]):
         elif p := await self.get_sql(**kwargs):
             return p
 
+        return None
+
     async def from_login(
         self,
         name: str,
@@ -296,14 +304,16 @@ class Players(list[Player]):
         """Return a player with a given name & pw_md5, from cache or sql."""
         if not (p := self.get(name=name)):
             if not sql:  # not to fetch from sql.
-                return
+                return None
 
             if not (p := await self.get_sql(name=name)):
                 # no player found in sql either.
-                return
+                return None
 
         if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
             return p
+
+        return None
 
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
@@ -369,6 +379,8 @@ class MapPools(list[MapPool]):
             if getattr(p, attr) == val:
                 return p
 
+        return None
+
     def __contains__(self, o: Union[MapPool, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
@@ -382,6 +394,8 @@ class MapPools(list[MapPool]):
         for p in self:
             if p.name == name:
                 return p
+
+        return None
 
     def append(self, m: MapPool) -> None:
         """Append `m` to the list."""
@@ -468,6 +482,8 @@ class Clans(list[Clan]):
         for c in self:
             if getattr(c, attr) == val:
                 return c
+
+        return None
 
     def append(self, c: Clan) -> None:
         """Append `c` to the list."""

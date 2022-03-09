@@ -222,11 +222,14 @@ async def osuGetFriends(
     return "\n".join(map(str, player.friends)).encode()
 
 
-_gulag_osuapi_status_map = {0: 0, 2: 1, 3: 2, 4: 3, 5: 4}
-
-
-def gulag_to_osuapi_status(s: int) -> int:
-    return _gulag_osuapi_status_map[s]
+def gulag_to_osuapi_status(gulag_status: int) -> int:
+    return {
+        0: 0,
+        2: 1,
+        3: 2,
+        4: 3,
+        5: 4,
+    }[gulag_status]
 
 
 @router.post("/web/osu-getbeatmapinfo.php")
