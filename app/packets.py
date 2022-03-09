@@ -452,11 +452,11 @@ class BanchoPacketReader:
         length = shift = 0
 
         while True:
-            b = self.body_view[0]
+            byte = self.body_view[0]
             self.body_view = self.body_view[1:]
 
-            length |= (b & 0b01111111) << shift
-            if (b & 0b10000000) == 0:
+            length |= (byte & 0x7F) << shift
+            if (byte & 0x80) == 0:
                 break
 
             shift += 7
@@ -560,14 +560,12 @@ def write_uleb128(num: int) -> Union[bytes, bytearray]:
         return b"\x00"
 
     ret = bytearray()
-    length = 0
 
-    while num > 0:
-        ret.append(num & 0b01111111)
+    while num != 0:
+        ret.append(num & 0x7F)
         num >>= 7
         if num != 0:
-            ret[length] |= 0b10000000
-        length += 1
+            ret[-1] |= 0x80
 
     return ret
 
