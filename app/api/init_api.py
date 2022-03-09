@@ -95,6 +95,8 @@ def init_events(asgi_app: FastAPI) -> None:
             )
             app.state.services.datadog.gauge("gulag.online_players", 0)
 
+        app.state.services.ip_resolver = app.state.services.IPResolver()
+
         await app.state.services.run_sql_migrations()
 
         async with app.state.services.database.connection() as db_conn:

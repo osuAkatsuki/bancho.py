@@ -8,10 +8,11 @@ import secrets
 from pathlib import Path
 from typing import AsyncGenerator
 from typing import AsyncIterator
+from typing import Mapping
+from typing import MutableMapping
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import Union
 
 import aioredis
 import databases
@@ -26,12 +27,11 @@ from cmyui.logging import Rainbow
 
 import app.settings
 import app.state
+from app._typing import IPAddress
 
 if TYPE_CHECKING:
     import aiohttp
     import databases.core
-
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
@@ -58,6 +58,8 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
         app_key=str(app.settings.DATADOG_APP_KEY),
     )
     datadog = datadog_client.ThreadStats()
+
+ip_resolver: IPResolver
 
 housekeeping_tasks: list[asyncio.Task] = []
 
@@ -113,7 +115,28 @@ country_codes = {
 # fmt: on
 
 
-def fetch_geoloc_db(ip: IPAddress) -> Optional[Geolocation]:
+class IPResolver:
+    def __init__(self) -> None:
+        self.cache: MutableMapping[str, IPAddress] = {}
+
+    def get_ip(self, headers: Mapping[str, str]) -> IPAddress:
+        """Resolve the IP address from the headers."""
+        if not (ip_str := headers.get("CF-Connecting-IP")):
+            forwards = headers["X-Forwarded-For"].split(",")
+
+            if len(forwards) != 1:
+                ip_str = forwards[0]
+            else:
+                ip_str = headers["X-Real-IP"]
+
+        if not (ip := self.cache.get(ip_str)):
+            ip = ipaddress.ip_address(ip_str)
+            self.cache[ip_str] = ip
+
+        return ip
+
+
+def fetch_geoloc_db(ip: IPAddress) -> Geolocation:
     """Fetch geolocation data based on ip (using local db)."""
     assert geoloc_db is not None
 

@@ -1645,7 +1645,6 @@ async def register_account(
     check: int = Form(...),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
     cloudflare_country: Optional[str] = Header(None, alias="CF-IPCountry"),
-    cloudflare_ip: Optional[str] = Header(None, alias="CF-Connecting-IP"),
     #
     # TODO: allow nginx to be optional
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
@@ -1734,21 +1733,7 @@ async def register_account(
             else:
                 # backup method, get the user's ip and
                 # do a db lookup to get their country.
-                if cloudflare_ip is not None:
-                    ip_str = cloudflare_ip
-                else:  # if forwarded_ip is not None:
-                    # if the request has been forwarded, get the origin
-                    forwards = forwarded_ip.split(",")
-                    if len(forwards) != 1:
-                        ip_str = forwards[0]
-                    else:
-                        ip_str = real_ip
-
-                if ip_str in app.state.cache.ip:
-                    ip = app.state.cache.ip[ip_str]
-                else:
-                    ip = ipaddress.ip_address(ip_str)
-                    app.state.cache.ip[ip_str] = ip
+                ip = app.state.services.ip_resolver.get_ip(request.headers)
 
                 if not ip.is_private:
                     if app.state.services.geoloc_db is not None:

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import re
 import struct
 import time
@@ -13,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 from typing import Literal
 from typing import Optional
-from typing import Union
+from typing import TypedDict
 
 import bcrypt
 import databases.core
@@ -34,6 +33,7 @@ import app.settings
 import app.state
 import app.utils
 from app import commands
+from app._typing import IPAddress
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -63,8 +63,6 @@ try:
     from oppai_ng.oppai import OppaiWrapper
 except ModuleNotFoundError:
     pass  # utils will handle this for us
-
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -104,27 +102,10 @@ async def bancho_http_handler():
 @router.post("/")
 async def bancho_handler(
     request: Request,
-    x_forwarded_for: str = Header(None),
-    x_real_ip: str = Header(None),
-    cf_connecting_ip: Optional[str] = Header(None),
     user_agent: Literal["osu!"] = Header(...),
     host: str = Header(None),
 ):
-    if cf_connecting_ip is not None:
-        ip_str = cf_connecting_ip
-    else:
-        # if the request has been forwarded, get the origin
-        forwards = x_forwarded_for.split(",")
-        if len(forwards) != 1:
-            ip_str = forwards[0]
-        else:
-            ip_str = x_real_ip
-
-    if ip_str in app.state.cache.ip:
-        ip = app.state.cache.ip[ip_str]
-    else:
-        ip = ipaddress.ip_address(ip_str)
-        app.state.cache.ip[ip_str] = ip
+    ip = app.state.services.ip_resolver.get_ip(request.headers)
 
     if user_agent != "osu!":
         url = f"{request.method} {host}{request['path']}"
