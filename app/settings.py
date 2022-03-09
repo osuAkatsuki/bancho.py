@@ -47,7 +47,7 @@ DATADOG_APP_KEY: Secret = config("DATADOG_APP_KEY", cast=Secret)
 DEBUG: bool = config("DEBUG", cast=bool, default=False)
 REDIRECT_OSU_URLS: bool = config("REDIRECT_OSU_URLS", cast=bool, default=True)
 
-PP_CACHED_ACCS: list[int] = [
+PP_CACHED_ACCURACIES: list[int] = [
     int(acc)
     for acc in config(
         "PP_CACHED_ACCS",
