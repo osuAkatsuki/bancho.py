@@ -114,8 +114,7 @@ class RankedStatus(IntEnum):
             self.Loved: "Loved",
         }[self]
 
-    @property
-    @functools.cache
+    @functools.cached_property
     def osu_api(self) -> int:
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
