@@ -26,6 +26,5 @@ class Achievement:
 
         self.cond = cond
 
-    @functools.cache
     def __repr__(self) -> str:
         return f"{self.file}+{self.name}+{self.desc}"

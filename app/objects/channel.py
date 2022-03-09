@@ -77,14 +77,12 @@ class Channel:
 
     # XXX: should this be cached differently?
 
-    @functools.cache
     def can_read(self, priv: Privileges) -> bool:
         if not self.read_priv:
             return True
 
         return priv & self.read_priv != 0
 
-    @functools.cache
     def can_write(self, priv: Privileges) -> bool:
         if not self.write_priv:
             return True

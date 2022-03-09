@@ -102,7 +102,6 @@ class RankedStatus(IntEnum):
     Qualified = 4
     Loved = 5
 
-    @functools.cache
     def __str__(self) -> str:
         return {
             self.NotSubmitted: "Unsubmitted",
@@ -595,7 +594,6 @@ class BeatmapSet:
         self.maps = maps or []
         self.last_osuapi_check = last_osuapi_check
 
-    @functools.lru_cache(maxsize=256)
     def __repr__(self) -> str:
         map_names = []
         for bmap in self.maps:
@@ -609,7 +607,6 @@ class BeatmapSet:
         """The online url for this beatmap set."""
         return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
 
-    @functools.cache
     def all_officially_ranked_or_approved(self) -> bool:
         """Whether all of the maps in the set are
         ranked or approved on official servers."""
@@ -621,7 +618,6 @@ class BeatmapSet:
                 return False
         return True
 
-    @functools.cache
     def all_officially_loved(self) -> bool:
         """Whether all of the maps in the set are
         loved on official servers."""

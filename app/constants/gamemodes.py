@@ -68,6 +68,5 @@ class GameMode(IntEnum):
         else:
             return self.value
 
-    @functools.cache
     def __repr__(self) -> str:
         return GAMEMODE_REPR_LIST[self.value]
