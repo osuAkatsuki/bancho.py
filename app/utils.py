@@ -15,6 +15,7 @@ from typing import Any
 from typing import Callable
 from typing import Optional
 from typing import Sequence
+from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
@@ -303,7 +304,15 @@ def _install_synchronous_excepthook() -> None:
     sys.excepthook = _excepthook
 
 
-def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str]]]]:
+class FrameInfo(TypedDict):
+    function: str
+    filename: str
+    lineno: int
+    charno: int
+    locals: dict[str, str]
+
+
+def get_appropriate_stacktrace() -> list[FrameInfo]:
     """Return information of all frames related to cmyui_pkg and below."""
     stack = inspect.stack()[1:]
     for idx, frame in enumerate(stack):
@@ -320,12 +329,10 @@ def get_appropriate_stacktrace() -> list[dict[str, Union[str, int, dict[str, str
             "charno": frame.index or 0,
             "locals": {k: repr(v) for k, v in frame.frame.f_locals.items()},
         }
-        for frame in stack[:idx]
-    ][
         # reverse for python-like stacktrace
         # ordering; puts the most recent
         # call closest to the command line
-        ::-1
+        for frame in reversed(stack[:idx])
     ]
 
 
