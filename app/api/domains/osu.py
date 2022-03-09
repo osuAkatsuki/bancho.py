@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import ipaddress
 import random
 import secrets
 import time
