@@ -18,7 +18,6 @@ import bcrypt
 import databases.core
 from cmyui.logging import Ansi
 from cmyui.logging import log
-from cmyui.logging import RGB
 from cmyui.utils import magnitude_fmt_time
 from fastapi import APIRouter
 from fastapi import Response
@@ -102,22 +101,13 @@ async def bancho_http_handler():
 @router.post("/")
 async def bancho_handler(
     request: Request,
+    osu_token: Optional[str] = Header(None),
     user_agent: Literal["osu!"] = Header(...),
-    host: str = Header(None),
 ):
     ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-    if user_agent != "osu!":
-        url = f"{request.method} {host}{request['path']}"
-        log(f"[{ip}] {url} missing user-agent.", Ansi.LRED)
-        return
-
-    # check for 'osu-token' in the headers.
-    # if it's not there, this is a login request.
-
-    if "osu-token" not in request.headers:
-        # login is a bit of a special case,
-        # so we'll handle it separately.
+    if osu_token is None:
+        # the client is performing a login
         async with app.state.sessions.players._lock:
             async with app.state.services.database.connection() as db_conn:
                 login_data = await login(await request.body(), ip, db_conn)
@@ -128,41 +118,37 @@ async def bancho_handler(
         )
 
     # get the player from the specified osu token.
-    player = app.state.sessions.players.get(token=request.headers["osu-token"])
+    player = app.state.sessions.players.get(token=osu_token)
 
     if not player:
-        # token not found; chances are that we just restarted
-        # the server - tell their client to reconnect immediately.
-        # (send 0ms restart packet since the server is already up)
+        # chances are, we just restarted the server
+        # tell their client to reconnect immediately.
         return Response(
-            content=app.packets.notification("Server has restarted.")
-            + app.packets.restart_server(0),
+            content=(
+                app.packets.notification("Server has restarted.")
+                + app.packets.restart_server(0)  # ms until reconnection
+            ),
         )
 
-    # restricted users may only use certain packet handlers.
-    if not player.restricted:
-        packet_map = app.state.packets["all"]
-    else:
+    if player.restricted:
+        # restricted users may only use certain packet handlers.
         packet_map = app.state.packets["restricted"]
+    else:
+        packet_map = app.state.packets["all"]
 
     # bancho connections can be comprised of multiple packets;
     # our reader is designed to iterate through them individually,
     # allowing logic to be implemented around the actual handler.
     # NOTE: any unhandled packets will be ignored internally.
 
-    packets_handled = []
     with memoryview(await request.body()) as body_view:
         for packet in BanchoPacketReader(body_view, packet_map):
             await packet.handle(player)
-            packets_handled.append(packet.__class__.__name__)
-
-    if app.settings.DEBUG:
-        packets_str = ", ".join(packets_handled) or "None"
-        log(f"[BANCHO] {player} | {packets_str}.", RGB(0xFF68AB))
 
     player.last_recv_time = time.time()
 
-    return Response(content=player.dequeue())
+    response_data = player.dequeue()
+    return Response(content=response_data)
 
 
 """ Packet logic """
