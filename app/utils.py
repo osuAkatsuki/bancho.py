@@ -588,10 +588,20 @@ def calculate_performances_std(
 
             calculator.calculate(osu_file_path)
 
+            pp = calculator.get_pp()
+            sr = calculator.get_sr()
+
+            if math.isnan(pp) or math.isinf(pp):
+                # TODO: report to logserver
+                pp = 0.0
+                sr = 0.0
+            else:
+                pp = round(pp, 5)
+
             results.append(
                 {
-                    "performance": calculator.get_pp(),
-                    "star_rating": calculator.get_sr(),
+                    "performance": pp,
+                    "star_rating": sr,
                 },
             )
 
@@ -618,10 +628,21 @@ def calculate_performances_taiko(
         )
 
         result = calculator.calculate(beatmap)
+
+        pp = result.pp
+        sr = result.stars
+
+        if math.isnan(pp) or math.isinf(pp):
+            # TODO: report to logserver
+            pp = 0.0
+            sr = 0.0
+        else:
+            pp = round(pp, 5)
+
         results.append(
             {
-                "performance": result.pp,
-                "star_rating": result.stars,
+                "performance": pp,
+                "star_rating": sr,
             },
         )
 
@@ -648,10 +669,21 @@ def calculate_performances_catch(
         )
 
         result = calculator.calculate(beatmap)
+
+        pp = result.pp
+        sr = result.stars
+
+        if math.isnan(pp) or math.isinf(pp):
+            # TODO: report to logserver
+            pp = 0.0
+            sr = 0.0
+        else:
+            pp = round(pp, 5)
+
         results.append(
             {
-                "performance": result.pp,
-                "star_rating": result.stars,
+                "performance": pp,
+                "star_rating": sr,
             },
         )
 
@@ -676,10 +708,21 @@ def calculate_performances_mania(
         )
 
         result = calculator.calculate(beatmap)
+
+        pp = result.pp
+        sr = result.stars
+
+        if math.isnan(pp) or math.isinf(pp):
+            # TODO: report to logserver
+            pp = 0.0
+            sr = 0.0
+        else:
+            pp = round(pp, 5)
+
         results.append(
             {
-                "performance": result.pp,
-                "star_rating": result.stars,
+                "performance": pp,
+                "star_rating": sr,
             },
         )
 
