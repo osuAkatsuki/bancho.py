@@ -1440,7 +1440,7 @@ async def reload(ctx: Context) -> Optional[str]:
 async def server(ctx: Context) -> Optional[str]:
     """Retrieve performance data about the server."""
 
-    build_str = f"gulag v{app.settings.VERSION!r} ({app.settings.DOMAIN})"
+    build_str = f"gulag v{app.settings.VERSION} ({app.settings.DOMAIN})"
 
     # get info about this process
     proc = psutil.Process(os.getpid())
@@ -1458,7 +1458,7 @@ async def server(ctx: Context) -> Optional[str]:
         )
 
     # list of all cpus installed with thread count
-    cpus_info = " | ".join([f"{v}x {k}" for k, v in model_names.most_common()])
+    cpus_info = " | ".join(f"{v}x {k}" for k, v in model_names.most_common())
 
     # get system-wide ram usage
     sys_ram = psutil.virtual_memory()
@@ -1468,21 +1468,26 @@ async def server(ctx: Context) -> Optional[str]:
     ram_values = (gulag_ram, sys_ram.used, sys_ram.total)
     ram_info = " / ".join([f"{v // 1024 ** 2}MB" for v in ram_values])
 
+    # current state of settings
+    mirror_url = app.settings.MIRROR_URL
+    using_osuapi = app.settings.OSU_API_KEY != ""
+    advanced_mode = app.settings.DEVELOPER_MODE
+    auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
+
+    # package versioning info
     # divide up pkg versions, 3 displayed per line, e.g.
     # aiohttp v3.6.3 | aiomysql v0.0.21 | bcrypt v3.2.0
     # cmyui v1.7.3 | datadog v0.40.1 | geoip2 v4.1.0
     # maniera v1.0.0 | mysql-connector-python v8.0.23 | orjson v3.5.1
     # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
     reqs = (Path.cwd() / "requirements.txt").read_text().splitlines()
-    pkg_sections = [reqs[i : i + 3] for i in range(0, len(reqs), 3)]
-
-    mirror_url = app.settings.MIRROR_URL
-    using_osuapi = app.settings.OSU_API_KEY != ""
-    advanced_mode = app.settings.DEVELOPER_MODE
-    auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
+    requirements_info = "\n".join(
+        " | ".join("{} v{}".format(*pkg.split("==")) for pkg in section)
+        for section in (reqs[i : i + 3] for i in range(0, len(reqs), 3))
+    )
 
     return "\n".join(
-        [
+        (
             f"{build_str} | uptime: {seconds_readable(uptime)}",
             f"cpu(s): {cpus_info}",
             f"ram: {ram_info}",
@@ -1490,13 +1495,8 @@ async def server(ctx: Context) -> Optional[str]:
             f"advanced mode: {advanced_mode} | auto logging: {auto_logging}",
             "",
             "requirements",
-            "\n".join(
-                [
-                    " | ".join(["{} v{}".format(*pkg.split("==")) for pkg in section])
-                    for section in pkg_sections
-                ],
-            ),
-        ],
+            requirements_info,
+        ),
     )
 
 
