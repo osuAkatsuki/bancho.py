@@ -418,20 +418,21 @@ class Beatmap:
         bmap = await cls._from_bid_cache(bid)
 
         if not bmap:
-            # try getting the set id either from the db,
-            # or the osu!api. we want to get the whole set
-            # cached all at once to minimize osu!api
-            # requests overall in the long run
+            # map not found in cache
+
+            # to be efficient, we want to cache the whole set
+            # at once rather than caching the individual map
+
             res = await app.state.services.database.fetch_one(
                 "SELECT set_id FROM maps WHERE id = :map_id",
                 {"map_id": bid},
             )
 
-            if res:
-                # found set id in db
+            if res is not None:
+                # set found in db
                 set_id = res["set_id"]
             else:
-                # failed to get from db, try osu!api
+                # set not found in db, try osu!api
                 api_data = await osuapiv1_getbeatmaps(b=bid)
 
                 if not api_data:
@@ -439,15 +440,12 @@ class Beatmap:
 
                 set_id = int(api_data[0]["beatmapset_id"])
 
-            # we have a valid set id, fetch the whole set.
-            if not await BeatmapSet.from_bsid(set_id):
-                return None
+            # fetch (and cache) beatmap set
+            beatmap_set = await BeatmapSet.from_bsid(set_id)
 
-            # fetching the set will put all maps in cache
-            bmap = await cls._from_bid_cache(bid, check_updates=False)
-
-            if not bmap:
-                return None
+            if beatmap_set is not None:
+                # the beatmap set has been cached - fetch beatmap from cache
+                bmap = await cls._from_bid_cache(bid, check_updates=False)
 
         return bmap
 
