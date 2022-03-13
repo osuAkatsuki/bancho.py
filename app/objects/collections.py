@@ -51,7 +51,7 @@ class Channels(list[Channel]):
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
-            return o in map(lambda c: c.name, self)
+            return o in (chan.name for chan in self)
         else:
             return super().__contains__(o)
 
@@ -138,7 +138,7 @@ class Matches(list[Optional[Match]]):
         return super().__iter__()
 
     def __repr__(self) -> str:
-        return f'[{", ".join([m.name for m in self if m])}]'
+        return f'[{", ".join(match.name for match in self if match)}]'
 
     def get_free(self) -> Optional[int]:
         """Return the first free match id from `self`."""
@@ -192,7 +192,7 @@ class Players(list[Player]):
         # allow us to either pass in the player
         # obj, or the player name as a string.
         if isinstance(p, str):
-            return p in [player.name for player in self]
+            return p in (player.name for player in self)
         else:
             return super().__contains__(p)
 
@@ -385,7 +385,7 @@ class MapPools(list[MapPool]):
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
-            return o in [p.name for p in self]
+            return o in (pool.name for pool in self)
         else:
             return o in self
 
@@ -467,7 +467,7 @@ class Clans(list[Clan]):
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
-            return o in [c.name for c in self]
+            return o in (clan.name for clan in self)
         else:
             return o in self
 

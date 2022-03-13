@@ -700,7 +700,7 @@ class Player:
 
         self.leave_channel(self.match.chat)
 
-        if all(map(Slot.empty, self.match.slots)):
+        if all(slot.empty() for slot in self.match.slots):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f"Match {self.match} finished.")
@@ -721,9 +721,9 @@ class Player:
             if lobby := app.state.sessions.channels["#lobby"]:
                 lobby.enqueue(app.packets.dispose_match(self.match.id))
 
-        else:
-            # we may have been host, if so, find another.
+        else:  # multi is not empty
             if self is self.match.host:
+                # player was host, trasnfer to first occupied slot
                 for s in self.match.slots:
                     if s.status & SlotStatus.has_player:
                         self.match.host_id = s.player.id

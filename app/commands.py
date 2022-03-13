@@ -455,7 +455,7 @@ async def _with(ctx: Context) -> Optional[str]:
 
         # parse acc, misses, combo and mods from arguments.
         # tried to balance complexity vs correctness here
-        for arg in map(str.lower, ctx.args):
+        for arg in (arg.lower() for arg in ctx.args):
             # mandatory suffix, combo & nmiss
             if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
                 combo = int(arg[:-1])

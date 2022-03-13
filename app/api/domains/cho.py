@@ -2035,14 +2035,12 @@ class UserPresenceRequestAll(BasePacket):
         # NOTE: this packet is only used when there
         # are >256 players visible to the client.
 
-        p.enqueue(
-            b"".join(
-                map(
-                    app.packets.user_presence,
-                    app.state.sessions.players.unrestricted,
-                ),
-            ),
-        )
+        buffer = bytearray()
+
+        for player in app.state.sessions.players.unrestricted:
+            buffer += app.packets.user_presence(player)
+
+        p.enqueue(bytes(buffer))
 
 
 @register(ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)
