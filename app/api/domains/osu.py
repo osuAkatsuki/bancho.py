@@ -555,6 +555,11 @@ def chart_entry(name: str, before: Optional[T], after: T) -> str:
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
+    # TODO: should token be allowed
+    # through but ac'd if not found?
+    # TODO: validate token format
+    # TODO: save token in the database
+    token: str = Header(...),
     # TODO: do ft & st contain pauses?
     exited_out: bool = Form(..., alias="x"),
     fail_time: int = Form(..., alias="ft"),
