@@ -176,11 +176,11 @@ async def api_get_player_info(
 
     # fetch user's stats if requested
     if scope in ("stats", "all"):
-        api_data["stats"] = []
+        api_data["stats"] = {}
 
-        # get all regular stats
+        # get all stats
         rows = await app.state.services.database.fetch_all(
-            "SELECT tscore, rscore, pp, plays, playtime, acc, max_combo, "
+            "SELECT mode, tscore, rscore, pp, plays, playtime, acc, max_combo, "
             "xh_count, x_count, sh_count, s_count, a_count FROM stats "
             "WHERE id = :userid",
             {"userid": resolved_user_id},
@@ -201,7 +201,8 @@ async def api_get_player_info(
                 country_rank + 1 if country_rank is not None else 0
             )
 
-            api_data["stats"].append(mode_stats)
+            mode = str(mode_stats.pop("mode"))
+            api_data["stats"][mode] = mode_stats
 
     return ORJSONResponse({"status": "success", "player": api_data})
 
