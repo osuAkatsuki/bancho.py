@@ -478,6 +478,11 @@ class Player:
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
 
+        if self.online:
+            # if they're online, send a packet
+            # to update their client-side privileges
+            self.enqueue(app.packets.bancho_privileges(self.bancho_priv))
+
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
@@ -489,6 +494,11 @@ class Player:
 
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
+
+        if self.online:
+            # if they're online, send a packet
+            # to update their client-side privileges
+            self.enqueue(app.packets.bancho_privileges(self.bancho_priv))
 
     async def restrict(self, admin: "Player", reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
