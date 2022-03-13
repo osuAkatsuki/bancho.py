@@ -37,7 +37,7 @@ class Clan:
         self.owner_id = owner_id  # userid
         self.member_ids = member_ids  # userids
 
-    async def add_member(self, p: "Player") -> None:
+    async def add_member(self, p: Player) -> None:
         """Add a given player to the clan's members."""
         self.member_ids.add(p.id)
 
@@ -49,7 +49,7 @@ class Clan:
         p.clan = self
         p.clan_priv = ClanPrivileges.Member
 
-    async def remove_member(self, p: "Player") -> None:
+    async def remove_member(self, p: Player) -> None:
         """Remove a given player from the clan's members."""
         self.member_ids.remove(p.id)
 

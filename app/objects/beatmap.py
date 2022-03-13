@@ -374,7 +374,7 @@ class Beatmap:
     # populating the higher levels of the cache with new maps.
 
     @classmethod
-    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional["Beatmap"]:
+    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional[Beatmap]:
         """Fetch a map from the cache, database, or osuapi by md5."""
         bmap = await cls._from_md5_cache(md5)
 
@@ -413,7 +413,7 @@ class Beatmap:
         return bmap
 
     @classmethod
-    async def from_bid(cls, bid: int) -> Optional["Beatmap"]:
+    async def from_bid(cls, bid: int) -> Optional[Beatmap]:
         """Fetch a map from the cache, database, or osuapi by id."""
         bmap = await cls._from_bid_cache(bid)
 
@@ -518,7 +518,7 @@ class Beatmap:
     async def _from_md5_cache(
         md5: str,
         check_updates: bool = True,
-    ) -> Optional["Beatmap"]:
+    ) -> Optional[Beatmap]:
         """Fetch a map from the cache by md5."""
         if md5 in app.state.cache.beatmap:
             bmap: Beatmap = app.state.cache.beatmap[md5]
@@ -534,7 +534,7 @@ class Beatmap:
     async def _from_bid_cache(
         bid: int,
         check_updates: bool = True,
-    ) -> Optional["Beatmap"]:
+    ) -> Optional[Beatmap]:
         """Fetch a map from the cache by id."""
         if bid in app.state.cache.beatmap:
             bmap: Beatmap = app.state.cache.beatmap[bid]
@@ -804,7 +804,7 @@ class BeatmapSet:
         )
 
     @staticmethod
-    async def _from_bsid_cache(bsid: int) -> Optional["BeatmapSet"]:
+    async def _from_bsid_cache(bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the cache by set id."""
         if bsid in app.state.cache.beatmapset:
             bmap_set: BeatmapSet = app.state.cache.beatmapset[bsid]
@@ -817,7 +817,7 @@ class BeatmapSet:
         return None
 
     @classmethod
-    async def _from_bsid_sql(cls, bsid: int) -> Optional["BeatmapSet"]:
+    async def _from_bsid_sql(cls, bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the database by set id."""
         async with app.state.services.database.connection() as db_conn:
             last_osuapi_check = await db_conn.fetch_val(
@@ -863,7 +863,7 @@ class BeatmapSet:
         return bmap_set
 
     @classmethod
-    async def _from_bsid_osuapi(cls, bsid: int) -> Optional["BeatmapSet"]:
+    async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the osu!api by set id."""
         if api_data := await osuapiv1_getbeatmaps(s=bsid):
             self = cls(id=bsid, last_osuapi_check=datetime.now())
@@ -912,7 +912,7 @@ class BeatmapSet:
         return None
 
     @classmethod
-    async def from_bsid(cls, bsid: int) -> Optional["BeatmapSet"]:
+    async def from_bsid(cls, bsid: int) -> Optional[BeatmapSet]:
         """Cache all maps in a set from the osuapi, optionally
         returning beatmaps by their md5 or id."""
         bmap_set = await cls._from_bsid_cache(bsid)

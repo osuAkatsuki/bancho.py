@@ -965,7 +965,7 @@ async def api_get_pool(
 
 # @domain.route("/set_avatar", methods=["POST", "PUT"])
 # @requires_api_key
-# async def api_set_avatar(conn: Connection, p: "Player") -> HTTPResponse:
+# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
 #     """Update the tokenholder's avatar to a given file."""
 #     if "avatar" not in conn.files:
 #         return (400, JSON({"status": "must provide avatar file."}))

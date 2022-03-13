@@ -464,7 +464,7 @@ class Match:
     async def await_submissions(
         self,
         was_playing: Sequence[Slot],
-    ) -> "tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]":
+    ) -> tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]:
         """Await score submissions from all players in completed state."""
         scores: dict[Union[MatchTeams, Player], int] = defaultdict(int)
         didnt_submit: list[Player] = []

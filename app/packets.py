@@ -284,7 +284,7 @@ class BasePacket(ABC):
         ...
 
     @abstractmethod
-    async def handle(self, p: "Player") -> None:
+    async def handle(self, p: Player) -> None:
         ...
 
 

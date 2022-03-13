@@ -198,7 +198,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int) -> Optional["Score"]:
+    async def from_sql(cls, score_id: int) -> Optional[Score]:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -259,7 +259,7 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data: list[str]) -> "Score":
+    async def from_submission(cls, data: list[str]) -> Score:
         """Create a score object from an osu! submission string."""
         s = cls()
 

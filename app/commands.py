@@ -1597,7 +1597,7 @@ def ensure_match(
 
 @mp_commands.add(Privileges.NORMAL, aliases=["h"])
 @ensure_match
-async def mp_help(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_help(ctx: Context, match: Match) -> Optional[str]:
     """Show all documented multiplayer commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
     cmds = []
@@ -1614,7 +1614,7 @@ async def mp_help(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["st"])
 @ensure_match
-async def mp_start(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_start(ctx: Context, match: Match) -> Optional[str]:
     """Start the current multiplayer match, with any players ready."""
     if len(ctx.args) > 1:
         return "Invalid syntax: !mp start <force/seconds>"
@@ -1700,7 +1700,7 @@ async def mp_start(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["a"])
 @ensure_match
-async def mp_abort(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_abort(ctx: Context, match: Match) -> Optional[str]:
     """Abort the current in-progress multiplayer match."""
     if not match.in_progress:
         return "Abort what?"
@@ -1715,7 +1715,7 @@ async def mp_abort(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_map(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_map(ctx: Context, match: Match) -> Optional[str]:
     """Set the current match's current map by id."""
     if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
         return "Invalid syntax: !mp map <beatmapid>"
@@ -1740,7 +1740,7 @@ async def mp_map(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_mods(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_mods(ctx: Context, match: Match) -> Optional[str]:
     """Set the current match's mods, from string form."""
     if len(ctx.args) != 1 or len(ctx.args[0]) % 2 != 0:
         return "Invalid syntax: !mp mods <mods>"
@@ -1765,7 +1765,7 @@ async def mp_mods(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["fm", "fmods"])
 @ensure_match
-async def mp_freemods(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
     """Toggle freemods status for the match."""
     if len(ctx.args) != 1 or ctx.args[0] not in ("on", "off"):
         return "Invalid syntax: !mp freemods <on/off>"
@@ -1801,7 +1801,7 @@ async def mp_freemods(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_host(ctx: Context, match: Match) -> Optional[str]:
     """Set the current match's current host by id."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp host <name>"
@@ -1824,7 +1824,7 @@ async def mp_host(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_randpw(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_randpw(ctx: Context, match: Match) -> Optional[str]:
     """Randomize the current match's password."""
     match.passwd = secrets.token_hex(8)
     return "Match password randomized."
@@ -1832,7 +1832,7 @@ async def mp_randpw(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["inv"])
 @ensure_match
-async def mp_invite(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_invite(ctx: Context, match: Match) -> Optional[str]:
     """Invite a player to the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp invite <name>"
@@ -1852,7 +1852,7 @@ async def mp_invite(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_addref(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_addref(ctx: Context, match: Match) -> Optional[str]:
     """Add a referee to the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
@@ -1872,7 +1872,7 @@ async def mp_addref(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_rmref(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_rmref(ctx: Context, match: Match) -> Optional[str]:
     """Remove a referee from the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
@@ -1892,14 +1892,14 @@ async def mp_rmref(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_listref(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_listref(ctx: Context, match: Match) -> Optional[str]:
     """List all referees from the current match."""
     return ", ".join(map(str, match.refs)) + "."
 
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_lock(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_lock(ctx: Context, match: Match) -> Optional[str]:
     """Lock all unused slots in the current match."""
     for slot in match.slots:
         if slot.status == SlotStatus.open:
@@ -1911,7 +1911,7 @@ async def mp_lock(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_unlock(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_unlock(ctx: Context, match: Match) -> Optional[str]:
     """Unlock locked slots in the current match."""
     for slot in match.slots:
         if slot.status == SlotStatus.locked:
@@ -1923,7 +1923,7 @@ async def mp_unlock(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_teams(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_teams(ctx: Context, match: Match) -> Optional[str]:
     """Change the team type for the current match."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp teams <type>"
@@ -1964,7 +1964,7 @@ async def mp_teams(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["cond"])
 @ensure_match
-async def mp_condition(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_condition(ctx: Context, match: Match) -> Optional[str]:
     """Change the win condition for the match."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp condition <type>"
@@ -2002,7 +2002,7 @@ async def mp_condition(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["autoref"])
 @ensure_match
-async def mp_scrim(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_scrim(ctx: Context, match: Match) -> Optional[str]:
     """Start a scrim in the current match."""
     if len(ctx.args) != 1 or not (r_match := regexes.BEST_OF.fullmatch(ctx.args[0])):
         return "Invalid syntax: !mp scrim <bo#>"
@@ -2040,7 +2040,7 @@ async def mp_scrim(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["end"])
 @ensure_match
-async def mp_endscrim(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_endscrim(ctx: Context, match: Match) -> Optional[str]:
     """End the current matches ongoing scrim."""
     if not match.is_scrimming:
         return "Not currently scrimming!"
@@ -2052,7 +2052,7 @@ async def mp_endscrim(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["rm"])
 @ensure_match
-async def mp_rematch(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_rematch(ctx: Context, match: Match) -> Optional[str]:
     """Restart a scrim, or roll back previous match point."""
     if ctx.args:
         return "Invalid syntax: !mp rematch"
@@ -2088,7 +2088,7 @@ async def mp_rematch(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.ADMINISTRATOR, aliases=["f"], hidden=True)
 @ensure_match
-async def mp_force(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_force(ctx: Context, match: Match) -> Optional[str]:
     """Force a player into the current match by name."""
     # NOTE: this overrides any limits such as silences or passwd.
     if len(ctx.args) != 1:
@@ -2106,7 +2106,7 @@ async def mp_force(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["lp"])
 @ensure_match
-async def mp_loadpool(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_loadpool(ctx: Context, match: Match) -> Optional[str]:
     """Load a mappool into the current match."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp loadpool <name>"
@@ -2128,7 +2128,7 @@ async def mp_loadpool(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL, aliases=["ulp"])
 @ensure_match
-async def mp_unloadpool(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_unloadpool(ctx: Context, match: Match) -> Optional[str]:
     """Unload the current matches mappool."""
     if ctx.args:
         return "Invalid syntax: !mp unloadpool"
@@ -2145,7 +2145,7 @@ async def mp_unloadpool(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_ban(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_ban(ctx: Context, match: Match) -> Optional[str]:
     """Ban a pick in the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp ban <pick>"
@@ -2175,7 +2175,7 @@ async def mp_ban(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_unban(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_unban(ctx: Context, match: Match) -> Optional[str]:
     """Unban a pick in the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp unban <pick>"
@@ -2205,7 +2205,7 @@ async def mp_unban(ctx: Context, match: "Match") -> Optional[str]:
 
 @mp_commands.add(Privileges.NORMAL)
 @ensure_match
-async def mp_pick(ctx: Context, match: "Match") -> Optional[str]:
+async def mp_pick(ctx: Context, match: Match) -> Optional[str]:
     """Pick a map from the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp pick <pick>"

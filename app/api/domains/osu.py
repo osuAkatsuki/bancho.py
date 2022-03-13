@@ -171,7 +171,7 @@ async def osuError(
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
-    player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
+    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
 ):
@@ -219,7 +219,7 @@ async def osuScreenshot(
 
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ):
     return "\n".join(map(str, player.friends)).encode()
 
@@ -237,7 +237,7 @@ def gulag_to_osuapi_status(gulag_status: int) -> int:
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
@@ -305,7 +305,7 @@ async def osuGetBeatmapInfo(
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     rows = await db_conn.fetch_all(
@@ -318,7 +318,7 @@ async def osuGetFavourites(
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
@@ -347,7 +347,7 @@ async def lastFM(
         ),
         alias="b",
     ),
-    player: "Player" = Depends(authenticate_player_session(Query, "us", "ha")),
+    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
 ):
     if beatmap_id_or_hidden_flag[0] != "a":
         # not anticheat related, tell the
@@ -430,7 +430,7 @@ DIRECT_MAP_INFO_FMTSTR = (
 
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     ranked_status: int = Query(..., alias="r", ge=0, le=8),
     query: str = Query(..., alias="q"),
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
@@ -509,7 +509,7 @@ async def osuSearchHandler(
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
@@ -1061,7 +1061,7 @@ async def osuSubmitModularSelector(
 
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
@@ -1081,7 +1081,7 @@ async def getReplay(
 
 @router.get("/web/osu-rate.php")
 async def osuRate(
-    player: "Player" = Depends(
+    player: Player = Depends(
         authenticate_player_session(Query, "u", "p", err=b"auth fail"),
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
@@ -1152,7 +1152,7 @@ SCORE_LISTING_FMTSTR = (
 
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
-    player: "Player" = Depends(authenticate_player_session(Query, "us", "ha")),
+    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
     get_scores: bool = Query(..., alias="s"),  # NOTE: this is flipped
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
@@ -1366,7 +1366,7 @@ async def getScores(
 
 @router.post("/web/osu-comment.php")
 async def osuComment(
-    player: "Player" = Depends(authenticate_player_session(Form, "u", "p")),
+    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
     score_id: int = Form(..., alias="r", ge=0, le=9_223_372_036_854_775_807),
@@ -1455,7 +1455,7 @@ async def osuComment(
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
@@ -1479,7 +1479,7 @@ async def osuSeasonal():
 
 @router.get("/web/bancho_connect.php")
 async def banchoConnect(
-    player: "Player" = Depends(authenticate_player_session(Query, "u", "h")),
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
     active_endpoint: Optional[str] = Query(None, alias="fail"),
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
