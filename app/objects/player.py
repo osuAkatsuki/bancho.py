@@ -21,6 +21,7 @@ from cmyui.logging import log
 import app.packets
 import app.settings
 import app.state
+from app._typing import IPAddress
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
@@ -142,6 +143,29 @@ class LastNp(TypedDict):
     timeout: float
 
 
+class ClientDetails:
+    def __init__(
+        self,
+        osu_version: date,
+        osu_path_md5: str,
+        adapters_md5: str,
+        uninstall_md5: str,
+        disk_signature_md5: str,
+        adapters: list[str],
+        ip: IPAddress,
+    ) -> None:
+        self.osu_version = osu_version
+        self.osu_path_md5 = osu_path_md5
+        self.adapters_md5 = adapters_md5
+        self.uninstall_md5 = uninstall_md5
+        self.disk_signature_md5 = disk_signature_md5
+
+        self.adapters = adapters
+        self.ip = ip
+
+    # TODO: __str__ to pack like osu! hashes?
+
+
 class Player:
     """\
     Server side representation of a player; not necessarily online.
@@ -205,7 +229,7 @@ class Player:
         "away_msg",
         "silence_end",
         "in_lobby",
-        "osu_ver",
+        "client_details",
         "pres_filter",
         "login_time",
         "last_recv_time",
@@ -257,8 +281,8 @@ class Player:
         self.match: Optional[Match] = None
         self.stealth = False
 
-        self.clan: Optional[Clan] = extras.get("clan", None)
-        self.clan_priv: Optional[ClanPrivileges] = extras.get("clan_priv", None)
+        self.clan: Optional[Clan] = extras.get("clan")
+        self.clan_priv: Optional[ClanPrivileges] = extras.get("clan_priv")
 
         self.achievements: set[Achievement] = set()
 
@@ -276,7 +300,8 @@ class Player:
         self.away_msg: Optional[str] = None
         self.silence_end = extras.get("silence_end", 0)
         self.in_lobby = False
-        self.osu_ver: Optional[date] = extras.get("osu_ver", None)
+
+        self.client_details: Optional[ClientDetails] = extras.get("client_details")
         self.pres_filter = PresenceFilter.Nil
 
         login_time = extras.get("login_time", 0.0)

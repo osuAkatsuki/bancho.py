@@ -52,6 +52,7 @@ from app.objects.menu import Menu
 from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.player import Action
+from app.objects.player import ClientDetails
 from app.objects.player import Player
 from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
@@ -393,6 +394,59 @@ class LoginResponse(TypedDict):
     response_body: bytes
 
 
+class LoginData(TypedDict):
+    username: str
+    password_md5: bytes
+    osu_version: str
+    utc_offset: int
+    display_city: bool
+    pm_private: bool
+    osu_path_md5: str
+    adapters_str: str
+    adapters_md5: str
+    uninstall_md5: str
+    disk_signature_md5: str
+
+
+def parse_login_data(data: bytes) -> LoginData:
+    """Parse data from the body of a login request."""
+    (
+        username,
+        password_md5,
+        remainder,
+    ) = data.decode().split("\n", maxsplit=2)
+
+    (
+        osu_version,
+        utc_offset,
+        display_city,
+        client_hashes,
+        pm_private,
+    ) = remainder.split("|", maxsplit=4)
+
+    (
+        osu_path_md5,
+        adapters_str,
+        adapters_md5,
+        uninstall_md5,
+        disk_signature_md5,
+    ) = client_hashes[:-1].split(":", maxsplit=4)
+
+    return {
+        "username": username,
+        "password_md5": password_md5.encode(),
+        "osu_version": osu_version,
+        "utc_offset": int(utc_offset),
+        "display_city": display_city == "1",
+        "pm_private": pm_private == "1",
+        "osu_path_md5": osu_path_md5,
+        "adapters_str": adapters_str,
+        "adapters_md5": adapters_md5,
+        "uninstall_md5": uninstall_md5,
+        "disk_signature_md5": disk_signature_md5,
+    }
+
+
 async def login(
     body: bytes,
     ip: IPAddress,
@@ -422,135 +476,81 @@ async def login(
       other: valid id, logged in
     """
 
-    """ Parse data and verify the request is legitimate. """
+    # parse login data
+    login_data = parse_login_data(body)
 
-    if len(split := body.decode().split("\n")[:-1]) != 3:
-        log(f"Invalid login request from {ip}.", Ansi.LRED)
+    # perform some validation & further parsing on the data
+
+    match = regexes.OSU_VERSION.match(login_data["osu_version"])
+    if match is None:
         return {
             "osu_token": "invalid-request",
             "response_body": b"",
         }
 
-    username = split[0]
-    pw_md5 = split[1].encode()
-
-    if len(client_info := split[2].split("|")) != 5:
-        return {
-            "osu_token": "invalid-request",
-            "response_body": b"",
-        }
-
-    osu_ver_str = client_info[0]
-
-    if not (r_match := regexes.OSU_VERSION.match(osu_ver_str)):
-        return {
-            "osu_token": "invalid-request",
-            "response_body": b"",
-        }
-
-    # quite a bit faster than using dt.strptime.
-    osu_ver_date = date(
-        year=int(r_match["ver"][0:4]),
-        month=int(r_match["ver"][4:6]),
-        day=int(r_match["ver"][6:8]),
+    # (quite a bit faster than using dt.strptime)
+    osu_version_date = date(
+        year=int(match["ver"][0:4]),
+        month=int(match["ver"][4:6]),
+        day=int(match["ver"][6:8]),
     )
-
-    osu_ver_stream = r_match["stream"] or "stable"
+    osu_ver_stream = match["stream"] or "stable"
     using_tourney_client = osu_ver_stream == "tourney"
 
-    # disallow the login if their osu! client is older
-    # than three months old, forcing an update re-check.
-    # NOTE: this is disabled on debug since older clients
-    #       can sometimes be quite useful when testing.
-    if not app.settings.DEBUG:
-        # this is currently slow, but asottile is on the
-        # case https://bugs.python.org/issue44307 :D
-        if osu_ver_date < (date.today() - DELTA_90_DAYS):
-            return {
-                "osu_token": "client-too-old",
-                "response_body": (
-                    app.packets.version_update_forced() + app.packets.user_id(-2)
-                ),
-            }
-
-    # ensure utc_offset is a number (negative inclusive).
-    if not client_info[1].replace("-", "").isdecimal():
+    # disallow login for clients older than 90 days
+    if osu_version_date < (date.today() - DELTA_90_DAYS):
         return {
-            "osu_token": "invalid-request",
-            "response_body": b"",
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update_forced() + app.packets.user_id(-2)
+            ),
         }
 
-    utc_offset = int(client_info[1])
-    # display_city = client_info[2] == '1'
+    running_under_wine = login_data["adapters_str"] == "runningunderwine"
+    adapters = [a for a in login_data["adapters_str"][:-1].split(".") if a]
 
-    client_hashes = client_info[3][:-1].split(":")
-    if len(client_hashes) != 5:
-        return {
-            "osu_token": "invalid-request",
-            "response_body": b"",
-        }
-
-    # TODO: should these be stored in player object?
-    (
-        osu_path_md5,
-        adapters_str,
-        adapters_md5,
-        uninstall_md5,
-        disk_sig_md5,
-    ) = client_hashes
-
-    is_wine = adapters_str == "runningunderwine"
-    adapters = [a for a in adapters_str[:-1].split(".") if a]
-
-    if not (is_wine or adapters):
+    if not (running_under_wine or adapters):
         return {
             "osu_token": "empty-adapters",
             "response_body": (
                 app.packets.user_id(-1)
-                + app.packets.notification(
-                    "Please restart your osu! and try again.",
-                )
+                + app.packets.notification("Please restart your osu! and try again.")
             ),
         }
 
-    pm_private = client_info[4] == "1"
-
-    """ Parsing complete, now check the given data. """
+    ## parsing successful
 
     login_time = time.time()
 
-    # TODO: improve tourney client support, this is not great.
-    if not using_tourney_client:
-        # Check if the player is already online
-        if p := app.state.sessions.players.get(name=username):
-            # player is online, only allow multiple
-            # logins if they're on a tourney client.
-            if not p.tourney_client:
-                if (login_time - p.last_recv_time) > 10:
-                    # if the current player obj online hasn't
-                    # pinged the server in > 10 seconds, log
-                    # them out and login the new user.
-                    p.logout()
-                else:
-                    # the user is currently online, send back failure.
-                    return {
-                        "osu_token": "user-ghosted",
-                        "response_body": (
-                            app.packets.user_id(-1)
-                            + app.packets.notification(
-                                "User already logged in.",
-                            )
-                        ),
-                    }
+    # TODO: improve tournament client support
+    if p := app.state.sessions.players.get(name=login_data["username"]):
+        # player is already logged in - allow this only for tournament clients
+
+        if not (using_tourney_client or p.tourney_client):
+            # neither session is a tournament client, disallow
+
+            if (login_time - p.last_recv_time) > 10:
+                # let this session overrule the existing one
+                # (this is made to help prevent user ghosting)
+                p.logout()
+            else:
+                # current session is still active, disallow
+                return {
+                    "osu_token": "user-ghosted",
+                    "response_body": (
+                        app.packets.user_id(-1)
+                        + app.packets.notification("User already logged in.")
+                    ),
+                }
 
     user_info = await db_conn.fetch_one(
         "SELECT id, name, priv, pw_bcrypt, country, "
         "silence_end, clan_id, clan_priv, api_key "
         "FROM users WHERE safe_name = :name",
-        {"name": app.utils.make_safe_name(username)},
+        {"name": app.utils.make_safe_name(login_data["username"])},
     )
 
-    if not user_info:
+    if user_info is None:
         # no account by this name exists.
         return {
             "osu_token": "unknown-username",
@@ -571,7 +571,7 @@ async def login(
             "response_body": app.packets.user_id(-1),
         }
 
-    # get our bcrypt cache.
+    # get our bcrypt cache
     bcrypt_cache = app.state.cache.bcrypt
     pw_bcrypt = user_info["pw_bcrypt"].encode()
     user_info["pw_bcrypt"] = pw_bcrypt
@@ -579,7 +579,7 @@ async def login(
     # check credentials against db. algorithms like these are intentionally
     # designed to be slow; we'll cache the results to speed up subsequent logins.
     if pw_bcrypt in bcrypt_cache:  # ~0.01 ms
-        if pw_md5 != bcrypt_cache[pw_bcrypt]:
+        if login_data["password_md5"] != bcrypt_cache[pw_bcrypt]:
             return {
                 "osu_token": "incorrect-password",
                 "response_body": (
@@ -588,7 +588,7 @@ async def login(
                 ),
             }
     else:  # ~200ms
-        if not bcrypt.checkpw(pw_md5, pw_bcrypt):
+        if not bcrypt.checkpw(login_data["password_md5"], pw_bcrypt):
             return {
                 "osu_token": "incorrect-password",
                 "response_body": (
@@ -597,7 +597,7 @@ async def login(
                 ),
             }
 
-        bcrypt_cache[pw_bcrypt] = pw_md5
+        bcrypt_cache[pw_bcrypt] = login_data["password_md5"]
 
     """ login credentials verified """
 
@@ -608,7 +608,7 @@ async def login(
         {
             "id": user_info["id"],
             "ip": str(ip),
-            "osu_ver": osu_ver_date,
+            "osu_ver": osu_version_date,
             "osu_stream": osu_ver_stream,
         },
     )
@@ -623,24 +623,24 @@ async def login(
         "latest_time = NOW() ",
         {
             "id": user_info["id"],
-            "osupath": osu_path_md5,
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk_serial": disk_sig_md5,
+            "osupath": login_data["osu_path_md5"],
+            "adapters": login_data["adapters_md5"],
+            "uninstall": login_data["uninstall_md5"],
+            "disk_serial": login_data["disk_signature_md5"],
         },
     )
 
     # TODO: store adapters individually
 
-    if is_wine:
+    if running_under_wine:
         hw_checks = "h.uninstall_id = :uninstall"
-        hw_args = {"uninstall": uninstall_md5}
+        hw_args = {"uninstall": login_data["uninstall_md5"]}
     else:
         hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk_serial"
         hw_args = {
-            "adapters": adapters_md5,
-            "uninstall": uninstall_md5,
-            "disk_serial": disk_sig_md5,
+            "adapters": login_data["adapters_md5"],
+            "uninstall": login_data["uninstall_md5"],
+            "disk_serial": login_data["disk_signature_md5"],
         }
 
     hw_matches = await db_conn.fetch_all(
@@ -702,7 +702,7 @@ async def login(
         if db_country == "xx":
             # bugfix for old bancho.py versions when
             # country wasn't stored on registration.
-            log(f"Fixing {username}'s country.", Ansi.LGREEN)
+            log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
             await db_conn.execute(
                 "UPDATE users SET country = :country WHERE id = :user_id",
@@ -712,15 +712,26 @@ async def login(
                 },
             )
 
+    client_details = ClientDetails(
+        osu_version=osu_version_date,
+        osu_path_md5=login_data["osu_path_md5"],
+        adapters_md5=login_data["adapters_md5"],
+        uninstall_md5=login_data["uninstall_md5"],
+        disk_signature_md5=login_data["disk_signature_md5"],
+        adapters=adapters,
+        ip=ip,
+    )
+
     p = Player(
         **user_info,  # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}
-        utc_offset=utc_offset,
-        osu_ver=osu_ver_date,
-        pm_private=pm_private,
+        utc_offset=login_data["utc_offset"],
+        osu_ver=osu_version_date,
+        pm_private=login_data["pm_private"],
         login_time=login_time,
         clan=clan,
         clan_priv=clan_priv,
         tourney_client=using_tourney_client,
+        client_details=client_details,
     )
 
     data = bytearray(app.packets.protocol_version(19))
@@ -887,11 +898,11 @@ async def login(
         time_taken = time.time() - login_time
         app.state.services.datadog.histogram("bancho.login_time", time_taken)
 
-    user_os = "unix (wine)" if is_wine else "win32"
+    user_os = "unix (wine)" if running_under_wine else "win32"
     country_code = p.geoloc["country"]["acronym"].upper()
 
     log(
-        f"{p} logged in from {country_code} using {osu_ver_str} on {user_os}",
+        f"{p} logged in from {country_code} using {login_data['osu_version']} on {user_os}",
         Ansi.LCYAN,
     )
 
