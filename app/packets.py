@@ -779,6 +779,7 @@ def change_username(old: str, new: str) -> bytes:
 BOT_STATUSES = (
     (3, "the source code.."),  # editing
     (6, "geohot livestreams.."),  # watching
+    (6, "asottile tutorials.."),  # watching
     (6, "over the server.."),  # watching
     (8, "out new features.."),  # testing
     (9, "a pull request.."),  # submitting
