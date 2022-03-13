@@ -1493,7 +1493,7 @@ async def server(ctx: Context) -> Optional[str]:
             "requirements",
             "\n".join(
                 [
-                    " | ".join([f"{pkg} v{pkg_version(pkg)}" for pkg in section])
+                    " | ".join(["{} v{}".format(*pkg.split("==")) for pkg in section])
                     for section in pkg_sections
                 ],
             ),
