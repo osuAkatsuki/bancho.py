@@ -462,20 +462,14 @@ async def osuSearchHandler(
                 if resp.status == status.HTTP_404_NOT_FOUND:
                     return b"0"
 
-            if 400 <= resp.status < 500:
-                # client error, report this to cmyui
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.state.services.log_strange_occurrence(stacktrace)
-
             return b"-1\nFailed to retrieve data from the beatmap mirror."
 
         result = await resp.json()
 
         if USING_CHIMU:
             if result["code"] != 0:
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.state.services.log_strange_occurrence(stacktrace)
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
+
             result = result["data"]
 
     lresult = len(result)  # send over 100 if we receive
