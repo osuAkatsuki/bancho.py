@@ -11,6 +11,7 @@ import secrets
 import signal
 import struct
 import time
+import traceback
 import uuid
 from collections import Counter
 from dataclasses import dataclass
@@ -2701,16 +2702,23 @@ async def process_commands(
     for cmd in commands:
         if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
             # found matching trigger with sufficient privs
-            res = await cmd.callback(
-                Context(
-                    player=p,
-                    trigger=trigger,
-                    args=args,
-                    recipient=target,
-                ),
-            )
+            try:
+                res = await cmd.callback(
+                    Context(
+                        player=p,
+                        trigger=trigger,
+                        args=args,
+                        recipient=target,
+                    ),
+                )
+            except Exception:
+                # print exception info to the console,
+                # but do not break the player's session.
+                traceback.print_exc()
 
-            if res:
+                res = "An exception occurred when running the command."
+
+            if res is not None:
                 # we have a message to return, include elapsed time
                 elapsed = cmyui.utils.magnitude_fmt_time(clock_ns() - start_time)
                 return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
