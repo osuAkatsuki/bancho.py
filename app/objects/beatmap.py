@@ -379,21 +379,23 @@ class Beatmap:
         bmap = await cls._from_md5_cache(md5)
 
         if not bmap:
+            # map not found in cache
+
+            # to be efficient, we want to cache the whole set
+            # at once rather than caching the individual map
+
             if set_id <= 0:
-                # valid set id not provided, try getting it
-                # from the db, or the osu!api. we want to get
-                # the whole set cached all at once to minimize
-                # osu!api requests overall in the long run.
+                # set id not provided - fetch it from the map md5
                 res = await app.state.services.database.fetch_one(
                     "SELECT set_id FROM maps WHERE md5 = :map_md5",
                     {"map_md5": md5},
                 )
 
-                if res:
-                    # found set id in db
+                if res is not None:
+                    # set found in db
                     set_id = res["set_id"]
                 else:
-                    # failed to get from db, try osu!api
+                    # set not found in db, try osu!api
                     api_data = await osuapiv1_getbeatmaps(h=md5)
 
                     if not api_data:
@@ -401,15 +403,12 @@ class Beatmap:
 
                     set_id = int(api_data[0]["beatmapset_id"])
 
-            # we have a valid set id, fetch the whole set.
-            if not await BeatmapSet.from_bsid(set_id):
-                return None
+            # fetch (and cache) beatmap set
+            beatmap_set = await BeatmapSet.from_bsid(set_id)
 
-            # fetching the set will put all maps in cache
-            bmap = await cls._from_md5_cache(md5, check_updates=False)
-
-            if not bmap:
-                return None
+            if beatmap_set is not None:
+                # the beatmap set has been cached - fetch beatmap from cache
+                bmap = await cls._from_md5_cache(md5, check_updates=False)
 
         return bmap
 
@@ -938,14 +937,22 @@ class BeatmapSet:
         if not did_api_request and bmap_set._cache_expired():
             await bmap_set._update_if_available()
 
-        # cache the individual maps & set for future requests
-        beatmapset_cache = app.state.cache.beatmapset
-        beatmap_cache = app.state.cache.beatmap
-
-        beatmapset_cache[bsid] = bmap_set
-
-        for bmap in bmap_set.maps:
-            beatmap_cache[bmap.md5] = bmap
-            beatmap_cache[bmap.id] = bmap
+        # cache the beatmap set, and beatmaps
+        # to be efficient in future requests
+        cache_beatmap_set(bmap_set)
 
         return bmap_set
+
+
+def cache_beatmap(beatmap: Beatmap) -> None:
+    """Add the beatmap to the cache."""
+    app.state.cache.beatmap[beatmap.md5] = beatmap
+    app.state.cache.beatmap[beatmap.id] = beatmap
+
+
+def cache_beatmap_set(beatmap_set: BeatmapSet) -> None:
+    """Add the beatmap set, and each beatmap to the cache."""
+    app.state.cache.beatmapset[beatmap_set.id] = beatmap_set
+
+    for beatmap in beatmap_set.maps:
+        cache_beatmap(beatmap)

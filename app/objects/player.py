@@ -534,7 +534,7 @@ class Player:
 
         if self.online:
             # log the user out if they're offline, this
-            # will simply relog them and refresh their app.state.
+            # will simply relog them and refresh their app.state
             self.logout()
 
     async def unrestrict(self, admin: "Player", reason: str) -> None:
@@ -575,7 +575,7 @@ class Player:
 
         if self.online:
             # log the user out if they're offline, this
-            # will simply relog them and refresh their app.state.
+            # will simply relog them and refresh their app.state
             self.logout()
 
     async def silence(self, admin: "Player", duration: int, reason: str) -> None:
