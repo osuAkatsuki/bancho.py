@@ -18,6 +18,8 @@ from typing import Callable
 from typing import Literal
 from typing import Mapping
 from typing import Optional
+from typing import TypeVar
+from typing import Union
 from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
@@ -549,8 +551,11 @@ async def osuSearchSetHandler(
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 
-def chart_entry(name: str, before: Optional[object], after: object) -> str:
-    return f'{name}Before:{before or ""}|{name}After:{after}'
+T = TypeVar("T", bound=Union[int, float])
+
+
+def chart_entry(name: str, before: Optional[T], after: T) -> str:
+    return f"{name}Before:{before or ''}|{name}After:{after}"
 
 
 @router.post("/web/osu-submit-modular-selector.php")

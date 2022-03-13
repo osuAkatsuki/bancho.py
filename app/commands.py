@@ -1258,9 +1258,8 @@ async def recalc(ctx: Context) -> Optional[str]:
                 app.state.services.database.connection() as score_select_conn,
                 app.state.services.database.connection() as update_conn,
             ):
-                for (
-                    bmap_row
-                ) in await bmap_select_conn.fetch_all(  # TODO: should be aiter
+                # TODO: should be aiter
+                for bmap_row in await bmap_select_conn.fetch_all(
                     "SELECT id, md5 FROM maps WHERE passes > 0",
                 ):
                     bmap_id = bmap_row["id"]
