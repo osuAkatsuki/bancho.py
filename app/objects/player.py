@@ -432,7 +432,7 @@ class Player:
                 score = s
                 continue
 
-            if s.play_time > score.play_time:
+            if s.server_time > score.server_time:
                 score = s
 
         return score

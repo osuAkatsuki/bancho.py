@@ -555,17 +555,17 @@ def chart_entry(name: str, before: Optional[T], after: T) -> str:
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
-    # TODO: figure out object types/names
     # TODO: do ft & st contain pauses?
     exited_out: bool = Form(..., alias="x"),
     fail_time: int = Form(..., alias="ft"),
     visual_settings_b64: str = Form(..., alias="fs"),
-    bmk: str = Form(...),  # TODO: real name
+    updated_beatmap_hash: str = Form(..., alias="bmk"),
+    storyboard_md5: Optional[str] = Form(None, alias="sbk"),
     iv_b64: str = Form(..., alias="iv"),
-    unique_id: str = Form(..., alias="c1"),  # TODO: more validaton
+    unique_ids: str = Form(..., alias="c1"),  # TODO: more validaton
     score_time: int = Form(..., alias="st"),  # TODO: is this real name?
     pw_md5: str = Form(..., alias="pass"),
-    osu_ver: str = Form(..., alias="osuver"),  # TODO: regex
+    osu_version: str = Form(..., alias="osuver"),  # TODO: regex
     client_hash_b64: str = Form(..., alias="s"),
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
@@ -588,7 +588,7 @@ async def osuSubmitModularSelector(
 
     # attempt to decrypt score data
     aes = RijndaelCbc(
-        key=f"osu!-scoreburgr---------{osu_ver}".encode(),
+        key=f"osu!-scoreburgr---------{osu_version}".encode(),
         iv=b64decode(iv_b64),
         padding=Pkcs7Padding(32),
         block_size=32,
@@ -616,6 +616,54 @@ async def osuSubmitModularSelector(
     # attach bmap & player
     score.bmap = bmap
     score.player = player
+
+    ## perform checksum validation
+
+    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
+    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
+    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
+
+    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
+
+    try:
+        # TODO: assert osu_version
+        # TODO: assert client_hash
+        assert player.client_details is not None
+
+        # assert unique ids (c1) are correct and match login params
+        assert (
+            unique_id1_md5 == player.client_details.uninstall_md5
+        ), f"unique_id1 mismatch ({unique_id1_md5} != {player.client_details.uninstall_md5})"
+        assert (
+            unique_id2_md5 == player.client_details.disk_signature_md5
+        ), f"unique_id2 mismatch ({unique_id2_md5} != {player.client_details.disk_signature_md5})"
+
+        # assert online checksums match
+        server_score_checksum = score.compute_online_checksum(
+            osu_version=osu_version,
+            osu_client_hash=client_hash_decoded,
+            storyboard_checksum=storyboard_md5 or "",
+        )
+        assert (
+            score.client_checksum == server_score_checksum
+        ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
+
+        # assert beatmap hashes match
+        assert (
+            updated_beatmap_hash == bmap_md5
+        ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {bmap_md5}"
+
+    except AssertionError as exc:
+        # NOTE: this is undergoing a temporary trial period,
+        # after which, it will be enabled & perform restrictions.
+        stacktrace = app.utils.get_appropriate_stacktrace()
+        await app.state.services.log_strange_occurrence(stacktrace)
+
+        # await player.restrict(
+        #     admin=app.state.sessions.bot,
+        #     reason="Mismatching hashes on score submission",
+        # )
+        # return b"error: ban"
 
     # all data read from submission.
     # now we can calculate things based on our data.
@@ -656,7 +704,7 @@ async def osuSubmitModularSelector(
     # Check for score duplicates
     if await db_conn.fetch_one(
         "SELECT 1 FROM scores WHERE online_checksum = :checksum",
-        {"checksum": score.online_checksum},
+        {"checksum": score.client_checksum},
     ):
         log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
         return b"error: no"
@@ -781,12 +829,12 @@ async def osuSubmitModularSelector(
             "grade": score.grade.name,
             "status": score.status,
             "mode": score.mode,
-            "play_time": score.play_time,
+            "play_time": score.server_time,
             "time_elapsed": score.time_elapsed,
             "client_flags": score.client_flags,
             "user_id": score.player.id,
             "perfect": score.perfect,
-            "checksum": score.online_checksum,
+            "checksum": score.client_checksum,
         },
     )
 
