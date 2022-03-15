@@ -104,6 +104,9 @@ def init_events(asgi_app: FastAPI) -> None:
 
         await app.bg_loops.initialize_housekeeping_tasks()
 
+        log("Startup process complete.", Ansi.LGREEN)
+        log(f"Listening @ {app.settings.SERVER_ADDR}", Ansi.LMAGENTA)
+
     @asgi_app.on_event("shutdown")
     async def on_shutdown() -> None:
         # we want to attempt to gracefully finish any ongoing connections

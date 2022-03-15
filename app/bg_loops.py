@@ -18,6 +18,8 @@ OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
 
 async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
+    log("Initializing housekeeping tasks.", Ansi.LCYAN)
+
     loop = asyncio.get_running_loop()
 
     app.state.sessions.housekeeping_tasks.update(
