@@ -53,6 +53,7 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.player import Action
 from app.objects.player import ClientDetails
+from app.objects.player import OsuVersion
 from app.objects.player import Player
 from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
@@ -461,7 +462,7 @@ async def login(
       we return a tuple of (response_bytes, user_token) on success.
 
     Request format:
-      username\npasswd_md5\nosu_ver|utc_offset|display_city|client_hashes|pm_private\n
+      username\npasswd_md5\nosu_version|utc_offset|display_city|client_hashes|pm_private\n
 
     Response format:
       Packet 5 (userid), with ID:
@@ -488,17 +489,18 @@ async def login(
             "response_body": b"",
         }
 
-    # (quite a bit faster than using dt.strptime)
-    osu_version_date = date(
-        year=int(match["ver"][0:4]),
-        month=int(match["ver"][4:6]),
-        day=int(match["ver"][6:8]),
+    osu_version = OsuVersion(
+        date=date(
+            year=int(match["date"][0:4]),
+            month=int(match["date"][4:6]),
+            day=int(match["date"][6:8]),
+        ),
+        revision=int(match["revision"]) if match["revision"] else None,
+        stream=match["stream"],  # type: ignore
     )
-    osu_ver_stream = match["stream"] or "stable"
-    using_tourney_client = osu_ver_stream == "tourney"
 
     # disallow login for clients older than 90 days
-    if osu_version_date < (date.today() - DELTA_90_DAYS):
+    if osu_version.date < (date.today() - DELTA_90_DAYS):
         return {
             "osu_token": "client-too-old",
             "response_body": (
@@ -526,7 +528,7 @@ async def login(
     if p := app.state.sessions.players.get(name=login_data["username"]):
         # player is already logged in - allow this only for tournament clients
 
-        if not (using_tourney_client or p.tourney_client):
+        if not (osu_version.stream == "tourney" or p.tourney_client):
             # neither session is a tournament client, disallow
 
             if (login_time - p.last_recv_time) > 10:
@@ -562,7 +564,7 @@ async def login(
 
     user_info = dict(user_info)  # make a mutable copy
 
-    if using_tourney_client and not (
+    if osu_version.stream == "tourney" and not (
         user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
     ):
         # trying to use tourney client with insufficient privileges.
@@ -608,8 +610,8 @@ async def login(
         {
             "id": user_info["id"],
             "ip": str(ip),
-            "osu_ver": osu_version_date,
-            "osu_stream": osu_ver_stream,
+            "osu_ver": osu_version.date,
+            "osu_stream": osu_version.stream,
         },
     )
 
@@ -713,7 +715,7 @@ async def login(
             )
 
     client_details = ClientDetails(
-        osu_version=osu_version_date,
+        osu_version=osu_version,
         osu_path_md5=login_data["osu_path_md5"],
         adapters_md5=login_data["adapters_md5"],
         uninstall_md5=login_data["uninstall_md5"],
@@ -725,12 +727,11 @@ async def login(
     p = Player(
         **user_info,  # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}
         utc_offset=login_data["utc_offset"],
-        osu_ver=osu_version_date,
         pm_private=login_data["pm_private"],
         login_time=login_time,
         clan=clan,
         clan_priv=clan_priv,
-        tourney_client=using_tourney_client,
+        tourney_client=osu_version.stream == "tourney",
         client_details=client_details,
     )
 

@@ -8,6 +8,7 @@ from enum import IntEnum
 from enum import unique
 from functools import cached_property
 from typing import Any
+from typing import Literal
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -143,10 +144,26 @@ class LastNp(TypedDict):
     timeout: float
 
 
+class OsuVersion:
+    # b20200201.2cuttingedge
+    # date = 2020/02/01
+    # revision = 2
+    # stream = cuttingedge
+    def __init__(
+        self,
+        date: date,
+        revision: Optional[int],  # TODO: should this be optional?
+        stream: Literal["stable", "beta", "cuttingedge", "tourney", "dev"],
+    ) -> None:
+        self.date = date
+        self.revision = revision
+        self.stream = stream
+
+
 class ClientDetails:
     def __init__(
         self,
-        osu_version: date,
+        osu_version: OsuVersion,
         osu_path_md5: str,
         adapters_md5: str,
         uninstall_md5: str,
