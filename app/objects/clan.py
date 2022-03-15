@@ -15,7 +15,7 @@ __all__ = ("Clan",)
 
 
 class Clan:
-    """A class to represent a single gulag clan."""
+    """A class to represent a single bancho.py clan."""
 
     __slots__ = ("id", "name", "tag", "created_at", "owner_id", "member_ids")
 
@@ -28,7 +28,7 @@ class Clan:
         owner_id: int,
         member_ids: set[int] = set(),
     ) -> None:
-        """A class representing one of gulag's clans."""
+        """A class representing one of bancho.py's clans."""
         self.id = id
         self.name = name
         self.tag = tag

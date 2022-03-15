@@ -93,7 +93,7 @@ def init_events(asgi_app: FastAPI) -> None:
                 flush_in_thread=True,
                 flush_interval=15,
             )
-            app.state.services.datadog.gauge("gulag.online_players", 0)
+            app.state.services.datadog.gauge("bancho.online_players", 0)
 
         app.state.services.ip_resolver = app.state.services.IPResolver()
 
@@ -138,7 +138,7 @@ def init_routes(asgi_app: FastAPI) -> None:
         asgi_app.host(f"osu.{domain}", domains.osu.router)
         asgi_app.host(f"b.{domain}", domains.map.router)
 
-        # gulag's developer-facing api
+        # bancho.py's developer-facing api
         asgi_app.host(f"api.{domain}", domains.api.router)
 
 

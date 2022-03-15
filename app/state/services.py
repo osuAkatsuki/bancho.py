@@ -197,8 +197,8 @@ async def log_strange_occurrence(obj: object) -> None:
         async with http.post(
             url="https://log.cmyui.xyz/",
             headers={
-                "Gulag-Version": app.settings.VERSION,
-                "Gulag-Domain": app.settings.DOMAIN,
+                "Bancho-Version": app.settings.VERSION,
+                "Bancho-Domain": app.settings.DOMAIN,
             },
             data=pickled_obj,
         ) as resp:
@@ -358,7 +358,7 @@ async def run_sql_migrations() -> None:
     latest_ver = Version.from_str(app.settings.VERSION)
 
     if latest_ver is None:
-        raise RuntimeError(f"Invalid gulag version '{app.settings.VERSION}'")
+        raise RuntimeError(f"Invalid bancho.py version '{app.settings.VERSION}'")
 
     if latest_ver == current_ver:
         return  # already up to date

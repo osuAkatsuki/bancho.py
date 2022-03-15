@@ -179,7 +179,7 @@ def test_write_notification(test_input, expected):
     assert app.packets.notification(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove gulag match object")
+@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
     ("test_input", "expected"),
     [
@@ -191,7 +191,7 @@ def test_write_update_match(test_input, expected):
     assert app.packets.update_match(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove gulag match object")
+@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
     ("test_input", "expected"),
     [
@@ -218,7 +218,7 @@ def test_write_toggle_block_non_friend_pm():
     assert app.packets.toggle_block_non_friend_dm() == b'"\x00\x00\x00\x00\x00\x00'
 
 
-@pytest.mark.xfail(reason="need to remove gulag match object")
+@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
     ("test_input", "expected"),
     [
@@ -256,7 +256,7 @@ def test_write_fellow_spectator_left(test_input, expected):
     assert app.packets.fellow_spectator_left(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove gulag match object")
+@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
     ("test_input", "expected"),
     [
@@ -522,7 +522,7 @@ def test_write_restart_server(test_input, expected):
     assert app.packets.restart_server(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove gulag match object")
+@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
     ("test_input", "expected"),
     [
