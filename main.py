@@ -1,5 +1,5 @@
 #!/usr/bin/env python3.9
-"""gulag - a fully-featured, dev-centered osu! server implementation
+"""bancho.py - a fully-featured, dev-centered osu! server implementation
 made for running production-quality osu! private servers."""
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ __discord__ = "cmyui#0425"
 
 import os
 
-# set working directory to the gulag/ directory.
+# set working directory to the bancho/ directory.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 import logging
@@ -75,7 +75,7 @@ def main() -> int:
             ):
                 log(
                     f"There are other processes listening on {app.settings.SERVER_ADDR}.\n"
-                    f"If you've lost it, gulag can be killed gracefully with SIGINT.",
+                    f"If you've lost it, bancho.py can be killed gracefully with SIGINT.",
                     Ansi.LRED,
                 )
                 return 1
@@ -95,9 +95,9 @@ def main() -> int:
         server_header=False,
         date_header=False,
         # TODO: uvicorn calls .lower() on the key & value,
-        #       but i would prefer Gulag-Version to keep
+        #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("gulag-version", app.settings.VERSION),),
+        headers=(("bancho-version", app.settings.VERSION),),
         **server_arguments,
     )
 

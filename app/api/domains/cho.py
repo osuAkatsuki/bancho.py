@@ -87,9 +87,9 @@ async def bancho_http_handler():
         b"<!DOCTYPE html>"
         + "<br>".join(
             (
-                f"Running gulag v{app.settings.VERSION}",
+                f"Running bancho.py v{app.settings.VERSION}",
                 f"Players online: {len(app.state.sessions.players) - 1}",
-                '<a href="https://github.com/cmyui/gulag">Source code</a>',
+                '<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>',
                 "",
                 f"<b>packets handled ({len(packets)})</b>",
                 "<br>".join([f"{p.name} ({p.value})" for p in packets]),
@@ -377,7 +377,7 @@ RESTRICTED_MSG = (
 )
 
 WELCOME_NOTIFICATION = app.packets.notification(
-    f"Welcome back to {BASE_DOMAIN}!\nRunning gulag v{app.settings.VERSION}.",
+    f"Welcome back to {BASE_DOMAIN}!\nRunning bancho.py v{app.settings.VERSION}.",
 )
 
 OFFLINE_NOTIFICATION = app.packets.notification(
@@ -700,7 +700,7 @@ async def login(
             user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
 
         if db_country == "xx":
-            # bugfix for old gulag versions when
+            # bugfix for old bancho.py versions when
             # country wasn't stored on registration.
             log(f"Fixing {username}'s country.", Ansi.LGREEN)
 
@@ -882,10 +882,10 @@ async def login(
 
     if app.state.services.datadog:
         if not p.restricted:
-            app.state.services.datadog.increment("gulag.online_players")
+            app.state.services.datadog.increment("bancho.online_players")
 
         time_taken = time.time() - login_time
-        app.state.services.datadog.histogram("gulag.login_time", time_taken)
+        app.state.services.datadog.histogram("bancho.login_time", time_taken)
 
     user_os = "unix (wine)" if is_wine else "win32"
     country_code = p.geoloc["country"]["acronym"].upper()

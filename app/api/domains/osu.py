@@ -224,14 +224,14 @@ async def osuGetFriends(
     return "\n".join(map(str, player.friends)).encode()
 
 
-def gulag_to_osuapi_status(gulag_status: int) -> int:
+def bancho_to_osuapi_status(bancho_status: int) -> int:
     return {
         0: 0,
         2: 1,
         3: 2,
         4: 3,
         5: 4,
-    }[gulag_status]
+    }[bancho_status]
 
 
 @router.post("/web/osu-getbeatmapinfo.php")
@@ -257,8 +257,8 @@ async def osuGetBeatmapInfo(
 
         row = dict(row)  # make mutable copy
 
-        # convert from gulag -> osu!api status
-        row["status"] = gulag_to_osuapi_status(row["status"])
+        # convert from bancho.py -> osu!api status
+        row["status"] = bancho_to_osuapi_status(row["status"])
 
         # try to get the user's grades on the map osu!
         # only allows us to send back one per gamemode,
@@ -410,7 +410,7 @@ async def lastFM(
     """
 
 
-# gulag supports both cheesegull mirrors & chimu.moe.
+# bancho.py supports both cheesegull mirrors & chimu.moe.
 # chimu.moe handles things a bit differently than cheesegull,
 # and has some extra features we'll eventually use more of.
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
@@ -685,11 +685,11 @@ async def osuSubmitModularSelector(
     """ Score submission checks completed; submit the score. """
 
     if app.state.services.datadog:
-        app.state.services.datadog.increment("gulag.submitted_scores")
+        app.state.services.datadog.increment("bancho.submitted_scores")
 
     if score.status == SubmissionStatus.BEST:
         if app.state.services.datadog:
-            app.state.services.datadog.increment("gulag.submitted_scores_best")
+            app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
             if (
@@ -1243,7 +1243,7 @@ async def getScores(
     # we've found a beatmap for the request.
 
     if app.state.services.datadog:
-        app.state.services.datadog.increment("gulag.leaderboards_served")
+        app.state.services.datadog.increment("bancho.leaderboards_served")
 
     if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,
@@ -1792,7 +1792,7 @@ async def register_account(
             )
 
         if app.state.services.datadog:
-            app.state.services.datadog.increment("gulag.registrations")
+            app.state.services.datadog.increment("bancho.registrations")
 
         log(f"<{username} ({user_id})> has registered!", Ansi.LGREEN)
 

@@ -856,7 +856,7 @@ def _user_stats(
     )
 
 
-# TODO: this is gulag-specific, move it out
+# TODO: this is implementation-specific, move it out
 def user_stats(p: Player) -> bytes:
     gm_stats = p.gm_stats
     if gm_stats.pp > 0x7FFF:
@@ -1149,7 +1149,7 @@ def _user_presence(
     )
 
 
-# TODO: this is gulag-specific, move it out
+# TODO: this is implementation-specific, move it out
 def user_presence(p: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
@@ -1201,7 +1201,7 @@ def user_silenced(user_id: int) -> bytes:
     return write(ServerPackets.USER_SILENCED, (user_id, osuTypes.i32))
 
 
-""" not sure why 95 & 96 exist? unused in gulag """
+""" not sure why 95 & 96 exist? unused in bancho.py """
 
 # packet id: 95
 @cache

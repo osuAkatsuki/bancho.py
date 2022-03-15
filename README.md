@@ -1,10 +1,10 @@
-# gulag - a dev-oriented, production-geared osu! server
+# bancho.py - a dev-oriented, production-geared osu! server
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/gulag/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/gulag/master)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-gulag is an in-progress osu! server implementation geared towards running production
+bancho.py is an in-progress osu! server implementation geared towards running production
 servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
 long-term goal being to replace our current [Ripple](https://github.com/osuripple)
 stack with something more easily maintainable, reliable, scalable, and feature-rich.
@@ -12,7 +12,7 @@ stack with something more easily maintainable, reliable, scalable, and feature-r
 # Setup
 ```sh
 # clone the repository & init the submodules
-git clone https://github.com/osuAkatsuki/gulag.git && cd gulag
+git clone https://github.com/osuAkatsuki/bancho.py.git && cd bancho.py
 
 # clone the submodules (oppai-ng)
 git submodule update --init
@@ -29,7 +29,7 @@ sudo apt install python3.9-dev python3.9-distutils cmake build-essential \
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
-# install gulag's python requirements
+# install bancho.py's python requirements
 python3.9 -m pip install -U pip setuptools
 python3.9 -m pip install -r requirements.txt
 
@@ -39,10 +39,10 @@ pre-commit install
 
 ######################################
 # NOTE: before continuing, create an #
-# empty database in mysql for gulag  #
+# empty database in mysql for bancho.py  #
 ######################################
 
-# import gulag's mysql structure
+# import bancho.py's mysql structure
 mysql -u your_sql_username -p your_db_name < migrations/base.sql
 
 # generate an ssl certificate for your domain (change email & domain)
@@ -55,8 +55,8 @@ sudo certbot certonly \
     -d *.your.domain
 
 # copy our nginx config to `sites-enabled` & open for editing
-sudo cp ext/nginx.conf /etc/nginx/sites-enabled/gulag.conf
-sudo nano /etc/nginx/sites-enabled/gulag.conf
+sudo cp ext/nginx.conf /etc/nginx/sites-enabled/bancho.conf
+sudo nano /etc/nginx/sites-enabled/bancho.conf
 
 ##########################################
 # NOTE: before continuing, make sure you #
@@ -124,5 +124,5 @@ nano .env
     |
     ├── ext                   # external entities used when running the server
     ├── migrations            # database migrations - updates to schema
-    ├── tools                 # various tools made throughout gulag's history
+    ├── tools                 # various tools made throughout bancho.py's history
     └── main.py               # an entry point (script) to run the server

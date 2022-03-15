@@ -117,7 +117,7 @@ create table mail
 
 create table maps
 (
-	server enum('osu!', 'gulag') default 'osu!' not null,
+	server enum('osu!', 'gulag') default 'osu!' not null, # TODO: change name
 	id int not null,
 	set_id int not null,
 	status int not null,
@@ -149,7 +149,7 @@ create table maps
 
 create table mapsets
 (
-	server enum('osu!', 'gulag') default 'osu!' not null,
+	server enum('osu!', 'gulag') default 'osu!' not null, # TODO: change name
 	id int not null,
 	last_osuapi_check datetime default CURRENT_TIMESTAMP not null,
 	primary key (server, id),
@@ -317,7 +317,7 @@ create table users
 );
 
 insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bcrypt, creation_time, latest_activity)
-values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@gulag.ca',
+values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@akatsuki.pw',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 INSERT INTO stats (id, mode) VALUES (1, 0); # vn!std

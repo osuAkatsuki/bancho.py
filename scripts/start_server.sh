@@ -11,7 +11,7 @@ while ! nc -z localhost 6379; do
     sleep 0.25
 done
 
-exec uvicorn --host 0.0.0.0 --uds /tmp/gulag.sock --no-access-log --reload app.api.init_api:asgi_app
+exec uvicorn --host 0.0.0.0 --uds /tmp/bancho.sock --no-access-log --reload app.api.init_api:asgi_app
 
 #SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 #python3.9 $SCRIPT_DIR/../main.py

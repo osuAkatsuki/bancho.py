@@ -452,7 +452,7 @@ class Beatmap:
     """ Lower level API """
     # These functions are meant for internal use under
     # all normal circumstances and should only be used
-    # if you're really modifying gulag by adding new
+    # if you're really modifying bancho.py by adding new
     # features, or perhaps optimizing parts of the code.
 
     def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, Any]) -> None:
@@ -608,7 +608,7 @@ class BeatmapSet:
         for bmap in self.maps:
             if (
                 bmap.status not in (RankedStatus.Ranked, RankedStatus.Approved)
-                or bmap.frozen  # ranked/approved, but only on gulag
+                or bmap.frozen  # ranked/approved, but only on bancho.py
             ):
                 return False
         return True
@@ -619,7 +619,7 @@ class BeatmapSet:
         for bmap in self.maps:
             if (
                 bmap.status != RankedStatus.Loved
-                or bmap.frozen  # loved, but only on gulag
+                or bmap.frozen  # loved, but only on bancho.py
             ):
                 return False
         return True
@@ -696,7 +696,7 @@ class BeatmapSet:
 
                     bmap._parse_from_osuapi_resp(new_map)
 
-                    # (some gulag-specific stuff not given by api)
+                    # (some implementation-specific stuff not given by api)
                     bmap.frozen = False
                     bmap.passes = 0
                     bmap.plays = 0
@@ -844,7 +844,7 @@ class BeatmapSet:
             ):
                 bmap = Beatmap(**row, map_set=bmap_set)
 
-                # XXX: tempfix for gulag <v3.4.1,
+                # XXX: tempfix for bancho.py <v3.4.1,
                 # where filenames weren't stored.
                 if not bmap.filename:
                     bmap.filename = (
@@ -868,7 +868,7 @@ class BeatmapSet:
         if api_data := await osuapiv1_getbeatmaps(s=bsid):
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
-            # XXX: pre-mapset gulag support
+            # XXX: pre-mapset bancho.py support
             # select all current beatmaps
             # that're frozen in the db
             res = await app.state.services.database.fetch_all(
@@ -892,7 +892,7 @@ class BeatmapSet:
 
                 bmap._parse_from_osuapi_resp(api_bmap)
 
-                # (some gulag-specific stuff not given by api)
+                # (some implementation-specific stuff not given by api)
                 bmap.passes = 0
                 bmap.plays = 0
 

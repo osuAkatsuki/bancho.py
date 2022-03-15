@@ -1,4 +1,4 @@
-""" api: gulag's developer api for interacting with server state """
+""" api: bancho.py's developer api for interacting with server state """
 from __future__ import annotations
 
 import hashlib
@@ -31,7 +31,7 @@ REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
-router = APIRouter(tags=["gulag API"])
+router = APIRouter(tags=["bancho.py API"])
 
 # NOTE: the api is still under design and is subject to change.
 # to keep up with breaking changes, please either join our discord,
@@ -188,13 +188,13 @@ async def api_get_player_info(
 
         for idx, mode_stats in enumerate([dict(row) for row in rows]):
             rank = await app.state.services.redis.zrevrank(
-                f"gulag:leaderboard:{idx}",
+                f"bancho:leaderboard:{idx}",
                 str(resolved_user_id),
             )
             mode_stats["rank"] = rank + 1 if rank is not None else 0
 
             country_rank = await app.state.services.redis.zrevrank(
-                f"gulag:leaderboard:{idx}:{resolved_country}",
+                f"bancho:leaderboard:{idx}:{resolved_country}",
                 str(resolved_user_id),
             )
             mode_stats["country_rank"] = (

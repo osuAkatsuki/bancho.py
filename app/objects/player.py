@@ -283,7 +283,7 @@ class Player:
         self.login_time = login_time
         self.last_recv_time = login_time
 
-        # XXX: below is mostly gulag-specific & internal stuff
+        # XXX: below is mostly implementation-specific & internal stuff
 
         # store most recent score for each gamemode.
         self.recent_scores: dict[GameMode, Optional[Score]] = {
@@ -448,7 +448,7 @@ class Player:
 
         if not self.restricted:
             if app.state.services.datadog:
-                app.state.services.datadog.decrement("gulag.online_players")
+                app.state.services.datadog.decrement("bancho.online_players")
 
             app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
@@ -513,11 +513,11 @@ class Player:
 
         for mode in (0, 1, 2, 3, 4, 5, 6, 8):
             await app.state.services.redis.zrem(
-                f"gulag:leaderboard:{mode}",
+                f"bancho:leaderboard:{mode}",
                 self.id,
             )
             await app.state.services.redis.zrem(
-                f'gulag:leaderboard:{mode}:{self.geoloc["country"]["acronym"]}',
+                f'bancho:leaderboard:{mode}:{self.geoloc["country"]["acronym"]}',
                 self.id,
             )
 
@@ -554,11 +554,11 @@ class Player:
 
         for mode, stats in self.stats.items():
             await app.state.services.redis.zadd(
-                f"gulag:leaderboard:{mode.value}",
+                f"bancho:leaderboard:{mode.value}",
                 {str(self.id): stats.pp},
             )
             await app.state.services.redis.zadd(
-                f"gulag:leaderboard:{mode.value}:{self.geoloc['country']['acronym']}",
+                f"bancho:leaderboard:{mode.value}:{self.geoloc['country']['acronym']}",
                 {str(self.id): stats.pp},
             )
 
@@ -982,7 +982,7 @@ class Player:
             return 0
 
         rank = await app.state.services.redis.zrevrank(
-            f"gulag:leaderboard:{mode.value}",
+            f"bancho:leaderboard:{mode.value}",
             str(self.id),
         )
         return rank + 1 if rank is not None else 0
@@ -993,7 +993,7 @@ class Player:
 
         country = self.geoloc["country"]["acronym"]
         rank = await app.state.services.redis.zrevrank(
-            f"gulag:leaderboard:{mode.value}:{country}",
+            f"bancho:leaderboard:{mode.value}:{country}",
             str(self.id),
         )
 
@@ -1005,13 +1005,13 @@ class Player:
 
         # global rank
         await app.state.services.redis.zadd(
-            f"gulag:leaderboard:{mode.value}",
+            f"bancho:leaderboard:{mode.value}",
             {str(self.id): stats.pp},
         )
 
         # country rank
         await app.state.services.redis.zadd(
-            f"gulag:leaderboard:{mode.value}:{country}",
+            f"bancho:leaderboard:{mode.value}:{country}",
             {str(self.id): stats.pp},
         )
 
