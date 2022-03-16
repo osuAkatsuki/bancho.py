@@ -1,80 +1,118 @@
-# bancho.py - a dev-oriented, production-geared osu! server
+# bancho.py
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-bancho.py is an in-progress osu! server implementation geared towards running production
-servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
-long-term goal being to replace our current [Ripple](https://github.com/osuripple)
-stack with something more easily maintainable, reliable, scalable, and feature-rich.
+bancho.py is an in-progress osu! server implementation geared towards developers
+of all levels of experience looking to host their own osu! server instances.
+
+it is developed primarily by [Akatsuki](https://akatsuki.pw/) as a replacement
+for pre-existing implementations that were either discontinued, or failed to
+keep their codebases maintainable. the project has undergone extensive
+refactoring as it's grown, and our aim is to create the most easily maintainable,
+reliable, scalable, and feature-rich osu! server implementation on the market.
 
 # Setup
+knowledge of linux, python, and databases will certainly help, but are by no
+means required.
+
+(lots of people have installed this server with no prior programming experience!)
+
+## cloning the required repositories to your machine
 ```sh
-# clone the repository & init the submodules
+# clone bancho.py's repository
 git clone https://github.com/osuAkatsuki/bancho.py.git && cd bancho.py
 
-# clone the submodules (oppai-ng)
+# clone bancho.py's submodule repositories
 git submodule update --init
+```
 
-# python3.9 is often not available natively
+## installing bancho.py's requirements
+```sh
+# python3.9 is often not available natively,
+# so we can use deadsnakes to provide it!
 # https://github.com/deadsnakes/python3.9
 sudo add-apt-repository ppa:deadsnakes
 
-# install project requirements (separate programs)
+# install required programs for running bancho.py
 sudo apt install python3.9-dev python3.9-distutils cmake build-essential \
                  mysql-server redis-server nginx certbot
 
-# install pip for python3.9
+# install python's package manager, pip
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # install bancho.py's python requirements
 python3.9 -m pip install -U pip setuptools
 python3.9 -m pip install -r requirements.txt
+```
 
-# setup pre-commit's git hooks
-# https://pre-commit.com/
-pre-commit install
+## creating a database for bancho.py
+```sh
+# login to mysql as an root (default administrator account)
+# this will put you into a shell where you can execute mysql commands
+mysql -u root -p
+```
 
-######################################
-# NOTE: before continuing, create an #
-# empty database in mysql for bancho.py  #
-######################################
+```sql
+# create a database for bancho.py to use
+# (you can name this whatever you'd like)
+CREATE DATABASE YOUR_DB_NAME;
 
+# create a user to use the bancho.py database
+CREATE USER 'YOUR_DB_USER'@'localhost' IDENTIFIED BY 'YOUR_DB_PASSWORD';
+
+# grant the user full access to all tables in the bancho.py database
+GRANT ALL PRIVILEGES ON YOUR_DB_NAME.* TO 'YOUR_DB_USER'@'localhost';
+
+# exit the mysql shell, back to bash
+quit
+```
+
+## setting up the database's structure for bancho.py
+```sh
 # import bancho.py's mysql structure
-mysql -u your_sql_username -p your_db_name < migrations/base.sql
+mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
+```
 
+## creating an ssl certificate (to allow https traffic)
+```sh
 # generate an ssl certificate for your domain (change email & domain)
 sudo certbot certonly \
     --manual \
     --preferred-challenges=dns \
-    --email your@email.com \
+    --email YOUR_EMAIL_ADDRESS \
     --server https://acme-v02.api.letsencrypt.org/directory \
     --agree-tos \
-    -d *.your.domain
+    -d *.YOUR_DOMAIN
+```
 
-# copy our nginx config to `sites-enabled` & open for editing
-sudo cp ext/nginx.conf /etc/nginx/sites-enabled/bancho.conf
-sudo nano /etc/nginx/sites-enabled/bancho.conf
+## configuring a reverse proxy (we'll use nginx)
+```sh
+# copy our nginx config to /etc/nginx/sites-available,
+# and make a symbolic link to /etc/nginx/sites-enabled
+sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
+sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
-##########################################
-# NOTE: before continuing, make sure you #
-# have completely configured the file.   #
-##########################################
+# edit the nginx configuration file
+sudo nano /etc/nginx/sites-available/bancho.conf
 
 # reload the reverse proxy's config
 sudo nginx -s reload
+```
 
-# create a config file from the sample & open it for editing
+## configuring bancho.py
+```sh
+# create a configuration file from the sample provided
 cp .env.example .env
+
+# open the configuration file for editing
 nano .env
+```
 
-##########################################
-# NOTE: before continuing, make sure you #
-# have completely configured the file.   #
-##########################################
-
+## profit?
+```sh
 # start the server
 ./main.py
 ```
