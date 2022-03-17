@@ -58,6 +58,8 @@ __all__ = (
     "create_config_from_default",
     "orjson_serialize_to_str",
     "get_media_type",
+    "has_jpeg_headers_and_trailers",
+    "has_png_headers_and_trailers",
 )
 
 DATA_PATH = Path.cwd() / ".data"
@@ -558,3 +560,14 @@ def get_media_type(extension: str) -> Optional[str]:
         return "image/png"
 
     # return none, fastapi will attempt to figure it out
+
+
+def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
+    return data_view[:4] == b"\xff\xd8\xff\xe0" and data_view[6:11] == b"JFIF\x00"
+
+
+def has_png_headers_and_trailers(data_view: memoryview) -> bool:
+    return (
+        data_view[:8] == b"\x89PNG\r\n\x1a\n"
+        and data_view[-8] == b"\x49END\xae\x42\x60\x82"
+    )

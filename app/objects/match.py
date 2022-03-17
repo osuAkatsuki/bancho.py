@@ -495,7 +495,7 @@ class Match:
                 if (
                     rc_score
                     and rc_score.bmap.md5 == self.map_md5
-                    and rc_score.play_time > max_age
+                    and rc_score.server_time > max_age
                 ):
                     # score found, add to our scores dict if != 0.
                     if score := getattr(rc_score, win_cond):

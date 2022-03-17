@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import math
 from datetime import datetime
 from enum import IntEnum
@@ -143,10 +144,11 @@ class Score:
         "passed",
         "perfect",
         "status",
-        "play_time",
+        "client_time",
+        "server_time",
         "time_elapsed",
         "client_flags",
-        "online_checksum",
+        "client_checksum",
         "prev_best",
     )
 
@@ -180,20 +182,25 @@ class Score:
         self.perfect: bool
         self.status: SubmissionStatus
 
-        self.play_time: datetime
+        self.client_time: datetime
+        self.server_time: datetime
         self.time_elapsed: int
 
         self.client_flags: ClientFlags
-        self.online_checksum: str
+        self.client_checksum: str
 
         self.rank: Optional[int] = None
         self.prev_best: Optional[Score] = None
 
-    def __repr__(self) -> str:  # maybe shouldn't be so long?
-        return (
-            f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
-            f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
-        )
+    def __repr__(self) -> str:
+        # TODO: i really need to clean up my reprs
+        try:
+            return (
+                f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
+                f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
+            )
+        except:
+            return super().__repr__()
 
     """Classmethods to fetch a score object from various data types."""
 
@@ -239,10 +246,10 @@ class Score:
             s.perfect,
             s.status,
             s.mode,
-            s.play_time,
+            s.server_time,
             s.time_elapsed,
             s.client_flags,
-            s.online_checksum,
+            s.client_checksum,
         ) = row[3:]
 
         # fix some types
@@ -259,7 +266,7 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data: list[str]) -> Score:
+    def from_submission(cls, data: list[str]) -> Score:
         """Create a score object from an osu! submission string."""
         s = cls()
 
@@ -282,29 +289,57 @@ class Score:
         # 15 osu_version + (" " * client_flags)
         """
 
-        s.online_checksum = data[0]
-
-        s.n300, s.n100, s.n50, s.ngeki, s.nkatu, s.nmiss, s.score, s.max_combo = map(
-            int,
-            data[1:9],
-        )
-
+        s.client_checksum = data[0]
+        s.n300 = int(data[1])
+        s.n100 = int(data[2])
+        s.n50 = int(data[3])
+        s.ngeki = int(data[4])
+        s.nkatu = int(data[5])
+        s.nmiss = int(data[6])
+        s.score = int(data[7])
+        s.max_combo = int(data[8])
         s.perfect = data[9] == "True"
-        _grade = data[10]  # letter grade
+        s.grade = Grade.from_str(data[10])
         s.mods = Mods(int(data[11]))
         s.passed = data[12] == "True"
         s.mode = GameMode.from_params(int(data[13]), s.mods)
-
-        # TODO: we might want to use data[14] to get more
-        #       accurate submission time (client side) but
-        #       we'd probably want to check if it's close.
-        s.play_time = datetime.now()
-
+        s.client_time = datetime.strptime(data[14], "%y%m%d%H%M%S")
         s.client_flags = ClientFlags(data[15].count(" ") & ~4)
 
-        s.grade = Grade.from_str(_grade) if s.passed else Grade.F
+        s.server_time = datetime.now()
 
         return s
+
+    def compute_online_checksum(
+        self,
+        osu_version: str,
+        osu_client_hash: str,
+        storyboard_checksum: str,
+    ) -> str:
+        """Validate the online checksum of the score."""
+        return hashlib.md5(
+            "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}".format(
+                self.n100 + self.n300,
+                self.n50,
+                self.ngeki,
+                self.nkatu,
+                self.nmiss,
+                self.bmap.md5,
+                self.max_combo,
+                self.perfect,
+                self.player.name,
+                self.score,
+                self.grade.name,
+                int(self.mods),
+                self.passed,
+                self.mode.as_vanilla,
+                self.client_time,
+                osu_version,  # 20210520
+                osu_client_hash,
+                storyboard_checksum,
+                # yyMMddHHmmss
+            ).encode(),
+        ).hexdigest()
 
     """Methods to calculate internal data for a score."""
 
