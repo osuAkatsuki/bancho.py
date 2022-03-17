@@ -29,6 +29,7 @@ from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
 from fastapi import status
+from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
 from fastapi.exceptions import HTTPException
 from fastapi.param_functions import Depends
@@ -546,6 +547,56 @@ def chart_entry(name: str, before: Optional[T], after: T) -> str:
     return f"{name}Before:{before or ''}|{name}After:{after}"
 
 
+def parse_form_data_score_params(
+    score_data: FormData,
+) -> Optional[tuple[bytes, StarletteUploadFile]]:
+    """Parse the score data, and replay file
+    from the form data's 'score' parameters."""
+    try:
+        score_parts = score_data.getlist("score")
+        assert len(score_parts) == 2, "Invalid score data"
+
+        score_data_b64 = score_data.getlist("score")[0]
+        assert isinstance(score_data_b64, str), "Invalid score data"
+        replay_file = score_data.getlist("score")[1]
+        assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
+    except AssertionError as exc:
+        # TODO: perhaps better logging?
+        log(f"Failed to validate score multipart data: ({exc.args[0]})", Ansi.LRED)
+        return None
+    else:
+        return (
+            score_data_b64.encode(),
+            replay_file,
+        )
+
+
+def decrypt_score_aes_data(
+    # to decode
+    score_data_b64: bytes,
+    client_hash_b64: bytes,
+    # used for decoding
+    iv_b64: bytes,
+    osu_version: str,
+) -> tuple[list[str], str]:
+    """Decrypt the base64'ed score data."""
+    # TODO: perhaps this should return TypedDict?
+
+    # attempt to decrypt score data
+    aes = RijndaelCbc(
+        key=f"osu!-scoreburgr---------{osu_version}".encode(),
+        iv=b64decode(iv_b64),
+        padding=Pkcs7Padding(32),
+        block_size=32,
+    )
+
+    score_data = aes.decrypt(b64decode(score_data_b64)).decode().split(":")
+    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
+
+    # score data is delimited by colons (:).
+    return score_data, client_hash_decoded
+
+
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
@@ -557,44 +608,40 @@ async def osuSubmitModularSelector(
     # TODO: do ft & st contain pauses?
     exited_out: bool = Form(..., alias="x"),
     fail_time: int = Form(..., alias="ft"),
-    visual_settings_b64: str = Form(..., alias="fs"),
+    visual_settings_b64: bytes = Form(..., alias="fs"),
     updated_beatmap_hash: str = Form(..., alias="bmk"),
     storyboard_md5: Optional[str] = Form(None, alias="sbk"),
-    iv_b64: str = Form(..., alias="iv"),
+    iv_b64: bytes = Form(..., alias="iv"),
     unique_ids: str = Form(..., alias="c1"),  # TODO: more validaton
     score_time: int = Form(..., alias="st"),  # TODO: is this real name?
     pw_md5: str = Form(..., alias="pass"),
     osu_version: str = Form(..., alias="osuver"),  # TODO: regex
-    client_hash_b64: str = Form(..., alias="s"),
+    client_hash_b64: bytes = Form(..., alias="s"),
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
     fl_cheat_screenshot: Optional[bytes] = File(None, alias="i"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    try:
-        form = await request.form()
-        score_parts = form.getlist("score")
-        assert len(score_parts) == 2, "Invalid score data"
+    """Handle a score submission from an osu! client with an active session."""
 
-        score_data_b64 = form.getlist("score")[0]
-        assert isinstance(score_data_b64, str), "Invalid score data"
-        replay_file = form.getlist("score")[1]
-        assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
-    except AssertionError as exc:
-        # TODO: log/do more than just this
-        log(f"Assertion on score-submission: ({exc.args[0]})", Ansi.LRED)
-        return
+    # NOTE: the bancho protocol uses the "score" parameter name for both
+    # the base64'ed score data, as well as the replay file in the multipart
+    # starlette/fastapi do not support this, so we've moved it out
+    score_parameters = parse_form_data_score_params(await request.form())
+    if score_parameters is None:
+        # failed to parse score data
+        return  # TODO: return something
 
-    # attempt to decrypt score data
-    aes = RijndaelCbc(
-        key=f"osu!-scoreburgr---------{osu_version}".encode(),
-        iv=b64decode(iv_b64),
-        padding=Pkcs7Padding(32),
-        block_size=32,
+    # extract the score data and replay file from the score data
+    score_data_b64, replay_file = score_parameters
+
+    # decrypt the score data (aes)
+    score_data, client_hash_decoded = decrypt_score_aes_data(
+        score_data_b64,
+        client_hash_b64,
+        iv_b64,
+        osu_version,
     )
-
-    # score data is delimited by colons (:).
-    score_data = aes.decrypt(b64decode(score_data_b64)).decode().split(":")
 
     # fetch map & player
 
@@ -621,8 +668,6 @@ async def osuSubmitModularSelector(
     unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
     unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
     unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
-
-    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
 
     try:
         assert osu_version == f"{player.client_details.osu_version.date:%Y%m%d}"
