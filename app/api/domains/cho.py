@@ -509,9 +509,9 @@ async def login(
         }
 
     running_under_wine = login_data["adapters_str"] == "runningunderwine"
-    adapters = [a for a in login_data["adapters_str"][:-1].split(".") if a]
+    adapters = [a for a in login_data["adapters_str"][:-1].split(".")]
 
-    if not (running_under_wine or adapters):
+    if not (running_under_wine or any(adapters)):
         return {
             "osu_token": "empty-adapters",
             "response_body": (
