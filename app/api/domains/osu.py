@@ -175,9 +175,9 @@ async def osuScreenshot(
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
 ):
-    with memoryview(await screenshot_file.read()) as screenshot_data_view:  # type: ignore
+    with memoryview(await screenshot_file.read()) as screenshot_view:  # type: ignore
         # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-        if len(screenshot_data_view) > (4 * 1024 * 1024):
+        if len(screenshot_view) > (4 * 1024 * 1024):
             return Response(
                 content=b"Screenshot file too large.",
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -188,15 +188,9 @@ async def osuScreenshot(
                 f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
             )
 
-        if (
-            screenshot_data_view[:4] == b"\xff\xd8\xff\xe0"
-            and screenshot_data_view[6:11] == b"JFIF\x00"
-        ):
+        if app.utils.has_jpeg_headers_and_trailers(screenshot_view):
             extension = "jpeg"
-        elif (
-            screenshot_data_view[:8] == b"\x89PNG\r\n\x1a\n"
-            and screenshot_data_view[-8] == b"\x49END\xae\x42\x60\x82"
-        ):
+        elif app.utils.has_png_headers_and_trailers(screenshot_view):
             extension = "png"
         else:
             return Response(
@@ -211,7 +205,7 @@ async def osuScreenshot(
                 break
 
         with ss_file.open("wb") as f:
-            f.write(screenshot_data_view)
+            f.write(screenshot_view)
 
     log(f"{player} uploaded {filename}.")
     return Response(filename.encode())
