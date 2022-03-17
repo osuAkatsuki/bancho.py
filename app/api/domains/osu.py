@@ -625,8 +625,8 @@ async def osuSubmitModularSelector(
     client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
 
     try:
-        # TODO: assert osu_version
-        # TODO: assert client_hash
+        assert osu_version == f"{player.client_details.osu_version.date:%Y%m%d}"
+        assert client_hash_decoded == player.client_details.client_hash
         assert player.client_details is not None
 
         # assert unique ids (c1) are correct and match login params

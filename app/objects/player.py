@@ -180,6 +180,14 @@ class ClientDetails:
         self.adapters = adapters
         self.ip = ip
 
+    @cached_property
+    def client_hash(self) -> str:
+        return (
+            # NOTE the extra '.' and ':' appended to ends
+            f"{self.osu_path_md5}:{'.'.join(self.adapters)}."
+            f":{self.adapters_md5}:{self.uninstall_md5}:{self.disk_signature_md5}:"
+        )
+
     # TODO: __str__ to pack like osu! hashes?
 
 
