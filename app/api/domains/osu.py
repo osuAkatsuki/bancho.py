@@ -1323,7 +1323,7 @@ SCORE_LISTING_FMTSTR = (
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
-    get_scores: bool = Query(..., alias="s"),  # NOTE: this is flipped
+    requesting_from_editor_song_select: bool = Query(..., alias="s"),
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
@@ -1335,7 +1335,7 @@ async def getScores(
     aqn_files_found: bool = Query(..., alias="a"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if get_scores or aqn_files_found:
+    if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
 
@@ -1428,14 +1428,18 @@ async def getScores(
 
     # fetch scores & personal best
     # TODO: create a leaderboard cache
-    score_rows, personal_best_score_row = await get_leaderboard_scores(
-        leaderboard_type,
-        bmap.md5,
-        mode,
-        mods,
-        player,
-        scoring_metric,
-    )
+    if not requesting_from_editor_song_select:
+        score_rows, personal_best_score_row = await get_leaderboard_scores(
+            leaderboard_type,
+            bmap.md5,
+            mode,
+            mods,
+            player,
+            scoring_metric,
+        )
+    else:
+        score_rows = []
+        personal_best_score_row = None
 
     # fetch beatmap rating
     rating = await bmap.fetch_rating()
