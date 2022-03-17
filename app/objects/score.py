@@ -266,7 +266,7 @@ class Score:
         return s
 
     @classmethod
-    async def from_submission(cls, data: list[str]) -> Score:
+    def from_submission(cls, data: list[str]) -> Score:
         """Create a score object from an osu! submission string."""
         s = cls()
 

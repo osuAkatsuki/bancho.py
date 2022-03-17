@@ -616,7 +616,7 @@ async def osuSubmitModularSelector(
         return
 
     # parse the score from the remaining data
-    score = await Score.from_submission(score_data[2:])
+    score = Score.from_submission(score_data[2:])
 
     # attach bmap & player
     score.bmap = bmap
