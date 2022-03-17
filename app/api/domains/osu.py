@@ -1229,6 +1229,90 @@ class LeaderboardType(IntEnum):
     Country = 4
 
 
+async def get_leaderboard_scores(
+    leaderboard_type: Union[LeaderboardType, int],
+    map_md5: str,
+    mode: int,
+    mods: Mods,
+    player: Player,
+    scoring_metric: Literal["pp", "score"],
+) -> tuple[list[Mapping[str, Any]], Optional[Mapping[str, Any]]]:
+    query = [
+        f"SELECT s.id, s.{scoring_metric} AS _score, "
+        "s.max_combo, s.n50, s.n100, s.n300, "
+        "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
+        "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
+        "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
+        "FROM scores s "
+        "INNER JOIN users u ON u.id = s.userid "
+        "LEFT JOIN clans c ON c.id = u.clan_id "
+        "WHERE s.map_md5 = :map_md5 AND s.status = 2 "  # 2: =best score
+        "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
+    ]
+
+    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+
+    if leaderboard_type == LeaderboardType.Mods:
+        query.append("AND s.mods = :mods")
+        params["mods"] = mods
+    elif leaderboard_type == LeaderboardType.Friends:
+        query.append("AND s.userid IN :friends")
+        params["friends"] = player.friends | {player.id}
+    elif leaderboard_type == LeaderboardType.Country:
+        query.append("AND u.country = :country")
+        params["country"] = player.geoloc["country"]["acronym"]
+
+    # TODO: customizability of the number of scores
+    query.append("ORDER BY _score DESC LIMIT 50")
+
+    async with app.state.services.database.connection() as db_conn:
+        score_rows = await app.state.services.database.fetch_all(
+            " ".join(query),
+            params,
+        )
+
+        if score_rows:  # None or []
+            # fetch player's personal best score
+            personal_best_score_row = await db_conn.fetch_one(
+                f"SELECT id, {scoring_metric} AS _score, "
+                "max_combo, n50, n100, n300, "
+                "nmiss, nkatu, ngeki, perfect, mods, "
+                "UNIX_TIMESTAMP(play_time) time "
+                "FROM scores "
+                "WHERE map_md5 = :map_md5 AND mode = :mode "
+                "AND userid = :user_id AND status = 2 "
+                "ORDER BY _score DESC LIMIT 1",
+                {"map_md5": map_md5, "mode": mode, "user_id": player.id},
+            )
+
+            if personal_best_score_row:
+                # calculate the rank of the score.
+                p_best_rank = 1 + await db_conn.fetch_val(
+                    "SELECT COUNT(*) FROM scores s "
+                    "INNER JOIN users u ON u.id = s.userid "
+                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+                    "AND s.status = 2 AND u.priv & 1 "
+                    f"AND s.{scoring_metric} > :score",
+                    {
+                        "map_md5": map_md5,
+                        "mode": mode,
+                        "score": personal_best_score_row["_score"],
+                    },
+                    column=0,  # COUNT(*)
+                )
+
+                # attach rank to personal best row
+                personal_best_score_row = dict(personal_best_score_row)
+                personal_best_score_row["rank"] = p_best_rank
+            else:
+                personal_best_score_row = None
+        else:
+            score_rows = []
+            personal_best_score_row = None
+
+    return score_rows, personal_best_score_row
+
+
 SCORE_LISTING_FMTSTR = (
     "{id}|{name}|{score}|{max_combo}|"
     "{n50}|{n100}|{n300}|{nmiss}|{nkatu}|{ngeki}|"
@@ -1342,112 +1426,62 @@ async def getScores(
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
 
-    # statuses: 0: failed, 1: passed but not top, 2: passed top
-    query = [
-        f"SELECT s.id, s.{scoring_metric} AS _score, "
-        "s.max_combo, s.n50, s.n100, s.n300, "
-        "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
-        "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
-        "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 AND s.status = 2 "
-        "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
+    # fetch scores & personal best
+    # TODO: create a leaderboard cache
+    score_rows, personal_best_score_row = await get_leaderboard_scores(
+        leaderboard_type,
+        bmap.md5,
+        mode,
+        mods,
+        player,
+        scoring_metric,
+    )
+
+    # fetch beatmap rating
+    rating = await bmap.fetch_rating()
+    if rating is None:
+        rating = 0.0
+
+    ## construct response for osu! client
+
+    response_lines: list[str] = [
+        # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}
+        f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}",
+        # {offset}\n{beatmap_name}\n{rating}
+        # TODO: server side beatmap offsets
+        f"0\n{bmap.full_name}\n{rating}",
     ]
 
-    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+    if not score_rows:
+        response_lines.extend(("", ""))  # no scores, no personal best
+        return "\n".join(response_lines).encode()
 
-    if leaderboard_type == LeaderboardType.Mods:
-        query.append("AND s.mods = :mods")
-        params["mods"] = mods
-    elif leaderboard_type == LeaderboardType.Friends:
-        query.append("AND s.userid IN :friends")
-        params["friends"] = player.friends | {player.id}
-    elif leaderboard_type == LeaderboardType.Country:
-        query.append("AND u.country = :country")
-        params["country"] = player.geoloc["country"]["acronym"]
-
-    # TODO: customizability of the number of scores
-    query.append("ORDER BY _score DESC LIMIT 50")
-
-    scores = await db_conn.fetch_all(" ".join(query), params)
-    num_scores = len(scores)
-
-    l: list[str] = []
-
-    # ranked status, serv has osz2, bid, bsid, len(scores)
-    l.append(f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{num_scores}")
-
-    # fetch beatmap rating from sql
-    rating_row = await db_conn.fetch_one(
-        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
-        {"map_md5": bmap.md5},
-    )
-    assert rating_row is not None
-    rating = rating_row["rating"]
-
-    if rating is not None:
-        rating = f"{rating:.1f}"
-    else:
-        rating = "10.0"
-
-    # TODO: we could have server-specific offsets for
-    # maps that mods could set for incorrectly timed maps.
-    l.append(f"0\n{bmap.full_name}\n{rating}")  # offset, name, rating
-
-    if not scores:
-        # simply return an empty set.
-        return ("\n".join(l) + "\n\n").encode()
-
-    # fetch player's personal best score
-    p_best = await db_conn.fetch_one(
-        f"SELECT id, {scoring_metric} AS _score, "
-        "max_combo, n50, n100, n300, "
-        "nmiss, nkatu, ngeki, perfect, mods, "
-        "UNIX_TIMESTAMP(play_time) time "
-        "FROM scores "
-        "WHERE map_md5 = :map_md5 AND mode = :mode "
-        "AND userid = :user_id AND status = 2 "
-        "ORDER BY _score DESC LIMIT 1",
-        {"map_md5": map_md5, "mode": mode, "user_id": player.id},
-    )
-
-    if p_best:
-        # calculate the rank of the score.
-        p_best_rank = 1 + await db_conn.fetch_val(
-            "SELECT COUNT(*) FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-            "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > :score",
-            {"map_md5": map_md5, "mode": mode, "score": p_best["_score"]},
-            column=0,  # COUNT(*)
-        )
-
-        l.append(
+    if personal_best_score_row is not None:
+        response_lines.append(
             SCORE_LISTING_FMTSTR.format(
-                **p_best,
+                **personal_best_score_row,
                 name=player.full_name,
                 userid=player.id,
-                score=int(p_best["_score"]),
+                score=int(personal_best_score_row["_score"]),
                 has_replay="1",
-                rank=p_best_rank,
             ),
         )
     else:
-        l.append("")
+        response_lines.append("")
 
-    l.extend(
+    response_lines.extend(
         [
             SCORE_LISTING_FMTSTR.format(
-                **s, score=int(s["_score"]), has_replay="1", rank=idx + 1
+                **s,
+                score=int(s["_score"]),
+                has_replay="1",
+                rank=idx + 1,
             )
-            for idx, s in enumerate(scores)
+            for idx, s in enumerate(score_rows)
         ],
     )
 
-    return "\n".join(l).encode()
+    return "\n".join(response_lines).encode()
 
 
 @router.post("/web/osu-comment.php")

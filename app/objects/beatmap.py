@@ -546,6 +546,18 @@ class Beatmap:
 
         return None
 
+    async def fetch_rating(self) -> Optional[float]:
+        """Fetch the beatmap's rating from sql."""
+        row = await app.state.services.database.fetch_one(
+            "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
+            {"map_md5": self.md5},
+        )
+
+        if row is None:
+            return None
+
+        return row["rating"]
+
 
 class BeatmapSet:
     """A class to represent an osu! beatmap set.
