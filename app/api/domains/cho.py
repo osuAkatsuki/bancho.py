@@ -496,7 +496,7 @@ async def login(
             day=int(match["date"][6:8]),
         ),
         revision=int(match["revision"]) if match["revision"] else None,
-        stream=match["stream"],  # type: ignore
+        stream=match["stream"] or "stable",
     )
 
     # disallow login for clients older than 90 days
