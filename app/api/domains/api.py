@@ -147,14 +147,14 @@ async def api_get_player_info(
     if username:
         user_info = await app.state.services.database.fetch_one(
             "SELECT id, name, safe_name, "
-            "priv, country, silence_end "
+            "priv, clan_id, country, silence_end "
             "FROM users WHERE safe_name = :username",
             {"username": username.lower()},
         )
     else:  # if user_id
         user_info = await app.state.services.database.fetch_one(
             "SELECT id, name, safe_name, "
-            "priv, country, silence_end "
+            "priv, clan_id, country, silence_end "
             "FROM users WHERE id = :userid",
             {"userid": user_id},
         )
