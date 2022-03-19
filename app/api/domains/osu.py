@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import random
 import secrets
 import time
-import functools
-from enum import IntEnum
 from base64 import b64decode
 from collections import defaultdict
 from enum import IntEnum
@@ -406,35 +405,38 @@ async def lastFM(
         pass
     """
 
+
 @unique
-class MIRROR_TYPE(IntEnum): # use intenum because this should be set in .env file by user
+class MIRROR_TYPE(
+    IntEnum,
+):  # use intenum because this should be set in .env file by user
     CHIMU = 1
     CHEESEGULL = 2
     NERINA = 3
 
     @functools.cached_property
-    def search_path(self) -> str: # more cleaner way to code these
+    def search_path(self) -> str:  # more cleaner way to code these
         if self == self.CHIMU:
             return "/search"
         if self == self.CHEESEGULL:
             return "/api/search"
-        return "/search" #NERINA
-    
+        return "/search"  # NERINA
+
     @functools.cached_property
     def set_id_spelling(self) -> str:
         if self == self.CHIMU:
             return "SetId"
         if self == self.CHEESEGULL:
             return "SetID"
-        return "id" #NERINA
-    
+        return "id"  # NERINA
+
     @functools.cached_property
     def download_path(self) -> str:
         if self == self.CHIMU:
             return "/download"
         if self == self.CHEESEGULL:
             return "/d"
-        return "/d" #NERINA
+        return "/d"  # NERINA
 
     @functools.cached_property
     def no_video_param(self) -> str:
@@ -442,8 +444,9 @@ class MIRROR_TYPE(IntEnum): # use intenum because this should be set in .env fil
             return "n"
         if self == self.NERINA:
             return "noVideo"
-        return "" #CHEESEGULL, not support no video
-        
+        return ""  # CHEESEGULL, not support no video
+
+
 CURRENT_MIRROR_TYPE = MIRROR_TYPE(app.settings.MIRROR_TYPE)
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
@@ -462,6 +465,7 @@ DIRECT_MAP_INFO_FMTSTR_NERINA = (
     "{{cs: {cs} / od: {accuracy} / ar: {ar} / hp: {drain}}}@{mode_int}"
 )
 
+
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
@@ -472,7 +476,7 @@ async def osuSearchHandler(
 ):
     search_url = f"{app.settings.MIRROR_URL}{CURRENT_MIRROR_TYPE.search_path}"
 
-    if(CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA):
+    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
         params: dict[str, object] = {"p": page_num, "ps": 100}
         # eventually we could try supporting these,
         # but it mostly depends on the mirror.
@@ -494,7 +498,7 @@ async def osuSearchHandler(
             params["mode"] = mode
 
         if ranked_status != 4:  # 4 for all
-            # convert to osu!api status 
+            # convert to osu!api status
             # TODO already played
             params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
@@ -517,7 +521,7 @@ async def osuSearchHandler(
 
     lresult = len(result)  # send over 100 if we receive
     # 100 matches, so the client
-    # knows there are more to get, 
+    # knows there are more to get,
     # sometime it just only 100 but it show to client 100+
     ret = [f"{'101' if lresult == 100 else lresult}"]
 
@@ -530,7 +534,10 @@ async def osuSearchHandler(
             bmap["Creator"] = bmap.pop("creator")
             bmap["RankedStatus"] = RankedStatus.from_str(bmap.pop("status")).osu_api
             diffs_str = ",".join(
-                [DIRECT_MAP_INFO_FMTSTR_NERINA.format(**row) for row in bmap["beatmaps"]],
+                [
+                    DIRECT_MAP_INFO_FMTSTR_NERINA.format(**row)
+                    for row in bmap["beatmaps"]
+                ],
             )
             ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
     else:
@@ -538,7 +545,7 @@ async def osuSearchHandler(
             if bmap["ChildrenBeatmaps"] is None:
                 continue
 
-            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU :
+            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU:
                 bmap["HasVideo"] = int(bmap["HasVideo"])
             else:
                 # cheesegull doesn't support vids
@@ -553,6 +560,7 @@ async def osuSearchHandler(
             )
             ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
     return "\n".join(ret).encode()
+
 
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
