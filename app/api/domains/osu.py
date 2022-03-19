@@ -6,6 +6,8 @@ import hashlib
 import random
 import secrets
 import time
+import functools
+from enum import IntEnum
 from base64 import b64decode
 from collections import defaultdict
 from enum import IntEnum
@@ -404,24 +406,61 @@ async def lastFM(
         pass
     """
 
+@unique
+class MIRROR_TYPE(IntEnum): # use intenum because this should be set in .env file by user
+    CHIMU = 1
+    CHEESEGULL = 2
+    NERINA = 3
 
-# bancho.py supports both cheesegull mirrors & chimu.moe.
-# chimu.moe handles things a bit differently than cheesegull,
-# and has some extra features we'll eventually use more of.
-USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
+    @functools.cached_property
+    def search_path(self) -> str: # more cleaner way to code these
+        if self == self.CHIMU:
+            return "/search"
+        if self == self.CHEESEGULL:
+            return "/api/search"
+        return "/search" #NERINA
+    
+    @functools.cached_property
+    def set_id_spelling(self) -> str:
+        if self == self.CHIMU:
+            return "SetId"
+        if self == self.CHEESEGULL:
+            return "SetID"
+        return "id" #NERINA
+    
+    @functools.cached_property
+    def download_path(self) -> str:
+        if self == self.CHIMU:
+            return "/download"
+        if self == self.CHEESEGULL:
+            return "/d"
+        return "/d" #NERINA
 
+    @functools.cached_property
+    def no_video_param(self) -> str:
+        if self == self.CHIMU:
+            return "n"
+        if self == self.NERINA:
+            return "noVideo"
+        return "" #CHEESEGULL, not support no video
+        
+CURRENT_MIRROR_TYPE = MIRROR_TYPE(app.settings.MIRROR_TYPE)
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
     "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"
     "0|{{HasVideo}}|0|0|0|{{diffs}}"  # 0s are threadid, has_story,
     # filesize, filesize_novid.
-).format(setid_spelling="SetId" if USING_CHIMU else "SetID")
+).format(setid_spelling=CURRENT_MIRROR_TYPE.set_id_spelling)
 
 DIRECT_MAP_INFO_FMTSTR = (
     "[{DifficultyRating:.2f}⭐] {DiffName} "
     "{{cs: {CS} / od: {OD} / ar: {AR} / hp: {HP}}}@{Mode}"
 )
 
+DIRECT_MAP_INFO_FMTSTR_NERINA = (
+    "[{difficulty_rating:.2f}⭐] {version} "
+    "{{cs: {cs} / od: {accuracy} / ar: {ar} / hp: {drain}}}@{mode_int}"
+)
 
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
@@ -431,28 +470,37 @@ async def osuSearchHandler(
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
     page_num: int = Query(..., alias="p"),
 ):
-    if USING_CHIMU:
-        search_url = f"{app.settings.MIRROR_URL}/search"
+    search_url = f"{app.settings.MIRROR_URL}{CURRENT_MIRROR_TYPE.search_path}"
+
+    if(CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA):
+        params: dict[str, object] = {"p": page_num, "ps": 100}
+        # eventually we could try supporting these,
+        # but it mostly depends on the mirror.
+        if query not in ("Newest", "Top+Rated", "Most+Played"):
+            params["q"] = query
+
+        if mode != -1:  # -1 for all
+            params["m"] = mode
+
+        if ranked_status != 4:  # 4 for all
+            # convert to osu!api status
+            params["s"] = RankedStatus.from_osudirect(ranked_status).osu_api
     else:
-        search_url = f"{app.settings.MIRROR_URL}/api/search"
+        params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
+        if query not in ("Newest", "Top+Rated", "Most+Played"):
+            params["query"] = query
 
-    params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
+        if mode != -1:  # -1 for all
+            params["mode"] = mode
 
-    # eventually we could try supporting these,
-    # but it mostly depends on the mirror.
-    if query not in ("Newest", "Top+Rated", "Most+Played"):
-        params["query"] = query
-
-    if mode != -1:  # -1 for all
-        params["mode"] = mode
-
-    if ranked_status != 4:  # 4 for all
-        # convert to osu!api status
-        params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
+        if ranked_status != 4:  # 4 for all
+            # convert to osu!api status 
+            # TODO already played
+            params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
     async with app.state.services.http.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
-            if USING_CHIMU:
+            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU or MIRROR_TYPE.NERINA:
                 # chimu uses 404 for no maps found
                 if resp.status == status.HTTP_404_NOT_FOUND:
                     return b"0"
@@ -461,7 +509,7 @@ async def osuSearchHandler(
 
         result = await resp.json()
 
-        if USING_CHIMU:
+        if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU:
             if result["code"] != 0:
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
 
@@ -469,31 +517,42 @@ async def osuSearchHandler(
 
     lresult = len(result)  # send over 100 if we receive
     # 100 matches, so the client
-    # knows there are more to get
+    # knows there are more to get, 
+    # sometime it just only 100 but it show to client 100+
     ret = [f"{'101' if lresult == 100 else lresult}"]
 
-    for bmap in result:
-        if bmap["ChildrenBeatmaps"] is None:
-            continue
+    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
+        for bmap in result:
+            bmap["Artist"] = bmap.pop("artist")
+            bmap["HasVideo"] = int(bmap.pop("video"))
+            bmap["Title"] = bmap.pop("title")
+            bmap["LastUpdate"] = bmap.pop("last_updated")
+            bmap["Creator"] = bmap.pop("creator")
+            bmap["RankedStatus"] = RankedStatus.from_str(bmap.pop("status")).osu_api
+            diffs_str = ",".join(
+                [DIRECT_MAP_INFO_FMTSTR_NERINA.format(**row) for row in bmap["beatmaps"]],
+            )
+            ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
+    else:
+        for bmap in result:
+            if bmap["ChildrenBeatmaps"] is None:
+                continue
 
-        if USING_CHIMU:
-            bmap["HasVideo"] = int(bmap["HasVideo"])
-        else:
-            # cheesegull doesn't support vids
-            bmap["HasVideo"] = "0"
+            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU :
+                bmap["HasVideo"] = int(bmap["HasVideo"])
+            else:
+                # cheesegull doesn't support vids
+                bmap["HasVideo"] = "0"
 
-        diff_sorted_maps = sorted(
-            bmap["ChildrenBeatmaps"],
-            key=lambda m: m["DifficultyRating"],
-        )
-        diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
-        )
-
-        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
-
+            diff_sorted_maps = sorted(
+                bmap["ChildrenBeatmaps"],
+                key=lambda m: m["DifficultyRating"],
+            )
+            diffs_str = ",".join(
+                [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
+            )
+            ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
     return "\n".join(ret).encode()
-
 
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
@@ -1699,13 +1758,13 @@ async def get_osz(
     if no_video:
         map_set_id = map_set_id[:-1]
 
-    if USING_CHIMU:
-        query_str = f"download/{map_set_id}?n={int(not no_video)}"
+    if not MIRROR_TYPE.CHEESEGULL:
+        query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}?{CURRENT_MIRROR_TYPE.no_video_param}={int(not no_video)}"
     else:
-        query_str = f"d/{map_set_id}"
+        query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}"
 
     return RedirectResponse(
-        url=f"{app.settings.MIRROR_URL}/{query_str}",
+        url=f"{app.settings.MIRROR_URL}{query_str}",
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
