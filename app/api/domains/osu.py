@@ -417,10 +417,10 @@ class MIRROR_TYPE(
     @functools.cached_property
     def search_path(self) -> str:  # more cleaner way to code these
         if self == self.CHIMU:
-            return "/search"
+            return "search"
         if self == self.CHEESEGULL:
-            return "/api/search"
-        return "/search"  # NERINA
+            return "api/search"
+        return "search"  # NERINA
 
     @functools.cached_property
     def set_id_spelling(self) -> str:
@@ -433,10 +433,10 @@ class MIRROR_TYPE(
     @functools.cached_property
     def download_path(self) -> str:
         if self == self.CHIMU:
-            return "/download"
+            return "download"
         if self == self.CHEESEGULL:
-            return "/d"
-        return "/d"  # NERINA
+            return "d"
+        return "d"  # NERINA
 
     @functools.cached_property
     def no_video_param(self) -> str:
@@ -474,7 +474,7 @@ async def osuSearchHandler(
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
     page_num: int = Query(..., alias="p"),
 ):
-    search_url = f"{app.settings.MIRROR_URL}{CURRENT_MIRROR_TYPE.search_path}"
+    search_url = f"{app.settings.MIRROR_URL}/{CURRENT_MIRROR_TYPE.search_path}"
 
     if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
         params: dict[str, object] = {"p": page_num, "ps": 100}
@@ -1772,7 +1772,7 @@ async def get_osz(
         query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}"
 
     return RedirectResponse(
-        url=f"{app.settings.MIRROR_URL}{query_str}",
+        url=f"{app.settings.MIRROR_URL}/{query_str}",
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
