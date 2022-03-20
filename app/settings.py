@@ -89,4 +89,4 @@ DEVELOPER_MODE: bool = config("DEVELOPER_MODE", cast=bool, default=False)
 ## WARNING: only touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.3.0"
+VERSION = "4.3.1"
