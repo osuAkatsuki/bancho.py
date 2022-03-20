@@ -443,7 +443,7 @@ class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file 
             return "n"
         if self == self.NERINA:
             return "noVideo"
-        return ""  # CHEESEGULL, not support no video
+        return "novideo"  # CHEESEGULL, not support no video
 
 
 CURRENT_MIRROR_TYPE = MIRROR_TYPE[app.settings.MIRROR_TYPE]
@@ -1781,10 +1781,7 @@ async def get_osz(
     if no_video:
         map_set_id = map_set_id[:-1]
 
-    if not MIRROR_TYPE.CHEESEGULL:
-        query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}?{CURRENT_MIRROR_TYPE.no_video_param}={int(not no_video)}"
-    else:
-        query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}"
+    query_str = f"{CURRENT_MIRROR_TYPE.download_path}/{map_set_id}?{CURRENT_MIRROR_TYPE.no_video_param}={int(not no_video)}"
 
     return RedirectResponse(
         url=f"{app.settings.MIRROR_URL}/{query_str}",
