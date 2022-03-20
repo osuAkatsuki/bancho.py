@@ -117,7 +117,7 @@ create table mail
 
 create table maps
 (
-	server enum('osu!', 'gulag') default 'osu!' not null, # TODO: change name
+	server enum('osu!', 'private') default 'osu!' not null,
 	id int not null,
 	set_id int not null,
 	status int not null,
@@ -149,7 +149,7 @@ create table maps
 
 create table mapsets
 (
-	server enum('osu!', 'gulag') default 'osu!' not null, # TODO: change name
+	server enum('osu!', 'private') default 'osu!' not null,
 	id int not null,
 	last_osuapi_check datetime default CURRENT_TIMESTAMP not null,
 	primary key (server, id),
