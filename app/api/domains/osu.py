@@ -9,6 +9,7 @@ import secrets
 import time
 from base64 import b64decode
 from collections import defaultdict
+from enum import Enum
 from enum import IntEnum
 from enum import unique
 from functools import cache
@@ -407,9 +408,7 @@ async def lastFM(
 
 
 @unique
-class MIRROR_TYPE(
-    IntEnum,
-):  # use intenum because this should be set in .env file by user
+class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file by user
     CHIMU = 1
     CHEESEGULL = 2
     NERINA = 3
@@ -447,7 +446,7 @@ class MIRROR_TYPE(
         return ""  # CHEESEGULL, not support no video
 
 
-CURRENT_MIRROR_TYPE = MIRROR_TYPE(app.settings.MIRROR_TYPE)
+CURRENT_MIRROR_TYPE = MIRROR_TYPE[app.settings.MIRROR_TYPE]
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
     "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"

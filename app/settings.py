@@ -21,7 +21,7 @@ OSU_API_KEY: Secret = config("OSU_API_KEY", cast=Secret)
 
 DOMAIN: str = config("DOMAIN", default="cmyui.xyz")
 MIRROR_URL: str = config("MIRROR_URL", default="https://api.chimu.moe/v1")
-MIRROR_TYPE: int = config("MIRROR_TYPE", default=1)
+MIRROR_TYPE: str = config("MIRROR_TYPE", default="CHIMU")
 
 COMMAND_PREFIX: str = config("COMMAND_PREFIX", default="!")
 
