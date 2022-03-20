@@ -905,10 +905,12 @@ def spectator_left(user_id: int) -> bytes:
 
 
 # packet id: 15
-# TODO: perhaps optimize this and match
-# frames to be a bit more efficient, since
-# they're literally spammed between clients.
 def spectate_frames(data: bytes) -> bytes:
+    # NOTE: this is left as unvalidated (raw) for efficiency due to the
+    # sheer rate of usage of these packets in spectator mode.
+
+    # spectator frames *received* by the server are always validated.
+
     return write(ServerPackets.SPECTATE_FRAMES, (data, osuTypes.raw))
 
 
