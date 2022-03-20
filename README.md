@@ -1,83 +1,179 @@
-# bancho.py - a dev-oriented, production-geared osu! server
+# bancho.py
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-bancho.py is an in-progress osu! server implementation geared towards running production
-servers - it is developed primarily by [Akatsuki](https://akatsuki.pw/) with our
-long-term goal being to replace our current [Ripple](https://github.com/osuripple)
-stack with something more easily maintainable, reliable, scalable, and feature-rich.
+bancho.py is an in-progress osu! server implementation for developers of all levels
+of experience interested in hosting their own osu private server instance(s).
+
+the project is developed primarily by the [osu!Akatsuki](https://akatsuki.pw/) team,
+and our aim is to create the most easily maintainable, reliable, and feature-rich
+osu! server implementation available.
 
 # Setup
+knowledge of linux, python, and databases will certainly help, but are by no
+means required.
+
+(lots of people have installed this server with no prior programming experience!)
+
+if you get stuck at any point in the process - we have a public discord above :)
+
+## download the osu! server codebase onto your machine
 ```sh
-# clone the repository & init the submodules
+# clone bancho.py's repository
 git clone https://github.com/osuAkatsuki/bancho.py.git && cd bancho.py
 
-# clone the submodules (oppai-ng)
+# clone bancho.py's submodule repositories
 git submodule update --init
+```
 
-# python3.9 is often not available natively
+## installing bancho.py's requirements
+bancho.py is a ~15,000 line codebase built on the shoulder of giants.
+
+we aim to minimize our dependencies, but still rely on ones such as
+- python (programming language)
+- mysql (relational database)
+- nginx (http(s) reverse proxy)
+- certbot (ssl certificate tool)
+
+as well as some others.
+
+```sh
+# python3.9 is often not available natively,
+# so we can use deadsnakes to provide it!
 # https://github.com/deadsnakes/python3.9
 sudo add-apt-repository ppa:deadsnakes
 
-# install project requirements (separate programs)
+# install required programs for running bancho.py
 sudo apt install python3.9-dev python3.9-distutils cmake build-essential \
                  mysql-server redis-server nginx certbot
 
-# install pip for python3.9
+# install python's package manager, pip
 wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # install bancho.py's python requirements
 python3.9 -m pip install -U pip setuptools
 python3.9 -m pip install -r requirements.txt
+```
 
-# setup pre-commit's git hooks
-# https://pre-commit.com/
-pre-commit install
+## creating a database for bancho.py
+you will need to create a database for bancho.py to store persistent data.
 
-######################################
-# NOTE: before continuing, create an #
-# empty database in mysql for bancho.py  #
-######################################
+the server uses this database to store metadata & logs, such as user accounts
+and stats, beatmaps and beatmapsets, chat channels, tourney mappools and more.
 
-# import bancho.py's mysql structure
-mysql -u your_sql_username -p your_db_name < migrations/base.sql
+```sh
+# login to mysql's shell with root - the default admin account
 
-# generate an ssl certificate for your domain (change email & domain)
+# note that this shell can be rather dangerous - it allows users
+# to perform arbitrary sql commands to interact with the database.
+
+# it's also very useful, powerful, and quick when used correctly.
+mysql -u root -p
+```
+
+from this mysql shell, we'll want to create a database, create a user account,
+and give the user full permissions to the database.
+
+then, later on, we'll configure bancho.py to use this database as well.
+```sql
+# create a database for bancho.py to use
+# (you can name this whatever you'd like)
+CREATE DATABASE YOUR_DB_NAME;
+
+# create a user to use the bancho.py database
+CREATE USER 'YOUR_DB_USER'@'localhost' IDENTIFIED BY 'YOUR_DB_PASSWORD';
+
+# grant the user full access to all tables in the bancho.py database
+GRANT ALL PRIVILEGES ON YOUR_DB_NAME.* TO 'YOUR_DB_USER'@'localhost';
+
+# exit the mysql shell, back to bash
+quit
+```
+
+## setting up the database's structure for bancho.py
+we've now created an empty database - databases are full of 2-dimensional
+tables of data.
+
+bancho.py has many tables it uses to organize information, for example, there
+are tables like `users` and `scores` for storing their respective information.
+
+the columns (vertical) represent the types of data stored for a `user` or `score`.
+for example, the number of 300s in a score, or the privileges of a user.
+
+the rows (horizontal) represent the individual items or events in a table.
+for example, an individual score in the scores table.
+
+this base state of the database is stored in `ext/base.sql`; it's a bunch of
+sql commands that can be run in sequence to create the base state we want.
+```sh
+# import bancho.py's mysql structure to our new db
+# this runs the contents of the file as sql commands.
+mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
+```
+
+## creating an ssl certificate (to allow https traffic)
+```sh
+# generate an ssl certificate for your domain
+# (you'll only need to change the email & domain)
 sudo certbot certonly \
     --manual \
     --preferred-challenges=dns \
-    --email your@email.com \
+    --email YOUR_EMAIL_ADDRESS \
     --server https://acme-v02.api.letsencrypt.org/directory \
     --agree-tos \
-    -d *.your.domain
+    -d *.YOUR_DOMAIN
+```
 
-# copy our nginx config to `sites-enabled` & open for editing
-sudo cp ext/nginx.conf /etc/nginx/sites-enabled/bancho.conf
-sudo nano /etc/nginx/sites-enabled/bancho.conf
+## configuring a reverse proxy (we'll use nginx)
+bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
+in terms of configuration. nginx is an open-source and efficient web server we'll
+be using for this guide, but feel free to check out others, like caddy and h2o.
 
-##########################################
-# NOTE: before continuing, make sure you #
-# have completely configured the file.   #
-##########################################
+```sh
+# copy the example nginx config to /etc/nginx/sites-available,
+# and make a symbolic link to /etc/nginx/sites-enabled
+sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
+sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
-# reload the reverse proxy's config
+# now, you can edit the config file.
+# you should only need to edit the directory paths used
+# for ssl certificates, as well as for static assets.
+sudo nano /etc/nginx/sites-available/bancho.conf
+
+# reload config from disk
 sudo nginx -s reload
+```
 
-# create a config file from the sample & open it for editing
+## configuring bancho.py
+all configuration for the osu! server (bancho.py) itself can be done from the
+`.env` file. we provide an example `.env.example` file which you can use as a base.
+```sh
+# create a configuration file from the sample provided
 cp .env.example .env
+
+# you'll want to configure *at least* DB_DSN (the database connection url),
+# as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
+# (e.g. beatmaps).
+
+# open the configuration file for editing
 nano .env
+```
 
-##########################################
-# NOTE: before continuing, make sure you #
-# have completely configured the file.   #
-##########################################
+## congratulations! you just setup an osu! private server
 
+if everything went well, you should be able to start your server up:
+
+```sh
 # start the server
 ./main.py
 ```
+
+and you should see something along the lines of:
+
+![ada](https://i.cmyui.xyz/ld-iZXysVXqwhM8.png)
 
 # Directory Structure
     .
