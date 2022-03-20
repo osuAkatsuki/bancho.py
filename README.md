@@ -4,14 +4,12 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-bancho.py is an in-progress osu! server implementation geared towards developers
-of all levels of experience looking to host their own osu! server instances.
+bancho.py is an in-progress osu! server implementation for developers of all levels
+of experience interested in hosting their own osu private server instance(s).
 
-it is developed primarily by [Akatsuki](https://akatsuki.pw/) as a replacement
-for pre-existing implementations that were either discontinued, or failed to
-keep their codebases maintainable. the project has undergone extensive
-refactoring as it's grown, and our aim is to create the most easily maintainable,
-reliable, scalable, and feature-rich osu! server implementation on the market.
+the project is developed primarily by the [osu!Akatsuki](https://akatsuki.pw/) team,
+and our aim is to create the most easily maintainable, reliable, and feature-rich
+osu! server implementation available.
 
 # Setup
 knowledge of linux, python, and databases will certainly help, but are by no
@@ -19,7 +17,9 @@ means required.
 
 (lots of people have installed this server with no prior programming experience!)
 
-## cloning the required repositories to your machine
+if you get stuck at any point in the process - we have a public discord above :)
+
+## download the osu! server codebase onto your machine
 ```sh
 # clone bancho.py's repository
 git clone https://github.com/osuAkatsuki/bancho.py.git && cd bancho.py
@@ -29,6 +29,16 @@ git submodule update --init
 ```
 
 ## installing bancho.py's requirements
+bancho.py is a ~15,000 line codebase built on the shoulder of giants.
+
+we aim to minimize our dependencies, but still rely on ones such as
+- python (programming language)
+- mysql (relational database)
+- nginx (http(s) reverse proxy)
+- certbot (ssl certificate tool)
+
+as well as some others.
+
 ```sh
 # python3.9 is often not available natively,
 # so we can use deadsnakes to provide it!
@@ -49,12 +59,25 @@ python3.9 -m pip install -r requirements.txt
 ```
 
 ## creating a database for bancho.py
+you will need to create a database for bancho.py to store persistent data.
+
+the server uses this database to store metadata & logs, such as user accounts
+and stats, beatmaps and beatmapsets, chat channels, tourney mappools and more.
+
 ```sh
-# login to mysql as an root (default administrator account)
-# this will put you into a shell where you can execute mysql commands
+# login to mysql's shell with root - the default admin account
+
+# note that this shell can be rather dangerous - it allows users
+# to perform arbitrary sql commands to interact with the database.
+
+# it's also very useful, powerful, and quick when used correctly.
 mysql -u root -p
 ```
 
+from this mysql shell, we'll want to create a database, create a user account,
+and give the user full permissions to the database.
+
+then, later on, we'll configure bancho.py to use this database as well.
 ```sql
 # create a database for bancho.py to use
 # (you can name this whatever you'd like)
@@ -71,14 +94,30 @@ quit
 ```
 
 ## setting up the database's structure for bancho.py
+we've now created an empty database - databases are full of 2-dimensional
+tables of data.
+
+bancho.py has many tables it uses to organize information, for example, there
+are tables like `users` and `scores` for storing their respective information.
+
+the columns (vertical) represent the types of data stored for a `user` or `score`.
+for example, the number of 300s in a score, or the privileges of a user.
+
+the rows (horizontal) represent the individual items or events in a table.
+for example, an individual score in the scores table.
+
+this base state of the database is stored in `ext/base.sql`; it's a bunch of
+sql commands that can be run in sequence to create the base state we want.
 ```sh
-# import bancho.py's mysql structure
+# import bancho.py's mysql structure to our new db
+# this runs the contents of the file as sql commands.
 mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
 ```
 
 ## creating an ssl certificate (to allow https traffic)
 ```sh
-# generate an ssl certificate for your domain (change email & domain)
+# generate an ssl certificate for your domain
+# (you'll only need to change the email & domain)
 sudo certbot certonly \
     --manual \
     --preferred-challenges=dns \
@@ -89,33 +128,52 @@ sudo certbot certonly \
 ```
 
 ## configuring a reverse proxy (we'll use nginx)
+bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
+in terms of configuration. nginx is an open-source and efficient web server we'll
+be using for this guide, but feel free to check out others, like caddy and h2o.
+
 ```sh
-# copy our nginx config to /etc/nginx/sites-available,
+# copy the example nginx config to /etc/nginx/sites-available,
 # and make a symbolic link to /etc/nginx/sites-enabled
 sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
-# edit the nginx configuration file
+# now, you can edit the config file.
+# you should only need to edit the directory paths used
+# for ssl certificates, as well as for static assets.
 sudo nano /etc/nginx/sites-available/bancho.conf
 
-# reload the reverse proxy's config
+# reload config from disk
 sudo nginx -s reload
 ```
 
 ## configuring bancho.py
+all configuration for the osu! server (bancho.py) itself can be done from the
+`.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
 # create a configuration file from the sample provided
 cp .env.example .env
+
+# you'll want to configure *at least* DB_DSN (the database connection url),
+# as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
+# (e.g. beatmaps).
 
 # open the configuration file for editing
 nano .env
 ```
 
-## profit?
+## congratulations! you just setup an osu! private server
+
+if everything went well, you should be able to start your server up:
+
 ```sh
 # start the server
 ./main.py
 ```
+
+and you should see something along the lines of:
+
+![ada](https://i.cmyui.xyz/ld-iZXysVXqwhM8.png)
 
 # Directory Structure
     .
