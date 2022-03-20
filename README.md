@@ -89,6 +89,9 @@ CREATE USER 'YOUR_DB_USER'@'localhost' IDENTIFIED BY 'YOUR_DB_PASSWORD';
 # grant the user full access to all tables in the bancho.py database
 GRANT ALL PRIVILEGES ON YOUR_DB_NAME.* TO 'YOUR_DB_USER'@'localhost';
 
+# make sure privilege changes are applied immediately.
+FLUSH PRIVILEGES;
+
 # exit the mysql shell, back to bash
 quit
 ```
