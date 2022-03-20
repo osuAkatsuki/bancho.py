@@ -1082,15 +1082,6 @@ async def osuSubmitModularSelector(
                 ),
                 chart_entry("pp", score.prev_best.pp, score.pp),
             )
-
-            overall_ranking_chart_entries = (
-                chart_entry("rank", prev_stats.rank, stats.rank),
-                chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
-                chart_entry("totalScore", prev_stats.tscore, stats.tscore),
-                chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
-                chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
-                chart_entry("pp", prev_stats.pp, stats.pp),
-            )
         else:
             # no previous best score
             beatmap_ranking_chart_entries = (
@@ -1102,14 +1093,14 @@ async def osuSubmitModularSelector(
                 chart_entry("pp", None, score.pp),
             )
 
-            overall_ranking_chart_entries = (
-                chart_entry("rank", None, stats.rank),
-                chart_entry("rankedScore", None, stats.rscore),
-                chart_entry("totalScore", None, stats.tscore),
-                chart_entry("maxCombo", None, stats.max_combo),
-                chart_entry("accuracy", None, round(stats.acc, 2)),
-                chart_entry("pp", None, stats.pp),
-            )
+        overall_ranking_chart_entries = (
+            chart_entry("rank", prev_stats.rank, stats.rank),
+            chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
+            chart_entry("totalScore", prev_stats.tscore, stats.tscore),
+            chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
+            chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
+            chart_entry("pp", prev_stats.pp, stats.pp),
+        )
 
         submission_charts = [
             # beatmap info chart
