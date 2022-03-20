@@ -464,7 +464,7 @@ DIRECT_MAP_INFO_FMTSTR_NERINA = (
     "{{cs: {cs} / od: {accuracy} / ar: {ar} / hp: {drain}}}@{mode_int}"
 )
 
-
+# TODO: mapset that already played on map filter
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
@@ -475,21 +475,34 @@ async def osuSearchHandler(
 ):
     search_url = f"{app.settings.MIRROR_URL}/{CURRENT_MIRROR_TYPE.search_path}"
 
+    # Generate URL parameter
     if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
         params: dict[str, object] = {"p": page_num, "ps": 100}
-        # eventually we could try supporting these,
-        # but it mostly depends on the mirror.
-        if query not in ("Newest", "Top+Rated", "Most+Played"):
+        if query == "Newest":
+            params["q"] = ""
+        elif query == "Top+Rated":
+            params["sort"] = "favourites_desc"
+            params["q"] = ""
+        elif query == "Most+Played":
+            params["sort"] = "plays_desc"
+            params["q"] = ""
+        else:
             params["q"] = query
 
         if mode != -1:  # -1 for all
             params["m"] = mode
 
-        if ranked_status != 4:  # 4 for all
-            # convert to osu!api status
+        # convert to osu!api status
+        if ranked_status == 4:  # 4 for all
+            params["s"] = "all"
+        elif ranked_status == 5:
+            params["s"] = "graveyard"
+        else:
             params["s"] = RankedStatus.from_osudirect(ranked_status).osu_api
     else:
         params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
+        # eventually we could try supporting these,
+        # but it mostly depends on the mirror.
         if query not in ("Newest", "Top+Rated", "Most+Played"):
             params["query"] = query
 
@@ -498,7 +511,6 @@ async def osuSearchHandler(
 
         if ranked_status != 4:  # 4 for all
             # convert to osu!api status
-            # TODO already played
             params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
     async with app.state.services.http.get(search_url, params=params) as resp:
