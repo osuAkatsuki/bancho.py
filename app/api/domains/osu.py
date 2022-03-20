@@ -523,6 +523,8 @@ async def osuSearchHandler(
 
     if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
         for bmap in result:
+            if bmap["download_disabled"]:
+                continue # Ignore the mapset that cannot download
             bmap["Artist"] = bmap.pop("artist")
             bmap["HasVideo"] = int(bmap.pop("video"))
             bmap["Title"] = bmap.pop("title")
@@ -538,7 +540,9 @@ async def osuSearchHandler(
             if bmap["ChildrenBeatmaps"] is None:
                 continue
 
-            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU :
+            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU:
+                if(bmap["Disabled"]):
+                    continue
                 bmap["HasVideo"] = int(bmap["HasVideo"])
             else:
                 # cheesegull doesn't support vids
