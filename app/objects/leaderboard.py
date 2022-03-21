@@ -28,7 +28,9 @@ class Leaderboard:
 
     @classmethod
     async def create_leaderboard(
-        cls, mode: GameMode, beatmap: "Beatmap",
+        cls,
+        mode: GameMode,
+        beatmap: "Beatmap",
     ) -> Leaderboard:
         """Create a leaderboard object with populated scores."""
 
