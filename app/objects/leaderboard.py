@@ -53,10 +53,7 @@ class Leaderboard:
         async with self.lock:
             self.scores.pop(index)
 
-    async def find_user_score(
-        self,
-        user_id: int,
-    ) -> Optional[UserScore]:
+    async def find_user_score(self, user_id: int) -> Optional[UserScore]:
         for idx, score in enumerate(self.scores):
             if score.player.id == user_id:
                 return {
