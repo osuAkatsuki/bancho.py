@@ -411,7 +411,7 @@ async def lastFM(
 class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file by user
     CHIMU = 1
     CHEESEGULL = 2
-    NERINA = 3
+    NERRIYAN = 3
 
     @functools.cached_property
     def search_path(self) -> str:  # more cleaner way to code these
@@ -419,7 +419,7 @@ class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file 
             return "search"
         if self == self.CHEESEGULL:
             return "api/search"
-        return "search"  # NERINA
+        return "search"  # NERRIYAN
 
     @functools.cached_property
     def set_id_spelling(self) -> str:
@@ -427,7 +427,7 @@ class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file 
             return "SetId"
         if self == self.CHEESEGULL:
             return "SetID"
-        return "id"  # NERINA
+        return "id"  # NERRIYAN
 
     @functools.cached_property
     def download_path(self) -> str:
@@ -435,13 +435,13 @@ class MIRROR_TYPE(Enum):  # use intenum because this should be set in .env file 
             return "download"
         if self == self.CHEESEGULL:
             return "d"
-        return "d"  # NERINA
+        return "d"  # NERRIYAN
 
     @functools.cached_property
     def no_video_param(self) -> str:
         if self == self.CHIMU:
             return "n"
-        if self == self.NERINA:
+        if self == self.NERRIYAN:
             return "noVideo"
         return "novideo"  # CHEESEGULL, not support no video
 
@@ -459,7 +459,7 @@ DIRECT_MAP_INFO_FMTSTR = (
     "{{cs: {CS} / od: {OD} / ar: {AR} / hp: {HP}}}@{Mode}"
 )
 
-DIRECT_MAP_INFO_FMTSTR_NERINA = (
+DIRECT_MAP_INFO_FMTSTR_NERRIYAN = (
     "[{difficulty_rating:.2f}⭐] {version} "
     "{{cs: {cs} / od: {accuracy} / ar: {ar} / hp: {drain}}}@{mode_int}"
 )
@@ -476,7 +476,7 @@ async def osuSearchHandler(
     search_url = f"{app.settings.MIRROR_URL}/{CURRENT_MIRROR_TYPE.search_path}"
 
     # Generate URL parameter
-    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
+    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERRIYAN:
         params: dict[str, object] = {"p": page_num, "ps": 100}
         if query == "Newest":
             params["q"] = ""
@@ -515,7 +515,7 @@ async def osuSearchHandler(
 
     async with app.state.services.http.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
-            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU or MIRROR_TYPE.NERINA:
+            if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU or MIRROR_TYPE.NERRIYAN:
                 # chimu uses 404 for no maps found
                 if resp.status == status.HTTP_404_NOT_FOUND:
                     return b"0"
@@ -536,7 +536,7 @@ async def osuSearchHandler(
     # sometime it just only 100 but it show to client 100+
     ret = [f"{'101' if lresult == 100 else lresult}"]
 
-    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINA:
+    if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERRIYAN:
         for bmap in result:
             if bmap["download_disabled"]:
                 continue  # Ignore the mapset that cannot download
@@ -548,7 +548,7 @@ async def osuSearchHandler(
             bmap["RankedStatus"] = RankedStatus.from_str(bmap.pop("status")).osu_api
             diffs_str = ",".join(
                 [
-                    DIRECT_MAP_INFO_FMTSTR_NERINA.format(**row)
+                    DIRECT_MAP_INFO_FMTSTR_NERRIYAN.format(**row)
                     for row in bmap["beatmaps"]
                 ],
             )
