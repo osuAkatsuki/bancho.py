@@ -1,6 +1,13 @@
 #!/usr/bin/env python3.9
-"""bancho.py - a fully-featured, dev-centered osu! server implementation
-made for running production-quality osu! private servers."""
+"""main.py - a user-friendly, safe wrapper around bancho.py's runtime
+
+bancho.py is an in-progress osu! server implementation for developers of all levels
+of experience interested in hosting their own osu private server instance(s).
+
+the project is developed primarily by the [osu!Akatsuki](https://akatsuki.pw/) team,
+and our aim is to create the most easily maintainable, reliable, and feature-rich
+osu! server implementation available.
+"""
 from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
