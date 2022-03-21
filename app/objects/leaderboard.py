@@ -20,8 +20,6 @@ class Leaderboard:
         self.mode = mode
         self.scores: list[Score] = []
 
-        self.lock: asyncio.Lock = asyncio.Lock()
-
     def __len__(self) -> int:
         return len(self.scores)
 
@@ -50,8 +48,7 @@ class Leaderboard:
         return leaderboard
 
     async def remove_score_index(self, index: int) -> None:
-        async with self.lock:
-            self.scores.pop(index)
+        self.scores.pop(index)
 
     async def find_user_score(self, user_id: int) -> Optional[UserScore]:
         for idx, score in enumerate(self.scores):
@@ -77,18 +74,15 @@ class Leaderboard:
             self.remove_score_index(result["rank"] - 1)
 
     async def sort(self) -> None:
-        async with self.lock:
-            if self.mode > GameMode.VANILLA_MANIA:  # rx/autopilot
-                sort = lambda score: score.pp
-            else:  # vanilla
-                sort = lambda score: score.score
+        if self.mode > GameMode.VANILLA_MANIA:  # rx/autopilot
+            sort = lambda score: score.pp
+        else:  # vanilla
+            sort = lambda score: score.score
 
-            self.scores = sorted(self.scores, key=sort, reverse=True)
+        self.scores = sorted(self.scores, key=sort, reverse=True)
 
     async def add_score(self, score: Score) -> None:
         await self.remove_user(score.player.id)
 
-        async with self.lock:
-            self.scores.append(score)
-
+        self.scores.append(score)
         await self.sort()
