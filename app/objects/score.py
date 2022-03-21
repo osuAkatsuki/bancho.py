@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -216,6 +217,15 @@ class Score:
         if not row:
             return None
 
+        return await cls.from_row(row)
+
+    @classmethod
+    async def from_row(
+        cls,
+        row: Mapping,
+        calculate_rank: bool = True,
+    ) -> Optional[Score]:
+        """Create a score object from an sql row."""
         s = cls()
 
         s.id = row[0]

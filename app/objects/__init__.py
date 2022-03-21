@@ -6,6 +6,7 @@ from . import beatmap
 from . import channel
 from . import clan
 from . import collections
+from . import leaderboard
 from . import match
 from . import menu
 from . import models
