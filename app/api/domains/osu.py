@@ -1003,8 +1003,7 @@ async def osuSubmitModularSelector(
     if score.status == SubmissionStatus.BEST:
         await leaderboard.add_score(score)
 
-        cached_score = await leaderboard.find_user_score(score.player.id)
-        score.rank = cached_score["rank"]
+        score.rank = await leaderboard.find_score_rank(score.id)
 
         if score.bmap.has_leaderboard:
             if (

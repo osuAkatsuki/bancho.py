@@ -66,6 +66,13 @@ class Leaderboard:
 
         return None
 
+    async def find_score_rank(self, score_id: int) -> int:
+        for idx, score in enumerate(self.scores):
+            if score.id == score_id:
+                return idx + 1
+
+        return 0
+
     async def remove_user(self, user_id: int) -> None:
         result = await self.find_user_score(user_id)
 
