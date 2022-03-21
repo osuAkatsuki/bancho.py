@@ -15,7 +15,6 @@ from typing import TypedDict
 from typing import Union
 
 import databases.core
-from cmyui.discord import Webhook  # TODO: move into bancho.py codebase
 
 import app.packets
 import app.settings
@@ -25,6 +24,7 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
+from app.discord import Webhook
 from app.logging import Ansi
 from app.logging import log
 from app.objects.channel import Channel
