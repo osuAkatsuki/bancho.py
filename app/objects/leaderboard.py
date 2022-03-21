@@ -51,13 +51,13 @@ class Leaderboard:
             score_obj = Score.from_row(row, calculate_rank=False)
             leaderboard.scores.append(score_obj)
 
-        await leaderboard.sort()
+        leaderboard.sort()
         return leaderboard
 
-    async def remove_score_index(self, index: int) -> None:
+    def remove_score_index(self, index: int) -> None:
         self.scores.pop(index)
 
-    async def find_user_score(self, user_id: int) -> Optional[UserScore]:
+    def find_user_score(self, user_id: int) -> Optional[UserScore]:
         for idx, score in enumerate(self.scores):
             if score.player.id == user_id:
                 return {
@@ -67,20 +67,20 @@ class Leaderboard:
 
         return None
 
-    async def find_score_rank(self, score_id: int) -> int:
+    def find_score_rank(self, score_id: int) -> int:
         for idx, score in enumerate(self.scores):
             if score.id == score_id:
                 return idx + 1
 
         return 0
 
-    async def remove_user(self, user_id: int) -> None:
-        result = await self.find_user_score(user_id)
+    def remove_user(self, user_id: int) -> None:
+        result = self.find_user_score(user_id)
 
         if result is not None:
             self.remove_score_index(result["rank"] - 1)
 
-    async def sort(self) -> None:
+    def sort(self) -> None:
         if self.mode > GameMode.VANILLA_MANIA:  # rx/autopilot
             sort = lambda score: score.pp
         else:  # vanilla
@@ -88,8 +88,8 @@ class Leaderboard:
 
         self.scores = sorted(self.scores, key=sort, reverse=True)
 
-    async def add_score(self, score: Score) -> None:
-        await self.remove_user(score.player.id)
+    def add_score(self, score: Score) -> None:
+        self.remove_user(score.player.id)
 
         self.scores.append(score)
-        await self.sort()
+        self.sort()

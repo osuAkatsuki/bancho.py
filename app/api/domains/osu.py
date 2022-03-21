@@ -721,7 +721,7 @@ async def osuSubmitModularSelector(
             score.pp, score.sr = score.calculate_performance(osu_file_path)
 
             if score.passed:
-                old_best = await leaderboard.find_user_score(score.player.id)
+                old_best = leaderboard.find_user_score(score.player.id)
 
                 if old_best:
                     score.prev_best = old_best["score"]
@@ -1001,9 +1001,9 @@ async def osuSubmitModularSelector(
 
     # update leaderboard cache & announce #1
     if score.status == SubmissionStatus.BEST:
-        await leaderboard.add_score(score)
+        leaderboard.add_score(score)
 
-        score.rank = await leaderboard.find_score_rank(score.id)
+        score.rank = leaderboard.find_score_rank(score.id)
 
         if score.bmap.has_leaderboard:
             if (
@@ -1445,7 +1445,7 @@ async def getScores(
 
         response_lines.append(bmap.osu_string(len(leaderboard), rating))
 
-        personal_best = await leaderboard.find_user_score(player.user_id)
+        personal_best = leaderboard.find_user_score(player.user_id)
         if personal_best:
             response_lines.append(
                 personal_best["score"].osu_string(
