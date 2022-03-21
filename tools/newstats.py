@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 
 import aiomysql
-from cmyui.mysql import AsyncSQLPool
+from cmyui.mysql import AsyncSQLPool  # module not in requirements.txt - deprecated
 
 TABLE_COLUMNS = ["tscore", "rscore", "pp", "plays", "playtime", "acc", "max_combo"]
 
