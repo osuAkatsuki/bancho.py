@@ -12,7 +12,10 @@ import os
 # set working directory to the bancho/ directory.
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
+import argparse
 import logging
+import sys
+from typing import Sequence
 
 import uvicorn
 from cmyui.logging import Ansi
@@ -22,7 +25,7 @@ import app.utils
 import app.settings
 
 
-def main() -> int:
+def main(argv: Sequence[str]) -> int:
     """Ensure runtime environment is ready, and start the server."""
     app.utils.setup_runtime_environment()
 
@@ -34,6 +37,20 @@ def main() -> int:
     ):
         if (exit_code := safety_check()) != 0:
             return exit_code
+
+    """ Parse and handle command-line arguments. """
+
+    parser = argparse.ArgumentParser(
+        description=("An open-source osu! server implementation by osu!Akatsuki."),
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s v{app.settings.VERSION}",
+    )
+
+    parser.parse_args(argv)
 
     """ Server should be safe to start """
 
@@ -105,4 +122,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
