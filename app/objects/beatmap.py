@@ -19,6 +19,7 @@ import app.utils
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
+from app.objects.leaderboard import Leaderboard
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -214,12 +215,14 @@ class Beatmap:
     The only methods you should need are:
       await Beatmap.from_md5(md5: str, set_id: int = -1) -> Optional[Beatmap]
       await Beatmap.from_bid(bid: int) -> Optional[Beatmap]
+      await Beatmap.fetch_leaderboard(self, mode: GameMode) -> Leaderboard
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
       Beatmap.url -> str # https://osu.cmyui.xyz/beatmaps/321
       Beatmap.embed -> str # [{url} {full}]
 
+      Beatmap.osu_string -> str
       Beatmap.has_leaderboard -> bool
       Beatmap.awards_ranked_pp -> bool
       Beatmap.as_dict -> dict[str, object]
@@ -302,6 +305,8 @@ class Beatmap:
 
         self.filename = kwargs.get("filename", "")
 
+        self.leaderboard: dict[GameMode, Leaderboard] = {}
+
     def __repr__(self) -> str:
         return self.full_name
 
@@ -360,6 +365,12 @@ class Beatmap:
             "hp": self.hp,
             "diff": self.diff,
         }
+
+    def osu_string(self, score_count: int, rating: int) -> str:
+        return (
+            f"{int(self.status)}|false|{self.id}|{self.set_id}|{score_count}\n"
+            f"0\n{self.full_name}\n{rating}"  # 0 = offset
+        )
 
     # TODO: implement some locking for the map fetch methods
 
@@ -447,6 +458,15 @@ class Beatmap:
                 bmap = await cls._from_bid_cache(bid, check_updates=False)
 
         return bmap
+
+    async def fetch_leaderboard(self, mode: GameMode) -> Leaderboard:
+        if leaderboard := self.leaderboards.get(mode):
+            return leaderboard
+
+        leaderboard = await Leaderboard.create_leaderboard(mode, self)
+        self.leaderboards[mode] = leaderboard
+
+        return leaderboard
 
     """ Lower level API """
     # These functions are meant for internal use under

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from typing import Optional
+from typing import TypedDict
 
 import app.state
 from app.constants.gamemodes import GameMode
 from app.objects.beatmap import Beatmap
 from app.objects.score import Score
+
+
+class UserScore(TypedDict):
+    score: Score
+    rank: int
 
 
 class Leaderboard:
@@ -50,10 +56,13 @@ class Leaderboard:
     async def find_user_score(
         self,
         user_id: int,
-    ) -> Optional[tuple[Score, int]]:  # (score, index)
+    ) -> Optional[UserScore]:
         for idx, score in enumerate(self.scores):
             if score.player.id == user_id:
-                return (score, idx)
+                return {
+                    "score": score,
+                    "rank": idx + 1,
+                }
 
         return None
 

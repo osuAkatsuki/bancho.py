@@ -1418,19 +1418,6 @@ async def getScores(
         return f"{int(bmap.status)}|false".encode()
 
     # fetch scores & personal best
-    # TODO: create a leaderboard cache
-    if not requesting_from_editor_song_select:
-        score_rows, personal_best_score_row = await get_leaderboard_scores(
-            leaderboard_type,
-            bmap.md5,
-            mode,
-            mods,
-            player,
-            scoring_metric,
-        )
-    else:
-        score_rows = []
-        personal_best_score_row = None
 
     # fetch beatmap rating
     rating = await bmap.fetch_rating()
@@ -1439,42 +1426,52 @@ async def getScores(
 
     ## construct response for osu! client
 
-    response_lines: list[str] = [
-        # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}
-        f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}",
-        # {offset}\n{beatmap_name}\n{rating}
-        # TODO: server side beatmap offsets
-        f"0\n{bmap.full_name}\n{rating}",
-    ]
+    response_lines: list[str] = []
 
-    if not score_rows:
-        response_lines.extend(("", ""))  # no scores, no personal best
-        return "\n".join(response_lines).encode()
+    if not requesting_from_editor_song_select:
+        leaderboard = await bmap.fetch_leaderboard(mode)
 
-    if personal_best_score_row is not None:
-        response_lines.append(
-            SCORE_LISTING_FMTSTR.format(
-                **personal_best_score_row,
-                name=player.full_name,
-                userid=player.id,
-                score=int(personal_best_score_row["_score"]),
-                has_replay="1",
-            ),
-        )
-    else:
-        response_lines.append("")
+        response_lines.append(bmap.osu_string(len(leaderboard), rating))
 
-    response_lines.extend(
-        [
-            SCORE_LISTING_FMTSTR.format(
-                **s,
-                score=int(s["_score"]),
-                has_replay="1",
-                rank=idx + 1,
+        personal_best = await leaderboard.find_user_score(player.user_id)
+        if personal_best:
+            response_lines.append(
+                personal_best["score"].osu_string(
+                    player.username,
+                    personal_best["rank"],
+                ),
             )
-            for idx, s in enumerate(score_rows)
-        ],
-    )
+        else:
+            response_lines.append("")  # osu still requires a personal best to be sent
+
+        lb_type = LeaderboardType(leaderboard_type)
+        for idx, score in enumerate(leaderboard.scores[:100]):
+            if score.player.restricted and score.player != player:
+                continue
+
+            if lb_type == LeaderboardType.Mods and score.mods != mods:
+                continue
+
+            if (
+                lb_type == LeaderboardType.Country
+                and score.player.geoloc["country"] != player.geoloc["country"]
+            ):
+                continue
+
+            if (
+                lb_type == LeaderboardType.Friends
+                and score.player.id not in player.friends
+            ):
+                continue
+
+            displayed_name = player.full_name
+            if score.player == player:
+                displayed_name = player.name
+
+            response_lines.append(score.osu_string(displayed_name, idx + 1))
+
+    else:
+        response_lines.append(bmap.osu_string(0, rating))  # 0 score count
 
     return "\n".join(response_lines).encode()
 

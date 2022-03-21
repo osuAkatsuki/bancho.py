@@ -197,6 +197,19 @@ class Score:
         except:
             return super().__repr__()
 
+    def osu_score(self, username: str, rank: int) -> str:
+        if self.mode > GameMode.VANILLA_MANIA:  # rx/ap
+            score = self.pp
+        else:
+            score = self.score
+
+        timestamp = self.server_time.timestamp()
+
+        return (
+            f"{self.id}|{username}|{score}|{self.max_combo}|{self.n50}|{self.n100}|{self.n300}|{self.nmiss}|"
+            f"{self.nkatu}|{self.ngeki}|{self.perfect}|{int(self.mods)}|{self.player.id}|{rank}|{timestamp}|1"
+        )  # 1 = has replay
+
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
