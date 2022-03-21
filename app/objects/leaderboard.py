@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from typing import Optional
-from typing import TypedDict
 from typing import TYPE_CHECKING
+from typing import TypedDict
 
 import app.state
 from app.constants.gamemodes import GameMode
@@ -27,7 +27,9 @@ class Leaderboard:
         return len(self.scores)
 
     @classmethod
-    async def create_leaderboard(cls, mode: GameMode, beatmap: "Beatmap") -> Leaderboard:
+    async def create_leaderboard(
+        cls, mode: GameMode, beatmap: "Beatmap",
+    ) -> Leaderboard:
         """Create a leaderboard object with populated scores."""
 
         leaderboard = Leaderboard(mode)
