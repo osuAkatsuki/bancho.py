@@ -37,7 +37,7 @@ class Leaderboard:
             "nmiss, ngeki, nkatu, grade, perfect, "
             "status, mode, play_time, "
             "time_elapsed, client_flags, online_checksum "
-            "FROM scores WHERE map_md5 = :map_md5 AND status = 2"
+            "FROM scores WHERE map_md5 = :map_md5 AND status = 2 "
             "AND mode = :mode",
             {"map_md5": beatmap.md5, "mode": mode.value},
         )
