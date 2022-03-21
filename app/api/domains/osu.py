@@ -1611,13 +1611,19 @@ _checkupdates_cache = {  # default timeout is 1h, set on request.
     "stable": {"check": None, "path": None, "timeout": 0},
 }
 
-# NOTE: this will only be triggered when using a server switcher.
+
 @router.get("/web/check-updates.php")
 async def checkUpdates(
     request: Request,
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
 ):
+    return
+
+    # NOTE: this code is unused now.
+    # it was only used with server switchers,
+    # which bancho.py has deprecated support for.
+
     if action == "error":
         # client is just reporting an error updating
         return
@@ -1714,6 +1720,12 @@ async def get_updated_beatmap(
             url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
+
+    return
+
+    # NOTE: this code is unused now.
+    # it was only used with server switchers,
+    # which bancho.py has deprecated support for.
 
     # server switcher, use old method
     map_filename = unquote(map_filename)
