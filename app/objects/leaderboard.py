@@ -77,7 +77,7 @@ class Leaderboard:
         result = await self.find_user_score(user_id)
 
         if result is not None:
-            self.remove_score_index(result[1])
+            self.remove_score_index(result["rank"] - 1)
 
     async def sort(self) -> None:
         async with self.lock:
