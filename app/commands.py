@@ -994,7 +994,7 @@ async def alertuser(ctx: Context) -> Optional[str]:
 
 
 # NOTE: this is pretty useless since it doesn't switch anything other
-# than the c[e4-6].ppy.sh domains; it exists on bancho as a tournament
+# than the c[e4].ppy.sh domains; it exists on bancho as a tournament
 # server switch mechanism, perhaps we could leverage this in the future.
 @command(Privileges.ADMINISTRATOR, hidden=True)
 async def switchserv(ctx: Context) -> Optional[str]:
