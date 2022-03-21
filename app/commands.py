@@ -30,12 +30,12 @@ from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
-import cmyui.utils
 import psutil
 import timeago
 from peace_performance_python.objects import Beatmap as PeaceMap
 from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.logging
 import app.packets
 import app.settings
 import app.state
@@ -1518,7 +1518,6 @@ if app.settings.DEVELOPER_MODE:
             "sys",
             "struct",
             "discord",
-            "cmyui",
             "datetime",
             "time",
             "inspect",
@@ -2715,7 +2714,7 @@ async def process_commands(
 
             if res is not None:
                 # we have a message to return, include elapsed time
-                elapsed = cmyui.utils.magnitude_fmt_time(clock_ns() - start_time)
+                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
                 return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
             else:
                 # no message to return

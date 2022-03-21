@@ -25,9 +25,6 @@ from urllib.parse import unquote_plus
 
 import bcrypt
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
@@ -56,6 +53,9 @@ from app.constants import regexes
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.logging import Ansi
+from app.logging import log
+from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file

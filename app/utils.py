@@ -22,14 +22,14 @@ import databases.core
 import orjson
 import pymysql
 import requests
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
-from cmyui.osu.replay import Keys
-from cmyui.osu.replay import ReplayFrame
+from cmyui.osu.replay import Keys  # # TODO: move into bancho.py codebase
+from cmyui.osu.replay import ReplayFrame  # # TODO: move into bancho.py codebase
 from fastapi import status
 
 import app.settings
+from app.logging import Ansi
+from app.logging import log
+from app.logging import printc
 
 __all__ = (
     # TODO: organize/sort these

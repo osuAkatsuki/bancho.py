@@ -12,7 +12,7 @@ import sys
 from enum import unique
 from enum import IntEnum
 
-from cmyui.logging import RGB
+from app.logging import RGB
 from mitmproxy import http
 
 

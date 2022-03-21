@@ -28,11 +28,11 @@ import sys
 from typing import Sequence
 
 import uvicorn
-from cmyui.logging import Ansi
-from cmyui.logging import log
 
 import app.utils
 import app.settings
+from app.logging import Ansi
+from app.logging import log
 
 
 def main(argv: Sequence[str]) -> int:

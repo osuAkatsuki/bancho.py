@@ -16,9 +16,6 @@ from typing import TypedDict
 
 import bcrypt
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.utils import magnitude_fmt_time
 from fastapi import APIRouter
 from fastapi import Response
 from fastapi.param_functions import Header
@@ -40,6 +37,9 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
+from app.logging import Ansi
+from app.logging import log
+from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
