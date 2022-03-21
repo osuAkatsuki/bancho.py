@@ -127,6 +127,10 @@ for example, an individual score in the scores table.
 this base state of the database is stored in `ext/base.sql`; it's a bunch of
 sql commands that can be run in sequence to create the base state we want.
 ```sh
+# you'll need to change:
+# - YOUR_DB_NAME
+# - YOUR_DB_USER
+
 # import bancho.py's mysql structure to our new db
 # this runs the contents of the file as sql commands.
 mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
