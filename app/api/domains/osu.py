@@ -713,16 +713,22 @@ async def osuSubmitModularSelector(
     # now we can calculate things based on our data.
     score.acc = score.calculate_accuracy()
 
+    leaderboard = await score.bmap.fetch_leaderboard(score.mode)
+
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
         if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
             score.pp, score.sr = score.calculate_performance(osu_file_path)
 
             if score.passed:
-                await score.calculate_status()
+                old_best = await leaderboard.find_user_score(score.player.id)
 
-                if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calculate_placement()
+                if old_best:
+                    score.prev_best = old_best["score"]
+                    if score.prev_best:
+                        score.prev_best.rank = old_best["rank"]
+
+                await score.calculate_status()
             else:
                 score.status = SubmissionStatus.FAILED
     else:
@@ -782,57 +788,6 @@ async def osuSubmitModularSelector(
     if score.status == SubmissionStatus.BEST:
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores_best")
-
-        if score.bmap.has_leaderboard:
-            if (
-                score.mode < GameMode.RELAX_OSU
-                and score.bmap.status == RankedStatus.Loved
-            ):
-                # use score for vanilla loved only
-                performance = f"{score.score:,} score"
-            else:
-                performance = f"{score.pp:,.2f}pp"
-
-            score.player.enqueue(
-                app.packets.notification(
-                    f"You achieved #{score.rank}! ({performance})",
-                ),
-            )
-
-            if score.rank == 1 and not score.player.restricted:
-                # this is the new #1, post the play to #announce.
-                announce_chan = app.state.sessions.channels["#announce"]
-
-                # Announce the user's #1 score.
-                # TODO: truncate artist/title/version to fit on screen
-                ann = [
-                    f"\x01ACTION achieved #1 on {score.bmap.embed}",
-                    f"with {score.acc:.2f}% for {performance}.",
-                ]
-
-                if score.mods:
-                    ann.insert(1, f"+{score.mods!r}")
-
-                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
-
-                # If there was previously a score on the map, add old #1.
-                prev_n1 = await db_conn.fetch_one(
-                    "SELECT u.id, name FROM users u "
-                    "INNER JOIN scores s ON u.id = s.userid "
-                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-                    "AND s.status = 2 AND u.priv & 1 "
-                    f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                    {"map_md5": score.bmap.md5, "mode": score.mode},
-                )
-
-                if prev_n1:
-                    if score.player.id != prev_n1["id"]:
-                        ann.append(
-                            f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
-                            "{id} {name}])".format(**prev_n1),
-                        )
-
-                announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
 
         # this score is our best score.
         # update any preexisting personal best
@@ -1043,6 +998,64 @@ async def osuSubmitModularSelector(
     score.player.recent_scores[score.mode] = score
     if "recent_score" in score.player.__dict__:
         del score.player.recent_score  # wipe cached_property
+
+    # update leaderboard cache & announce #1
+    if score.status == SubmissionStatus.BEST:
+        await leaderboard.add_score(score)
+
+        cached_score = await leaderboard.find_user_score(score.player.id)
+        score.rank = cached_score["rank"]
+
+        if score.bmap.has_leaderboard:
+            if (
+                score.mode < GameMode.RELAX_OSU
+                and score.bmap.status == RankedStatus.Loved
+            ):
+                # use score for vanilla loved only
+                performance = f"{score.score:,} score"
+            else:
+                performance = f"{score.pp:,.2f}pp"
+
+            score.player.enqueue(
+                app.packets.notification(
+                    f"You achieved #{score.rank}! ({performance})",
+                ),
+            )
+
+            if score.rank == 1 and not score.player.restricted:
+                # this is the new #1, post the play to #announce.
+                announce_chan = app.state.sessions.channels["#announce"]
+
+                # Announce the user's #1 score.
+                # TODO: truncate artist/title/version to fit on screen
+                ann = [
+                    f"\x01ACTION achieved #1 on {score.bmap.embed}",
+                    f"with {score.acc:.2f}% for {performance}.",
+                ]
+
+                if score.mods:
+                    ann.insert(1, f"+{score.mods!r}")
+
+                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+
+                # If there was previously a score on the map, add old #1.
+                prev_n1 = await db_conn.fetch_one(
+                    "SELECT u.id, name FROM users u "
+                    "INNER JOIN scores s ON u.id = s.userid "
+                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+                    "AND s.status = 2 AND u.priv & 1 "
+                    f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
+                    {"map_md5": score.bmap.md5, "mode": score.mode},
+                )
+
+                if prev_n1:
+                    if score.player.id != prev_n1["id"]:
+                        ann.append(
+                            f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
+                            "{id} {name}])".format(**prev_n1),
+                        )
+
+                announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
 
     """ score submission charts """
 

@@ -184,7 +184,7 @@ class Score:
         self.client_flags: ClientFlags
         self.client_checksum: str
 
-        self.rank: Optional[int] = None
+        self.rank: int = 0
         self.prev_best: Optional[Score] = None
 
     def __repr__(self) -> str:
@@ -411,28 +411,12 @@ class Score:
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
-        # find any other `status = 2` scores we have
-        # on the map. If there are any, store
-        res = await app.state.services.database.fetch_one(
-            "SELECT id, pp FROM scores "
-            "WHERE userid = :user_id AND map_md5 = :map_md5 "
-            "AND mode = :mode AND status = 2",
-            {
-                "user_id": self.player.id,
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-            },
-        )
 
-        if res:
-            # we have a score on the map.
-            # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res["id"])
-
+        if self.prev_best:
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > res["pp"]:
+            if self.pp > self.prev_best.pp:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
