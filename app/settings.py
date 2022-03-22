@@ -24,6 +24,8 @@ MIRROR_URL: str = config("MIRROR_URL", default="https://api.chimu.moe/v1")
 
 COMMAND_PREFIX: str = config("COMMAND_PREFIX", default="!")
 
+LEADERBOARD_SIZE: int = config("LEADERBOARD_SIZE", cast=int, default=100)
+
 SEASONAL_BGS: CommaSeparatedStrings = config(
     "SEASONAL_BGS",
     cast=CommaSeparatedStrings,

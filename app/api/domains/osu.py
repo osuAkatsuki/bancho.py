@@ -1456,7 +1456,10 @@ async def getScores(
             response_lines.append("")  # osu still requires a personal best to be sent
 
         lb_type = LeaderboardType(leaderboard_type)
-        for idx, score in enumerate(leaderboard.scores[:100]):
+
+        for idx, score in enumerate(
+            leaderboard.scores[: app.settings.LEADERBOARD_SIZE],
+        ):
             if score.player.restricted and score.player != player:
                 continue
 
