@@ -1372,8 +1372,6 @@ async def getScores(
         if not player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
-
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
     has_set_id = map_set_id > 0
 
@@ -1445,11 +1443,11 @@ async def getScores(
 
         response_lines.append(bmap.osu_string(len(leaderboard), rating))
 
-        personal_best = leaderboard.find_user_score(player.user_id)
+        personal_best = leaderboard.find_user_score(player.id)
         if personal_best:
             response_lines.append(
                 personal_best["score"].osu_string(
-                    player.username,
+                    player.name,
                     personal_best["rank"],
                 ),
             )
@@ -1476,7 +1474,7 @@ async def getScores(
             ):
                 continue
 
-            displayed_name = player.full_name
+            displayed_name = score.player.full_name
             if score.player == player:
                 displayed_name = player.name
 

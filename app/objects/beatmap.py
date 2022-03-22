@@ -270,6 +270,7 @@ class Beatmap:
         "hp",
         "diff",
         "filename",
+        "leaderboards",
     )
 
     def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
@@ -305,7 +306,7 @@ class Beatmap:
 
         self.filename = kwargs.get("filename", "")
 
-        self.leaderboard: dict[GameMode, Leaderboard] = {}
+        self.leaderboards: dict[GameMode, Leaderboard] = {}
 
     def __repr__(self) -> str:
         return self.full_name
@@ -366,10 +367,10 @@ class Beatmap:
             "diff": self.diff,
         }
 
-    def osu_string(self, score_count: int, rating: int) -> str:
+    def osu_string(self, score_count: int, rating: float) -> str:
         return (
             f"{int(self.status)}|false|{self.id}|{self.set_id}|{score_count}\n"
-            f"0\n{self.full_name}\n{rating}"  # 0 = offset
+            f"0\n{self.full_name}\n{rating:.1f}"  # 0 = offset
         )
 
     # TODO: implement some locking for the map fetch methods
