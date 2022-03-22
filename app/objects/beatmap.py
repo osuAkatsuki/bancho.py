@@ -272,6 +272,8 @@ class Beatmap:
         "hp",
         "diff",
         "filename",
+        "rating_total",
+        "rating_count",
         "leaderboards",
     )
 
@@ -308,6 +310,9 @@ class Beatmap:
 
         self.filename = kwargs.get("filename", "")
 
+        self.rating_total = kwargs.get("rating_total", 0.0)
+        self.rating_count: Optional[int] = kwargs.get("rating_count", None)
+
         self.leaderboards: dict[GameMode, Leaderboard] = {}
 
     def __repr__(self) -> str:
@@ -327,6 +332,15 @@ class Beatmap:
     def embed(self) -> str:
         """An osu! chat embed to `self`'s osu! beatmap page."""
         return f"[{self.url} {self.full_name}]"
+
+    @property
+    def rating(self) -> float:
+        """The osu! beatmap's average rating."""
+        assert self.rating_count is not None
+        if self.rating_count == 0:
+            return 0.0
+
+        return self.rating_total / self.rating_count
 
     # TODO: cache these & standardize method for changing status
 
@@ -558,18 +572,6 @@ class Beatmap:
             return bmap
 
         return None
-
-    async def fetch_rating(self) -> Optional[float]:
-        """Fetch the beatmap's rating from sql."""
-        row = await app.state.services.database.fetch_one(
-            "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
-            {"map_md5": self.md5},
-        )
-
-        if row is None:
-            return None
-
-        return row["rating"]
 
 
 class BeatmapSet:

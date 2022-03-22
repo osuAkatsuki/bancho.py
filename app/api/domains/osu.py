@@ -48,7 +48,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import app.packets
 import app.settings
 import app.state
-import app.usecases.leaderboard
+import app.usecases.beatmaps
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -1428,14 +1428,14 @@ async def getScores(
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
 
-    # fetch scores & personal best
-
     # fetch beatmap rating
-    rating = await bmap.fetch_rating()
-    if rating is None:
-        rating = 0.0
+    if bmap.rating_count is None:
+        # fetch and cache beatmap rating for future
+        rating = await app.usecases.beatmaps.fetch_rating(bmap.md5)
+        bmap.rating_count, bmap.rating_total = rating
 
     ## construct response for osu! client
+    # fetch scores & personal best
 
     response_lines: list[str] = []
 
