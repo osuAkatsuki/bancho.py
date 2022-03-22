@@ -2627,7 +2627,7 @@ async def clan_leave(ctx: Context):
     elif p.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    p.clan.remove_member(p)
+    await p.clan.remove_member(p)
     return f"You have successfully left {p.clan!r}."
 
 
