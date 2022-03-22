@@ -48,6 +48,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import app.packets
 import app.settings
 import app.state
+import app.usecases.leaderboard
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -713,7 +714,7 @@ async def osuSubmitModularSelector(
     # now we can calculate things based on our data.
     score.acc = score.calculate_accuracy()
 
-    leaderboard = await score.bmap.fetch_leaderboard(score.mode)
+    leaderboard = await app.usecases.leaderboard.fetch(score.bmap, score.mode)
 
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
@@ -1439,7 +1440,7 @@ async def getScores(
     response_lines: list[str] = []
 
     if not requesting_from_editor_song_select:
-        leaderboard = await bmap.fetch_leaderboard(mode)
+        leaderboard = await app.usecases.leaderboard.fetch(bmap, mode)
 
         response_lines.append(bmap.osu_string(len(leaderboard), rating))
 

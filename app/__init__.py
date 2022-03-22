@@ -10,4 +10,5 @@ from . import logging
 from . import objects
 from . import packets
 from . import state
+from . import usecases
 from . import utils

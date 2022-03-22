@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Union
 
 import app.settings
@@ -19,9 +20,11 @@ import app.utils
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
-from app.objects.leaderboard import Leaderboard
 from app.utils import escape_enum
 from app.utils import pymysql_encode
+
+if TYPE_CHECKING:
+    from app.objects.leaderboard import Leaderboard
 
 # from dataclasses import dataclass
 
@@ -215,7 +218,6 @@ class Beatmap:
     The only methods you should need are:
       await Beatmap.from_md5(md5: str, set_id: int = -1) -> Optional[Beatmap]
       await Beatmap.from_bid(bid: int) -> Optional[Beatmap]
-      await Beatmap.fetch_leaderboard(self, mode: GameMode) -> Leaderboard
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
@@ -459,15 +461,6 @@ class Beatmap:
                 bmap = await cls._from_bid_cache(bid, check_updates=False)
 
         return bmap
-
-    async def fetch_leaderboard(self, mode: GameMode) -> Leaderboard:
-        if leaderboard := self.leaderboards.get(mode):
-            return leaderboard
-
-        leaderboard = await Leaderboard.create_leaderboard(mode, self)
-        self.leaderboards[mode] = leaderboard
-
-        return leaderboard
 
     """ Lower level API """
     # These functions are meant for internal use under
