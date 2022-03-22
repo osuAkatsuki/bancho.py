@@ -1,0 +1,43 @@
+version: "3"
+
+services:
+  bancho.py:
+    build: .
+    environment: # TODO: should we still require/allow a .env file?
+      - SERVER_ADDR: "127.0.0.1"
+      - SERVER_PORT: 443
+      - DB_DSN: "mysql://bpy:lol123@mysql:3306/bpy"
+      - REDIS_DSN: "redis://redis"
+      - OSU_API_KEY: "changeme"
+      - DOMAIN: "changeme"
+      - MIRROR_URL: "https://api.chimu.moe/v1"
+      - COMMAND_PREFIX: "!"
+      - SEASONAL_BGS: "https://akatsuki.pw/static/flower.png,https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg"
+      - MENU_ICON_URL: "https://akatsuki.pw/static/logos/logo_ingame.png"
+      - MENU_ONCLICK_URL: "https://akatsuki.pw"
+      - PYTHONUNBUFFERED: 1 # helps prevent bug where the stdout isn't being displayed
+    volumes:
+      - ./:./bancho.py
+    ports:
+      - 443:443
+    depends_on:
+      - mysql
+      - redis
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      - MYSQL_DATABASE: "bpy"
+      - MYSQL_ROOT_PASSWORD: "lol123"
+      - MYSQL_USER: "bpy"
+      - MYSQL_PASSWORD: "lol123"
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - 5001:3306 # TODO: should this be 3306?
+  redis:
+    image: redis:alpine
+    restart: always
+
+volumes:
+  mysql:
