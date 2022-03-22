@@ -49,6 +49,7 @@ import app.packets
 import app.settings
 import app.state
 import app.usecases.beatmaps
+import app.usecases.leaderboards
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -714,7 +715,7 @@ async def osuSubmitModularSelector(
     # now we can calculate things based on our data.
     score.acc = score.calculate_accuracy()
 
-    leaderboard = await app.usecases.leaderboard.fetch(score.bmap, score.mode)
+    leaderboard = await app.usecases.leaderboards.fetch(score.bmap, score.mode)
 
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
@@ -1440,9 +1441,14 @@ async def getScores(
     response_lines: list[str] = []
 
     if not requesting_from_editor_song_select:
-        leaderboard = await app.usecases.leaderboard.fetch(bmap, mode)
+        leaderboard = await app.usecases.leaderboards.fetch(bmap, mode)
 
-        response_lines.append(bmap.osu_string(len(leaderboard), rating))
+        response_lines.append(
+            bmap.osu_string(
+                score_count=len(leaderboard),
+                rating=bmap.rating,
+            ),
+        )
 
         personal_best = leaderboard.find_user_score(player.id)
         if personal_best:
@@ -1460,7 +1466,7 @@ async def getScores(
         for idx, score in enumerate(
             leaderboard.scores[: app.settings.LEADERBOARD_SIZE],
         ):
-            if score.player.restricted and score.player != player:
+            if score.player.restricted and score.player is not player:
                 continue
 
             if lb_type == LeaderboardType.Mods and score.mods != mods:
@@ -1478,14 +1484,24 @@ async def getScores(
             ):
                 continue
 
-            displayed_name = score.player.full_name
-            if score.player == player:
+            if score.player is player:
+                # don't show the player their own clan name
+                # it stops the client from telling it's your score
                 displayed_name = player.name
+            else:
+                displayed_name = score.player.full_name
 
-            response_lines.append(score.osu_string(displayed_name, idx + 1))
+            response_lines.append(score.osu_string(displayed_name, rank=idx + 1))
 
     else:
-        response_lines.append(bmap.osu_string(0, rating))  # 0 score count
+        # this is a request from the song selection in the osu! editor
+        # it does not use score information and we don't need to send them
+        response_lines.append(
+            bmap.osu_string(
+                score_count=0,
+                rating=bmap.rating,
+            ),
+        )
 
     return "\n".join(response_lines).encode()
 
