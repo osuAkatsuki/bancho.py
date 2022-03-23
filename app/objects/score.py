@@ -11,13 +11,11 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 import app.state
-import app.usecases.performance
 import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
-from app.usecases.performance import ScoreDifficultyParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -385,30 +383,6 @@ class Score:
 
         # TODO: idk if returns none
         return better_scores + 1  # if better_scores is not None else 1
-
-    def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
-        """Calculate PP and star rating for our score."""
-        mode_vn = self.mode.as_vanilla
-
-        if mode_vn in (0, 1, 2):
-            score_args: ScoreDifficultyParams = {
-                "acc": self.acc,
-                "combo": self.max_combo,
-                "nmiss": self.nmiss,
-            }
-        else:  # mode_vn == 3
-            score_args: ScoreDifficultyParams = {
-                "score": self.score,
-            }
-
-        result = app.usecases.performance.calculate_performances(
-            osu_file_path=str(osu_file_path),
-            mode=mode_vn,
-            mods=int(self.mods),
-            scores=[score_args],
-        )
-
-        return result[0]["performance"], result[0]["star_rating"]
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""

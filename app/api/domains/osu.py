@@ -50,6 +50,7 @@ import app.settings
 import app.state
 import app.usecases.beatmaps
 import app.usecases.leaderboards
+import app.usecases.scores
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -720,7 +721,10 @@ async def osuSubmitModularSelector(
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
         if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-            score.pp, score.sr = score.calculate_performance(osu_file_path)
+            score.pp, score.sr = app.usecases.scores.calculate_performance(
+                score,
+                osu_file_path,
+            )
 
             if score.passed:
                 old_best = leaderboard.find_user_score(score.player.id)

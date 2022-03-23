@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import TypedDict
 
 from app.constants.gamemodes import GameMode
-from app.objects.score import Score
+
+if TYPE_CHECKING:
+    from app.objects.score import Score
 
 
 class UserScore(TypedDict):
