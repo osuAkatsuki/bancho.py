@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import math
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
@@ -10,21 +9,16 @@ from pathlib import Path
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
-
 import app.state
+import app.usecases.performance
+import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.usecases.performance import ScoreDifficultyParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
-try:
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -261,7 +255,7 @@ class Score:
         s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
-            s.rank = await s.calc_lb_placement()
+            s.rank = await s.calculate_placement()
 
         return s
 
@@ -343,7 +337,7 @@ class Score:
 
     """Methods to calculate internal data for a score."""
 
-    async def calc_lb_placement(self) -> int:
+    async def calculate_placement(self) -> int:
         if self.mode >= GameMode.RELAX_OSU:
             scoring_metric = "pp"
             score = self.pp
@@ -368,74 +362,31 @@ class Score:
         # TODO: idk if returns none
         return better_scores + 1  # if better_scores is not None else 1
 
-    def calc_diff(self, osu_file_path: Path) -> tuple[float, float]:
+    def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn == 0:  # std
-            with OppaiWrapper() as ezpp:
-                if self.mods:
-                    ezpp.set_mods(int(self.mods))
+        if mode_vn in (0, 1, 2):
+            score_args: ScoreDifficultyParams = {
+                "acc": self.acc,
+                "combo": self.max_combo,
+                "nmiss": self.nmiss,
+            }
+        else:  # mode_vn == 3
+            score_args: ScoreDifficultyParams = {
+                "score": self.score,
+            }
 
-                if mode_vn:
-                    ezpp.set_mode(mode_vn)
+        result = app.usecases.performance.calculate_performances(
+            osu_file_path=str(osu_file_path),
+            mode=mode_vn,
+            mods=int(self.mods),
+            scores=[score_args],
+        )
 
-                ezpp.set_combo(self.max_combo)
-                ezpp.set_nmiss(self.nmiss)  # clobbers acc
-                ezpp.set_accuracy_percent(self.acc)
+        return result[0]["performance"], result[0]["star_rating"]
 
-                ezpp.calculate(str(osu_file_path))
-
-                pp = ezpp.get_pp()
-
-                if math.isnan(pp) or math.isinf(pp):
-                    # TODO: report to logserver
-                    return (0.0, 0.0)
-
-                return (round(pp, 5), ezpp.get_sr())
-        elif mode_vn in (1, 2):  # taiko, catch
-            beatmap = PeaceMap(osu_file_path)
-            peace = PeaceCalculator()
-
-            if self.mods != Mods.NOMOD:
-                peace.set_mods(int(self.mods))
-
-            if mode_vn:
-                peace.set_mode(mode_vn)
-
-            peace.set_combo(self.max_combo)
-            peace.set_miss(self.nmiss)
-            peace.set_acc(self.acc)
-
-            calculated = peace.calculate(beatmap)
-
-            if math.isnan(calculated.pp) or math.isinf(calculated.pp):
-                # TODO: report to logserver
-                return (0.0, 0.0)
-
-            return (round(calculated.pp, 5), calculated.stars)
-        elif mode_vn == 3:  # mania
-            beatmap = PeaceMap(osu_file_path)
-            peace = PeaceCalculator()
-
-            if self.mods != Mods.NOMOD:
-                peace.set_mods(int(self.mods))
-
-            if mode_vn:
-                peace.set_mode(mode_vn)
-
-            peace.set_score(self.score)
-            calculated = peace.calculate(beatmap)
-
-            if math.isnan(calculated.pp) or math.isinf(calculated.pp):
-                # TODO: report to logserver
-                return (0.0, 0.0)
-
-            return (round(calculated.pp, 5), calculated.stars)
-        else:
-            raise ValueError(f"Invalid vanilla mode {mode_vn}")
-
-    async def calc_status(self) -> None:
+    async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
         # find any other `status = 2` scores we have
         # on the map. If there are any, store
@@ -467,7 +418,7 @@ class Score:
             # this is our first score on the map.
             self.status = SubmissionStatus.BEST
 
-    def calc_accuracy(self) -> float:
+    def calculate_accuracy(self) -> float:
         """Calculate the accuracy of our score."""
         mode_vn = self.mode.as_vanilla
 
