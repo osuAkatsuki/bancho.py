@@ -523,6 +523,7 @@ def get_media_type(extension: str) -> Optional[str]:
         return "image/png"
 
     # return none, fastapi will attempt to figure it out
+    return None
 
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:

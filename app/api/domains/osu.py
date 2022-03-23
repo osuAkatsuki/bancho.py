@@ -711,18 +711,18 @@ async def osuSubmitModularSelector(
 
     # all data read from submission.
     # now we can calculate things based on our data.
-    score.acc = score.calc_accuracy()
+    score.acc = score.calculate_accuracy()
 
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
         if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-            score.pp, score.sr = score.calc_diff(osu_file_path)
+            score.pp, score.sr = score.calculate_performance(osu_file_path)
 
             if score.passed:
-                await score.calc_status()
+                await score.calculate_status()
 
                 if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calc_lb_placement()
+                    score.rank = await score.calculate_placement()
             else:
                 score.status = SubmissionStatus.FAILED
     else:
