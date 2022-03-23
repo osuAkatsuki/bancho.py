@@ -25,6 +25,7 @@ from fastapi.responses import HTMLResponse
 import app.packets
 import app.settings
 import app.state
+import app.usecases.performance
 import app.utils
 from app import commands
 from app._typing import IPAddress
@@ -57,7 +58,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
-from app.utils import ScoreDifficultyParams
+from app.usecases.performance import ScoreDifficultyParams
 
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
@@ -1144,7 +1145,7 @@ class SendPrivateMessage(BasePacket):
                                     for score in app.settings.PP_CACHED_SCORES
                                 ]
 
-                            results = app.utils.calculate_performances(
+                            results = app.usecases.performance.calculate_performances(
                                 osu_file_path=str(osu_file_path),
                                 mode=mode_vn,
                                 mods=int(mods) if mods is not None else None,

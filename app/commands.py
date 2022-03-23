@@ -33,13 +33,12 @@ from typing import Union
 
 import psutil
 import timeago
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import app.logging
 import app.packets
 import app.settings
 import app.state
+import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -60,7 +59,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.utils import ScoreDifficultyParams
+from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
 try:
@@ -559,7 +558,7 @@ async def _with(ctx: Context) -> Optional[str]:
             score_args["score"] = score * 1000
             msg_fields.append(f"{score}k")
 
-    result = app.utils.calculate_performances(
+    result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         mode=mode_vn,
         mods=int(command_args["mods"]),

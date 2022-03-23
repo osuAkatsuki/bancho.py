@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import math
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
@@ -11,14 +10,15 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 import app.state
+import app.usecases.performance
 import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.usecases.performance import ScoreDifficultyParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-from app.utils import ScoreDifficultyParams
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -377,7 +377,7 @@ class Score:
                 "score": self.score,
             }
 
-        result = app.utils.calculate_performances(
+        result = app.usecases.performance.calculate_performances(
             osu_file_path=str(osu_file_path),
             mode=mode_vn,
             mods=int(self.mods),
