@@ -533,6 +533,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
         priv=Privileges.NORMAL,
         bot_client=True,
+        token=None,
     )
     app.state.sessions.players.append(app.state.sessions.bot)
 

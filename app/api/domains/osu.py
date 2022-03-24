@@ -46,8 +46,11 @@ from py3rijndael import RijndaelCbc
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.packets
+import app.repositories.scores
 import app.settings
-import app.state
+import app.state.services
+import app.usecases.players
+import app.usecases.scores
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import ClientFlags
@@ -355,7 +358,8 @@ async def lastFM(
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
-        await player.restrict(
+        await app.usecases.players.restrict(
+            player=player,
             admin=app.state.sessions.bot,
             reason=f"hq!osu running ({flags})",
         )
@@ -369,7 +373,8 @@ async def lastFM(
 
         if random.randrange(32) == 0:
             # Random chance (1/32) for a ban.
-            await player.restrict(
+            await app.usecases.players.restrict(
+                player=player,
                 admin=app.state.sessions.bot,
                 reason="hq!osu relife 1/32",
             )
@@ -390,7 +395,7 @@ async def lastFM(
             ),
         )
 
-        player.logout()
+        app.usecases.players.logout(player)
 
         return b"-3"
 
@@ -643,7 +648,8 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    # fetch map & player
+    # parse the score from the remaining data
+    score = Score.from_submission(score_data)
 
     bmap_md5 = score_data[0]
     if not (bmap := await Beatmap.from_md5(bmap_md5)):
@@ -656,14 +662,8 @@ async def osuSubmitModularSelector(
         # client will retry submission when they log in.
         return
 
-    # parse the score from the remaining data
-    score = Score.from_submission(score_data[2:])
-
-    # attach bmap & player
-    score.bmap = bmap
-    score.player = player
-
     ## perform checksum validation
+    # TODO: move this functionality out
 
     unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
     unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
@@ -711,18 +711,24 @@ async def osuSubmitModularSelector(
 
     # all data read from submission.
     # now we can calculate things based on our data.
-    score.acc = score.calculate_accuracy()
+    score.acc = app.usecases.scores.calculate_accuracy(score)
 
-    if score.bmap:
-        osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
-        if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-            score.pp, score.sr = score.calculate_performance(osu_file_path)
+    if bmap:
+        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
+        if await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
+            score.pp, score.sr = app.usecases.scores.calculate_performance(
+                score,
+                osu_file_path,
+            )
 
             if score.passed:
-                await score.calculate_status()
+                await app.usecases.scores.calculate_status(score, bmap, player)
 
-                if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calculate_placement()
+                if bmap.status != RankedStatus.PENDING:
+                    score.rank = await app.usecases.scores.calculate_placement(
+                        score,
+                        bmap,
+                    )
             else:
                 score.status = SubmissionStatus.FAILED
     else:
@@ -734,23 +740,23 @@ async def osuSubmitModularSelector(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    score.player.update_latest_activity_soon()
+    app.usecases.players.update_latest_activity_soon(player)
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
-    if score.mode != score.player.status.mode:
-        score.player.status.mods = score.mods
-        score.player.status.mode = score.mode
+    if score.mode != player.status.mode:
+        player.status.mods = score.mods
+        player.status.mode = score.mode
 
-        if not score.player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+        if not player.restricted:
+            app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
     # Check for score duplicates
     if await db_conn.fetch_one(
         "SELECT 1 FROM scores WHERE online_checksum = :checksum",
         {"checksum": score.client_checksum},
     ):
-        log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
+        log(f"{player} submitted a duplicate score.", Ansi.LYELLOW)
         return b"error: no"
 
     score.time_elapsed = score_time if score.passed else fail_time
@@ -760,15 +766,15 @@ async def osuSubmitModularSelector(
         await app.state.services.log_strange_occurrence(stacktrace)
 
     if (  # check for pp caps on ranked & approved maps for appropriate players.
-        score.bmap.awards_ranked_pp
-        and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
+        bmap.awards_ranked_pp
+        and not (player.priv & Privileges.WHITELISTED or player.restricted)
     ):
         # Get the PP cap for the current context.
         """# TODO: find where to put autoban pp
         pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
-            await score.player.restrict(
+            await player.restrict(
                 admin=app.state.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
@@ -783,30 +789,27 @@ async def osuSubmitModularSelector(
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
-        if score.bmap.has_leaderboard:
-            if (
-                score.mode < GameMode.RELAX_OSU
-                and score.bmap.status == RankedStatus.Loved
-            ):
+        if bmap.has_leaderboard:
+            if score.mode < GameMode.RELAX_OSU and bmap.status == RankedStatus.LOVED:
                 # use score for vanilla loved only
                 performance = f"{score.score:,} score"
             else:
                 performance = f"{score.pp:,.2f}pp"
 
-            score.player.enqueue(
+            player.enqueue(
                 app.packets.notification(
                     f"You achieved #{score.rank}! ({performance})",
                 ),
             )
 
-            if score.rank == 1 and not score.player.restricted:
+            if score.rank == 1 and not player.restricted:
                 # this is the new #1, post the play to #announce.
                 announce_chan = app.state.sessions.channels["#announce"]
 
                 # Announce the user's #1 score.
                 # TODO: truncate artist/title/version to fit on screen
                 ann = [
-                    f"\x01ACTION achieved #1 on {score.bmap.embed}",
+                    f"\x01ACTION achieved #1 on {bmap.embed}",
                     f"with {score.acc:.2f}% for {performance}.",
                 ]
 
@@ -822,17 +825,17 @@ async def osuSubmitModularSelector(
                     "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
                     "AND s.status = 2 AND u.priv & 1 "
                     f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                    {"map_md5": score.bmap.md5, "mode": score.mode},
+                    {"map_md5": bmap.md5, "mode": score.mode},
                 )
 
                 if prev_n1:
-                    if score.player.id != prev_n1["id"]:
+                    if player.id != prev_n1["id"]:
                         ann.append(
                             f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
                             "{id} {name}])".format(**prev_n1),
                         )
 
-                announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
+                announce_chan.send(" ".join(ann), sender=player, to_self=True)
 
         # this score is our best score.
         # update any preexisting personal best
@@ -842,8 +845,8 @@ async def osuSubmitModularSelector(
             "WHERE status = 2 AND map_md5 = :map_md5 "
             "AND userid = :user_id AND mode = :mode",
             {
-                "map_md5": score.bmap.md5,
-                "user_id": score.player.id,
+                "map_md5": bmap.md5,
+                "user_id": player.id,
                 "mode": score.mode,
             },
         )
@@ -858,7 +861,7 @@ async def osuSubmitModularSelector(
         ":time_elapsed, :client_flags, :user_id, :perfect, "
         ":checksum)",
         {
-            "map_md5": score.bmap.md5,
+            "map_md5": bmap.md5,
             "score": score.score,
             "pp": score.pp,
             "acc": score.acc,
@@ -876,7 +879,7 @@ async def osuSubmitModularSelector(
             "play_time": score.server_time,
             "time_elapsed": score.time_elapsed,
             "client_flags": score.client_flags,
-            "user_id": score.player.id,
+            "user_id": player.id,
             "perfect": score.perfect,
             "checksum": score.client_checksum,
         },
@@ -887,9 +890,10 @@ async def osuSubmitModularSelector(
 
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
-        if len(replay_data) < 24 and not score.player.restricted:
-            log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
-            await score.player.restrict(
+        if len(replay_data) < 24 and not player.restricted:
+            log(f"{player} submitted a score without a replay!", Ansi.LRED)
+            await app.usecases.players.restrict(
+                player=player,
                 admin=app.state.sessions.bot,
                 reason="submitted score with no replay",
             )
@@ -905,7 +909,7 @@ async def osuSubmitModularSelector(
 
     # get the current stats, and take a
     # shallow copy for the response charts.
-    stats = score.player.gm_stats
+    stats = player.gm_stats
     prev_stats = copy.copy(stats)
 
     # stuff update for all submitted scores
@@ -931,7 +935,7 @@ async def osuSubmitModularSelector(
         "total_hits": stats.total_hits,
     }
 
-    if score.passed and score.bmap.has_leaderboard:
+    if score.passed and bmap.has_leaderboard:
         # player passed & map is ranked, approved, or loved.
 
         if score.max_combo > stats.max_combo:
@@ -939,7 +943,7 @@ async def osuSubmitModularSelector(
             stats_query_l.append("max_combo = :max_combo")
             stats_query_args["max_combo"] = stats.max_combo
 
-        if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+        if bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
             # map is ranked or approved, and it's our (new)
             # best score on the map. update the player's
             # ranked score, grades, pp, acc and global rank.
@@ -982,7 +986,7 @@ async def osuSubmitModularSelector(
                 "WHERE s.userid = :user_id AND s.mode = :mode "
                 "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
                 "ORDER BY s.pp DESC",
-                {"user_id": score.player.id, "mode": score.mode},
+                {"user_id": player.id, "mode": score.mode},
             )
 
             total_scores = len(best_scores)
@@ -1009,40 +1013,40 @@ async def osuSubmitModularSelector(
             stats_query_args["pp"] = stats.pp
 
             # update global & country ranking
-            stats.rank = await score.player.update_rank(score.mode)
+            stats.rank = await app.usecases.players.update_rank(player, score.mode)
 
     # create a single querystring from the list of updates
     stats_query = ", ".join(stats_query_l)
 
     stats_query += " WHERE id = :user_id AND mode = :mode"
-    stats_query_args["user_id"] = score.player.id
+    stats_query_args["user_id"] = player.id
     stats_query_args["mode"] = score.mode.value
 
     # send any stat changes to sql, and other players
     await db_conn.execute(stats_query, stats_query_args)
 
-    if not score.player.restricted:
+    if not player.restricted:
         # enqueue new stats info to all other users
-        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+        app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
         # update beatmap with new stats
-        score.bmap.plays += 1
+        bmap.plays += 1
         if score.passed:
-            score.bmap.passes += 1
+            bmap.passes += 1
 
         await db_conn.execute(
             "UPDATE maps SET plays = :plays, passes = :passes WHERE md5 = :map_md5",
             {
-                "plays": score.bmap.plays,
-                "passes": score.bmap.passes,
-                "map_md5": score.bmap.md5,
+                "plays": bmap.plays,
+                "passes": bmap.passes,
+                "map_md5": bmap.md5,
             },
         )
 
     # update their recent score
-    score.player.recent_scores[score.mode] = score
-    if "recent_score" in score.player.__dict__:
-        del score.player.recent_score  # wipe cached_property
+    player.recent_scores[score.mode] = score
+    if "recent_score" in player.__dict__:
+        del player.recent_score  # wipe cached_property
 
     """ score submission charts """
 
@@ -1052,16 +1056,16 @@ async def osuSubmitModularSelector(
 
     else:
         # construct and send achievements & ranking charts to the client
-        if score.bmap.awards_ranked_pp and not score.player.restricted:
+        if bmap.awards_ranked_pp and not player.restricted:
             achievements = []
-            for ach in app.state.sessions.achievements:
-                if ach in score.player.achievements:
+            for achievement in app.state.sessions.achievements:
+                if achievement in player.achievements:
                     # player already has this achievement.
                     continue
 
-                if ach.cond(score, score.mode.as_vanilla):
-                    await score.player.unlock_achievement(ach)
-                    achievements.append(ach)
+                if achievement.cond(score, score.mode.as_vanilla):
+                    await app.usecases.players.unlock_achievement(player, achievement)
+                    achievements.append(achievement)
 
             achievements_str = "/".join(map(repr, achievements))
         else:
@@ -1104,22 +1108,22 @@ async def osuSubmitModularSelector(
 
         submission_charts = [
             # beatmap info chart
-            f"beatmapId:{score.bmap.id}",
-            f"beatmapSetId:{score.bmap.set_id}",
-            f"beatmapPlaycount:{score.bmap.plays}",
-            f"beatmapPasscount:{score.bmap.passes}",
-            f"approvedDate:{score.bmap.last_update}",
+            f"beatmapId:{bmap.id}",
+            f"beatmapSetId:{bmap.set_id}",
+            f"beatmapPlaycount:{bmap.plays}",
+            f"beatmapPasscount:{bmap.passes}",
+            f"approvedDate:{bmap.last_update}",
             "\n",
             # beatmap ranking chart
             "chartId:beatmap",
-            f"chartUrl:{score.bmap.set.url}",
+            f"chartUrl:{bmap.set.url}",
             "chartName:Beatmap Ranking",
             *beatmap_ranking_chart_entries,
             f"onlineScoreId:{score.id}",
             "\n",
             # overall ranking chart
             "chartId:overall",
-            f"chartUrl:https://{app.settings.DOMAIN}/u/{score.player.id}",
+            f"chartUrl:https://{app.settings.DOMAIN}/u/{player.id}",
             "chartName:Overall Ranking",
             *overall_ranking_chart_entries,
             f"achievements-new:{achievements_str}",
@@ -1128,7 +1132,7 @@ async def osuSubmitModularSelector(
         ret = "|".join(submission_charts).encode()
 
     log(
-        f"[{score.mode!r}] {score.player} submitted a score! "
+        f"[{score.mode!r}] {player} submitted a score! "
         f"({score.status!r}, {score.pp:,.2f}pp / {stats.pp:,}pp)",
         Ansi.LGREEN,
     )
@@ -1142,7 +1146,7 @@ async def getReplay(
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    score = await Score.from_sql(score_id)
+    score = await app.repositories.scores.fetch(score_id)
     if not score:
         return
 
@@ -1151,7 +1155,8 @@ async def getReplay(
         return
 
     # increment replay views for this score
-    app.state.loop.create_task(score.increment_replay_views())
+    task = app.usecases.scores.increment_replay_views(player.id, mode)
+    app.state.loop.create_task(task)
 
     return FileResponse(file)
 
@@ -1174,7 +1179,7 @@ async def osuRate(
         cached = app.state.cache.beatmap[map_md5]
 
         # only allow rating on maps with a leaderboard.
-        if cached.status < RankedStatus.Ranked:
+        if cached.status < RankedStatus.RANKED:
             return b"not ranked"
 
         # osu! client is checking whether we can rate the map or not.
@@ -1412,7 +1417,7 @@ async def getScores(
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.leaderboards_served")
 
-    if bmap.status < RankedStatus.Ranked:
+    if bmap.status < RankedStatus.RANKED:
         # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
@@ -1529,7 +1534,7 @@ async def osuComment(
                 "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
             )
 
-        player.update_latest_activity_soon()
+        app.usecases.players.update_latest_activity_soon(player)
         return "\n".join(ret).encode()
 
     elif action == "post":
@@ -1564,8 +1569,8 @@ async def osuComment(
             },
         )
 
-        player.update_latest_activity_soon()
-        return  # empty resp is fine
+        app.usecases.players.update_latest_activity_soon(player)
+        return None  # empty resp is fine
 
 
 @router.get("/web/osu-markasread.php")
@@ -1683,7 +1688,7 @@ async def get_screenshot(
 
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 
 

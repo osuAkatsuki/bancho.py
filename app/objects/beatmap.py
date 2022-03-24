@@ -98,23 +98,23 @@ class RankedStatus(IntEnum):
     Same as used in osu!'s /web/getscores.php.
     """
 
-    NotSubmitted = -1
-    Pending = 0
-    UpdateAvailable = 1
-    Ranked = 2
-    Approved = 3
-    Qualified = 4
-    Loved = 5
+    NOT_SUBMITTED = -1
+    PENDING = 0
+    UPDATE_AVAILABLE = 1
+    RANKED = 2
+    APPROVED = 3
+    QUALIFIED = 4
+    LOVED = 5
 
     def __str__(self) -> str:
         return {
-            self.NotSubmitted: "Unsubmitted",
-            self.Pending: "Unranked",
-            self.UpdateAvailable: "Outdated",
-            self.Ranked: "Ranked",
-            self.Approved: "Approved",
-            self.Qualified: "Qualified",
-            self.Loved: "Loved",
+            self.NOT_SUBMITTED: "Unsubmitted",
+            self.PENDING: "Unranked",
+            self.UPDATE_AVAILABLE: "Outdated",
+            self.RANKED: "Ranked",
+            self.APPROVED: "Approved",
+            self.QUALIFIED: "Qualified",
+            self.LOVED: "Loved",
         }[self]
 
     @functools.cached_property
@@ -122,11 +122,11 @@ class RankedStatus(IntEnum):
         """Convert the value to osu!api status."""
         # XXX: only the ones that exist are mapped.
         return {
-            self.Pending: 0,
-            self.Ranked: 1,
-            self.Approved: 2,
-            self.Qualified: 3,
-            self.Loved: 4,
+            self.PENDING: 0,
+            self.RANKED: 1,
+            self.APPROVED: 2,
+            self.QUALIFIED: 3,
+            self.LOVED: 4,
         }[self]
 
     @classmethod
@@ -134,15 +134,15 @@ class RankedStatus(IntEnum):
     def from_osuapi(cls, osuapi_status: int) -> RankedStatus:
         """Convert from osu!api status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable,
+            lambda: cls.UPDATE_AVAILABLE,
             {
-                -2: cls.Pending,  # graveyard
-                -1: cls.Pending,  # wip
-                0: cls.Pending,
-                1: cls.Ranked,
-                2: cls.Approved,
-                3: cls.Qualified,
-                4: cls.Loved,
+                -2: cls.PENDING,  # graveyard
+                -1: cls.PENDING,  # wip
+                0: cls.PENDING,
+                1: cls.RANKED,
+                2: cls.APPROVED,
+                3: cls.QUALIFIED,
+                4: cls.LOVED,
             },
         )
         return mapping[osuapi_status]
@@ -152,15 +152,15 @@ class RankedStatus(IntEnum):
     def from_osudirect(cls, osudirect_status: int) -> RankedStatus:
         """Convert from osu!direct status."""
         mapping: Mapping[int, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable,
+            lambda: cls.UPDATE_AVAILABLE,
             {
-                0: cls.Ranked,
-                2: cls.Pending,
-                3: cls.Qualified,
+                0: cls.RANKED,
+                2: cls.PENDING,
+                3: cls.QUALIFIED,
                 # 4: all ranked statuses lol
-                5: cls.Pending,  # graveyard
-                7: cls.Ranked,  # played before
-                8: cls.Loved,
+                5: cls.PENDING,  # graveyard
+                7: cls.RANKED,  # played before
+                8: cls.LOVED,
             },
         )
         return mapping[osudirect_status]
@@ -170,13 +170,13 @@ class RankedStatus(IntEnum):
     def from_str(cls, status_str: str) -> RankedStatus:
         """Convert from string value."""  # could perhaps have `'unranked': cls.Pending`?
         mapping: Mapping[str, RankedStatus] = defaultdict(
-            lambda: cls.UpdateAvailable,
+            lambda: cls.UPDATE_AVAILABLE,
             {
-                "pending": cls.Pending,
-                "ranked": cls.Ranked,
-                "approved": cls.Approved,
-                "qualified": cls.Qualified,
-                "loved": cls.Loved,
+                "pending": cls.PENDING,
+                "ranked": cls.RANKED,
+                "approved": cls.APPROVED,
+                "qualified": cls.QUALIFIED,
+                "loved": cls.LOVED,
             },
         )
         return mapping[status_str]
@@ -326,15 +326,15 @@ class Beatmap:
     def has_leaderboard(self) -> bool:
         """Return whether the map has a ranked leaderboard."""
         return self.status in (
-            RankedStatus.Ranked,
-            RankedStatus.Approved,
-            RankedStatus.Loved,
+            RankedStatus.RANKED,
+            RankedStatus.APPROVED,
+            RankedStatus.LOVED,
         )
 
     @property
     def awards_ranked_pp(self) -> bool:
         """Return whether the map's status awards ranked pp for scores."""
-        return self.status in (RankedStatus.Ranked, RankedStatus.Approved)
+        return self.status in (RankedStatus.RANKED, RankedStatus.APPROVED)
 
     @property  # perhaps worth caching some of?
     def as_dict(self) -> dict[str, object]:
@@ -618,7 +618,7 @@ class BeatmapSet:
         ranked or approved on official servers."""
         for bmap in self.maps:
             if (
-                bmap.status not in (RankedStatus.Ranked, RankedStatus.Approved)
+                bmap.status not in (RankedStatus.RANKED, RankedStatus.APPROVED)
                 or bmap.frozen  # ranked/approved, but only on bancho.py
             ):
                 return False
@@ -629,7 +629,7 @@ class BeatmapSet:
         loved on official servers."""
         for bmap in self.maps:
             if (
-                bmap.status != RankedStatus.Loved
+                bmap.status != RankedStatus.LOVED
                 or bmap.frozen  # loved, but only on bancho.py
             ):
                 return False

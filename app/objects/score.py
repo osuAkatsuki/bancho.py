@@ -7,21 +7,12 @@ from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Optional
-from typing import TYPE_CHECKING
 
-import app.state
-import app.usecases.performance
-import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.objects.beatmap import Beatmap
-from app.usecases.performance import ScoreDifficultyParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
-if TYPE_CHECKING:
-    from app.objects.player import Player
 
 __all__ = ("Grade", "SubmissionStatus", "Score")
 
@@ -118,8 +109,8 @@ class Score:
 
     __slots__ = (
         "id",
-        "bmap",
-        "player",
+        "bmap_md5",
+        "player_name",
         "mode",
         "mods",
         "pp",
@@ -147,10 +138,9 @@ class Score:
     )
 
     def __init__(self):
-        # TODO: check whether the reamining Optional's should be
-        self.id: Optional[int] = None
-        self.bmap: Optional[Beatmap] = None
-        self.player: Optional[Player] = None
+        self.id: int
+        self.bmap_md5: str
+        self.player_name: str
 
         self.mode: GameMode
         self.mods: Mods
@@ -191,7 +181,7 @@ class Score:
         try:
             return (
                 f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
-                f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
+                f"#{self.rank} on {self.bmap_md5} for {self.pp:,.2f}pp>"
             )
         except:
             return super().__repr__()
@@ -199,110 +189,98 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int) -> Optional[Score]:
-        """Create a score object from sql using it's scoreid."""
-        # XXX: perhaps in the future this should take a gamemode rather
-        # than just the sql table? just faster on the current setup :P
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, map_md5, userid, pp, score, "
-            "max_combo, mods, acc, n300, n100, n50, "
-            "nmiss, ngeki, nkatu, grade, perfect, "
-            "status, mode, play_time, "
-            "time_elapsed, client_flags, online_checksum "
-            "FROM scores WHERE id = :score_id",
-            {"score_id": score_id},
-        )
-
-        if not row:
-            return None
-
-        s = cls()
-
-        s.id = row[0]
-        s.bmap = await Beatmap.from_md5(row[1])
-        s.player = await app.state.sessions.players.from_cache_or_sql(id=row[2])
-
-        s.sr = 0.0  # TODO
+    def from_row(cls, row) -> Score:  # TODO: row type
+        score = cls()
 
         (
-            s.pp,
-            s.score,
-            s.max_combo,
-            s.mods,
-            s.acc,
-            s.n300,
-            s.n100,
-            s.n50,
-            s.nmiss,
-            s.ngeki,
-            s.nkatu,
-            s.grade,
-            s.perfect,
-            s.status,
-            s.mode,
-            s.server_time,
-            s.time_elapsed,
-            s.client_flags,
-            s.client_checksum,
-        ) = row[3:]
+            score.id,
+            score.bmap_md5,
+            score.player_name,
+            score.pp,
+            score.score,
+            score.max_combo,
+            score.mods,
+            score.acc,
+            score.n300,
+            score.n100,
+            score.n50,
+            score.nmiss,
+            score.ngeki,
+            score.nkatu,
+            score.grade,
+            score.perfect,
+            score.status,
+            score.mode,
+            score.server_time,
+            score.time_elapsed,
+            score.client_flags,
+            score.client_checksum,
+        ) = row
 
         # fix some types
-        s.passed = s.status != 0
-        s.status = SubmissionStatus(s.status)
-        s.grade = Grade.from_str(s.grade)
-        s.mods = Mods(s.mods)
-        s.mode = GameMode(s.mode)
-        s.client_flags = ClientFlags(s.client_flags)
+        score.passed = score.status != 0
+        score.status = SubmissionStatus(score.status)
+        score.grade = Grade.from_str(score.grade)
+        score.mods = Mods(score.mods)
+        score.mode = GameMode(score.mode)
+        score.client_flags = ClientFlags(score.client_flags)
 
-        if s.bmap:
-            s.rank = await s.calculate_placement()
+        score.sr = 0.0  # TODO
 
-        return s
+        # TODO: ensure this is everywhere required
+        # if score.bmap:
+        #    score.rank = await score.calculate_placement()
+
+        return score
 
     @classmethod
     def from_submission(cls, data: list[str]) -> Score:
         """Create a score object from an osu! submission string."""
-        s = cls()
+        score = cls()
 
         """ parse the following format
-        # 0  online_checksum
-        # 1  n300
-        # 2  n100
-        # 3  n50
-        # 4  ngeki
-        # 5  nkatu
-        # 6  nmiss
-        # 7  score
-        # 8  max_combo
-        # 9  perfect
-        # 10 grade
-        # 11 mods
-        # 12 passed
-        # 13 gamemode
-        # 14 play_time # yyMMddHHmmss
-        # 15 osu_version + (" " * client_flags)
+        # 0  beatmap_md5
+        # 1
+        # 1  online_checksum
+        # 2  n300
+        # 3  n100
+        # 4  n50
+        # 5  ngeki
+        # 6  nkatu
+        # 7  nmiss
+        # 8  score
+        # 9  max_combo
+        # 10  perfect
+        # 11 grade
+        # 12 mods
+        # 13 passed
+        # 14 gamemode
+        # 15 play_time # yyMMddHHmmss
+        # 16 osu_version + (" " * client_flags)
         """
 
-        s.client_checksum = data[0]
-        s.n300 = int(data[1])
-        s.n100 = int(data[2])
-        s.n50 = int(data[3])
-        s.ngeki = int(data[4])
-        s.nkatu = int(data[5])
-        s.nmiss = int(data[6])
-        s.score = int(data[7])
-        s.max_combo = int(data[8])
-        s.perfect = data[9] == "True"
-        s.grade = Grade.from_str(data[10])
-        s.mods = Mods(int(data[11]))
-        s.passed = data[12] == "True"
-        s.mode = GameMode.from_params(int(data[13]), s.mods)
-        s.client_time = datetime.strptime(data[14], "%y%m%d%H%M%S")
-        s.client_flags = ClientFlags(data[15].count(" ") & ~4)
+        score.bmap_md5 = data[0]
+        score.player_name = data[1].rstrip()  # ends with ' ' if client has supporter
+        score.client_checksum = data[2]
+        score.n300 = int(data[3])
+        score.n100 = int(data[4])
+        score.n50 = int(data[5])
+        score.ngeki = int(data[6])
+        score.nkatu = int(data[7])
+        score.nmiss = int(data[8])
+        score.score = int(data[9])
+        score.max_combo = int(data[10])
+        score.perfect = data[11] == "True"
+        score.grade = Grade.from_str(data[12])
+        score.mods = Mods(int(data[13]))
+        score.passed = data[14] == "True"
+        score.mode = GameMode.from_params(int(data[15]), score.mods)
+        score.client_time = datetime.strptime(data[16], "%y%m%d%H%M%S")
+        score.client_flags = ClientFlags(data[17].count(" ") & ~4)
 
-        s.server_time = datetime.now()
+        score.server_time = datetime.now()
 
-        return s
+        return score
 
     def compute_online_checksum(
         self,
@@ -318,10 +296,10 @@ class Score:
                 self.ngeki,
                 self.nkatu,
                 self.nmiss,
-                self.bmap.md5,
+                self.bmap_md5,
                 self.max_combo,
                 self.perfect,
-                self.player.name,
+                self.player_name,
                 self.score,
                 self.grade.name,
                 int(self.mods),
@@ -334,152 +312,3 @@ class Score:
                 # yyMMddHHmmss
             ).encode(),
         ).hexdigest()
-
-    """Methods to calculate internal data for a score."""
-
-    async def calculate_placement(self) -> int:
-        if self.mode >= GameMode.RELAX_OSU:
-            scoring_metric = "pp"
-            score = self.pp
-        else:
-            scoring_metric = "score"
-            score = self.score
-
-        better_scores = await app.state.services.database.fetch_val(
-            "SELECT COUNT(*) AS c FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-            "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > :score",
-            {
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-                "score": score,
-            },
-            column=0,  # COUNT(*)
-        )
-
-        # TODO: idk if returns none
-        return better_scores + 1  # if better_scores is not None else 1
-
-    def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
-        """Calculate PP and star rating for our score."""
-        mode_vn = self.mode.as_vanilla
-
-        if mode_vn in (0, 1, 2):
-            score_args: ScoreDifficultyParams = {
-                "acc": self.acc,
-                "combo": self.max_combo,
-                "nmiss": self.nmiss,
-            }
-        else:  # mode_vn == 3
-            score_args: ScoreDifficultyParams = {
-                "score": self.score,
-            }
-
-        result = app.usecases.performance.calculate_performances(
-            osu_file_path=str(osu_file_path),
-            mode=mode_vn,
-            mods=int(self.mods),
-            scores=[score_args],
-        )
-
-        return result[0]["performance"], result[0]["star_rating"]
-
-    async def calculate_status(self) -> None:
-        """Calculate the submission status of a submitted score."""
-        # find any other `status = 2` scores we have
-        # on the map. If there are any, store
-        res = await app.state.services.database.fetch_one(
-            "SELECT id, pp FROM scores "
-            "WHERE userid = :user_id AND map_md5 = :map_md5 "
-            "AND mode = :mode AND status = 2",
-            {
-                "user_id": self.player.id,
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-            },
-        )
-
-        if res:
-            # we have a score on the map.
-            # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res["id"])
-
-            # if our new score is better, update
-            # both of our score's submission statuses.
-            # NOTE: this will be updated in sql later on in submission
-            if self.pp > res["pp"]:
-                self.status = SubmissionStatus.BEST
-                self.prev_best.status = SubmissionStatus.SUBMITTED
-            else:
-                self.status = SubmissionStatus.SUBMITTED
-        else:
-            # this is our first score on the map.
-            self.status = SubmissionStatus.BEST
-
-    def calculate_accuracy(self) -> float:
-        """Calculate the accuracy of our score."""
-        mode_vn = self.mode.as_vanilla
-
-        if mode_vn == 0:  # osu!
-            total = self.n300 + self.n100 + self.n50 + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return (
-                100.0
-                * ((self.n300 * 300.0) + (self.n100 * 100.0) + (self.n50 * 50.0))
-                / (total * 300.0)
-            )
-
-        elif mode_vn == 1:  # osu!taiko
-            total = self.n300 + self.n100 + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return 100.0 * ((self.n100 * 0.5) + self.n300) / total
-
-        elif mode_vn == 2:  # osu!catch
-            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return 100.0 * (self.n300 + self.n100 + self.n50) / total
-
-        elif mode_vn == 3:  # osu!mania
-            total = (
-                self.n300 + self.n100 + self.n50 + self.ngeki + self.nkatu + self.nmiss
-            )
-
-            if total == 0:
-                return 0.0
-
-            return (
-                100.0
-                * (
-                    (self.n50 * 50.0)
-                    + (self.n100 * 100.0)
-                    + (self.nkatu * 200.0)
-                    + ((self.n300 + self.ngeki) * 300.0)
-                )
-                / (total * 300.0)
-            )
-        else:
-            raise Exception(f"Invalid vanilla mode {mode_vn}")
-
-    """ Methods for updating a score. """
-
-    async def increment_replay_views(self) -> None:
-        # TODO: move replay views to be per-score rather than per-user
-        assert self.player is not None
-
-        await app.state.services.database.execute(
-            f"UPDATE stats "
-            "SET replay_views = replay_views + 1 "
-            "WHERE id = :user_id AND mode = :mode",
-            {"user_id": self.player.id, "mode": self.mode},
-        )

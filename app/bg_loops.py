@@ -6,6 +6,7 @@ import time
 import app.packets
 import app.settings
 import app.state
+import app.usecases.players
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
@@ -53,7 +54,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             assert p is not None
 
             # TODO: perhaps make a `revoke_donor` method?
-            await p.remove_privs(Privileges.DONATOR)
+            await app.usecases.players.remove_privs(p, Privileges.DONATOR)
             await app.state.services.database.execute(
                 "UPDATE users SET donor_end = 0 WHERE id = :id",
                 {"id": p.id},
@@ -79,7 +80,7 @@ async def _disconnect_ghosts(interval: int) -> None:
         for p in app.state.sessions.players:
             if current_time - p.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f"Auto-dced {p}.", Ansi.LMAGENTA)
-                p.logout()
+                app.usecases.players.logout(p)
 
 
 async def _update_bot_status(interval: int) -> None:

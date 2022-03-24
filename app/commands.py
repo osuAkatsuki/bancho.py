@@ -581,7 +581,7 @@ async def request(ctx: Context) -> Optional[str]:
 
     bmap = ctx.player.last_np["bmap"]
 
-    if bmap.status != RankedStatus.Pending:
+    if bmap.status != RankedStatus.PENDING:
         return "Only pending maps may be requested for status change."
 
     await app.state.services.database.execute(
@@ -1092,6 +1092,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
             priv=Privileges.NORMAL | Privileges.VERIFIED,
             silence_end=0,
             login_time=0x7FFFFFFF,  # never auto-dc
+            token="",
         )
 
         static_player.stats[GameMode.VANILLA_OSU] = copy.copy(
