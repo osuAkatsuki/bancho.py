@@ -725,7 +725,7 @@ async def osuSubmitModularSelector(
             if score.passed:
                 await app.usecases.scores.calculate_status(score, bmap, player)
 
-                if bmap.status != RankedStatus.PENDING:
+                if bmap.status != RankedStatus.Pending:
                     score.rank = await app.usecases.scores.calculate_placement(
                         score,
                         bmap,
@@ -791,7 +791,7 @@ async def osuSubmitModularSelector(
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if bmap.has_leaderboard:
-            if score.mode < GameMode.RELAX_OSU and bmap.status == RankedStatus.LOVED:
+            if score.mode < GameMode.RELAX_OSU and bmap.status == RankedStatus.Loved:
                 # use score for vanilla loved only
                 performance = f"{score.score:,} score"
             else:
@@ -1180,7 +1180,7 @@ async def osuRate(
         cached = app.state.cache.beatmap[map_md5]
 
         # only allow rating on maps with a leaderboard.
-        if cached.status < RankedStatus.RANKED:
+        if cached.status < RankedStatus.Ranked:
             return b"not ranked"
 
         # osu! client is checking whether we can rate the map or not.
@@ -1418,7 +1418,7 @@ async def getScores(
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.leaderboards_served")
 
-    if bmap.status < RankedStatus.RANKED:
+    if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()

@@ -581,7 +581,7 @@ async def request(ctx: Context) -> Optional[str]:
 
     bmap = ctx.player.last_np["bmap"]
 
-    if bmap.status != RankedStatus.PENDING:
+    if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
     await app.state.services.database.execute(
