@@ -409,6 +409,7 @@ async def lastFM(
 # chimu.moe handles things a bit differently than cheesegull,
 # and has some extra features we'll eventually use more of.
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
+USING_SAYO = "https://txy1.sayobot.cn" in app.settings.MIRROR_URL
 
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
@@ -1698,6 +1699,8 @@ async def get_osz(
 
     if USING_CHIMU:
         query_str = f"download/{map_set_id}?n={int(not no_video)}"
+    elif USING_SAYO:
+        query_str = f"beatmaps/download{'/novideo' if no_video else ''}/{map_set_id}?server=auto"
     else:
         query_str = f"d/{map_set_id}"
 
