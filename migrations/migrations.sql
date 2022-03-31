@@ -382,3 +382,7 @@ alter table users add userpage_content varchar(2048) charset utf8 null after cus
 # v4.2.0
 # please refer to tools/migrate_v420 for further v4.2.0 migrations
 update stats set mode = 8 where mode = 7;
+
+# v4.3.1
+alter table maps change server server enum('osu!', 'private') default 'osu!' not null;
+alter table mapsets change server server enum('osu!', 'private') default 'osu!' not null;

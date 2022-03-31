@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import time
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
-
 import app.packets
 import app.settings
 import app.state
 from app.constants.privileges import Privileges
+from app.logging import Ansi
+from app.logging import log
 
 __all__ = ("initialize_housekeeping_tasks",)
 

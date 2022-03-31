@@ -15,9 +15,6 @@ from typing import TypedDict
 from typing import Union
 
 import databases.core
-from cmyui.discord import Webhook
-from cmyui.logging import Ansi
-from cmyui.logging import log
 
 import app.packets
 import app.settings
@@ -27,6 +24,9 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
+from app.discord import Webhook
+from app.logging import Ansi
+from app.logging import log
 from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams

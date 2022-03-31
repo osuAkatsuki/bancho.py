@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 from typing import Callable
 from typing import Optional
-from typing import Sequence
 from typing import TypedDict
 from typing import TypeVar
 
@@ -22,18 +21,15 @@ import databases.core
 import orjson
 import pymysql
 import requests
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
-from cmyui.osu.replay import Keys
-from cmyui.osu.replay import ReplayFrame
 from fastapi import status
 
 import app.settings
+from app.logging import Ansi
+from app.logging import log
+from app.logging import printc
 
 __all__ = (
     # TODO: organize/sort these
-    "get_press_times",
     "make_safe_name",
     "fetch_bot_name",
     "download_achievement_images",
@@ -68,39 +64,6 @@ DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 OPPAI_PATH = Path.cwd() / "oppai_ng"
 OLD_OPPAI_PATH = Path.cwd() / "oppai-ng"
-
-useful_keys = (Keys.M1, Keys.M2, Keys.K1, Keys.K2)
-
-
-def get_press_times(frames: Sequence[ReplayFrame]) -> dict[int, list[int]]:
-    """A very basic function to press times of an osu! replay.
-    This is mostly only useful for taiko maps, since it
-    doesn't take holds into account (taiko has none).
-
-    In the future, we will make a version that can take
-    account for the type of note that is being hit, for
-    much more accurate and useful detection ability.
-    """
-    # TODO: remove negatives?
-    press_times: dict[int, list[int]] = {key: [] for key in useful_keys}
-    cumulative = {key: 0 for key in useful_keys}
-
-    prev_frame = frames[0]
-
-    for frame in frames[1:]:
-        for key in useful_keys:
-            if frame.keys & key:
-                # key pressed, add to cumulative
-                cumulative[key] += frame.delta
-            elif prev_frame.keys & key:
-                # key unpressed, add to press times
-                press_times[key].append(cumulative[key])
-                cumulative[key] = 0
-
-        prev_frame = frame
-
-    # return all keys with presses
-    return {k: v for k, v in press_times.items() if v}
 
 
 def make_safe_name(name: str) -> str:
@@ -560,6 +523,7 @@ def get_media_type(extension: str) -> Optional[str]:
         return "image/png"
 
     # return none, fastapi will attempt to figure it out
+    return None
 
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:

@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import time
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
-from cmyui.utils import magnitude_fmt_time
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.logging import Ansi
+from app.logging import log
+from app.logging import magnitude_fmt_time
+from app.logging import printc
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):

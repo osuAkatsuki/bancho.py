@@ -27,9 +27,6 @@ from urllib.parse import unquote_plus
 
 import bcrypt
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
@@ -58,6 +55,9 @@ from app.constants import regexes
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.logging import Ansi
+from app.logging import log
+from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
@@ -793,18 +793,18 @@ async def osuSubmitModularSelector(
 
     # all data read from submission.
     # now we can calculate things based on our data.
-    score.acc = score.calc_accuracy()
+    score.acc = score.calculate_accuracy()
 
     if score.bmap:
         osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
         if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-            score.pp, score.sr = score.calc_diff(osu_file_path)
+            score.pp, score.sr = score.calculate_performance(osu_file_path)
 
             if score.passed:
-                await score.calc_status()
+                await score.calculate_status()
 
                 if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calc_lb_placement()
+                    score.rank = await score.calculate_placement()
             else:
                 score.status = SubmissionStatus.FAILED
     else:
@@ -1164,15 +1164,6 @@ async def osuSubmitModularSelector(
                 ),
                 chart_entry("pp", score.prev_best.pp, score.pp),
             )
-
-            overall_ranking_chart_entries = (
-                chart_entry("rank", prev_stats.rank, stats.rank),
-                chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
-                chart_entry("totalScore", prev_stats.tscore, stats.tscore),
-                chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
-                chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
-                chart_entry("pp", prev_stats.pp, stats.pp),
-            )
         else:
             # no previous best score
             beatmap_ranking_chart_entries = (
@@ -1184,14 +1175,14 @@ async def osuSubmitModularSelector(
                 chart_entry("pp", None, score.pp),
             )
 
-            overall_ranking_chart_entries = (
-                chart_entry("rank", None, stats.rank),
-                chart_entry("rankedScore", None, stats.rscore),
-                chart_entry("totalScore", None, stats.tscore),
-                chart_entry("maxCombo", None, stats.max_combo),
-                chart_entry("accuracy", None, round(stats.acc, 2)),
-                chart_entry("pp", None, stats.pp),
-            )
+        overall_ranking_chart_entries = (
+            chart_entry("rank", prev_stats.rank, stats.rank),
+            chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
+            chart_entry("totalScore", prev_stats.tscore, stats.tscore),
+            chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
+            chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
+            chart_entry("pp", prev_stats.pp, stats.pp),
+        )
 
         submission_charts = [
             # beatmap info chart
@@ -1702,13 +1693,19 @@ _checkupdates_cache = {  # default timeout is 1h, set on request.
     "stable": {"check": None, "path": None, "timeout": 0},
 }
 
-# NOTE: this will only be triggered when using a server switcher.
+
 @router.get("/web/check-updates.php")
 async def checkUpdates(
     request: Request,
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
 ):
+    return
+
+    # NOTE: this code is unused now.
+    # it was only used with server switchers,
+    # which bancho.py has deprecated support for.
+
     if action == "error":
         # client is just reporting an error updating
         return
@@ -1802,6 +1799,12 @@ async def get_updated_beatmap(
             url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
+
+    return
+
+    # NOTE: this code is unused now.
+    # it was only used with server switchers,
+    # which bancho.py has deprecated support for.
 
     # server switcher, use old method
     map_filename = unquote(map_filename)

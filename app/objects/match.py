@@ -14,8 +14,6 @@ from typing import TypedDict
 from typing import Union
 
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
 
 import app.packets
 import app.settings
@@ -23,6 +21,8 @@ import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.logging import Ansi
+from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.utils import escape_enum
 from app.utils import pymysql_encode

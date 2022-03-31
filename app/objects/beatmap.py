@@ -13,13 +13,12 @@ from typing import Mapping
 from typing import Optional
 from typing import Union
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
-
 import app.settings
 import app.state
 import app.utils
 from app.constants.gamemodes import GameMode
+from app.logging import Ansi
+from app.logging import log
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 

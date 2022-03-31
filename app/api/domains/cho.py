@@ -16,20 +16,16 @@ from typing import TypedDict
 
 import bcrypt
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.utils import magnitude_fmt_time
 from fastapi import APIRouter
 from fastapi import Response
 from fastapi.param_functions import Header
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
 
 import app.packets
 import app.settings
 import app.state
+import app.usecases.performance
 import app.utils
 from app import commands
 from app._typing import IPAddress
@@ -40,6 +36,9 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
+from app.logging import Ansi
+from app.logging import log
+from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
@@ -59,11 +58,8 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.usecases.performance import ScoreDifficultyParams
 
-try:
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -962,7 +958,12 @@ class SpectateFrames(BasePacket):
         self.frame_bundle = reader.read_replayframe_bundle()
 
     async def handle(self, p: Player) -> None:
-        # packing this manually is about ~3x faster
+        # TODO: perform validations on the parsed frame bundle
+        # to ensure it's not being tamperated with or weaponized.
+
+        # NOTE: this is given a fastpath here for efficiency due to the
+        # sheer rate of usage of these packets in spectator mode.
+
         # data = app.packets.spectateFrames(self.frame_bundle.raw_data)
         data = (
             struct.pack("<HxI", 15, len(self.frame_bundle.raw_data))
@@ -1126,76 +1127,46 @@ class SendPrivateMessage(BasePacket):
                             # calculate pp for common generic values
                             pp_calc_st = time.time_ns()
 
-                            if mode_vn in (0, 1, 2):  # osu, taiko, catch
-                                if r_match["mods"] is not None:
-                                    # [1:] to remove leading whitespace
-                                    mods_str = r_match["mods"][1:]
-                                    mods = Mods.from_np(mods_str, mode_vn)
-                                else:
-                                    mods = None
+                            if r_match["mods"] is not None:
+                                # [1:] to remove leading whitespace
+                                mods_str = r_match["mods"][1:]
+                                mods = Mods.from_np(mods_str, mode_vn)
+                            else:
+                                mods = None
 
-                                pp_values = []  # [(acc, pp), ...]
+                            if mode_vn in (0, 1, 2):
+                                scores: list[ScoreDifficultyParams] = [
+                                    {"acc": acc}
+                                    for acc in app.settings.PP_CACHED_ACCURACIES
+                                ]
+                            else:  # mode_vn == 3
+                                scores: list[ScoreDifficultyParams] = [
+                                    {"score": score}
+                                    for score in app.settings.PP_CACHED_SCORES
+                                ]
 
-                                if mode_vn == 0:
-                                    with OppaiWrapper() as ezpp:
-                                        if mods is not None:
-                                            ezpp.set_mods(int(mods))
+                            results = app.usecases.performance.calculate_performances(
+                                osu_file_path=str(osu_file_path),
+                                mode=mode_vn,
+                                mods=int(mods) if mods is not None else None,
+                                scores=scores,
+                            )
 
-                                        for acc in app.settings.PP_CACHED_ACCS:
-                                            ezpp.set_accuracy_percent(acc)
-
-                                            ezpp.calculate(str(osu_file_path))
-
-                                            pp_values.append((acc, ezpp.get_pp()))
-                                else:
-                                    beatmap = PeaceMap(osu_file_path)
-                                    peace = PeaceCalculator()
-
-                                    if mods is not None:
-                                        peace.set_mods(int(mods))
-
-                                    peace.set_mode(mode_vn)
-
-                                    for acc in app.settings.PP_CACHED_ACCS:
-                                        peace.set_acc(acc)
-
-                                        calc = peace.calculate(beatmap)
-
-                                        pp_values.append((acc, calc.pp))
-
+                            if mode_vn in (0, 1, 2):
                                 resp_msg = " | ".join(
-                                    [f"{acc}%: {pp:,.2f}pp" for acc, pp in pp_values],
+                                    f"{acc}%: {result['performance']:,.2f}pp"
+                                    for acc, result in zip(
+                                        app.settings.PP_CACHED_ACCURACIES,
+                                        results,
+                                    )
                                 )
-                            else:  # mania
-                                if r_match["mods"] is not None:
-                                    # [1:] to remove leading whitespace
-                                    mods_str = r_match["mods"][1:]
-                                    mods = Mods.from_np(mods_str, mode_vn)
-                                else:
-                                    mods = None
-
-                                beatmap = PeaceMap(osu_file_path)
-                                peace = PeaceCalculator()
-
-                                if mods is not None:
-                                    peace.set_mods(int(mods))
-
-                                peace.set_mode(mode_vn)
-
-                                pp_values = []
-
-                                for score in app.settings.PP_CACHED_SCORES:
-                                    peace.set_score(int(score))
-
-                                    calc = peace.calculate(beatmap)
-
-                                    pp_values.append((score, calc.pp))
-
+                            else:  # mode_vn == 3
                                 resp_msg = " | ".join(
-                                    [
-                                        f"{int(score // 1000)}k: {pp:,.2f}pp"
-                                        for score, pp in pp_values
-                                    ],
+                                    f"{score // 1000:.0f}k: {result['performance']:,.2f}pp"
+                                    for score, result in zip(
+                                        app.settings.PP_CACHED_SCORES,
+                                        results,
+                                    )
                                 )
 
                             elapsed = time.time_ns() - pp_calc_st
