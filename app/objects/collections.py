@@ -12,14 +12,14 @@ from typing import Sequence
 from typing import Union
 
 import databases.core
-from cmyui.logging import Ansi
-from cmyui.logging import log
 
 import app.settings
 import app.state
 import app.utils
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
+from app.logging import Ansi
+from app.logging import log
 from app.objects.achievement import Achievement
 from app.objects.channel import Channel
 from app.objects.clan import Clan

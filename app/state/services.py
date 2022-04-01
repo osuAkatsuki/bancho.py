@@ -20,14 +20,14 @@ import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import geoip2.database
 import pymysql
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.logging import printc
-from cmyui.logging import Rainbow
 
 import app.settings
 import app.state
 from app._typing import IPAddress
+from app.logging import Ansi
+from app.logging import log
+from app.logging import printc
+from app.logging import Rainbow
 
 if TYPE_CHECKING:
     import aiohttp

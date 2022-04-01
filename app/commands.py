@@ -17,12 +17,12 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
-from importlib.metadata import version as pkg_version
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import Any
 from typing import Awaitable
 from typing import Callable
+from typing import Mapping
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
@@ -31,15 +31,14 @@ from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
-import cmyui.utils
 import psutil
 import timeago
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
 
+import app.logging
 import app.packets
 import app.settings
 import app.state
+import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -60,6 +59,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
+from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
 try:
@@ -429,6 +429,87 @@ async def top(ctx: Context) -> Optional[str]:
 # TODO: !compare (compare to previous !last/!top post's map)
 
 
+class ParsingError(str):
+    ...
+
+
+def parse__with__command_args(
+    mode: int,
+    args: Sequence[str],
+) -> Union[Mapping[str, Any], ParsingError]:
+    """Parse arguments for the !with command."""
+
+    # tried to balance complexity vs correctness for this function
+    # TODO: it can surely be cleaned up further - need to rethink it?
+
+    if mode in (0, 1, 2):
+        if not args or len(args) > 4:
+            return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
+
+        # !with 95% 1m 429x hddt
+        acc = mods = combo = nmiss = None
+
+        # parse acc, misses, combo and mods from arguments.
+        # tried to balance complexity vs correctness here
+        for arg in [str.lower(arg) for arg in args]:
+            # mandatory suffix, combo & nmiss
+            if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
+                combo = int(arg[:-1])
+                # if combo > bmap.max_combo:
+                #    return "Invalid combo."
+            elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
+                nmiss = int(arg[:-1])
+                # TODO: store nobjects?
+                # if nmiss > bmap.max_combo:
+                #    return "Invalid misscount."
+            else:
+                # optional prefix/suffix, mods & accuracy
+                arg_stripped = arg.removeprefix("+").removesuffix("%")
+                if (
+                    mods is None
+                    and arg_stripped.isalpha()
+                    and len(arg_stripped) % 2 == 0
+                ):
+                    mods = Mods.from_modstr(arg_stripped)
+                    mods = mods.filter_invalid_combos(mode)
+                elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
+                    acc = float(arg_stripped)
+                    if not 0 <= acc <= 100:
+                        return ParsingError("Invalid accuracy.")
+                else:
+                    return ParsingError(f"Unknown argument: {arg}")
+
+        return {
+            "acc": acc,
+            "mods": mods,
+            "combo": combo,
+            "nmiss": nmiss,
+        }
+    else:  # mode == 4
+        if not args or len(args) > 2:
+            return ParsingError("Invalid syntax: !with <score/mods ...>")
+
+        score = 1000
+        mods = Mods.NOMOD
+
+        for param in (p.strip("+k") for p in args):
+            if param.isdecimal():  # acc
+                if not 0 <= (score := int(param)) <= 1000:
+                    return ParsingError("Invalid score.")
+                if score <= 500:
+                    return ParsingError("<=500k score is always 0pp.")
+            elif len(param) % 2 == 0:
+                mods = Mods.from_modstr(param)
+                mods = mods.filter_invalid_combos(mode)
+            else:
+                return ParsingError("Invalid syntax: !with <score/mods ...>")
+
+        return {
+            "mods": mods,
+            "score": score,
+        }
+
+
 @command(Privileges.NORMAL, aliases=["w"], hidden=True)
 async def _with(ctx: Context) -> Optional[str]:
     """Specify custom accuracy & mod combinations with `/np`."""
@@ -446,129 +527,47 @@ async def _with(ctx: Context) -> Optional[str]:
 
     mode_vn = ctx.player.last_np["mode_vn"]
 
-    if mode_vn in (0, 1, 2):  # osu, taiko, catch
-        if not ctx.args or len(ctx.args) > 4:
-            return "Invalid syntax: !with <acc/nmiss/combo/mods ...>"
+    command_args = parse__with__command_args(mode_vn, ctx.args)
+    if isinstance(command_args, ParsingError):
+        return str(command_args)
 
-        # !with 95% 1m 429x hddt
-        acc = mods = combo = nmiss = None
+    msg_fields = []
 
-        # parse acc, misses, combo and mods from arguments.
-        # tried to balance complexity vs correctness here
-        for arg in (arg.lower() for arg in ctx.args):
-            # mandatory suffix, combo & nmiss
-            if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
-                combo = int(arg[:-1])
-                if combo > bmap.max_combo:
-                    return "Invalid combo."
-            elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
-                nmiss = int(arg[:-1])
-                # TODO: store nobjects?
-                if nmiss > bmap.max_combo:
-                    return "Invalid misscount."
-            else:
-                # optional prefix/suffix, mods & accuracy
-                arg_stripped = arg.removeprefix("+").removesuffix("%")
-                if (
-                    mods is None
-                    and arg_stripped.isalpha()
-                    and len(arg_stripped) % 2 == 0
-                ):
-                    mods = Mods.from_modstr(arg_stripped)
-                    mods = mods.filter_invalid_combos(mode_vn)
-                elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
-                    acc = float(arg_stripped)
-                    if not 0 <= acc <= 100:
-                        return "Invalid accuracy."
-                else:
-                    return f"Unknown argument: {arg}"
+    # include mods regardless of mode
+    if (mods := command_args.get("mods")) is not None:
+        msg_fields.append(f"{mods!r}")
 
-        msg = []
+    score_args: ScoreDifficultyParams = {}
 
-        if mode_vn == 0:
-            with OppaiWrapper() as ezpp:
-                if mods is not None:
-                    ezpp.set_mods(int(mods))
-                    msg.append(f"{mods!r}")
+    # include mode-specific fields
+    if mode_vn in (0, 1, 2):
+        if (nmiss := command_args["nmiss"]) is not None:
+            score_args["nmiss"] = nmiss
+            msg_fields.append(f"{nmiss}m")
 
-                if nmiss is not None:
-                    ezpp.set_nmiss(nmiss)
-                    msg.append(f"{nmiss}m")
+        if (combo := command_args["combo"]) is not None:
+            score_args["combo"] = combo
+            msg_fields.append(f"{combo}x")
 
-                if combo is not None:
-                    ezpp.set_combo(combo)
-                    msg.append(f"{combo}x")
+        if (acc := command_args["acc"]) is not None:
+            score_args["acc"] = acc
+            msg_fields.append(f"{acc:.2f}%")
 
-                if acc is not None:
-                    ezpp.set_accuracy_percent(acc)
-                    msg.append(f"{acc:.2f}%")
+    else:  # mode_vn == 3
+        if (score := command_args["score"]) is not None:
+            score_args["score"] = score * 1000
+            msg_fields.append(f"{score}k")
 
-                ezpp.calculate(str(osu_file_path))
-                pp, sr = ezpp.get_pp(), ezpp.get_sr()
+    result = app.usecases.performance.calculate_performances(
+        osu_file_path=str(osu_file_path),
+        mode=mode_vn,
+        mods=int(command_args["mods"]),
+        scores=[score_args],  # calculate one score
+    )
 
-                return f"{' '.join(msg)}: {pp:.2f}pp ({sr:.2f}*)"
-        else:
-            beatmap = PeaceMap(osu_file_path)
-            peace = PeaceCalculator()
-
-            if mods is not None:
-                peace.set_mods(int(mods))
-                msg.append(f"{mods!r}")
-
-            if nmiss is not None:
-                peace.set_miss(nmiss)
-                msg.append(f"{nmiss}m")
-
-            if combo is not None:
-                peace.set_combo(combo)
-                msg.append(f"{combo}x")
-
-            if acc is not None:
-                peace.set_acc(acc)
-                msg.append(f"{acc:.2f}%")
-
-            if mode_vn:
-                peace.set_mode(mode_vn)
-
-            calculated = peace.calculate(beatmap)
-
-            if math.isnan(calculated.pp) or math.isinf(calculated.pp):
-                # TODO: report to logserver
-                return f"{' '.join(msg)}: 0pp (0*)"
-
-            return f"{' '.join(msg)}: {calculated.pp:.2f}pp ({calculated.stars:.2f}*)"
-    else:  # mania
-        if not ctx.args or len(ctx.args) > 2:
-            return "Invalid syntax: !with <score/mods ...>"
-
-        score = 1000
-        mods = Mods.NOMOD
-
-        for param in (p.strip("+k") for p in ctx.args):
-            if param.isdecimal():  # acc
-                if not 0 <= (score := int(param)) <= 1000:
-                    return "Invalid score."
-                if score <= 500:
-                    return "<=500k score is always 0pp."
-            elif len(param) % 2 == 0:
-                mods = Mods.from_modstr(param)
-                mods = mods.filter_invalid_combos(mode_vn)
-            else:
-                return "Invalid syntax: !with <score/mods ...>"
-
-        beatmap = PeaceMap(osu_file_path)
-        peace = PeaceCalculator()
-
-        if mods != Mods.NOMOD:
-            peace.set_mods(int(mods))
-
-        if mode_vn:
-            peace.set_mode(mode_vn)
-
-        peace.set_score(score * 1000)
-
-        calc = peace.calculate(beatmap)
-        return f"{score}k {mods!r}: {calc.pp:.2f}pp ({calc.stars:.2f}*)"
+    return "{msg}: {performance:.2f}pp ({star_rating:.2f}*)".format(
+        msg=" ".join(msg_fields), **result[0]  # (first score result)
+    )
 
 
 @command(Privileges.NORMAL, aliases=["req"])
@@ -995,7 +994,7 @@ async def alertuser(ctx: Context) -> Optional[str]:
 
 
 # NOTE: this is pretty useless since it doesn't switch anything other
-# than the c[e4-6].ppy.sh domains; it exists on bancho as a tournament
+# than the c[e4].ppy.sh domains; it exists on bancho as a tournament
 # server switch mechanism, perhaps we could leverage this in the future.
 @command(Privileges.ADMINISTRATOR, hidden=True)
 async def switchserv(ctx: Context) -> Optional[str]:
@@ -1519,7 +1518,6 @@ if app.settings.DEVELOPER_MODE:
             "sys",
             "struct",
             "discord",
-            "cmyui",
             "datetime",
             "time",
             "inspect",
@@ -2629,7 +2627,7 @@ async def clan_leave(ctx: Context):
     elif p.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    p.clan.remove_member(p)
+    await p.clan.remove_member(p)
     return f"You have successfully left {p.clan!r}."
 
 
@@ -2716,7 +2714,7 @@ async def process_commands(
 
             if res is not None:
                 # we have a message to return, include elapsed time
-                elapsed = cmyui.utils.magnitude_fmt_time(clock_ns() - start_time)
+                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
                 return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
             else:
                 # no message to return

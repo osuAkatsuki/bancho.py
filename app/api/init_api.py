@@ -7,8 +7,6 @@ import pprint
 
 import aiohttp
 import orjson
-from cmyui.logging import Ansi
-from cmyui.logging import log
 from fastapi import FastAPI
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
@@ -24,6 +22,8 @@ import app.state
 import app.utils
 from app.api import domains
 from app.api import middlewares
+from app.logging import Ansi
+from app.logging import log
 from app.objects import collections
 
 
