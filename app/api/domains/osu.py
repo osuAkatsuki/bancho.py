@@ -538,7 +538,7 @@ async def osuSearchHandler(
 
     if CURRENT_MIRROR_TYPE == MIRROR_TYPE.NERINYAN:
         for bmap in result:
-            if bmap["download_disabled"]:
+            if bmap["availability"]["download_disabled"]:
                 continue  # Ignore the mapset that cannot download
             bmap["Artist"] = bmap.pop("artist")
             bmap["HasVideo"] = int(bmap.pop("video"))
