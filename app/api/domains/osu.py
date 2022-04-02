@@ -513,7 +513,6 @@ async def osuSearchHandler(
             # convert to osu!api status
             params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-
     async with app.state.services.http.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU or MIRROR_TYPE.NERINYAN:
@@ -546,7 +545,9 @@ async def osuSearchHandler(
             bmap["Title"] = bmap.pop("title")
             bmap["LastUpdate"] = bmap.pop("last_updated")
             bmap["Creator"] = bmap.pop("creator")
-            if bmap["status"] == "graveyard": # RankedStatus enum didn't support graveyard/wip yet
+            if (
+                bmap["status"] == "graveyard"
+            ):  # RankedStatus enum didn't support graveyard/wip yet
                 bmap["RankedStatus"] = -2
             elif bmap["status"] == "wip":
                 bmap["RankedStatus"] = -1
