@@ -1326,7 +1326,7 @@ async def debug(ctx: Context) -> Optional[str]:
 async def givedonator(ctx: Context) -> Optional[str]:
     """Gives donator to a specified player (by name) for a specified time, such as '3h5m'."""
     if len(ctx.args) < 2:
-        return "Invalid syntax: !setdonator <name> <duration>"
+        return "Invalid syntax: !givedonator <name> <duration>"
 
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
