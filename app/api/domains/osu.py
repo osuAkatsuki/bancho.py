@@ -1440,8 +1440,9 @@ async def getScores(
     ## construct response for osu! client
 
     response_lines: list[str] = [
-        # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}
-        f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0||",
+        # NOTE: fa stands for featured artist (for the ones that may not know)
+        # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}|{fa_track_id}|{fa_license_text}
+        f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0|",
         # {offset}\n{beatmap_name}\n{rating}
         # TODO: server side beatmap offsets
         f"0\n{bmap.full_name}\n{rating}",
