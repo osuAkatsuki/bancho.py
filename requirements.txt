@@ -29,11 +29,11 @@ pycparser==2.21
 pydantic==1.9.0
 PyMySQL==0.9.3
 python-multipart==0.0.5
+pytimeparse==1.1.8
 requests==2.27.1
 six==1.16.0
 sniffio==1.2.0
 SQLAlchemy==1.4.32
-pytimeparse==1.1.8
 starlette==0.17.1
 timeago==1.0.15
 typing_extensions==4.1.1

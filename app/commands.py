@@ -1339,9 +1339,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
         return "The minimum timespan is 5 minutes."
 
     await app.state.services.database.execute(
-        "UPDATE users "
-        "SET donor_end = :end, "
-        "WHERE id = :user_id",
+        "UPDATE users " "SET donor_end = :end, " "WHERE id = :user_id",
         {"end": int(time.time()) + seconds, "user_id": t.id},
     )
 
