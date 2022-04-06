@@ -1341,7 +1341,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
         seconds += t.donor_end
 
     await app.state.services.database.execute(
-        "UPDATE users " "SET donor_end = :end ""WHERE id = :user_id",
+        "UPDATE users " "SET donor_end = :end " "WHERE id = :user_id",
         {"end": seconds, "user_id": t.id},
     )
 
