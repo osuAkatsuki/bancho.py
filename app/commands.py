@@ -1336,7 +1336,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
     if seconds is None:
         return "Invalid timespan."
 
-    if t.donor_end == 0:
+    if t.donor_end < time.time():
         seconds += int(time.time())
     else:
         seconds += t.donor_end
