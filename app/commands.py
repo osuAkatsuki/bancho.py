@@ -30,10 +30,10 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import TypeVar
 from typing import Union
-from pytimeparse.timeparse import timeparse
 
 import psutil
 import timeago
+from pytimeparse.timeparse import timeparse
 
 import app.logging
 import app.packets
