@@ -516,7 +516,7 @@ async def osuSearchHandler(
     async with app.state.services.http.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU or MIRROR_TYPE.NERINYAN:
-                # chimu uses 404 for no maps found
+                # chimu and nerinyan uses 404 for no maps found
                 if resp.status == status.HTTP_404_NOT_FOUND:
                     return b"0"
 
@@ -525,7 +525,7 @@ async def osuSearchHandler(
         result = await resp.json()
 
         if CURRENT_MIRROR_TYPE == MIRROR_TYPE.CHIMU:
-            if result["code"] != 0:
+            if result["code"] != 200:
                 return b"-1\nFailed to retrieve data from the beatmap mirror."
 
             result = result["data"]
