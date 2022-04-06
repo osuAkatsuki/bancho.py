@@ -480,10 +480,10 @@ async def osuSearchHandler(
         params: dict[str, object] = {"p": page_num, "ps": 100}
         if query == "Newest":
             params["q"] = ""
-        elif query == "Top+Rated":
+        elif query == "Top Rated":
             params["sort"] = "favourites_desc"
             params["q"] = ""
-        elif query == "Most+Played":
+        elif query == "Most Played":
             params["sort"] = "plays_desc"
             params["q"] = ""
         else:
@@ -503,7 +503,7 @@ async def osuSearchHandler(
         params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
         # eventually we could try supporting these,
         # but it mostly depends on the mirror.
-        if query not in ("Newest", "Top+Rated", "Most+Played"):
+        if query not in ("Newest", "Top Rated", "Most Played"):
             params["query"] = query
 
         if mode != -1:  # -1 for all
