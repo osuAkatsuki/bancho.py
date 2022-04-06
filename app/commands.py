@@ -1340,7 +1340,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
 
     await app.state.services.database.execute(
         "UPDATE users " "SET donor_end = :end " "WHERE id = :user_id",
-        {"end": int(time.time()) + t.donor_end + seconds, "user_id": t.id},
+        {"end": t.donor_end + seconds, "user_id": t.id},
     )
 
     await t.add_privs(Privileges.SUPPORTER)
