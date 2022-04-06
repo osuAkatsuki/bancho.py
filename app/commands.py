@@ -1335,13 +1335,15 @@ async def givedonator(ctx: Context) -> Optional[str]:
     if seconds is None:
         return "Invalid timespan."
 
-    await app.state.services.database.execute(
-        "UPDATE users " "SET donor_end = :end " "WHERE id = :user_id",
-        {"end": t.donator_end + seconds, "user_id": t.id},
-    )
+    if t.donor_end == 0:
+        seconds += int(time.time())
+    else:
+        seconds += t.donor_end
 
-    await t.add_privs(Privileges.SUPPORTER)
-    return f"Gave donator to {t} for {ctx.args[1]}."
+    await app.state.services.database.execute(
+        "UPDATE users " "SET donor_end = :end ""WHERE id = :user_id",
+        {"end": seconds, "user_id": t.id},
+    )
 
 
 # NOTE: these commands will likely be removed
