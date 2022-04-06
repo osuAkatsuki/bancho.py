@@ -1335,12 +1335,9 @@ async def givedonator(ctx: Context) -> Optional[str]:
     if seconds is None:
         return "Invalid timespan."
 
-    if seconds < 5 * 60:
-        return "The minimum timespan is 5 minutes."
-
     await app.state.services.database.execute(
         "UPDATE users " "SET donor_end = :end " "WHERE id = :user_id",
-        {"end": t.donor_end + seconds, "user_id": t.id},
+        {"end": t.donator_end + seconds, "user_id": t.id},
     )
 
     await t.add_privs(Privileges.SUPPORTER)
