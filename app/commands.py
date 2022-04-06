@@ -1345,7 +1345,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
         {"end": seconds, "user_id": t.id},
     )
 
-    return f"Added {ctx.args[1]} to .{t}'s donator status."
+    return f"Added {ctx.args[1]} to the donator status of {t}."
 
 
 # NOTE: these commands will likely be removed
