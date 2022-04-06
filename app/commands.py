@@ -1339,12 +1339,13 @@ async def givedonator(ctx: Context) -> Optional[str]:
         return "The minimum timespan is 5 minutes."
 
     await app.state.services.database.execute(
-        "UPDATE users " "SET donor_end = :end, " "WHERE id = :user_id",
-        {"end": int(time.time()) + seconds, "user_id": t.id},
+        "UPDATE users " "SET donor_end = :end "
+        "WHERE id = :user_id",
+        {"end": time.time() + t.donor_end + seconds, "user_id": t.id},
     )
 
     await t.add_privs(Privileges.SUPPORTER)
-    return f"Updated {t}'s privileges."
+    return f"Gave donator to {t} for {ctx.args[1]}."
 
 
 # NOTE: these commands will likely be removed
