@@ -289,7 +289,6 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Username already taken by another player."
 
     # all checks passed, update their name
-
     await app.state.services.database.execute(
         "UPDATE users SET name = :name, safe_name = :safe_name WHERE id = :user_id",
         {"name": name, "safe_name": safe_name, "user_id": ctx.player.id},
