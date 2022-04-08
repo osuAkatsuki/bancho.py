@@ -280,14 +280,15 @@ async def changename(ctx: Context) -> Optional[str]:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
+    safe_name = name.lower().replace(" ", "_")
+
     if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM users WHERE name = :name",
-        {"name": name},
+        "SELECT 1 FROM users WHERE safe_name = :safe_name",
+        {"safe_name": safe_name},
     ):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    safe_name = name.lower().replace(" ", "_")
 
     await app.state.services.database.execute(
         "UPDATE users SET name = :name, safe_name = :safe_name WHERE id = :user_id",
