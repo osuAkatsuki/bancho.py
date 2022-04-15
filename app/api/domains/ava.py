@@ -34,7 +34,7 @@ async def get_avatar(
 
     return FileResponse(
         avatar_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 
 
@@ -46,7 +46,7 @@ async def get_avatar_osu(user_id: int) -> Response:
         if avatar_path.exists():
             return FileResponse(
                 avatar_path,
-                media_type=app.utils.get_media_type(extension),
+                media_type=app.utils.get_media_type(extension),  # type: ignore
             )
 
     return FileResponse(DEFAULT_AVATAR, media_type="image/jpeg")
