@@ -40,17 +40,17 @@ def calculate_performances_std(
         results: list[DifficultyRating] = []
 
         for score in scores:
-            if score["acc"] is not None:
-                calculator.set_accuracy_percent(score["acc"])
-
             if score["mods"] is not None:
                 calculator.set_mods(score["mods"])
+
+            if score["nmiss"] is not None:
+                calculator.set_nmiss(score["nmiss"])
 
             if score["combo"] is not None:
                 calculator.set_combo(score["combo"])
 
-            if score["nmiss"] is not None:
-                calculator.set_nmiss(score["nmiss"])
+            if score["acc"] is not None:
+                calculator.set_accuracy_percent(score["acc"])
 
             calculator.calculate(osu_file_path)
 

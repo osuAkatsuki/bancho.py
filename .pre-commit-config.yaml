@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.1.0
+    rev: v4.2.0
     hooks:
     -   id: check-added-large-files
     -   id: check-ast
@@ -13,11 +13,11 @@ repos:
     -   id: requirements-txt-fixer
     -   id: trailing-whitespace
 -   repo: https://github.com/psf/black
-    rev: 22.1.0
+    rev: 22.3.0
     hooks:
     -   id: black
 -   repo: https://github.com/asottile/pyupgrade
-    rev: v2.31.1
+    rev: v2.32.0
     hooks:
     -   id: pyupgrade
         args: [--py37-plus, --keep-runtime-typing]
@@ -27,7 +27,7 @@ repos:
     -   id: reorder-python-imports
         args: [--py37-plus, --add-import, 'from __future__ import annotations']
 -   repo: https://github.com/asottile/add-trailing-comma
-    rev: v2.2.1
+    rev: v2.2.2
     hooks:
     -   id: add-trailing-comma
 -   repo: https://github.com/asottile/blacken-docs
