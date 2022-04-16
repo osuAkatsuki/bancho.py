@@ -1,16 +1,119 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 from pathlib import Path
+from typing import Optional
+
+from py3rijndael import Pkcs7Padding
+from py3rijndael import RijndaelCbc
+from starlette.datastructures import FormData
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.repositories.scores
 import app.state.services
 import app.usecases.performance  # maybe problem?
 from app.constants.gamemodes import GameMode
+from app.logging import Ansi
+from app.logging import log
 from app.objects.beatmap import Beatmap
+from app.objects.player import ClientDetails
 from app.objects.player import Player
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.usecases.performance import ScoreDifficultyParams  # maybe problem?
+
+
+def validate_score_submission_data(
+    score: Score,
+    unique_ids: str,
+    osu_version: str,
+    client_hash_decoded,
+    updated_beatmap_hash,
+    storyboard_checksum,
+    login_details: ClientDetails,
+):
+    """Validate score submission checksums and data are non-fraudulent."""
+    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
+    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
+    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
+
+    assert osu_version == f"{login_details.osu_version.date:%Y%m%d}"
+    assert client_hash_decoded == login_details.client_hash
+    assert login_details is not None
+
+    # assert unique ids (c1) are correct and match login params
+    assert (
+        unique_id1_md5 == login_details.uninstall_md5
+    ), f"unique_id1 mismatch ({unique_id1_md5} != {login_details.uninstall_md5})"
+    assert (
+        unique_id2_md5 == login_details.disk_signature_md5
+    ), f"unique_id2 mismatch ({unique_id2_md5} != {login_details.disk_signature_md5})"
+
+    # assert online checksums match
+    server_score_checksum = score.compute_online_checksum(
+        osu_version=osu_version,
+        osu_client_hash=client_hash_decoded,
+        storyboard_checksum=storyboard_checksum or "",
+    )
+    assert (
+        score.client_checksum == server_score_checksum
+    ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
+
+    # assert beatmap hashes match
+    assert (
+        updated_beatmap_hash == score.bmap_md5
+    ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {score.bmap_md5}"
+
+
+def parse_form_data_score_params(
+    score_data: FormData,
+) -> Optional[tuple[bytes, StarletteUploadFile]]:
+    """Parse the score data, and replay file
+    from the form data's 'score' parameters."""
+    try:
+        score_parts = score_data.getlist("score")
+        assert len(score_parts) == 2, "Invalid score data"
+
+        score_data_b64 = score_data.getlist("score")[0]
+        assert isinstance(score_data_b64, str), "Invalid score data"
+        replay_file = score_data.getlist("score")[1]
+        assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
+    except AssertionError as exc:
+        # TODO: perhaps better logging?
+        log(f"Failed to validate score multipart data: ({exc.args[0]})", Ansi.LRED)
+        return None
+    else:
+        return (
+            score_data_b64.encode(),
+            replay_file,
+        )
+
+
+def decrypt_score_aes_data(
+    # to decode
+    score_data_b64: bytes,
+    client_hash_b64: bytes,
+    # used for decoding
+    iv_b64: bytes,
+    osu_version: str,
+) -> tuple[list[str], str]:
+    """Decrypt the base64'ed score data."""
+    # TODO: perhaps this should return TypedDict?
+
+    # attempt to decrypt score data
+    aes = RijndaelCbc(
+        key=f"osu!-scoreburgr---------{osu_version}".encode(),
+        iv=base64.b64decode(iv_b64),
+        padding=Pkcs7Padding(32),
+        block_size=32,
+    )
+
+    score_data = aes.decrypt(base64.b64decode(score_data_b64)).decode().split(":")
+    client_hash_decoded = aes.decrypt(base64.b64decode(client_hash_b64)).decode()
+
+    # score data is delimited by colons (:).
+    return score_data, client_hash_decoded
 
 
 async def calculate_placement(score: Score, beatmap: Beatmap) -> int:

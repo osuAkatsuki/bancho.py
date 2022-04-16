@@ -407,56 +407,6 @@ def chart_entry(name: str, before: Optional[T], after: T) -> str:
     return f"{name}Before:{before or ''}|{name}After:{after}"
 
 
-def parse_form_data_score_params(
-    score_data: FormData,
-) -> Optional[tuple[bytes, StarletteUploadFile]]:
-    """Parse the score data, and replay file
-    from the form data's 'score' parameters."""
-    try:
-        score_parts = score_data.getlist("score")
-        assert len(score_parts) == 2, "Invalid score data"
-
-        score_data_b64 = score_data.getlist("score")[0]
-        assert isinstance(score_data_b64, str), "Invalid score data"
-        replay_file = score_data.getlist("score")[1]
-        assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
-    except AssertionError as exc:
-        # TODO: perhaps better logging?
-        log(f"Failed to validate score multipart data: ({exc.args[0]})", Ansi.LRED)
-        return None
-    else:
-        return (
-            score_data_b64.encode(),
-            replay_file,
-        )
-
-
-def decrypt_score_aes_data(
-    # to decode
-    score_data_b64: bytes,
-    client_hash_b64: bytes,
-    # used for decoding
-    iv_b64: bytes,
-    osu_version: str,
-) -> tuple[list[str], str]:
-    """Decrypt the base64'ed score data."""
-    # TODO: perhaps this should return TypedDict?
-
-    # attempt to decrypt score data
-    aes = RijndaelCbc(
-        key=f"osu!-scoreburgr---------{osu_version}".encode(),
-        iv=b64decode(iv_b64),
-        padding=Pkcs7Padding(32),
-        block_size=32,
-    )
-
-    score_data = aes.decrypt(b64decode(score_data_b64)).decode().split(":")
-    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
-
-    # score data is delimited by colons (:).
-    return score_data, client_hash_decoded
-
-
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
@@ -484,21 +434,25 @@ async def osuSubmitModularSelector(
 ):
     """Handle a score submission from an osu! client with an active session."""
 
-    # NOTE: the bancho protocol uses the "score" parameter name for both
-    # the base64'ed score data, as well as the replay file in the multipart
-    # starlette/fastapi do not support this, so we've moved it out
-    score_parameters = parse_form_data_score_params(await request.form())
+    form_data = await request.form()
+
+    # XXX:HACK  the bancho protocol uses the "score" parameter name for
+    # both the base64'ed score data, as well as the replay file in the multipart.
+    # starlette/fastapi do not support this - this function provides a workaround
+    score_parameters = app.usecases.scores.parse_form_data_score_params(form_data)
     if score_parameters is None:
         # failed to parse score data
-        return  # TODO: return something
+        return
 
     # extract the score data and replay file from the score data
     score_data_b64, replay_file = score_parameters
 
-    # decrypt the score data (aes)
-    score_data, client_hash_decoded = decrypt_score_aes_data(
+    # decrypt the score data and client hash using the iv and osu version
+    score_data, client_hash_decoded = app.usecases.scores.decrypt_score_aes_data(
+        # to decrypt
         score_data_b64,
         client_hash_b64,
+        # decryption keys
         iv_b64,
         osu_version,
     )
@@ -518,40 +472,16 @@ async def osuSubmitModularSelector(
         return
 
     ## perform checksum validation
-    # TODO: move this functionality out
-
-    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
-    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
-    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
-
     try:
-        assert osu_version == f"{player.client_details.osu_version.date:%Y%m%d}"
-        assert client_hash_decoded == player.client_details.client_hash
-        assert player.client_details is not None
-
-        # assert unique ids (c1) are correct and match login params
-        assert (
-            unique_id1_md5 == player.client_details.uninstall_md5
-        ), f"unique_id1 mismatch ({unique_id1_md5} != {player.client_details.uninstall_md5})"
-        assert (
-            unique_id2_md5 == player.client_details.disk_signature_md5
-        ), f"unique_id2 mismatch ({unique_id2_md5} != {player.client_details.disk_signature_md5})"
-
-        # assert online checksums match
-        server_score_checksum = score.compute_online_checksum(
-            osu_version=osu_version,
-            osu_client_hash=client_hash_decoded,
-            storyboard_checksum=storyboard_md5 or "",
+        app.usecases.scores.validate_score_submission_data(
+            score,
+            unique_ids,
+            osu_version,
+            client_hash_decoded,
+            updated_beatmap_hash,
+            storyboard_md5,
+            player.client_details,  # type: ignore
         )
-        assert (
-            score.client_checksum == server_score_checksum
-        ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
-
-        # assert beatmap hashes match
-        assert (
-            updated_beatmap_hash == bmap_md5
-        ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {bmap_md5}"
-
     except AssertionError as exc:
         # NOTE: this is undergoing a temporary trial period,
         # after which, it will be enabled & perform restrictions.
