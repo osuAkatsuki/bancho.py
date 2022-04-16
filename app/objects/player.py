@@ -21,7 +21,6 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
-from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.menu import Menu
 from app.objects.menu import menu_keygen
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
+    from app.objects.channel import Channel
     from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
@@ -101,9 +101,9 @@ class Status:
     map_id: int = 0
 
 
-# temporary menu-related stuff
-async def bot_hello(p: Player) -> None:
-    p.send_bot(f"hello {p.name}!")
+# # temporary menu-related stuff
+# async def bot_hello(p: Player) -> None:
+#     p.send_bot(f"hello {p.name}!")
 
 
 async def notif_hello(p: Player) -> None:
@@ -121,7 +121,7 @@ MENU2 = Menu(
 MAIN_MENU = Menu(
     "Main Menu",
     {
-        menu_keygen(): (MenuCommands.Execute, MenuFunction("bot_hello", bot_hello)),
+        # menu_keygen(): (MenuCommands.Execute, MenuFunction("bot_hello", bot_hello)),
         menu_keygen(): (MenuCommands.Execute, MenuFunction("notif_hello", notif_hello)),
         menu_keygen(): (MenuCommands.Advance, MENU2),
     },

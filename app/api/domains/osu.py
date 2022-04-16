@@ -4,7 +4,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import random
-import secrets
 import time
 from base64 import b64decode
 from collections import defaultdict
@@ -23,7 +22,6 @@ from typing import Union
 from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
-import bcrypt
 import databases.core
 from fastapi import status
 from fastapi.datastructures import FormData
@@ -50,11 +48,16 @@ import app.repositories.scores
 import app.settings
 import app.state.services
 import app.state.sessions
+import app.usecases.comments
+import app.usecases.direct
+import app.usecases.mail
 import app.usecases.players
+import app.usecases.replays
 import app.usecases.scores
+import app.usecases.screenshots
 import app.utils
 from app.constants import regexes
-from app.constants.clientflags import ClientFlags
+from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.logging import Ansi
@@ -180,40 +183,21 @@ async def osuScreenshot(
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
 ):
-    with memoryview(await screenshot_file.read()) as screenshot_view:  # type: ignore
-        # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-        if len(screenshot_view) > (4 * 1024 * 1024):
-            return Response(
-                content=b"Screenshot file too large.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+    if endpoint_version != 1:
+        await app.state.services.log_strange_occurrence(
+            f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
+        )
 
-        if endpoint_version != 1:
-            await app.state.services.log_strange_occurrence(
-                f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
-            )
+    resp, data = await app.usecases.screenshots.create(screenshot_file)
 
-        if app.utils.has_jpeg_headers_and_trailers(screenshot_view):
-            extension = "jpeg"
-        elif app.utils.has_png_headers_and_trailers(screenshot_view):
-            extension = "png"
-        else:
-            return Response(
-                content=b"Invalid file type",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+    if not resp:
+        return Response(
+            content=data,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
-        while True:
-            filename = f"{secrets.token_urlsafe(6)}.{extension}"
-            ss_file = SCREENSHOTS_PATH / filename
-            if not ss_file.exists():
-                break
-
-        with ss_file.open("wb") as f:
-            f.write(screenshot_view)
-
-    log(f"{player} uploaded {filename}.")
-    return Response(filename.encode())
+    log(f"{player} uploaded {data}.")
+    return data
 
 
 @router.get("/web/osu-getfriends.php")
@@ -305,47 +289,24 @@ async def osuGetBeatmapInfo(
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    rows = await db_conn.fetch_all(
-        "SELECT setid FROM favourites WHERE userid = :user_id",
-        {"user_id": player.id},
-    )
+    resp = await app.usecases.players.get_favourite_mapsets(player)
 
-    return "\n".join([str(row["setid"]) for row in rows]).encode()
+    return "\n".join([str(set_id) for set_id in resp]).encode()
 
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    # check if they already have this favourited.
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
-        {"user_id": player.id, "set_id": map_set_id},
-    ):
-        return b"You've already favourited this beatmap!"
-
-    # add favourite
-    await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id)",
-        {"user_id": player.id, "set_id": map_set_id},
-    )
+    return await app.usecases.players.add_favourite(player, map_set_id)
 
 
 @router.get("/web/lastfm.php")
 async def lastFM(
     action: Literal["scrobble", "np"],
-    beatmap_id_or_hidden_flag: str = Query(
-        ...,
-        description=(
-            "This flag is normally a beatmap ID, but is also "
-            "used as a hidden anticheat flag within osu!"
-        ),
-        alias="b",
-    ),
+    beatmap_id_or_hidden_flag: str = Query(..., alias="b"),
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
 ):
     if beatmap_id_or_hidden_flag[0] != "a":
@@ -353,9 +314,9 @@ async def lastFM(
         # client not to send any more for now.
         return b"-3"
 
-    flags = ClientFlags(int(beatmap_id_or_hidden_flag[1:]))
+    flags = LastFMFlags(int(beatmap_id_or_hidden_flag[1:]))
 
-    if flags & (ClientFlags.HQ_ASSEMBLY | ClientFlags.HQ_FILE):
+    if flags & (LastFMFlags.HQ_ASSEMBLY | LastFMFlags.HQ_FILE):
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
@@ -366,7 +327,7 @@ async def lastFM(
         )
         return b"-3"
 
-    if flags & ClientFlags.REGISTRY_EDITS:
+    if flags & LastFMFlags.REGISTRY_EDITS:
         # Player has registry edits left from
         # hq!osu's multiaccounting tool. This
         # does not necessarily mean they are
@@ -411,139 +372,32 @@ async def lastFM(
     """
 
 
-# bancho.py supports both cheesegull mirrors & chimu.moe.
-# chimu.moe handles things a bit differently than cheesegull,
-# and has some extra features we'll eventually use more of.
-USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
-
-DIRECT_SET_INFO_FMTSTR = (
-    "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
-    "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"
-    "0|{{HasVideo}}|0|0|0|{{diffs}}"  # 0s are threadid, has_story,
-    # filesize, filesize_novid.
-).format(setid_spelling="SetId" if USING_CHIMU else "SetID")
-
-DIRECT_MAP_INFO_FMTSTR = (
-    "[{DifficultyRating:.2f}⭐] {DiffName} "
-    "{{cs: {CS} / od: {OD} / ar: {AR} / hp: {HP}}}@{Mode}"
-)
-
-
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    ranked_status: int = Query(..., alias="r", ge=0, le=8),
     query: str = Query(..., alias="q"),
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
+    ranked_status: int = Query(..., alias="r", ge=0, le=8),
     page_num: int = Query(..., alias="p"),
 ):
-    if USING_CHIMU:
-        search_url = f"{app.settings.MIRROR_URL}/search"
-    else:
-        search_url = f"{app.settings.MIRROR_URL}/api/search"
-
-    params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
-
-    # eventually we could try supporting these,
-    # but it mostly depends on the mirror.
-    if query not in ("Newest", "Top+Rated", "Most+Played"):
-        params["query"] = query
-
-    if mode != -1:  # -1 for all
-        params["mode"] = mode
-
-    if ranked_status != 4:  # 4 for all
-        # convert to osu!api status
-        params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
-
-    async with app.state.services.http.get(search_url, params=params) as resp:
-        if resp.status != status.HTTP_200_OK:
-            if USING_CHIMU:
-                # chimu uses 404 for no maps found
-                if resp.status == status.HTTP_404_NOT_FOUND:
-                    return b"0"
-
-            return b"-1\nFailed to retrieve data from the beatmap mirror."
-
-        result = await resp.json()
-
-        if USING_CHIMU:
-            if result["code"] != 0:
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-
-            result = result["data"]
-
-    lresult = len(result)  # send over 100 if we receive
-    # 100 matches, so the client
-    # knows there are more to get
-    ret = [f"{'101' if lresult == 100 else lresult}"]
-
-    for bmap in result:
-        if bmap["ChildrenBeatmaps"] is None:
-            continue
-
-        if USING_CHIMU:
-            bmap["HasVideo"] = int(bmap["HasVideo"])
-        else:
-            # cheesegull doesn't support vids
-            bmap["HasVideo"] = "0"
-
-        diff_sorted_maps = sorted(
-            bmap["ChildrenBeatmaps"],
-            key=lambda m: m["DifficultyRating"],
-        )
-        diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
-        )
-
-        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
-
-    return "\n".join(ret).encode()
+    return await app.usecases.direct.search(
+        query,
+        mode,
+        ranked_status,
+        page_num,
+    )
 
 
-# TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    # TODO: refactor this to use the new internal bmap(set) api
-
-    # Since we only need set-specific data, we can basically
-    # just do same same query with either bid or bsid.
-
-    if map_set_id is not None:
-        # this is just a normal request
-        k, v = ("set_id", map_set_id)
-    elif map_id is not None:
-        k, v = ("id", map_id)
-    else:
-        return  # invalid args
-
-    # Get all set data.
-    bmapset = await db_conn.fetch_one(
-        "SELECT DISTINCT set_id, artist, "
-        "title, status, creator, last_update "
-        f"FROM maps WHERE {k} = :v",
-        {"v": v},
+    return await app.usecases.direct.search_set(
+        map_id,
+        map_set_id,
     )
-
-    if not bmapset:
-        # TODO: get from osu!
-        return
-
-    return (
-        (
-            "{set_id}.osz|{artist}|{title}|{creator}|"
-            "{status}|10.0|{last_update}|{set_id}|"  # TODO: rating
-            "0|0|0|0|0"
-        )
-        .format(**bmapset)
-        .encode()
-    )
-    # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 
 T = TypeVar("T", bound=Union[int, float])
@@ -1147,19 +1001,12 @@ async def getReplay(
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    score = await app.repositories.scores.fetch(score_id)
-    if not score:
+    replay_file = await app.usecases.replays.fetch_file(score_id)
+    if replay_file is None:
         return
 
-    file = REPLAYS_PATH / f"{score_id}.osr"
-    if not file.exists():
-        return
-
-    # increment replay views for this score
-    task = app.usecases.scores.increment_replay_views(player.id, mode)
-    app.state.loop.create_task(task)
-
-    return FileResponse(file)
+    await app.usecases.scores.increment_replay_views(player.id, mode)
+    return FileResponse(replay_file)
 
 
 @router.get("/web/osu-rate.php")
@@ -1486,6 +1333,28 @@ async def getScores(
     return "\n".join(response_lines).encode()
 
 
+def format_comments(comments: list[Mapping[str, Any]]) -> bytes:
+    ret: list[str] = []
+
+    for cmt in comments:
+        # TODO: maybe support player/creator colours?
+        # pretty expensive for very low gain, but completion :D
+        if cmt["priv"] & Privileges.NOMINATOR:
+            fmt = "bat"
+        elif cmt["priv"] & Privileges.DONATOR:
+            fmt = "supporter"
+        else:
+            fmt = ""
+
+        if cmt["colour"]:
+            fmt += f'|{cmt["colour"]}'
+
+        ret.append(
+            "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
+        )
+    return "\n".join(ret).encode()
+
+
 @router.post("/web/osu-comment.php")
 async def osuComment(
     player: Player = Depends(authenticate_player_session(Form, "u", "p")),
@@ -1499,49 +1368,22 @@ async def osuComment(
     colour: Optional[str] = Form(None, alias="f", min_length=6, max_length=6),
     start_time: Optional[int] = Form(None, alias="starttime"),
     comment: Optional[str] = Form(None, min_length=1, max_length=80),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if action == "get":
         # client is requesting all comments
-        comments = await app.state.services.database.fetch_all(
-            "SELECT c.time, c.target_type, c.colour, "
-            "c.comment, u.priv FROM comments c "
-            "INNER JOIN users u ON u.id = c.userid "
-            "WHERE (c.target_type = 'replay' AND c.target_id = :score_id) "
-            "OR (c.target_type = 'song' AND c.target_id = :set_id) "
-            "OR (c.target_type = 'map' AND c.target_id = :map_id) ",
-            {
-                "score_id": score_id,
-                "set_id": map_set_id,
-                "map_id": map_id,
-            },
+        comments = await app.usecases.comments.fetch_all(
+            score_id,
+            map_set_id,
+            map_id,
         )
 
-        ret: list[str] = []
-
-        for cmt in comments:
-            # TODO: maybe support player/creator colours?
-            # pretty expensive for very low gain, but completion :D
-            if cmt["priv"] & Privileges.NOMINATOR:
-                fmt = "bat"
-            elif cmt["priv"] & Privileges.DONATOR:
-                fmt = "supporter"
-            else:
-                fmt = ""
-
-            if cmt["colour"]:
-                fmt += f'|{cmt["colour"]}'
-
-            ret.append(
-                "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
-            )
-
-        app.usecases.players.update_latest_activity_soon(player)
-        return "\n".join(ret).encode()
-
+        resp = format_comments(comments)
     elif action == "post":
         # client is submitting a new comment
-        # TODO: maybe validate all params are sent?
+
+        # validate required parameters are present
+        if target is None or comment is None or start_time is None:
+            return None
 
         # get the corresponding id from the request
         if target == "song":
@@ -1551,46 +1393,43 @@ async def osuComment(
         else:  # target == "replay"
             target_id = score_id
 
-        if colour and not player.priv & Privileges.DONATOR:
+        if colour is not None and not player.priv & Privileges.DONATOR:
             # only supporters can use colours.
             # TODO: should we be restricting them?
             colour = None
 
         # insert into sql
-        await app.state.services.database.execute(
-            "INSERT INTO comments "
-            "(target_id, target_type, userid, time, comment, colour) "
-            "VALUES (:target_id, :target_type, :userid, :time, :comment, :colour)",
-            {
-                "target_id": target_id,
-                "target_type": target,
-                "userid": player.id,
-                "time": start_time,
-                "comment": comment,
-                "colour": colour,
-            },
+        await app.usecases.comments.create(
+            player,
+            target,
+            target_id,
+            colour,
+            comment,
+            start_time,
         )
 
-        app.usecases.players.update_latest_activity_soon(player)
-        return None  # empty resp is fine
+        resp = None  # empty resp is fine
+
+    app.usecases.players.update_latest_activity_soon(player)
+    return resp
 
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    if not (t_name := unquote(channel)):  # TODO: unquote needed?
+    if not (channel_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    if t := await app.state.sessions.players.from_cache_or_sql(name=t_name):
-        # mark any unread mail from this user as read.
-        await db_conn.execute(
-            "UPDATE `mail` SET `read` = 1 "
-            "WHERE `to_id` = :to AND `from_id` = :from "
-            "AND `read` = 0",
-            {"to": player.id, "from": t.id},
+    target_player = await app.state.sessions.players.from_cache_or_sql(
+        name=channel_name,
+    )
+
+    if target_player is not None:
+        await app.usecases.mail.mark_as_read(
+            source_id=target_player.id,
+            target_id=player.id,
         )
 
 
@@ -1608,7 +1447,9 @@ async def banchoConnect(
     client_hash: Optional[str] = Query(None, alias="ch"),
     retrying: Optional[bool] = Query(None, alias="retry"),  # '0' or '1'
 ):
-    return b""  # TODO
+    # TODO: support for client verification?
+
+    return b""
 
 
 _checkupdates_cache = {  # default timeout is 1h, set on request.
@@ -1680,16 +1521,16 @@ async def get_screenshot(
     extension: Literal["jpg", "jpeg", "png"] = Path(...),
 ):
     """Serve a screenshot from the server, by filename."""
-    screenshot_path = SCREENSHOTS_PATH / f"{screenshot_id}.{extension}"
+    screenshot_file = app.usecases.screenshots.fetch_file(screenshot_id, extension)
 
-    if not screenshot_path.exists():
+    if screenshot_file is None:
         return ORJSONResponse(
             content={"status": "Screenshot not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
     return FileResponse(
-        path=screenshot_path,
+        screenshot_file,
         media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 
@@ -1703,28 +1544,25 @@ async def get_osz(
     if no_video:
         map_set_id = map_set_id[:-1]
 
-    if USING_CHIMU:
-        query_str = f"download/{map_set_id}?n={int(not no_video)}"
-    else:
-        query_str = f"d/{map_set_id}"
+    download_url = app.usecases.direct.get_mapset_download_url(
+        int(map_set_id),
+        no_video,
+    )
 
     return RedirectResponse(
-        url=f"{app.settings.MIRROR_URL}/{query_str}",
+        url=download_url,
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
 
 @router.get("/web/maps/{map_filename}")
-async def get_updated_beatmap(
-    request: Request,
-    map_filename: str,
-    host: str = Header(...),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
-):
+async def get_updated_beatmap(map_filename: str, host: str = Header(...)):
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
+        update_url = app.usecases.direct.get_mapset_update_url(map_filename)
+
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['path']}",
+            url=update_url,
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
@@ -1866,69 +1704,41 @@ async def register_account(
         # the client isn't just checking values,
         # they want to register the account now.
         # make the md5 & bcrypt the md5 for sql.
-        async with app.state.sessions.players._lock:
-            pw_md5 = hashlib.md5(pw_plaintext.encode()).hexdigest().encode()
-            pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-            app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
 
-            if cloudflare_country:
-                # best case, dev has enabled ip geolocation in the
-                # network tab of cloudflare, so it sends the iso code.
-                country_acronym = cloudflare_country.lower()
-            else:
-                # backup method, get the user's ip and
-                # do a db lookup to get their country.
-                ip = app.state.services.ip_resolver.get_ip(request.headers)
+        if cloudflare_country:
+            # best case, dev has enabled ip geolocation in the
+            # network tab of cloudflare, so it sends the iso code.
+            country_acronym = cloudflare_country.lower()
+        else:
+            # backup method, get the user's ip and
+            # do a db lookup to get their country.
+            ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-                if not ip.is_private:
-                    if app.state.services.geoloc_db is not None:
-                        # decent case, dev has downloaded a geoloc db from
-                        # maxmind, so we can do a local db lookup. (~1-5ms)
-                        # https://www.maxmind.com/en/home
-                        geoloc = app.state.services.fetch_geoloc_db(ip)
-                    else:
-                        # worst case, we must do an external db lookup
-                        # using a public api. (depends, `ping ip-api.com`)
-                        geoloc = await app.state.services.fetch_geoloc_web(ip)
-
-                    if geoloc is not None:
-                        country_acronym = geoloc["country"]["acronym"]
-                    else:
-                        country_acronym = "xx"
+            if not ip.is_private:
+                if app.state.services.geoloc_db is not None:
+                    # decent case, dev has downloaded a geoloc db from
+                    # maxmind, so we can do a local db lookup. (~1-5ms)
+                    # https://www.maxmind.com/en/home
+                    geoloc = app.state.services.fetch_geoloc_db(ip)
                 else:
-                    # localhost, unknown country
+                    # worst case, we must do an external db lookup
+                    # using a public api. (depends, `ping ip-api.com`)
+                    geoloc = await app.state.services.fetch_geoloc_web(ip)
+
+                if geoloc is not None:
+                    country_acronym = geoloc["country"]["acronym"]
+                else:
                     country_acronym = "xx"
+            else:
+                # localhost, unknown country
+                country_acronym = "xx"
 
-            # add to `users` table.
-            user_id = await db_conn.execute(
-                "INSERT INTO users "
-                "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
-                "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
-                {
-                    "name": username,
-                    "safe_name": safe_name,
-                    "email": email,
-                    "pw_bcrypt": pw_bcrypt,
-                    "country": country_acronym,
-                },
-            )
-
-            # add to `stats` table.
-            await db_conn.execute_many(
-                "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
-                [
-                    {"user_id": user_id, "mode": mode}
-                    for mode in (
-                        0,  # vn!std
-                        1,  # vn!taiko
-                        2,  # vn!catch
-                        3,  # vn!mania
-                        4,  # rx!std
-                        5,  # rx!taiko
-                        6,  # rx!catch
-                        8,  # ap!std
-                    )
-                ],
+        async with app.state.sessions.players._lock:
+            user_id = await app.usecases.players.register(
+                username,
+                email,
+                pw_plaintext,
+                country_acronym,
             )
 
         if app.state.services.datadog:

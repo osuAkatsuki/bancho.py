@@ -105,10 +105,8 @@ class Channel:
         """Enqueue `msg` to all connected clients from bot."""
         bot = app.state.sessions.bot
 
-        msg_len = len(msg)
-
-        if msg_len >= 31979:  # TODO ??????????
-            msg = f"message would have crashed games ({msg_len} chars)"
+        if len(msg) >= 31979:  # TODO ??????????
+            msg = f"message would have crashed games ({len(msg)} chars)"
 
         self.enqueue(
             app.packets.send_message(
@@ -128,7 +126,14 @@ class Channel:
         """Enqueue `sender`'s `msg` to `recipients`."""
         for p in recipients:
             if p in self:
-                p.send(msg, sender=sender, chan=self)
+                self.enqueue(
+                    app.packets.send_message(
+                        sender=sender.name,
+                        msg=msg,
+                        recipient=self.name,
+                        sender_id=sender.id,
+                    ),
+                )
 
     def append(self, p: Player) -> None:
         """Add `p` to the channel's players."""

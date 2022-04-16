@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 import uuid
 from typing import Optional
@@ -63,6 +64,53 @@ def generate_token() -> str:
 
 
 # TODO: enqueue_to_all, enqueue_to_player, dequeue?
+
+
+async def register(
+    player_name: str,
+    email: str,
+    pw_plaintext: str,
+    country: str,
+) -> int:
+    """Register a user in our database, returning their new id."""
+    pw_md5 = hashlib.md5(pw_plaintext.encode()).hexdigest().encode()
+    pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
+    app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
+
+    async with app.state.services.database.connection() as db_conn:
+        # add to `users` table.
+        user_id = await db_conn.execute(
+            "INSERT INTO users "
+            "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
+            "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
+            {
+                "name": player_name,
+                "safe_name": player_name.lower().replace(" ", "_"),
+                "email": email,
+                "pw_bcrypt": pw_bcrypt,
+                "country": country,
+            },
+        )
+
+        # add to `stats` table.
+        await db_conn.execute_many(
+            "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
+            [
+                {"user_id": user_id, "mode": mode}
+                for mode in (
+                    0,  # vn!std
+                    1,  # vn!taiko
+                    2,  # vn!catch
+                    3,  # vn!mania
+                    4,  # rx!std
+                    5,  # rx!taiko
+                    6,  # rx!catch
+                    8,  # ap!std
+                )
+            ],
+        )
+
+    return user_id
 
 
 async def login(player_name: str, player_password_md5: bytes) -> Optional[Player]:
@@ -807,3 +855,31 @@ def send_bot(player: Player, msg: str) -> None:
             sender_id=bot.id,
         ),
     )
+
+
+async def get_favourite_mapsets(player: Player) -> list[int]:
+    """Return a list of the user's favourite map set ids."""
+    rows = await app.state.services.database.fetch_all(
+        "SELECT setid FROM favourites WHERE userid = :user_id",
+        {"user_id": player.id},
+    )
+
+    return [row["setid"] for row in rows]
+
+
+async def add_favourite(player: Player, map_set_id: int) -> bytes:
+    async with app.state.services.database.connection() as db_conn:
+        # check if they already have this favourited.
+        if await db_conn.fetch_one(
+            "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
+            {"user_id": player.id, "set_id": map_set_id},
+        ):
+            return b"You've already favourited this beatmap!"
+
+        # add favourite
+        await db_conn.execute(
+            "INSERT INTO favourites VALUES (:user_id, :set_id)",
+            {"user_id": player.id, "set_id": map_set_id},
+        )
+
+    return b""

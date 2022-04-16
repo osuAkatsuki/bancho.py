@@ -25,6 +25,7 @@ import app.packets
 import app.repositories.players
 import app.settings
 import app.state
+import app.usecases.mail
 import app.usecases.performance
 import app.usecases.players
 import app.utils
@@ -552,7 +553,7 @@ async def login(
             "osu_token": "login-failed",
             "response_body": (
                 app.packets.notification(
-                    f"Login attempt to failed\n"
+                    f"Login attempt failed.\n"
                     "Incorrect username or password.\n"
                     "\n"
                     f"Server: {BASE_DOMAIN}",
@@ -752,13 +753,7 @@ async def login(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await db_conn.fetch_all(
-            "SELECT m.`msg`, m.`time`, m.`from_id`, "
-            "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
-            "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = :to AND m.`read` = 0",
-            {"to": player.id},
-        )
+        mail_rows = await app.usecases.mail.fetch_unread(player.id)
 
         if mail_rows:
             sent_to = set()  # ids
@@ -1018,12 +1013,7 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await app.state.services.database.execute(
-                "INSERT INTO `mail` "
-                "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
-                {"from": p.id, "to": t.id, "msg": msg},
-            )
+            await app.usecases.mail.send(source_id=p.id, target_id=t.id, msg=msg)
         else:
             # messaging the bot, check for commands & /np.
             if msg.startswith(app.settings.COMMAND_PREFIX):
@@ -1194,9 +1184,7 @@ class MatchCreate(BasePacket):
         app.state.sessions.channels.append(chan)
         self.match.chat = chan
 
-        app.usecases.players.update_latest_activity_soon(
-            p,
-        )
+        app.usecases.players.update_latest_activity_soon(p)
         app.usecases.players.join_match(p, self.match, self.match.passwd)
 
         self.match.chat.send_bot(f"Match created by {p.name}.")
