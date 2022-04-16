@@ -12,7 +12,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import app.models.geolocation
+import app.objects.geolocation
 import app.packets
 import app.settings
 import app.state.services
@@ -235,7 +235,7 @@ class Player:
         clan: Optional[Clan] = None,
         clan_priv: int = 0,
         achievements: Optional[set[Achievement]] = None,
-        geoloc: Optional[app.models.geolocation.Geolocation] = None,
+        geoloc: Optional[app.objects.geolocation.Geolocation] = None,
         utc_offset: int = 0,
         pm_private: bool = False,
         away_msg: Optional[str] = None,

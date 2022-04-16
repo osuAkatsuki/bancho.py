@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-import app.models.geolocation
+import app.objects.geolocation
 import app.state.services
 from app._typing import IPAddress
 from app.logging import Ansi
 from app.logging import log
 
 
-def lookup_maxmind(ip: IPAddress) -> app.models.geolocation.Geolocation:
+def lookup_maxmind(ip: IPAddress) -> app.objects.geolocation.Geolocation:
     """Fetch geolocation data based on ip (using local db)."""
     assert app.state.services.geoloc_db is not None
 
@@ -30,7 +30,7 @@ def lookup_maxmind(ip: IPAddress) -> app.models.geolocation.Geolocation:
     }
 
 
-async def lookup_ipinfo(ip: IPAddress) -> Optional[app.models.geolocation.Geolocation]:
+async def lookup_ipinfo(ip: IPAddress) -> Optional[app.objects.geolocation.Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
     url = f"http://ip-api.com/line/{ip}"
 
@@ -61,7 +61,7 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[app.models.geolocation.Geoloc
     }
 
 
-async def lookup(ip: IPAddress) -> Optional[app.models.geolocation.Geolocation]:
+async def lookup(ip: IPAddress) -> Optional[app.objects.geolocation.Geolocation]:
     """Fetch geolocation data based on ip."""
     if not ip.is_private:
         if app.state.services.geoloc_db is not None:

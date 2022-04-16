@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Optional
 
-import app.models.geolocation
+import app.objects.geolocation
 import app.state.cache
 import app.state.services
 import app.state.sessions
@@ -79,13 +79,13 @@ async def fetch(
 
     # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
     # TODO: should we fetch their last ip from db here, and update it if they login?
-    geolocation_data: app.models.geolocation.Geolocation = {
+    geolocation_data: app.objects.geolocation.Geolocation = {
         # XXX: we don't have an ip here, so we can't lookup the geolocation
         "latitude": 0.0,
         "longitude": 0.0,
         "country": {
             "acronym": country_acronym,
-            "numeric": app.models.geolocation.country_codes[country_acronym],
+            "numeric": app.objects.geolocation.country_codes[country_acronym],
         },
     }
 
