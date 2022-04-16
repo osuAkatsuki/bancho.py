@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from enum import IntEnum
 from enum import unique
+from typing import Union
 
 from app.constants.mods import Mods
 from app.utils import escape_enum
@@ -49,7 +50,7 @@ class GameMode(IntEnum):
 
     @classmethod
     @functools.lru_cache(maxsize=32)
-    def from_params(cls, mode_vn: int, mods: Mods) -> GameMode:
+    def from_params(cls, mode_vn: int, mods: Union[int, GameMode]) -> GameMode:
         mode = mode_vn
 
         if mods & Mods.AUTOPILOT:

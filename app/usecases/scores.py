@@ -202,47 +202,44 @@ async def calculate_status(score: Score, beatmap: Beatmap, player: Player) -> No
         score.status = SubmissionStatus.BEST
 
 
-def calculate_accuracy(score: Score) -> float:
+def calculate_accuracy(
+    vanilla_mode: int,
+    n300: int,
+    n100: int,
+    n50: int,
+    ngeki: int,
+    nkatu: int,
+    nmiss: int,
+) -> float:
     """Calculate the accuracy of our score."""
-    mode_vn = score.mode.as_vanilla
-
-    if mode_vn == 0:  # osu!
-        total = score.n300 + score.n100 + score.n50 + score.nmiss
+    if vanilla_mode == 0:  # osu!
+        total = n300 + n100 + n50 + nmiss
 
         if total == 0:
             return 0.0
 
         return (
-            100.0
-            * ((score.n300 * 300.0) + (score.n100 * 100.0) + (score.n50 * 50.0))
-            / (total * 300.0)
+            100.0 * ((n300 * 300.0) + (n100 * 100.0) + (n50 * 50.0)) / (total * 300.0)
         )
 
-    elif mode_vn == 1:  # osu!taiko
-        total = score.n300 + score.n100 + score.nmiss
+    elif vanilla_mode == 1:  # osu!taiko
+        total = n300 + n100 + nmiss
 
         if total == 0:
             return 0.0
 
-        return 100.0 * ((score.n100 * 0.5) + score.n300) / total
+        return 100.0 * ((n100 * 0.5) + n300) / total
 
-    elif mode_vn == 2:  # osu!catch
-        total = score.n300 + score.n100 + score.n50 + score.nkatu + score.nmiss
+    elif vanilla_mode == 2:  # osu!catch
+        total = n300 + n100 + n50 + nkatu + nmiss
 
         if total == 0:
             return 0.0
 
-        return 100.0 * (score.n300 + score.n100 + score.n50) / total
+        return 100.0 * (n300 + n100 + n50) / total
 
-    elif mode_vn == 3:  # osu!mania
-        total = (
-            score.n300
-            + score.n100
-            + score.n50
-            + score.ngeki
-            + score.nkatu
-            + score.nmiss
-        )
+    elif vanilla_mode == 3:  # osu!mania
+        total = n300 + n100 + n50 + ngeki + nkatu + nmiss
 
         if total == 0:
             return 0.0
@@ -250,15 +247,15 @@ def calculate_accuracy(score: Score) -> float:
         return (
             100.0
             * (
-                (score.n50 * 50.0)
-                + (score.n100 * 100.0)
-                + (score.nkatu * 200.0)
-                + ((score.n300 + score.ngeki) * 300.0)
+                (n50 * 50.0)
+                + (n100 * 100.0)
+                + (nkatu * 200.0)
+                + ((n300 + ngeki) * 300.0)
             )
             / (total * 300.0)
         )
     else:
-        raise Exception(f"Invalid vanilla mode {mode_vn}")
+        raise Exception(f"Invalid vanilla mode {vanilla_mode}")
 
 
 """ Methods for updating a score. """

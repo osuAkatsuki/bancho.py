@@ -6,16 +6,16 @@ from datetime import date
 from enum import IntEnum
 from enum import unique
 from functools import cached_property
-from typing import Any
 from typing import Literal
+from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import Union
 
+import app.models.geolocation
 import app.packets
 import app.settings
-import app.state
+import app.state.services
 from app._typing import IPAddress
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
     from app.objects.channel import Channel
-    from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
@@ -217,139 +216,116 @@ class Player:
              cls.dequeue() will return the data, and remove it.
     """
 
-    __slots__ = (
-        "token",
-        "id",
-        "name",
-        "safe_name",
-        "pw_bcrypt",
-        "priv",
-        "stats",
-        "status",
-        "friends",
-        "blocks",
-        "channels",
-        "spectators",
-        "spectating",
-        "match",
-        "stealth",
-        "clan",
-        "clan_priv",
-        "achievements",
-        "recent_scores",
-        "last_np",
-        "location",
-        "utc_offset",
-        "pm_private",
-        "away_msg",
-        "silence_end",
-        "in_lobby",
-        "client_details",
-        "pres_filter",
-        "login_time",
-        "last_recv_time",
-        "current_menu",
-        "previous_menus",
-        "bot_client",
-        "tourney_client",
-        "api_key",
-        "_queue",
-        "__dict__",
-    )
-
     def __init__(
         self,
         id: int,
         name: str,
-        priv: Union[int, Privileges],
+        priv: int,
         token: Optional[str] = None,
-        **extras: Any,
+        pw_bcrypt: Optional[str | bytes] = None,
+        stats: Optional[Mapping[GameMode, ModeData]] = None,
+        status: Optional[Status] = None,
+        friends: Optional[set[int]] = None,
+        blocks: Optional[set[int]] = None,
+        channels: Optional[list[Channel]] = None,
+        spectators: Optional[list[Player]] = None,
+        spectating: Optional[Player] = None,
+        match: Optional[Match] = None,
+        stealth: bool = False,
+        clan: Optional[Clan] = None,
+        clan_priv: int = 0,
+        achievements: Optional[set[Achievement]] = None,
+        geoloc: Optional[app.models.geolocation.Geolocation] = None,
+        utc_offset: int = 0,
+        pm_private: bool = False,
+        away_msg: Optional[str] = None,
+        silence_end: int = 0,
+        in_lobby: bool = False,
+        client_details: Optional[ClientDetails] = None,
+        pres_filter: PresenceFilter = PresenceFilter.Nil,
+        login_time: float = 0.0,
+        last_recv_time: float = 0.0,
+        recent_scores: Optional[Mapping[GameMode, Optional[Score]]] = None,
+        last_np: Optional[LastNp] = None,
+        current_menu: Menu = MAIN_MENU,
+        previous_menus: Optional[list[Menu]] = None,
+        bot_client: bool = False,
+        tourney_client: bool = False,
+        api_key: Optional[str] = None,
     ) -> None:
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
+        self.priv = priv
+        self.token = token
 
-        if pw_bcrypt := extras.get("pw_bcrypt"):
+        if pw_bcrypt is not None:
+            # support both str and bytes
             if isinstance(pw_bcrypt, str):
                 self.pw_bcrypt = pw_bcrypt.encode()
             elif isinstance(pw_bcrypt, bytes):
                 self.pw_bcrypt = pw_bcrypt
             else:
-                raise NotImplementedError
+                raise NotImplementedError(
+                    "Player.pw_bcrypt parameter only supports `str | bytes`.",
+                )
         else:
             self.pw_bcrypt = None
 
-        self.token = token
-
-        # ensure priv is of type Privileges
-        self.priv = priv if isinstance(priv, Privileges) else Privileges(priv)
-
-        self.stats: dict[GameMode, ModeData] = {}
-        self.status = Status()
+        self.stats = stats or {}
+        self.status = status or Status()
 
         # userids, not player objects
-        self.friends: set[int] = set()
-        self.blocks: set[int] = set()
+        self.friends = friends or set()
+        self.blocks = blocks or set()
 
-        self.channels: list[Channel] = []
-        self.spectators: list[Player] = []
-        self.spectating: Optional[Player] = None
-        self.match: Optional[Match] = None
-        self.stealth = False
+        self.channels = channels or []
+        self.spectators = spectators or []
+        self.spectating = spectating or None
+        self.match = match or None
+        self.stealth = stealth
 
-        self.clan: Optional[Clan] = extras.get("clan")
-        self.clan_priv: Optional[ClanPrivileges] = extras.get("clan_priv")
+        # TODO: clans as a repository, store clan_id references in other objects
+        self.clan = clan
+        self.clan_priv = clan_priv
 
-        self.achievements: set[Achievement] = set()
+        self.achievements = achievements or set()
 
-        self.geoloc: app.state.services.Geolocation = extras.get(
-            "geoloc",
-            {
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {"acronym": "xx", "numeric": 0},
-            },
-        )
+        # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
+        self.geoloc = geoloc or {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": {"acronym": "xx", "numeric": 0},
+        }
 
-        self.utc_offset = extras.get("utc_offset", 0)
-        self.pm_private = extras.get("pm_private", False)
-        self.away_msg: Optional[str] = None
-        self.silence_end = extras.get("silence_end", 0)
-        self.in_lobby = False
+        self.utc_offset = utc_offset
+        self.pm_private = pm_private
+        self.away_msg = away_msg
+        self.silence_end = silence_end
+        self.in_lobby = in_lobby
 
-        self.client_details: Optional[ClientDetails] = extras.get("client_details")
-        self.pres_filter = PresenceFilter.Nil
+        self.client_details = client_details
+        self.pres_filter = pres_filter
 
-        login_time = extras.get("login_time", 0.0)
         self.login_time = login_time
-        self.last_recv_time = login_time
+        self.last_recv_time = last_recv_time  # or login_time
 
         # XXX: below is mostly implementation-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores: dict[GameMode, Optional[Score]] = {
-            mode: None for mode in GameMode
-        }
+        self.recent_scores = recent_scores or {mode: None for mode in GameMode}
 
         # store the last beatmap /np'ed by the user.
-        self.last_np: LastNp = {  # type: ignore
-            "bmap": None,
-            "mode_vn": None,
-            "timeout": 0.0,
-        }
+        self.last_np = last_np
 
-        # TODO: document
-        self.current_menu = MAIN_MENU
-        self.previous_menus: list[Menu] = []
+        # TODO: documentation for menus
+        self.current_menu = current_menu
+        self.previous_menus = previous_menus or []
 
-        # subject to possible change in the future,
-        # although if anything, bot accounts will
-        # probably just use the /api/ routes?
-        self.bot_client = extras.get("bot_client", False)
-
-        self.tourney_client = extras.get("tourney_client", False)
-
-        self.api_key = extras.get("api_key", None)
+        # subject to change in the future
+        self.bot_client = bot_client
+        self.tourney_client = tourney_client
+        self.api_key = api_key
 
         # packet queue
         self._queue = bytearray()
@@ -357,11 +333,11 @@ class Player:
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
-    @cached_property
+    @property
     def online(self) -> bool:
         return self.token != ""
 
-    @cached_property
+    @property
     def url(self) -> str:
         """The url to the player's profile."""
         # NOTE: this is currently never wiped because
@@ -369,7 +345,7 @@ class Player:
         # ever changes, it will need to be wiped.
         return f"https://{app.settings.DOMAIN}/u/{self.id}"
 
-    @cached_property
+    @property
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
         # NOTE: this is currently never wiped because
@@ -377,7 +353,7 @@ class Player:
         # ever changes, it will need to be wiped.
         return f"[{self.url} {self.name}]"
 
-    @cached_property
+    @property
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
         # NOTE: this is currently never wiped because
@@ -385,7 +361,7 @@ class Player:
         # ever changes, it will need to be wiped.
         return f"https://a.{app.settings.DOMAIN}/{self.id}"
 
-    @cached_property
+    @property
     def full_name(self) -> str:
         """The user's "full" name; including their clan tag."""
         # NOTE: this is currently only wiped when the
@@ -408,23 +384,23 @@ class Player:
         """Whether or not the player is silenced."""
         return self.remaining_silence != 0
 
-    @cached_property
-    def bancho_priv(self) -> ClientPrivileges:
+    @property
+    def bancho_priv(self) -> int:
         """The player's privileges according to the client."""
-        ret = ClientPrivileges(0)
+        priv_bits = 0
         if self.priv & Privileges.NORMAL:
-            ret |= ClientPrivileges.PLAYER
+            priv_bits |= ClientPrivileges.PLAYER
         if self.priv & Privileges.DONATOR:
-            ret |= ClientPrivileges.SUPPORTER
+            priv_bits |= ClientPrivileges.SUPPORTER
         if self.priv & Privileges.MODERATOR:
-            ret |= ClientPrivileges.MODERATOR
+            priv_bits |= ClientPrivileges.MODERATOR
         if self.priv & Privileges.ADMINISTRATOR:
-            ret |= ClientPrivileges.DEVELOPER
+            priv_bits |= ClientPrivileges.DEVELOPER
         if self.priv & Privileges.DEVELOPER:
-            ret |= ClientPrivileges.OWNER
-        return ret
+            priv_bits |= ClientPrivileges.OWNER
+        return priv_bits
 
-    @cached_property
+    @property
     def restricted(self) -> bool:
         """Return whether the player is restricted."""
         return not self.priv & Privileges.NORMAL
@@ -450,6 +426,8 @@ class Player:
                 score = s
 
         return score
+
+    # TODO: from_row, to_row?
 
     @staticmethod
     def make_safe(name: str) -> str:

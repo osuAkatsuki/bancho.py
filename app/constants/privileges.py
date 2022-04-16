@@ -1,18 +1,9 @@
 from __future__ import annotations
 
-from enum import IntEnum
-from enum import IntFlag
-from enum import unique
-
-from app.utils import escape_enum
-from app.utils import pymysql_encode
-
 __all__ = ("Privileges", "ClientPrivileges", "ClanPrivileges")
 
 
-@unique
-@pymysql_encode(escape_enum)
-class Privileges(IntFlag):
+class Privileges:
     """Server side user privileges."""
 
     # privileges intended for all normal players.
@@ -40,9 +31,7 @@ class Privileges(IntFlag):
     STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER
 
 
-@unique
-@pymysql_encode(escape_enum)
-class ClientPrivileges(IntFlag):
+class ClientPrivileges:
     """Client side user privileges."""
 
     PLAYER = 1 << 0
@@ -53,9 +42,7 @@ class ClientPrivileges(IntFlag):
     TOURNAMENT = 1 << 5  # NOTE: not used in communications with osu! client
 
 
-@unique
-@pymysql_encode(escape_enum)
-class ClanPrivileges(IntEnum):
+class ClanPrivileges:
     """A class to represent a clan members privs."""
 
     Member = 1

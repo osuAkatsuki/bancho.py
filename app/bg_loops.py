@@ -4,6 +4,7 @@ import asyncio
 import time
 
 import app.packets
+import app.repositories.players
 import app.settings
 import app.state
 import app.usecases.players
@@ -47,25 +48,22 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         )
 
         for expired_donor in expired_donors:
-            p = await app.state.sessions.players.from_cache_or_sql(
-                id=expired_donor["id"],
-            )
-
-            assert p is not None
+            player = await app.repositories.players.fetch(player_id=expired_donor["id"])
+            assert player is not None
 
             # TODO: perhaps make a `revoke_donor` method?
-            await app.usecases.players.remove_privs(p, Privileges.DONATOR)
+            await app.usecases.players.remove_privs(player, Privileges.DONATOR)
             await app.state.services.database.execute(
                 "UPDATE users SET donor_end = 0 WHERE id = :id",
-                {"id": p.id},
+                {"id": player.id},
             )
 
-            if p.online:
-                p.enqueue(
+            if player.online:
+                player.enqueue(
                     app.packets.notification("Your supporter status has expired."),
                 )
 
-            log(f"{p}'s supporter status has expired.", Ansi.LMAGENTA)
+            log(f"{player}'s supporter status has expired.", Ansi.LMAGENTA)
 
         await asyncio.sleep(interval)
 

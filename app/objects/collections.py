@@ -11,16 +11,11 @@ from typing import overload
 from typing import Sequence
 from typing import Union
 
-import databases.core
-
 import app.settings
 import app.state
 import app.utils
-from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
-from app.logging import Ansi
 from app.logging import log
-from app.objects.achievement import Achievement
 from app.objects.channel import Channel
 from app.objects.clan import Clan
 from app.objects.match import MapPool
@@ -34,7 +29,6 @@ __all__ = (
     "Players",
     "MapPools",
     "Clans",
-    "initialize_ram_caches",
 )
 
 # TODO: decorator for these collections which automatically
@@ -113,20 +107,6 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{c} removed from channels list.")
 
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM channels"):
-            self.append(
-                Channel(
-                    name=row["name"],
-                    topic=row["topic"],
-                    read_priv=Privileges(row["read_priv"]),
-                    write_priv=Privileges(row["write_priv"]),
-                    auto_join=row["auto_join"] == 1,
-                ),
-            )
-
 
 class Matches(list[Optional[Match]]):
     """The currently active multiplayer matches on the server."""
@@ -178,8 +158,6 @@ class Matches(list[Optional[Match]]):
 
 class Players(list[Player]):
     """The currently active players on the server."""
-
-    __slots__ = ("_lock",)
 
     def __init__(self, *args, **kwargs):
         self._lock = asyncio.Lock()
@@ -245,73 +223,6 @@ class Players(list[Player]):
         for p in self:
             if getattr(p, attr) == val:
                 return p
-
-        return None
-
-    async def get_sql(self, **kwargs: object) -> Optional[Player]:
-        """Get a player by token, id, or name from sql."""
-        attr, val = self._parse_attr(kwargs)
-
-        # try to get from sql.
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, name, priv, pw_bcrypt, country, "
-            "silence_end, clan_id, clan_priv, api_key "
-            f"FROM users WHERE {attr} = :val",
-            {"val": val},
-        )
-
-        if not row:
-            return None
-
-        row = dict(row)
-
-        # encode pw_bcrypt from str -> bytes.
-        row["pw_bcrypt"] = row["pw_bcrypt"].encode()
-
-        if row["clan_id"] != 0:
-            row["clan"] = app.state.sessions.clans.get(id=row["clan_id"])
-            row["clan_priv"] = ClanPrivileges(row["clan_priv"])
-        else:
-            row["clan"] = row["clan_priv"] = None
-
-        # country from acronym to {acronym, numeric}
-        row["geoloc"] = {
-            "latitude": 0.0,  # TODO
-            "longitude": 0.0,
-            "country": {
-                "acronym": row["country"],
-                "numeric": app.state.services.country_codes[row["country"]],
-            },
-        }
-
-        return Player(**row, token="")
-
-    async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
-        """Try to get player from cache, or sql as fallback."""
-        if p := self.get(**kwargs):
-            return p
-        elif p := await self.get_sql(**kwargs):
-            return p
-
-        return None
-
-    async def from_login(
-        self,
-        name: str,
-        pw_md5: str,
-        sql: bool = False,
-    ) -> Optional[Player]:
-        """Return a player with a given name & pw_md5, from cache or sql."""
-        if not (p := self.get(name=name)):
-            if not sql:  # not to fetch from sql.
-                return None
-
-            if not (p := await self.get_sql(name=name)):
-                # no player found in sql either.
-                return None
-
-        if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
-            return p
 
         return None
 
@@ -418,25 +329,6 @@ class MapPools(list[MapPool]):
         if app.settings.DEBUG:
             log(f"{m} removed from mappools list.")
 
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching mappools from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM tourney_pools"):
-            created_by = await app.state.sessions.players.from_cache_or_sql(
-                id=row["created_by"],
-            )
-
-            assert created_by is not None
-
-            pool = MapPool(
-                id=row["id"],
-                name=row["name"],
-                created_at=row["created_at"],
-                created_by=created_by,
-            )
-            await pool.maps_from_sql(db_conn)
-            self.append(pool)
-
 
 class Clans(list[Clan]):
     """The currently active clans on the server."""
@@ -505,52 +397,3 @@ class Clans(list[Clan]):
 
         if app.settings.DEBUG:
             log(f"{c} removed from clans list.")
-
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching clans from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM clans"):
-            row = dict(row)  # make a mutable copy
-            row["owner_id"] = row.pop("owner")
-            clan = Clan(**row)
-            await clan.members_from_sql(db_conn)
-            self.append(clan)
-
-
-async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
-    """Setup & cache the global collections before listening for connections."""
-    # fetch channels, clans and pools from db
-    await app.state.sessions.channels.prepare(db_conn)
-    await app.state.sessions.clans.prepare(db_conn)
-    await app.state.sessions.pools.prepare(db_conn)
-
-    bot_name = await app.utils.fetch_bot_name(db_conn)
-
-    # create bot & add it to online players
-    app.state.sessions.bot = Player(
-        id=1,
-        name=bot_name,
-        login_time=float(0x7FFFFFFF),  # (never auto-dc)
-        priv=Privileges.NORMAL,
-        bot_client=True,
-        token=None,
-    )
-    app.state.sessions.players.append(app.state.sessions.bot)
-
-    # global achievements (sorted by vn gamemodes)
-    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        row = dict(row)
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
-
-        app.state.sessions.achievements.append(achievement)
-
-    # static api keys
-    app.state.sessions.api_keys = {
-        row["api_key"]: row["id"]
-        for row in await db_conn.fetch_all(
-            "SELECT id, api_key FROM users WHERE api_key IS NOT NULL",
-        )
-    }

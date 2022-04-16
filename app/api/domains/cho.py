@@ -22,10 +22,15 @@ from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
 
 import app.packets
+import app.repositories.beatmaps
 import app.repositories.players
 import app.settings
 import app.state
+import app.usecases.beatmaps
+import app.usecases.channels
+import app.usecases.geolocation
 import app.usecases.mail
+import app.usecases.multiplayer
 import app.usecases.performance
 import app.usecases.players
 import app.utils
@@ -40,8 +45,6 @@ from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 from app.logging import magnitude_fmt_time
-from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams
@@ -263,7 +266,7 @@ class SendMessage(BasePacket):
             log(f"{p} wrote to {recipient} without being in it.")
             return
 
-        if not t_chan.can_write(p.priv):
+        if not app.usecases.channels.can_write(t_chan, p.priv):
             log(f"{p} wrote to {recipient} with insufficient privileges.")
             return
 
@@ -285,14 +288,25 @@ class SendMessage(BasePacket):
         if cmd:
             # a command was triggered.
             if not cmd["hidden"]:
-                t_chan.send(msg, sender=p)
+                app.usecases.channels.send_msg_to_clients(t_chan, msg, sender=p)
                 if cmd["resp"] is not None:
-                    t_chan.send_bot(cmd["resp"])
+                    app.usecases.channels.send_bot(t_chan, cmd["resp"])
             else:
+                # hidden message
                 staff = app.state.sessions.players.staff
-                t_chan.send_selective(msg=msg, sender=p, recipients=staff - {p})
+
+                # send player's command trigger to staff
+                app.usecases.channels.send_selective(
+                    t_chan,
+                    msg=msg,
+                    sender=p,
+                    recipients=staff - {p},
+                )
+
+                # send bot response to player & staff
                 if cmd["resp"] is not None:
-                    t_chan.send_selective(
+                    app.usecases.channels.send_selective(
+                        t_chan,
                         msg=cmd["resp"],
                         sender=app.state.sessions.bot,
                         recipients=staff | {p},
@@ -308,9 +322,12 @@ class SendMessage(BasePacket):
                 # the player is /np'ing a map.
                 # save it to their player instance
                 # so we can use this elsewhere owo..
-                bmap = await Beatmap.from_bid(int(r_match["bid"]))
 
-                if bmap:
+                beatmap = await app.repositories.beatmaps.fetch_by_id(
+                    int(r_match["bid"]),
+                )
+
+                if beatmap is not None:
                     # parse mode_vn int from regex
                     if r_match["mode_vn"] is not None:
                         mode_vn = {"Taiko": 1, "CatchTheBeat": 2, "osu!mania": 3}[
@@ -321,7 +338,7 @@ class SendMessage(BasePacket):
                         mode_vn = p.status.mode.as_vanilla
 
                     p.last_np = {
-                        "bmap": bmap,
+                        "bmap": beatmap,
                         "mode_vn": mode_vn,
                         "timeout": time.time() + 300,  # /np's last 5mins
                     }
@@ -329,7 +346,7 @@ class SendMessage(BasePacket):
                     # time out their previous /np
                     p.last_np["timeout"] = 0.0
 
-            t_chan.send(msg, sender=p)
+            app.usecases.channels.send_msg_to_clients(t_chan, msg, sender=p)
 
         app.usecases.players.update_latest_activity_soon(p)
         log(f"{p} @ {t_chan}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
@@ -658,15 +675,7 @@ async def login(
     player.tourney_client = osu_version.stream == "tourney"
 
     if not ip.is_private:
-        if app.state.services.geoloc_db is not None:
-            # good, dev has downloaded a geoloc db from maxmind,
-            # so we can do a local db lookup. (typically ~1-5ms)
-            # https://www.maxmind.com/en/home
-            geoloc = app.state.services.fetch_geoloc_db(ip)
-        else:
-            # bad, we must do an external db lookup using
-            # a public api. (depends, `ping ip-api.com`)
-            geoloc = await app.state.services.fetch_geoloc_web(ip)
+        geoloc = await app.usecases.geolocation.lookup(ip)
 
         if geoloc is not None:
             player.geoloc = geoloc
@@ -704,7 +713,7 @@ async def login(
     for c in app.state.sessions.channels:
         if (
             not c.auto_join
-            or not c.can_read(player.priv)
+            or not app.usecases.channels.can_read(c, player.priv)
             or c._name == "#lobby"  # (can't be in mp lobby @ login)
         ):
             continue
@@ -716,7 +725,7 @@ async def login(
         data += chan_info_packet
 
         for o in app.state.sessions.players:
-            if c.can_read(o.priv):
+            if app.usecases.channels.can_read(c, o.priv):
                 o.enqueue(chan_info_packet)
 
     # tells osu! to reorder channels based on config.
@@ -957,7 +966,7 @@ class SendPrivateMessage(BasePacket):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await app.state.sessions.players.from_cache_or_sql(name=t_name)):
+        if not (t := await app.repositories.players.fetch(player_name=t_name)):
             if app.settings.DEBUG:
                 log(f"{p} tried to write to non-existent user {t_name}.", Ansi.LYELLOW)
             return
@@ -1031,9 +1040,12 @@ class SendPrivateMessage(BasePacket):
                     # user is /np'ing a map.
                     # save it to their player instance
                     # so we can use this elsewhere owo..
-                    bmap = await Beatmap.from_bid(int(r_match["bid"]))
 
-                    if bmap:
+                    beatmap = await app.repositories.beatmaps.fetch_by_id(
+                        int(r_match["bid"]),
+                    )
+
+                    if beatmap is not None:
                         # parse mode_vn int from regex
                         if r_match["mode_vn"] is not None:
                             mode_vn = {"Taiko": 1, "CatchTheBeat": 2, "osu!mania": 3}[
@@ -1044,18 +1056,18 @@ class SendPrivateMessage(BasePacket):
                             mode_vn = p.status.mode.as_vanilla
 
                         p.last_np = {
-                            "bmap": bmap,
+                            "bmap": beatmap,
                             "mode_vn": mode_vn,
                             "timeout": time.time() + 300,  # /np's last 5mins
                         }
 
                         # calculate generic pp values from their /np
 
-                        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-                        if not await ensure_local_osu_file(
+                        osu_file_path = BEATMAPS_PATH / f"{beatmap.id}.osu"
+                        if not await app.usecases.beatmaps.ensure_local_osu_file(
                             osu_file_path,
-                            bmap.id,
-                            bmap.md5,
+                            beatmap.id,
+                            beatmap.md5,
                         ):
                             resp_msg = (
                                 "Mapfile could not be found; "
@@ -1186,8 +1198,9 @@ class MatchCreate(BasePacket):
 
         app.usecases.players.update_latest_activity_soon(p)
         app.usecases.players.join_match(p, self.match, self.match.passwd)
+        app.usecases.multiplayer.send_match_state_to_clients(self.match)
 
-        self.match.chat.send_bot(f"Match created by {p.name}.")
+        app.usecases.channels.send_bot(self.match.chat, f"Match created by {p.name}.")
         log(f"{p} created a new multiplayer match.")
 
 
@@ -1227,24 +1240,24 @@ class MatchJoin(BasePacket):
         self.match_id = reader.read_i32()
         self.match_passwd = reader.read_string()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         is_menu_request = self.match_id >= 64  # max multi matches
 
         if is_menu_request or self.match_id < 0:
             if is_menu_request:
                 # NOTE: this function is unrelated to mp.
-                await execute_menu_option(p, self.match_id)
+                await execute_menu_option(player, self.match_id)
 
-            p.enqueue(app.packets.match_join_fail())
+            player.enqueue(app.packets.match_join_fail())
             return
 
-        if not (m := app.state.sessions.matches[self.match_id]):
-            log(f"{p} tried to join a non-existant mp lobby?")
-            p.enqueue(app.packets.match_join_fail())
+        if not (match := app.state.sessions.matches[self.match_id]):
+            log(f"{player} tried to join a non-existant mp lobby?")
+            player.enqueue(app.packets.match_join_fail())
             return
 
-        if p.restricted:
-            p.enqueue(
+        if player.restricted:
+            player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(
                     "Multiplayer is not available while restricted.",
@@ -1252,8 +1265,8 @@ class MatchJoin(BasePacket):
             )
             return
 
-        if p.silenced:
-            p.enqueue(
+        if player.silenced:
+            player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(
                     "Multiplayer is not available while silenced.",
@@ -1261,8 +1274,9 @@ class MatchJoin(BasePacket):
             )
             return
 
-        app.usecases.players.update_latest_activity_soon(p)
-        app.usecases.players.join_match(p, m, self.match_passwd)
+        app.usecases.players.update_latest_activity_soon(player)
+        app.usecases.players.join_match(player, match, self.match_passwd)
+        app.usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.PART_MATCH)
@@ -1296,7 +1310,8 @@ class MatchChangeSlot(BasePacket):
         m.slots[self.slot_id].copy_from(slot)
         slot.reset()
 
-        m.enqueue_state()  # technically not needed for host?
+        # technically not needed for host?
+        app.usecases.multiplayer.send_match_state_to_clients(m)
 
 
 @register(ClientPackets.MATCH_READY)
@@ -1309,7 +1324,7 @@ class MatchReady(BasePacket):
         assert slot is not None
 
         slot.status = SlotStatus.ready
-        m.enqueue_state(lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(m, lobby=False)
 
 
 @register(ClientPackets.MATCH_LOCK)
@@ -1347,7 +1362,7 @@ class MatchLock(BasePacket):
 
             slot.status = SlotStatus.locked
 
-        m.enqueue_state()
+        app.usecases.multiplayer.send_match_state_to_clients(m)
 
 
 @register(ClientPackets.MATCH_CHANGE_SETTINGS)
@@ -1355,74 +1370,77 @@ class MatchChangeSettings(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.new = Match.from_parsed_match(reader.read_match())
 
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        if p is not m.host:
-            log(f"{p} attempted to change settings as non-host.", Ansi.LYELLOW)
+        if player is not match.host:
+            log(f"{player} attempted to change settings as non-host.", Ansi.LYELLOW)
             return
 
-        if self.new.freemods != m.freemods:
+        if self.new.freemods != match.freemods:
             # freemods status has been changed.
-            m.freemods = self.new.freemods
+            match.freemods = self.new.freemods
 
             if self.new.freemods:
                 # match mods -> active slot mods.
-                for s in m.slots:
-                    if s.status & SlotStatus.has_player:
+                for slot in match.slots:
+                    if slot.status & SlotStatus.has_player:
                         # the slot takes any non-speed
                         # changing mods from the match.
-                        s.mods = m.mods & ~SPEED_CHANGING_MODS
+                        slot.mods = match.mods & ~SPEED_CHANGING_MODS
 
                 # keep only speed-changing mods.
-                m.mods &= SPEED_CHANGING_MODS
+                match.mods &= SPEED_CHANGING_MODS
             else:
                 # host mods -> match mods.
-                host = m.get_host_slot()  # should always exist
+                host = match.get_host_slot()  # should always exist
                 assert host is not None
 
                 # the match keeps any speed-changing mods,
                 # and also takes any mods the host has enabled.
-                m.mods &= SPEED_CHANGING_MODS
-                m.mods |= host.mods
+                match.mods &= SPEED_CHANGING_MODS
+                match.mods |= host.mods
 
-                for s in m.slots:
-                    if s.status & SlotStatus.has_player:
-                        s.mods = Mods.NOMOD
+                for slot in match.slots:
+                    if slot.status & SlotStatus.has_player:
+                        slot.mods = Mods.NOMOD
 
         if self.new.map_id == -1:
             # map being changed, unready players.
-            m.unready_players(expected=SlotStatus.ready)
-            m.prev_map_id = m.map_id
+            app.usecases.multiplayer.unready_players(match, expected=SlotStatus.ready)
+            match.prev_map_id = match.map_id
 
-            m.map_id = -1
-            m.map_md5 = ""
-            m.map_name = ""
-        elif m.map_id == -1:
-            if m.prev_map_id != self.new.map_id:
+            match.map_id = -1
+            match.map_md5 = ""
+            match.map_name = ""
+        elif match.map_id == -1:
+            if match.prev_map_id != self.new.map_id:
                 # new map has been chosen, send to match chat.
-                m.chat.send_bot(f"Selected: {self.new.map_embed}.")
+                app.usecases.channels.send_bot(
+                    match.chat,
+                    f"Selected: {self.new.map_embed}.",
+                )
 
             # use our serverside version if we have it, but
             # still allow for users to pick unknown maps.
-            bmap = await Beatmap.from_md5(self.new.map_md5)
+            bmap = await app.repositories.beatmaps.fetch_by_md5(self.new.map_md5)
 
             if bmap:
-                m.map_id = bmap.id
-                m.map_md5 = bmap.md5
-                m.map_name = bmap.full_name
-                m.mode = bmap.mode
+                match.map_id = bmap.id
+                match.map_md5 = bmap.md5
+                match.map_name = bmap.full_name
+                match.mode = bmap.mode
             else:
-                m.map_id = self.new.map_id
-                m.map_md5 = self.new.map_md5
-                m.map_name = self.new.map_name
-                m.mode = self.new.mode
+                match.map_id = self.new.map_id
+                match.map_md5 = self.new.map_md5
+                match.map_name = self.new.map_name
+                match.mode = self.new.mode
 
-        if m.team_type != self.new.team_type:
+        if match.team_type != self.new.team_type:
             # if theres currently a scrim going on, only allow
             # team type to change by using the !mp teams command.
-            if m.is_scrimming:
+            if match.is_scrimming:
                 _team = ("head-to-head", "tag-coop", "team-vs", "tag-team-vs")[
                     self.new.team_type
                 ]
@@ -1432,7 +1450,7 @@ class MatchChangeSettings(BasePacket):
                     "the overall score - to do so, please use the "
                     f"!mp teams {_team} command."
                 )
-                m.chat.send_bot(msg)
+                app.usecases.channels.send_bot(match.chat, msg)
             else:
                 # find the new appropriate default team.
                 # defaults are (ffa: neutral, teams: red).
@@ -1446,37 +1464,37 @@ class MatchChangeSettings(BasePacket):
 
                 # change each active slots team to
                 # fit the correspoding team type.
-                for s in m.slots:
-                    if s.status & SlotStatus.has_player:
-                        s.team = new_t
+                for slot in match.slots:
+                    if slot.status & SlotStatus.has_player:
+                        slot.team = new_t
 
                 # change the matches'.
-                m.team_type = self.new.team_type
+                match.team_type = self.new.team_type
 
-        if m.win_condition != self.new.win_condition:
+        if match.win_condition != self.new.win_condition:
             # win condition changing; if `use_pp_scoring`
             # is enabled, disable it. always use new cond.
-            if m.use_pp_scoring:
-                m.use_pp_scoring = False
+            if match.use_pp_scoring:
+                match.use_pp_scoring = False
 
-            m.win_condition = self.new.win_condition
+            match.win_condition = self.new.win_condition
 
-        m.name = self.new.name
+        match.name = self.new.name
 
-        m.enqueue_state()
+        app.usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.MATCH_START)
 class MatchStart(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        if p is not m.host:
-            log(f"{p} attempted to start match as non-host.", Ansi.LYELLOW)
+        if player is not match.host:
+            log(f"{player} attempted to start match as non-host.", Ansi.LYELLOW)
             return
 
-        m.start()
+        app.usecases.multiplayer.start(match)
 
 
 @register(ClientPackets.MATCH_SCORE_UPDATE)
@@ -1484,35 +1502,35 @@ class MatchScoreUpdate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.play_data = reader.read_raw()  # TODO: probably not necessary
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         # this runs very frequently in matches,
         # so it's written to run pretty quick.
 
-        if not (m := p.match):
+        if not (match := player.match):
             return
 
         # if scorev2 is enabled, read an extra 8 bytes.
         buf = bytearray(b"0\x00\x00")
         buf += len(self.play_data).to_bytes(4, "little")
         buf += self.play_data
-        buf[11] = m.get_slot_id(p)
+        buf[11] = match.get_slot_id(player)
 
-        m.enqueue(bytes(buf), lobby=False)
+        app.usecases.multiplayer.send_data_to_clients(match, bytes(buf), lobby=False)
 
 
 @register(ClientPackets.MATCH_COMPLETE)
 class MatchComplete(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.status = SlotStatus.complete
 
         # check if there are any players that haven't finished.
-        if any([s.status == SlotStatus.playing for s in m.slots]):
+        if any([s.status == SlotStatus.playing for s in match.slots]):
             return
 
         # find any players just sitting in the multi room
@@ -1521,23 +1539,34 @@ class MatchComplete(BasePacket):
         # the ones who are playing (just new match info).
         not_playing = [
             s.player.id
-            for s in m.slots
+            for s in match.slots
             if s.status & SlotStatus.has_player and s.status != SlotStatus.complete
         ]
 
         was_playing = [
-            s for s in m.slots if s.player and s.player.id not in not_playing
+            s for s in match.slots if s.player and s.player.id not in not_playing
         ]
 
-        m.unready_players(expected=SlotStatus.complete)
+        match.in_progress = False
 
-        m.in_progress = False
-        m.enqueue(app.packets.match_complete(), lobby=False, immune=not_playing)
-        m.enqueue_state()
+        app.usecases.multiplayer.unready_players(
+            match,
+            expected=SlotStatus.complete,
+        )
 
-        if m.is_scrimming:
+        app.usecases.multiplayer.send_data_to_clients(
+            match,
+            data=app.packets.match_complete(),
+            lobby=False,
+            immune=not_playing,
+        )
+        app.usecases.multiplayer.send_match_state_to_clients(match)
+
+        if match.is_scrimming:
             # determine winner, update match points & inform players.
-            asyncio.create_task(m.update_matchpoints(was_playing))
+            asyncio.create_task(
+                app.usecases.multiplayer.update_matchpoints(match, was_playing),
+            )
 
 
 @register(ClientPackets.MATCH_CHANGE_MODS)
@@ -1567,7 +1596,7 @@ class MatchChangeMods(BasePacket):
             # not freemods, set match mods.
             m.mods = Mods(self.mods)
 
-        m.enqueue_state()
+        app.usecases.multiplayer.send_match_state_to_clients(m)
 
 
 def is_playing(slot: Slot) -> bool:
@@ -1576,73 +1605,81 @@ def is_playing(slot: Slot) -> bool:
 
 @register(ClientPackets.MATCH_LOAD_COMPLETE)
 class MatchLoadComplete(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
         # our player has loaded in and is ready to play.
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.loaded = True
 
         # check if all players are loaded,
         # if so, tell all players to begin.
-        if not any(map(is_playing, m.slots)):
-            m.enqueue(app.packets.match_all_players_loaded(), lobby=False)
+        if not any(is_playing(slot) for slot in match.slots):
+            app.usecases.multiplayer.send_data_to_clients(
+                match,
+                data=app.packets.match_all_players_loaded(),
+                lobby=False,
+            )
 
 
 @register(ClientPackets.MATCH_NO_BEATMAP)
 class MatchNoBeatmap(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.status = SlotStatus.no_map
-        m.enqueue_state(lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
 
 
 @register(ClientPackets.MATCH_NOT_READY)
 class MatchNotReady(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.status = SlotStatus.not_ready
-        m.enqueue_state(lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
 
 
 @register(ClientPackets.MATCH_FAILED)
 class MatchFailed(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
         # find the player's slot id, and enqueue that
         # they've failed to all other players in the match.
-        slot_id = m.get_slot_id(p)
+        slot_id = match.get_slot_id(player)
         assert slot_id is not None
 
-        m.enqueue(app.packets.match_player_failed(slot_id), lobby=False)
+        app.usecases.multiplayer.send_data_to_clients(
+            match,
+            data=app.packets.match_player_failed(slot_id),
+            lobby=False,
+        )
 
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
 class MatchHasBeatmap(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.status = SlotStatus.not_ready
-        m.enqueue_state(lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
 
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
@@ -1655,14 +1692,21 @@ class MatchSkipRequest(BasePacket):
         assert slot is not None
 
         slot.skipped = True
-        m.enqueue(app.packets.match_player_skipped(p.id))
+        app.usecases.multiplayer.send_data_to_clients(
+            m,
+            app.packets.match_player_skipped(p.id),
+        )
 
         for slot in m.slots:
             if slot.status == SlotStatus.playing and not slot.skipped:
                 return
 
         # all users have skipped, enqueue a skip.
-        m.enqueue(app.packets.match_skip(), lobby=False)
+        app.usecases.multiplayer.send_data_to_clients(
+            m,
+            app.packets.match_skip(),
+            lobby=False,
+        )
 
 
 @register(ClientPackets.CHANNEL_JOIN, restricted=True)
@@ -1704,7 +1748,7 @@ class MatchTransferHost(BasePacket):
 
         m.host_id = t.id
         m.host.enqueue(app.packets.match_transfer_host())
-        m.enqueue_state()
+        app.usecases.multiplayer.send_match_state_to_clients(m)
 
 
 @register(ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST)
@@ -1822,7 +1866,7 @@ class MatchChangeTeam(BasePacket):
         else:
             slot.team = MatchTeams.blue
 
-        m.enqueue_state(lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(m, lobby=False)
 
 
 @register(ClientPackets.CHANNEL_PART, restricted=True)
@@ -1830,22 +1874,22 @@ class ChannelPart(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.name = reader.read_string()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         if self.name in IGNORED_CHANNELS:
             return
 
-        c = app.state.sessions.channels[self.name]
+        channel = app.state.sessions.channels[self.name]
 
-        if not c:
-            log(f"{p} failed to leave {self.name}.", Ansi.LYELLOW)
+        if not channel:
+            log(f"{player} failed to leave {self.name}.", Ansi.LYELLOW)
             return
 
-        if p not in c:
+        if player not in channel:
             # user not in chan
             return
 
         # leave the chan server-side.
-        app.usecases.players.leave_channel(p, c)
+        app.usecases.players.leave_channel(player, channel)
 
 
 @register(ClientPackets.RECEIVE_UPDATES, restricted=True)
@@ -1919,16 +1963,16 @@ class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match = Match.from_parsed_match(reader.read_match())
 
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        if p is not m.host:
-            log(f"{p} attempted to change pw as non-host.", Ansi.LYELLOW)
+        if player is not match.host:
+            log(f"{player} attempted to change pw as non-host.", Ansi.LYELLOW)
             return
 
-        m.passwd = self.match.passwd
-        m.enqueue_state()
+        match.passwd = self.match.passwd
+        app.usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.USER_PRESENCE_REQUEST)

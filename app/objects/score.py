@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import Any
+from typing import Mapping
 from typing import Optional
 
 from app.constants.clientflags import ClientFlags
@@ -61,6 +63,7 @@ class Grade(IntEnum):
 @pymysql_encode(escape_enum)
 class SubmissionStatus(IntEnum):
     # TODO: make a system more like bancho's?
+    UNSUBMITTED = -1
     FAILED = 0
     SUBMITTED = 1
     BEST = 2
@@ -107,74 +110,65 @@ class Score:
         value will always be accurate for any score.
     """
 
-    __slots__ = (
-        "id",
-        "bmap_md5",
-        "player_name",
-        "mode",
-        "mods",
-        "pp",
-        "sr",
-        "score",
-        "max_combo",
-        "acc",
-        "n300",
-        "n100",
-        "n50",
-        "nmiss",
-        "ngeki",
-        "nkatu",
-        "grade",
-        "rank",
-        "passed",
-        "perfect",
-        "status",
-        "client_time",
-        "server_time",
-        "time_elapsed",
-        "client_flags",
-        "client_checksum",
-        "prev_best",
-    )
-
-    def __init__(self):
-        self.id: int
-        self.bmap_md5: str
-        self.player_name: str
-
-        self.mode: GameMode
-        self.mods: Mods
-
-        self.pp: float
-        self.sr: float
-        self.score: int
-        self.max_combo: int
-        self.acc: float
-
-        # TODO: perhaps abstract these differently
-        # since they're mode dependant? feels weird..
-        self.n300: int
-        self.n100: int  # n150 for taiko
-        self.n50: int
-        self.nmiss: int
-        self.ngeki: int
-        self.nkatu: int
-
-        self.grade: Grade
-
-        self.passed: bool
-        self.perfect: bool
-        self.status: SubmissionStatus
-
-        self.client_time: datetime
-        self.server_time: datetime
-        self.time_elapsed: int
-
-        self.client_flags: ClientFlags
-        self.client_checksum: str
-
-        self.rank: Optional[int] = None
-        self.prev_best: Optional[Score] = None
+    def __init__(
+        self,
+        id: Optional[int],  # can be None if status == SubmissionStatus.UNSUBMITTED
+        bmap_md5: str,
+        player_name: str,
+        mode: GameMode,
+        mods: Mods,
+        pp: float,
+        sr: float,
+        score: int,
+        max_combo: int,
+        acc: float,
+        n300: int,
+        n100: int,
+        n50: int,
+        nmiss: int,
+        ngeki: int,
+        nkatu: int,
+        grade: Grade,
+        passed: bool,
+        perfect: bool,
+        status: SubmissionStatus,
+        server_time: datetime,
+        time_elapsed: int,
+        client_flags: ClientFlags,
+        client_checksum: str,
+        rank: Optional[int] = None,
+        prev_best: Optional[Score] = None,
+        # TODO: we should be storing this in the database,
+        # and it should be moved back up with server_time
+        client_time: Optional[datetime] = None,
+    ):
+        self.id = id
+        self.bmap_md5 = bmap_md5
+        self.player_name = player_name
+        self.mode = mode
+        self.mods = mods
+        self.pp = pp
+        self.sr = sr
+        self.score = score
+        self.max_combo = max_combo
+        self.acc = acc
+        self.n300 = n300
+        self.n100 = n100
+        self.n50 = n50
+        self.nmiss = nmiss
+        self.ngeki = ngeki
+        self.nkatu = nkatu
+        self.grade = grade
+        self.passed = passed
+        self.perfect = perfect
+        self.status = status
+        self.client_time = client_time
+        self.server_time = server_time
+        self.time_elapsed = time_elapsed
+        self.client_flags = client_flags
+        self.client_checksum = client_checksum
+        self.rank = rank
+        self.prev_best = prev_best
 
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
@@ -189,98 +183,124 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    def from_row(cls, row) -> Score:  # TODO: row type
-        score = cls()
-
-        (
-            score.id,
-            score.bmap_md5,
-            score.player_name,
-            score.pp,
-            score.score,
-            score.max_combo,
-            score.mods,
-            score.acc,
-            score.n300,
-            score.n100,
-            score.n50,
-            score.nmiss,
-            score.ngeki,
-            score.nkatu,
-            score.grade,
-            score.perfect,
-            score.status,
-            score.mode,
-            score.server_time,
-            score.time_elapsed,
-            score.client_flags,
-            score.client_checksum,
-        ) = row
-
-        # fix some types
-        score.passed = score.status != 0
-        score.status = SubmissionStatus(score.status)
-        score.grade = Grade.from_str(score.grade)
-        score.mods = Mods(score.mods)
-        score.mode = GameMode(score.mode)
-        score.client_flags = ClientFlags(score.client_flags)
-
-        score.sr = 0.0  # TODO
-
-        # TODO: ensure this is everywhere required
+    def from_row(cls, row: Mapping[str, Any]) -> Score:  # TODO: row type
+        # TODO: ensure this is everywhere required (after calling Score.from_row)
         # if score.bmap:
         #    score.rank = await score.calculate_placement()
 
-        return score
+        return cls(
+            id=row["id"],
+            bmap_md5=row["bmap_md5"],
+            player_name=row["player_name"],
+            pp=row["pp"],
+            score=row["score"],
+            max_combo=row["max_combo"],
+            mods=Mods(row["mods"]),
+            acc=row["acc"],
+            n300=row["n300"],
+            n100=row["n100"],
+            n50=row["n50"],
+            nmiss=row["nmiss"],
+            ngeki=row["ngeki"],
+            nkatu=row["nkatu"],
+            grade=Grade.from_str(row["grade"]),
+            passed=row["status"] != 0,
+            perfect=row["perfect"],
+            status=SubmissionStatus(row["status"]),
+            mode=GameMode(row["mode"]),
+            server_time=row["server_time"],
+            time_elapsed=row["time_elapsed"],
+            client_flags=ClientFlags(row["client_flags"]),
+            client_checksum=row["client_checksum"],
+            sr=0.0,
+        )
+
+    def to_row(self) -> Mapping[str, Any]:
+        return {
+            "id": self.id,
+            "bmap_md5": self.bmap_md5,
+            "player_name": self.player_name,
+            "pp": self.pp,
+            "score": self.score,
+            "max_combo": self.max_combo,
+            "mods": self.mods,
+            "acc": self.acc,
+            "n300": self.n300,
+            "n100": self.n100,
+            "n50": self.n50,
+            "nmiss": self.nmiss,
+            "ngeki": self.ngeki,
+            "nkatu": self.nkatu,
+            "grade": self.grade.name,
+            "perfect": self.perfect,
+            "status": self.status,
+            "mode": self.mode,
+            "server_time": self.server_time,
+            "time_elapsed": self.time_elapsed,
+            # "client_flags": self.client_flags,
+            # "client_checksum": self.client_checksum,
+            "passed": self.passed,
+            "sr": self.sr,
+        }
 
     @classmethod
-    def from_submission(cls, data: list[str]) -> Score:
-        """Create a score object from an osu! submission string."""
-        score = cls()
+    def from_submission(
+        cls,
+        data: list[str],
+        accuracy: float,
+        time_elapsed: int,
+    ) -> Score:
+        """\
+        Create a score object from an osu! submission string.
 
-        """ parse the following format
-        # 0  beatmap_md5
-        # 1
-        # 1  online_checksum
-        # 2  n300
-        # 3  n100
-        # 4  n50
-        # 5  ngeki
-        # 6  nkatu
-        # 7  nmiss
-        # 8  score
-        # 9  max_combo
-        # 10  perfect
-        # 11 grade
-        # 12 mods
-        # 13 passed
-        # 14 gamemode
-        # 15 play_time # yyMMddHHmmss
-        # 16 osu_version + (" " * client_flags)
+        Parse the following format:
+        [0]  beatmap_md5
+        [1]  player name
+        [2]  online_checksum
+        [3]  n300
+        [4]  n100
+        [5]  n50
+        [6]  ngeki
+        [7]  nkatu
+        [8]  nmiss
+        [9]  score
+        [10] max_combo
+        [11] perfect
+        [12] grade
+        [13] mods
+        [14] passed
+        [15] gamemode
+        [16] play_time # yyMMddHHmmss
+        [17] osu_version + (" " * client_flags)
         """
-
-        score.bmap_md5 = data[0]
-        score.player_name = data[1].rstrip()  # ends with ' ' if client has supporter
-        score.client_checksum = data[2]
-        score.n300 = int(data[3])
-        score.n100 = int(data[4])
-        score.n50 = int(data[5])
-        score.ngeki = int(data[6])
-        score.nkatu = int(data[7])
-        score.nmiss = int(data[8])
-        score.score = int(data[9])
-        score.max_combo = int(data[10])
-        score.perfect = data[11] == "True"
-        score.grade = Grade.from_str(data[12])
-        score.mods = Mods(int(data[13]))
-        score.passed = data[14] == "True"
-        score.mode = GameMode.from_params(int(data[15]), score.mods)
-        score.client_time = datetime.strptime(data[16], "%y%m%d%H%M%S")
-        score.client_flags = ClientFlags(data[17].count(" ") & ~4)
-
-        score.server_time = datetime.now()
-
-        return score
+        return cls(
+            id=None,
+            bmap_md5=data[0],
+            player_name=data[1].rstrip(),  # ends with ' ' if client has supporter
+            client_checksum=data[2],
+            n300=int(data[3]),
+            n100=int(data[4]),
+            n50=int(data[5]),
+            ngeki=int(data[6]),
+            nkatu=int(data[7]),
+            nmiss=int(data[8]),
+            score=int(data[9]),
+            max_combo=int(data[10]),
+            perfect=data[11] == "True",
+            grade=Grade.from_str(data[12]),
+            mods=Mods(int(data[13])),
+            passed=data[14] == "True",
+            mode=GameMode.from_params(mode_vn=int(data[15]), mods=int(data[13])),
+            client_time=datetime.strptime(data[16], "%y%m%d%H%M%S"),
+            client_flags=ClientFlags(data[17].count(" ") & ~4),
+            acc=accuracy,
+            time_elapsed=time_elapsed,
+            server_time=datetime.now(),
+            # updated upon submission
+            status=SubmissionStatus.UNSUBMITTED,
+            pp=0.0,
+            sr=0.0,
+        )
 
     def compute_online_checksum(
         self,
@@ -306,7 +326,7 @@ class Score:
                 self.passed,
                 self.mode.as_vanilla,
                 self.client_time,
-                osu_version,  # 20210520
+                osu_version,  # "20210520"
                 osu_client_hash,
                 storyboard_checksum,
                 # yyMMddHHmmss

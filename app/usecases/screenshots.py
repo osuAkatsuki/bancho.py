@@ -13,6 +13,7 @@ SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 
 
 async def create(screenshot_file: UploadFile) -> tuple[bool, bytes]:
+    """Upload a screenshot, saving the file on disk and returning it's filename."""
     with memoryview(await screenshot_file.read()) as screenshot_view:  # type: ignore
         # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
         if len(screenshot_view) > (4 * 1024 * 1024):
@@ -41,6 +42,7 @@ def fetch_file(
     screenshot_id: str,
     extension: Literal["jpg", "jpeg", "png"],
 ) -> Optional[Path]:
+    """Fetch a screenshot file on disk."""
     screenshot_path = SCREENSHOTS_PATH / f"{screenshot_id}.{extension}"
 
     if screenshot_path.exists():

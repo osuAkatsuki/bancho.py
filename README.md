@@ -73,7 +73,7 @@ python3.9 -m pip install -r requirements.txt
 you will need to create a database for bancho.py to store persistent data.
 
 the server uses this database to store metadata & logs, such as user accounts
-and stats, beatmaps and beatmapsets, chat channels, tourney mappools and more.
+and stats, beatmaps and beatmap sets, chat channels, tourney mappools and more.
 
 ```sh
 # login to mysql's shell with root - the default admin account

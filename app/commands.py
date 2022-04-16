@@ -36,8 +36,14 @@ import timeago
 
 import app.logging
 import app.packets
+import app.repositories.beatmaps
+import app.repositories.players
 import app.settings
 import app.state
+import app.usecases.beatmaps
+import app.usecases.channels
+import app.usecases.clans
+import app.usecases.multiplayer
 import app.usecases.performance
 import app.usecases.players
 import app.utils
@@ -49,7 +55,6 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
 from app.objects.beatmap import RankedStatus
 from app.objects.clan import Clan
 from app.objects.match import MapPool
@@ -91,14 +96,12 @@ Callback = Callable[[Context], Awaitable[Optional[str]]]
 class Command(NamedTuple):
     triggers: list[str]
     callback: Callback
-    priv: Privileges
+    priv: int
     hidden: bool
     doc: Optional[str]
 
 
 class CommandSet:
-    __slots__ = ("trigger", "doc", "commands")
-
     def __init__(self, trigger: str, doc: str) -> None:
         self.trigger = trigger
         self.doc = doc
@@ -107,7 +110,7 @@ class CommandSet:
 
     def add(
         self,
-        priv: Privileges,
+        priv: int,
         aliases: list[str] = [],
         hidden: bool = False,
     ) -> Callable[[Callback], Callback]:
@@ -145,7 +148,7 @@ command_sets = [
 
 
 def command(
-    priv: Privileges,
+    priv: int,
     aliases: list[str] = [],
     hidden: bool = False,
 ) -> Callable[[Callback], Callback]:
@@ -211,10 +214,10 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.repositories.players.fetch(player_name=" ".join(ctx.args))
 
-    if not target:
-        return "User not found."
+    if target is None:
+        return "Player not found."
 
     if target is app.state.sessions.bot or target is ctx.player:
         return "What?"
@@ -232,7 +235,7 @@ async def block(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await app.repositories.players.fetch(player_name=" ".join(ctx.args))
 
     if not target:
         return "User not found."
@@ -306,25 +309,25 @@ async def changename(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, aliases=["bloodcat", "beatconnect", "chimu", "q"])
 async def maplink(ctx: Context) -> Optional[str]:
     """Return a download link to the user's current map (situation dependant)."""
-    bmap = None
-
     # priority: multiplayer -> spectator -> last np
     match = ctx.player.match
     spectating = ctx.player.spectating
 
-    if match and match.map_id:
-        bmap = await Beatmap.from_md5(match.map_md5)
-    elif spectating and spectating.status.map_id:
-        bmap = await Beatmap.from_md5(spectating.status.map_md5)
-    elif time.time() < ctx.player.last_np["timeout"]:
-        bmap = ctx.player.last_np["bmap"]
+    beatmap = None
 
-    if bmap is None:
+    if match and match.map_id:
+        beatmap = await app.repositories.beatmaps.fetch_by_id(match.map_id)
+    elif spectating and spectating.status.map_id:
+        beatmap = await app.repositories.beatmaps.fetch_by_id(spectating.status.map_id)
+    elif time.time() < ctx.player.last_np["timeout"]:
+        beatmap = ctx.player.last_np["bmap"]
+
+    if beatmap is None:
         return "No map found!"
 
     # gatari.pw & nerina.pw are pretty much the only
     # reliable mirrors i know of? perhaps beatconnect
-    return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full_name}]"
+    return f"[https://osu.gatari.pw/d/{beatmap.set_id} {beatmap.full_name}]"
 
 
 @command(Privileges.NORMAL, aliases=["last", "r"])
@@ -336,26 +339,30 @@ async def recent(ctx: Context) -> Optional[str]:
     else:
         target = ctx.player
 
-    if not (s := target.recent_score):
-        return "No scores found :o (only saves per play session)"
+    if not (score := target.recent_score):
+        return "Score could not be retrieved. (only saves per play session)"
 
-    l = [f"[{s.mode!r}] {s.bmap.embed}", f"{s.acc:.2f}%"]
+    beatmap = await app.repositories.beatmaps.fetch_by_md5(score.bmap_md5)
+    if beatmap is None:
+        return "Beatmap could not be retrieved."
 
-    if s.mods:
-        l.insert(1, f"+{s.mods!r}")
+    l = [f"[{score.mode!r}] {beatmap.embed}", f"{score.acc:.2f}%"]
+
+    if score.mods:
+        l.insert(1, f"+{score.mods!r}")
 
     l = [" ".join(l)]
 
-    if s.passed:
-        rank = s.rank if s.status == SubmissionStatus.BEST else "NA"
-        l.append(f"PASS {{{s.pp:.2f}pp #{rank}}}")
+    if score.passed:
+        rank = score.rank if score.status == SubmissionStatus.BEST else "NA"
+        l.append(f"PASS {{{score.pp:.2f}pp #{rank}}}")
     else:
         # XXX: prior to v3.2.0, bancho.py didn't parse total_length from
         # the osu!api, and thus this can do some zerodivision moments.
         # this can probably be removed in the future, or better yet
         # replaced with a better system to fix the maps.
-        if s.bmap.total_length != 0:
-            completion = s.time_elapsed / (s.bmap.total_length * 1000)
+        if beatmap.total_length != 0:
+            completion = score.time_elapsed / (beatmap.total_length * 1000)
             l.append(f"FAIL {{{completion * 100:.2f}% complete}})")
         else:
             l.append("FAIL")
@@ -393,12 +400,12 @@ async def top(ctx: Context) -> Optional[str]:
 
         # specific player provided
         if not (
-            p := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[1])
+            player := await app.repositories.players.fetch(player_name=ctx.args[1])
         ):
             return "Player not found."
     else:
         # no player provided, use self
-        p = ctx.player
+        player = ctx.player
 
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
@@ -412,14 +419,14 @@ async def top(ctx: Context) -> Optional[str]:
         "AND s.status = 2 "
         "AND b.status in (2, 3) "
         "ORDER BY s.pp DESC LIMIT 10",
-        {"user_id": p.id, "mode": mode},
+        {"user_id": player.id, "mode": mode},
     )
 
     if not scores:
         return "No scores"
 
     return "\n".join(
-        [f"Top 10 scores for {p.embed} ({ctx.args[0]})."]
+        [f"Top 10 scores for {player.embed} ({ctx.args[0]})."]
         + [
             TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.settings.DOMAIN, **s)
             for idx, s in enumerate(scores)
@@ -523,7 +530,11 @@ async def _with(ctx: Context) -> Optional[str]:
     bmap: Beatmap = ctx.player.last_np["bmap"]
 
     osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-    if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
+    if not await app.usecases.beatmaps.ensure_local_osu_file(
+        osu_file_path,
+        bmap.id,
+        bmap.md5,
+    ):
         return "Mapfile could not be found; this incident has been reported."
 
     mode_vn = ctx.player.last_np["mode_vn"]
@@ -580,16 +591,16 @@ async def request(ctx: Context) -> Optional[str]:
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
-    bmap = ctx.player.last_np["bmap"]
+    beatmap = ctx.player.last_np["bmap"]
 
-    if bmap.status != RankedStatus.Pending:
+    if beatmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
     await app.state.services.database.execute(
         "INSERT INTO map_requests "
         "(map_id, player_id, datetime, active) "
         "VALUES (:map_id, :user_id, NOW(), 1)",
-        {"map_id": bmap.id, "user_id": ctx.player.id},
+        {"map_id": beatmap.id, "user_id": ctx.player.id},
     )
 
     return "Request submitted."
@@ -645,15 +656,15 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in rows:
         # find player & map for each row, and add to output.
-        if not (p := await app.state.sessions.players.from_cache_or_sql(id=player_id)):
+        if not (player := await app.repositories.players.fetch(player_id=player_id)):
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
-        if not (bmap := await Beatmap.from_bid(map_id)):
+        if not (beatmap := await app.repositories.beatmaps.fetch_by_id(map_id)):
             l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        l.append(f"[{p.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
+        l.append(f"[{player.embed} @ {dt:%b %d %I:%M%p}] {beatmap.embed}.")
 
     return "\n".join(l)
 
@@ -750,7 +761,7 @@ async def notes(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 2 or not ctx.args[1].isdecimal():
         return "Invalid syntax: !notes <name> <days_back>"
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     days = int(ctx.args[1])
@@ -773,7 +784,7 @@ async def notes(ctx: Context) -> Optional[str]:
 
     notes = []
     for row in res:
-        logger = await app.state.sessions.players.from_cache_or_sql(id=row["from"])
+        logger = await app.repositories.players.fetch(player_id=row["from"])
         if not logger:
             continue
 
@@ -792,7 +803,7 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     await app.state.services.database.execute(
@@ -830,7 +841,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -847,7 +858,12 @@ async def silence(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await t.silence(ctx.player, duration, reason)
+    await app.usecases.players.silence(
+        player=t,
+        admin=ctx.player,
+        duration=duration,
+        reason=reason,
+    )
     return f"{t} was silenced."
 
 
@@ -857,7 +873,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !unsilence <name>"
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if not t.silenced:
@@ -866,7 +882,10 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    await t.unsilence(ctx.player)
+    await app.usecases.players.unsilence(
+        player=t,
+        admin=ctx.player,
+    )
     return f"{t} was unsilenced."
 
 
@@ -884,7 +903,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+        p = await app.repositories.players.fetch(player_name=" ".join(ctx.args))
 
         if not p:
             return "Player not found."
@@ -922,7 +941,7 @@ async def restrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !restrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -936,7 +955,11 @@ async def restrict(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await t.restrict(admin=ctx.player, reason=reason)
+    await app.usecases.players.restrict(
+        player=t,
+        admin=ctx.player,
+        reason=reason,
+    )
 
     return f"{t} was restricted."
 
@@ -948,7 +971,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return f'"{ctx.args[0]}" not found.'
 
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -1090,13 +1113,13 @@ async def fakeusers(ctx: Context) -> Optional[str]:
             id=0,
             name="",
             utc_offset=0,
-            osu_ver="",
             pm_private=False,
             clan=None,
             clan_priv=None,
             priv=Privileges.NORMAL | Privileges.VERIFIED,
             silence_end=0,
             login_time=0x7FFFFFFF,  # never auto-dc
+            last_recv_time=0x7FFFFFFF,  # never auto-dc
             token="",
         )
 
@@ -1215,7 +1238,11 @@ async def recalc(ctx: Context) -> Optional[str]:
         bmap: Beatmap = ctx.player.last_np["bmap"]
 
         osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
+        if not await app.usecases.beatmaps.ensure_local_osu_file(
+            osu_file_path,
+            bmap.id,
+            bmap.md5,
+        ):
             return "Mapfile could not be found; this incident has been reported."
 
         async with (
@@ -1255,7 +1282,10 @@ async def recalc(ctx: Context) -> Optional[str]:
         staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
 
         async def recalc_all() -> None:
-            staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
+            app.usecases.channels.send_bot(
+                staff_chan,
+                f"{ctx.player} started a full recalculation.",
+            )
             st = time.time()
 
             async with (
@@ -1271,12 +1301,13 @@ async def recalc(ctx: Context) -> Optional[str]:
                     bmap_md5 = bmap_row["md5"]
 
                     osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                    if not await ensure_local_osu_file(
+                    if not await app.usecases.beatmaps.ensure_local_osu_file(
                         osu_file_path,
                         bmap_id,
                         bmap_md5,
                     ):
-                        staff_chan.send_bot(
+                        app.usecases.channels.send_bot(
+                            staff_chan,
                             f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
                         )
                         continue
@@ -1313,7 +1344,10 @@ async def recalc(ctx: Context) -> Optional[str]:
                     await asyncio.sleep(0.01)
 
             elapsed = app.utils.seconds_readable(int(time.time() - st))
-            staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
+            app.usecases.channels.send_bot(
+                staff_chan,
+                f"Recalculation complete. | Elapsed: {elapsed}",
+            )
 
         app.state.loop.create_task(recalc_all())
 
@@ -1350,7 +1384,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addpriv <name> <role1 role2 role3 ...>"
 
-    bits = Privileges(0)
+    bits = 0
 
     for m in [m.lower() for m in ctx.args[1:]]:
         if m not in str_priv_dict:
@@ -1358,7 +1392,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return "Could not find user."
 
     await app.usecases.players.add_privs(t, bits)
@@ -1371,7 +1405,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !rmpriv <name> <role1 role2 role3 ...>"
 
-    bits = Privileges(0)
+    bits = 0
 
     for m in [m.lower() for m in ctx.args[1:]]:
         if m not in str_priv_dict:
@@ -1379,7 +1413,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+    if not (t := await app.repositories.players.fetch(player_name=ctx.args[0])):
         return "Could not find user."
 
     await app.usecases.players.remove_privs(t, bits)
@@ -1392,7 +1426,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !wipemap"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     map_md5 = ctx.player.last_np["bmap"].md5
@@ -1650,21 +1684,27 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
                 """Remove any pending timers & start the match."""
                 # remove start & alert timers
                 match.starting["start"] = None
-                match.starting["alerts"] = None
-                match.starting["time"] = None
+                match.starting["alerts"] = []
+                match.starting["time"] = 0.0
 
                 # make sure player didn't leave the
                 # match since queueing this start lol..
                 if ctx.player not in match:
-                    match.chat.send_bot("Player left match? (cancelled)")
+                    app.usecases.channels.send_bot(
+                        match.chat,
+                        "Player left match? (cancelled)",
+                    )
                     return
 
-                match.start()
-                match.chat.send_bot("Starting match.")
+                app.usecases.multiplayer.start(match)
+                app.usecases.channels.send_bot(match.chat, "Starting match.")
 
             def _alert_start(t: int) -> None:
                 """Alert the match of the impending start."""
-                match.chat.send_bot(f"Match starting in {t} seconds.")
+                app.usecases.channels.send_bot(
+                    match.chat,
+                    f"Match starting in {t} seconds.",
+                )
 
             # add timers to our match object,
             # so we can cancel them if needed.
@@ -1687,15 +1727,15 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
                 alert.cancel()
 
             match.starting["start"] = None
-            match.starting["alerts"] = None
-            match.starting["time"] = None
+            match.starting["alerts"] = []
+            match.starting["time"] = 0.0
 
             return "Match timer cancelled."
         elif ctx.args[0] not in ("force", "f"):
             return "Invalid syntax: !mp start <force/seconds>"
         # !mp start force simply passes through
 
-    match.start()
+    app.usecases.multiplayer.start(match)
     return "Good luck!"
 
 
@@ -1706,11 +1746,12 @@ async def mp_abort(ctx: Context, match: Match) -> Optional[str]:
     if not match.in_progress:
         return "Abort what?"
 
-    match.unready_players(expected=SlotStatus.playing)
-
     match.in_progress = False
-    match.enqueue(app.packets.match_abort())
-    match.enqueue_state()
+
+    app.usecases.multiplayer.unready_players(match, expected=SlotStatus.playing)
+    app.usecases.multiplayer.send_data_to_clients(match, app.packets.match_abort())
+
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "Match aborted."
 
 
@@ -1726,17 +1767,16 @@ async def mp_map(ctx: Context, match: Match) -> Optional[str]:
     if map_id == match.map_id:
         return "Map already selected."
 
-    if not (bmap := await Beatmap.from_bid(map_id)):
+    if not (beatmap := await app.repositories.beatmaps.fetch_by_id(map_id)):
         return "Beatmap not found."
 
-    match.map_id = bmap.id
-    match.map_md5 = bmap.md5
-    match.map_name = bmap.full_name
+    match.map_id = beatmap.id
+    match.map_md5 = beatmap.md5
+    match.map_name = beatmap.full_name
+    match.mode = beatmap.mode
 
-    match.mode = bmap.mode
-
-    match.enqueue_state()
-    return f"Selected: {bmap.embed}."
+    app.usecases.multiplayer.send_match_state_to_clients(match)
+    return f"Selected: {beatmap.embed}."
 
 
 @mp_commands.add(Privileges.NORMAL)
@@ -1755,12 +1795,13 @@ async def mp_mods(ctx: Context, match: Match) -> Optional[str]:
             match.mods = mods & SPEED_CHANGING_MODS
 
         # set slot mods
-        match.get_slot(ctx.player).mods = mods & ~SPEED_CHANGING_MODS
+        slot = match.get_slot(ctx.player)
+        slot.mods = mods & ~SPEED_CHANGING_MODS
     else:
         # not freemods, set match mods.
         match.mods = mods
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "Match mods updated."
 
 
@@ -1796,7 +1837,7 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
             if s.status & SlotStatus.has_player:
                 s.mods = Mods.NOMOD
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "Match freemod status updated."
 
 
@@ -1816,10 +1857,13 @@ async def mp_host(ctx: Context, match: Match) -> Optional[str]:
     if t not in match:
         return "Found no such player in the match."
 
+    # update host in match state
     match.host_id = t.id
 
+    # tell host's client they've been promoted
     match.host.enqueue(app.packets.match_transfer_host())
-    match.enqueue_state(lobby=True)
+
+    app.usecases.multiplayer.send_match_state_to_clients(match, lobby=True)
     return "Match host updated."
 
 
@@ -1838,17 +1882,18 @@ async def mp_invite(ctx: Context, match: Match) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp invite <name>"
 
-    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
+    if not (target := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t is app.state.sessions.bot:
+    # don't allow users to invite the bot
+    if target is app.state.sessions.bot:
         return "I'm too busy!"
 
-    if t is ctx.player:
+    if target is ctx.player:
         return "You can't invite yourself!"
 
-    t.enqueue(app.packets.match_invite(ctx.player, t.name))
-    return f"Invited {t} to the match."
+    target.enqueue(app.packets.match_invite(ctx.player, target.name))
+    return f"Invited {target} to the match."
 
 
 @mp_commands.add(Privileges.NORMAL)
@@ -1858,17 +1903,17 @@ async def mp_addref(ctx: Context, match: Match) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
+    if not (target := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t not in match:
+    if target not in match:
         return "User must be in the current match!"
 
-    if t in match.refs:
-        return f"{t} is already a match referee!"
+    if target in match.refs:
+        return f"{target} is already a match referee!"
 
-    match._refs.add(t)
-    return f"{t.name} added to match referees."
+    match._refs.add(target)
+    return f"{target.name} added to match referees."
 
 
 @mp_commands.add(Privileges.NORMAL)
@@ -1878,17 +1923,17 @@ async def mp_rmref(ctx: Context, match: Match) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    if not (t := app.state.sessions.players.get(name=ctx.args[0])):
+    if not (target := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t not in match.refs:
-        return f"{t} is not a match referee!"
+    if target not in match.refs:
+        return f"{target} is not a match referee!"
 
-    if t is match.host:
+    if target is match.host:
         return "The host is always a referee!"
 
-    match._refs.remove(t)
-    return f"{t.name} removed from match referees."
+    match._refs.remove(target)
+    return f"{target.name} removed from match referees."
 
 
 @mp_commands.add(Privileges.NORMAL)
@@ -1906,7 +1951,7 @@ async def mp_lock(ctx: Context, match: Match) -> Optional[str]:
         if slot.status == SlotStatus.open:
             slot.status = SlotStatus.locked
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "All unused slots locked."
 
 
@@ -1918,7 +1963,7 @@ async def mp_unlock(ctx: Context, match: Match) -> Optional[str]:
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "All locked slots unlocked."
 
 
@@ -1957,9 +2002,9 @@ async def mp_teams(ctx: Context, match: Match) -> Optional[str]:
 
     if match.is_scrimming:
         # reset score if scrimming.
-        match.reset_scrim()
+        app.usecases.multiplayer.reset_scrimmage_state(match)
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
     return "Match team type updated."
 
 
@@ -1997,7 +2042,7 @@ async def mp_condition(ctx: Context, match: Match) -> Optional[str]:
         else:
             return "Invalid win condition. (score, acc, combo, scorev2, *pp)"
 
-    match.enqueue_state(lobby=False)
+    app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
     return "Match win condition updated."
 
 
@@ -2032,7 +2077,7 @@ async def mp_scrim(ctx: Context, match: Match) -> Optional[str]:
             return "Not currently scrimming!"
 
         match.is_scrimming = False
-        match.reset_scrim()
+        app.usecases.multiplayer.reset_scrimmage_state(match)
         msg = "Scrimming cancelled."
 
     match.winning_pts = winning_pts
@@ -2047,8 +2092,11 @@ async def mp_endscrim(ctx: Context, match: Match) -> Optional[str]:
         return "Not currently scrimming!"
 
     match.is_scrimming = False
-    match.reset_scrim()
-    return "Scrimmage ended."  # TODO: final score (get_score method?)
+
+    app.usecases.multiplayer.reset_scrimmage_state(match)
+
+    # TODO: return final score
+    return "Scrimmage ended."
 
 
 @mp_commands.add(Privileges.NORMAL, aliases=["rm"])
@@ -2100,6 +2148,8 @@ async def mp_force(ctx: Context, match: Match) -> Optional[str]:
 
     if not app.usecases.players.join_match(t, match, match.passwd):
         return None
+
+    app.usecases.multiplayer.send_match_state_to_clients(match)
 
     return "Welcome."
 
@@ -2251,7 +2301,7 @@ async def mp_pick(ctx: Context, match: Match) -> Optional[str]:
     # update match mods to the picked map.
     match.mods = mods
 
-    match.enqueue_state()
+    app.usecases.multiplayer.send_match_state_to_clients(match)
 
     return f"Picked {bmap.embed}. ({mods_slot})"
 
@@ -2306,8 +2356,8 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     row = dict(row)  # make mutable copy
 
-    row["created_by"] = await app.state.sessions.players.from_cache_or_sql(
-        id=row["created_by"],
+    row["created_by"] = await app.repositories.players.fetch(
+        player_id=row["created_by"],
     )
 
     app.state.sessions.pools.append(MapPool(**row))
@@ -2434,9 +2484,12 @@ async def pool_list(ctx: Context) -> Optional[str]:
     l = [f"Mappools ({len(pools)})"]
 
     for pool in pools:
+        pool_creator = await app.repositories.players.fetch(player_id=pool.creator_id)
+        assert pool_creator is not None
+
         l.append(
             f"[{pool.created_at:%Y-%m-%d}] {pool.id}. "
-            f"{pool.name}, by {pool.created_by}.",
+            f"{pool.name}, by {pool_creator}.",
         )
 
     return "\n".join(l)
@@ -2456,7 +2509,11 @@ async def pool_info(ctx: Context) -> Optional[str]:
     _time = pool.created_at.strftime("%H:%M:%S%p")
     _date = pool.created_at.strftime("%Y-%m-%d")
     datetime_fmt = f"Created at {_time} on {_date}"
-    l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
+
+    pool_creator = await app.repositories.players.fetch(player_id=pool.creator_id)
+    assert pool_creator is not None
+
+    l = [f"{pool.id}. {pool.name}, by {pool_creator} | {datetime_fmt}."]
 
     for (mods, slot), bmap in pool.maps.items():
         l.append(f"{mods!r}{slot}: {bmap.embed}")
@@ -2534,9 +2591,6 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    if "full_name" in ctx.player.__dict__:
-        del ctx.player.full_name  # wipe cached_property
-
     await app.state.services.database.execute(
         "UPDATE users "
         "SET clan_id = :clan_id, "
@@ -2548,7 +2602,12 @@ async def clan_create(ctx: Context) -> Optional[str]:
     # announce clan creation
     if announce_chan := app.state.sessions.channels["#announce"]:
         msg = f"\x01ACTION founded {clan!r}."
-        announce_chan.send(msg, sender=ctx.player, to_self=True)
+        app.usecases.channels.send_msg_to_clients(
+            announce_chan,
+            msg,
+            sender=ctx.player,
+            to_self=True,
+        )
 
     return f"{clan!r} created."
 
@@ -2581,8 +2640,6 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-            if "full_name" in member.__dict__:
-                del member.full_name  # wipe cached_property
 
     await app.state.services.database.execute(
         "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",
@@ -2595,7 +2652,12 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     # announce clan disbanding
     if announce_chan := app.state.sessions.channels["#announce"]:
         msg = f"\x01ACTION disbanded {clan!r}."
-        announce_chan.send(msg, sender=ctx.player, to_self=True)
+        app.usecases.channels.send_msg_to_clients(
+            announce_chan,
+            msg,
+            sender=ctx.player,
+            to_self=True,
+        )
 
     return f"{clan!r} disbanded."
 
@@ -2628,15 +2690,23 @@ async def clan_info(ctx: Context) -> Optional[str]:
 @clan_commands.add(Privileges.NORMAL)
 async def clan_leave(ctx: Context):
     """Leaves the clan you're in."""
-    p = await app.state.sessions.players.from_cache_or_sql(name=ctx.player.name)
+    player = await app.repositories.players.fetch(player_name=ctx.player.name)
+    if player is None:
+        return "Could not find player."
 
-    if not p.clan:
+    if not player.clan:
         return "You're not in a clan."
-    elif p.clan_priv == ClanPrivileges.Owner:
+    elif player.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    await p.clan.remove_member(p)
-    return f"You have successfully left {p.clan!r}."
+    clan = player.clan
+
+    await app.usecases.clans.remove_member(clan, player)
+
+    player.clan = None
+    player.clan_priv = 0
+
+    return f"You have successfully left {player.clan!r}."
 
 
 # TODO: !clan inv, !clan join, !clan leave

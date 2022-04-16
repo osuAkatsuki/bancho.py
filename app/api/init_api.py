@@ -24,7 +24,6 @@ from app.api import domains
 from app.api import middlewares
 from app.logging import Ansi
 from app.logging import log
-from app.objects import collections
 
 
 def init_exception_handlers(asgi_app: FastAPI) -> None:
@@ -100,7 +99,7 @@ def init_events(asgi_app: FastAPI) -> None:
         await app.state.services.run_sql_migrations()
 
         async with app.state.services.database.connection() as db_conn:
-            await collections.initialize_ram_caches(db_conn)
+            await app.state.sessions.init_server_state(db_conn)
 
         await app.bg_loops.initialize_housekeeping_tasks()
 
