@@ -39,6 +39,7 @@ import app.packets
 import app.settings
 import app.state
 import app.usecases.performance
+import app.usecases.players
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -224,7 +225,7 @@ async def block(ctx: Context) -> Optional[str]:
     if target.id in ctx.player.friends:
         ctx.player.friends.remove(target.id)
 
-    await ctx.player.add_block(target)
+    await app.usecases.players.add_block(ctx.player, target)
     return f"Added {target.name} to blocked users."
 
 
@@ -242,7 +243,7 @@ async def unblock(ctx: Context) -> Optional[str]:
     if target.id not in ctx.player.blocks:
         return f"{target.name} not blocked!"
 
-    await ctx.player.remove_block(target)
+    await app.usecases.players.remove_block(ctx.player, target)
     return f"Removed {target.name} from blocked users."
 
 
@@ -261,7 +262,7 @@ async def reconnect(ctx: Context) -> Optional[str]:
         # !reconnect
         target = ctx.player
 
-    target.logout()
+    app.usecases.players.logout(target)
 
     return None
 
@@ -297,7 +298,7 @@ async def changename(ctx: Context) -> Optional[str]:
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
     )
-    ctx.player.logout()
+    app.usecases.players.logout(ctx.player)
 
     return None
 
@@ -961,7 +962,11 @@ async def unrestrict(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await t.unrestrict(ctx.player, reason)
+    await app.usecases.players.unrestrict(
+        player=t,
+        admin=ctx.player,
+        reason=reason,
+    )
 
     return f"{t} was unrestricted."
 
@@ -1356,7 +1361,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
-    await t.add_privs(bits)
+    await app.usecases.players.add_privs(t, bits)
     return f"Updated {t}'s privileges."
 
 
@@ -1377,7 +1382,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
-    await t.remove_privs(bits)
+    await app.usecases.players.remove_privs(t, bits)
     return f"Updated {t}'s privileges."
 
 
@@ -1404,7 +1409,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER, hidden=True)
 async def menu(ctx: Context) -> Optional[str]:
     """Temporary command to illustrate the menu option idea."""
-    ctx.player.send_current_menu()
+    app.usecases.players.send_current_menu(ctx.player)
 
     return None
 
@@ -2093,7 +2098,9 @@ async def mp_force(ctx: Context, match: Match) -> Optional[str]:
     if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    t.join_match(match, match.passwd)
+    if not app.usecases.players.join_match(t, match, match.passwd):
+        return None
+
     return "Welcome."
 
 
