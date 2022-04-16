@@ -94,9 +94,14 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
                 new_map = new_maps[old_id]
                 if old_map.md5 != new_map["file_md5"]:
                     # update map from old_maps
-                    bmap = old_maps[old_id]
-                    bmap._parse_from_osuapi_resp(new_map)
-                    updated_maps.append(bmap)
+                    beatmap = Beatmap.from_osuapi_response(new_map)
+
+                    if old_map.frozen:
+                        # maintain freeze & ranked status
+                        beatmap.frozen = True
+                        beatmap.status = old_map.status
+
+                    updated_maps.append(beatmap)
                 else:
                     # map is the same, make no changes
                     updated_maps.append(old_map)  # TODO: is this needed?
@@ -105,17 +110,8 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
         for new_id, new_map in new_maps.items():
             if new_id not in old_maps:
                 # new map we don't have locally, add it
-                bmap: Beatmap = Beatmap.__new__(Beatmap)
-                bmap.id = new_id
-
-                bmap._parse_from_osuapi_resp(new_map)
-
-                # (some implementation-specific stuff not given by api)
-                bmap.frozen = False
-                bmap.passes = 0
-                bmap.plays = 0
-
-                updated_maps.append(bmap)
+                beatmap = Beatmap.from_osuapi_response(new_map)
+                updated_maps.append(beatmap)
 
         # save changes to cache
         beatmap_set.maps = updated_maps

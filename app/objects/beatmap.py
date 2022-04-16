@@ -166,6 +166,8 @@ class Beatmap:
     def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
         self.set = map_set
 
+        # TODO: simplify this init
+
         self.md5 = kwargs.get("md5", "")
         self.id = kwargs.get("id", 0)
         self.set_id = kwargs.get("set_id", 0)
@@ -294,66 +296,6 @@ class Beatmap:
             hp=float(osuapi_response["diff_drain"]),
             diff=float(osuapi_response["difficultyrating"]),
         )
-
-    # TODO: remove this, replace with the above classmethod
-    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, Any]) -> None:
-        """Change internal data with the data in osu!api format."""
-        # NOTE: `self` is not guaranteed to have any attributes
-        #       initialized when this is called.
-        self.md5 = osuapi_resp["file_md5"]
-        # self.id = int(osuapi_resp['beatmap_id'])
-        self.set_id = int(osuapi_resp["beatmapset_id"])
-
-        self.artist, self.title, self.version, self.creator = (
-            osuapi_resp["artist"],
-            osuapi_resp["title"],
-            osuapi_resp["version"],
-            osuapi_resp["creator"],
-        )
-
-        self.filename = (
-            ("{artist} - {title} ({creator}) [{version}].osu")
-            .format(**osuapi_resp)
-            .translate(IGNORED_BEATMAP_CHARS)
-        )
-
-        # quite a bit faster than using dt.strptime.
-        _last_update = osuapi_resp["last_update"]
-        self.last_update = datetime(
-            year=int(_last_update[0:4]),
-            month=int(_last_update[5:7]),
-            day=int(_last_update[8:10]),
-            hour=int(_last_update[11:13]),
-            minute=int(_last_update[14:16]),
-            second=int(_last_update[17:19]),
-        )
-
-        self.total_length = int(osuapi_resp["total_length"])
-
-        if osuapi_resp["max_combo"] is not None:
-            self.max_combo = int(osuapi_resp["max_combo"])
-        else:
-            self.max_combo = 0
-
-        # if a map is 'frozen', we keeps it's status
-        # even after an update from the osu!api.
-        if not getattr(self, "frozen", False):
-            osuapi_status = int(osuapi_resp["approved"])
-            self.status = RankedStatus.from_osuapi(osuapi_status)
-
-        self.mode = GameMode(int(osuapi_resp["mode"]))
-
-        if osuapi_resp["bpm"] is not None:
-            self.bpm = float(osuapi_resp["bpm"])
-        else:
-            self.bpm = 0.0
-
-        self.cs = float(osuapi_resp["diff_size"])
-        self.od = float(osuapi_resp["diff_overall"])
-        self.ar = float(osuapi_resp["diff_approach"])
-        self.hp = float(osuapi_resp["diff_drain"])
-
-        self.diff = float(osuapi_resp["difficultyrating"])
 
 
 class BeatmapSet:
