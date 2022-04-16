@@ -40,6 +40,7 @@ import app.repositories.beatmaps
 import app.repositories.players
 import app.settings
 import app.state
+import app.usecases.beatmap_sets
 import app.usecases.beatmaps
 import app.usecases.channels
 import app.usecases.clans
@@ -686,59 +687,40 @@ async def _map(ctx: Context) -> Optional[str]:
     ):
         return "Invalid syntax: !map <rank/unrank/love> <map/set>"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
-    bmap = ctx.player.last_np["bmap"]
+    beatmap = ctx.player.last_np["bmap"]
     new_status = RankedStatus(status_to_id(ctx.args[0]))
 
-    if bmap.status == new_status:
-        return f"{bmap.embed} is already {new_status!s}!"
+    if beatmap.status == new_status:
+        return f"{beatmap.embed} is already {new_status!s}!"
 
     # update sql & cache based on scope
-    # XXX: not sure if getting md5s from sql
-    # for updating cache would be faster?
-    # surely this will not scale as well..
 
-    async with app.state.services.database.connection() as db_conn:
-        if ctx.args[1] == "set":
-            # update whole set
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE set_id = :set_id",
-                {"status": new_status, "set_id": bmap.set_id},
+    if ctx.args[1] == "set":
+        await app.usecases.beatmap_sets.update_status(beatmap.set, new_status)
+
+        map_ids_to_clear_requests_for = [
+            row[0]
+            for row in await app.state.services.database.fetch_all(
+                "SELECT id FROM maps WHERE set_id = :set_id",
+                {"set_id": beatmap.set_id},
             )
+        ]
 
-            # select all map ids for clearing map requests.
-            map_ids = [
-                row[0]
-                for row in await db_conn.fetch_all(
-                    "SELECT id FROM maps WHERE set_id = :set_id",
-                    {"set_id": bmap.set_id},
-                )
-            ]
+    else:
+        await app.usecases.beatmaps.update_status(beatmap, new_status)
 
-            for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
-                bmap.status = new_status
+        map_ids_to_clear_requests_for = [beatmap.id]
 
-        else:
-            # update only map
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
-                {"status": new_status, "map_id": bmap.id},
-            )
+    # deactivate rank requests for all ids
+    await app.state.services.database.execute(
+        "UPDATE map_requests SET active = 0 WHERE map_id IN :map_ids",
+        {"map_ids": map_ids_to_clear_requests_for},
+    )
 
-            map_ids = [bmap.id]
-
-            if bmap.md5 in app.state.cache.beatmap:
-                app.state.cache.beatmap[bmap.md5].status = new_status
-
-        # deactivate rank requests for all ids
-        await db_conn.execute(
-            "UPDATE map_requests SET active = 0 WHERE map_id IN :map_ids",
-            {"map_ids": map_ids},
-        )
-
-    return f"{bmap.embed} updated to {new_status!s}."
+    return f"{beatmap.embed} updated to {new_status!s}."
 
 
 """ Mod commands

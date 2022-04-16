@@ -14,6 +14,10 @@ from app.objects.beatmap import RankedStatus
 
 cache: dict[int, BeatmapSet] = {}
 
+# create
+
+# read
+
 
 def _fetch_by_id_cache(id: int) -> Optional[BeatmapSet]:
     """Fetch a beatmap set from the cache."""
@@ -101,7 +105,7 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
         {"id": beatmap_set.id, "last_osuapi_check": beatmap_set.last_osuapi_check},
     )
 
-    await app.repositories.beatmap_sets.save_to_sql(beatmap_set)
+    await app.repositories.beatmap_sets.replace_into_database(beatmap_set)
     return beatmap_set
 
 
@@ -123,7 +127,19 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
     return None
 
 
-async def save_to_sql(beatmap_set: BeatmapSet) -> None:
+# update
+
+
+async def update_status(beatmap_set_id: int, new_status: RankedStatus) -> None:
+    """Update all beatmaps in a set to a new ranked status in the database."""
+
+    await app.state.services.database.execute(
+        "UPDATE maps SET status = :status, frozen = 1 WHERE set_id = :set_id",
+        {"status": new_status, "set_id": beatmap_set_id},
+    )
+
+
+async def replace_into_database(beatmap_set: BeatmapSet) -> None:
     """Save the object's attributes into the database."""
     await app.state.services.database.execute_many(
         "REPLACE INTO maps ("
@@ -169,3 +185,6 @@ async def save_to_sql(beatmap_set: BeatmapSet) -> None:
             for bmap in beatmap_set.maps
         ],
     )
+
+
+# delete

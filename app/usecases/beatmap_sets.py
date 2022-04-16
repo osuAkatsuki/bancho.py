@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timedelta
+from typing import MutableMapping
 from typing import Sequence
 
 import app.repositories.beatmap_sets
@@ -11,6 +12,11 @@ import app.state.services
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import BeatmapSet
 from app.objects.beatmap import RankedStatus
+
+cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
+
+# create
+# read
 
 
 def all_officially_ranked_or_approved(beatmaps: Sequence[Beatmap]) -> bool:
@@ -64,6 +70,20 @@ def has_expired_cache(beatmap_set: BeatmapSet) -> bool:
         check_delta *= 4
 
     return current_datetime > (beatmap_set.last_osuapi_check + check_delta)
+
+
+# update
+
+
+async def update_status(beatmap_set: BeatmapSet, new_status: RankedStatus) -> None:
+    """Update all beatmaps in a set to a new ranked status in cache and the database."""
+
+    # update in cache
+    for beatmap in beatmap_set.maps:
+        beatmap.status = new_status
+
+    # update in database
+    await app.repositories.beatmap_sets.update_status(beatmap_set.id, new_status)
 
 
 async def _update_if_available(beatmap_set: BeatmapSet) -> None:
@@ -142,7 +162,7 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
 
         # update maps in sql
 
-        await app.repositories.beatmap_sets.save_to_sql(beatmap_set)
+        await app.repositories.beatmap_sets.replace_into_database(beatmap_set)
     else:
         # TODO: we have the map on disk but it's
         #       been removed from the osu!api.
@@ -166,3 +186,6 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
             "DELETE FROM mapsets WHERE id = :set_id",
             {"set_id": beatmap_set.id},
         )
+
+
+# delete

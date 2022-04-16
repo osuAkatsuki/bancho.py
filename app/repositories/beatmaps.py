@@ -6,6 +6,7 @@ from typing import Union
 import app.repositories.osuapi_v1
 import app.state.services
 from app.objects.beatmap import Beatmap
+from app.objects.beatmap import RankedStatus
 
 
 cache: dict[Union[str, int], Beatmap] = {}
@@ -133,5 +134,15 @@ async def fetch_by_id(id: int) -> Optional[Beatmap]:
 
 
 ## update
+
+
+async def update_status(beatmap_id: int, new_status: RankedStatus) -> None:
+    """Update a beatmap to a new ranked status in the database."""
+
+    await app.state.services.database.execute(
+        "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
+        {"status": new_status, "map_id": beatmap_id},
+    )
+
 
 ## delete

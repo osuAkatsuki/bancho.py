@@ -13,7 +13,12 @@ from app.logging import Ansi
 from app.logging import log
 from app.objects import models
 from app.objects.beatmap import Beatmap
+from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
+
+# create
+
+# read
 
 
 async def ensure_local_osu_file(
@@ -158,3 +163,19 @@ async def fetch_rating(beatmap: Beatmap) -> Optional[float]:
         return None
 
     return row["rating"]
+
+
+# update
+
+
+async def update_status(beatmap: Beatmap, new_status: RankedStatus) -> None:
+    """Update a beatmaps to a new ranked status in cache and the database."""
+
+    # update in cache
+    beatmap.status = new_status
+
+    # update in database
+    await app.repositories.beatmaps.update_status(beatmap.id, new_status)
+
+
+# delete
