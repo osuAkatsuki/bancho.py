@@ -40,6 +40,9 @@ class BanchoAPI(FastAPI):
                 if isinstance(host, starlette.routing.Host)
             ]
 
+            # XXX:HACK fastapi will not show documentation for routes
+            # added through use sub applications using the Host class
+            # (e.g. app.host('other.domain', app2))
             for host in starlette_hosts:
                 for route in host.routes:
                     if route not in routes:
