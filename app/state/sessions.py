@@ -16,7 +16,6 @@ from app.logging import log
 from app.objects.achievement import Achievement
 from app.objects.collections import Channels
 from app.objects.collections import Clans
-from app.objects.collections import MapPools
 from app.objects.collections import Matches
 from app.objects.collections import Players
 from app.objects.player import Player
@@ -24,7 +23,6 @@ from app.objects.player import Privileges
 
 players = Players()
 channels = Channels()
-pools = MapPools()
 clans = Clans()
 matches = Matches()
 achievements: list[Achievement] = []
@@ -67,10 +65,11 @@ async def cancel_housekeeping_tasks() -> None:
 
 async def init_server_state(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
-    # fetch channels, clans and pools from db
-    channels.extend(await app.repositories.channels.fetch_all())
-    clans.extend(await app.repositories.clans.fetch_all())
-    pools.extend(await app.repositories.mappools.fetch_all())
+
+    # populate our ram cache of channels, clans, and mappools from the db
+    await app.repositories.channels._populate_cache_from_database()
+    await app.repositories.clans._populate_cache_from_database()
+    await app.repositories.mappools._populate_cache_from_database()
 
     bot_name = await app.utils.fetch_bot_name(db_conn)
 

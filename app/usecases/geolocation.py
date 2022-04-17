@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from typing import Optional
 
-import app.objects.geolocation
 import app.state.services
 from app._typing import IPAddress
 from app.logging import Ansi
 from app.logging import log
+from app.objects.geolocation import Geolocation
+from app.objects.geolocation import OSU_COUNTRY_CODES
 
 
-def lookup_maxmind(ip: IPAddress) -> app.objects.geolocation.Geolocation:
-    """Fetch geolocation data based on ip (using local db)."""
+def lookup_maxmind(ip: IPAddress) -> Geolocation:
+    """\
+    Fetch geolocation data based on ip (using local db).
+
+    https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en
+    """
     assert app.state.services.geoloc_db is not None
 
     res = app.state.services.geoloc_db.city(ip)
@@ -25,16 +30,19 @@ def lookup_maxmind(ip: IPAddress) -> app.objects.geolocation.Geolocation:
         "longitude": res.location.longitude or 0.0,
         "country": {
             "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "numeric": OSU_COUNTRY_CODES[acronym],
         },
     }
 
 
-async def lookup_ipinfo(ip: IPAddress) -> Optional[app.objects.geolocation.Geolocation]:
-    """Fetch geolocation data based on ip (using ip-api)."""
-    url = f"http://ip-api.com/line/{ip}"
+async def lookup_ipinfo(ip: IPAddress) -> Optional[Geolocation]:
+    """\
+    Fetch geolocation data based on ip (using ip-api).
 
-    async with app.state.services.http.get(url) as resp:
+    http://ip-api.com/
+    """
+
+    async with app.state.services.http.get(url=f"http://ip-api.com/line/{ip}") as resp:
         if not resp or resp.status != 200:
             log("Failed to get geoloc data: request failed.", Ansi.LRED)
             return None
@@ -56,12 +64,12 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[app.objects.geolocation.Geolo
         "longitude": float(lines[7]),
         "country": {
             "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "numeric": OSU_COUNTRY_CODES[acronym],
         },
     }
 
 
-async def lookup(ip: IPAddress) -> Optional[app.objects.geolocation.Geolocation]:
+async def lookup(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip."""
     if not ip.is_private:
         if app.state.services.geoloc_db is not None:

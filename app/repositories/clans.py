@@ -1,28 +1,82 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
+from typing import Union
 
 import app.state.services
+from app.constants.privileges import ClanPrivileges
 from app.objects.clan import Clan
+from app.objects.player import Player
 
-cache: MutableMapping[int, Clan] = {}  # {id: clan}
+ClanID = int
+ClanTag = str
 
-# create
+KeyTypes = Union[ClanID, ClanTag]
 
-# read
+cache: MutableMapping[KeyTypes, Clan] = {}  # {id/tag: clan}
 
-
-def _fetch_by_id_cache(id: int) -> Optional[Clan]:
-    """Fetch a clan from the cache by id."""
-    return cache.get(id)
+## create
 
 
-async def _fetch_by_id_database(id: int) -> Optional[Clan]:
-    """Fetch a clan from the database by id."""
+async def create(name: str, tag: str, owner: Player) -> Clan:
+    """Create a clan in cache and the database."""
+    created_at = datetime.now()
+
+    clan_id = await app.state.services.database.execute(
+        "INSERT INTO clans "
+        "(name, tag, created_at, owner) "
+        "VALUES (:name, :tag, :created_at, :owner_id)",
+        {"name": name, "tag": tag, "created_at": created_at, "owner": owner.id},
+    )
+
+    clan = Clan(
+        id=clan_id,
+        name=name,
+        tag=tag,
+        created_at=created_at,
+        owner_id=owner.id,
+        member_ids={owner.id},
+    )
+
+    owner.clan = clan
+    owner.clan_priv = ClanPrivileges.OWNER
+
+    await app.state.services.database.execute(
+        "UPDATE users "
+        "SET clan_id = :clan_id, clan_priv = :clan_priv "
+        "WHERE id = :user_id",
+        {
+            "clan_id": owner.clan.id,
+            "clan_priv": owner.clan_priv,
+            "user_id": owner.id,
+        },
+    )
+
+    cache[clan.id] = clan
+    cache[clan.tag] = clan
+
+    return clan
+
+
+## read
+
+
+# low level api
+# allow for fetching based on any supported key
+
+
+def _fetch_by_key_cache(key: KeyTypes) -> Optional[Clan]:
+    """Fetch a clan from the cache by any supported key."""
+    return cache.get(key)
+
+
+async def _fetch_by_key_database(key: str, val: KeyTypes) -> Optional[Clan]:
+    """Fetch a clan from the database by any supported key."""
     row = await app.state.services.database.fetch_one(
-        "SELECT * FROM clans WHERE id = :id",
-        {"id": id},
+        f"SELECT * FROM clans WHERE {key} = :val",
+        {"val": val},
     )
     if row is None:
         return None
@@ -32,7 +86,7 @@ async def _fetch_by_id_database(id: int) -> Optional[Clan]:
         row["id"]
         for row in await app.state.services.database.fetch_all(
             "SELECT id FROM users WHERE clan_id = :clan_id",
-            {"clan_id": id},
+            {"clan_id": row["id"]},
         )
     }
 
@@ -46,15 +100,29 @@ async def _fetch_by_id_database(id: int) -> Optional[Clan]:
     )
 
 
-async def fetch_by_id(id: int) -> Optional[Clan]:
-    """Fetch a clan from the cache, or database by id."""
-    if clan := _fetch_by_id_cache(id):
+async def _fetch_by_key(key: str, val: KeyTypes) -> Optional[Clan]:
+    """Fetch a clan from the cache, or database by any supported key."""
+    if clan := _fetch_by_key_cache(val):
         return clan
 
-    if clan := await _fetch_by_id_database(id):
+    if clan := await _fetch_by_key_database(key, val):
+        cache[clan.id] = clan
         return clan
 
     return None
+
+
+# high level api
+
+
+async def fetch_by_id(id: ClanID) -> Optional[Clan]:
+    """Fetch a clan from the cache, or database by id."""
+    return await _fetch_by_key("id", id)
+
+
+async def fetch_by_tag(tag: ClanTag) -> Optional[Clan]:
+    """Fetch a clan from the cache, or database by tag."""
+    return await _fetch_by_key("tag", tag)
 
 
 async def fetch_all() -> set[Clan]:
@@ -70,6 +138,17 @@ async def fetch_all() -> set[Clan]:
             clans.add(clan)
 
     return clans
+
+
+async def _populate_cache_from_database() -> None:
+    """Populate the cache with all values from the database."""
+    all_resources = await fetch_all()
+
+    for resource in await fetch_all():
+        cache[resource.id] = resource
+        cache[resource.tag] = resource
+
+    return None
 
 
 # update

@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime as datetime
 from enum import IntEnum
 from enum import unique
-from typing import Mapping
+from typing import MutableMapping
 from typing import Optional
 from typing import overload
 from typing import TYPE_CHECKING
@@ -97,7 +97,7 @@ class MapPool:
         name: str,
         created_at: datetime,
         created_by: int,  # player id
-        maps: Mapping[tuple[Mods, int], Beatmap],
+        maps: MutableMapping[tuple[Mods, int], Beatmap],
     ) -> None:
         self.id = id
         self.name = name

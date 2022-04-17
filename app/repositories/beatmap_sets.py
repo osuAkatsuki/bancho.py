@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import MutableMapping
 from typing import Optional
 
 import app.repositories.beatmap_sets
@@ -12,7 +13,7 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import BeatmapSet
 from app.objects.beatmap import RankedStatus
 
-cache: dict[int, BeatmapSet] = {}
+cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
 
 # create
 

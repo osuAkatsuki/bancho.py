@@ -340,33 +340,21 @@ class Player:
     @property
     def url(self) -> str:
         """The url to the player's profile."""
-        # NOTE: this is currently never wiped because
-        # domain & id cannot be changed in-game; if this
-        # ever changes, it will need to be wiped.
         return f"https://{app.settings.DOMAIN}/u/{self.id}"
 
     @property
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
-        # NOTE: this is currently never wiped because
-        # url & name cannot be changed in-game; if this
-        # ever changes, it will need to be wiped.
         return f"[{self.url} {self.name}]"
 
     @property
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
-        # NOTE: this is currently never wiped because
-        # domain & id cannot be changed in-game; if this
-        # ever changes, it will need to be wiped.
         return f"https://a.{app.settings.DOMAIN}/{self.id}"
 
     @property
     def full_name(self) -> str:
         """The user's "full" name; including their clan tag."""
-        # NOTE: this is currently only wiped when the
-        # user leaves their clan; if name/clantag ever
-        # become changeable, it will need to be wiped.
         if self.clan:
             return f"[{self.clan.tag}] {self.name}"
         else:
@@ -410,7 +398,7 @@ class Player:
         """The player's stats in their currently selected mode."""
         return self.stats[self.status.mode]
 
-    @cached_property  # TODO: should this be in repos, or usecases?
+    @property  # TODO: should this be in repos, or usecases?
     def recent_score(self) -> Optional[Score]:
         """The player's most recently submitted score."""
         score = None

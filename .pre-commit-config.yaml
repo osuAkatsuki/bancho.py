@@ -8,7 +8,6 @@ repos:
     -   id: check-ast
     -   id: check-builtin-literals
     -   id: check-yaml
-    -   id: debug-statements
     -   id: end-of-file-fixer
     -   id: requirements-txt-fixer
     -   id: trailing-whitespace

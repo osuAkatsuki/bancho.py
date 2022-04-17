@@ -40,6 +40,7 @@ from fastapi.routing import APIRouter
 import app.packets
 import app.repositories.beatmap_sets
 import app.repositories.beatmaps
+import app.repositories.channels
 import app.repositories.players
 import app.repositories.scores
 import app.settings
@@ -364,7 +365,7 @@ async def submit_score(
 
     form_data = await request.form()
 
-    # XXX:HACK  the bancho protocol uses the "score" parameter name for
+    # XXX:HACK the bancho protocol uses the "score" parameter name for
     # both the base64'ed score data, as well as the replay file in the multipart.
     # starlette/fastapi do not support this - this function provides a workaround
     score_parameters = app.usecases.scores.parse_form_data_score_params(form_data)
@@ -385,16 +386,18 @@ async def submit_score(
         osu_version,
     )
 
-    beatmap_md5 = score_data[0]
-    if not (beatmap := await app.repositories.beatmaps.fetch_by_md5(beatmap_md5)):
-        # Map does not exist, most likely unsubmitted.
+    # fetch the beatmap played in the score
+    beatmap = await app.repositories.beatmaps.fetch_by_md5(score_data[0])
+
+    if beatmap is None:
+        # map does not exist, most likely unsubmitted.
         return b"error: beatmap"
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
     if not (
         player := await app.usecases.players.login(unquote(username), pw_md5.encode())
     ):
-        # Player is not online, return nothing so that their
+        # player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
 
@@ -435,7 +438,7 @@ async def submit_score(
             storyboard_md5,
             player.client_details,  # type: ignore
         )
-    except AssertionError as exc:
+    except AssertionError:
         # NOTE: this is undergoing a temporary trial period,
         # after which, it will be enabled & perform restrictions.
         stacktrace = app.utils.get_appropriate_stacktrace()
@@ -542,43 +545,49 @@ async def submit_score(
 
             if score.rank == 1 and not player.restricted:
                 # this is the new #1, post the play to #announce.
-                announce_chan = app.state.sessions.channels["#announce"]
-
-                # Announce the user's #1 score.
-                # TODO: truncate artist/title/version to fit on screen
-                ann = [
-                    f"\x01ACTION achieved #1 on {beatmap.embed}",
-                    f"with {score.acc:.2f}% for {performance}.",
-                ]
-
-                if score.mods:
-                    ann.insert(1, f"+{score.mods!r}")
-
-                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
-
-                # If there was previously a score on the map, add old #1.
-                prev_n1 = await db_conn.fetch_one(
-                    "SELECT u.id, name FROM users u "
-                    "INNER JOIN scores s ON u.id = s.userid "
-                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-                    "AND s.status = 2 AND u.priv & 1 "
-                    f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                    {"map_md5": beatmap.md5, "mode": score.mode},
+                announce_channel = await app.repositories.channels.fetch_by_name(
+                    "#announce",
                 )
 
-                if prev_n1:
-                    if player.id != prev_n1["id"]:
-                        ann.append(
-                            f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
-                            "{id} {name}])".format(**prev_n1),
-                        )
+                if announce_channel is not None:
+                    # Announce the user's #1 score.
+                    # TODO: truncate artist/title/version to fit on screen
+                    ann = [
+                        f"\x01ACTION achieved #1 on {beatmap.embed}",
+                        f"with {score.acc:.2f}% for {performance}.",
+                    ]
 
-                app.usecases.channels.send_msg_to_clients(
-                    announce_chan,
-                    msg=" ".join(ann),
-                    sender=player,
-                    to_self=True,
-                )
+                    if score.mods:
+                        ann.insert(1, f"+{score.mods!r}")
+
+                    scoring_metric = (
+                        "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+                    )
+
+                    # If there was previously a score on the map, add old #1.
+                    prev_n1 = await db_conn.fetch_one(
+                        "SELECT u.id, name FROM users u "
+                        "INNER JOIN scores s ON u.id = s.userid "
+                        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+                        "AND s.status = 2 AND u.priv & 1 "
+                        f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
+                        {"map_md5": beatmap.md5, "mode": score.mode},
+                    )
+
+                    if prev_n1:
+                        if player.id != prev_n1["id"]:
+                            ann.append(
+                                f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
+                                "{id} {name}])".format(**prev_n1),
+                            )
+
+                    app.usecases.channels.send_msg_to_clients(
+                        announce_channel,
+                        msg=" ".join(ann),
+                        sender=player,
+                        to_self=True,
+                    )
+
         # this score is our best score.
         # update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
@@ -838,6 +847,7 @@ async def submit_score(
                 chart_entry("accuracy", None, round(score.acc, 2)),
                 chart_entry("pp", None, score.pp),
             )
+        import dataclasses
 
         overall_ranking_chart_entries = (
             chart_entry("rank", prev_stats.rank, stats.rank),
@@ -908,7 +918,7 @@ async def post_beatmap_rating(
     if rating is None:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
-        beatmap = app.repositories.beatmaps._fetch_by_md5_cache(map_md5)
+        beatmap = app.repositories.beatmaps._fetch_by_key_cache("md5", map_md5)
         if beatmap is None:
             return b"no exist"
 
@@ -1287,7 +1297,7 @@ async def mark_channel_as_read(
     if not (channel_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    target_player = await app.repositories.players.fetch(player_name=channel_name)
+    target_player = await app.repositories.players.fetch(name=channel_name)
 
     if target_player is not None:
         await app.usecases.mail.mark_as_read(

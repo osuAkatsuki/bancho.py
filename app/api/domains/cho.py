@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Callable
 from typing import Literal
 from typing import Optional
+from typing import Sequence
 from typing import TypedDict
+from typing import Union
 
 import databases.core
 from fastapi import APIRouter
@@ -23,6 +25,7 @@ from fastapi.responses import HTMLResponse
 
 import app.packets
 import app.repositories.beatmaps
+import app.repositories.channels
 import app.repositories.players
 import app.settings
 import app.state
@@ -248,7 +251,7 @@ class SendMessage(BasePacket):
             else:
                 return
 
-            t_chan = app.state.sessions.channels[f"#spec_{spec_id}"]
+            t_chan = await app.repositories.channels.fetch_by_name(f"#spec_{spec_id}")
         elif recipient == "#multiplayer":
             if not p.match:
                 # they're not in a match?
@@ -256,7 +259,7 @@ class SendMessage(BasePacket):
 
             t_chan = p.match.chat
         else:
-            t_chan = app.state.sessions.channels[recipient]
+            t_chan = await app.repositories.channels.fetch_by_name(recipient)
 
         if not t_chan:
             log(f"{p} wrote to non-existent {recipient}.", Ansi.LYELLOW)
@@ -710,7 +713,7 @@ async def login(
 
     # send all appropriate channel info to our player.
     # the osu! client will attempt to join the channels.
-    for c in app.state.sessions.channels:
+    for c in app.repositories.channels.cache.values():
         if (
             not c.auto_join
             or not app.usecases.channels.can_read(c, player.priv)
@@ -966,7 +969,7 @@ class SendPrivateMessage(BasePacket):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (t := await app.repositories.players.fetch(player_name=t_name)):
+        if not (t := await app.repositories.players.fetch(name=t_name)):
             if app.settings.DEBUG:
                 log(f"{p} tried to write to non-existent user {t_name}.", Ansi.LYELLOW)
             return
@@ -1183,18 +1186,26 @@ class MatchCreate(BasePacket):
             p.enqueue(app.packets.match_join_fail())
             return
 
-        # create the channel and add it
-        # to the global channel list as
-        # an instanced channel.
-        chan = Channel(
+        # create a new channel for this multiplayer match
+        channel = await app.repositories.channels.create(
             name=f"#multi_{self.match.id}",
             topic=f"MID {self.match.id}'s multiplayer channel.",
+            read_priv=Privileges.NORMAL,
+            write_priv=Privileges.NORMAL,
             auto_join=False,
             instance=True,
         )
+        if channel is None:
+            p.enqueue(
+                app.packets.match_join_fail()
+                + app.packets.notification(
+                    "Failed to create #multiplayer channel.",
+                ),
+            )
+            return
 
-        app.state.sessions.channels.append(chan)
-        self.match.chat = chan
+        # attach the new channel to our multiplayer match
+        self.match.chat = channel
 
         app.usecases.players.update_latest_activity_soon(p)
         app.usecases.players.join_match(p, self.match, self.match.passwd)
@@ -1518,6 +1529,152 @@ class MatchScoreUpdate(BasePacket):
         app.usecases.multiplayer.send_data_to_clients(match, bytes(buf), lobby=False)
 
 
+async def update_matchpoints(match: Match, was_playing: Sequence[Slot]) -> None:
+    """\
+    Determine the winner from `scores`, increment & inform players.
+
+    This automatically works with the match settings (such as
+    win condition, teams, & co-op) to determine the appropriate
+    winner, and will use any team names included in the match name,
+    along with the match name (fmt: OWC2020: (Team1) vs. (Team2)).
+
+    For the examples, we'll use accuracy as a win condition.
+
+    Teams, match title: `OWC2015: (United States) vs. (China)`.
+        United States takes the point! (293.32% vs 292.12%)
+        Total Score: United States | 7 - 2 | China
+        United States takes the match, finishing OWC2015 with a score of 7 - 2!
+
+    FFA, the top <=3 players will be listed for the total score.
+        Justice takes the point! (94.32% [Match avg. 91.22%])
+        Total Score: Justice - 3 | cmyui - 2 | FrostiDrinks - 2
+        Justice takes the match, finishing with a score of 4 - 2!
+    """
+
+    assert match.chat is not None
+    scores, didnt_submit = await app.usecases.multiplayer.await_submissions(
+        match,
+        was_playing,
+    )
+
+    for p in didnt_submit:
+        app.usecases.channels.send_bot(
+            match.chat,
+            f"{p} didn't submit a score (timeout: 10s).",
+        )
+
+    if scores:
+        ffa = match.team_type in (
+            MatchTeamTypes.head_to_head,
+            MatchTeamTypes.tag_coop,
+        )
+
+        # all scores are equal, it was a tie.
+        if len(scores) != 1 and len(set(scores.values())) == 1:
+            match.winners.append(None)
+            app.usecases.channels.send_bot(match.chat, "The point has ended in a tie!")
+            return None
+
+        # Find the winner & increment their matchpoints.
+        winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
+        match.winners.append(winner)
+        match.match_points[winner] += 1
+
+        msg: list[str] = []
+
+        def add_suffix(score: Union[int, float]) -> Union[str, int, float]:
+            if match.use_pp_scoring:
+                return f"{score:.2f}pp"
+            elif match.win_condition == MatchWinConditions.accuracy:
+                return f"{score:.2f}%"
+            elif match.win_condition == MatchWinConditions.combo:
+                return f"{score}x"
+            else:
+                return str(score)
+
+        if ffa:
+            msg.append(
+                f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
+                f"[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])",
+            )
+
+            wmp = match.match_points[winner]
+
+            # check if match point #1 has enough points to win.
+            if match.winning_pts and wmp == match.winning_pts:
+                # we have a champion, announce & reset our match.
+                match.is_scrimming = False
+                app.usecases.multiplayer.reset_scrimmage_state(match)
+                match.bans.clear()
+
+                m = f"{winner.name} takes the match! Congratulations!"
+            else:
+                # no winner, just announce the match points so far.
+                # for ffa, we'll only announce the top <=3 players.
+                m_points = sorted(match.match_points.items(), key=lambda x: x[1])
+                m = f"Total Score: {' | '.join([f'{k.name} - {v}' for k, v in m_points])}"
+
+            msg.append(m)
+            del m
+
+        else:  # teams
+            if r_match := regexes.TOURNEY_MATCHNAME.match(match.name):
+                match_name = r_match["name"]
+                team_names = {
+                    MatchTeams.blue: r_match["T1"],
+                    MatchTeams.red: r_match["T2"],
+                }
+            else:
+                match_name = match.name
+                team_names = {MatchTeams.blue: "Blue", MatchTeams.red: "Red"}
+
+            # teams are binary, so we have a loser.
+            loser = MatchTeams({1: 2, 2: 1}[winner])
+
+            # from match name if available, else blue/red.
+            wname = team_names[winner]
+            lname = team_names[loser]
+
+            # scores from the recent play
+            # (according to win condition)
+            ws = add_suffix(scores[winner])
+            ls = add_suffix(scores[loser])
+
+            # total win/loss score in the match.
+            wmp = match.match_points[winner]
+            lmp = match.match_points[loser]
+
+            # announce the score for the most recent play.
+            msg.append(f"{wname} takes the point! ({ws} vs. {ls})")
+
+            # check if the winner has enough match points to win the match.
+            if match.winning_pts and wmp == match.winning_pts:
+                # we have a champion, announce & reset our match.
+                match.is_scrimming = False
+                app.usecases.multiplayer.reset_scrimmage_state(match)
+
+                msg.append(
+                    f"{wname} takes the match, finishing {match_name} "
+                    f"with a score of {wmp} - {lmp}! Congratulations!",
+                )
+            else:
+                # no winner, just announce the match points so far.
+                msg.append(f"Total Score: {wname} | {wmp} - {lmp} | {lname}")
+
+        if didnt_submit:
+            app.usecases.channels.send_bot(
+                match.chat,
+                "If you'd like to perform a rematch, "
+                "please use the `!mp rematch` command.",
+            )
+
+        for line in msg:
+            app.usecases.channels.send_bot(match.chat, line)
+
+    else:
+        app.usecases.channels.send_bot(match.chat, "Scores could not be calculated.")
+
+
 @register(ClientPackets.MATCH_COMPLETE)
 class MatchComplete(BasePacket):
     async def handle(self, player: Player) -> None:
@@ -1563,6 +1720,7 @@ class MatchComplete(BasePacket):
         app.usecases.multiplayer.send_match_state_to_clients(match)
 
         if match.is_scrimming:
+
             # determine winner, update match points & inform players.
             asyncio.create_task(
                 app.usecases.multiplayer.update_matchpoints(match, was_playing),
@@ -1712,16 +1870,26 @@ class MatchSkipRequest(BasePacket):
 @register(ClientPackets.CHANNEL_JOIN, restricted=True)
 class ChannelJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.name = reader.read_string()
+        self.channel_name = reader.read_string()
 
-    async def handle(self, p: Player) -> None:
-        if self.name in IGNORED_CHANNELS:
+    async def handle(self, player: Player) -> None:
+        if self.channel_name in IGNORED_CHANNELS:
             return
 
-        c = app.state.sessions.channels[self.name]
+        channel = await app.repositories.channels.fetch_by_name(self.channel_name)
 
-        if not c or not app.usecases.players.join_channel(p, c):
-            log(f"{p} failed to join {self.name}.", Ansi.LYELLOW)
+        if channel is None:
+            log(
+                f"{player} tried to join non-existent {self.channel_name}",
+                Ansi.LYELLOW,
+            )
+            return
+
+        if not app.usecases.players.join_channel(player, channel):
+            log(
+                f"{player} failed to join {self.channel_name}.",
+                Ansi.LYELLOW,
+            )
             return
 
 
@@ -1817,21 +1985,22 @@ class TourneyMatchLeaveChannel(BasePacket):
 @register(ClientPackets.FRIEND_ADD)
 class FriendAdd(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.user_id = reader.read_i32()
+        self.player_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
-        if not (t := app.state.sessions.players.get(id=self.user_id)):
-            log(f"{p} tried to add a user who is not online! ({self.user_id})")
+    async def handle(self, player: Player) -> None:
+
+        if not (target := app.state.sessions.players.get(id=self.player_id)):
+            log(f"{player} tried to add a user who is not online! ({self.player_id})")
             return
 
-        if t is app.state.sessions.bot:
+        if target is app.state.sessions.bot:
             return
 
-        if t.id in p.blocks:
-            p.blocks.remove(t.id)
+        if target.id in player.blocks:
+            player.blocks.remove(target.id)
 
-        app.usecases.players.update_latest_activity_soon(p)
-        await app.usecases.players.add_friend(p, t)
+        app.usecases.players.update_latest_activity_soon(player)
+        await app.usecases.players.add_friend(player, target)
 
 
 @register(ClientPackets.FRIEND_REMOVE)
@@ -1839,26 +2008,26 @@ class FriendRemove(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         if not (t := app.state.sessions.players.get(id=self.user_id)):
-            log(f"{p} tried to remove a user who is not online! ({self.user_id})")
+            log(f"{player} tried to remove a user who is not online! ({self.user_id})")
             return
 
         if t is app.state.sessions.bot:
             return
 
-        app.usecases.players.update_latest_activity_soon(p)
-        await app.usecases.players.remove_friend(p, t)
+        app.usecases.players.update_latest_activity_soon(player)
+        await app.usecases.players.remove_friend(player, t)
 
 
 @register(ClientPackets.MATCH_CHANGE_TEAM)
 class MatchChangeTeam(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
         # toggle team
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         if slot.team == MatchTeams.blue:
@@ -1866,7 +2035,7 @@ class MatchChangeTeam(BasePacket):
         else:
             slot.team = MatchTeams.blue
 
-        app.usecases.multiplayer.send_match_state_to_clients(m, lobby=False)
+        app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
 
 
 @register(ClientPackets.CHANNEL_PART, restricted=True)
@@ -1878,14 +2047,14 @@ class ChannelPart(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = app.state.sessions.channels[self.name]
+        channel = await app.repositories.channels.fetch_by_name(self.name)
 
-        if not channel:
-            log(f"{player} failed to leave {self.name}.", Ansi.LYELLOW)
+        if channel is None:
+            log(f"{player} tried to leave non-existent {self.name}.", Ansi.LYELLOW)
             return
 
         if player not in channel:
-            # user not in chan
+            log(f"{player} tried to leave {self.name} before joining.", Ansi.LYELLOW)
             return
 
         # leave the chan server-side.
@@ -1897,12 +2066,12 @@ class ReceiveUpdates(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         if not 0 <= self.value < 3:
-            log(f"{p} tried to set his presence filter to {self.value}?")
+            log(f"{player} tried to set his presence filter to {self.value}?")
             return
 
-        p.pres_filter = PresenceFilter(self.value)
+        player.pres_filter = PresenceFilter(self.value)
 
 
 @register(ClientPackets.SET_AWAY_MESSAGE)
@@ -1910,8 +2079,8 @@ class SetAwayMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
-    async def handle(self, p: Player) -> None:
-        p.away_msg = self.msg.text
+    async def handle(self, player: Player) -> None:
+        player.away_msg = self.msg.text
 
 
 @register(ClientPackets.USER_STATS_REQUEST, restricted=True)
@@ -1919,20 +2088,20 @@ class StatsRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         unrestrcted_ids = [p.id for p in app.state.sessions.players.unrestricted]
-        is_online = lambda o: o in unrestrcted_ids and o != p.id
+        is_online = lambda o: o in unrestrcted_ids and o != player.id
 
         for online in filter(is_online, self.user_ids):
-            if t := app.state.sessions.players.get(id=online):
-                if t is app.state.sessions.bot:
+            if target := app.state.sessions.players.get(id=online):
+                if target is app.state.sessions.bot:
                     # optimization for bot since it's
                     # the most frequently requested user
-                    packet = app.packets.bot_stats(t)
+                    packet = app.packets.bot_stats(target)
                 else:
-                    packet = app.packets.user_stats(t)
+                    packet = app.packets.user_stats(target)
 
-                p.enqueue(packet)
+                player.enqueue(packet)
 
 
 @register(ClientPackets.MATCH_INVITE)
@@ -1940,22 +2109,22 @@ class MatchInvite(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
-        if not p.match:
+    async def handle(self, player: Player) -> None:
+        if not player.match:
             return
 
         if not (t := app.state.sessions.players.get(id=self.user_id)):
-            log(f"{p} tried to invite a user who is not online! ({self.user_id})")
+            log(f"{player} tried to invite a user who is not online! ({self.user_id})")
             return
 
         if t is app.state.sessions.bot:
-            app.usecases.players.send_bot(p, "I'm too busy!")
+            app.usecases.players.send_bot(player, "I'm too busy!")
             return
 
-        t.enqueue(app.packets.match_invite(p, t.name))
-        app.usecases.players.update_latest_activity_soon(p)
+        t.enqueue(app.packets.match_invite(player, t.name))
+        app.usecases.players.update_latest_activity_soon(player)
 
-        log(f"{p} invited {t} to their match.")
+        log(f"{player} invited {t} to their match.")
 
 
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
@@ -1980,7 +2149,7 @@ class UserPresenceRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         for pid in self.user_ids:
             if t := app.state.sessions.players.get(id=pid):
                 if t is app.state.sessions.bot:
@@ -1990,7 +2159,7 @@ class UserPresenceRequest(BasePacket):
                 else:
                     packet = app.packets.user_presence(t)
 
-                p.enqueue(packet)
+                player.enqueue(packet)
 
 
 @register(ClientPackets.USER_PRESENCE_REQUEST_ALL)
@@ -1999,7 +2168,7 @@ class UserPresenceRequestAll(BasePacket):
         # TODO: should probably ratelimit with this (300k s)
         self.ingame_time = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         # NOTE: this packet is only used when there
         # are >256 players visible to the client.
 
@@ -2008,7 +2177,7 @@ class UserPresenceRequestAll(BasePacket):
         for player in app.state.sessions.players.unrestricted:
             buffer += app.packets.user_presence(player)
 
-        p.enqueue(bytes(buffer))
+        player.enqueue(bytes(buffer))
 
 
 @register(ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS)
@@ -2016,7 +2185,7 @@ class ToggleBlockingDMs(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
-        p.pm_private = self.value == 1
+    async def handle(self, player: Player) -> None:
+        player.pm_private = self.value == 1
 
-        app.usecases.players.update_latest_activity_soon(p)
+        app.usecases.players.update_latest_activity_soon(player)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import MutableMapping
 from typing import Optional
+from typing import Union
 
 import app.objects.geolocation
 import app.state.cache
@@ -11,7 +13,7 @@ import app.usecases.players
 import app.utils
 from app.objects.player import Player
 
-cache = {}
+cache: MutableMapping[Union[int, str], Player] = {}  # {name/id: player}
 
 
 async def _fetch_user_info_sql(key: str, val: Any):  # TODO: type
@@ -38,10 +40,10 @@ def _determine_argument_kv(
 
 async def fetch(
     # support fetching from both args
-    player_id: Optional[int] = None,
-    player_name: Optional[str] = None,
+    id: Optional[int] = None,
+    name: Optional[str] = None,
 ) -> Player | None:
-    arg_key, arg_val = _determine_argument_kv(player_id, player_name)
+    arg_key, arg_val = _determine_argument_kv(id, name)
 
     # determine correct source
     if player := cache.get(arg_val):
@@ -85,7 +87,7 @@ async def fetch(
         "longitude": 0.0,
         "country": {
             "acronym": country_acronym,
-            "numeric": app.objects.geolocation.country_codes[country_acronym],
+            "numeric": app.objects.geolocation.OSU_COUNTRY_CODES[country_acronym],
         },
     }
 

@@ -27,7 +27,6 @@ __all__ = (
     "Channels",
     "Matches",
     "Players",
-    "MapPools",
     "Clans",
 )
 
@@ -243,91 +242,6 @@ class Players(list[Player]):
             return
 
         super().remove(p)
-
-
-class MapPools(list[MapPool]):
-    """The currently active mappools on the server."""
-
-    def __iter__(self) -> Iterator[MapPool]:
-        return super().__iter__()
-
-    @overload
-    def __getitem__(self, index: int) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[MapPool]:
-        ...
-
-    def __getitem__(
-        self,
-        index: Union[int, slice, str],
-    ) -> Union[MapPool, list[MapPool]]:
-        """Allow slicing by either a string (for name), or slice."""
-        if isinstance(index, str):
-            return self.get_by_name(index)  # type: ignore
-        else:
-            return super().__getitem__(index)
-
-    @staticmethod
-    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
-        """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("id", "name"):
-            if (val := kwargs.pop(attr, None)) is not None:
-                return attr, val
-        else:
-            raise ValueError("Incorrect call to MapPools.get()")
-
-    def get(self, **kwargs: object) -> Optional[MapPool]:
-        """Get a mappool by id, or name from cache."""
-        attr, val = self._parse_attr(kwargs)
-
-        for p in self:
-            if getattr(p, attr) == val:
-                return p
-
-        return None
-
-    def __contains__(self, o: Union[MapPool, str]) -> bool:
-        """Check whether internal list contains `o`."""
-        # Allow string to be passed to compare vs. name.
-        if isinstance(o, str):
-            return o in (pool.name for pool in self)
-        else:
-            return o in self
-
-    def get_by_name(self, name: str) -> Optional[MapPool]:
-        """Get a pool from the list by `name`."""
-        for p in self:
-            if p.name == name:
-                return p
-
-        return None
-
-    def append(self, m: MapPool) -> None:
-        """Append `m` to the list."""
-        super().append(m)
-
-        if app.settings.DEBUG:
-            log(f"{m} added to mappools list.")
-
-    def extend(self, ms: Iterable[MapPool]) -> None:
-        """Extend the list with `ms`."""
-        super().extend(ms)
-
-        if app.settings.DEBUG:
-            log(f"{ms} added to mappools list.")
-
-    def remove(self, m: MapPool) -> None:
-        """Remove `m` from the list."""
-        super().remove(m)
-
-        if app.settings.DEBUG:
-            log(f"{m} removed from mappools list.")
 
 
 class Clans(list[Clan]):

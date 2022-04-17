@@ -31,6 +31,35 @@ class Privileges:
     STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER
 
 
+def privileges_to_str(privileges: int) -> str:
+    l = []
+
+    if privileges & Privileges.NORMAL:
+        l.append("Normal")
+    if privileges & Privileges.VERIFIED:
+        l.append("Verified")
+    if privileges & Privileges.WHITELISTED:
+        l.append("Whitelisted")
+    if privileges & Privileges.SUPPORTER:
+        l.append("Supporter")
+    if privileges & Privileges.PREMIUM:
+        l.append("Premium")
+    if privileges & Privileges.ALUMNI:
+        l.append("Alumni")
+    if privileges & Privileges.TOURNAMENT:
+        l.append("Tournament")
+    if privileges & Privileges.NOMINATOR:
+        l.append("Nominator")
+    if privileges & Privileges.MODERATOR:
+        l.append("Moderator")
+    if privileges & Privileges.ADMINISTRATOR:
+        l.append("Administrator")
+    if privileges & Privileges.DEVELOPER:
+        l.append("Developer")
+
+    return " | ".join(l)
+
+
 class ClientPrivileges:
     """Client side user privileges."""
 
@@ -45,6 +74,6 @@ class ClientPrivileges:
 class ClanPrivileges:
     """A class to represent a clan members privs."""
 
-    Member = 1
-    Officer = 2
-    Owner = 3
+    MEMBER = 1
+    OFFICER = 2
+    OWNER = 3

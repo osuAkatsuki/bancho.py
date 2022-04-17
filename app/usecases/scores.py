@@ -28,9 +28,9 @@ def validate_score_submission_data(
     score: Score,
     unique_ids: str,
     osu_version: str,
-    client_hash_decoded,
-    updated_beatmap_hash,
-    storyboard_checksum,
+    client_hash_decoded: str,
+    updated_beatmap_hash: str,
+    storyboard_checksum: Optional[str],
     login_details: ClientDetails,
 ):
     """Validate score submission checksums and data are non-fraudulent."""

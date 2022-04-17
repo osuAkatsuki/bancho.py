@@ -3,13 +3,22 @@ from __future__ import annotations
 from typing import Mapping
 
 import app.repositories.beatmaps
+import app.repositories.mappools
 import app.state.services
 from app.constants.mods import Mods
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
+from app.objects.match import MapPool
+
+# create
 
 
+async def create(name: str, created_by: int) -> MapPool:
+    return await app.repositories.mappools.create(name, created_by)
+
+
+# read
 async def maps_from_sql(pool_id: int) -> Mapping[tuple[Mods, int], Beatmap]:
     """Retrieve all maps from sql to populate `self.maps`."""
     pool_maps: dict[tuple[Mods, int], Beatmap] = {}
@@ -39,3 +48,8 @@ async def maps_from_sql(pool_id: int) -> Mapping[tuple[Mods, int], Beatmap]:
         pool_maps[key] = bmap
 
     return pool_maps
+
+
+# update
+
+# delete

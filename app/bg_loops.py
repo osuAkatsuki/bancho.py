@@ -48,7 +48,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         )
 
         for expired_donor in expired_donors:
-            player = await app.repositories.players.fetch(player_id=expired_donor["id"])
+            player = await app.repositories.players.fetch(id=expired_donor["id"])
             assert player is not None
 
             # TODO: perhaps make a `revoke_donor` method?

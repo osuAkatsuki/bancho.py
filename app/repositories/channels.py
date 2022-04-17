@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
 
@@ -9,6 +10,50 @@ from app.objects.channel import Channel
 cache: MutableMapping[str, Channel] = {}
 
 # create
+
+
+async def create(
+    name: str,
+    topic: str,
+    read_priv: int,
+    write_priv: int,
+    auto_join: bool,
+    instance: bool,
+) -> Channel:
+    """Create a channel in cache and the database."""
+    # created_at = datetime.now() # TODO: add audit details to db schema
+
+    if not instance:
+        # instanced channels only exist in the cache, not database
+        # TODO: should channel id be saved in channels objects?
+        channel_id = await app.state.services.database.execute(
+            "INSERT INTO channels (name, topic, read_priv, write_priv, auto_join) "
+            "VALUES (:name, :topic, :read_priv, :write_priv, :auto_join)",
+            {
+                "name": name,
+                "topic": topic,
+                "read_priv": read_priv,
+                "write_priv": write_priv,
+                "auto_join": auto_join,  # TODO: need int()?
+            },
+        )
+
+    channel = Channel(
+        name=name,
+        topic=topic,
+        read_priv=read_priv,
+        write_priv=write_priv,
+        auto_join=auto_join,
+        instance=instance,
+    )
+
+    cache[channel.name] = channel
+
+    # NOTE: if you'd like this new channel to be broadcasted to all the players
+    # online, you'll need to send them a packet so the clients are aware of it.
+
+    return channel
+
 
 # read
 
@@ -64,6 +109,43 @@ async def fetch_all() -> set[Channel]:
     return channels
 
 
+async def _populate_cache_from_database() -> None:
+    """Populate the cache with all values from the database."""
+    all_resources = await fetch_all()
+
+    for resource in all_resources:
+        cache[resource.name] = resource
+
+    return None
+
+
 # update
 
 # delete
+
+
+def delete_instance(name: str) -> None:
+    """Delete an instanced channel from the cache."""
+    if channel := _fetch_by_name_cache(name):
+        assert channel.instance, "Channel is not an instance."
+
+        del cache[channel.name]
+    else:
+        raise ValueError(f"Channel {name} not found in cache.")
+
+    return None
+
+
+async def delete(name: str) -> None:
+    """Delete a channel from the cache and the database."""
+
+    if channel := _fetch_by_name_cache(name):
+        del cache[channel.name]
+    else:
+        raise ValueError(f"Channel {name} not found in cache.")
+
+    if not channel.instance:
+        await app.state.services.database.execute(
+            "DELETE FROM channels WHERE name = :name",
+            {"name": name},
+        )

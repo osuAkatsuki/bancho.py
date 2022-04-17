@@ -190,7 +190,7 @@ class Score:
 
         return cls(
             id=row["id"],
-            bmap_md5=row["bmap_md5"],
+            bmap_md5=row["map_md5"],  # TODO: fix inconsistency
             player_name=row["player_name"],
             pp=row["pp"],
             score=row["score"],
@@ -218,7 +218,7 @@ class Score:
     def to_row(self) -> Mapping[str, Any]:
         return {
             "id": self.id,
-            "bmap_md5": self.bmap_md5,
+            "map_md5": self.bmap_md5,  # TODO: fix inconsistency
             "player_name": self.player_name,
             "pp": self.pp,
             "score": self.score,
@@ -310,7 +310,11 @@ class Score:
     ) -> str:
         """Validate the online checksum of the score."""
         return hashlib.md5(
-            "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}".format(
+            (
+                "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}"
+                "{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}"
+            )
+            .format(
                 self.n100 + self.n300,
                 self.n50,
                 self.ngeki,
@@ -330,5 +334,6 @@ class Score:
                 osu_client_hash,
                 storyboard_checksum,
                 # yyMMddHHmmss
-            ).encode(),
+            )
+            .encode(),
         ).hexdigest()

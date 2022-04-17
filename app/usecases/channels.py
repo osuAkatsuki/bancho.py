@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 import app.packets
+import app.repositories.channels
 import app.state.sessions
 from app.objects.channel import Channel
 from app.objects.player import Player
@@ -101,8 +102,7 @@ def remove_channel(channel: Channel, player: Player) -> None:
     """Remove a player from a channel."""
     channel.players.remove(player)
 
-    if not channel.players and channel.instance:
-        # if it's an instance channel and this
-        # is the last member leaving, just remove
-        # the channel from the global list.
+    if channel.instance and not channel.players:
+        # delete instanced channels once all players have left
+        app.repositories.channels.delete_instance(channel.name)
         app.state.sessions.channels.remove(channel)
