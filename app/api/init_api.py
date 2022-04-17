@@ -32,31 +32,33 @@ from app.objects import collections
 
 class BanchoAPI(FastAPI):
     def openapi(self) -> dict[str, Any]:
-        if self.openapi_schema:
-            return self.openapi_schema
+        if not self.openapi_schema:
+            routes = self.routes
+            starlette_hosts = [
+                host
+                for host in super().routes
+                if isinstance(host, starlette.routing.Host)
+            ]
 
-        routes = self.routes
-        starlette_hosts = [
-            host for host in super().routes if isinstance(host, starlette.routing.Host)
-        ]
+            for host in starlette_hosts:
+                for route in host.routes:
+                    if route not in routes:
+                        routes.append(route)
 
-        for host in starlette_hosts:
-            for route in host.routes:
-                if route not in routes:
-                    routes.append(route)
+            self.openapi_schema = get_openapi(
+                title=self.title,
+                version=self.version,
+                openapi_version=self.openapi_version,
+                description=self.description,
+                terms_of_service=self.terms_of_service,
+                contact=self.contact,
+                license_info=self.license_info,
+                routes=routes,
+                tags=self.openapi_tags,
+                servers=self.servers,
+            )
 
-        self.openapi_schema = get_openapi(
-            title=self.title,
-            version=self.version,
-            openapi_version=self.openapi_version,
-            description=self.description,
-            terms_of_service=self.terms_of_service,
-            contact=self.contact,
-            license_info=self.license_info,
-            routes=routes,
-            tags=self.openapi_tags,
-            servers=self.servers,
-        )
+        return self.openapi_schema
 
 
 def init_exception_handlers(asgi_app: BanchoAPI) -> None:
