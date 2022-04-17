@@ -8,17 +8,17 @@ from typing import Any
 
 import aiohttp
 import orjson
+import starlette.routing
 from fastapi import FastAPI
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
-from fastapi.openapi.utils import get_openapi
 
-import starlette.routing
 import app.bg_loops
 import app.settings
 import app.state
