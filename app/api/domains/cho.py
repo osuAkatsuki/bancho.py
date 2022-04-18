@@ -714,8 +714,7 @@ async def login(
     # the osu! client will attempt to join the channels.
     for c in app.repositories.channels.cache.values():
         if (
-            not c.auto_join
-            or not app.usecases.channels.can_read(c, player.priv)
+            not app.usecases.channels.can_read(c, player.priv)
             or c._name == "#lobby"  # (can't be in mp lobby @ login)
         ):
             continue
@@ -725,6 +724,9 @@ async def login(
         chan_info_packet = app.packets.channel_info(c._name, c.topic, len(c.players))
 
         data += chan_info_packet
+
+        if c.auto_join:
+            data += app.packets.channel_join(c.name)
 
         for o in app.state.sessions.players:
             if app.usecases.channels.can_read(c, o.priv):
