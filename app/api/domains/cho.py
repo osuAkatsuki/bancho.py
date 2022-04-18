@@ -48,7 +48,6 @@ from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 from app.logging import magnitude_fmt_time
-from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -1128,7 +1127,8 @@ class SendPrivateMessage(BasePacket):
                         resp_msg = "Could not find map."
 
                         # time out their previous /np
-                        p.last_np["timeout"] = 0.0
+                        if p.last_np is not None:
+                            p.last_np["timeout"] = 0.0
 
                     app.usecases.players.send(p, resp_msg, sender=t)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 from typing import Union
 
-import app.repositories.osuapi_v1
+import app.repositories.osuapi_v1  # TODO: refactor this requirement out
 import app.state.services
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus

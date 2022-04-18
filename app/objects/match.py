@@ -102,7 +102,7 @@ class MapPool:
         self.id = id
         self.name = name
         self.created_at = created_at
-        self.creator_id = created_by
+        self.created_by = created_by
         self.maps = maps
 
     def __repr__(self) -> str:

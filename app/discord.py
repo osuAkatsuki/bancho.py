@@ -17,7 +17,7 @@ __all__ = (
     "Author",
     "Field",
     "Embed",
-    "Webhook",
+    "DiscordWebhook",
 )
 
 
@@ -112,7 +112,7 @@ class Embed:
         self.fields.append(Field(name, value, inline))
 
 
-class Webhook:
+class DiscordWebhook:
     """A class to represent a single-use Discord webhook."""
 
     def __init__(self, url: str, **kwargs) -> None:

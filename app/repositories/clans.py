@@ -40,7 +40,8 @@ async def create(name: str, tag: str, owner: Player) -> Clan:
         member_ids={owner.id},
     )
 
-    owner.clan = clan
+    # TODO: should this user-specific stuff be another usecase
+    owner.clan_id = clan.id
     owner.clan_priv = ClanPrivileges.OWNER
 
     await app.state.services.database.execute(
@@ -48,7 +49,7 @@ async def create(name: str, tag: str, owner: Player) -> Clan:
         "SET clan_id = :clan_id, clan_priv = :clan_priv "
         "WHERE id = :user_id",
         {
-            "clan_id": owner.clan.id,
+            "clan_id": owner.clan_id,
             "clan_priv": owner.clan_priv,
             "user_id": owner.id,
         },
@@ -144,7 +145,7 @@ async def _populate_cache_from_database() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 
-    for resource in await fetch_all():
+    for resource in all_resources:
         cache[resource.id] = resource
         cache[resource.tag] = resource
 
@@ -154,3 +155,14 @@ async def _populate_cache_from_database() -> None:
 # update
 
 # delete
+
+
+async def delete(clan: Clan) -> None:
+    """Delete a clan from the cache and database."""
+    await app.state.services.database.execute(
+        "DELETE FROM clans WHERE id = :clan_id",
+        {"clan_id": clan.id},
+    )
+
+    del cache[clan.id]
+    del cache[clan.tag]

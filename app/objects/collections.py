@@ -18,7 +18,6 @@ from app.constants.privileges import Privileges
 from app.logging import log
 from app.objects.channel import Channel
 from app.objects.clan import Clan
-from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
 from app.utils import make_safe_name

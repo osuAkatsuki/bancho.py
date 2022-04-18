@@ -29,7 +29,7 @@ async def add_member(clan: Clan, p: Player) -> None:
         {"clan_id": clan.id, "user_id": p.id},
     )
 
-    p.clan = clan
+    p.clan_id = clan.id
     p.clan_priv = ClanPrivileges.MEMBER
 
 
@@ -40,37 +40,15 @@ async def add_member(clan: Clan, p: Player) -> None:
 # delete
 
 
-async def remove_member(clan: Clan, p: Player) -> None:
+async def remove_member(clan: Clan, player: Player) -> None:
     """Remove a given player from the clan's members."""
-    clan.member_ids.remove(p.id)
+    await app.state.services.database.execute(
+        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = :user_id",
+        {"user_id": player.id},
+    )
 
-    async with app.state.services.database.connection() as db_conn:
-        await db_conn.execute(
-            "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = :user_id",
-            {"user_id": p.id},
-        )
+    clan.member_ids.remove(player.id)
 
-        if not clan.member_ids:
-            # no members left, disband clan.
-            await db_conn.execute(
-                "DELETE FROM clans WHERE id = :clan_id",
-                {"clan_id": clan.id},
-            )
-        elif p.id == clan.owner_id:
-            # owner leaving and members left,
-            # transfer the ownership.
-            # TODO: prefer officers
-            clan.owner_id = next(iter(clan.member_ids))
 
-            await db_conn.execute(
-                "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
-                {"user_id": clan.owner_id, "clan_id": clan.id},
-            )
-
-            await db_conn.execute(
-                "UPDATE users SET clan_priv = 3 WHERE id = :user_id",
-                {"user_id": clan.owner_id},
-            )
-
-    p.clan = None
-    p.clan_priv = 0  # TODO:REFACTOR should this be None?
+async def delete(clan: Clan) -> None:
+    await app.repositories.clans.delete(clan)

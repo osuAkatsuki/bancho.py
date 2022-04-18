@@ -73,6 +73,10 @@ def init_events(asgi_app: FastAPI) -> None:
 
     @asgi_app.on_event("startup")
     async def on_startup() -> None:
+        import os
+
+        print("TEST:", os.environ.get("TEST"))
+
         app.state.loop = asyncio.get_running_loop()
 
         if os.geteuid() == 0:

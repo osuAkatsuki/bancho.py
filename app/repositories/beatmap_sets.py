@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
 
-import app.repositories.beatmap_sets
 import app.repositories.osuapi_v1
 import app.state.services
 from app.logging import Ansi
@@ -16,6 +15,7 @@ from app.objects.beatmap import RankedStatus
 cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
 
 # create
+# TODO: beatmap submission
 
 # read
 
@@ -96,7 +96,6 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
         beatmap.passes = 0
         beatmap.plays = 0
 
-        beatmap.set = beatmap_set
         beatmap_set.maps.append(beatmap)
 
     await app.state.services.database.execute(
@@ -106,7 +105,7 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
         {"id": beatmap_set.id, "last_osuapi_check": beatmap_set.last_osuapi_check},
     )
 
-    await app.repositories.beatmap_sets.replace_into_database(beatmap_set)
+    await replace_into_database(beatmap_set)
     return beatmap_set
 
 
@@ -189,3 +188,4 @@ async def replace_into_database(beatmap_set: BeatmapSet) -> None:
 
 
 # delete
+# TODO: beatmap submission

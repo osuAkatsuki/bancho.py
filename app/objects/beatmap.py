@@ -163,9 +163,7 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
-        self.set = map_set
-
+    def __init__(self, **kwargs: Any) -> None:
         # TODO: simplify this init
 
         self.md5 = kwargs.get("md5", "")

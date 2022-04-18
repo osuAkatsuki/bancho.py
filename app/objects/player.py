@@ -8,6 +8,7 @@ from enum import unique
 from functools import cached_property
 from typing import Literal
 from typing import Mapping
+from typing import MutableMapping
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -34,7 +35,6 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
-    from app.objects.clan import Clan
     from app.objects.channel import Channel
 
 __all__ = ("ModeData", "Status", "Player")
@@ -180,6 +180,30 @@ class ClientDetails:
     # TODO: __str__ to pack like osu! hashes?
 
 
+"""\
+TODO: refactor player into limited session classes
+
+class Session:
+    ...
+
+
+class TournamentSpectatorSession(Session):
+    ...
+
+
+class TournamentManagerSession(Session):
+    ...
+
+
+class BotSession(Session):
+    ...
+
+
+class PlayerSession(Session):
+    ...
+"""
+
+
 class Player:
     """\
     Server side representation of a player; not necessarily online.
@@ -232,8 +256,8 @@ class Player:
         spectating: Optional[Player] = None,
         match: Optional[Match] = None,
         stealth: bool = False,
-        clan: Optional[Clan] = None,
-        clan_priv: int = 0,
+        clan_id: Optional[int] = None,
+        clan_priv: Optional[int] = None,
         achievements: Optional[set[Achievement]] = None,
         geoloc: Optional[app.objects.geolocation.Geolocation] = None,
         utc_offset: int = 0,
@@ -245,7 +269,7 @@ class Player:
         pres_filter: PresenceFilter = PresenceFilter.Nil,
         login_time: float = 0.0,
         last_recv_time: float = 0.0,
-        recent_scores: Optional[Mapping[GameMode, Optional[Score]]] = None,
+        recent_scores: Optional[MutableMapping[GameMode, Optional[Score]]] = None,
         last_np: Optional[LastNp] = None,
         current_menu: Menu = MAIN_MENU,
         previous_menus: Optional[list[Menu]] = None,
@@ -285,8 +309,7 @@ class Player:
         self.match = match or None
         self.stealth = stealth
 
-        # TODO: clans as a repository, store clan_id references in other objects
-        self.clan = clan
+        self.clan_id = clan_id
         self.clan_priv = clan_priv
 
         self.achievements = achievements or set()
@@ -351,14 +374,6 @@ class Player:
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
         return f"https://a.{app.settings.DOMAIN}/{self.id}"
-
-    @property
-    def full_name(self) -> str:
-        """The user's "full" name; including their clan tag."""
-        if self.clan:
-            return f"[{self.clan.tag}] {self.name}"
-        else:
-            return self.name
 
     # TODO: chat embed with clan tag hyperlinked?
 

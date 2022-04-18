@@ -16,9 +16,10 @@ import app.state
 import app.usecases.channels
 import app.usecases.clans
 import app.usecases.multiplayer
+import app.utils
 from app.constants.gamemodes import GameMode
 from app.constants.privileges import Privileges
-from app.discord import Webhook
+from app.discord import DiscordWebhook
 from app.logging import Ansi
 from app.logging import log
 from app.objects.channel import Channel
@@ -155,6 +156,11 @@ def logout(player: Player) -> None:
     log(f"{player} logged out.", Ansi.LYELLOW)
 
 
+async def update_name(player_id: int, new_name: str) -> None:
+    """Update a player's name to a new value, by id."""
+    await app.repositories.players.update_name(player_id, new_name)
+
+
 async def update_privs(player: Player, new_privs: int) -> None:
     """Update a player's privileges to a new value."""
     player.priv = new_privs
@@ -199,12 +205,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
     await remove_privs(player, Privileges.NORMAL)
 
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, :msg, NOW())",
-        {"from": admin.id, "to": player.id, "action": "restrict", "msg": reason},
-    )
+    country_acronym = player.geoloc["country"]["acronym"]
 
     for mode in (0, 1, 2, 3, 4, 5, 6, 8):
         await app.state.services.redis.zrem(
@@ -212,7 +213,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
             player.id,
         )
         await app.state.services.redis.zrem(
-            f'bancho:leaderboard:{mode}:{player.geoloc["country"]["acronym"]}',
+            f"bancho:leaderboard:{mode}:{country_acronym}",
             player.id,
         )
 
@@ -221,28 +222,18 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
     log(log_msg, Ansi.LRED)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
-        webhook = Webhook(webhook_url, content=log_msg)
+        webhook = DiscordWebhook(webhook_url, content=log_msg)
         await webhook.post(app.state.services.http)
-
-    if player.online:
-        # log the user out if they're offline, this
-        # will simply relog them and refresh their app.state
-        logout(player)
 
 
 async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
     await add_privs(player, Privileges.NORMAL)
 
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, :msg, NOW())",
-        {"from": admin.id, "to": player.id, "action": "unrestrict", "msg": reason},
-    )
-
     if not player.online:
         player.stats = await fetch_stats(player.id)
+
+    country_acronym = player.geoloc["country"]["acronym"]
 
     for mode, stats in player.stats.items():
         await app.state.services.redis.zadd(
@@ -250,7 +241,7 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
             {str(player.id): stats.pp},
         )
         await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}:{player.geoloc['country']['acronym']}",
+            f"bancho:leaderboard:{mode.value}:{country_acronym}",
             {str(player.id): stats.pp},
         )
 
@@ -259,13 +250,8 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     log(log_msg, Ansi.LRED)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
-        webhook = Webhook(webhook_url, content=log_msg)
+        webhook = DiscordWebhook(webhook_url, content=log_msg)
         await webhook.post(app.state.services.http)
-
-    if player.online:
-        # log the user out if they're offline, this
-        # will simply relog them and refresh their app.state
-        logout(player)
 
 
 async def silence(player: Player, admin: Player, duration: int, reason: str) -> None:

@@ -10,11 +10,9 @@ from typing import Union
 import app.packets
 import app.repositories.beatmaps
 import app.state.sessions
-from app.constants import regexes
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
-from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.player import Player

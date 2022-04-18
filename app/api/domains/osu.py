@@ -254,6 +254,10 @@ async def lastfm_handler(
             admin=app.state.sessions.bot,
             reason=f"hq!osu running ({flags})",
         )
+
+        if player.online:  # refresh their client state
+            app.usecases.players.logout(player)
+
         return b"-3"
 
     if flags & LastFMFlags.REGISTRY_EDITS:
@@ -269,6 +273,9 @@ async def lastfm_handler(
                 admin=app.state.sessions.bot,
                 reason="hq!osu relife 1/32",
             )
+
+            if player.online:  # refresh their client state
+                app.usecases.players.logout(player)
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
@@ -444,10 +451,14 @@ async def submit_score(
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
 
-        # await player.restrict(
+        # await app.usecases.players.restrict(
+        #     player=player,
         #     admin=app.state.sessions.bot,
         #     reason="TODO",
         # )
+
+        # if player.online: # refresh their client state
+        #     app.usecases.players.logout(player)
         # return b"error: ban"
     except:
         raise
@@ -515,10 +526,14 @@ async def submit_score(
         pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
-            await player.restrict(
+            await app.usecases.players.restrict(
+                player=player,
                 admin=app.state.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
+
+            if player.online: # refresh their client state
+                app.usecases.players.logout(player)
         """
 
     """ Score submission checks completed; submit the score. """
@@ -648,6 +663,9 @@ async def submit_score(
                 admin=app.state.sessions.bot,
                 reason="submitted score with no replay",
             )
+
+            if player.online:  # refresh their client state
+                app.usecases.players.logout(player)
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can
@@ -796,8 +814,6 @@ async def submit_score(
 
     # update their recent score
     player.recent_scores[score.mode] = score
-    if "recent_score" in player.__dict__:
-        del player.recent_score  # wipe cached_property
 
     """ score submission charts """
 
@@ -847,7 +863,6 @@ async def submit_score(
                 chart_entry("accuracy", None, round(score.acc, 2)),
                 chart_entry("pp", None, score.pp),
             )
-        import dataclasses
 
         overall_ranking_chart_entries = (
             chart_entry("rank", prev_stats.rank, stats.rank),
@@ -868,7 +883,7 @@ async def submit_score(
             "\n",
             # beatmap ranking chart
             "chartId:beatmap",
-            f"chartUrl:{beatmap.set.url}",
+            f"chartUrl:https://osu.{app.settings.DOMAIN}/beatmapsets/{beatmap.set_id}"
             "chartName:Beatmap Ranking",
             *beatmap_ranking_chart_entries,
             f"onlineScoreId:{score.id}",
@@ -918,7 +933,7 @@ async def post_beatmap_rating(
     if rating is None:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
-        beatmap = app.repositories.beatmaps._fetch_by_key_cache("md5", map_md5)
+        beatmap = app.repositories.beatmaps._fetch_by_key_cache(map_md5)
         if beatmap is None:
             return b"no exist"
 
@@ -1184,7 +1199,7 @@ async def get_beatmap_leaderboard(
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
                 **personal_best_score_row,
-                name=player.full_name,
+                name=player.name,
                 userid=player.id,
                 score=int(personal_best_score_row["_score"]),
                 has_replay="1",

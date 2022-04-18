@@ -15,6 +15,11 @@ from app.objects.player import Player
 
 cache: MutableMapping[Union[int, str], Player] = {}  # {name/id: player}
 
+## create
+
+
+## read
+
 
 async def _fetch_user_info_sql(key: str, val: Any):  # TODO: type
     # WARNING: do not pass user input into `key`; sql injection
@@ -68,14 +73,6 @@ async def fetch(
 
     user_info = dict(user_info)  # make mutable copy
 
-    # get clan from clan id
-    # TODO: clans as a repository, store clan_id references in other objects
-    clan_id = user_info.pop("clan_id")
-    if clan_id != 0:
-        clan = app.state.sessions.clans.get(id=clan_id)
-    else:
-        clan = None
-
     # get geoloc from country acronym
     country_acronym = user_info.pop("country")
 
@@ -96,7 +93,6 @@ async def fetch(
         stats=stats,
         friends=friends,
         blocks=blocks,
-        clan=clan,
         achievements=achievements,
         geoloc=geolocation_data,
         token=None,
@@ -109,3 +105,21 @@ async def fetch(
     cache[player.name] = player
 
     return player
+
+
+## update
+
+
+async def update_name(player_id: int, new_name: str) -> None:
+    """Update a player's name to a new value, by id."""
+    await app.state.services.database.execute(
+        "UPDATE users SET name = :name, safe_name = :safe_name WHERE id = :user_id",
+        {
+            "name": new_name,
+            "safe_name": app.utils.make_safe_name(new_name),
+            "user_id": player_id,
+        },
+    )
+
+
+## delete

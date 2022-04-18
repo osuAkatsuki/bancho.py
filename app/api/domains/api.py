@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 import app.packets
 import app.repositories.beatmaps
+import app.repositories.clans
 import app.repositories.mappools
 import app.repositories.players
 import app.repositories.scores
@@ -74,22 +75,13 @@ router = APIRouter(tags=["bancho.py API"])
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 
+# TODO: probably refactor these into something better, like responses.py
 def format_clan_basic(clan: Clan) -> dict[str, object]:
     return {
         "id": clan.id,
         "name": clan.name,
         "tag": clan.tag,
         "members": len(clan.member_ids),
-    }
-
-
-def format_player_basic(p: Player) -> dict[str, object]:
-    return {
-        "id": p.id,
-        "name": p.name,
-        "country": p.geoloc["country"]["acronym"],
-        "clan": format_clan_basic(p.clan) if p.clan else None,
-        "online": p.online,
     }
 
 
@@ -402,15 +394,20 @@ async def api_get_player_scores(
         bmap = await app.repositories.beatmaps.fetch_by_md5(row.pop("map_md5"))
         row["beatmap"] = bmap.as_dict if bmap else None
 
+    if player.clan_id is not None:
+        clan = await app.repositories.clans.fetch_by_id(player.clan_id)
+    else:
+        clan = None
+
     player_info = {
         "id": player.id,
         "name": player.name,
         "clan": {
-            "id": player.clan.id,
-            "name": player.clan.name,
-            "tag": player.clan.tag,
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
         }
-        if player.clan
+        if clan
         else None,
     }
 
@@ -865,7 +862,8 @@ async def api_get_clan(
 
     # TODO: fetching by name & tag (requires safe_name, safe_tag)
 
-    if not (clan := app.state.sessions.clans.get(id=clan_id)):
+    clan = await app.repositories.clans.fetch_by_id(clan_id)
+    if clan is None:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -920,15 +918,27 @@ async def api_get_pool(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    pool_creator = await app.repositories.players.fetch(id=pool.creator_id)
+    pool_creator = await app.repositories.players.fetch(id=pool.created_by)
     assert pool_creator is not None
+
+    if pool_creator.clan_id is not None:
+        clan = await app.repositories.clans.fetch_by_id(pool_creator.clan_id)
+        assert clan is not None
+    else:
+        clan = None
 
     return ORJSONResponse(
         {
             "id": pool.id,
             "name": pool.name,
             "created_at": pool.created_at,
-            "created_by": format_player_basic(pool_creator),
+            "created_by": {
+                "id": pool_creator.id,
+                "name": pool_creator.name,
+                "country": pool_creator.geoloc["country"]["acronym"],
+                "clan": format_clan_basic(clan) if clan else None,
+                "online": pool_creator.online,
+            },
             "maps": {
                 f"{mods!r}{slot}": format_map_basic(bmap)
                 for (mods, slot), bmap in pool.maps.items()
