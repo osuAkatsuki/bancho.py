@@ -148,7 +148,7 @@ def logout(player: Player) -> None:
     app.state.sessions.players.remove(player)
 
     if not player.restricted:
-        if app.state.services.datadog:
+        if app.state.services.datadog is not None:
             app.state.services.datadog.decrement("bancho.online_players")
 
         app.state.sessions.players.enqueue(app.packets.logout(player.id))

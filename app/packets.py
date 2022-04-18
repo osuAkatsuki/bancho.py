@@ -1181,7 +1181,7 @@ def match_invite(p: Player, t_name: str) -> bytes:
 
 # packet id: 89
 @cache
-def channel_info_end() -> bytes:
+def channel_info_end_marker() -> bytes:
     return write(ServerPackets.CHANNEL_INFO_END)
 
 

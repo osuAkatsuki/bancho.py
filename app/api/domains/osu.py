@@ -538,11 +538,11 @@ async def submit_score(
 
     """ Score submission checks completed; submit the score. """
 
-    if app.state.services.datadog:
+    if app.state.services.datadog is not None:
         app.state.services.datadog.increment("bancho.submitted_scores")
 
     if score.status == SubmissionStatus.BEST:
-        if app.state.services.datadog:
+        if app.state.services.datadog is not None:
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if beatmap.has_leaderboard:
@@ -1152,7 +1152,7 @@ async def get_beatmap_leaderboard(
 
     # we've found a beatmap for the request.
 
-    if app.state.services.datadog:
+    if app.state.services.datadog is not None:
         app.state.services.datadog.increment("bancho.leaderboards_served")
 
     if beatmap.status < RankedStatus.Ranked:
@@ -1604,7 +1604,7 @@ async def register_account(
                 country_acronym,
             )
 
-        if app.state.services.datadog:
+        if app.state.services.datadog is not None:
             app.state.services.datadog.increment("bancho.registrations")
 
         log(f"<{username} ({user_id})> has registered!", Ansi.LGREEN)

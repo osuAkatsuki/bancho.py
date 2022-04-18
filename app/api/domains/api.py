@@ -767,7 +767,8 @@ async def api_get_match(
     """Return information of a given multiplayer match."""
     # TODO: eventually, this should contain recent score info.
 
-    if not (match := app.state.sessions.matches[match_id]):
+    match = app.state.sessions.matches[match_id]
+    if match is None:
         return ORJSONResponse(
             {"status": "Match not found."},
             status_code=status.HTTP_404_NOT_FOUND,

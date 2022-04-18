@@ -49,10 +49,7 @@ async def _fetch_by_key_database(key: str, val: KeyTypes) -> Optional[Beatmap]:
     if row is None:
         return None
 
-    return Beatmap(
-        map_set=None,  # type: ignore
-        **row,
-    )
+    return Beatmap(**row)
 
 
 async def _fetch_by_key_osuapi(key: str, val: KeyTypes) -> Optional[Beatmap]:

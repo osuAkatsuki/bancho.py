@@ -14,10 +14,10 @@ from app.objects.beatmap import RankedStatus
 
 cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
 
-# create
+## create
 # TODO: beatmap submission
 
-# read
+## read
 
 
 def _fetch_by_id_cache(id: int) -> Optional[BeatmapSet]:
@@ -36,23 +36,24 @@ async def _fetch_by_id_database(id: int) -> Optional[BeatmapSet]:
         if last_osuapi_check is None:
             return None
 
-        beatmap_set = BeatmapSet(id=id, last_osuapi_check=last_osuapi_check)
-
-        for row in await db_conn.fetch_all(
-            "SELECT md5, id, set_id, "
-            "artist, title, version, creator, "
-            "filename, last_update, total_length, "
-            "max_combo, status, frozen, "
-            "plays, passes, mode, bpm, "
-            "cs, od, ar, hp, diff "
-            "FROM maps "
-            "WHERE set_id = :set_id",
-            {"set_id": id},
-        ):
-            bmap = Beatmap(**row, map_set=beatmap_set)
-            beatmap_set.maps.append(bmap)
-
-    return beatmap_set
+        return BeatmapSet(
+            id,
+            last_osuapi_check,
+            maps=[
+                Beatmap(**row)
+                for row in await db_conn.fetch_all(
+                    "SELECT md5, id, set_id, "
+                    "artist, title, version, creator, "
+                    "filename, last_update, total_length, "
+                    "max_combo, status, frozen, "
+                    "plays, passes, mode, bpm, "
+                    "cs, od, ar, hp, diff "
+                    "FROM maps "
+                    "WHERE set_id = :set_id",
+                    {"set_id": id},
+                )
+            ],
+        )
 
 
 async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
@@ -127,7 +128,7 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
     return None
 
 
-# update
+## update
 
 
 async def update_status(beatmap_set_id: int, new_status: RankedStatus) -> None:
@@ -187,5 +188,5 @@ async def replace_into_database(beatmap_set: BeatmapSet) -> None:
     )
 
 
-# delete
+## delete
 # TODO: beatmap submission

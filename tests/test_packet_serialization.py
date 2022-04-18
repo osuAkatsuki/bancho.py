@@ -535,7 +535,7 @@ def test_write_match_invite(test_input, expected):
 
 
 def test_channel_info_end():
-    assert app.packets.channel_info_end() == b"Y\x00\x00\x00\x00\x00\x00"
+    assert app.packets.channel_info_end_marker() == b"Y\x00\x00\x00\x00\x00\x00"
 
 
 @pytest.mark.parametrize(

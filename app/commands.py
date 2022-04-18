@@ -1927,7 +1927,11 @@ async def mp_condition(ctx: Context, match: Match) -> Optional[str]:
 @ensure_match
 async def mp_scrim(ctx: Context, match: Match) -> Optional[str]:
     """Start a scrim in the current match."""
-    if len(ctx.args) != 1 or not (r_match := regexes.BEST_OF.fullmatch(ctx.args[0])):
+    if len(ctx.args) != 1:
+        return "Invalid syntax: !mp scrim <bo#>"
+
+    r_match = regexes.BEST_OF.fullmatch(ctx.args[0])
+    if r_match is None:
         return "Invalid syntax: !mp scrim <bo#>"
 
     if not 0 <= (best_of := int(r_match[1])) < 16:
@@ -2266,7 +2270,8 @@ async def pool_add(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if not (pool := await app.repositories.mappools.fetch_by_name(name)):
+    pool = await app.repositories.mappools.fetch_by_name(name)
+    if pool is None:
         return "Could not find a pool by that name!"
 
     if (mods, slot) in pool.maps:
@@ -2423,7 +2428,8 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan = await app.repositories.clans.create(name, tag, owner=ctx.player)
 
     # announce clan creation
-    if announce_chan := await app.repositories.channels.fetch_by_name("#announce"):
+    announce_chan = await app.repositories.channels.fetch_by_name("#announce")
+    if announce_chan is not None:
         app.usecases.channels.send_msg_to_clients(
             channel=announce_chan,
             msg=f"\x01ACTION founded {clan!r}.",
@@ -2468,7 +2474,8 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     await app.usecases.clans.delete(clan)
 
     # announce clan disbanding
-    if announce_chan := await app.repositories.channels.fetch_by_name("#announce"):
+    announce_chan = await app.repositories.channels.fetch_by_name("#announce")
+    if announce_chan is not None:
         msg = f"\x01ACTION disbanded {clan!r}."
         app.usecases.channels.send_msg_to_clients(
             announce_chan,
@@ -2562,16 +2569,16 @@ class CommandResponse(TypedDict):
 
 
 async def process_commands(
-    p: Player,
-    target: Union["Channel", Player],
-    msg: str,
+    player: Player,
+    target: Union[Channel, Player],
+    message: str,
 ) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
     start_time = clock_ns()
 
     prefix_len = len(app.settings.COMMAND_PREFIX)
-    trigger, *args = msg[prefix_len:].strip().split(" ")
+    trigger, *args = message[prefix_len:].strip().split(" ")
 
     # case-insensitive triggers
     trigger = trigger.lower()
@@ -2594,12 +2601,12 @@ async def process_commands(
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
+        if trigger in cmd.triggers and player.priv & cmd.priv == cmd.priv:
             # found matching trigger with sufficient privs
             try:
                 res = await cmd.callback(
                     Context(
-                        player=p,
+                        player=player,
                         trigger=trigger,
                         args=args,
                         recipient=target,

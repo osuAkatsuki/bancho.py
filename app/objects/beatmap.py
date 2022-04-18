@@ -20,9 +20,8 @@ from app.utils import pymysql_encode
 
 __all__ = ("RankedStatus", "Beatmap", "BeatmapSet")
 
-DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
-
-IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
+# create a table of all ignored characters mapping to None
+BEATMAP_FILENAME_TRANSLATION_TABLE = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
 # for some ungodly reason, different values are used to
@@ -34,7 +33,9 @@ IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 @unique
 @pymysql_encode(escape_enum)
 class RankedStatus(IntEnum):
-    """Server side osu! beatmap ranked statuses.
+    """\
+    Server side osu! beatmap ranked statuses.
+
     Same as used in osu!'s /web/getscores.php.
     """
 
@@ -142,7 +143,8 @@ class RankedStatus(IntEnum):
 
 
 class Beatmap:
-    """A class representing an osu! beatmap.
+    """\
+    A class representing an osu! beatmap.
 
     For ways of working with Beatmap objects, see `app/usecases/beatmaps.py`.
 
@@ -163,38 +165,53 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        # TODO: simplify this init
-
-        self.md5 = kwargs.get("md5", "")
-        self.id = kwargs.get("id", 0)
-        self.set_id = kwargs.get("set_id", 0)
-
-        self.artist = kwargs.get("artist", "")
-        self.title = kwargs.get("title", "")
-        self.version = kwargs.get("version", "")  # diff name
-        self.creator = kwargs.get("creator", "")
-
-        self.last_update = kwargs.get("last_update", DEFAULT_LAST_UPDATE)
-        self.total_length = kwargs.get("total_length", 0)
-        self.max_combo = kwargs.get("max_combo", 0)
-
-        self.status = RankedStatus(kwargs.get("status", 0))
-        self.frozen = kwargs.get("frozen", False) == 1
-
-        self.plays = kwargs.get("plays", 0)
-        self.passes = kwargs.get("passes", 0)
-        self.mode = GameMode(kwargs.get("mode", 0))
-        self.bpm = kwargs.get("bpm", 0.0)
-
-        self.cs = kwargs.get("cs", 0.0)
-        self.od = kwargs.get("od", 0.0)
-        self.ar = kwargs.get("ar", 0.0)
-        self.hp = kwargs.get("hp", 0.0)
-
-        self.diff = kwargs.get("diff", 0.0)
-
-        self.filename = kwargs.get("filename", "")
+    def __init__(
+        self,
+        md5: str,
+        id: int,
+        set_id: int,
+        artist: str,
+        title: str,
+        version: str,
+        creator: str,
+        filename: str,
+        last_update: datetime,
+        total_length: int,
+        max_combo: int,
+        status: int,
+        frozen: bool,
+        plays: int,
+        passes: int,
+        mode: int,
+        bpm: float,
+        cs: float,
+        ar: float,
+        od: float,
+        hp: float,
+        diff: float,
+    ) -> None:
+        self.md5 = md5
+        self.id = id
+        self.set_id = set_id
+        self.artist = artist
+        self.title = title
+        self.version = version
+        self.creator = creator
+        self.filename = filename
+        self.last_update = last_update
+        self.total_length = total_length
+        self.max_combo = max_combo
+        self.status = status
+        self.frozen = frozen
+        self.plays = plays
+        self.passes = passes
+        self.mode = mode
+        self.bpm = bpm
+        self.cs = cs
+        self.od = ar
+        self.ar = od
+        self.hp = hp
+        self.diff = diff
 
     def __repr__(self) -> str:
         return self.full_name
@@ -261,8 +278,6 @@ class Beatmap:
         osuapi_response: Mapping[str, Any],
     ) -> Beatmap:
         return cls(
-            # NOTE: if you call this, make sure you set map_set soon!
-            map_set=None,  # type: ignore
             md5=osuapi_response["file_md5"],
             id=osuapi_response["beatmap_id"],
             set_id=osuapi_response["beatmapset_id"],
@@ -273,7 +288,7 @@ class Beatmap:
             filename=(
                 ("{artist} - {title} ({creator}) [{version}].osu")
                 .format(**osuapi_response)
-                .translate(IGNORED_BEATMAP_CHARS)
+                .translate(BEATMAP_FILENAME_TRANSLATION_TABLE)
             ),
             last_update=datetime(
                 year=int(osuapi_response["last_update"][0:4]),
@@ -293,11 +308,16 @@ class Beatmap:
             ar=float(osuapi_response["diff_approach"]),
             hp=float(osuapi_response["diff_drain"]),
             diff=float(osuapi_response["difficultyrating"]),
+            # gulag-specific params
+            frozen=False,
+            plays=0,
+            passes=0,
         )
 
 
 class BeatmapSet:
-    """A class to represent an osu! beatmap set.
+    """\
+    A class to represent an osu! beatmap set.
 
     For ways of working with BeatmapSet objects, see `app/usecases/beatmap_sets.py`.
 
