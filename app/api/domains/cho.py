@@ -1767,9 +1767,7 @@ class MatchComplete(BasePacket):
         if match.is_scrimming:
 
             # determine winner, update match points & inform players.
-            asyncio.create_task(
-                app.usecases.multiplayer.update_matchpoints(match, was_playing),
-            )
+            asyncio.create_task(update_matchpoints(match, was_playing))
 
 
 @register(ClientPackets.MATCH_CHANGE_MODS)
