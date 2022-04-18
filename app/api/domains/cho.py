@@ -1028,7 +1028,11 @@ async def handle_bot_message(player: Player, target: Player, msg: str) -> None:
             beatmap.id,
             beatmap.md5,
         ):
-            resp_msg = "Mapfile could not be found; " "this incident has been reported."
+            app.usecases.players.send(
+                player,
+                "Mapfile could not be found; " "this incident has been reported.",
+                sender=target,
+            )
         else:
             # calculate pp for common generic values
             pp_calc_st = time.time_ns()
@@ -1075,6 +1079,8 @@ async def handle_bot_message(player: Player, target: Player, msg: str) -> None:
 
             elapsed = time.time_ns() - pp_calc_st
             resp_msg += f" | Elapsed: {magnitude_fmt_time(elapsed)}"
+
+            app.usecases.players.send(player, resp_msg, sender=target)
 
 
 @register(ClientPackets.SEND_PRIVATE_MESSAGE)
