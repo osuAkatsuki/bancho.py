@@ -409,55 +409,55 @@ def ensure_directory_structure() -> int:
 
 
 def ensure_dependencies_and_requirements() -> int:
-    """Make sure all of bancho.py's dependencies are ready."""
-    if (
-        not OPPAI_PATH.exists()
-        or not (OPPAI_PATH / "pybind11").exists()
-        or not any((OPPAI_PATH / "pybind11").iterdir())
-    ):
-        log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["git", "submodule", "update", "--init", "--recursive"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to get git submodules.", Ansi.LRED)
-            return exit_code
+    # """Make sure all of bancho.py's dependencies are ready."""
+    # if (
+    #     not OPPAI_PATH.exists()
+    #     or not (OPPAI_PATH / "pybind11").exists()
+    #     or not any((OPPAI_PATH / "pybind11").iterdir())
+    # ):
+    #     log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
+    #     p = subprocess.Popen(
+    #         args=["git", "submodule", "update", "--init", "--recursive"],
+    #         stdout=subprocess.DEVNULL,
+    #         stderr=subprocess.DEVNULL,
+    #     )
+    #     if exit_code := p.wait():
+    #         log("Failed to get git submodules.", Ansi.LRED)
+    #         return exit_code
 
-    if not (OPPAI_PATH / "oppai.so").exists():
-        log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["./build"],
-            cwd="oppai_ng",
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        if exit_code := p.wait():
-            _, stderr = p.communicate()
-            print(stderr.decode())
-            log("Failed to build oppai-ng automatically.", Ansi.LRED)
-            return exit_code
+    # if not (OPPAI_PATH / "oppai.so").exists():
+    #     log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
+    #     p = subprocess.Popen(
+    #         args=["./build"],
+    #         cwd="oppai_ng",
+    #         stdout=subprocess.DEVNULL,
+    #         stderr=subprocess.PIPE,
+    #     )
+    #     if exit_code := p.wait():
+    #         _, stderr = p.communicate()
+    #         print(stderr.decode())
+    #         log("Failed to build oppai-ng automatically.", Ansi.LRED)
+    #         return exit_code
 
-        log(
-            "oppai-ng built, please start bancho.py again!",
-            Ansi.LMAGENTA,
-        )  # restart is required to fix imports
+    #     log(
+    #         "oppai-ng built, please start bancho.py again!",
+    #         Ansi.LMAGENTA,
+    #     )  # restart is required to fix imports
 
-        if OLD_OPPAI_PATH.exists():
-            # they have the old oppai-ng folder on disk
-            # they may have made changes to their pp system,
-            # let them know that they can delete it & fork if needed
-            log(
-                "Note that with the v4.2.1 migration, the oppai-ng folder was "
-                "moved to oppai_ng (note the underscore). Your old oppai-ng "
-                "folder still exists, and if you have made diverging changes "
-                "to your PP system, you'll need to update the new oppai_ng "
-                "submodule to apply those changes.",
-                Ansi.LMAGENTA,
-            )
+    #     if OLD_OPPAI_PATH.exists():
+    #         # they have the old oppai-ng folder on disk
+    #         # they may have made changes to their pp system,
+    #         # let them know that they can delete it & fork if needed
+    #         log(
+    #             "Note that with the v4.2.1 migration, the oppai-ng folder was "
+    #             "moved to oppai_ng (note the underscore). Your old oppai-ng "
+    #             "folder still exists, and if you have made diverging changes "
+    #             "to your PP system, you'll need to update the new oppai_ng "
+    #             "submodule to apply those changes.",
+    #             Ansi.LMAGENTA,
+    #         )
 
-        return 1
+    #     return 1
 
     return 0
 
