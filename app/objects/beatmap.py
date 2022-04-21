@@ -325,11 +325,11 @@ class Beatmap:
     @property
     def has_leaderboard(self) -> bool:
         """Return whether the map has a ranked leaderboard."""
-        return self.status in (
-            RankedStatus.Ranked,
-            RankedStatus.Approved,
-            RankedStatus.Loved,
-        )
+        return self.status in (RankedStatus.Ranked,
+                               RankedStatus.Approved,
+                               RankedStatus.Loved,
+                               RankedStatus.Qualified,
+                               RankedStatus.Pending)
 
     @property
     def awards_ranked_pp(self) -> bool:

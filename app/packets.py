@@ -776,15 +776,6 @@ def change_username(old: str, new: str) -> bytes:
     )
 
 
-BOT_STATUSES = (
-    (3, "the source code.."),  # editing
-    (6, "geohot livestreams.."),  # watching
-    (6, "asottile tutorials.."),  # watching
-    (6, "over the server.."),  # watching
-    (8, "out new features.."),  # testing
-    (9, "a pull request.."),  # submitting
-)
-
 # since the bot is always online and is
 # also automatically added to all player's
 # friends list, their stats are requested
@@ -796,7 +787,7 @@ BOT_STATUSES = (
 @cache
 def bot_stats(p: Player) -> bytes:
     # pick at random from list of potential statuses.
-    status_id, status_txt = random.choice(BOT_STATUSES)
+    status_id, status_txt = (2, "ATRI -My Dear Moments-")
 
     return write(
         ServerPackets.USER_STATS,
