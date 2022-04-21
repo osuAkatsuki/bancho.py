@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import math
+import subprocess
 from typing import Optional
 from typing import TypedDict
 
-try:  # TODO: ask asottile about this
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
+import orjson
+from app.logging import Ansi, log
 
-from peace_performance_python.objects import Beatmap as PeaceMap
-from peace_performance_python.objects import Calculator as PeaceCalculator
+from app.utils import OSU_TOOLS_EXEC_PATH
+from app.constants.mods import Mods, mod2modstr_dict
 
 
 class DifficultyRating(TypedDict):
@@ -30,46 +29,79 @@ class ManiaScore(TypedDict):
     score: Optional[int]
 
 
+def mods2modlist(mods: int) -> list[str]:
+    if mods == Mods.NOMOD:
+        return []
+
+    result = []
+    _dict = mod2modstr_dict
+
+    for mod in Mods:
+        if mods & mod:
+            result.append(_dict[mod])
+
+    return result
+
+
 def calculate_performances_std(
     osu_file_path: str,
     scores: list[StdTaikoCatchScore],
 ) -> list[DifficultyRating]:
-    with OppaiWrapper() as calculator:
-        calculator.set_mode(0)
+    results: list[DifficultyRating] = []
 
-        results: list[DifficultyRating] = []
+    for score in scores:
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "osu", "-j"]
 
-        for score in scores:
-            if score["mods"] is not None:
-                calculator.set_mods(score["mods"])
+        if score["mods"] is not None:
+            modlist = mods2modlist(score["mods"])
+            for mod in modlist:
+                cmd.append("-m")
+                cmd.append(mod)
 
-            if score["nmiss"] is not None:
-                calculator.set_nmiss(score["nmiss"])
+        if score["nmiss"] is not None:
+            cmd.append("-X")
+            cmd.append(score["nmiss"])
 
-            if score["combo"] is not None:
-                calculator.set_combo(score["combo"])
+        if score["combo"] is not None:
+            cmd.append("-c")
+            cmd.append(score["combo"])
 
-            if score["acc"] is not None:
-                calculator.set_accuracy_percent(score["acc"])
+        if score["acc"] is not None:
+            cmd.append("-a")
+            cmd.append(score["acc"])
 
-            calculator.calculate(osu_file_path)
+        cmd.append(osu_file_path)
 
-            pp = calculator.get_pp()
-            sr = calculator.get_sr()
+        p = subprocess.Popen(
+            args=cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
-            if math.isnan(pp) or math.isinf(pp):
-                # TODO: report to logserver
-                pp = 0.0
-                sr = 0.0
-            else:
-                pp = round(pp, 5)
+        if exit_code := p.wait():
+            _, stderr = p.communicate()
+            print(stderr.decode())
+            log(
+                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+            raise Exception()
 
-            results.append(
-                {
-                    "performance": pp,
-                    "star_rating": sr,
-                },
-            )
+        stdout, _ = p.communicate()
+        obj = orjson.loads(stdout.decode())
+
+        pp = obj["performance_attributes"]["pp"]
+        sr = obj["difficulty_attributes"]["star_rating"]
+
+        if math.isnan(pp) or math.isinf(pp):
+            # TODO: report to logserver
+            pp = 0.0
+            sr = 0.0
+
+        results.append(
+            {
+                "performance": pp,
+                "star_rating": sr,
+            },
+        )
 
     return results
 
@@ -78,32 +110,54 @@ def calculate_performances_taiko(
     osu_file_path: str,
     scores: list[StdTaikoCatchScore],
 ) -> list[DifficultyRating]:
-    beatmap = PeaceMap(osu_file_path)  # type: ignore
-
     results: list[DifficultyRating] = []
 
     for score in scores:
-        calculator = PeaceCalculator(
-            {
-                "mode": 1,
-                "mods": score["mods"],
-                "acc": score["acc"],
-                "combo": score["combo"],
-                "nmiss": score["nmiss"],
-            },
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "taiko", "-j"]
+
+        if score["mods"] is not None:
+            modlist = mods2modlist(score["mods"])
+            for mod in modlist:
+                cmd.append("-m")
+                cmd.append(mod)
+
+        if score["nmiss"] is not None:
+            cmd.append("-X")
+            cmd.append(score["nmiss"])
+
+        if score["combo"] is not None:
+            cmd.append("-c")
+            cmd.append(score["combo"])
+
+        if score["acc"] is not None:
+            cmd.append("-a")
+            cmd.append(score["acc"])
+
+        cmd.append(osu_file_path)
+
+        p = subprocess.Popen(
+            args=cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
-        result = calculator.calculate(beatmap)
+        if exit_code := p.wait():
+            _, stderr = p.communicate()
+            print(stderr.decode())
+            log(
+                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+            raise Exception()
 
-        pp = result.pp
-        sr = result.stars
+        stdout, _ = p.communicate()
+        obj = orjson.loads(stdout.decode())
+
+        pp = obj["performance_attributes"]["pp"]
+        sr = obj["difficulty_attributes"]["star_rating"]
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
             sr = 0.0
-        else:
-            pp = round(pp, 5)
 
         results.append(
             {
@@ -119,32 +173,54 @@ def calculate_performances_catch(
     osu_file_path: str,
     scores: list[StdTaikoCatchScore],
 ) -> list[DifficultyRating]:
-    beatmap = PeaceMap(osu_file_path)  # type: ignore
-
     results: list[DifficultyRating] = []
 
     for score in scores:
-        calculator = PeaceCalculator(
-            {
-                "mode": 2,
-                "mods": score["mods"],
-                "acc": score["acc"],
-                "combo": score["combo"],
-                "nmiss": score["nmiss"],
-            },
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "catch", "-j"]
+
+        if score["mods"] is not None:
+            modlist = mods2modlist(score["mods"])
+            for mod in modlist:
+                cmd.append("-m")
+                cmd.append(mod)
+
+        if score["nmiss"] is not None:
+            cmd.append("-X")
+            cmd.append(score["nmiss"])
+
+        if score["combo"] is not None:
+            cmd.append("-c")
+            cmd.append(score["combo"])
+
+        if score["acc"] is not None:
+            cmd.append("-a")
+            cmd.append(score["acc"])
+
+        cmd.append(osu_file_path)
+
+        p = subprocess.Popen(
+            args=cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
-        result = calculator.calculate(beatmap)
+        if exit_code := p.wait():
+            _, stderr = p.communicate()
+            print(stderr.decode())
+            log(
+                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+            raise Exception()
 
-        pp = result.pp
-        sr = result.stars
+        stdout, _ = p.communicate()
+        obj = orjson.loads(stdout.decode())
+
+        pp = obj["performance_attributes"]["pp"]
+        sr = obj["difficulty_attributes"]["star_rating"]
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
             sr = 0.0
-        else:
-            pp = round(pp, 5)
 
         results.append(
             {
@@ -160,30 +236,46 @@ def calculate_performances_mania(
     osu_file_path: str,
     scores: list[ManiaScore],
 ) -> list[DifficultyRating]:
-    beatmap = PeaceMap(osu_file_path)  # type: ignore
-
     results: list[DifficultyRating] = []
 
     for score in scores:
-        calculator = PeaceCalculator(
-            {
-                "mode": 3,
-                "mods": score["mods"],
-                "score": score["score"],
-            },
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "osu", "-j"]
+
+        if score["mods"] is not None:
+            modlist = mods2modlist(score["mods"])
+            for mod in modlist:
+                cmd.append("-m")
+                cmd.append(mod)
+
+        if score["score"] is not None:
+            cmd.append("-s")
+            cmd.append(score["score"])
+
+        cmd.append(osu_file_path)
+
+        p = subprocess.Popen(
+            args=cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
-        result = calculator.calculate(beatmap)
+        if exit_code := p.wait():
+            _, stderr = p.communicate()
+            print(stderr.decode())
+            log(
+                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+            raise Exception()
 
-        pp = result.pp
-        sr = result.stars
+        stdout, _ = p.communicate()
+        obj = orjson.loads(stdout.decode())
+
+        pp = obj["performance_attributes"]["pp"]
+        sr = obj["difficulty_attributes"]["star_rating"]
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
             sr = 0.0
-        else:
-            pp = round(pp, 5)
 
         results.append(
             {

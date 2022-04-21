@@ -133,7 +133,7 @@ class Mods(IntFlag):
         _dict = modstr2mod_dict  # global
 
         # split into 2 character chunks
-        mod_strs = [s[idx : idx + 2].upper() for idx in range(0, len(s), 2)]
+        mod_strs = [s[idx: idx + 2].upper() for idx in range(0, len(s), 2)]
 
         # find matching mods
         for m in mod_strs:
@@ -175,7 +175,7 @@ modstr2mod_dict = {
     "HT": Mods.HALFTIME,
     "NC": Mods.NIGHTCORE,
     "FL": Mods.FLASHLIGHT,
-    "AU": Mods.AUTOPLAY,
+    "AT": Mods.AUTOPLAY,
     "SO": Mods.SPUNOUT,
     "AP": Mods.AUTOPILOT,
     "PF": Mods.PERFECT,
@@ -249,7 +249,7 @@ mod2modstr_dict = {
     Mods.HALFTIME: "HT",
     Mods.NIGHTCORE: "NC",
     Mods.FLASHLIGHT: "FL",
-    Mods.AUTOPLAY: "AU",
+    Mods.AUTOPLAY: "AT",
     Mods.SPUNOUT: "SO",
     Mods.AUTOPILOT: "AP",
     Mods.PERFECT: "PF",
