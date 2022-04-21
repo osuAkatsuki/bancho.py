@@ -1,0 +1,3 @@
+[submodule "osu-tools"]
+	path = osu-tools
+	url = https://github.com/osu-Atrias/osu-tools
