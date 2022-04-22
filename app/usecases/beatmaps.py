@@ -4,11 +4,10 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
-import app.repositories.beatmaps
-import app.repositories.osuapi_v1
 import app.settings
 import app.state.services
 import app.utils
+from app import repositories
 from app.logging import Ansi
 from app.logging import log
 from app.objects import models
@@ -37,7 +36,7 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if resp.status != 200:
                 if 400 <= resp.status < 500:
                     # client error, report this to cmyui
@@ -123,7 +122,7 @@ async def get_beatmap_info(
 
 def _filename_exists_cache(filename: str) -> bool:
     """Fetch whether a map exists in the cache by filename."""
-    for beatmap in app.repositories.beatmaps.cache.values():
+    for beatmap in repositories.beatmaps.cache.values():
         if filename == beatmap.filename:
             return True
     else:
@@ -175,7 +174,7 @@ async def update_status(beatmap: Beatmap, new_status: RankedStatus) -> None:
     beatmap.status = new_status
 
     # update in database
-    await app.repositories.beatmaps.update_status(beatmap.id, new_status)
+    await repositories.beatmaps.update_status(beatmap.id, new_status)
 
 
 # delete

@@ -10,13 +10,11 @@ from typing import TYPE_CHECKING
 import bcrypt
 
 import app.packets
-import app.repositories.players
 import app.settings
 import app.state
-import app.usecases.channels
-import app.usecases.clans
-import app.usecases.multiplayer
 import app.utils
+from app import repositories
+from app import usecases
 from app.constants.gamemodes import GameMode
 from app.constants.privileges import Privileges
 from app.discord import DiscordWebhook
@@ -117,7 +115,7 @@ async def register(
 
 
 async def login(player_name: str, player_password_md5: bytes) -> Optional[Player]:
-    player = await app.repositories.players.fetch(name=player_name)
+    player = await repositories.players.fetch(name=player_name)
 
     if player and validate_credentials(
         password=player_password_md5,
@@ -158,7 +156,7 @@ def logout(player: Player) -> None:
 
 async def update_name(player_id: int, new_name: str) -> None:
     """Update a player's name to a new value, by id."""
-    await app.repositories.players.update_name(player_id, new_name)
+    await repositories.players.update_name(player_id, new_name)
 
 
 async def update_privs(player: Player, new_privs: int) -> None:
@@ -223,7 +221,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
-        await webhook.post(app.state.services.http)
+        await webhook.post(app.state.services.http_client)
 
 
 async def unrestrict(player: Player, admin: Player, reason: str) -> None:
@@ -251,7 +249,7 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
-        await webhook.post(app.state.services.http)
+        await webhook.post(app.state.services.http_client)
 
 
 async def silence(player: Player, admin: Player, duration: int, reason: str) -> None:
@@ -354,7 +352,7 @@ def join_match(player: Player, match: Match, passwd: str) -> bool:
 
     player.enqueue(app.packets.match_join_success(match))
 
-    # NOTE: you will need to call app.usecases.multiplayer.send_match_state_to_clients after this
+    # NOTE: you will need to call usecases.multiplayer.send_match_state_to_clients after this
 
     return True
 
@@ -399,7 +397,7 @@ def leave_match(player: Player) -> None:
         app.state.sessions.matches.remove(player.match)
 
         if lobby := app.state.sessions.channels["#lobby"]:
-            app.usecases.channels.send_data_to_clients(
+            usecases.channels.send_data_to_clients(
                 lobby,
                 app.packets.dispose_match(player.match.id),
             )
@@ -415,13 +413,13 @@ def leave_match(player: Player) -> None:
 
         if player in player.match._refs:
             player.match._refs.remove(player)
-            app.usecases.channels.send_bot(
+            usecases.channels.send_bot(
                 player.match.chat,
                 f"{player.name} removed from match referees.",
             )
 
         # notify others of our deprature
-        app.usecases.multiplayer.send_match_state_to_clients(player.match)
+        usecases.multiplayer.send_match_state_to_clients(player.match)
 
     player.match = None
 
@@ -432,13 +430,13 @@ def join_channel(player: Player, channel: Channel) -> bool:
         # player already in channel
         player in channel
         # no read privs
-        or not app.usecases.channels.can_read(channel, player.priv)
+        or not usecases.channels.can_read(channel, player.priv)
         # not in mp lobby
         or (channel._name == "#lobby" and not player.in_lobby)
     ):
         return False
 
-    app.usecases.channels.join_channel(channel, player)  # add to channel.players
+    usecases.channels.join_channel(channel, player)  # add to channel.players
     player.channels.append(channel)  # add to player.channels
 
     player.enqueue(app.packets.channel_join(channel.name))
@@ -458,7 +456,7 @@ def join_channel(player: Player, channel: Channel) -> bool:
         # normal channel, send to all players who
         # have access to see the channel's usercount.
         for p in app.state.sessions.players:
-            if app.usecases.channels.can_read(channel, p.priv):
+            if usecases.channels.can_read(channel, p.priv):
                 p.enqueue(chan_info_packet)
 
     if app.settings.DEBUG:
@@ -473,7 +471,7 @@ def leave_channel(player: Player, c: Channel, kick: bool = True) -> None:
     if player not in c:
         return
 
-    app.usecases.channels.remove_channel(c, player)  # remove from channel.players
+    usecases.channels.remove_channel(c, player)  # remove from channel.players
     player.channels.remove(c)  # remove from player.channels
 
     if kick:
@@ -490,7 +488,7 @@ def leave_channel(player: Player, c: Channel, kick: bool = True) -> None:
         # normal channel, send to all players who
         # have access to see the channel's usercount.
         for p in app.state.sessions.players:
-            if app.usecases.channels.can_read(c, p.priv):
+            if usecases.channels.can_read(c, p.priv):
                 p.enqueue(chan_info_packet)
 
     if app.settings.DEBUG:

@@ -42,7 +42,9 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[Geolocation]:
     http://ip-api.com/
     """
 
-    async with app.state.services.http.get(url=f"http://ip-api.com/line/{ip}") as resp:
+    async with app.state.services.http_client.get(
+        url=f"http://ip-api.com/line/{ip}",
+    ) as resp:
         if not resp or resp.status != 200:
             log("Failed to get geoloc data: request failed.", Ansi.LRED)
             return None

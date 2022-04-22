@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
 
-import app.repositories.osuapi_v1
 import app.state.services
+from app import repositories
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
@@ -58,7 +58,7 @@ async def _fetch_by_id_database(id: int) -> Optional[BeatmapSet]:
 
 async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
     """Fetch a mapset from the osu!api by set id."""
-    api_data = await app.repositories.osuapi_v1.get_beatmaps(s=id)
+    api_data = await repositories.osuapi_v1.get_beatmaps(s=id)
 
     if api_data is None:
         return None

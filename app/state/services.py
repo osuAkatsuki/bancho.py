@@ -42,7 +42,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 """ session objects """
 
-http: aiohttp.ClientSession
+http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
@@ -92,7 +92,7 @@ async def log_strange_occurrence(obj: object) -> None:
 
     if app.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
-        async with http.post(
+        async with http_client.post(
             url="https://log.cmyui.xyz/",
             headers={
                 "Bancho-Version": app.settings.VERSION,
@@ -196,7 +196,7 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
 
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency_name}/json"
-        async with http.get(url) as resp:
+        async with http_client.get(url) as resp:
             if resp.status == 200 and (json := await resp.json()):
                 latest_ver = Version.from_str(json["info"]["version"])
 

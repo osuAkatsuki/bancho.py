@@ -77,11 +77,11 @@ async def get_beatmaps(
 
     params["k"] = str(app.settings.OSU_API_KEY)
 
-    async with app.state.services.http.get(
+    async with app.state.services.http_client.get(
         url="https://old.ppy.sh/api/get_beatmaps",
         params=params,
     ) as resp:
-        if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
+        if resp and resp.status == 200:
             return await resp.json()
 
     return None

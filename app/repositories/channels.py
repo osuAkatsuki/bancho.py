@@ -108,7 +108,7 @@ async def fetch_all() -> set[Channel]:
     return channels
 
 
-async def _populate_cache_from_database() -> None:
+async def _populate_caches_from_database() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 

@@ -32,7 +32,7 @@ async def check_updates(
     if stream_cache[action] and stream_cache["timeout"] > current_time:
         return stream_cache[action]
 
-    async with app.state.services.http.get(
+    async with app.state.services.http_client.get(
         url="https://old.ppy.sh/web/check-updates.php",
         params=query_params,
     ) as resp:

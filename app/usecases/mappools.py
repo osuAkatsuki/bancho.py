@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Mapping
 
-import app.repositories.beatmaps
-import app.repositories.mappools
 import app.state.services
+from app import repositories
 from app.constants.mods import Mods
 from app.logging import Ansi
 from app.logging import log
@@ -15,7 +14,7 @@ from app.objects.match import MapPool
 
 
 async def create(name: str, created_by: int) -> MapPool:
-    return await app.repositories.mappools.create(name, created_by)
+    return await repositories.mappools.create(name, created_by)
 
 
 # read
@@ -28,7 +27,7 @@ async def maps_from_sql(pool_id: int) -> Mapping[tuple[Mods, int], Beatmap]:
         {"pool_id": pool_id},
     ):
         map_id = row["map_id"]
-        bmap = await app.repositories.beatmaps.fetch_by_id(map_id)
+        bmap = await repositories.beatmaps.fetch_by_id(map_id)
 
         if not bmap:
             # map not found? remove it from the

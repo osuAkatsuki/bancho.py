@@ -7,8 +7,7 @@ from typing import Mapping
 from typing import Optional
 from typing import Sequence
 
-import app.repositories.notes
-import app.state
+from app import repositories
 
 ### TODO: fully refactor notes to be stored in JSON format
 
@@ -23,7 +22,7 @@ async def create(
     created_at: Optional[datetime] = None,
 ) -> None:
     """Add a note to a specific player by name."""
-    return await app.repositories.notes.create(
+    return await repositories.notes.create(
         action,
         message,
         receiver_id,
@@ -38,7 +37,7 @@ async def create(
 # TODO: filters when fetching?
 async def fetch_notes_by_player_id(player_id: int) -> Sequence[Mapping[str, Any]]:
     """Retrieve the notes for a specific player by id."""
-    return await app.repositories.notes.fetch_notes_by_player_id(player_id)
+    return await repositories.notes.fetch_notes_by_player_id(player_id)
 
 
 ## update

@@ -3,10 +3,13 @@ from __future__ import annotations
 from typing import Optional
 from typing import Union
 
-import app.repositories.osuapi_v1  # TODO: refactor this requirement out
 import app.state.services
+from app import repositories
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
+
+# TODO: kevin question; usecases using other usecases
+# TODO: refactor this requirement out
 
 BeatmapID = int
 BeatmapMD5 = str
@@ -61,18 +64,15 @@ async def _fetch_by_key_osuapi(key: str, val: KeyTypes) -> Optional[Beatmap]:
     else:
         raise NotImplementedError
 
-    api_data = await app.repositories.osuapi_v1.get_beatmaps(**params)
+    api_data = await repositories.osuapi_v1.get_beatmaps(**params)
 
-    if api_data is None:
+    if not api_data:  # None or []
         return None
 
     # TODO: is it possible for this to be a map we already have?
     #       might need to vary logic based on frozen status
 
-    try:
-        return Beatmap.from_osuapi_response(api_data[0])
-    except IndexError:
-        breakpoint()
+    return Beatmap.from_osuapi_response(api_data[0])
 
 
 async def _fetch_by_key(key: str, val: KeyTypes) -> Optional[Beatmap]:

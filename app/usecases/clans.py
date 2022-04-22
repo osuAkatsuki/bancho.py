@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import app.repositories.clans
 import app.state.services
+from app import repositories
 from app.constants.privileges import ClanPrivileges
 from app.objects.clan import Clan
 from app.objects.player import Player
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 async def create(name: str, tag: str, owner: Player) -> Clan:
     """Create a mappool in cache and the database."""
-    return await app.repositories.clans.create(name, tag, owner)
+    return await repositories.clans.create(name, tag, owner)
 
 
 async def add_member(clan: Clan, p: Player) -> None:
@@ -51,4 +51,4 @@ async def remove_member(clan: Clan, player: Player) -> None:
 
 
 async def delete(clan: Clan) -> None:
-    await app.repositories.clans.delete(clan)
+    await repositories.clans.delete(clan)

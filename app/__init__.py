@@ -9,5 +9,7 @@ from . import discord
 from . import logging
 from . import objects
 from . import packets
+from . import repositories
 from . import state
+from . import usecases
 from . import utils

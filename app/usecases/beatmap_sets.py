@@ -4,10 +4,9 @@ from datetime import datetime
 from datetime import timedelta
 from typing import Sequence
 
-import app.repositories.beatmap_sets
-import app.repositories.osuapi_v1
 import app.settings
 import app.state.services
+from app import repositories
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import BeatmapSet
 from app.objects.beatmap import RankedStatus
@@ -80,7 +79,7 @@ async def update_status(beatmap_set: BeatmapSet, new_status: RankedStatus) -> No
         beatmap.status = new_status
 
     # update in database
-    await app.repositories.beatmap_sets.update_status(beatmap_set.id, new_status)
+    await repositories.beatmap_sets.update_status(beatmap_set.id, new_status)
 
 
 async def _update_if_available(beatmap_set: BeatmapSet) -> None:
@@ -89,7 +88,7 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
     if not app.settings.OSU_API_KEY:
         return
 
-    if api_data := await app.repositories.osuapi_v1.get_beatmaps(s=beatmap_set.id):
+    if api_data := await repositories.osuapi_v1.get_beatmaps(s=beatmap_set.id):
         old_maps = {bmap.id: bmap for bmap in beatmap_set.maps}
         new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
 
@@ -159,7 +158,7 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
 
         # update maps in sql
 
-        await app.repositories.beatmap_sets.replace_into_database(beatmap_set)
+        await repositories.beatmap_sets.replace_into_database(beatmap_set)
     else:
         # TODO: we have the map on disk but it's
         #       been removed from the osu!api.

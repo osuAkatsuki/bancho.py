@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import importlib
 import math
 import os
@@ -9,7 +8,6 @@ import pprint
 import random
 import secrets
 import signal
-import struct
 import time
 import traceback
 import uuid
@@ -35,26 +33,12 @@ import timeago
 
 import app.logging
 import app.packets
-import app.repositories.beatmap_sets
-import app.repositories.beatmaps
-import app.repositories.channels
-import app.repositories.clans
-import app.repositories.mappools
-import app.repositories.players
 import app.settings
 import app.state
-import app.usecases.beatmap_sets
-import app.usecases.beatmaps
-import app.usecases.channels
-import app.usecases.clans
-import app.usecases.mappools
-import app.usecases.multiplayer
-import app.usecases.notes
-import app.usecases.performance
-import app.usecases.players
 import app.utils
+from app import repositories
+from app import usecases
 from app.constants import regexes
-from app.constants.gamemodes import GameMode
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
@@ -72,7 +56,6 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
 try:
@@ -221,7 +204,7 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.NORMAL, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await app.repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch(name=" ".join(ctx.args))
 
     if target is None:
         return "Player not found."
@@ -235,14 +218,14 @@ async def block(ctx: Context) -> Optional[str]:
     if target.id in ctx.player.friends:
         ctx.player.friends.remove(target.id)
 
-    await app.usecases.players.add_block(ctx.player, target)
+    await usecases.players.add_block(ctx.player, target)
     return f"Added {target.name} to blocked users."
 
 
 @command(Privileges.NORMAL, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await app.repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch(name=" ".join(ctx.args))
 
     if target is None:
         return "User not found."
@@ -253,7 +236,7 @@ async def unblock(ctx: Context) -> Optional[str]:
     if target.id not in ctx.player.blocks:
         return f"{target.name} not blocked!"
 
-    await app.usecases.players.remove_block(ctx.player, target)
+    await usecases.players.remove_block(ctx.player, target)
     return f"Removed {target.name} from blocked users."
 
 
@@ -272,7 +255,7 @@ async def reconnect(ctx: Context) -> Optional[str]:
         # !reconnect
         target = ctx.player
 
-    app.usecases.players.logout(target)
+    usecases.players.logout(target)
 
     return None
 
@@ -292,17 +275,17 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Disallowed username; pick another."
 
     # username may already be in use by another player
-    if (await app.repositories.players.fetch(name=new_player_name)) is not None:
+    if (await repositories.players.fetch(name=new_player_name)) is not None:
         return "Username already taken by another player."
 
-    await app.usecases.players.update_name(ctx.player.id, new_player_name)
+    await usecases.players.update_name(ctx.player.id, new_player_name)
 
     ctx.player.enqueue(
         app.packets.notification(
             f"Your username has been changed to {new_player_name}!",
         ),
     )
-    app.usecases.players.logout(ctx.player)
+    usecases.players.logout(ctx.player)
 
     return None
 
@@ -317,9 +300,9 @@ async def maplink(ctx: Context) -> Optional[str]:
     beatmap = None
 
     if match and match.map_id:
-        beatmap = await app.repositories.beatmaps.fetch_by_id(match.map_id)
+        beatmap = await repositories.beatmaps.fetch_by_id(match.map_id)
     elif spectating and spectating.status.map_id:
-        beatmap = await app.repositories.beatmaps.fetch_by_id(spectating.status.map_id)
+        beatmap = await repositories.beatmaps.fetch_by_id(spectating.status.map_id)
     elif ctx.player.last_np is not None and time.time() < ctx.player.last_np["timeout"]:
         beatmap = ctx.player.last_np["bmap"]
 
@@ -335,7 +318,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 async def recent(ctx: Context) -> Optional[str]:
     """Show information about a player's most recent score."""
     if ctx.args:
-        target = await app.repositories.players.fetch(name=" ".join(ctx.args))
+        target = await repositories.players.fetch(name=" ".join(ctx.args))
         if target is None:
             return "Player not found."
     else:
@@ -344,7 +327,7 @@ async def recent(ctx: Context) -> Optional[str]:
     if not (score := target.recent_score):
         return "Score could not be retrieved. (only saves per play session)"
 
-    beatmap = await app.repositories.beatmaps.fetch_by_md5(score.bmap_md5)
+    beatmap = await repositories.beatmaps.fetch_by_md5(score.bmap_md5)
     if beatmap is None:
         return "Beatmap could not be retrieved."
 
@@ -401,7 +384,7 @@ async def top(ctx: Context) -> Optional[str]:
             return "Invalid username."
 
         # specific player provided
-        player = await app.repositories.players.fetch(name=ctx.args[1])
+        player = await repositories.players.fetch(name=ctx.args[1])
         if player is None:
             return "Player not found."
     else:
@@ -531,7 +514,7 @@ async def _with(ctx: Context) -> Optional[str]:
     bmap: Beatmap = ctx.player.last_np["bmap"]
 
     osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-    if not await app.usecases.beatmaps.ensure_local_osu_file(
+    if not await usecases.beatmaps.ensure_local_osu_file(
         osu_file_path,
         bmap.id,
         bmap.md5,
@@ -550,7 +533,7 @@ async def _with(ctx: Context) -> Optional[str]:
     if (mods := command_args.get("mods")) is not None:
         msg_fields.append(f"{mods!r}")
 
-    score_args: ScoreDifficultyParams = {}
+    score_args: usecases.performance.ScoreDifficultyParams = {}
 
     # include mode-specific fields
     if mode_vn in (0, 1, 2):
@@ -571,7 +554,7 @@ async def _with(ctx: Context) -> Optional[str]:
             score_args["score"] = score * 1000
             msg_fields.append(f"{score}k")
 
-    result = app.usecases.performance.calculate_performances(
+    result = usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         mode=mode_vn,
         mods=int(command_args["mods"]),
@@ -657,12 +640,12 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in rows:
         # find player & map for each row, and add to output.
-        player = await app.repositories.players.fetch(id=player_id)
+        player = await repositories.players.fetch(id=player_id)
         if player is None:
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
-        beatmap = await app.repositories.beatmaps.fetch_by_id(map_id)
+        beatmap = await repositories.beatmaps.fetch_by_id(map_id)
         if beatmap is None:
             l.append(f"Failed to find requested map ({map_id})?")
             continue
@@ -701,10 +684,10 @@ async def _map(ctx: Context) -> Optional[str]:
     # update sql & cache based on scope
 
     if ctx.args[1] == "set":
-        beatmap_set = await app.repositories.beatmap_sets.fetch_by_id(beatmap.set_id)
+        beatmap_set = await repositories.beatmap_sets.fetch_by_id(beatmap.set_id)
         assert beatmap_set is not None
 
-        await app.usecases.beatmap_sets.update_status(beatmap_set, new_status)
+        await usecases.beatmap_sets.update_status(beatmap_set, new_status)
 
         map_ids_to_clear_requests_for = [
             row[0]
@@ -715,7 +698,7 @@ async def _map(ctx: Context) -> Optional[str]:
         ]
 
     else:
-        await app.usecases.beatmaps.update_status(beatmap, new_status)
+        await usecases.beatmaps.update_status(beatmap, new_status)
 
         map_ids_to_clear_requests_for = [beatmap.id]
 
@@ -745,16 +728,16 @@ ACTION_STRINGS = {
 @command(Privileges.MODERATOR, hidden=True)
 async def notes(ctx: Context) -> Optional[str]:
     """Retrieve the logs of a specified player by name."""
-    target = await app.repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch(name=" ".join(ctx.args))
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
-    notes = await app.usecases.notes.fetch_notes_by_player_id(target.id)
+    notes = await usecases.notes.fetch_notes_by_player_id(target.id)
 
     output_lines = []
 
     for note in notes:
-        sender = await app.repositories.players.fetch(id=note["from"])
+        sender = await repositories.players.fetch(id=note["from"])
         if sender is None:
             return f"No notes found for {target}."
 
@@ -775,11 +758,11 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
-    await app.usecases.notes.create(
+    await usecases.notes.create(
         action="note",
         message=" ".join(ctx.args[1:]),
         receiver_id=target.id,
@@ -809,7 +792,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -828,7 +811,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await app.usecases.players.silence(
+    await usecases.players.silence(
         player=target,
         admin=ctx.player,
         duration=duration,
@@ -843,7 +826,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !unsilence <name>"
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -853,7 +836,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    await app.usecases.players.unsilence(player=target, admin=ctx.player)
+    await usecases.players.unsilence(player=target, admin=ctx.player)
     return f"{target} was unsilenced."
 
 
@@ -871,7 +854,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await app.repositories.players.fetch(name=" ".join(ctx.args))
+        p = await repositories.players.fetch(name=" ".join(ctx.args))
 
         if not p:
             return "Player not found."
@@ -882,7 +865,7 @@ async def user(ctx: Context) -> Optional[str]:
         last_np = None
 
     if p.clan_id is not None:
-        clan = await app.repositories.clans.fetch_by_id(p.clan_id)
+        clan = await repositories.clans.fetch_by_id(p.clan_id)
         assert clan is not None
 
         player_name = f"[{clan.tag}] {p.name}"
@@ -912,7 +895,7 @@ async def restrict(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !restrict <name> <reason>"
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -927,16 +910,16 @@ async def restrict(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await app.usecases.players.restrict(
+    await usecases.players.restrict(
         player=target,
         admin=ctx.player,
         reason=reason,
     )
 
     if target.online:  # refresh their client state
-        app.usecases.players.logout(target)
+        usecases.players.logout(target)
 
-    await app.usecases.notes.create(
+    await usecases.notes.create(
         action="restrict",
         message=reason,
         receiver_id=target.id,
@@ -953,7 +936,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -968,16 +951,16 @@ async def unrestrict(ctx: Context) -> Optional[str]:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await app.usecases.players.unrestrict(
+    await usecases.players.unrestrict(
         player=target,
         admin=ctx.player,
         reason=reason,
     )
 
     if target.online:  # refresh their client state
-        app.usecases.players.logout(target)
+        usecases.players.logout(target)
 
-    await app.usecases.notes.create(
+    await usecases.notes.create(
         action="unrestrict",
         message=reason,
         receiver_id=target.id,
@@ -1098,7 +1081,7 @@ async def recalc(ctx: Context) -> Optional[str]:
         bmap: Beatmap = ctx.player.last_np["bmap"]
 
         osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-        if not await app.usecases.beatmaps.ensure_local_osu_file(
+        if not await usecases.beatmaps.ensure_local_osu_file(
             osu_file_path,
             bmap.id,
             bmap.md5,
@@ -1140,11 +1123,11 @@ async def recalc(ctx: Context) -> Optional[str]:
     else:
         # recalc all plays on the server, on all maps
         # we'll log any errors that occur to the #staff channel (if it exists)
-        err_reporting_channel = await app.repositories.channels.fetch_by_name("#staff")
+        err_reporting_channel = await repositories.channels.fetch_by_name("#staff")
 
         async def recalc_all() -> None:
             if err_reporting_channel is not None:
-                app.usecases.channels.send_bot(
+                usecases.channels.send_bot(
                     err_reporting_channel,
                     f"{ctx.player} started a full recalculation.",
                 )
@@ -1164,13 +1147,13 @@ async def recalc(ctx: Context) -> Optional[str]:
                     bmap_md5 = bmap_row["md5"]
 
                     osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                    if not await app.usecases.beatmaps.ensure_local_osu_file(
+                    if not await usecases.beatmaps.ensure_local_osu_file(
                         osu_file_path,
                         bmap_id,
                         bmap_md5,
                     ):
                         if err_reporting_channel is not None:
-                            app.usecases.channels.send_bot(
+                            usecases.channels.send_bot(
                                 err_reporting_channel,
                                 f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
                             )
@@ -1210,7 +1193,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             elapsed = app.utils.seconds_readable(int(time.time() - st))
 
             if err_reporting_channel is not None:
-                app.usecases.channels.send_bot(
+                usecases.channels.send_bot(
                     err_reporting_channel,
                     f"Recalculation complete. | Elapsed: {elapsed}",
                 )
@@ -1258,11 +1241,11 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return "Could not find user."
 
-    await app.usecases.players.add_privs(target, bits)
+    await usecases.players.add_privs(target, bits)
     return f"Updated {target}'s privileges."
 
 
@@ -1280,11 +1263,11 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    target = await app.repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch(name=ctx.args[0])
     if target is None:
         return "Could not find user."
 
-    await app.usecases.players.remove_privs(target, bits)
+    await usecases.players.remove_privs(target, bits)
     return f"Updated {target}'s privileges."
 
 
@@ -1311,7 +1294,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER, hidden=True)
 async def menu(ctx: Context) -> Optional[str]:
     """Temporary command to illustrate the menu option idea."""
-    app.usecases.players.send_current_menu(ctx.player)
+    usecases.players.send_current_menu(ctx.player)
 
     return None
 
@@ -1558,18 +1541,18 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
                 # make sure player didn't leave the
                 # match since queueing this start lol..
                 if ctx.player not in match:
-                    app.usecases.channels.send_bot(
+                    usecases.channels.send_bot(
                         match.chat,
                         "Player left match? (cancelled)",
                     )
                     return
 
-                app.usecases.multiplayer.start(match)
-                app.usecases.channels.send_bot(match.chat, "Starting match.")
+                usecases.multiplayer.start(match)
+                usecases.channels.send_bot(match.chat, "Starting match.")
 
             def _alert_start(t: int) -> None:
                 """Alert the match of the impending start."""
-                app.usecases.channels.send_bot(
+                usecases.channels.send_bot(
                     match.chat,
                     f"Match starting in {t} seconds.",
                 )
@@ -1603,7 +1586,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
             return "Invalid syntax: !mp start <force/seconds>"
         # !mp start force simply passes through
 
-    app.usecases.multiplayer.start(match)
+    usecases.multiplayer.start(match)
     return "Good luck!"
 
 
@@ -1616,10 +1599,10 @@ async def mp_abort(ctx: Context, match: Match) -> Optional[str]:
 
     match.in_progress = False
 
-    app.usecases.multiplayer.unready_players(match, expected=SlotStatus.playing)
-    app.usecases.multiplayer.send_data_to_clients(match, app.packets.match_abort())
+    usecases.multiplayer.unready_players(match, expected=SlotStatus.playing)
+    usecases.multiplayer.send_data_to_clients(match, app.packets.match_abort())
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "Match aborted."
 
 
@@ -1635,7 +1618,7 @@ async def mp_map(ctx: Context, match: Match) -> Optional[str]:
     if map_id == match.map_id:
         return "Map already selected."
 
-    beatmap = await app.repositories.beatmaps.fetch_by_id(map_id)
+    beatmap = await repositories.beatmaps.fetch_by_id(map_id)
     if beatmap is None:
         return "Beatmap not found."
 
@@ -1644,7 +1627,7 @@ async def mp_map(ctx: Context, match: Match) -> Optional[str]:
     match.map_name = beatmap.full_name
     match.mode = beatmap.mode
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return f"Selected: {beatmap.embed}."
 
 
@@ -1672,7 +1655,7 @@ async def mp_mods(ctx: Context, match: Match) -> Optional[str]:
         # not freemods, set match mods.
         match.mods = mods
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "Match mods updated."
 
 
@@ -1710,7 +1693,7 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
             if s.status & SlotStatus.has_player:
                 s.mods = Mods.NOMOD
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "Match freemod status updated."
 
 
@@ -1737,7 +1720,7 @@ async def mp_host(ctx: Context, match: Match) -> Optional[str]:
     # tell host's client they've been promoted
     match.host.enqueue(app.packets.match_transfer_host())
 
-    app.usecases.multiplayer.send_match_state_to_clients(match, lobby=True)
+    usecases.multiplayer.send_match_state_to_clients(match, lobby=True)
     return "Match host updated."
 
 
@@ -1828,7 +1811,7 @@ async def mp_lock(ctx: Context, match: Match) -> Optional[str]:
         if slot.status == SlotStatus.open:
             slot.status = SlotStatus.locked
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "All unused slots locked."
 
 
@@ -1840,7 +1823,7 @@ async def mp_unlock(ctx: Context, match: Match) -> Optional[str]:
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "All locked slots unlocked."
 
 
@@ -1879,9 +1862,9 @@ async def mp_teams(ctx: Context, match: Match) -> Optional[str]:
 
     if match.is_scrimming:
         # reset score if scrimming.
-        app.usecases.multiplayer.reset_scrimmage_state(match)
+        usecases.multiplayer.reset_scrimmage_state(match)
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
     return "Match team type updated."
 
 
@@ -1919,7 +1902,7 @@ async def mp_condition(ctx: Context, match: Match) -> Optional[str]:
         else:
             return "Invalid win condition. (score, acc, combo, scorev2, *pp)"
 
-    app.usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
+    usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
     return "Match win condition updated."
 
 
@@ -1958,7 +1941,7 @@ async def mp_scrim(ctx: Context, match: Match) -> Optional[str]:
             return "Not currently scrimming!"
 
         match.is_scrimming = False
-        app.usecases.multiplayer.reset_scrimmage_state(match)
+        usecases.multiplayer.reset_scrimmage_state(match)
         msg = "Scrimming cancelled."
 
     match.winning_pts = winning_pts
@@ -1974,7 +1957,7 @@ async def mp_endscrim(ctx: Context, match: Match) -> Optional[str]:
 
     match.is_scrimming = False
 
-    app.usecases.multiplayer.reset_scrimmage_state(match)
+    usecases.multiplayer.reset_scrimmage_state(match)
 
     # TODO: return final score
     return "Scrimmage ended."
@@ -2028,10 +2011,10 @@ async def mp_force(ctx: Context, match: Match) -> Optional[str]:
     if target is None:
         return "Could not find a user by that name."
 
-    if not app.usecases.players.join_match(target, match, match.passwd):
+    if not usecases.players.join_match(target, match, match.passwd):
         return None
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
 
     return "Welcome."
 
@@ -2049,7 +2032,7 @@ async def mp_loadpool(ctx: Context, match: Match) -> Optional[str]:
     if ctx.player is not match.host:
         return "Only available to the host."
 
-    pool = await app.repositories.mappools.fetch_by_name(ctx.args[0])
+    pool = await repositories.mappools.fetch_by_name(ctx.args[0])
     if pool is None:
         return "Could not find a pool by that name!"
 
@@ -2185,7 +2168,7 @@ async def mp_pick(ctx: Context, match: Match) -> Optional[str]:
     # update match mods to the picked map.
     match.mods = mods
 
-    app.usecases.multiplayer.send_match_state_to_clients(match)
+    usecases.multiplayer.send_match_state_to_clients(match)
 
     return f"Picked {bmap.embed}. ({mods_slot})"
 
@@ -2221,10 +2204,10 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    if await app.repositories.mappools.fetch_by_name(name):
+    if await repositories.mappools.fetch_by_name(name):
         return "Pool already exists by that name!"
 
-    pool = await app.usecases.mappools.create(name, ctx.player.id)
+    pool = await usecases.mappools.create(name, ctx.player.id)
 
     return f"{pool.name} created."
 
@@ -2235,12 +2218,12 @@ async def pool_delete(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !pool delete <name>"
 
-    pool = await app.repositories.mappools.fetch_by_name(ctx.args[0])
+    pool = await repositories.mappools.fetch_by_name(ctx.args[0])
 
     if pool is None:
         return "Could not find a pool by that name!"
 
-    await app.repositories.mappools.delete(pool)
+    await repositories.mappools.delete(pool)
 
     return f"{pool.name} deleted."
 
@@ -2270,7 +2253,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    pool = await app.repositories.mappools.fetch_by_name(name)
+    pool = await repositories.mappools.fetch_by_name(name)
     if pool is None:
         return "Could not find a pool by that name!"
 
@@ -2312,7 +2295,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    pool = await app.repositories.mappools.fetch_by_name(pool_name)
+    pool = await repositories.mappools.fetch_by_name(pool_name)
     if pool is None:
         return "Could not find a pool by that name!"
 
@@ -2334,7 +2317,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
 @pool_commands.add(Privileges.TOURNAMENT, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> Optional[str]:
     """List all existing mappools information."""
-    pools = await app.repositories.mappools.fetch_all()
+    pools = await repositories.mappools.fetch_all()
 
     if not pools:
         return "There are currently no pools!"
@@ -2342,7 +2325,7 @@ async def pool_list(ctx: Context) -> Optional[str]:
     l = [f"Mappools ({len(pools)})"]
 
     for pool in pools:
-        pool_creator = await app.repositories.players.fetch(id=pool.created_by)
+        pool_creator = await repositories.players.fetch(id=pool.created_by)
         assert pool_creator is not None
 
         l.append(
@@ -2361,7 +2344,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
 
     name = ctx.args[0]
 
-    pool = await app.repositories.mappools.fetch_by_name(name)
+    pool = await repositories.mappools.fetch_by_name(name)
     if pool is None:
         return "Could not find a pool by that name!"
 
@@ -2369,7 +2352,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
     _date = pool.created_at.strftime("%Y-%m-%d")
     datetime_fmt = f"Created at {_time} on {_date}"
 
-    pool_creator = await app.repositories.players.fetch(id=pool.created_by)
+    pool_creator = await repositories.players.fetch(id=pool.created_by)
     assert pool_creator is not None
 
     l = [f"{pool.id}. {pool.name}, by {pool_creator} | {datetime_fmt}."]
@@ -2415,22 +2398,22 @@ async def clan_create(ctx: Context) -> Optional[str]:
         return "Clan name may be 2-16 characters long."
 
     if ctx.player.clan_id:
-        clan = await app.repositories.clans.fetch_by_id(ctx.player.clan_id)
+        clan = await repositories.clans.fetch_by_id(ctx.player.clan_id)
         return f"You're already a member of {clan!r}!"
 
     # TODO:REFACTOR add support for fetching by name
-    # if await app.repositories.clans.fetch_by_name(name):
+    # if await repositories.clans.fetch_by_name(name):
     #     return "That name has already been claimed by another clan."
 
-    if await app.repositories.clans.fetch_by_tag(tag):
+    if await repositories.clans.fetch_by_tag(tag):
         return "That tag has already been claimed by another clan."
 
-    clan = await app.repositories.clans.create(name, tag, owner=ctx.player)
+    clan = await repositories.clans.create(name, tag, owner=ctx.player)
 
     # announce clan creation
-    announce_chan = await app.repositories.channels.fetch_by_name("#announce")
+    announce_chan = await repositories.channels.fetch_by_name("#announce")
     if announce_chan is not None:
-        app.usecases.channels.send_msg_to_clients(
+        usecases.channels.send_msg_to_clients(
             channel=announce_chan,
             msg=f"\x01ACTION founded {clan!r}.",
             sender=ctx.player,
@@ -2447,7 +2430,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        clan = await app.repositories.clans.fetch_by_tag(" ".join(ctx.args).upper())
+        clan = await repositories.clans.fetch_by_tag(" ".join(ctx.args).upper())
 
         if clan is None:
             return "Could not find a clan by that tag."
@@ -2455,29 +2438,29 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if ctx.player.clan_id is None:
             return "You're not a member of a clan."
 
-        clan = await app.repositories.clans.fetch_by_id(ctx.player.clan_id)
+        clan = await repositories.clans.fetch_by_id(ctx.player.clan_id)
         assert clan is not None
 
     # remove all members from the clan
     for member_id in clan.member_ids:
-        member = await app.repositories.players.fetch(id=member_id)
+        member = await repositories.players.fetch(id=member_id)
         if member is None:
             log(f"Could not find a clan's member with id {member_id}.", Ansi.LYELLOW)
             continue
 
-        await app.usecases.clans.remove_member(clan, member)
+        await usecases.clans.remove_member(clan, member)
 
         member.clan_id = None
         member.clan_priv = None
 
     # delete the clan
-    await app.usecases.clans.delete(clan)
+    await usecases.clans.delete(clan)
 
     # announce clan disbanding
-    announce_chan = await app.repositories.channels.fetch_by_name("#announce")
+    announce_chan = await repositories.channels.fetch_by_name("#announce")
     if announce_chan is not None:
         msg = f"\x01ACTION disbanded {clan!r}."
-        app.usecases.channels.send_msg_to_clients(
+        usecases.channels.send_msg_to_clients(
             announce_chan,
             msg,
             sender=ctx.player,
@@ -2493,7 +2476,7 @@ async def clan_info(ctx: Context) -> Optional[str]:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = await app.repositories.clans.fetch_by_tag(tag=" ".join(ctx.args).upper())
+    clan = await repositories.clans.fetch_by_tag(tag=" ".join(ctx.args).upper())
     if clan is None:
         return "Could not find a clan by that tag."
 
@@ -2522,10 +2505,10 @@ async def clan_leave(ctx: Context):
     if ctx.player.clan_priv == ClanPrivileges.OWNER:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    clan = await app.repositories.clans.fetch_by_id(ctx.player.clan_id)
+    clan = await repositories.clans.fetch_by_id(ctx.player.clan_id)
     assert clan is not None
 
-    await app.usecases.clans.remove_member(clan, ctx.player)
+    await usecases.clans.remove_member(clan, ctx.player)
 
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
@@ -2533,7 +2516,7 @@ async def clan_leave(ctx: Context):
     if not clan.member_ids:
         # no players remain in this clan
         # create a task to delete it soon
-        asyncio.create_task(app.usecases.clans.delete(clan))
+        asyncio.create_task(usecases.clans.delete(clan))
 
     return f"You have successfully left {clan!r}."
 
@@ -2552,12 +2535,12 @@ async def clan_list(ctx: Context) -> Optional[str]:
     else:
         offset = 0
 
-    if offset >= (total_clans := len(app.repositories.clans.cache)):
+    if offset >= (total_clans := len(repositories.clans.cache)):
         return "No clans found."
 
     msg = [f"bancho.py clans listing ({total_clans} total)."]
 
-    for idx, clan in enumerate(app.repositories.clans.cache.values(), offset):
+    for idx, clan in enumerate(repositories.clans.cache.values(), offset):
         msg.append(f"{idx + 1}. {clan!r}")
 
     return "\n".join(msg)

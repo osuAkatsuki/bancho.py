@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Optional
 
 import app.state.services
-import app.usecases.players
 from app.objects.score import Score
 
 # NOTE: this may end up as a class eventually

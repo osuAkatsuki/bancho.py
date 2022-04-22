@@ -14,14 +14,14 @@ class Achievement:
         file: str,
         name: str,
         desc: str,
-        cond: Callable,
+        condition: Callable,
     ) -> None:
         self.id = id
         self.file = file
         self.name = name
         self.desc = desc
 
-        self.cond = cond
+        self.condition = condition
 
     def __repr__(self) -> str:
         return f"{self.file}+{self.name}+{self.desc}"

@@ -38,27 +38,13 @@ from fastapi.responses import Response
 from fastapi.routing import APIRouter
 
 import app.packets
-import app.repositories.beatmap_sets
-import app.repositories.beatmaps
-import app.repositories.channels
-import app.repositories.players
-import app.repositories.scores
 import app.settings
 import app.state.cache
 import app.state.services
 import app.state.sessions
-import app.usecases.beatmap_sets
-import app.usecases.beatmaps
-import app.usecases.channels
-import app.usecases.client_versioning
-import app.usecases.comments
-import app.usecases.direct
-import app.usecases.mail
-import app.usecases.players
-import app.usecases.replays
-import app.usecases.scores
-import app.usecases.screenshots
 import app.utils
+from app import repositories
+from app import usecases
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -101,7 +87,7 @@ def authenticate_player_session(
         username: str = param_function(..., alias=username_alias),
         pw_md5: str = param_function(..., alias=pw_md5_alias),
     ) -> Player:
-        if player := await app.usecases.players.login(
+        if player := await usecases.players.login(
             unquote(username),
             pw_md5.encode(),
         ):
@@ -156,7 +142,7 @@ async def osuError(
         return
 
     if username and pw_md5:
-        if not app.usecases.players.login(unquote(username), pw_md5.encode()):
+        if not usecases.players.login(unquote(username), pw_md5.encode()):
             # player login incorrect
             await app.state.services.log_strange_occurrence("osu-error auth failed")
             player = None
@@ -184,7 +170,7 @@ async def osuScreenshot(
             f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
         )
 
-    resp, data = await app.usecases.screenshots.create(screenshot_file)
+    resp, data = await usecases.screenshots.create(screenshot_file)
 
     if not resp:
         return Response(
@@ -209,7 +195,7 @@ async def get_beatmap_info(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    return await app.usecases.beatmaps.get_beatmap_info(player, form_data)
+    return await usecases.beatmaps.get_beatmap_info(player, form_data)
 
 
 def format_favourites(favourite_beatmap_set_ids: list[int]) -> bytes:
@@ -220,7 +206,7 @@ def format_favourites(favourite_beatmap_set_ids: list[int]) -> bytes:
 async def get_favourite_beatmap_sets(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ):
-    resp = await app.usecases.players.get_favourite_beatmap_sets(player)
+    resp = await usecases.players.get_favourite_beatmap_sets(player)
     return format_favourites(resp)
 
 
@@ -229,7 +215,7 @@ async def add_favourite_beatmap(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
 ):
-    return await app.usecases.players.add_favourite(player, map_set_id)
+    return await usecases.players.add_favourite(player, map_set_id)
 
 
 @router.get("/web/lastfm.php")
@@ -249,14 +235,14 @@ async def lastfm_handler(
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
-        await app.usecases.players.restrict(
+        await usecases.players.restrict(
             player=player,
             admin=app.state.sessions.bot,
             reason=f"hq!osu running ({flags})",
         )
 
         if player.online:  # refresh their client state
-            app.usecases.players.logout(player)
+            usecases.players.logout(player)
 
         return b"-3"
 
@@ -268,14 +254,14 @@ async def lastfm_handler(
 
         if random.randrange(32) == 0:
             # Random chance (1/32) for a ban.
-            await app.usecases.players.restrict(
+            await usecases.players.restrict(
                 player=player,
                 admin=app.state.sessions.bot,
                 reason="hq!osu relife 1/32",
             )
 
             if player.online:  # refresh their client state
-                app.usecases.players.logout(player)
+                usecases.players.logout(player)
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
@@ -293,7 +279,7 @@ async def lastfm_handler(
             ),
         )
 
-        app.usecases.players.logout(player)
+        usecases.players.logout(player)
 
         return b"-3"
 
@@ -316,7 +302,7 @@ async def beatmap_search(
     ranked_status: int = Query(..., alias="r", ge=0, le=8),
     page_num: int = Query(..., alias="p"),
 ):
-    return await app.usecases.direct.search(
+    return await usecases.direct.search(
         query,
         mode,
         ranked_status,
@@ -330,7 +316,7 @@ async def get_beatmap_set_information(
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
 ):
-    return await app.usecases.direct.search_set(
+    return await usecases.direct.search_set(
         map_id,
         map_set_id,
     )
@@ -375,7 +361,7 @@ async def submit_score(
     # XXX:HACK the bancho protocol uses the "score" parameter name for
     # both the base64'ed score data, as well as the replay file in the multipart.
     # starlette/fastapi do not support this - this function provides a workaround
-    score_parameters = app.usecases.scores.parse_form_data_score_params(form_data)
+    score_parameters = usecases.scores.parse_form_data_score_params(form_data)
     if score_parameters is None:
         # failed to parse score data
         return
@@ -384,7 +370,7 @@ async def submit_score(
     score_data_b64, replay_file = score_parameters
 
     # decrypt the score data and client hash using the iv and osu version
-    score_data, client_hash_decoded = app.usecases.scores.decrypt_score_aes_data(
+    score_data, client_hash_decoded = usecases.scores.decrypt_score_aes_data(
         # to decrypt
         score_data_b64,
         client_hash_b64,
@@ -394,16 +380,14 @@ async def submit_score(
     )
 
     # fetch the beatmap played in the score
-    beatmap = await app.repositories.beatmaps.fetch_by_md5(score_data[0])
+    beatmap = await repositories.beatmaps.fetch_by_md5(score_data[0])
 
     if beatmap is None:
         # map does not exist, most likely unsubmitted.
         return b"error: beatmap"
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
-    if not (
-        player := await app.usecases.players.login(unquote(username), pw_md5.encode())
-    ):
+    if not (player := await usecases.players.login(unquote(username), pw_md5.encode())):
         # player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
@@ -421,7 +405,7 @@ async def submit_score(
 
     # all data read from submission.
     # now we can calculate things based on our data.
-    accuracy = app.usecases.scores.calculate_accuracy(
+    accuracy = usecases.scores.calculate_accuracy(
         vanilla_mode,
         n300,
         n100,
@@ -436,7 +420,7 @@ async def submit_score(
 
     ## perform checksum validation
     try:
-        app.usecases.scores.validate_score_submission_data(
+        usecases.scores.validate_score_submission_data(
             score,
             unique_ids,
             osu_version,
@@ -451,35 +435,35 @@ async def submit_score(
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
 
-        # await app.usecases.players.restrict(
+        # await usecases.players.restrict(
         #     player=player,
         #     admin=app.state.sessions.bot,
         #     reason="TODO",
         # )
 
         # if player.online: # refresh their client state
-        #     app.usecases.players.logout(player)
+        #     usecases.players.logout(player)
         # return b"error: ban"
     except:
         raise
 
     if beatmap is not None:
         osu_file_path = BEATMAPS_PATH / f"{beatmap.id}.osu"
-        if await app.usecases.beatmaps.ensure_local_osu_file(
+        if await usecases.beatmaps.ensure_local_osu_file(
             osu_file_path,
             beatmap.id,
             beatmap.md5,
         ):
-            score.pp, score.sr = app.usecases.scores.calculate_performance(
+            score.pp, score.sr = usecases.scores.calculate_performance(
                 score,
                 osu_file_path,
             )
 
             if score.passed:
-                await app.usecases.scores.calculate_status(score, beatmap, player)
+                await usecases.scores.calculate_status(score, beatmap, player)
 
                 if beatmap.status != RankedStatus.Pending:
-                    score.rank = await app.usecases.scores.calculate_placement(
+                    score.rank = await usecases.scores.calculate_placement(
                         score,
                         beatmap,
                     )
@@ -494,7 +478,7 @@ async def submit_score(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    app.usecases.players.update_latest_activity_soon(player)
+    usecases.players.update_latest_activity_soon(player)
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -526,14 +510,14 @@ async def submit_score(
         pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
-            await app.usecases.players.restrict(
+            await usecases.players.restrict(
                 player=player,
                 admin=app.state.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
 
             if player.online: # refresh their client state
-                app.usecases.players.logout(player)
+                usecases.players.logout(player)
         """
 
     """ Score submission checks completed; submit the score. """
@@ -560,7 +544,7 @@ async def submit_score(
 
             if score.rank == 1 and not player.restricted:
                 # this is the new #1, post the play to #announce.
-                announce_channel = await app.repositories.channels.fetch_by_name(
+                announce_channel = await repositories.channels.fetch_by_name(
                     "#announce",
                 )
 
@@ -596,7 +580,7 @@ async def submit_score(
                                 "{id} {name}])".format(**prev_n1),
                             )
 
-                    app.usecases.channels.send_msg_to_clients(
+                    usecases.channels.send_msg_to_clients(
                         announce_channel,
                         msg=" ".join(ann),
                         sender=player,
@@ -658,14 +642,14 @@ async def submit_score(
         # If not, they may be using a score submitter.
         if len(replay_data) < 24 and not player.restricted:
             log(f"{player} submitted a score without a replay!", Ansi.LRED)
-            await app.usecases.players.restrict(
+            await usecases.players.restrict(
                 player=player,
                 admin=app.state.sessions.bot,
                 reason="submitted score with no replay",
             )
 
             if player.online:  # refresh their client state
-                app.usecases.players.logout(player)
+                usecases.players.logout(player)
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can
@@ -782,7 +766,7 @@ async def submit_score(
             stats_query_args["pp"] = stats.pp
 
             # update global & country ranking
-            stats.rank = await app.usecases.players.update_rank(player, score.mode)
+            stats.rank = await usecases.players.update_rank(player, score.mode)
 
     # create a single querystring from the list of updates
     stats_query = ", ".join(stats_query_l)
@@ -830,8 +814,8 @@ async def submit_score(
                     # player already has this achievement.
                     continue
 
-                if achievement.cond(score, score.mode.as_vanilla):
-                    await app.usecases.players.unlock_achievement(player, achievement)
+                if achievement.condition(score, score.mode.as_vanilla):
+                    await usecases.players.unlock_achievement(player, achievement)
                     achievements.append(achievement)
 
             achievements_str = "/".join(map(repr, achievements))
@@ -913,11 +897,11 @@ async def get_score_replay(
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ):
-    replay_file = await app.usecases.replays.fetch_file(score_id)
+    replay_file = await usecases.replays.fetch_file(score_id)
     if replay_file is None:
         return
 
-    await app.usecases.scores.increment_replay_views(player.id, mode)
+    await usecases.scores.increment_replay_views(player.id, mode)
     return FileResponse(replay_file)
 
 
@@ -933,7 +917,7 @@ async def post_beatmap_rating(
     if rating is None:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
-        beatmap = app.repositories.beatmaps._fetch_by_key_cache(map_md5)
+        beatmap = repositories.beatmaps._fetch_by_key_cache(map_md5)
         if beatmap is None:
             return b"no exist"
 
@@ -1128,16 +1112,16 @@ async def get_beatmap_leaderboard(
 
     if map_set_id > 0:
         # focus on long-term efficiency - cache the whole set
-        await app.repositories.beatmap_sets.fetch_by_id(map_set_id)
+        await repositories.beatmap_sets.fetch_by_id(map_set_id)
 
-    beatmap = await app.repositories.beatmaps.fetch_by_md5(map_md5)
+    beatmap = await repositories.beatmaps.fetch_by_md5(map_md5)
 
     if beatmap is None:
         # map not found, figure out whether it needs an
         # update or isn't submitted using it's filename.
 
         map_filename = unquote_plus(map_filename)  # TODO: is unquote needed?
-        map_exists = await app.usecases.beatmaps.filename_exists(map_filename)
+        map_exists = await usecases.beatmaps.filename_exists(map_filename)
 
         if map_exists:
             # map can be updated.
@@ -1176,7 +1160,7 @@ async def get_beatmap_leaderboard(
         personal_best_score_row = None
 
     # fetch beatmap rating
-    rating = await app.usecases.beatmaps.fetch_rating(beatmap)
+    rating = await usecases.beatmaps.fetch_rating(beatmap)
     if rating is None:
         rating = 0.0
 
@@ -1261,7 +1245,7 @@ async def beatmap_comments_handler(
 ):
     if action == "get":
         # client is requesting all comments
-        comments = await app.usecases.comments.fetch_all(
+        comments = await usecases.comments.fetch_all(
             score_id,
             map_set_id,
             map_id,
@@ -1289,7 +1273,7 @@ async def beatmap_comments_handler(
             colour = None
 
         # insert into sql
-        await app.usecases.comments.create(
+        await usecases.comments.create(
             player,
             target,
             target_id,
@@ -1300,7 +1284,7 @@ async def beatmap_comments_handler(
 
         resp = None  # empty resp is fine
 
-    app.usecases.players.update_latest_activity_soon(player)
+    usecases.players.update_latest_activity_soon(player)
     return resp
 
 
@@ -1312,10 +1296,10 @@ async def mark_channel_as_read(
     if not (channel_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    target_player = await app.repositories.players.fetch(name=channel_name)
+    target_player = await repositories.players.fetch(name=channel_name)
 
     if target_player is not None:
-        await app.usecases.mail.mark_as_read(
+        await usecases.mail.mark_as_read(
             source_id=target_player.id,
             target_id=player.id,
         )
@@ -1352,7 +1336,7 @@ async def check_updates(
     # NOTE: this code is unused now.
     # it was only used with server switchers,
     # which bancho.py has deprecated support for.
-    return await app.usecases.client_versioning.check_updates(
+    return await usecases.client_versioning.check_updates(
         action,
         stream,
         request.query_params,
@@ -1384,7 +1368,7 @@ async def get_screenshot(
     extension: Literal["jpg", "jpeg", "png"] = Path(...),
 ):
     """Serve a screenshot from the server, by filename."""
-    screenshot_file = app.usecases.screenshots.fetch_file(screenshot_id, extension)
+    screenshot_file = usecases.screenshots.fetch_file(screenshot_id, extension)
 
     if screenshot_file is None:
         return ORJSONResponse(
@@ -1407,7 +1391,7 @@ async def get_osz(
     if no_video:
         map_set_id = map_set_id[:-1]
 
-    download_url = app.usecases.direct.get_mapset_download_url(
+    download_url = usecases.direct.get_mapset_download_url(
         int(map_set_id),
         no_video,
     )
@@ -1422,7 +1406,7 @@ async def get_osz(
 async def get_updated_beatmap(map_filename: str, host: str = Header(...)):
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
-        update_url = app.usecases.direct.get_mapset_update_url(map_filename)
+        update_url = usecases.direct.get_mapset_update_url(map_filename)
 
         return RedirectResponse(
             url=update_url,
@@ -1458,7 +1442,7 @@ async def get_updated_beatmap(map_filename: str, host: str = Header(...)):
         # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
 
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f"Could not find map {osu_file_path}!", Ansi.LRED)
                 return (404, b"")  # couldn't find on osu!'s server
@@ -1597,7 +1581,7 @@ async def register_account(
                 country_acronym = "xx"
 
         async with app.state.sessions.players._lock:
-            user_id = await app.usecases.players.register(
+            user_id = await usecases.players.register(
                 username,
                 email,
                 pw_plaintext,

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Sequence
 
 import app.packets
-import app.repositories.channels
 import app.state.sessions
+from app import repositories
 from app.objects.channel import Channel
 from app.objects.player import Player
 
@@ -104,5 +104,5 @@ def remove_channel(channel: Channel, player: Player) -> None:
 
     if channel.instance and not channel.players:
         # delete instanced channels once all players have left
-        app.repositories.channels.delete_instance(channel.name)
+        repositories.channels.delete_instance(channel.name)
         app.state.sessions.channels.remove(channel)

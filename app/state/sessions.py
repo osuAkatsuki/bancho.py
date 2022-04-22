@@ -4,13 +4,8 @@ import asyncio
 
 import databases.core
 
-import app.repositories.channels
-import app.repositories.clans
-import app.repositories.mappools
-import app.repositories.players
-import app.usecases.clans
-import app.usecases.mappools
 import app.utils
+from app import repositories
 from app.logging import Ansi
 from app.logging import log
 from app.objects.achievement import Achievement
@@ -63,13 +58,15 @@ async def cancel_housekeeping_tasks() -> None:
                 )
 
 
+async def init_server_repository_caches() -> None:
+    # populate our ram cache of channels, clans, and mappools from the db
+    await repositories.channels._populate_caches_from_database()
+    await repositories.clans._populate_caches_from_database()
+    await repositories.mappools._populate_caches_from_database()
+
+
 async def init_server_state(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
-
-    # populate our ram cache of channels, clans, and mappools from the db
-    await app.repositories.channels._populate_cache_from_database()
-    await app.repositories.clans._populate_cache_from_database()
-    await app.repositories.mappools._populate_cache_from_database()
 
     bot_name = await app.utils.fetch_bot_name(db_conn)
 
@@ -93,7 +90,7 @@ async def init_server_state(db_conn: databases.core.Connection) -> None:
         # expressions in the database to allow for extensive customizability.
         row = dict(row)
         condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
+        achievement = Achievement(**row, condition=condition)
 
         achievements.append(achievement)
 

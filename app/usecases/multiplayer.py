@@ -8,8 +8,8 @@ from typing import Sequence
 from typing import Union
 
 import app.packets
-import app.repositories.beatmaps
 import app.state.sessions
+from app import repositories
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -36,7 +36,7 @@ async def await_submissions(
     else:
         win_cond = ("score", "acc", "max_combo", "score")[match.win_condition]
 
-    beatmap = await app.repositories.beatmaps.fetch_by_md5(match.map_md5)
+    beatmap = await repositories.beatmaps.fetch_by_md5(match.map_md5)
 
     if not beatmap:
         # map isn't submitted

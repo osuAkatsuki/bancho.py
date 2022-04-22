@@ -9,8 +9,8 @@ import app.objects.geolocation
 import app.state.cache
 import app.state.services
 import app.state.sessions
-import app.usecases.players
 import app.utils
+from app import usecases
 from app.objects.player import Player
 
 cache: MutableMapping[Union[int, str], Player] = {}  # {name/id: player}
@@ -61,9 +61,9 @@ async def fetch(
 
     db_player_id = user_info["id"]
 
-    achievements = await app.usecases.players.fetch_achievements(db_player_id)
-    friends, blocks = await app.usecases.players.fetch_relationships(db_player_id)
-    stats = await app.usecases.players.fetch_stats(db_player_id)
+    achievements = await usecases.players.fetch_achievements(db_player_id)
+    friends, blocks = await usecases.players.fetch_relationships(db_player_id)
+    stats = await usecases.players.fetch_stats(db_player_id)
 
     # TODO: fetch player's recent scores
 

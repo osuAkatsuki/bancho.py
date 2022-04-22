@@ -302,7 +302,7 @@ class Beatmap:
             max_combo=int(osuapi_response["max_combo"] or 0),
             status=RankedStatus.from_osuapi(int(osuapi_response["approved"])),
             mode=GameMode(int(osuapi_response["mode"])),
-            bpm=int(osuapi_response["bpm"] or 0.0),
+            bpm=float(osuapi_response["bpm"] or 0.0),
             cs=float(osuapi_response["diff_size"]),
             od=float(osuapi_response["diff_overall"]),
             ar=float(osuapi_response["diff_approach"]),

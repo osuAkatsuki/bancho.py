@@ -5,8 +5,8 @@ from typing import MutableMapping
 from typing import Optional
 from typing import Union
 
-import app.repositories.beatmaps
 import app.state.services
+from app import repositories
 from app.constants.mods import Mods
 from app.logging import Ansi
 from app.logging import log
@@ -26,7 +26,7 @@ async def _maps_from_sql(pool_id: int) -> MutableMapping[tuple[Mods, int], Beatm
         {"pool_id": pool_id},
     ):
         map_id = row["map_id"]
-        bmap = await app.repositories.beatmaps.fetch_by_id(map_id)
+        bmap = await repositories.beatmaps.fetch_by_id(map_id)
 
         if not bmap:
             # map not found? remove it from the
@@ -170,7 +170,7 @@ async def fetch_all() -> set[MapPool]:
     return mappools
 
 
-async def _populate_cache_from_database() -> None:
+async def _populate_caches_from_database() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 

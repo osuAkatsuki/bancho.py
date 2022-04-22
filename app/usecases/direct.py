@@ -75,7 +75,7 @@ async def search(
         params["amount"] = 100
         params["offset"] = page_num * 100
 
-    async with app.state.services.http.get(search_url, params=params) as resp:
+    async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
                 # chimu uses 404 for no maps found
@@ -160,7 +160,10 @@ async def search_set(
             elif map_id is not None:
                 params["b"] = map_id
 
-            async with app.state.services.http.get(search_url, params=params) as resp:
+            async with app.state.services.http_client.get(
+                search_url,
+                params=params,
+            ) as resp:
                 if resp.status != status.HTTP_200_OK:
                     return None
 

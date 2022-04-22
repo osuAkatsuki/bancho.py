@@ -16,12 +16,8 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
 
 import app.packets
-import app.repositories.beatmaps
-import app.repositories.clans
-import app.repositories.mappools
-import app.repositories.players
-import app.repositories.scores
 import app.state
+from app import repositories
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -149,9 +145,7 @@ async def api_get_player_info(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    import app.repositories.players
-
-    player = await app.repositories.players.fetch(player_id, player_name)
+    player = await repositories.players.fetch(player_id, player_name)
     if player is None:
         return ORJSONResponse(
             {"status": "Player not found."},
@@ -253,7 +247,7 @@ async def api_get_player_status(
         )
 
     if player.status.map_md5:
-        bmap = await app.repositories.beatmaps.fetch_by_md5(player.status.map_md5)
+        bmap = await repositories.beatmaps.fetch_by_md5(player.status.map_md5)
     else:
         bmap = None
 
@@ -307,9 +301,9 @@ async def api_get_player_scores(
         )
 
     if username:
-        player = await app.repositories.players.fetch(name=username)
+        player = await repositories.players.fetch(name=username)
     elif player_id:
-        player = await app.repositories.players.fetch(id=player_id)
+        player = await repositories.players.fetch(id=player_id)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
@@ -391,11 +385,11 @@ async def api_get_player_scores(
 
     # fetch & return info from sql
     for row in rows:
-        bmap = await app.repositories.beatmaps.fetch_by_md5(row.pop("map_md5"))
+        bmap = await repositories.beatmaps.fetch_by_md5(row.pop("map_md5"))
         row["beatmap"] = bmap.as_dict if bmap else None
 
     if player.clan_id is not None:
-        clan = await app.repositories.clans.fetch_by_id(player.clan_id)
+        clan = await repositories.clans.fetch_by_id(player.clan_id)
     else:
         clan = None
 
@@ -442,9 +436,9 @@ async def api_get_player_most_played(
         )
 
     if player_id is not None:
-        p = await app.repositories.players.fetch(id=player_id)
+        p = await repositories.players.fetch(id=player_id)
     elif username is not None:
-        p = await app.repositories.players.fetch(name=username)
+        p = await repositories.players.fetch(name=username)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
@@ -490,9 +484,9 @@ async def api_get_map_info(
 ):
     """Return information about a given beatmap."""
     if beatmap_id is not None:
-        bmap = await app.repositories.beatmaps.fetch_by_id(beatmap_id)
+        bmap = await repositories.beatmaps.fetch_by_id(beatmap_id)
     elif md5 is not None:
-        bmap = await app.repositories.beatmaps.fetch_by_md5(md5)
+        bmap = await repositories.beatmaps.fetch_by_md5(md5)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
@@ -536,9 +530,9 @@ async def api_get_map_scores(
         )
 
     if beatmap_id is not None:
-        bmap = await app.repositories.beatmaps.fetch_by_id(beatmap_id)
+        bmap = await repositories.beatmaps.fetch_by_id(beatmap_id)
     elif map_md5 is not None:
-        bmap = await app.repositories.beatmaps.fetch_by_md5(map_md5)
+        bmap = await repositories.beatmaps.fetch_by_md5(map_md5)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
@@ -625,7 +619,7 @@ async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
 ):
     """Return information about a given score."""
-    score = await app.repositories.scores.fetch(score_id)
+    score = await repositories.scores.fetch(score_id)
 
     if score is None:
         return ORJSONResponse(
@@ -863,7 +857,7 @@ async def api_get_clan(
 
     # TODO: fetching by name & tag (requires safe_name, safe_tag)
 
-    clan = await app.repositories.clans.fetch_by_id(clan_id)
+    clan = await repositories.clans.fetch_by_id(clan_id)
     if clan is None:
         return ORJSONResponse(
             {"status": "Clan not found."},
@@ -873,11 +867,11 @@ async def api_get_clan(
     members: list[Player] = []
 
     for member_id in clan.member_ids:
-        member = await app.repositories.players.fetch(id=member_id)
+        member = await repositories.players.fetch(id=member_id)
         assert member is not None
         members.append(member)
 
-    owner = await app.repositories.players.fetch(id=clan.owner_id)
+    owner = await repositories.players.fetch(id=clan.owner_id)
     assert owner is not None
 
     return ORJSONResponse(
@@ -911,7 +905,7 @@ async def api_get_pool(
     """Return information of a given mappool."""
 
     # TODO: fetching by name (requires safe_name)
-    pool = await app.repositories.mappools.fetch_by_id(pool_id)
+    pool = await repositories.mappools.fetch_by_id(pool_id)
 
     if pool is None:
         return ORJSONResponse(
@@ -919,11 +913,11 @@ async def api_get_pool(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    pool_creator = await app.repositories.players.fetch(id=pool.created_by)
+    pool_creator = await repositories.players.fetch(id=pool.created_by)
     assert pool_creator is not None
 
     if pool_creator.clan_id is not None:
-        clan = await app.repositories.clans.fetch_by_id(pool_creator.clan_id)
+        clan = await repositories.clans.fetch_by_id(pool_creator.clan_id)
         assert clan is not None
     else:
         clan = None
@@ -962,7 +956,7 @@ async def api_get_pool(
 
 #         # get player from api token
 #         player_id = app.state.sessions.api_keys[api_key]
-#         p = await app.repositories.players.fetch(player_id=player_id)
+#         p = await repositories.players.fetch(player_id=player_id)
 
 #         return await f(conn, p)
 

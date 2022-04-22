@@ -10,9 +10,9 @@ from py3rijndael import RijndaelCbc
 from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-import app.repositories.scores
 import app.state.services
-import app.usecases.performance  # maybe problem?
+from app import repositories
+from app import usecases
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
@@ -21,7 +21,6 @@ from app.objects.player import ClientDetails
 from app.objects.player import Player
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams  # maybe problem?
 
 
 def validate_score_submission_data(
@@ -147,17 +146,17 @@ def calculate_performance(score: Score, osu_file_path: Path) -> tuple[float, flo
     mode_vn = score.mode.as_vanilla
 
     if mode_vn in (0, 1, 2):
-        score_args: ScoreDifficultyParams = {
+        score_args: usecases.performance.ScoreDifficultyParams = {
             "acc": score.acc,
             "combo": score.max_combo,
             "nmiss": score.nmiss,
         }
     else:  # mode_vn == 3
-        score_args: ScoreDifficultyParams = {
+        score_args: usecases.performance.ScoreDifficultyParams = {
             "score": score.score,
         }
 
-    result = app.usecases.performance.calculate_performances(
+    result = usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         mode=mode_vn,
         mods=int(score.mods),
@@ -186,7 +185,7 @@ async def calculate_status(score: Score, beatmap: Beatmap, player: Player) -> No
         # we have a score on the map.
         # save it as our previous best score.
 
-        score.prev_best = await app.repositories.scores.fetch(res["id"])
+        score.prev_best = await repositories.scores.fetch(res["id"])
         assert score.prev_best is not None
 
         # if our new score is better, update
