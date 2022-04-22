@@ -42,7 +42,7 @@ def main(argv: Sequence[str]) -> int:
         app.utils.ensure_supported_platform,  # linux only at the moment
         app.utils.ensure_local_services_are_running,  # mysql (if local)
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
-        app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
+        app.utils.ensure_dependencies_and_requirements,  # submodules & osu-tools build
     ):
         if (exit_code := safety_check()) != 0:
             return exit_code
