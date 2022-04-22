@@ -1471,7 +1471,6 @@ async def server(ctx: Context) -> Optional[str]:
     mirror_url = app.settings.MIRROR_URL
     using_osuapi = app.settings.OSU_API_KEY != ""
     advanced_mode = app.settings.DEVELOPER_MODE
-    auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
     # package versioning info
     # divide up pkg versions, 3 displayed per line, e.g.
@@ -1491,7 +1490,7 @@ async def server(ctx: Context) -> Optional[str]:
             f"cpu(s): {cpus_info}",
             f"ram: {ram_info}",
             f"mirror: {mirror_url} | osu!api connection: {using_osuapi}",
-            f"advanced mode: {advanced_mode} | auto logging: {auto_logging}",
+            f"advanced mode: {advanced_mode}",
             "",
             "requirements",
             requirements_info,

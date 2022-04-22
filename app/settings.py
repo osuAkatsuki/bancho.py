@@ -73,12 +73,6 @@ DISALLOWED_PASSWORDS: CommaSeparatedStrings = config(
 
 DISCORD_AUDIT_LOG_WEBHOOK: str = config("DISCORD_AUDIT_LOG_WEBHOOK")
 
-AUTOMATICALLY_REPORT_PROBLEMS: bool = config(
-    "AUTOMATICALLY_REPORT_PROBLEMS",
-    cast=bool,
-    default=True,
-)
-
 # advanced dev settings
 
 ## WARNING: only touch this once you've
