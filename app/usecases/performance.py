@@ -239,7 +239,7 @@ def calculate_performances_mania(
     results: list[DifficultyRating] = []
 
     for score in scores:
-        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "osu", "-j"]
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "mania", "-j"]
 
         if score["mods"] is not None:
             modlist = mods2modlist(score["mods"])
