@@ -1412,7 +1412,7 @@ async def getScores(
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.leaderboards_served")
 
-    if bmap.status < RankedStatus.Ranked:
+    if not bmap.has_leaderboard():
         # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
