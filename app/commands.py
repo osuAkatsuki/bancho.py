@@ -59,13 +59,8 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams
+from app.usecases.performance import ScoreDifficultyParams, calculate_performances_catch, calculate_performances_mania, calculate_performances_std, calculate_performances_taiko
 from app.utils import seconds_readable
-
-try:
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -1216,32 +1211,101 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            with OppaiWrapper() as ezpp:
-                ezpp.set_mode(0)  # TODO: other modes
-                for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                    # TODO: this should be using an async generator
-                    for row in await score_select_conn.fetch_all(
-                        "SELECT id, acc, mods, max_combo, nmiss "
-                        "FROM scores "
-                        "WHERE map_md5 = :map_md5 AND mode = :mode",
-                        {"map_md5": bmap.md5, "mode": mode},
-                    ):
-                        ezpp.set_mods(row["mods"])
-                        ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                        ezpp.set_combo(row["max_combo"])
-                        ezpp.set_accuracy_percent(row["acc"])
+            for mode in (0, 4, 8):  # std
+                # TODO: this should be using an async generator
+                for row in await score_select_conn.fetch_all(
+                    "SELECT id, acc, mods, max_combo, nmiss "
+                    "FROM scores "
+                    "WHERE map_md5 = :map_md5 AND mode = :mode",
+                    {"map_md5": bmap.md5, "mode": mode},
+                ):
+                    score = {
+                        "mods": row["mods"],
+                        "acc": row["acc"],
+                        "combo": row["max_combo"],
+                        "nmiss": row["nmiss"]
+                    }
 
-                        ezpp.calculate(str(osu_file_path))
+                    result = calculate_performances_std(str(osu_file_path), [score])
 
-                        pp = ezpp.get_pp()
+                    pp = result[0]["performance"]
 
-                        if math.isinf(pp) or math.isnan(pp):
-                            continue
+                    await update_conn.execute(
+                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                        {"pp": pp, "score_id": row["id"]},
+                    )
 
-                        await update_conn.execute(
-                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                            {"pp": pp, "score_id": row["id"]},
-                        )
+            for mode in (1, 5):  # taiko
+                # TODO: this should be using an async generator
+                for row in await score_select_conn.fetch_all(
+                    "SELECT id, acc, mods, max_combo, nmiss "
+                    "FROM scores "
+                    "WHERE map_md5 = :map_md5 AND mode = :mode",
+                    {"map_md5": bmap.md5, "mode": mode},
+                ):
+                    score = {
+                        "mods": row["mods"],
+                        "acc": row["acc"],
+                        "combo": row["max_combo"],
+                        "nmiss": row["nmiss"]
+                    }
+
+                    result = calculate_performances_taiko(str(osu_file_path), [score])
+
+                    pp = result[0]["performance"]
+
+                    await update_conn.execute(
+                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                        {"pp": pp, "score_id": row["id"]},
+                    )
+            
+            for mode in (2, 6):  # catch
+                # TODO: this should be using an async generator
+                for row in await score_select_conn.fetch_all(
+                    "SELECT id, acc, mods, max_combo, nmiss "
+                    "FROM scores "
+                    "WHERE map_md5 = :map_md5 AND mode = :mode",
+                    {"map_md5": bmap.md5, "mode": mode},
+                ):
+                    score = {
+                        "mods": row["mods"],
+                        "acc": row["acc"],
+                        "combo": row["max_combo"],
+                        "nmiss": row["nmiss"]
+                    }
+
+                    result = calculate_performances_catch(str(osu_file_path), [score])
+
+                    pp = result[0]["performance"]
+
+                    await update_conn.execute(
+                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                        {"pp": pp, "score_id": row["id"]},
+                    )
+
+            for mode in (3):  # mania
+                # TODO: this should be using an async generator
+                for row in await score_select_conn.fetch_all(
+                    "SELECT id, acc, mods, max_combo, nmiss "
+                    "FROM scores "
+                    "WHERE map_md5 = :map_md5 AND mode = :mode",
+                    {"map_md5": bmap.md5, "mode": mode},
+                ):
+                    score = {
+                        "mods": row["mods"],
+                        "acc": row["acc"],
+                        "combo": row["max_combo"],
+                        "nmiss": row["nmiss"]
+                    }
+
+                    result = calculate_performances_mania(str(osu_file_path), [score])
+
+                    pp = result[0]["performance"]
+
+                    await update_conn.execute(
+                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                        {"pp": pp, "score_id": row["id"]},
+                    )
 
         return "Map recalculated."
     else:
@@ -1275,33 +1339,102 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    with OppaiWrapper() as ezpp:
-                        ezpp.set_mode(0)  # TODO: other modes
-                        for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                            # TODO: this should be using an async generator
-                            for row in await score_select_conn.fetch_all(
-                                "SELECT id, acc, mods, max_combo, nmiss "
-                                "FROM scores "
-                                "WHERE map_md5 = :map_md5 AND mode = :mode",
-                                {"map_md5": bmap_md5, "mode": mode},
-                            ):
-                                ezpp.set_mods(row["mods"])
-                                ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                                ezpp.set_combo(row["max_combo"])
-                                ezpp.set_accuracy_percent(row["acc"])
+                    for mode in (0, 4, 8):  # std
+                        # TODO: this should be using an async generator
+                        for row in await score_select_conn.fetch_all(
+                            "SELECT id, acc, mods, max_combo, nmiss "
+                            "FROM scores "
+                            "WHERE map_md5 = :map_md5 AND mode = :mode",
+                            {"map_md5": bmap.md5, "mode": mode},
+                        ):
+                            score = {
+                                "mods": row["mods"],
+                                "acc": row["acc"],
+                                "combo": row["max_combo"],
+                                "nmiss": row["nmiss"]
+                            }
 
-                                ezpp.calculate(str(osu_file_path))
+                            result = calculate_performances_std(str(osu_file_path), [score])
 
-                                pp = ezpp.get_pp()
+                            pp = result[0]["performance"]
 
-                                if math.isinf(pp) or math.isnan(pp):
-                                    continue
+                            await update_conn.execute(
+                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                                {"pp": pp, "score_id": row["id"]},
+                            )
 
-                                await update_conn.execute(
-                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                    {"pp": pp, "score_id": row["id"]},
-                                )
-
+                    for mode in (1, 5):  # taiko
+                        # TODO: this should be using an async generator
+                        for row in await score_select_conn.fetch_all(
+                            "SELECT id, acc, mods, max_combo, nmiss "
+                            "FROM scores "
+                            "WHERE map_md5 = :map_md5 AND mode = :mode",
+                            {"map_md5": bmap.md5, "mode": mode},
+                        ):
+                            score = {
+                                "mods": row["mods"],
+                                "acc": row["acc"],
+                                "combo": row["max_combo"],
+                                "nmiss": row["nmiss"]
+                            }
+        
+                            result = calculate_performances_taiko(str(osu_file_path), [score])
+        
+                            pp = result[0]["performance"]
+        
+                            await update_conn.execute(
+                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                                {"pp": pp, "score_id": row["id"]},
+                            )
+                    
+                    for mode in (2, 6):  # catch
+                        # TODO: this should be using an async generator
+                        for row in await score_select_conn.fetch_all(
+                            "SELECT id, acc, mods, max_combo, nmiss "
+                            "FROM scores "
+                            "WHERE map_md5 = :map_md5 AND mode = :mode",
+                            {"map_md5": bmap.md5, "mode": mode},
+                        ):
+                            score = {
+                                "mods": row["mods"],
+                                "acc": row["acc"],
+                                "combo": row["max_combo"],
+                                "nmiss": row["nmiss"]
+                            }
+        
+                            result = calculate_performances_catch(str(osu_file_path), [score])
+        
+                            pp = result[0]["performance"]
+        
+                            await update_conn.execute(
+                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                                {"pp": pp, "score_id": row["id"]},
+                            )
+        
+                    for mode in (3):  # mania
+                        # TODO: this should be using an async generator
+                        for row in await score_select_conn.fetch_all(
+                            "SELECT id, acc, mods, max_combo, nmiss "
+                            "FROM scores "
+                            "WHERE map_md5 = :map_md5 AND mode = :mode",
+                            {"map_md5": bmap.md5, "mode": mode},
+                        ):
+                            score = {
+                                "mods": row["mods"],
+                                "acc": row["acc"],
+                                "combo": row["max_combo"],
+                                "nmiss": row["nmiss"]
+                            }
+        
+                            result = calculate_performances_mania(str(osu_file_path), [score])
+        
+                            pp = result[0]["performance"]
+        
+                            await update_conn.execute(
+                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                                {"pp": pp, "score_id": row["id"]},
+                            )
+        
                     # leave at least 1/100th of
                     # a second for handling conns.
                     await asyncio.sleep(0.01)
