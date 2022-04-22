@@ -883,7 +883,7 @@ async def submit_score(
             "\n",
             # beatmap ranking chart
             "chartId:beatmap",
-            f"chartUrl:https://osu.{app.settings.DOMAIN}/beatmapsets/{beatmap.set_id}"
+            f"chartUrl:https://osu.{app.settings.DOMAIN}/beatmapsets/{beatmap.set_id}",
             "chartName:Beatmap Ranking",
             *beatmap_ranking_chart_entries,
             f"onlineScoreId:{score.id}",
