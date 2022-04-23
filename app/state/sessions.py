@@ -59,7 +59,7 @@ async def cancel_housekeeping_tasks() -> None:
 
 
 async def init_server_repository_caches() -> None:
-    # populate our ram cache of channels, clans, and mappools from the db
+    """Populate our ram cache of channels, clans, and mappools from the db."""
     await repositories.channels._populate_caches_from_database()
     await repositories.clans._populate_caches_from_database()
     await repositories.mappools._populate_caches_from_database()
@@ -67,6 +67,9 @@ async def init_server_repository_caches() -> None:
 
 async def init_server_state(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
+
+    # TODO: should this be an optional thing?
+    await init_server_repository_caches()
 
     bot_name = await app.utils.fetch_bot_name(db_conn)
 
