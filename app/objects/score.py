@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from re import S
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -368,8 +369,9 @@ class Score:
 
         if mode_vn in (0, 1, 2):
             score_args: ScoreDifficultyParams = {
-                "acc": self.acc,
                 "combo": self.max_combo,
+                "n100": self.n100,
+                "n50": self.n50,
                 "nmiss": self.nmiss,
             }
         else:  # mode_vn == 3

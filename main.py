@@ -24,7 +24,6 @@ import app.settings
 import app.utils
 from app.logging import Ansi
 from app.logging import log
-from app.usecases.performance import calculate_performances_std
 
 __author__ = "Joshua Smith (cmyui)"
 __email__ = "cmyuiosu@gmail.com"

@@ -1174,7 +1174,7 @@ async def osuRate(
         cached = app.state.cache.beatmap[map_md5]
 
         # only allow rating on maps with a leaderboard.
-        if cached.status < RankedStatus.Ranked:
+        if cached.has_leaderboard:
             return b"not ranked"
 
         # osu! client is checking whether we can rate the map or not.
@@ -1412,7 +1412,7 @@ async def getScores(
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.leaderboards_served")
 
-    if not bmap.has_leaderboard():
+    if not bmap.has_leaderboard:
         # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
         return f"{int(bmap.status)}|false".encode()
