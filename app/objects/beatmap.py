@@ -493,7 +493,7 @@ class Beatmap:
         else:
             self.max_combo = 0
 
-        # if a map is 'frozen', we keeps it's status
+        # if a map is 'frozen', we keep it's status
         # even after an update from the osu!api.
         if not getattr(self, "frozen", False):
             osuapi_status = int(osuapi_resp["approved"])
