@@ -62,17 +62,19 @@ def calculate_performances_std(
 
         if score["nmiss"] is not None:
             cmd.append("-X")
-            cmd.append(score["nmiss"])
+            cmd.append(str(score["nmiss"]))
 
         if score["combo"] is not None:
             cmd.append("-c")
-            cmd.append(score["combo"])
+            cmd.append(str(score["combo"]))
 
         if score["acc"] is not None:
             cmd.append("-a")
-            cmd.append(score["acc"])
+            cmd.append(str(score["acc"]))
 
         cmd.append(osu_file_path)
+
+        log(f"Running {cmd}", Ansi.LMAGENTA)
 
         p = subprocess.Popen(
             args=cmd,
@@ -127,15 +129,15 @@ def calculate_performances_taiko(
 
         if score["nmiss"] is not None:
             cmd.append("-X")
-            cmd.append(score["nmiss"])
+            cmd.append(str(score["nmiss"]))
 
         if score["combo"] is not None:
             cmd.append("-c")
-            cmd.append(score["combo"])
+            cmd.append(str(score["combo"]))
 
         if score["acc"] is not None:
             cmd.append("-a")
-            cmd.append(score["acc"])
+            cmd.append(str(score["acc"]))
 
         cmd.append(osu_file_path)
 
@@ -192,15 +194,15 @@ def calculate_performances_catch(
 
         if score["nmiss"] is not None:
             cmd.append("-X")
-            cmd.append(score["nmiss"])
+            cmd.append(str(score["nmiss"]))
 
         if score["combo"] is not None:
             cmd.append("-c")
-            cmd.append(score["combo"])
+            cmd.append(str(score["combo"]))
 
         if score["acc"] is not None:
             cmd.append("-a")
-            cmd.append(score["acc"])
+            cmd.append(str(score["acc"]))
 
         cmd.append(osu_file_path)
 
@@ -257,7 +259,7 @@ def calculate_performances_mania(
 
         if score["score"] is not None:
             cmd.append("-s")
-            cmd.append(score["score"])
+            cmd.append(str(score["score"]))
 
         cmd.append(osu_file_path)
 
