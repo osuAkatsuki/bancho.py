@@ -207,7 +207,9 @@ async def log_strange_occurrence(obj: object) -> None:
         Ansi.LYELLOW,
     )
 
+
 # dependency management
+
 
 class Version:
     __slots__ = ("major", "minor", "micro")

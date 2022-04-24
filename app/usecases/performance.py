@@ -6,10 +6,12 @@ from typing import Optional
 from typing import TypedDict
 
 import orjson
-from app.logging import Ansi, log
 
+from app.constants.mods import mod2modstr_dict
+from app.constants.mods import Mods
+from app.logging import Ansi
+from app.logging import log
 from app.utils import OSU_TOOLS_EXEC_PATH
-from app.constants.mods import Mods, mod2modstr_dict
 
 
 class DifficultyRating(TypedDict):
@@ -82,7 +84,9 @@ def calculate_performances_std(
             _, stderr = p.communicate()
             print(stderr.decode())
             log(
-                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+                f"Failed to calculate performance points for map {osu_file_path}",
+                Ansi.LRED,
+            )
             raise Exception()
 
         stdout, _ = p.communicate()
@@ -145,7 +149,9 @@ def calculate_performances_taiko(
             _, stderr = p.communicate()
             print(stderr.decode())
             log(
-                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+                f"Failed to calculate performance points for map {osu_file_path}",
+                Ansi.LRED,
+            )
             raise Exception()
 
         stdout, _ = p.communicate()
@@ -208,7 +214,9 @@ def calculate_performances_catch(
             _, stderr = p.communicate()
             print(stderr.decode())
             log(
-                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+                f"Failed to calculate performance points for map {osu_file_path}",
+                Ansi.LRED,
+            )
             raise Exception()
 
         stdout, _ = p.communicate()
@@ -263,7 +271,9 @@ def calculate_performances_mania(
             _, stderr = p.communicate()
             print(stderr.decode())
             log(
-                f"Failed to calculate performance points for map {osu_file_path}", Ansi.LRED)
+                f"Failed to calculate performance points for map {osu_file_path}",
+                Ansi.LRED,
+            )
             raise Exception()
 
         stdout, _ = p.communicate()

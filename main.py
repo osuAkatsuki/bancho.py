@@ -12,16 +12,18 @@ we're also fully open source!
 https://github.com/osuAkatsuki/bancho.py
 """
 from __future__ import annotations
-from app.logging import log
-from app.logging import Ansi
+
+import argparse
+import logging
+import sys
+from typing import Sequence
+
+import uvicorn
+
 import app.settings
 import app.utils
-import uvicorn
-from typing import Sequence
-import sys
-import logging
-import argparse
-
+from app.logging import Ansi
+from app.logging import log
 from app.usecases.performance import calculate_performances_std
 
 __author__ = "Joshua Smith (cmyui)"
@@ -50,8 +52,7 @@ def main(argv: Sequence[str]) -> int:
     """ Parse and handle command-line arguments. """
 
     parser = argparse.ArgumentParser(
-        description=(
-            "An open-source osu! server implementation by osu!Akatsuki."),
+        description=("An open-source osu! server implementation by osu!Akatsuki."),
     )
     parser.add_argument(
         "-V",
@@ -97,8 +98,7 @@ def main(argv: Sequence[str]) -> int:
         # (uvicorn currently does not do this for us, and will raise an exc)
         if os.path.exists(app.settings.SERVER_ADDR):
             if (
-                app.utils.processes_listening_on_unix_socket(
-                    app.settings.SERVER_ADDR)
+                app.utils.processes_listening_on_unix_socket(app.settings.SERVER_ADDR)
                 != 0
             ):
                 log(

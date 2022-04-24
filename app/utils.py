@@ -63,8 +63,15 @@ ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 OSU_TOOLS_PATH = Path.cwd() / "osu-tools"
-OSU_TOOLS_EXEC_PATH = Path.cwd() / "osu-tools" / "PerformanceCalculator" / \
-    "bin" / "Debug" / "net6.0" / "PerformanceCalculator"
+OSU_TOOLS_EXEC_PATH = (
+    Path.cwd()
+    / "osu-tools"
+    / "PerformanceCalculator"
+    / "bin"
+    / "Debug"
+    / "net6.0"
+    / "PerformanceCalculator"
+)
 
 
 def make_safe_name(name: str) -> str:

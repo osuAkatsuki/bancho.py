@@ -59,7 +59,11 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams, calculate_performances_catch, calculate_performances_mania, calculate_performances_std, calculate_performances_taiko
+from app.usecases.performance import calculate_performances_catch
+from app.usecases.performance import calculate_performances_mania
+from app.usecases.performance import calculate_performances_std
+from app.usecases.performance import calculate_performances_taiko
+from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
 if TYPE_CHECKING:
@@ -1223,7 +1227,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "mods": row["mods"],
                         "acc": row["acc"],
                         "combo": row["max_combo"],
-                        "nmiss": row["nmiss"]
+                        "nmiss": row["nmiss"],
                     }
 
                     result = calculate_performances_std(str(osu_file_path), [score])
@@ -1247,7 +1251,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "mods": row["mods"],
                         "acc": row["acc"],
                         "combo": row["max_combo"],
-                        "nmiss": row["nmiss"]
+                        "nmiss": row["nmiss"],
                     }
 
                     result = calculate_performances_taiko(str(osu_file_path), [score])
@@ -1258,7 +1262,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "UPDATE scores SET pp = :pp WHERE id = :score_id",
                         {"pp": pp, "score_id": row["id"]},
                     )
-            
+
             for mode in (2, 6):  # catch
                 # TODO: this should be using an async generator
                 for row in await score_select_conn.fetch_all(
@@ -1271,7 +1275,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "mods": row["mods"],
                         "acc": row["acc"],
                         "combo": row["max_combo"],
-                        "nmiss": row["nmiss"]
+                        "nmiss": row["nmiss"],
                     }
 
                     result = calculate_performances_catch(str(osu_file_path), [score])
@@ -1283,7 +1287,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         {"pp": pp, "score_id": row["id"]},
                     )
 
-            for mode in (3):  # mania
+            for mode in 3:  # mania
                 # TODO: this should be using an async generator
                 for row in await score_select_conn.fetch_all(
                     "SELECT id, acc, mods, max_combo, nmiss "
@@ -1295,7 +1299,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "mods": row["mods"],
                         "acc": row["acc"],
                         "combo": row["max_combo"],
-                        "nmiss": row["nmiss"]
+                        "nmiss": row["nmiss"],
                     }
 
                     result = calculate_performances_mania(str(osu_file_path), [score])
@@ -1351,10 +1355,13 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 "mods": row["mods"],
                                 "acc": row["acc"],
                                 "combo": row["max_combo"],
-                                "nmiss": row["nmiss"]
+                                "nmiss": row["nmiss"],
                             }
 
-                            result = calculate_performances_std(str(osu_file_path), [score])
+                            result = calculate_performances_std(
+                                str(osu_file_path),
+                                [score],
+                            )
 
                             pp = result[0]["performance"]
 
@@ -1375,18 +1382,21 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 "mods": row["mods"],
                                 "acc": row["acc"],
                                 "combo": row["max_combo"],
-                                "nmiss": row["nmiss"]
+                                "nmiss": row["nmiss"],
                             }
-        
-                            result = calculate_performances_taiko(str(osu_file_path), [score])
-        
+
+                            result = calculate_performances_taiko(
+                                str(osu_file_path),
+                                [score],
+                            )
+
                             pp = result[0]["performance"]
-        
+
                             await update_conn.execute(
                                 "UPDATE scores SET pp = :pp WHERE id = :score_id",
                                 {"pp": pp, "score_id": row["id"]},
                             )
-                    
+
                     for mode in (2, 6):  # catch
                         # TODO: this should be using an async generator
                         for row in await score_select_conn.fetch_all(
@@ -1399,19 +1409,22 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 "mods": row["mods"],
                                 "acc": row["acc"],
                                 "combo": row["max_combo"],
-                                "nmiss": row["nmiss"]
+                                "nmiss": row["nmiss"],
                             }
-        
-                            result = calculate_performances_catch(str(osu_file_path), [score])
-        
+
+                            result = calculate_performances_catch(
+                                str(osu_file_path),
+                                [score],
+                            )
+
                             pp = result[0]["performance"]
-        
+
                             await update_conn.execute(
                                 "UPDATE scores SET pp = :pp WHERE id = :score_id",
                                 {"pp": pp, "score_id": row["id"]},
                             )
-        
-                    for mode in (3):  # mania
+
+                    for mode in 3:  # mania
                         # TODO: this should be using an async generator
                         for row in await score_select_conn.fetch_all(
                             "SELECT id, acc, mods, max_combo, nmiss "
@@ -1423,18 +1436,21 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 "mods": row["mods"],
                                 "acc": row["acc"],
                                 "combo": row["max_combo"],
-                                "nmiss": row["nmiss"]
+                                "nmiss": row["nmiss"],
                             }
-        
-                            result = calculate_performances_mania(str(osu_file_path), [score])
-        
+
+                            result = calculate_performances_mania(
+                                str(osu_file_path),
+                                [score],
+                            )
+
                             pp = result[0]["performance"]
-        
+
                             await update_conn.execute(
                                 "UPDATE scores SET pp = :pp WHERE id = :score_id",
                                 {"pp": pp, "score_id": row["id"]},
                             )
-        
+
                     # leave at least 1/100th of
                     # a second for handling conns.
                     await asyncio.sleep(0.01)
