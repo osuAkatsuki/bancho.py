@@ -66,10 +66,6 @@ DISALLOWED_NAMES: CommaSeparatedStrings = config(
     "DISALLOWED_NAMES",
     cast=CommaSeparatedStrings,
 )
-DISALLOWED_PASSWORDS: CommaSeparatedStrings = config(
-    "DISALLOWED_PASSWORDS",
-    cast=CommaSeparatedStrings,
-)
 
 DISCORD_AUDIT_LOG_WEBHOOK: str = config("DISCORD_AUDIT_LOG_WEBHOOK")
 

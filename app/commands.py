@@ -278,7 +278,7 @@ async def changename(ctx: Context) -> Optional[str]:
     if (await repositories.players.fetch(name=new_player_name)) is not None:
         return "Username already taken by another player."
 
-    await usecases.players.update_name(ctx.player.id, new_player_name)
+    await usecases.players.update_name(ctx.player, new_player_name)
 
     ctx.player.enqueue(
         app.packets.notification(
@@ -324,8 +324,13 @@ async def recent(ctx: Context) -> Optional[str]:
     else:
         target = ctx.player
 
-    if not (score := target.recent_score):
+    if not (score_id := target.recent_score_id):
         return "Score could not be retrieved. (only saves per play session)"
+
+    score = await repositories.scores.fetch(score_id)
+    if score is None:
+        # TODO: log this? should not happen
+        return "Score could not be retrieved."
 
     beatmap = await repositories.beatmaps.fetch_by_md5(score.bmap_md5)
     if beatmap is None:
@@ -872,6 +877,14 @@ async def user(ctx: Context) -> Optional[str]:
     else:
         player_name = p.name
 
+    if p.recent_score_id is not None:
+        recent_score = await repositories.scores.fetch(p.recent_score_id)
+        if recent_score is None:
+            # TODO: log this? should not happen
+            return "Score could not be retrieved."
+    else:
+        recent_score = None
+
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {player_name} ({p.id})',
@@ -882,7 +895,7 @@ async def user(ctx: Context) -> Optional[str]:
             f"osu! build: {p.client_details.osu_version.date} | Tourney: {p.tourney_client}",
             f"Silenced: {p.silenced} | Spectating: {p.spectating}",
             f"Last /np: {last_np}",
-            f"Recent score: {p.recent_score}",
+            f"Recent score: {recent_score}",
             f"Match: {p.match}",
             f"Spectators: {p.spectators}",
         ),
@@ -916,16 +929,6 @@ async def restrict(ctx: Context) -> Optional[str]:
         reason=reason,
     )
 
-    if target.online:  # refresh their client state
-        usecases.players.logout(target)
-
-    await usecases.notes.create(
-        action="restrict",
-        message=reason,
-        receiver_id=target.id,
-        sender_id=ctx.player.id,
-    )
-
     return f"{target} was restricted."
 
 
@@ -955,16 +958,6 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         player=target,
         admin=ctx.player,
         reason=reason,
-    )
-
-    if target.online:  # refresh their client state
-        usecases.players.logout(target)
-
-    await usecases.notes.create(
-        action="unrestrict",
-        message=reason,
-        receiver_id=target.id,
-        sender_id=ctx.player.id,
     )
 
     return f"{target} was unrestricted."
@@ -1245,7 +1238,8 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if target is None:
         return "Could not find user."
 
-    await usecases.players.add_privs(target, bits)
+    await usecases.players.add_privileges(target, bits)
+
     return f"Updated {target}'s privileges."
 
 
@@ -1267,7 +1261,8 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     if target is None:
         return "Could not find user."
 
-    await usecases.players.remove_privs(target, bits)
+    await usecases.players.remove_privileges(target, bits)
+
     return f"Updated {target}'s privileges."
 
 

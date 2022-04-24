@@ -54,7 +54,7 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[Geolocation]:
         if status != "success":
             err_msg = lines[0]
             if err_msg == "invalid query":
-                err_msg += f" ({url})"
+                err_msg += f" (ip: {ip})"
 
             log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
             return None

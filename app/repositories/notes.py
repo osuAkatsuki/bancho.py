@@ -16,8 +16,8 @@ import app.state
 
 
 async def create(
-    action: Literal["note", "silence", "restrict", "unrestrict"],
-    message: str,
+    action: Literal["note", "silence", "unsilence", "restrict", "unrestrict"],
+    message: Optional[str],
     receiver_id: int,
     sender_id: int,
     created_at: Optional[datetime] = None,

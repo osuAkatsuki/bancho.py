@@ -51,8 +51,8 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             player = await repositories.players.fetch(id=expired_donor["id"])
             assert player is not None
 
-            # TODO: perhaps make a `revoke_donor` method?
-            await usecases.players.remove_privs(player, Privileges.DONATOR)
+            await usecases.players.remove_privileges(player, Privileges.DONATOR)
+
             await app.state.services.database.execute(
                 "UPDATE users SET donor_end = 0 WHERE id = :id",
                 {"id": player.id},
@@ -75,10 +75,10 @@ async def _disconnect_ghosts(interval: int) -> None:
         await asyncio.sleep(interval)
         current_time = time.time()
 
-        for p in app.state.sessions.players:
-            if current_time - p.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
-                log(f"Auto-dced {p}.", Ansi.LMAGENTA)
-                usecases.players.logout(p)
+        for player in app.state.sessions.players:
+            if current_time - player.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
+                log(f"Auto-dced {player}.", Ansi.LMAGENTA)
+                usecases.players.logout(player)
 
 
 async def _update_bot_status(interval: int) -> None:

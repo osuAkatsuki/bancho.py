@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
 from typing import Union
@@ -10,8 +11,11 @@ import app.state.cache
 import app.state.services
 import app.state.sessions
 import app.utils
-from app import usecases
+from app.constants.gamemodes import GameMode
+from app.objects.achievement import Achievement
+from app.objects.player import ModeData
 from app.objects.player import Player
+from app.objects.score import Grade
 
 cache: MutableMapping[Union[int, str], Player] = {}  # {name/id: player}
 
@@ -59,17 +63,14 @@ async def fetch(
     if user_info is None:
         return None
 
-    db_player_id = user_info["id"]
+    player_id = user_info["id"]
 
-    achievements = await usecases.players.fetch_achievements(db_player_id)
-    friends, blocks = await usecases.players.fetch_relationships(db_player_id)
-    stats = await usecases.players.fetch_stats(db_player_id)
-
-    # TODO: fetch player's recent scores
+    achievements = await fetch_achievements(player_id)
+    friends, blocks = await fetch_relationships(player_id)
+    stats = await fetch_stats(player_id)
+    recent_scores = await fetch_recent_scores(player_id)
 
     # TODO: fetch player's utc offset?
-
-    # TODO: fetch player's api key?
 
     user_info = dict(user_info)  # make mutable copy
 
@@ -77,9 +78,8 @@ async def fetch(
     country_acronym = user_info.pop("country")
 
     # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
-    # TODO: should we fetch their last ip from db here, and update it if they login?
+    # TODO: fetch their ip from their last login here, update it if they login from different location
     geolocation_data: app.objects.geolocation.Geolocation = {
-        # XXX: we don't have an ip here, so we can't lookup the geolocation
         "latitude": 0.0,
         "longitude": 0.0,
         "country": {
@@ -95,6 +95,7 @@ async def fetch(
         blocks=blocks,
         achievements=achievements,
         geoloc=geolocation_data,
+        recent_scores=recent_scores,
         token=None,
     )
 
@@ -105,6 +106,109 @@ async def fetch(
     cache[player.name] = player
 
     return player
+
+
+async def get_global_rank(player_id: int, mode: GameMode) -> int:
+    rank = await app.state.services.redis.zrevrank(
+        f"bancho:leaderboard:{mode.value}",
+        str(player_id),
+    )
+    return rank + 1 if rank is not None else 0
+
+
+async def get_country_rank(player_id: int, mode: GameMode, country: str) -> int:
+    rank = await app.state.services.redis.zrevrank(
+        f"bancho:leaderboard:{mode.value}:{country}",
+        str(player_id),
+    )
+    return rank + 1 if rank is not None else 0
+
+
+async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
+    """Retrieve `player`'s relationships from sql."""
+    player_friends = set()
+    player_blocks = set()
+
+    for row in await app.state.services.database.fetch_all(
+        "SELECT user2, type FROM relationships WHERE user1 = :user1",
+        {"user1": player_id},
+    ):
+        if row["type"] == "friend":
+            player_friends.add(row["user2"])
+        else:
+            player_blocks.add(row["user2"])
+
+    # always have bot added to friends.
+    player_friends.add(1)
+
+    return player_friends, player_blocks
+
+
+async def fetch_achievements(player_id: int) -> set[Achievement]:
+    """Retrieve `player`'s achievements from sql."""
+    player_achievements = set()
+
+    for row in await app.state.services.database.fetch_all(
+        "SELECT ua.achid id FROM user_achievements ua "
+        "INNER JOIN achievements a ON a.id = ua.achid "
+        "WHERE ua.userid = :user_id",
+        {"user_id": player_id},
+    ):
+        for ach in app.state.sessions.achievements:
+            if row["id"] == ach.id:
+                player_achievements.add(ach)
+
+    return player_achievements
+
+
+async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
+    """Retrieve `player`'s stats (all modes) from sql."""
+    player_stats: Mapping[GameMode, ModeData] = {}
+
+    for row in await app.state.services.database.fetch_all(
+        "SELECT mode, tscore, rscore, pp, acc, "
+        "plays, playtime, max_combo, total_hits, "
+        "xh_count, x_count, sh_count, s_count, a_count "
+        "FROM stats "
+        "WHERE id = :user_id",
+        {"user_id": player_id},
+    ):
+        row = dict(row)  # make mutable copy
+        mode = row.pop("mode")
+
+        # calculate player's rank.
+        row["rank"] = await get_global_rank(player_id, GameMode(mode))
+
+        row["grades"] = {
+            Grade.XH: row.pop("xh_count"),
+            Grade.X: row.pop("x_count"),
+            Grade.SH: row.pop("sh_count"),
+            Grade.S: row.pop("s_count"),
+            Grade.A: row.pop("a_count"),
+        }
+
+        player_stats[GameMode(mode)] = ModeData(**row)
+
+    return player_stats
+
+
+async def fetch_recent_scores(
+    player_id: int,
+) -> MutableMapping[GameMode, Optional[int]]:
+    recent_scores: MutableMapping[GameMode, Optional[int]] = {}
+
+    # TODO: is this doable in a single query?
+    for mode in (0, 1, 2, 3, 4, 5, 6, 8):
+        row = await app.state.services.database.fetch_one(
+            "SELECT id FROM scores WHERE userid = :user_id AND mode = :mode",
+            {"user_id": player_id, "mode": mode},
+        )
+        if row is None:
+            recent_scores[GameMode(mode)] = None
+        else:
+            recent_scores[GameMode(mode)] = row["id"]
+
+    return recent_scores
 
 
 ## update
@@ -120,6 +224,45 @@ async def update_name(player_id: int, new_name: str) -> None:
             "user_id": player_id,
         },
     )
+
+    if player := cache.get(player_id):
+        del cache[player.name]
+        cache[new_name] = player
+
+        player.name = new_name
+
+
+async def update_privs(player_id: int, new_privileges: int) -> None:
+    """Update a player's privileges to a new value, by id."""
+    await app.state.services.database.execute(
+        "UPDATE users SET priv = :priv WHERE id = :user_id",
+        {"priv": new_privileges, "user_id": player_id},
+    )
+
+    if player := cache.get(player_id):
+        player.priv = new_privileges
+
+
+async def silence_until(player_id: int, until: int) -> None:
+    """Silence a player until a certain time."""
+    await app.state.services.database.execute(
+        "UPDATE users SET silence_end = :until WHERE id = :user_id",
+        {"silence_end": until, "user_id": player_id},
+    )
+
+    if player := cache.get(player_id):
+        player.silence_end = until
+
+
+async def unsilence(player_id: int) -> None:
+    """Unsilence a player."""
+    await app.state.services.database.execute(
+        "UPDATE users SET silence_end = 0 WHERE id = :user_id",
+        {"user_id": player_id},
+    )
+
+    if player := cache.get(player_id):
+        player.silence_end = 0
 
 
 ## delete

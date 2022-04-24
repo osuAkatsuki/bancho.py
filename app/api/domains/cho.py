@@ -104,12 +104,10 @@ async def bancho_handler(
     user_agent: Literal["osu!"] = Header(...),
 ):
     ip = app.state.services.ip_resolver.get_ip(request.headers)
-
     if osu_token is None:
         # the client is performing a login
-        async with app.state.sessions.players._lock:
-            async with app.state.services.database.connection() as db_conn:
-                login_data = await login(await request.body(), ip, db_conn)
+        async with app.state.services.database.connection() as db_conn:
+            login_data = await login(await request.body(), ip, db_conn)
 
         return Response(
             content=login_data["response_body"],
@@ -426,7 +424,12 @@ class LoginData(TypedDict):
 
 
 def parse_login_data(data: bytes) -> LoginData:
-    """Parse data from the body of a login request."""
+    """\
+    Parse data from the body of a login request.
+
+    Format:
+      username\npasswd_md5\nosu_version|utc_offset|display_city|client_hashes|pm_private\n
+    """
     (
         username,
         password_md5,
@@ -472,10 +475,6 @@ async def login(
     """\
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
-
-    Some notes:
-      this must be called with app.state.sessions.players._lock held.
-      we return a tuple of (response_bytes, user_token) on success.
 
     Request format:
       username\npasswd_md5\nosu_version|utc_offset|display_city|client_hashes|pm_private\n
@@ -563,13 +562,31 @@ async def login(
                     ),
                 }
 
-    player = await usecases.players.login(
-        login_data["username"],
-        login_data["password_md5"],
-    )
+    player = await repositories.players.fetch(name=login_data["username"])
 
     if player is None:
         # no account by this name exists.
+        return {
+            "osu_token": "login-failed",
+            "response_body": (
+                app.packets.notification(
+                    f"Login attempt failed.\n"
+                    "Incorrect username or password.\n"
+                    "\n"
+                    f"Server: {BASE_DOMAIN}",
+                )
+                + app.packets.user_id(-1)
+            ),
+        }
+
+    # validate login credentials
+    correct_login = usecases.players.validate_credentials(
+        password=login_data["password_md5"],
+        hashed_password=player.pw_bcrypt,  # type: ignore
+    )
+
+    if not correct_login:
+        # incorrect username:password combination.
         return {
             "osu_token": "login-failed",
             "response_body": (
@@ -629,7 +646,11 @@ async def login(
         hw_checks = "h.uninstall_id = :uninstall"
         hw_args = {"uninstall": login_data["uninstall_md5"]}
     else:
-        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk_serial"
+        hw_checks = (
+            "h.adapters = :adapters OR "
+            "h.uninstall_id = :uninstall OR "
+            "h.disk_serial = :disk_serial"
+        )
         hw_args = {
             "adapters": login_data["adapters_md5"],
             "uninstall": login_data["uninstall_md5"],
@@ -716,7 +737,8 @@ async def login(
     # the osu! client will attempt to join the channels.
     for channel in repositories.channels.cache.values():
         if (
-            not usecases.channels.can_read(channel, player.priv)
+            not channel.auto_join  # TODO: is this correct?
+            or not usecases.channels.can_read(channel, player.priv)
             or channel._name == "#lobby"  # (can't be in mp lobby @ login)
         ):
             continue
@@ -730,9 +752,6 @@ async def login(
         )
 
         data += channel_info_packet
-
-        if channel.auto_join:
-            data += app.packets.channel_join(channel.name)
 
         for other in app.state.sessions.players:
             if usecases.channels.can_read(channel, other.priv):
@@ -798,22 +817,20 @@ async def login(
         if not player.priv & Privileges.VERIFIED:
             # this is the player's first login, verify their
             # account & send info about the server/its usage.
-            await usecases.players.add_privs(player, Privileges.VERIFIED)
+            await usecases.players.add_privileges(player, Privileges.VERIFIED)
 
             if player.id == FIRST_BANCHOPY_USER_ID:
                 # this is the first player registering on
                 # the server, grant them full privileges.
-                await usecases.players.add_privs(
-                    player,
-                    bits=(
-                        Privileges.STAFF
-                        | Privileges.NOMINATOR
-                        | Privileges.WHITELISTED
-                        | Privileges.TOURNAMENT
-                        | Privileges.DONATOR
-                        | Privileges.ALUMNI
-                    ),
+                new_privileges = (
+                    Privileges.STAFF
+                    | Privileges.NOMINATOR
+                    | Privileges.WHITELISTED
+                    | Privileges.TOURNAMENT
+                    | Privileges.DONATOR
+                    | Privileges.ALUMNI
                 )
+                await usecases.players.add_privileges(player, new_privileges)
 
             data += app.packets.send_message(
                 sender=app.state.sessions.bot.name,

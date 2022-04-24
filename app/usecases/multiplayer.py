@@ -43,10 +43,16 @@ async def await_submissions(
         return {}, ()
 
     for s in was_playing:
+        assert s.player is not None
+
         # continue trying to fetch each player's
         # scores until they've all been submitted.
         while True:
-            rc_score = s.player.recent_score
+            if s.player.recent_score_id is not None:
+                rc_score = await repositories.scores.fetch(s.player.recent_score_id)
+            else:
+                rc_score = None
+
             max_age = datetime.now() - timedelta(
                 seconds=beatmap.total_length + time_waited + 0.5,
             )

@@ -8,9 +8,6 @@ from app import repositories
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 
-# TODO: kevin question; usecases using other usecases
-# TODO: refactor this requirement out
-
 BeatmapID = int
 BeatmapMD5 = str
 

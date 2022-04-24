@@ -4,7 +4,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import random
-from collections import defaultdict
 from enum import IntEnum
 from enum import unique
 from functools import cache
@@ -44,8 +43,9 @@ import app.state.services
 import app.state.sessions
 import app.utils
 from app import repositories
+from app import responses
 from app import usecases
-from app.constants import regexes
+from app import validation
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -62,7 +62,6 @@ from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -87,9 +86,11 @@ def authenticate_player_session(
         username: str = param_function(..., alias=username_alias),
         pw_md5: str = param_function(..., alias=pw_md5_alias),
     ) -> Player:
-        if player := await usecases.players.login(
-            unquote(username),
-            pw_md5.encode(),
+        player = await repositories.players.fetch(name=unquote(username))
+
+        if player and usecases.players.validate_credentials(
+            password=pw_md5.encode(),
+            hashed_password=player.pw_bcrypt,  # type: ignore
         ):
             return player
 
@@ -142,7 +143,12 @@ async def osuError(
         return
 
     if username and pw_md5:
-        if not usecases.players.login(unquote(username), pw_md5.encode()):
+        player = await repositories.players.fetch(name=unquote(username))
+
+        if player is None or not usecases.players.validate_credentials(
+            password=pw_md5.encode(),
+            hashed_password=player.pw_bcrypt,  # type: ignore
+        ):
             # player login incorrect
             await app.state.services.log_strange_occurrence("osu-error auth failed")
             player = None
@@ -262,6 +268,7 @@ async def lastfm_handler(
 
             if player.online:  # refresh their client state
                 usecases.players.logout(player)
+
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
@@ -387,7 +394,13 @@ async def submit_score(
         return b"error: beatmap"
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
-    if not (player := await usecases.players.login(unquote(username), pw_md5.encode())):
+
+    player = await repositories.players.fetch(name=unquote(username))
+
+    if player is None or usecases.players.validate_credentials(
+        password=pw_md5.encode(),
+        hashed_password=player.pw_bcrypt,  # type: ignore
+    ):
         # player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
@@ -797,7 +810,7 @@ async def submit_score(
         )
 
     # update their recent score
-    player.recent_scores[score.mode] = score
+    player.recent_scores[score.mode] = score.id
 
     """ score submission charts """
 
@@ -1364,7 +1377,7 @@ if app.settings.REDIRECT_OSU_URLS:
 
 @router.get("/ss/{screenshot_id}.{extension}")
 async def get_screenshot(
-    screenshot_id: str = Path(..., regex=r"[a-zA-Z0-9-_]{8}"),
+    screenshot_id: str = Path(..., regex=r"^[a-zA-Z0-9-_]{8}$"),
     extension: Literal["jpg", "jpeg", "png"] = Path(...),
 ):
     """Serve a screenshot from the server, by filename."""
@@ -1456,7 +1469,7 @@ async def get_updated_beatmap(map_filename: str, host: str = Header(...)):
 
 
 @router.get("/p/doyoureallywanttoaskpeppy")
-async def peppyDMHandler():
+async def peppy_direct_message_handler():
     return (
         b"This user's ID is usually peppy's (when on bancho), "
         b"and is blocked from being messaged by the osu! client."
@@ -1472,126 +1485,39 @@ async def register_account(
     username: str = Form(..., alias="user[username]"),
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
-    check: int = Form(...),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
+    only_validating_params: int = Form(..., alias="check"),
     cloudflare_country: Optional[str] = Header(None, alias="CF-IPCountry"),
-    #
-    # TODO: allow nginx to be optional
-    forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
-    real_ip: str = Header(..., alias="X-Real-IP"),
 ):
-    safe_name = username.lower().replace(" ", "_")
-
-    if not all((username, email, pw_plaintext)):
-        return Response(
-            content=b"Missing required params",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # ensure all args passed
-    # are safe for registration.
-    errors: Mapping[str, list[str]] = defaultdict(list)
-
-    # Usernames must:
-    # - be within 2-15 characters in length
-    # - not contain both ' ' and '_', one is fine
-    # - not be in the config's `disallowed_names` list
-    # - not already be taken by another player
-    if not regexes.USERNAME.match(username):
-        errors["username"].append("Must be 2-15 characters in length.")
-
-    if "_" in username and " " in username:
-        errors["username"].append('May contain "_" and " ", but not both.')
-
-    if username in app.settings.DISALLOWED_NAMES:
-        errors["username"].append("Disallowed username; pick another.")
-
-    if "username" not in errors:
-        if await db_conn.fetch_one(
-            "SELECT 1 FROM users WHERE safe_name = :safe_name",
-            {"safe_name": safe_name},
-        ):
-            errors["username"].append("Username already taken by another player.")
-
-    # Emails must:
-    # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
-    # - not already be taken by another player
-    if not regexes.EMAIL.match(email):
-        errors["user_email"].append("Invalid email syntax.")
-    else:
-        if await db_conn.fetch_one(
-            "SELECT 1 FROM users WHERE email = :email",
-            {"email": email},
-        ):
-            errors["user_email"].append("Email already taken by another player.")
-
-    # Passwords must:
-    # - be within 8-32 characters in length
-    # - have more than 3 unique characters
-    # - not be in the config's `disallowed_passwords` list
-    if not 8 <= len(pw_plaintext) <= 32:
-        errors["password"].append("Must be 8-32 characters in length.")
-
-    if len(set(pw_plaintext)) <= 3:
-        errors["password"].append("Must have more than 3 unique characters.")
-
-    if pw_plaintext.lower() in app.settings.DISALLOWED_PASSWORDS:
-        errors["password"].append("That password was deemed too simple.")
-
+    errors = await validation.osu_registration(username, email, pw_plaintext)
     if errors:
-        # we have errors to send back, send them back delimited by newlines.
-        errors = {k: ["\n".join(v)] for k, v in errors.items()}
-        errors_full = {"form_error": {"user": errors}}
-        return ORJSONResponse(
-            content=errors_full,
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return responses.osu_registration_failure(errors)
 
-    if check == 0:
-        # the client isn't just checking values,
-        # they want to register the account now.
-        # make the md5 & bcrypt the md5 for sql.
+    if not only_validating_params:  # == 0
+        # fetch the country code from the request
 
         if cloudflare_country:
-            # best case, dev has enabled ip geolocation in the
-            # network tab of cloudflare, so it sends the iso code.
+            # FASTPATH: use cloudflare country header
             country_acronym = cloudflare_country.lower()
         else:
-            # backup method, get the user's ip and
-            # do a db lookup to get their country.
             ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-            if not ip.is_private:
-                if app.state.services.geoloc_db is not None:
-                    # decent case, dev has downloaded a geoloc db from
-                    # maxmind, so we can do a local db lookup. (~1-5ms)
-                    # https://www.maxmind.com/en/home
-                    geoloc = app.state.services.fetch_geoloc_db(ip)
-                else:
-                    # worst case, we must do an external db lookup
-                    # using a public api. (depends, `ping ip-api.com`)
-                    geoloc = await app.state.services.fetch_geoloc_web(ip)
-
-                if geoloc is not None:
-                    country_acronym = geoloc["country"]["acronym"]
-                else:
-                    country_acronym = "xx"
+            geoloc = await usecases.geolocation.lookup(ip)
+            if geoloc is not None:
+                country_acronym = geoloc["country"]["acronym"]
             else:
-                # localhost, unknown country
                 country_acronym = "xx"
 
-        async with app.state.sessions.players._lock:
-            user_id = await usecases.players.register(
-                username,
-                email,
-                pw_plaintext,
-                country_acronym,
-            )
+        player_id = await usecases.players.register(
+            username,
+            email,
+            pw_plaintext,
+            country_acronym,
+        )
 
         if app.state.services.datadog is not None:
             app.state.services.datadog.increment("bancho.registrations")
 
-        log(f"<{username} ({user_id})> has registered!", Ansi.LGREEN)
+        log(f"<{username} ({player_id})> has registered!", Ansi.LGREEN)
 
     return b"ok"  # success
 

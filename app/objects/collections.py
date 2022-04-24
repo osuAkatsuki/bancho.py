@@ -2,7 +2,6 @@
 # in a lot of these classes; needs refactor.
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from typing import Iterable
 from typing import Iterator
@@ -158,7 +157,6 @@ class Players(list[Player]):
     """The currently active players on the server."""
 
     def __init__(self, *args, **kwargs):
-        self._lock = asyncio.Lock()
         super().__init__(*args, **kwargs)
 
     def __iter__(self) -> Iterator[Player]:

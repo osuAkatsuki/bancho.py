@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 import uuid
-from typing import Mapping
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -26,8 +26,6 @@ from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
-from app.objects.player import ModeData
-from app.objects.score import Grade
 
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
@@ -154,29 +152,14 @@ def logout(player: Player) -> None:
     log(f"{player} logged out.", Ansi.LYELLOW)
 
 
-async def update_name(player_id: int, new_name: str) -> None:
+async def update_name(player: Player, new_name: str) -> None:
     """Update a player's name to a new value, by id."""
-    await repositories.players.update_name(player_id, new_name)
+    await repositories.players.update_name(player.id, new_name)
 
 
-async def update_privs(player: Player, new_privs: int) -> None:
+async def update_privileges(player: Player, new_privileges: int) -> None:
     """Update a player's privileges to a new value."""
-    player.priv = new_privs
-
-    await app.state.services.database.execute(
-        "UPDATE users SET priv = :priv WHERE id = :user_id",
-        {"priv": player.priv, "user_id": player.id},
-    )
-
-
-async def add_privs(player: Player, bits: int) -> None:
-    """Update a player's privileges, adding some bits."""
-    player.priv |= bits
-
-    await app.state.services.database.execute(
-        "UPDATE users SET priv = :priv WHERE id = :user_id",
-        {"priv": player.priv, "user_id": player.id},
-    )
+    await repositories.players.update_privs(player.id, new_privileges)
 
     if player.online:
         # if they're online, send a packet
@@ -184,14 +167,23 @@ async def add_privs(player: Player, bits: int) -> None:
         player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
-async def remove_privs(player: Player, bits: int) -> None:
-    """Update a player's privileges, removing some bits."""
-    player.priv &= ~bits
+async def add_privileges(player: Player, bits: int) -> None:
+    """Update a player's privileges, adding some bits."""
 
-    await app.state.services.database.execute(
-        "UPDATE users SET priv = :priv WHERE id = :user_id",
-        {"priv": player.priv, "user_id": player.id},
-    )
+    new_privileges = player.priv | bits
+    await repositories.players.update_privs(player.id, new_privileges)
+
+    if player.online:
+        # if they're online, send a packet
+        # to update their client-side privileges
+        player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
+
+
+async def remove_privileges(player: Player, bits: int) -> None:
+    """Update a player's privileges, removing some bits."""
+
+    new_privileges = player.priv & ~bits
+    await repositories.players.update_privs(player.id, new_privileges)
 
     if player.online:
         # if they're online, send a packet
@@ -201,7 +193,7 @@ async def remove_privs(player: Player, bits: int) -> None:
 
 async def restrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
-    await remove_privs(player, Privileges.NORMAL)
+    await remove_privileges(player, Privileges.NORMAL)
 
     country_acronym = player.geoloc["country"]["acronym"]
 
@@ -215,21 +207,31 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
             player.id,
         )
 
+    await usecases.notes.create(
+        action="restrict",
+        message=reason,
+        receiver_id=player.id,
+        sender_id=admin.id,
+    )
+
+    # if the player is online, log them out
+    # to refresh their client-side state
+    # TODO: is this really required?
+    if player.online:
+        usecases.players.logout(player)
+
     log_msg = f"{admin} restricted {player} for: {reason}."
 
     log(log_msg, Ansi.LRED)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
-        await webhook.post(app.state.services.http_client)
+        asyncio.create_task(webhook.post(app.state.services.http_client))
 
 
 async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
-    await add_privs(player, Privileges.NORMAL)
-
-    if not player.online:
-        player.stats = await fetch_stats(player.id)
+    await add_privileges(player, Privileges.NORMAL)
 
     country_acronym = player.geoloc["country"]["acronym"]
 
@@ -243,29 +245,38 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
             {str(player.id): stats.pp},
         )
 
+    await repositories.notes.create(
+        action="unrestrict",
+        message=reason,
+        receiver_id=player.id,
+        sender_id=admin.id,
+    )
+
+    # if the player is online, log them out
+    # to refresh their client-side state
+    # TODO: is this really required?
+    if player.online:
+        logout(player)
+
     log_msg = f"{admin} unrestricted {player} for: {reason}."
 
     log(log_msg, Ansi.LRED)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
-        await webhook.post(app.state.services.http_client)
+        asyncio.create_task(webhook.post(app.state.services.http_client))
 
 
 async def silence(player: Player, admin: Player, duration: int, reason: str) -> None:
     """Silence a player for a duration in seconds, and log to sql."""
-    player.silence_end = int(time.time() + duration)
+    new_silence_end = int(time.time() + duration)
+    await repositories.players.silence_until(player.id, new_silence_end)
 
-    await app.state.services.database.execute(
-        "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-        {"silence_end": player.silence_end, "user_id": player.id},
-    )
-
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, :msg, NOW())",
-        {"from": admin.id, "to": player.id, "action": "silence", "msg": reason},
+    await repositories.notes.create(
+        action="silence",
+        message=reason,
+        receiver_id=player.id,
+        sender_id=admin.id,
     )
 
     # inform the user's client.
@@ -283,18 +294,13 @@ async def silence(player: Player, admin: Player, duration: int, reason: str) -> 
 
 async def unsilence(player: Player, admin: Player) -> None:
     """Unsilence a player, and log to sql."""
-    player.silence_end = int(time.time())
+    await repositories.players.unsilence(player.id)
 
-    await app.state.services.database.execute(
-        "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-        {"silence_end": player.silence_end, "user_id": player.id},
-    )
-
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, NULL, NOW())",
-        {"from": admin.id, "to": player.id, "action": "unsilence"},
+    await repositories.notes.create(
+        action="unsilence",
+        message=None,
+        receiver_id=player.id,
+        sender_id=admin.id,
     )
 
     # inform the user's client
@@ -355,6 +361,9 @@ def join_match(player: Player, match: Match, passwd: str) -> bool:
     # NOTE: you will need to call usecases.multiplayer.send_match_state_to_clients after this
 
     return True
+
+
+### TODO:REFACTOR: refactor the usage of usecases in these next few functions
 
 
 def leave_match(player: Player) -> None:
@@ -465,38 +474,42 @@ def join_channel(player: Player, channel: Channel) -> bool:
     return True
 
 
-def leave_channel(player: Player, c: Channel, kick: bool = True) -> None:
+def leave_channel(player: Player, channel: Channel, kick: bool = True) -> None:
     """Attempt to remove `player` from `c`."""
     # ensure they're in the chan.
-    if player not in c:
+    if player not in channel:
         return
 
-    usecases.channels.remove_channel(c, player)  # remove from channel.players
-    player.channels.remove(c)  # remove from player.channels
+    usecases.channels.remove_channel(channel, player)  # remove from channel.players
+    player.channels.remove(channel)  # remove from player.channels
 
     if kick:
-        player.enqueue(app.packets.channel_kick(c.name))
+        player.enqueue(app.packets.channel_kick(channel.name))
 
-    chan_info_packet = app.packets.channel_info(c.name, c.topic, len(c.players))
+    chan_info_packet = app.packets.channel_info(
+        channel.name,
+        channel.topic,
+        len(channel.players),
+    )
 
-    if c.instance:
+    if channel.instance:
         # instanced channel, only send the players
         # who are currently inside of the instance
-        for p in c.players:
+        for p in channel.players:
             p.enqueue(chan_info_packet)
     else:
         # normal channel, send to all players who
         # have access to see the channel's usercount.
         for p in app.state.sessions.players:
-            if usecases.channels.can_read(c, p.priv):
+            if usecases.channels.can_read(channel, p.priv):
                 p.enqueue(chan_info_packet)
 
     if app.settings.DEBUG:
-        log(f"{player} left {c}.")
+        log(f"{player} left {channel}.")
 
 
-def add_spectator(player: Player, p: Player) -> None:
-    """Attempt to add `p` to `player`'s spectators."""
+def add_spectator(player: Player, other: Player) -> None:
+    """Attempt to add `other` to `player`'s spectators."""
     chan_name = f"#spec_{player.id}"
 
     if not (spec_chan := app.state.sessions.channels[chan_name]):
@@ -512,52 +525,56 @@ def add_spectator(player: Player, p: Player) -> None:
         app.state.sessions.channels.append(spec_chan)
 
     # attempt to join their spectator channel.
-    if not join_channel(p, spec_chan):
+    if not join_channel(other, spec_chan):
         log(f"{player} failed to join {spec_chan}?", Ansi.LYELLOW)
         return
 
-    if not p.stealth:
-        p_joined = app.packets.fellow_spectator_joined(p.id)
+    if not other.stealth:
+        p_joined = app.packets.fellow_spectator_joined(other.id)
         for s in player.spectators:
             s.enqueue(p_joined)
-            p.enqueue(app.packets.fellow_spectator_joined(s.id))
+            other.enqueue(app.packets.fellow_spectator_joined(s.id))
 
-        player.enqueue(app.packets.spectator_joined(p.id))
+        player.enqueue(app.packets.spectator_joined(other.id))
     else:
         # player is admin in stealth, only give
         # other players data to us, not vice-versa.
         for s in player.spectators:
-            p.enqueue(app.packets.fellow_spectator_joined(s.id))
+            other.enqueue(app.packets.fellow_spectator_joined(s.id))
 
-    player.spectators.append(p)
-    p.spectating = player
+    player.spectators.append(other)
+    other.spectating = player
 
-    log(f"{p} is now spectating {player}.")
+    log(f"{other} is now spectating {player}.")
 
 
-def remove_spectator(player: Player, p: Player) -> None:
-    """Attempt to remove `p` from `player`'s spectators."""
-    player.spectators.remove(p)
-    p.spectating = None
+def remove_spectator(player: Player, other: Player) -> None:
+    """Attempt to remove `other` from `player`'s spectators."""
+    player.spectators.remove(other)
+    other.spectating = None
 
-    c = app.state.sessions.channels[f"#spec_{player.id}"]
-    leave_channel(p, c)
+    channel = app.state.sessions.channels[f"#spec_{player.id}"]
+    leave_channel(other, channel)
 
     if not player.spectators:
         # remove host from channel, deleting it.
-        leave_channel(player, c)
+        leave_channel(player, channel)
     else:
         # send new playercount
-        c_info = app.packets.channel_info(c.name, c.topic, len(c.players))
-        fellow = app.packets.fellow_spectator_left(p.id)
+        c_info = app.packets.channel_info(
+            channel.name,
+            channel.topic,
+            len(channel.players),
+        )
+        fellow = app.packets.fellow_spectator_left(other.id)
 
         player.enqueue(c_info)
 
         for s in player.spectators:
             s.enqueue(fellow + c_info)
 
-    player.enqueue(app.packets.spectator_left(p.id))
-    log(f"{p} is no longer spectating {player}.")
+    player.enqueue(app.packets.spectator_left(other.id))
+    log(f"{other} is no longer spectating {player}.")
 
 
 async def add_friend(player: Player, other: Player) -> None:
@@ -642,60 +659,6 @@ async def unlock_achievement(player: Player, achievement: "Achievement") -> None
     player.achievements.add(achievement)
 
 
-async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
-    """Retrieve `player`'s relationships from sql."""
-    player_friends = set()
-    player_blocks = set()
-
-    for row in await app.state.services.database.fetch_all(
-        "SELECT user2, type FROM relationships WHERE user1 = :user1",
-        {"user1": player_id},
-    ):
-        if row["type"] == "friend":
-            player_friends.add(row["user2"])
-        else:
-            player_blocks.add(row["user2"])
-
-    # always have bot added to friends.
-    player_friends.add(1)
-
-    return player_friends, player_blocks
-
-
-async def fetch_achievements(player_id: int) -> set[Achievement]:
-    """Retrieve `player`'s achievements from sql."""
-    player_achievements = set()
-
-    for row in await app.state.services.database.fetch_all(
-        "SELECT ua.achid id FROM user_achievements ua "
-        "INNER JOIN achievements a ON a.id = ua.achid "
-        "WHERE ua.userid = :user_id",
-        {"user_id": player_id},
-    ):
-        for ach in app.state.sessions.achievements:
-            if row["id"] == ach.id:
-                player_achievements.add(ach)
-
-    return player_achievements
-
-
-async def get_global_rank(player_id: int, mode: GameMode) -> int:
-    rank = await app.state.services.redis.zrevrank(
-        f"bancho:leaderboard:{mode.value}",
-        str(player_id),
-    )
-    return rank + 1 if rank is not None else 0
-
-
-async def get_country_rank(player_id: int, mode: GameMode, country: str) -> int:
-    rank = await app.state.services.redis.zrevrank(
-        f"bancho:leaderboard:{mode.value}:{country}",
-        str(player_id),
-    )
-
-    return rank + 1 if rank is not None else 0
-
-
 async def update_rank(player: Player, mode: GameMode) -> int:
     country = player.geoloc["country"]["acronym"]
     stats = player.stats[mode]
@@ -715,40 +678,9 @@ async def update_rank(player: Player, mode: GameMode) -> int:
     if player.restricted:
         global_rank = 0
     else:
-        global_rank = await get_global_rank(player.id, mode)
+        global_rank = await repositories.players.get_global_rank(player.id, mode)
 
     return global_rank
-
-
-async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
-    """Retrieve `player`'s stats (all modes) from sql."""
-    player_stats: Mapping[GameMode, ModeData] = {}
-
-    for row in await app.state.services.database.fetch_all(
-        "SELECT mode, tscore, rscore, pp, acc, "
-        "plays, playtime, max_combo, total_hits, "
-        "xh_count, x_count, sh_count, s_count, a_count "
-        "FROM stats "
-        "WHERE id = :user_id",
-        {"user_id": player_id},
-    ):
-        row = dict(row)  # make mutable copy
-        mode = row.pop("mode")
-
-        # calculate player's rank.
-        row["rank"] = await get_global_rank(player_id, GameMode(mode))
-
-        row["grades"] = {
-            Grade.XH: row.pop("xh_count"),
-            Grade.X: row.pop("x_count"),
-            Grade.SH: row.pop("sh_count"),
-            Grade.S: row.pop("s_count"),
-            Grade.A: row.pop("a_count"),
-        }
-
-        player_stats[GameMode(mode)] = ModeData(**row)
-
-    return player_stats
 
 
 def send_menu_clear(player: Player) -> None:

@@ -28,7 +28,6 @@ from app.objects.menu import menu_keygen
 from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
-from app.objects.score import Score
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -269,7 +268,7 @@ class Player:
         pres_filter: PresenceFilter = PresenceFilter.Nil,
         login_time: float = 0.0,
         last_recv_time: float = 0.0,
-        recent_scores: Optional[MutableMapping[GameMode, Optional[Score]]] = None,
+        recent_scores: Optional[MutableMapping[GameMode, Optional[int]]] = None,
         last_np: Optional[LastNp] = None,
         current_menu: Menu = MAIN_MENU,
         previous_menus: Optional[list[Menu]] = None,
@@ -280,7 +279,7 @@ class Player:
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
-        self.priv = priv
+        self.priv = priv  # TODO: rename to privileges
         self.token = token
 
         if pw_bcrypt is not None:
@@ -414,21 +413,9 @@ class Player:
         return self.stats[self.status.mode]
 
     @property  # TODO: should this be in repos, or usecases?
-    def recent_score(self) -> Optional[Score]:
+    def recent_score_id(self) -> Optional[int]:
         """The player's most recently submitted score."""
-        score = None
-        for s in self.recent_scores.values():
-            if not s:
-                continue
-
-            if not score:
-                score = s
-                continue
-
-            if s.server_time > score.server_time:
-                score = s
-
-        return score
+        return self.recent_scores.get(self.status.mode)
 
     # TODO: from_row, to_row?
 
