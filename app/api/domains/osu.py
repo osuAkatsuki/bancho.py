@@ -713,22 +713,13 @@ async def osuSubmitModularSelector(
     # now we can calculate things based on our data.
     score.acc = score.calculate_accuracy()
 
-    if score.bmap:
-        osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
-        if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-            score.pp, score.sr = score.calculate_performance(osu_file_path)
+    osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
+    if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
+        score.pp, score.sr = score.calculate_performance(osu_file_path)
 
-            if score.passed:
-                await score.calculate_status()
-
-                if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calculate_placement()
-            else:
-                score.status = SubmissionStatus.FAILED
-    else:
-        score.pp = score.sr = 0.0
         if score.passed:
-            score.status = SubmissionStatus.SUBMITTED
+            await score.calculate_status()
+            score.rank = await score.calculate_placement()
         else:
             score.status = SubmissionStatus.FAILED
 
@@ -758,21 +749,6 @@ async def osuSubmitModularSelector(
     if fl_cheat_screenshot:
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
-
-    if (  # check for pp caps on ranked & approved maps for appropriate players.
-        score.bmap.awards_ranked_pp
-        and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
-    ):
-        # Get the PP cap for the current context.
-        """# TODO: find where to put autoban pp
-        pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
-
-        if score.pp > pp_cap:
-            await score.player.restrict(
-                admin=app.state.sessions.bot,
-                reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
-            )
-        """
 
     """ Score submission checks completed; submit the score. """
 
