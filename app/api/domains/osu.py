@@ -952,23 +952,28 @@ async def osuSubmitModularSelector(
             # because bonus pp counts the total amount of ranked
             # scores. i'm aware this scales horribly and it'll
             # likely be split into two queries in the future.
+            total_scores = await db_conn.fetch_one(
+                "SELECT COUNT(*) AS nums FROM scores s "
+                "INNER JOIN maps m ON s.map_md5 = m.md5 "
+                "WHERE s.userid = :user_id AND s.mode = :mode "
+                "AND s.status = 2 AND m.status IN (2, 3) ",
+                {"user_id": score.player.id, "mode": score.mode},
+            )
+            
             best_scores = await db_conn.fetch_all(
                 "SELECT s.pp, s.acc FROM scores s "
                 "INNER JOIN maps m ON s.map_md5 = m.md5 "
                 "WHERE s.userid = :user_id AND s.mode = :mode "
                 "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
-                "ORDER BY s.pp DESC",
+                "ORDER BY s.pp DESC LIMIT 100",
                 {"user_id": score.player.id, "mode": score.mode},
             )
 
-            total_scores = len(best_scores)
-            top_100_pp = best_scores[:100]
-
             # calculate new total weighted accuracy
             weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
+                row["acc"] * 0.95**i for i, row in enumerate(best_scores)
             )
-            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
+            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores['nums']))
             stats.acc = (weighted_acc * bonus_acc) / 100
 
             # add acc to query
@@ -976,8 +981,8 @@ async def osuSubmitModularSelector(
             stats_query_args["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
-            bonus_pp = 416.6667 * (1 - 0.95**total_scores)
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+            bonus_pp = 416.6667 * (1 - 0.95**total_scores['nums'])
             stats.pp = round(weighted_pp + bonus_pp)
 
             # add pp to query
