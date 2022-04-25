@@ -59,10 +59,8 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import calculate_performances_catch
+from app.usecases.performance import calculate_performances_stc
 from app.usecases.performance import calculate_performances_mania
-from app.usecases.performance import calculate_performances_std
-from app.usecases.performance import calculate_performances_taiko
 from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
@@ -115,7 +113,8 @@ class CommandSet:
                     # NOTE: this method assumes that functions without any
                     # triggers will be named like '{self.trigger}_{trigger}'.
                     triggers=(
-                        [f.__name__.removeprefix(f"{self.trigger}_").strip()] + aliases
+                        [f.__name__.removeprefix(
+                            f"{self.trigger}_").strip()] + aliases
                     ),
                     callback=f,
                     priv=priv,
@@ -419,7 +418,8 @@ async def top(ctx: Context) -> Optional[str]:
     return "\n".join(
         [f"Top 10 scores for {p.embed} ({ctx.args[0]})."]
         + [
-            TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.settings.DOMAIN, **s)
+            TOP_SCORE_FMTSTR.format(
+                idx=idx + 1, domain=app.settings.DOMAIN, **s)
             for idx, s in enumerate(scores)
         ],
     )
@@ -1033,7 +1033,8 @@ async def shutdown(ctx: Context) -> Optional[str]:
                 f'Reason: {" ".join(ctx.args[1:])}'
             )
 
-            app.state.sessions.players.enqueue(app.packets.notification(alert_msg))
+            app.state.sessions.players.enqueue(
+                app.packets.notification(alert_msg))
 
         app.state.loop.call_later(delay, os.kill, os.getpid(), _signal)
         return f"Enqueued {ctx.trigger}."
@@ -1077,7 +1078,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     data = bytearray()
 
     if action == "add":
-        ## create static data - no need to redo everything for each iteration
+        # create static data - no need to redo everything for each iteration
         # NOTE: this is where most of the efficiency of this command comes from
 
         static_player = Player(
@@ -1109,12 +1110,13 @@ async def fakeusers(ctx: Context) -> Optional[str]:
 
         static_stats = app.packets.user_stats(ctx.player)
 
-        ## create new fake players
+        # create new fake players
         new_fakes = []
 
         # get the current number of fake users
         if _fake_users:
-            current_fakes = max(x.id for x in _fake_users) - (FAKE_ID_START - 1)
+            current_fakes = max(x.id for x in _fake_users) - \
+                (FAKE_ID_START - 1)
         else:
             current_fakes = 0
 
@@ -1138,7 +1140,8 @@ async def fakeusers(ctx: Context) -> Optional[str]:
                 21 + name_len,  # packet len
                 fake_user_id,  # userid
             )
-            data += f"\x0b{chr(name_len)}{name}".encode()  # username (hacky uleb)
+            # username (hacky uleb)
+            data += f"\x0b{chr(name_len)}{name}".encode()
             data += static_presence
             data += static_stats
 
@@ -1155,7 +1158,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
         if amount > len_fake_users:
             return f"Too many! Only {len_fake_users} fake users remain."
 
-        to_remove = _fake_users[len_fake_users - amount :]
+        to_remove = _fake_users[len_fake_users - amount:]
         logout_packet_header = b"\x0c\x00\x00\x05\x00\x00\x00"
 
         for fake in to_remove:
@@ -1194,269 +1197,158 @@ async def stealth(ctx: Context) -> Optional[str]:
 
 @command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> Optional[str]:
-    """Recalculate pp for a given map, or all maps."""
+    """Recalculate pp for all maps."""
     # NOTE: at the moment this command isn't very optimal and re-parses
     # the beatmap file each iteration; this will be heavily improved.
-    if len(ctx.args) != 1 or ctx.args[0] not in ("map", "all"):
-        return "Invalid syntax: !recalc <map/all>"
+    if len(ctx.args) != 0:
+        return "Usage: !recalc"
 
-    if ctx.args[0] == "map":
-        # by specific map, use their last /np
-        if time.time() >= ctx.player.last_np["timeout"]:
-            return "Please /np a map first!"
+    # recalc all plays on the server, on all maps
+    staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
 
-        bmap: Beatmap = ctx.player.last_np["bmap"]
-
-        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
-            return "Mapfile could not be found; this incident has been reported."
+    async def recalc_all() -> None:
+        staff_chan.send_bot(
+            f"[Recalc] {ctx.player} started a full recalculation.")
+        st = time.time()
 
         async with (
+            app.state.services.database.connection() as bmap_select_conn,
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            for mode in (0, 4, 8):  # std
-                # TODO: this should be using an async generator
-                for row in await score_select_conn.fetch_all(
-                    "SELECT id, n100, n50, mods, max_combo, nmiss "
-                    "FROM scores "
-                    "WHERE map_md5 = :map_md5 AND mode = :mode",
-                    {"map_md5": bmap.md5, "mode": mode},
-                ):
-                    score = {
-                        "mods": row["mods"],
-                        "n100": row["n100"],
-                        "n50": row["n50"],
-                        "combo": row["max_combo"],
-                        "nmiss": row["nmiss"],
-                        "acc": None,
-                    }
-
-                    result = calculate_performances_std(str(osu_file_path), [score])
-
-                    pp = result[0]["performance"]
-
-                    await update_conn.execute(
-                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                        {"pp": pp, "score_id": row["id"]},
-                    )
-
-            for mode in (1, 5):  # taiko
-                # TODO: this should be using an async generator
-                for row in await score_select_conn.fetch_all(
-                    "SELECT id, n100, n50, mods, max_combo, nmiss "
-                    "FROM scores "
-                    "WHERE map_md5 = :map_md5 AND mode = :mode",
-                    {"map_md5": bmap.md5, "mode": mode},
-                ):
-                    score = {
-                        "mods": row["mods"],
-                        "n100": row["n100"],
-                        "n50": row["n50"],
-                        "combo": row["max_combo"],
-                        "nmiss": row["nmiss"],
-                        "acc": None,
-                    }
-
-                    result = calculate_performances_taiko(str(osu_file_path), [score])
-
-                    pp = result[0]["performance"]
-
-                    await update_conn.execute(
-                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                        {"pp": pp, "score_id": row["id"]},
-                    )
-
-            for mode in (2, 6):  # catch
-                # TODO: this should be using an async generator
-                for row in await score_select_conn.fetch_all(
-                    "SELECT id, n100, n50, mods, max_combo, nmiss "
-                    "FROM scores "
-                    "WHERE map_md5 = :map_md5 AND mode = :mode",
-                    {"map_md5": bmap.md5, "mode": mode},
-                ):
-                    score = {
-                        "mods": row["mods"],
-                        "n100": row["n100"],
-                        "n50": row["n50"],
-                        "combo": row["max_combo"],
-                        "nmiss": row["nmiss"],
-                        "acc": None,
-                    }
-
-                    result = calculate_performances_catch(str(osu_file_path), [score])
-
-                    pp = result[0]["performance"]
-
-                    await update_conn.execute(
-                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                        {"pp": pp, "score_id": row["id"]},
-                    )
-
-            for mode in (3, ):  # mania
-                # TODO: this should be using an async generator
-                for row in await score_select_conn.fetch_all(
-                    "SELECT id, score, mods "
-                    "FROM scores "
-                    "WHERE map_md5 = :map_md5 AND mode = :mode",
-                    {"map_md5": bmap.md5, "mode": mode},
-                ):
-                    score = {
-                        "mods": row["mods"],
-                        "score": row["score"]
-                    }
-
-                    result = calculate_performances_mania(str(osu_file_path), [score])
-
-                    pp = result[0]["performance"]
-
-                    await update_conn.execute(
-                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                        {"pp": pp, "score_id": row["id"]},
-                    )
-
-        return "Map recalculated."
-    else:
-        # recalc all plays on the server, on all maps
-        staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
-
-        async def recalc_all() -> None:
-            staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
-            st = time.time()
-
-            async with (
-                app.state.services.database.connection() as bmap_select_conn,
-                app.state.services.database.connection() as score_select_conn,
-                app.state.services.database.connection() as update_conn,
+            cnt = 0
+            for bmap_row in await bmap_select_conn.fetch_all(
+                "SELECT id, md5 FROM maps WHERE passes > 0",
             ):
-                # TODO: should be aiter
-                for bmap_row in await bmap_select_conn.fetch_all(
-                    "SELECT id, md5 FROM maps WHERE passes > 0",
+                cnt += 1
+                if cnt % 100 == 0:
+                    staff_chan.send_bot(f"[Recalc] Recalculated {cnt} maps.")
+
+                bmap_id = bmap_row["id"]
+                bmap_md5 = bmap_row["md5"]
+
+                osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
+                if not await ensure_local_osu_file(
+                    osu_file_path,
+                    bmap_id,
+                    bmap_md5,
                 ):
-                    bmap_id = bmap_row["id"]
-                    bmap_md5 = bmap_row["md5"]
+                    staff_chan.send_bot(
+                        f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
+                    )
+                    continue
 
-                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                    if not await ensure_local_osu_file(
-                        osu_file_path,
-                        bmap_id,
-                        bmap_md5,
-                    ):
-                        staff_chan.send_bot(
-                            f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
-                        )
-                        continue
+                for row in await score_select_conn.fetch_all(
+                        "SELECT id, n100, n50, mods, max_combo, nmiss, mode, score "
+                        "FROM scores "
+                        "WHERE map_md5 = :map_md5",
+                        {"map_md5": bmap_md5},
+                ):
+                    if row['mode'] in (0, 4, 8):
+                        mode_str = 'std'
+                    elif row['mode'] in (1, 5):
+                        mode_str = 'taiko'
+                    elif row['mode'] in (2, 6):
+                        mode_str = 'catch'
 
-                    for mode in (0, 4, 8):  # std
-                        # TODO: this should be using an async generator
-                        for row in await score_select_conn.fetch_all(
-                            "SELECT id, n100, n50, mods, max_combo, nmiss "
-                            "FROM scores "
-                            "WHERE map_md5 = :map_md5 AND mode = :mode",
-                            {"map_md5": bmap_md5, "mode": mode},
-                        ):
-                            score = {
-                                "mods": row["mods"],
-                                "n100": row["n100"],
-                                "n50": row["n50"],
-                                "combo": row["max_combo"],
-                                "nmiss": row["nmiss"],
-                                "acc": None,
-                            }
-        
-                            result = calculate_performances_std(str(osu_file_path), [score])
-        
-                            pp = result[0]["performance"]
-        
-                            await update_conn.execute(
-                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                {"pp": pp, "score_id": row["id"]},
-                            )
-        
-                    for mode in (1, 5):  # taiko
-                        # TODO: this should be using an async generator
-                        for row in await score_select_conn.fetch_all(
-                            "SELECT id, n100, n50, mods, max_combo, nmiss "
-                            "FROM scores "
-                            "WHERE map_md5 = :map_md5 AND mode = :mode",
-                            {"map_md5": bmap_md5, "mode": mode},
-                        ):
-                            score = {
-                                "mods": row["mods"],
-                                "n100": row["n100"],
-                                "n50": row["n50"],
-                                "combo": row["max_combo"],
-                                "nmiss": row["nmiss"],
-                                "acc": None,
-                            }
-        
-                            result = calculate_performances_taiko(str(osu_file_path), [score])
-        
-                            pp = result[0]["performance"]
-        
-                            await update_conn.execute(
-                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                {"pp": pp, "score_id": row["id"]},
-                            )
-        
-                    for mode in (2, 6):  # catch
-                        # TODO: this should be using an async generator
-                        for row in await score_select_conn.fetch_all(
-                            "SELECT id, n100, n50, mods, max_combo, nmiss "
-                            "FROM scores "
-                            "WHERE map_md5 = :map_md5 AND mode = :mode",
-                            {"map_md5": bmap_md5, "mode": mode},
-                        ):
-                            score = {
-                                "mods": row["mods"],
-                                "n100": row["n100"],
-                                "n50": row["n50"],
-                                "combo": row["max_combo"],
-                                "nmiss": row["nmiss"],
-                                "acc": None,
-                            }
-        
-                            result = calculate_performances_catch(str(osu_file_path), [score])
-        
-                            pp = result[0]["performance"]
-        
-                            await update_conn.execute(
-                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                {"pp": pp, "score_id": row["id"]},
-                            )
-        
-                    for mode in (3, ):  # mania
-                        # TODO: this should be using an async generator
-                        for row in await score_select_conn.fetch_all(
-                            "SELECT id, score, mods "
-                            "FROM scores "
-                            "WHERE map_md5 = :map_md5 AND mode = :mode",
-                            {"map_md5": bmap_md5, "mode": mode},
-                        ):
-                            score = {
-                                "mods": row["mods"],
-                                "score": row["score"]
-                            }
-        
-                            result = calculate_performances_mania(str(osu_file_path), [score])
-        
-                            pp = result[0]["performance"]
-        
-                            await update_conn.execute(
-                                "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                {"pp": pp, "score_id": row["id"]},
-                            )
+                    if row['mode'] != 3:
+                        score = {
+                            "mods": row["mods"],
+                            "n100": row["n100"],
+                            "n50": row["n50"],
+                            "combo": row["max_combo"],
+                            "nmiss": row["nmiss"],
+                            "acc": None,
+                        }
+                        result = calculate_performances_stc(
+                            mode_str, str(osu_file_path), [score])
+                    else:
+                        score = {
+                            "mods": row["mods"],
+                            "score": row["score"]
+                        }
+                        result = calculate_performances_mania(
+                            str(osu_file_path), [score])
 
-                    # leave at least 1/100th of
-                    # a second for handling conns.
-                    await asyncio.sleep(0.01)
+                    pp = result[0]["performance"]
 
-            elapsed = app.utils.seconds_readable(int(time.time() - st))
-            staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
+                    await update_conn.execute(
+                        "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                        {"pp": pp, "score_id": row["id"]},
+                    )
 
-        app.state.loop.create_task(recalc_all())
+        elapsed = app.utils.seconds_readable(int(time.time() - st))
+        staff_chan.send_bot(
+            f"[Recalc] Recalculation complete. | Elapsed: {elapsed}")
+        staff_chan.send_bot(
+            f"[Recalc] Started to update stats.")
+        st = time.time()
 
-        return "Starting a full recalculation."
+        async with (
+            app.state.services.database.connection() as user_select_conn,
+            app.state.services.database.connection() as score_select_conn,
+            app.state.services.database.connection() as update_conn,
+        ):
+            cnt = 0
+            for user_row in await user_select_conn.fetch_all(
+                "SELECT id, country FROM users"
+            ):
+                cnt += 1
+                if cnt % 20 == 0:
+                    staff_chan.send_bot(f"[Recalc] Recalculated {cnt} stats.")
+                for mode in (0, 1, 2, 3, 4, 5, 6, 8):
+                    total_scores = await score_select_conn.fetch_all(
+                        "SELECT COUNT (*) AS nums FROM scores s "
+                        "INNER JOIN maps m ON s.map_md5 = m.md5 "
+                        "WHERE s.userid = :user_id AND s.mode = :mode "
+                        "AND s.status = 2 AND m.status IN (2, 3) ",
+                        {"user_id": user_row['id'], "mode": mode},
+                    )
+
+                    best_scores = await score_select_conn.fetch_all(
+                        "SELECT s.pp, s.acc FROM scores s "
+                        "INNER JOIN maps m ON s.map_md5 = m.md5 "
+                        "WHERE s.userid = :user_id AND s.mode = :mode "
+                        "AND s.status = 2 AND m.status IN (2, 3) "
+                        "ORDER BY s.pp DESC LIMIT 100",
+                        {"user_id": user_row['id'], "mode": mode},
+                    )
+
+                    weighted_acc = sum(
+                        row["acc"] * 0.95**i for i, row in enumerate(best_scores)
+                    )
+                    bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores['nums']))
+                    new_acc = (weighted_acc * bonus_acc) / 100
+
+                    weighted_pp = sum(
+                        row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+                    bonus_pp = 416.6667 * (1 - 0.95**total_scores['nums'])
+                    new_pp = round(weighted_pp + bonus_pp)
+
+                    await app.state.services.redis.zadd(
+                        f"bancho:leaderboard:{mode}",
+                        {str(user_row["id"]): new_pp},
+                    )
+
+                    await app.state.services.redis.zadd(
+                        f"bancho:leaderboard:{mode}:{user_row['country']}",
+                        {str(user_row["id"]): new_pp},
+                    )
+
+                    await update_conn.execute(
+                        "UPDATE stats SET pp = :pp, acc = :acc "
+                        "WHERE id = :user_id AND mode = :mode",
+                        {"user_id": user_row['id'], "mode": mode,
+                            "pp": new_pp, "acc": new_acc},
+                    )
+
+        elapsed = app.utils.seconds_readable(int(time.time() - st))
+        staff_chan.send_bot(
+            f"[Recalc] Stats update complete. | Elapsed: {elapsed}")
+
+    app.state.loop.create_task(recalc_all())
+
+    return "[Recalc] Starting a full recalculation."
 
 
 @command(Privileges.DEVELOPER, hidden=True)
@@ -1596,7 +1488,7 @@ async def server(ctx: Context) -> Optional[str]:
         trailer = "\n"
 
         model_names = Counter(
-            line[len(header) : -len(trailer)]
+            line[len(header): -len(trailer)]
             for line in f.readlines()
             if line.startswith("model name")
         )
@@ -1626,7 +1518,7 @@ async def server(ctx: Context) -> Optional[str]:
     reqs = (Path.cwd() / "requirements.txt").read_text().splitlines()
     requirements_info = "\n".join(
         " | ".join("{} v{}".format(*pkg.split("==")) for pkg in section)
-        for section in (reqs[i : i + 3] for i in range(0, len(reqs), 3))
+        for section in (reqs[i: i + 3] for i in range(0, len(reqs), 3))
     )
 
     return "\n".join(
@@ -1806,9 +1698,11 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            match.starting["start"] = app.state.loop.call_later(duration, _start)
+            match.starting["start"] = app.state.loop.call_later(
+                duration, _start)
             match.starting["alerts"] = [
-                app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                app.state.loop.call_later(
+                    duration - t, lambda t=t: _alert_start(t))
                 for t in (60, 30, 10, 5, 4, 3, 2, 1)
                 if t < duration
             ]
@@ -2858,7 +2752,8 @@ async def process_commands(
 
             if res is not None:
                 # we have a message to return, include elapsed time
-                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
+                elapsed = app.logging.magnitude_fmt_time(
+                    clock_ns() - start_time)
                 return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
             else:
                 # no message to return

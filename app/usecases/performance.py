@@ -46,6 +46,7 @@ def mods2modlist(mods: int) -> list[str]:
 
     return result
 
+
 def calculate_performances_stc(
     mode: str,
     osu_file_path: str,
@@ -69,7 +70,7 @@ def calculate_performances_stc(
         if score["combo"] is not None:
             cmd.append("-c")
             cmd.append(str(score["combo"]))
-        
+
         if score["acc"] is not None:
             cmd.append("-a")
             cmd.append(str(score["acc"]))
@@ -77,7 +78,7 @@ def calculate_performances_stc(
             if score["n100"] is not None:
                 cmd.append("-G")
                 cmd.append(str(score["n100"]))
-        
+
             if score["n50"] is not None:
                 cmd.append("-M")
                 cmd.append(str(score["n50"]))
@@ -118,27 +119,6 @@ def calculate_performances_stc(
         )
 
     return results
-
-
-def calculate_performances_std(
-    osu_file_path: str,
-    scores: list[StdTaikoCatchScore],
-) -> list[DifficultyRating]:
-    return calculate_performances_stc('osu', osu_file_path, scores)
-
-
-def calculate_performances_taiko(
-    osu_file_path: str,
-    scores: list[StdTaikoCatchScore],
-) -> list[DifficultyRating]:
-    return calculate_performances_stc('taiko', osu_file_path, scores)
-
-
-def calculate_performances_catch(
-    osu_file_path: str,
-    scores: list[StdTaikoCatchScore],
-) -> list[DifficultyRating]:
-    return calculate_performances_stc('catch', osu_file_path, scores)
 
 
 def calculate_performances_mania(
@@ -230,20 +210,17 @@ def calculate_performances(
         ]
 
         if mode == 0:
-            results = calculate_performances_std(
-                osu_file_path=osu_file_path,
-                scores=std_taiko_catch_scores,
-            )
+            mode_str = 'std'
         elif mode == 1:
-            results = calculate_performances_taiko(
-                osu_file_path=osu_file_path,
-                scores=std_taiko_catch_scores,
-            )
+            mode_str = 'taiko'
         elif mode == 2:
-            results = calculate_performances_catch(
-                osu_file_path=osu_file_path,
-                scores=std_taiko_catch_scores,
-            )
+            mode_str = 'catch'
+
+        results = calculate_performances_stc(
+            mode_str,
+            osu_file_path=osu_file_path,
+            scores=std_taiko_catch_scores,
+        )
 
     elif mode == 3:
         mania_scores: list[ManiaScore] = [
