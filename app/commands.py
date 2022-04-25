@@ -59,8 +59,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import calculate_performances_stc
-from app.usecases.performance import calculate_performances_mania
+from app.usecases.performance import calculate_performances
 from app.usecases.performance import ScoreDifficultyParams
 from app.utils import seconds_readable
 
@@ -1244,32 +1243,20 @@ async def recalc(ctx: Context) -> Optional[str]:
                         "WHERE map_md5 = :map_md5",
                         {"map_md5": bmap_md5},
                 ):
-                    if row['mode'] in (0, 4, 8):
-                        mode_str = 'std'
-                    elif row['mode'] in (1, 5):
-                        mode_str = 'taiko'
-                    elif row['mode'] in (2, 6):
-                        mode_str = 'catch'
-
                     if row['mode'] != 3:
                         score = {
-                            "mods": row["mods"],
                             "n100": row["n100"],
                             "n50": row["n50"],
                             "combo": row["max_combo"],
                             "nmiss": row["nmiss"],
                             "acc": None,
                         }
-                        result = calculate_performances_stc(
-                            mode_str, str(osu_file_path), [score])
                     else:
                         score = {
-                            "mods": row["mods"],
                             "score": row["score"]
                         }
-                        result = calculate_performances_mania(
-                            str(osu_file_path), [score])
-
+                    
+                    result = calculate_performances(str(osu_file_path), mode, row["mods"], [score])
                     pp = result[0]["performance"]
 
                     await update_conn.execute(

@@ -17,21 +17,17 @@ from app.utils import OSU_TOOLS_EXEC_PATH
 class DifficultyRating(TypedDict):
     performance: float
     star_rating: float
+    
+class ScoreDifficultyParams(TypedDict, total=False):
+    # std, taiko, catch
+    combo: int
+    n100: int
+    n50: int
+    nmiss: int
+    acc: float
 
-
-class StdTaikoCatchScore(TypedDict):
-    mods: Optional[int]
-    combo: Optional[int]
-    n100: Optional[int]
-    n50: Optional[int]
-    nmiss: Optional[int]
-    acc: Optional[float]
-
-
-class ManiaScore(TypedDict):
-    mods: Optional[int]
-    score: Optional[int]
-
+    # mania
+    score: int
 
 def mods2modlist(mods: int) -> list[str]:
     if mods == Mods.NOMOD:
@@ -48,40 +44,48 @@ def mods2modlist(mods: int) -> list[str]:
 
 
 def calculate_performances_stc(
-    mode: str,
+    mode: int,
+    mods: Optional[int],
     osu_file_path: str,
-    scores: list[StdTaikoCatchScore],
+    scores: list[ScoreDifficultyParams],
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
+    
+    if mode in (0, 4, 8):
+        mode_str = 'std'
+    elif mode in (1, 5):
+        mode_str = 'taiko'
+    elif mode in (2, 6):
+        mode_str = 'catch'
 
     for score in scores:
-        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode, "-j"]
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
 
-        if score["mods"] is not None:
-            modlist = mods2modlist(score["mods"])
+        if mods is not None:
+            modlist = mods2modlist(mods)
             for mod in modlist:
                 cmd.append("-m")
                 cmd.append(mod)
 
-        if score["nmiss"] is not None:
+        if score.get("nmiss") is not None:
             cmd.append("-X")
-            cmd.append(str(score["nmiss"]))
+            cmd.append(str(score.get("nmiss")))
 
-        if score["combo"] is not None:
+        if score.get("combo") is not None:
             cmd.append("-c")
-            cmd.append(str(score["combo"]))
+            cmd.append(str(score.get("combo")))
 
-        if score["acc"] is not None:
+        if score.get("acc") is not None:
             cmd.append("-a")
-            cmd.append(str(score["acc"]))
+            cmd.append(str(score.get("acc")))
         else:
-            if score["n100"] is not None:
+            if score.get("n100") is not None:
                 cmd.append("-G")
-                cmd.append(str(score["n100"]))
+                cmd.append(str(score.get("n100")))
 
-            if score["n50"] is not None:
+            if score.get("n50") is not None:
                 cmd.append("-M")
-                cmd.append(str(score["n50"]))
+                cmd.append(str(score.get("n50")))
 
         cmd.append(osu_file_path)
 
@@ -102,8 +106,14 @@ def calculate_performances_stc(
 
         stdout, _ = p.communicate()
         obj = orjson.loads(stdout.decode())
-
-        pp = obj["performance_attributes"]["pp"]
+        
+        if mode == 4:
+            pp = obj["performance_attributes"]["aim"]
+        elif mode == 8:
+            pp = obj["performance_attributes"]["speed"]
+        else:
+            pp = obj["performance_attributes"]["pp"]
+        
         sr = obj["difficulty_attributes"]["star_rating"]
 
         if math.isnan(pp) or math.isinf(pp):
@@ -123,22 +133,23 @@ def calculate_performances_stc(
 
 def calculate_performances_mania(
     osu_file_path: str,
-    scores: list[ManiaScore],
+    mods: Optional[int],
+    scores: list[ScoreDifficultyParams],
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
     for score in scores:
         cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "mania", "-j"]
 
-        if score["mods"] is not None:
-            modlist = mods2modlist(score["mods"])
+        if mods is not None:
+            modlist = mods2modlist(mods)
             for mod in modlist:
                 cmd.append("-m")
                 cmd.append(mod)
 
-        if score["score"] is not None:
+        if score.get("score") is not None:
             cmd.append("-s")
-            cmd.append(str(score["score"]))
+            cmd.append(str(score.get("score")))
 
         cmd.append(osu_file_path)
 
@@ -178,62 +189,25 @@ def calculate_performances_mania(
     return results
 
 
-class ScoreDifficultyParams(TypedDict, total=False):
-    # std, taiko, catch
-    combo: int
-    n100: int
-    n50: int
-    nmiss: int
-    acc: float
-
-    # mania
-    score: int
-
-
 def calculate_performances(
     osu_file_path: str,
     mode: int,
     mods: Optional[int],
     scores: list[ScoreDifficultyParams],
 ) -> list[DifficultyRating]:
-    if mode in (0, 1, 2):
-        std_taiko_catch_scores: list[StdTaikoCatchScore] = [
-            {
-                "mods": mods,
-                "n100": score.get("n100"),
-                "n50": score.get("n50"),
-                "combo": score.get("combo"),
-                "nmiss": score.get("nmiss"),
-                "acc": score.get("acc"),
-            }
-            for score in scores
-        ]
-
-        if mode == 0:
-            mode_str = 'std'
-        elif mode == 1:
-            mode_str = 'taiko'
-        elif mode == 2:
-            mode_str = 'catch'
-
+    if mode in (0, 1, 2, 4, 5, 6, 8):
         results = calculate_performances_stc(
-            mode_str,
-            osu_file_path=osu_file_path,
-            scores=std_taiko_catch_scores,
+            mode,
+            mods,
+            osu_file_path,
+            scores,
         )
 
     elif mode == 3:
-        mania_scores: list[ManiaScore] = [
-            {
-                "mods": mods,
-                "score": score.get("score"),
-            }
-            for score in scores
-        ]
-
         results = calculate_performances_mania(
-            osu_file_path=osu_file_path,
-            scores=mania_scores,
+            mods,
+            osu_file_path,
+            scores,
         )
     else:
         raise NotImplementedError
