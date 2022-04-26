@@ -1256,7 +1256,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                             "score": row["score"]
                         }
                     
-                    result = calculate_performances(str(osu_file_path), mode, row["mods"], [score])
+                    result = calculate_performances(str(osu_file_path), row['mode'], row["mods"], [score])
                     pp = result[0]["performance"]
 
                     await update_conn.execute(
