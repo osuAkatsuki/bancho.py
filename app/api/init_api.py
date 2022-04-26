@@ -7,6 +7,7 @@ import pprint
 from typing import Any
 
 import aiohttp
+from aiohttp_socks import ProxyConnector
 import orjson
 import starlette.routing
 from fastapi import FastAPI
@@ -119,9 +120,16 @@ def init_events(asgi_app: BanchoAPI) -> None:
                 Ansi.LRED,
             )
 
-        app.state.services.http = aiohttp.ClientSession(
-            json_serialize=lambda x: orjson.dumps(x).decode(),
-        )
+        if app.settings.SOCKS_PROXY_ADDR is not None:
+            connector = ProxyConnector.from_url(app.settings.SOCKS_PROXY_ADDR)
+            app.state.services.http = aiohttp.ClientSession(
+                json_serialize=lambda x: orjson.dumps(x).decode(),
+                connector=connector
+            )
+        else:
+            app.state.services.http = aiohttp.ClientSession(
+                json_serialize=lambda x: orjson.dumps(x).decode(),
+            )
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
 

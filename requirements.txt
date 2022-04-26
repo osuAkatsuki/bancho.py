@@ -2,6 +2,7 @@ aiohttp==3.8.1
 aiomysql==0.0.22
 aioredis==2.0.1
 aiosignal==1.2.0
+aiohttp-socks==0.7.1
 anyio==3.5.0
 asgiref==3.5.0
 async-timeout==4.0.2

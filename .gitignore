@@ -9,4 +9,5 @@ ext/GeoLite2-City.mmdb
 tools/migrate_v420/go.sum
 tools/migrate_v420/scoreMigrator
 /venv
+/.venv
 /cache

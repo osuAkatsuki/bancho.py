@@ -335,7 +335,8 @@ async def run_sql_migrations() -> None:
     latest_ver = Version.from_str(app.settings.VERSION)
 
     if latest_ver is None:
-        raise RuntimeError(f"Invalid bancho.py version '{app.settings.VERSION}'")
+        raise RuntimeError(
+            f"Invalid bancho.py version '{app.settings.VERSION}'")
 
     if latest_ver == current_ver:
         return  # already up to date
