@@ -59,7 +59,7 @@ def calculate_performances_stc(
         mode_str = 'catch'
 
     for score in scores:
-        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
+        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j", "-m", "CL"]
 
         if mods is not None:
             modlist = mods2modlist(mods)
