@@ -52,7 +52,7 @@ def calculate_performances_stc(
     results: list[DifficultyRating] = []
     
     if mode in (0, 4, 8):
-        mode_str = 'std'
+        mode_str = 'osu'
     elif mode in (1, 5):
         mode_str = 'taiko'
     elif mode in (2, 6):
