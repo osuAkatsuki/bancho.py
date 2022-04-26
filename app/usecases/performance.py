@@ -195,10 +195,6 @@ def calculate_performances(
     mods: Optional[int],
     scores: list[ScoreDifficultyParams],
 ) -> list[DifficultyRating]:
-    if mods is not None:
-        if Mods.DOUBLETIME in mods and Mods.NIGHTCORE in mods:
-            mods = mods & (~Mods.NIGHTCORE)
-    
     if mode in (0, 1, 2, 4, 5, 6, 8):
         results = calculate_performances_stc(
             mode,
