@@ -19,7 +19,7 @@ REDIS_DSN: str = config("REDIS_DSN")
 
 OSU_API_KEY: Secret = config("OSU_API_KEY", cast=Secret)
 
-SOCKS_PROXY_ADDR: Optional[str] = config("SERVER_PORT", default=None)
+SOCKS_PROXY_ADDR: Optional[str] = config("SOCKS_PROXY_ADDR", default=None)
 
 DOMAIN: str = config("DOMAIN", default="cmyui.xyz")
 MIRROR_URL: str = config("MIRROR_URL", default="https://api.chimu.moe/v1")
