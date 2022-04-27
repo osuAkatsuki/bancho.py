@@ -10,7 +10,6 @@ import app.utils
 from app import repositories
 from app.logging import Ansi
 from app.logging import log
-from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
@@ -61,16 +60,17 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 
 async def get_beatmap_info(
     player: Player,
-    form_data: models.OsuBeatmapRequestForm,
+    beatmap_filenames: list[str],
+    beatmap_ids: list[int],
 ) -> bytes:
 
-    num_requests = len(form_data.Filenames) + len(form_data.Ids)
+    num_requests = len(beatmap_filenames) + len(beatmap_ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
     ret = []
 
     async with app.state.services.database.connection() as db_conn:
-        for idx, map_filename in enumerate(form_data.Filenames):
+        for idx, map_filename in enumerate(beatmap_filenames):
             # try getting the map from sql
             row = await db_conn.fetch_one(
                 "SELECT id, set_id, status, md5 FROM maps WHERE filename = :filename",
@@ -109,9 +109,9 @@ async def get_beatmap_info(
                 ),
             )
 
-    if form_data.Ids:  # still have yet to see this used
+    if beatmap_ids:  # still have yet to see this used
         await app.state.services.log_strange_occurrence(
-            f"{player} requested map(s) info by id ({form_data.Ids})",
+            f"{player} requested map(s) info by id ({beatmap_ids})",
         )
 
     return "\n".join(ret).encode()
@@ -169,11 +169,6 @@ async def fetch_rating(beatmap: Beatmap) -> Optional[float]:
 
 async def update_status(beatmap: Beatmap, new_status: RankedStatus) -> None:
     """Update a beatmaps to a new ranked status in cache and the database."""
-
-    # update in cache
-    beatmap.status = new_status
-
-    # update in database
     await repositories.beatmaps.update_status(beatmap.id, new_status)
 
 

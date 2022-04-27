@@ -221,7 +221,11 @@ async def get_beatmap_info(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    return await usecases.beatmaps.get_beatmap_info(player, form_data)
+    return await usecases.beatmaps.get_beatmap_info(
+        player,
+        form_data.beatmap_filenames,
+        form_data.beatmap_ids,
+    )
 
 
 def format_favourites(favourite_beatmap_set_ids: list[int]) -> bytes:

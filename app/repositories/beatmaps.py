@@ -108,11 +108,12 @@ async def fetch_by_id(id: int) -> Optional[Beatmap]:
 
 async def update_status(beatmap_id: int, new_status: RankedStatus) -> None:
     """Update a beatmap to a new ranked status in the database."""
-
     await app.state.services.database.execute(
         "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
         {"status": new_status, "map_id": beatmap_id},
     )
+
+    cache[beatmap_id].status = new_status
 
 
 ## delete

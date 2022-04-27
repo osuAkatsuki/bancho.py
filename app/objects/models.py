@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from pydantic import Field
 
 
 class OsuBeatmapRequestForm(BaseModel):
-    Filenames: list[str]
-    Ids: list[int]
+    beatmap_filenames: list[str] = Field(..., alias="Filenames")
+    beatmap_ids: list[int] = Field(..., alias="Ids")
