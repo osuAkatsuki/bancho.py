@@ -129,7 +129,6 @@ def test_write_logout(test_input, expected):
 )
 def test_write_spectator_joined(test_input, expected):
     assert app.packets.spectator_joined(test_input) == expected
-    ...
 
 
 @pytest.mark.parametrize(
