@@ -203,7 +203,8 @@ and you should see something along the lines of:
 
 many people have reported that their server is not reachable after the setup. please try this out first before asking on the discord server for help.
 > if you use cloudflare please make sure that you have set your ssl encryption mode to **full**. for this you need to go to your domain's page, then click on SSL/TLS > Overview.
-> ![Cloudflare](https://x.catboy.best/9i7NAqk.png)
+
+![Cloudflare](https://x.catboy.best/YO0UfeH.png)
 
 # Directory Structure
     .
