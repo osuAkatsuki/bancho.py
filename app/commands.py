@@ -60,8 +60,8 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.usecases.performance import ScoreDifficultyParams
-from app.utils import seconds_readable
 from app.utils import make_safe_name
+from app.utils import seconds_readable
 
 try:
     from oppai_ng.oppai import OppaiWrapper

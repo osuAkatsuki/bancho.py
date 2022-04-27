@@ -40,8 +40,8 @@ from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.utils import escape_enum
-from app.utils import pymysql_encode
 from app.utils import make_safe_name
+from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
