@@ -170,7 +170,7 @@ async def fetch_all() -> set[MapPool]:
     return mappools
 
 
-async def _populate_caches_from_database() -> None:
+async def _populate_caches() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 

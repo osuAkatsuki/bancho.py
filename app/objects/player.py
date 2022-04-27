@@ -257,7 +257,7 @@ class Player:
         stealth: bool = False,
         clan_id: Optional[int] = None,
         clan_priv: Optional[int] = None,
-        achievements: Optional[set[Achievement]] = None,
+        achievement_ids: Optional[set[int]] = None,
         geoloc: Optional[app.objects.geolocation.Geolocation] = None,
         utc_offset: int = 0,
         pm_private: bool = False,
@@ -311,7 +311,7 @@ class Player:
         self.clan_id = clan_id
         self.clan_priv = clan_priv
 
-        self.achievements = achievements or set()
+        self.achievement_ids = achievement_ids or set()
 
         # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
         self.geoloc = geoloc or {
@@ -390,7 +390,7 @@ class Player:
     def bancho_priv(self) -> int:
         """The player's privileges according to the client."""
         priv_bits = 0
-        if self.priv & Privileges.NORMAL:
+        if self.priv & Privileges.UNRESTRICTED:
             priv_bits |= ClientPrivileges.PLAYER
         if self.priv & Privileges.DONATOR:
             priv_bits |= ClientPrivileges.SUPPORTER
@@ -405,7 +405,7 @@ class Player:
     @property
     def restricted(self) -> bool:
         """Return whether the player is restricted."""
-        return not self.priv & Privileges.NORMAL
+        return not self.priv & Privileges.UNRESTRICTED
 
     @property
     def gm_stats(self) -> ModeData:

@@ -10,6 +10,7 @@ from typing import Union
 import app.packets
 import app.state.sessions
 from app import repositories
+from app import usecases
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -79,28 +80,39 @@ async def await_submissions(
     return scores, didnt_submit
 
 
-def send_data_to_clients(
+async def send_data_to_clients(
     match: Match,
     data: bytes,
     lobby: bool = True,
     immune: Sequence[int] = [],
 ) -> None:
-    """Add data to be sent to all clients in the match."""
-    match.chat.enqueue(data, immune)
+    """Add data to be sent to all clients in the match, and optionally #lobby."""
+    usecases.channels.send_data_to_clients(match.chat, data, immune)
 
-    if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
-        lchan.enqueue(data)
+    if lobby:
+        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        if lobby_channel is not None and lobby_channel.players:
+            usecases.channels.send_data_to_clients(lobby_channel, data)
 
 
-def send_match_state_to_clients(match: Match, lobby: bool = True) -> None:
+async def send_match_state_to_clients(match: Match, lobby: bool = True) -> None:
     """Enqueue `self`'s state to players in the match & lobby."""
     # TODO: hmm this is pretty bad, writes twice
 
     # send password only to users currently in the match.
-    match.chat.enqueue(app.packets.update_match(match, send_pw=True))
+    usecases.channels.send_data_to_clients(
+        match.chat,
+        app.packets.update_match(match, send_pw=True),
+    )
 
-    if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
-        lchan.enqueue(app.packets.update_match(match, send_pw=False))
+    # but not to those in the #lobby channel
+    if lobby:
+        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        if lobby_channel is not None and lobby_channel.players:
+            usecases.channels.send_data_to_clients(
+                lobby_channel,
+                app.packets.update_match(match, send_pw=False),
+            )
 
 
 def unready_players(match: Match, expected: SlotStatus = SlotStatus.ready) -> None:
@@ -110,7 +122,7 @@ def unready_players(match: Match, expected: SlotStatus = SlotStatus.ready) -> No
             s.status = SlotStatus.not_ready
 
 
-def start(match: Match) -> None:
+async def start(match: Match) -> None:
     """Start the match for all ready players with the map."""
     no_map: list[int] = []
 
@@ -123,13 +135,13 @@ def start(match: Match) -> None:
                 no_map.append(s.player.id)
 
     match.in_progress = True
-    send_data_to_clients(
+    await send_data_to_clients(
         match,
         app.packets.match_start(match),
         immune=no_map,
         lobby=False,
     )
-    send_match_state_to_clients(match)
+    await send_match_state_to_clients(match)
 
 
 def reset_scrimmage_state(match: Match) -> None:

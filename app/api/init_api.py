@@ -16,7 +16,7 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 
-import app.bg_loops
+import app.housekeeping
 import app.settings
 import app.state
 import app.utils
@@ -101,7 +101,7 @@ def init_events(asgi_app: FastAPI) -> None:
         async with app.state.services.database.connection() as db_conn:
             await app.state.sessions.init_server_state(db_conn)
 
-        await app.bg_loops.initialize_housekeeping_tasks()
+        await app.housekeeping.initialize_housekeeping_tasks()
 
         log("Startup process complete.", Ansi.LGREEN)
         log(f"Listening @ {app.settings.SERVER_ADDR}", Ansi.LMAGENTA)

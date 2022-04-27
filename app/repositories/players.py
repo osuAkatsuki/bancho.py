@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 from typing import Mapping
 from typing import MutableMapping
@@ -65,7 +66,7 @@ async def fetch(
 
     player_id = user_info["id"]
 
-    achievements = await fetch_achievements(player_id)
+    achievements = await fetch_achievement_ids(player_id)
     friends, blocks = await fetch_relationships(player_id)
     stats = await fetch_stats(player_id)
     recent_scores = await fetch_recent_scores(player_id)
@@ -93,7 +94,7 @@ async def fetch(
         stats=stats,
         friends=friends,
         blocks=blocks,
-        achievements=achievements,
+        achievement_ids=achievements,
         geoloc=geolocation_data,
         recent_scores=recent_scores,
         token=None,
@@ -103,7 +104,7 @@ async def fetch(
     # utc_offset, pm_private, login_time, tourney_client, client_details
 
     cache[player.id] = player
-    cache[player.name] = player
+    cache[app.utils.make_safe_name(player.name)] = player
 
     return player
 
@@ -144,21 +145,17 @@ async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
     return player_friends, player_blocks
 
 
-async def fetch_achievements(player_id: int) -> set[Achievement]:
+async def fetch_achievement_ids(player_id: int) -> set[int]:
     """Retrieve `player`'s achievements from sql."""
-    player_achievements = set()
-
-    for row in await app.state.services.database.fetch_all(
-        "SELECT ua.achid id FROM user_achievements ua "
-        "INNER JOIN achievements a ON a.id = ua.achid "
-        "WHERE ua.userid = :user_id",
-        {"user_id": player_id},
-    ):
-        for ach in app.state.sessions.achievements:
-            if row["id"] == ach.id:
-                player_achievements.add(ach)
-
-    return player_achievements
+    return {
+        row["id"]
+        for row in await app.state.services.database.fetch_all(
+            "SELECT ua.achid id FROM user_achievements ua "
+            "INNER JOIN achievements a ON a.id = ua.achid "
+            "WHERE ua.userid = :user_id",
+            {"user_id": player_id},
+        )
+    }
 
 
 async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
@@ -243,10 +240,34 @@ async def update_privs(player_id: int, new_privileges: int) -> None:
         player.priv = new_privileges
 
 
+async def add_donator_time(player_id: int, delta: timedelta) -> None:
+    """Add a period of time from a player's donation status."""
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = donor_end + :delta WHERE id = :id",
+        {"id": player_id, "delta": delta.total_seconds()},
+    )
+
+
+async def remove_donator_time(player_id: int, delta: timedelta) -> None:
+    """Remove a period of time from a player's donation status."""
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = donor_end - :delta WHERE id = :id",
+        {"id": player_id, "delta": delta.total_seconds()},
+    )
+
+
+async def reset_donator_time(player_id: int) -> None:
+    """Reset the time left on a player's donation status."""
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = 0 WHERE id = :id",
+        {"id": player_id},
+    )
+
+
 async def silence_until(player_id: int, until: int) -> None:
     """Silence a player until a certain time."""
     await app.state.services.database.execute(
-        "UPDATE users SET silence_end = :until WHERE id = :user_id",
+        "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
         {"silence_end": until, "user_id": player_id},
     )
 
@@ -263,6 +284,13 @@ async def unsilence(player_id: int) -> None:
 
     if player := cache.get(player_id):
         player.silence_end = 0
+
+
+async def update_latest_activity(player_id: int) -> None:
+    await app.state.services.database.execute(
+        "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
+        {"user_id": player_id},
+    )
 
 
 ## delete

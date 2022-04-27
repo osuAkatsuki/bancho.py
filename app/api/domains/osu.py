@@ -46,6 +46,8 @@ from app import repositories
 from app import responses
 from app import usecases
 from app import validation
+from app._typing import OsuClientGameModes
+from app._typing import OsuClientModes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -118,30 +120,26 @@ async def osuError(
     username: Optional[str] = Form(None, alias="u"),
     pw_md5: Optional[str] = Form(None, alias="h"),
     user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: str = Form(..., alias="osumode"),
-    game_mode: str = Form(..., alias="gamemode"),
+    osu_mode: OsuClientModes = Form(..., alias="osumode"),
+    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
     game_time: int = Form(..., alias="gametime", ge=0),
     audio_time: int = Form(..., alias="audiotime"),
     culture: str = Form(...),
     map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
-    feedback: str = Form(...),
+    feedback: Optional[str] = Form(None),
     stacktrace: str = Form(...),
     soft: bool = Form(...),
     map_count: int = Form(..., alias="beatmap_count", ge=0),
     compatibility: bool = Form(...),
-    ram: int = Form(...),
-    osu_ver: str = Form(..., alias="version"),
+    ram_used: int = Form(..., alias="ram", ge=0),
+    osu_version: str = Form(..., alias="version"),
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
     screenshot_file: Optional[UploadFile] = File(None, alias="ss"),
 ):
     """Handle an error submitted from the osu! client."""
-    if not app.settings.DEBUG:
-        # only handle osu-error in debug mode
-        return
-
     if username and pw_md5:
         player = await repositories.players.fetch(name=unquote(username))
 
@@ -155,14 +153,36 @@ async def osuError(
     else:
         player = None
 
-    err_desc = f"{feedback} ({exception})"
-    log(f'{player or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
+    await usecases.error_reporting.create(
+        player,
+        osu_mode,
+        game_mode,
+        game_time,
+        audio_time,
+        culture,
+        map_id,
+        map_md5,
+        exception,
+        feedback,
+        stacktrace,
+        soft,
+        map_count,
+        compatibility,
+        ram_used,
+        osu_version,
+        exe_hash,
+        config,
+        screenshot_file,
+    )
+
+    log(
+        f'{player or "Offline user"} sent error report: {feedback} ({exception})',
+        Ansi.LCYAN,
+    )
 
     # NOTE: this stacktrace can be a LOT of data
     if app.settings.DEBUG and len(stacktrace) < 2000:
         printc(stacktrace[:-2], Ansi.LMAGENTA)
-
-    # TODO: save error in db?
 
 
 @router.post("/web/osu-screenshot.php")
@@ -248,7 +268,7 @@ async def lastfm_handler(
         )
 
         if player.online:  # refresh their client state
-            usecases.players.logout(player)
+            await usecases.players.logout(player)
 
         return b"-3"
 
@@ -267,7 +287,7 @@ async def lastfm_handler(
             )
 
             if player.online:  # refresh their client state
-                usecases.players.logout(player)
+                await usecases.players.logout(player)
 
             return b"-3"
 
@@ -286,7 +306,7 @@ async def lastfm_handler(
             ),
         )
 
-        usecases.players.logout(player)
+        await usecases.players.logout(player)
 
         return b"-3"
 
@@ -397,7 +417,7 @@ async def submit_score(
 
     player = await repositories.players.fetch(name=unquote(username))
 
-    if player is None or usecases.players.validate_credentials(
+    if player is None or not usecases.players.validate_credentials(
         password=pw_md5.encode(),
         hashed_password=player.pw_bcrypt,  # type: ignore
     ):
@@ -455,7 +475,7 @@ async def submit_score(
         # )
 
         # if player.online: # refresh their client state
-        #     usecases.players.logout(player)
+        #     await usecases.players.logout(player)
         # return b"error: ban"
     except:
         raise
@@ -491,7 +511,7 @@ async def submit_score(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    usecases.players.update_latest_activity_soon(player)
+    app.state.loop.create_task(usecases.players.update_latest_activity(player))
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -530,7 +550,7 @@ async def submit_score(
             )
 
             if player.online: # refresh their client state
-                usecases.players.logout(player)
+                await usecases.players.logout(player)
         """
 
     """ Score submission checks completed; submit the score. """
@@ -662,7 +682,7 @@ async def submit_score(
             )
 
             if player.online:  # refresh their client state
-                usecases.players.logout(player)
+                await usecases.players.logout(player)
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can
@@ -822,8 +842,8 @@ async def submit_score(
         # construct and send achievements & ranking charts to the client
         if beatmap.awards_ranked_pp and not player.restricted:
             achievements = []
-            for achievement in app.state.sessions.achievements:
-                if achievement in player.achievements:
+            for achievement in await repositories.achievements.fetch_all():
+                if achievement.id in player.achievement_ids:
                     # player already has this achievement.
                     continue
 
@@ -1297,7 +1317,7 @@ async def beatmap_comments_handler(
 
         resp = None  # empty resp is fine
 
-    usecases.players.update_latest_activity_soon(player)
+    app.state.loop.create_task(usecases.players.update_latest_activity(player))
     return resp
 
 
@@ -1327,7 +1347,7 @@ async def get_sesonal_backgrounds():
 @router.get("/web/bancho_connect.php")
 async def bancho_connect_preflight(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    osu_ver: str = Query(..., alias="v"),
+    osu_version: str = Query(..., alias="v"),
     active_endpoint: Optional[str] = Query(None, alias="fail"),
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
     client_hash: Optional[str] = Query(None, alias="ch"),
@@ -1357,22 +1377,6 @@ async def check_updates(
 
 
 """ Misc handlers """
-
-
-if app.settings.REDIRECT_OSU_URLS:
-    # NOTE: this will likely be removed with the addition of a frontend.
-    async def osu_redirect(request: Request, _: int = Path(...)):
-        return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['path']}",
-            status_code=status.HTTP_301_MOVED_PERMANENTLY,
-        )
-
-    for pattern in (
-        "/beatmapsets/{_}",
-        "/beatmaps/{_}",
-        "/community/forums/topics/{_}",
-    ):
-        router.get(pattern)(osu_redirect)
 
 
 @router.get("/ss/{screenshot_id}.{extension}")
@@ -1475,6 +1479,21 @@ async def peppy_direct_message_handler():
         b"and is blocked from being messaged by the osu! client."
     )
 
+
+if app.settings.REDIRECT_OSU_URLS:
+    # NOTE: this will likely be removed with the addition of a frontend.
+    async def osu_redirect(request: Request, _: int = Path(...)):
+        return RedirectResponse(
+            url=f"https://osu.ppy.sh{request['path']}",
+            status_code=status.HTTP_301_MOVED_PERMANENTLY,
+        )
+
+    for pattern in (
+        "/beatmapsets/{_}",
+        "/beatmaps/{_}",
+        "/community/forums/topics/{_}",
+    ):
+        router.get(pattern)(osu_redirect)
 
 """ ingame registration """
 

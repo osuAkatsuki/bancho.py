@@ -93,22 +93,25 @@ async def fetch_by_name(name: str) -> Optional[Channel]:
 
 async def fetch_all() -> set[Channel]:
     """Fetch all channels from the cache, or database."""
-    channel_names = {
-        row["name"]
-        for row in await app.state.services.database.fetch_all(
-            "SELECT name FROM channels",
-        )
-    }
+    if cache:
+        return set(cache.values())
+    else:
+        channel_names = {
+            row["name"]
+            for row in await app.state.services.database.fetch_all(
+                "SELECT name FROM channels",
+            )
+        }
 
-    channels = set()
-    for name in channel_names:
-        if channel := await fetch_by_name(name):  # should never be false
-            channels.add(channel)
+        channels = set()
+        for name in channel_names:
+            if channel := await fetch_by_name(name):  # should never be false
+                channels.add(channel)
 
-    return channels
+        return channels
 
 
-async def _populate_caches_from_database() -> None:
+async def _populate_caches() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 

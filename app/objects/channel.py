@@ -31,8 +31,8 @@ class Channel:
         self,
         name: str,
         topic: str,
-        read_priv: int = Privileges.NORMAL,
-        write_priv: int = Privileges.NORMAL,
+        read_priv: int = Privileges.UNRESTRICTED,
+        write_priv: int = Privileges.UNRESTRICTED,
         auto_join: bool = True,
         instance: bool = False,
     ) -> None:

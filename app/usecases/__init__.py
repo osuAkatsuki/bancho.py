@@ -8,6 +8,7 @@ from . import clans
 from . import client_versioning
 from . import comments
 from . import direct
+from . import error_reporting
 from . import geolocation
 from . import mail
 from . import mappools

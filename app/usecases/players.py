@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import time
 import uuid
+from datetime import timedelta
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -122,18 +123,18 @@ async def login(player_name: str, player_password_md5: bytes) -> Optional[Player
         return player
 
 
-def logout(player: Player) -> None:
+async def logout(player: Player) -> None:
     """Log `player` out of the server."""
     # invalidate the user's token.
     player.token = ""
 
     # leave multiplayer.
     if player.match:
-        leave_match(player)
+        await leave_match(player)
 
     # stop spectating.
     if host := player.spectating:
-        remove_spectator(host, player)
+        await remove_spectator(host, player)
 
     # leave channels
     for channel in reversed(player.channels):
@@ -191,9 +192,21 @@ async def remove_privileges(player: Player, bits: int) -> None:
         player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
+async def add_donator_time(player: Player, delta: timedelta) -> None:
+    await repositories.players.add_donator_time(player.id, delta)
+
+
+async def remove_donator_time(player: Player, delta: timedelta) -> None:
+    await repositories.players.remove_donator_time(player.id, delta)
+
+
+async def reset_donator_time(player: Player) -> None:
+    await repositories.players.reset_donator_time(player.id)
+
+
 async def restrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
-    await remove_privileges(player, Privileges.NORMAL)
+    await remove_privileges(player, Privileges.UNRESTRICTED)
 
     country_acronym = player.geoloc["country"]["acronym"]
 
@@ -218,7 +231,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
     # to refresh their client-side state
     # TODO: is this really required?
     if player.online:
-        usecases.players.logout(player)
+        await logout(player)
 
     log_msg = f"{admin} restricted {player} for: {reason}."
 
@@ -231,7 +244,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
 
 async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
-    await add_privileges(player, Privileges.NORMAL)
+    await add_privileges(player, Privileges.UNRESTRICTED)
 
     country_acronym = player.geoloc["country"]["acronym"]
 
@@ -256,7 +269,7 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     # to refresh their client-side state
     # TODO: is this really required?
     if player.online:
-        logout(player)
+        await logout(player)
 
     log_msg = f"{admin} unrestricted {player} for: {reason}."
 
@@ -287,7 +300,7 @@ async def silence(player: Player, admin: Player, duration: int, reason: str) -> 
 
     # remove them from multiplayer match (if any).
     if player.match:
-        leave_match(player)
+        await leave_match(player)
 
     log(f"Silenced {player}.", Ansi.LCYAN)
 
@@ -309,7 +322,7 @@ async def unsilence(player: Player, admin: Player) -> None:
     log(f"Unsilenced {player}.", Ansi.LCYAN)
 
 
-def join_match(player: Player, match: Match, passwd: str) -> bool:
+async def join_match(player: Player, match: Match, passwd: str) -> bool:
     """Attempt to add a player to a multiplayer match."""
     if player.match:
         log(f"{player} tried to join multiple matches?")
@@ -343,8 +356,9 @@ def join_match(player: Player, match: Match, passwd: str) -> bool:
         log(f"{player} failed to join {match.chat}.", Ansi.LYELLOW)
         return False
 
-    if (lobby := app.state.sessions.channels["#lobby"]) in player.channels:
-        leave_channel(player, lobby)
+    lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+    if lobby_channel is not None and lobby_channel.players:
+        leave_channel(player, lobby_channel)
 
     slot: Slot = match.slots[0 if slotID == -1 else slotID]
 
@@ -366,7 +380,7 @@ def join_match(player: Player, match: Match, passwd: str) -> bool:
 ### TODO:REFACTOR: refactor the usage of usecases in these next few functions
 
 
-def leave_match(player: Player) -> None:
+async def leave_match(player: Player) -> None:
     """Attempt to remove a player from their multiplayer match."""
     if not player.match:
         if app.settings.DEBUG:
@@ -405,9 +419,10 @@ def leave_match(player: Player) -> None:
 
         app.state.sessions.matches.remove(player.match)
 
-        if lobby := app.state.sessions.channels["#lobby"]:
+        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        if lobby_channel is not None:
             usecases.channels.send_data_to_clients(
-                lobby,
+                lobby_channel,
                 app.packets.dispose_match(player.match.id),
             )
 
@@ -428,7 +443,7 @@ def leave_match(player: Player) -> None:
             )
 
         # notify others of our deprature
-        usecases.multiplayer.send_match_state_to_clients(player.match)
+        await usecases.multiplayer.send_match_state_to_clients(player.match)
 
     player.match = None
 
@@ -508,25 +523,27 @@ def leave_channel(player: Player, channel: Channel, kick: bool = True) -> None:
         log(f"{player} left {channel}.")
 
 
-def add_spectator(player: Player, other: Player) -> None:
+async def add_spectator(player: Player, other: Player) -> None:
     """Attempt to add `other` to `player`'s spectators."""
     chan_name = f"#spec_{player.id}"
 
-    if not (spec_chan := app.state.sessions.channels[chan_name]):
+    spec_channel = await repositories.channels.fetch_by_name(chan_name)
+    if spec_channel is None:
         # spectator chan doesn't exist, create it.
-        spec_chan = Channel(
+        spec_channel = await repositories.channels.create(
             name=chan_name,
             topic=f"{player.name}'s spectator channel.'",
+            read_priv=Privileges.ANYONE,
+            write_priv=Privileges.UNRESTRICTED,
             auto_join=False,
             instance=True,
         )
 
-        join_channel(player, spec_chan)
-        app.state.sessions.channels.append(spec_chan)
+        join_channel(player, spec_channel)
 
     # attempt to join their spectator channel.
-    if not join_channel(other, spec_chan):
-        log(f"{player} failed to join {spec_chan}?", Ansi.LYELLOW)
+    if not join_channel(other, spec_channel):
+        log(f"{player} failed to join {spec_channel}?", Ansi.LYELLOW)
         return
 
     if not other.stealth:
@@ -548,12 +565,14 @@ def add_spectator(player: Player, other: Player) -> None:
     log(f"{other} is now spectating {player}.")
 
 
-def remove_spectator(player: Player, other: Player) -> None:
+async def remove_spectator(player: Player, other: Player) -> None:
     """Attempt to remove `other` from `player`'s spectators."""
     player.spectators.remove(other)
     other.spectating = None
 
-    channel = app.state.sessions.channels[f"#spec_{player.id}"]
+    channel = await repositories.channels.fetch_by_name(f"#spec_{player.id}")
+    assert channel is not None
+
     leave_channel(other, channel)
 
     if not player.spectators:
@@ -649,14 +668,14 @@ async def remove_block(player: Player, other: Player) -> None:
     log(f"{player} unblocked {other}.")
 
 
-async def unlock_achievement(player: Player, achievement: "Achievement") -> None:
+async def unlock_achievement(player: Player, achievement: Achievement) -> None:
     """Unlock `ach` for `player`, storing in both cache & sql."""
     await app.state.services.database.execute(
         "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
         {"user_id": player.id, "ach_id": achievement.id},
     )
 
-    player.achievements.add(achievement)
+    player.achievement_ids.add(achievement.id)
 
 
 async def update_rank(player: Player, mode: GameMode) -> int:
@@ -711,13 +730,9 @@ def send_current_menu(player: Player) -> None:
     send_bot(player, "\n".join(msg))
 
 
-def update_latest_activity_soon(player: Player) -> None:
+async def update_latest_activity(player: Player) -> None:
     """Update the player's latest activity in the database."""
-    task = app.state.services.database.execute(
-        "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
-        {"user_id": player.id},
-    )
-    app.state.loop.create_task(task)
+    await repositories.players.update_latest_activity(player.id)
 
 
 def send(

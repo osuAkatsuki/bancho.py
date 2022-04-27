@@ -128,20 +128,25 @@ async def fetch_by_tag(tag: ClanTag) -> Optional[Clan]:
 
 async def fetch_all() -> set[Clan]:
     """Fetch all clans from the cache, or database."""
-    clan_ids = {
-        row["id"]
-        for row in await app.state.services.database.fetch_all("SELECT id FROM clans")
-    }
+    if cache:
+        return set(cache.values())
+    else:
+        clan_ids = {
+            row["id"]
+            for row in await app.state.services.database.fetch_all(
+                "SELECT id FROM clans",
+            )
+        }
 
-    clans = set()
-    for id in clan_ids:
-        if clan := await fetch_by_id(id):  # should never be false
-            clans.add(clan)
+        clans = set()
+        for id in clan_ids:
+            if clan := await fetch_by_id(id):  # should never be false
+                clans.add(clan)
 
-    return clans
+        return clans
 
 
-async def _populate_caches_from_database() -> None:
+async def _populate_caches() -> None:
     """Populate the cache with all values from the database."""
     all_resources = await fetch_all()
 

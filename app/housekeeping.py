@@ -52,11 +52,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             assert player is not None
 
             await usecases.players.remove_privileges(player, Privileges.DONATOR)
-
-            await app.state.services.database.execute(
-                "UPDATE users SET donor_end = 0 WHERE id = :id",
-                {"id": player.id},
-            )
+            await usecases.players.reset_donator_time(player)
 
             if player.online:
                 player.enqueue(
@@ -78,7 +74,7 @@ async def _disconnect_ghosts(interval: int) -> None:
         for player in app.state.sessions.players:
             if current_time - player.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f"Auto-dced {player}.", Ansi.LMAGENTA)
-                usecases.players.logout(player)
+                await usecases.players.logout(player)
 
 
 async def _update_bot_status(interval: int) -> None:

@@ -10,6 +10,7 @@ from app.logging import Ansi
 from app.logging import log
 
 
+# TODO: move to models?
 class OsuAPIV1BeatmapResponse(TypedDict):
     """\
     A typed dictionary representing a beatmap from the v1 osu! API.

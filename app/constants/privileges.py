@@ -6,8 +6,10 @@ __all__ = ("Privileges", "ClientPrivileges", "ClanPrivileges")
 class Privileges:
     """Server side user privileges."""
 
+    ANYONE = 0
+
     # privileges intended for all normal players.
-    NORMAL = 1 << 0  # is an unbanned player.
+    UNRESTRICTED = 1 << 0  # is an unbanned player.
     VERIFIED = 1 << 1  # has logged in to the server in-game.
 
     # has bypass to low-ceiling anticheat measures (trusted).
@@ -21,7 +23,7 @@ class Privileges:
     ALUMNI = 1 << 7
 
     # staff permissions, able to manage server app.state.
-    TOURNAMENT = 1 << 10  # able to manage match state without host.
+    TOURNEY_MANAGER = 1 << 10  # able to manage match state without host.
     NOMINATOR = 1 << 11  # able to manage maps ranked status.
     MODERATOR = 1 << 12  # able to manage users (level 1).
     ADMINISTRATOR = 1 << 13  # able to manage users (level 2).
@@ -32,32 +34,32 @@ class Privileges:
 
 
 def privileges_to_str(privileges: int) -> str:
-    l = []
+    privilege_strings = []
 
-    if privileges & Privileges.NORMAL:
-        l.append("Normal")
+    if privileges & Privileges.UNRESTRICTED:
+        privilege_strings.append("Unrestricted")
     if privileges & Privileges.VERIFIED:
-        l.append("Verified")
+        privilege_strings.append("Verified")
     if privileges & Privileges.WHITELISTED:
-        l.append("Whitelisted")
+        privilege_strings.append("Whitelisted")
     if privileges & Privileges.SUPPORTER:
-        l.append("Supporter")
+        privilege_strings.append("Supporter")
     if privileges & Privileges.PREMIUM:
-        l.append("Premium")
+        privilege_strings.append("Premium")
     if privileges & Privileges.ALUMNI:
-        l.append("Alumni")
-    if privileges & Privileges.TOURNAMENT:
-        l.append("Tournament")
+        privilege_strings.append("Alumni")
+    if privileges & Privileges.TOURNEY_MANAGER:
+        privilege_strings.append("Tourney Manager")
     if privileges & Privileges.NOMINATOR:
-        l.append("Nominator")
+        privilege_strings.append("Nominator")
     if privileges & Privileges.MODERATOR:
-        l.append("Moderator")
+        privilege_strings.append("Moderator")
     if privileges & Privileges.ADMINISTRATOR:
-        l.append("Administrator")
+        privilege_strings.append("Administrator")
     if privileges & Privileges.DEVELOPER:
-        l.append("Developer")
+        privilege_strings.append("Developer")
 
-    return " | ".join(l)
+    return " | ".join(privilege_strings)
 
 
 class ClientPrivileges:
