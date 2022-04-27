@@ -41,6 +41,7 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.utils import escape_enum
 from app.utils import pymysql_encode
+from app.utils import make_safe_name
 
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
@@ -470,7 +471,7 @@ class Player:
     @staticmethod
     def make_safe(name: str) -> str:
         """Return a name safe for usage in sql."""
-        return name.lower().replace(" ", "_")
+        return make_safe_name(name)
 
     def logout(self) -> None:
         """Log `self` out of the server."""

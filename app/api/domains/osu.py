@@ -68,6 +68,7 @@ from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn
 from app.utils import escape_enum
 from app.utils import pymysql_encode
+from app.utils import make_safe_name
 
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -1789,7 +1790,7 @@ async def register_account(
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
     real_ip: str = Header(..., alias="X-Real-IP"),
 ):
-    safe_name = username.lower().replace(" ", "_")
+    safe_name = make_safe_name(username)
 
     if not all((username, email, pw_plaintext)):
         return Response(
