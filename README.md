@@ -199,6 +199,11 @@ and you should see something along the lines of:
 
 ![ada](https://i.cmyui.xyz/ld-iZXysVXqwhM8.png)
 
+## Troubleshooting
+
+many people have reported that their server is not reachable after the setup. please try this out first before asking on the discord server for help.
+> please make sure that you have set your ssl encryption mode to **full** via cloudflare.
+
 # Directory Structure
     .
     ├── app                   # the server - logic, classes and objects
