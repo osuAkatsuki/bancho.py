@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import time
 import uuid
@@ -21,12 +22,16 @@ from app.constants.privileges import Privileges
 from app.discord import DiscordWebhook
 from app.logging import Ansi
 from app.logging import log
+from app.objects.beatmap import Beatmap
 from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
+from app.objects.score import Grade
+from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
@@ -700,6 +705,129 @@ async def update_rank(player: Player, mode: GameMode) -> int:
         global_rank = await repositories.players.get_global_rank(player.id, mode)
 
     return global_rank
+
+
+async def update_stats(
+    player: Player,
+    score: Score,
+    beatmap: Beatmap,
+) -> None:
+    # get the current stats, and take a
+    # shallow copy for the response charts.
+    stats = player.gm_stats
+
+    # stuff update for all submitted scores
+    stats.playtime += score.time_elapsed // 1000
+    stats.plays += 1
+    stats.tscore += score.score
+    stats.total_hits += score.n300 + score.n100 + score.n50
+
+    if score.mode.as_vanilla in (1, 3):
+        # taiko uses geki & katu for hitting big notes with 2 keys
+        # mania uses geki & katu for rainbow 300 & 200
+        stats.total_hits += score.ngeki + score.nkatu
+
+    stats_query_l = [
+        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
+        "total_hits = :total_hits",
+    ]
+
+    stats_query_args: dict[str, object] = {
+        "plays": stats.plays,
+        "playtime": stats.playtime,
+        "tscore": stats.tscore,
+        "total_hits": stats.total_hits,
+    }
+
+    if score.passed and beatmap.has_leaderboard:
+        # player passed & map is ranked, approved, or loved.
+
+        if score.max_combo > stats.max_combo:
+            stats.max_combo = score.max_combo
+            stats_query_l.append("max_combo = :max_combo")
+            stats_query_args["max_combo"] = stats.max_combo
+
+        if beatmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+            # map is ranked or approved, and it's our (new)
+            # best score on the map. update the player's
+            # ranked score, grades, pp, acc and global rank.
+
+            additional_rscore = score.score
+            if score.prev_best:
+                # we previously had a score, so remove
+                # it's score from our ranked score.
+                additional_rscore -= score.prev_best.score
+
+                if score.grade != score.prev_best.grade:
+                    if score.grade >= Grade.A:
+                        stats.grades[score.grade] += 1
+                        grade_col = format(score.grade, "stats_column")
+                        stats_query_l.append(f"{grade_col} = {grade_col} + 1")
+
+                    if score.prev_best.grade >= Grade.A:
+                        stats.grades[score.prev_best.grade] -= 1
+                        grade_col = format(score.prev_best.grade, "stats_column")
+                        stats_query_l.append(f"{grade_col} = {grade_col} - 1")
+            else:
+                # this is our first submitted score on the map
+                if score.grade >= Grade.A:
+                    stats.grades[score.grade] += 1
+                    grade_col = format(score.grade, "stats_column")
+                    stats_query_l.append(f"{grade_col} = {grade_col} + 1")
+
+            stats.rscore += additional_rscore
+            stats_query_l.append("rscore = :rscore")
+            stats_query_args["rscore"] = stats.rscore
+
+            # fetch scores sorted by pp for total acc/pp calc
+            # NOTE: we select all plays (and not just top100)
+            # because bonus pp counts the total amount of ranked
+            # scores. i'm aware this scales horribly and it'll
+            # likely be split into two queries in the future.
+            best_scores = await app.state.services.database.fetch_all(
+                "SELECT s.pp, s.acc FROM scores s "
+                "INNER JOIN maps m ON s.map_md5 = m.md5 "
+                "WHERE s.userid = :user_id AND s.mode = :mode "
+                "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
+                "ORDER BY s.pp DESC",
+                {"user_id": player.id, "mode": score.mode},
+            )
+
+            total_scores = len(best_scores)
+            top_100_pp = best_scores[:100]
+
+            # calculate new total weighted accuracy
+            weighted_acc = sum(
+                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
+            )
+            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
+            stats.acc = (weighted_acc * bonus_acc) / 100
+
+            # add acc to query
+            stats_query_l.append("acc = :acc")
+            stats_query_args["acc"] = stats.acc
+
+            # calculate new total weighted pp
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
+            bonus_pp = 416.6667 * (1 - 0.95**total_scores)
+            stats.pp = round(weighted_pp + bonus_pp)
+
+            # add pp to query
+            stats_query_l.append("pp = :pp")
+            stats_query_args["pp"] = stats.pp
+
+            # update global & country ranking
+            stats.rank = await update_rank(player, score.mode)
+
+    # create a single querystring from the list of updates
+    stats_query = ", ".join(stats_query_l)
+
+    stats_query += " WHERE id = :user_id AND mode = :mode"
+    stats_query_args["user_id"] = player.id
+    stats_query_args["mode"] = score.mode.value
+
+    # send any stat changes to sql, and other players
+    await app.state.services.database.execute(stats_query, stats_query_args)
 
 
 def send_menu_clear(player: Player) -> None:

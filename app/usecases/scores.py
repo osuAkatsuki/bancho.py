@@ -22,47 +22,63 @@ from app.objects.player import Player
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 
+## create
 
-def validate_score_submission_data(
-    score: Score,
-    unique_ids: str,
-    osu_version: str,
-    client_hash_decoded: str,
-    updated_beatmap_hash: str,
-    storyboard_checksum: Optional[str],
-    login_details: ClientDetails,
-):
-    """Validate score submission checksums and data are non-fraudulent."""
-    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
-    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
-    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
 
-    assert osu_version == f"{login_details.osu_version.date:%Y%m%d}"
-    assert client_hash_decoded == login_details.client_hash
-    assert login_details is not None
+async def submit(score: Score, beatmap: Beatmap, player: Player) -> int:
+    """Submit a score to the database."""
+    if score.status == SubmissionStatus.BEST:
+        # this score is our best score.
+        # update any preexisting personal best
+        # records with SubmissionStatus.SUBMITTED.
+        await app.state.services.database.execute(
+            "UPDATE scores SET status = 1 "
+            "WHERE status = 2 AND map_md5 = :map_md5 "
+            "AND userid = :user_id AND mode = :mode",
+            {
+                "map_md5": beatmap.md5,
+                "user_id": player.id,
+                "mode": score.mode,
+            },
+        )
 
-    # assert unique ids (c1) are correct and match login params
-    assert (
-        unique_id1_md5 == login_details.uninstall_md5
-    ), f"unique_id1 mismatch ({unique_id1_md5} != {login_details.uninstall_md5})"
-    assert (
-        unique_id2_md5 == login_details.disk_signature_md5
-    ), f"unique_id2 mismatch ({unique_id2_md5} != {login_details.disk_signature_md5})"
-
-    # assert online checksums match
-    server_score_checksum = score.compute_online_checksum(
-        osu_version=osu_version,
-        osu_client_hash=client_hash_decoded,
-        storyboard_checksum=storyboard_checksum or "",
+    score_id = await app.state.services.database.execute(
+        "INSERT INTO scores "
+        "VALUES (NULL, "
+        ":map_md5, :score, :pp, :acc, "
+        ":max_combo, :mods, :n300, :n100, "
+        ":n50, :nmiss, :ngeki, :nkatu, "
+        ":grade, :status, :mode, :play_time, "
+        ":time_elapsed, :client_flags, :user_id, :perfect, "
+        ":checksum)",
+        {
+            "map_md5": beatmap.md5,
+            "score": score.score,
+            "pp": score.pp,
+            "acc": score.acc,
+            "max_combo": score.max_combo,
+            "mods": score.mods,
+            "n300": score.n300,
+            "n100": score.n100,
+            "n50": score.n50,
+            "nmiss": score.nmiss,
+            "ngeki": score.ngeki,
+            "nkatu": score.nkatu,
+            "grade": score.grade.name,
+            "status": score.status,
+            "mode": score.mode,
+            "play_time": score.server_time,
+            "time_elapsed": score.time_elapsed,
+            "client_flags": score.client_flags,
+            "user_id": player.id,
+            "perfect": score.perfect,
+            "checksum": score.client_checksum,
+        },
     )
-    assert (
-        score.client_checksum == server_score_checksum
-    ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
+    return score_id
 
-    # assert beatmap hashes match
-    assert (
-        updated_beatmap_hash == score.bmap_md5
-    ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {score.bmap_md5}"
+
+## read
 
 
 def parse_form_data_score_params(
@@ -257,7 +273,7 @@ def calculate_accuracy(
         raise Exception(f"Invalid vanilla mode {vanilla_mode}")
 
 
-""" Methods for updating a score. """
+## update
 
 
 async def increment_replay_views(player_id: int, mode: int) -> None:
@@ -269,3 +285,6 @@ async def increment_replay_views(player_id: int, mode: int) -> None:
         "WHERE id = :user_id AND mode = :mode",
         {"user_id": player_id, "mode": mode},
     )
+
+
+## delete

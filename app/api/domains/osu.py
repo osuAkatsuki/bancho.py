@@ -1,6 +1,7 @@
 """ osu: handle connections from web, api, and beyond? """
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 import random
@@ -353,13 +354,6 @@ async def get_beatmap_set_information(
     )
 
 
-T = TypeVar("T", bound=Union[int, float])
-
-
-def chart_entry(name: str, before: Optional[T], after: T) -> str:
-    return f"{name}Before:{before or ''}|{name}After:{after}"
-
-
 @router.post("/web/osu-submit-modular-selector.php")
 async def submit_score(
     request: Request,
@@ -457,7 +451,7 @@ async def submit_score(
 
     ## perform checksum validation
     try:
-        usecases.scores.validate_score_submission_data(
+        validation.score_submission_checksums(
             score,
             unique_ids,
             osu_version,
@@ -484,38 +478,28 @@ async def submit_score(
     except:
         raise
 
-    if beatmap is not None:
-        osu_file_path = BEATMAPS_PATH / f"{beatmap.id}.osu"
-        if await usecases.beatmaps.ensure_local_osu_file(
-            osu_file_path,
-            beatmap.id,
-            beatmap.md5,
-        ):
-            score.pp, score.sr = usecases.scores.calculate_performance(
-                score,
-                osu_file_path,
-            )
+    osu_file_path = BEATMAPS_PATH / f"{beatmap.id}.osu"
+    if await usecases.beatmaps.ensure_local_osu_file(
+        osu_file_path,
+        beatmap.id,
+        beatmap.md5,
+    ):
+        score.pp, score.sr = usecases.scores.calculate_performance(score, osu_file_path)
 
-            if score.passed:
-                await usecases.scores.calculate_status(score, beatmap, player)
-
-                if beatmap.status != RankedStatus.Pending:
-                    score.rank = await usecases.scores.calculate_placement(
-                        score,
-                        beatmap,
-                    )
-            else:
-                score.status = SubmissionStatus.FAILED
-    else:
-        score.pp = score.sr = 0.0
         if score.passed:
-            score.status = SubmissionStatus.SUBMITTED
+            await usecases.scores.calculate_status(score, beatmap, player)
+
+            if beatmap.status != RankedStatus.Pending:
+                score.rank = await usecases.scores.calculate_placement(
+                    score,
+                    beatmap,
+                )
         else:
             score.status = SubmissionStatus.FAILED
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    app.state.loop.create_task(usecases.players.update_latest_activity(player))
+    asyncio.create_task(usecases.players.update_latest_activity(player))
 
     # attempt to update their stats if their
     # gm/gm-affecting-mods change at all.
@@ -567,7 +551,16 @@ async def submit_score(
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if beatmap.has_leaderboard:
-            if score.mode < GameMode.RELAX_OSU and beatmap.status == RankedStatus.Loved:
+            if (
+                score.mode
+                in (
+                    GameMode.VANILLA_OSU,
+                    GameMode.VANILLA_TAIKO,
+                    GameMode.VANILLA_CATCH,
+                    GameMode.VANILLA_MANIA,
+                )
+                and beatmap.status == RankedStatus.Loved
+            ):
                 # use score for vanilla loved only
                 performance = f"{score.score:,} score"
             else:
@@ -624,53 +617,7 @@ async def submit_score(
                         to_self=True,
                     )
 
-        # this score is our best score.
-        # update any preexisting personal best
-        # records with SubmissionStatus.SUBMITTED.
-        await db_conn.execute(
-            "UPDATE scores SET status = 1 "
-            "WHERE status = 2 AND map_md5 = :map_md5 "
-            "AND userid = :user_id AND mode = :mode",
-            {
-                "map_md5": beatmap.md5,
-                "user_id": player.id,
-                "mode": score.mode,
-            },
-        )
-
-    score.id = await db_conn.execute(
-        "INSERT INTO scores "
-        "VALUES (NULL, "
-        ":map_md5, :score, :pp, :acc, "
-        ":max_combo, :mods, :n300, :n100, "
-        ":n50, :nmiss, :ngeki, :nkatu, "
-        ":grade, :status, :mode, :play_time, "
-        ":time_elapsed, :client_flags, :user_id, :perfect, "
-        ":checksum)",
-        {
-            "map_md5": beatmap.md5,
-            "score": score.score,
-            "pp": score.pp,
-            "acc": score.acc,
-            "max_combo": score.max_combo,
-            "mods": score.mods,
-            "n300": score.n300,
-            "n100": score.n100,
-            "n50": score.n50,
-            "nmiss": score.nmiss,
-            "ngeki": score.ngeki,
-            "nkatu": score.nkatu,
-            "grade": score.grade.name,
-            "status": score.status,
-            "mode": score.mode,
-            "play_time": score.server_time,
-            "time_elapsed": score.time_elapsed,
-            "client_flags": score.client_flags,
-            "user_id": player.id,
-            "perfect": score.perfect,
-            "checksum": score.client_checksum,
-        },
-    )
+    score.id = await usecases.scores.submit(score, beatmap, player)
 
     if score.passed:
         replay_data = await replay_file.read()
@@ -695,142 +642,21 @@ async def submit_score(
             replay_file = REPLAYS_PATH / f"{score.id}.osr"
             replay_file.write_bytes(replay_data)
 
-    """ Update the user's & beatmap's stats """
+    prev_stats = copy.copy(player.gm_stats)
 
-    # get the current stats, and take a
-    # shallow copy for the response charts.
-    stats = player.gm_stats
-    prev_stats = copy.copy(stats)
-
-    # stuff update for all submitted scores
-    stats.playtime += score.time_elapsed // 1000
-    stats.plays += 1
-    stats.tscore += score.score
-    stats.total_hits += score.n300 + score.n100 + score.n50
-
-    if score.mode.as_vanilla in (1, 3):
-        # taiko uses geki & katu for hitting big notes with 2 keys
-        # mania uses geki & katu for rainbow 300 & 200
-        stats.total_hits += score.ngeki + score.nkatu
-
-    stats_query_l = [
-        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
-        "total_hits = :total_hits",
-    ]
-
-    stats_query_args: dict[str, object] = {
-        "plays": stats.plays,
-        "playtime": stats.playtime,
-        "tscore": stats.tscore,
-        "total_hits": stats.total_hits,
-    }
-
-    if score.passed and beatmap.has_leaderboard:
-        # player passed & map is ranked, approved, or loved.
-
-        if score.max_combo > stats.max_combo:
-            stats.max_combo = score.max_combo
-            stats_query_l.append("max_combo = :max_combo")
-            stats_query_args["max_combo"] = stats.max_combo
-
-        if beatmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
-            # map is ranked or approved, and it's our (new)
-            # best score on the map. update the player's
-            # ranked score, grades, pp, acc and global rank.
-
-            additional_rscore = score.score
-            if score.prev_best:
-                # we previously had a score, so remove
-                # it's score from our ranked score.
-                additional_rscore -= score.prev_best.score
-
-                if score.grade != score.prev_best.grade:
-                    if score.grade >= Grade.A:
-                        stats.grades[score.grade] += 1
-                        grade_col = format(score.grade, "stats_column")
-                        stats_query_l.append(f"{grade_col} = {grade_col} + 1")
-
-                    if score.prev_best.grade >= Grade.A:
-                        stats.grades[score.prev_best.grade] -= 1
-                        grade_col = format(score.prev_best.grade, "stats_column")
-                        stats_query_l.append(f"{grade_col} = {grade_col} - 1")
-            else:
-                # this is our first submitted score on the map
-                if score.grade >= Grade.A:
-                    stats.grades[score.grade] += 1
-                    grade_col = format(score.grade, "stats_column")
-                    stats_query_l.append(f"{grade_col} = {grade_col} + 1")
-
-            stats.rscore += additional_rscore
-            stats_query_l.append("rscore = :rscore")
-            stats_query_args["rscore"] = stats.rscore
-
-            # fetch scores sorted by pp for total acc/pp calc
-            # NOTE: we select all plays (and not just top100)
-            # because bonus pp counts the total amount of ranked
-            # scores. i'm aware this scales horribly and it'll
-            # likely be split into two queries in the future.
-            best_scores = await db_conn.fetch_all(
-                "SELECT s.pp, s.acc FROM scores s "
-                "INNER JOIN maps m ON s.map_md5 = m.md5 "
-                "WHERE s.userid = :user_id AND s.mode = :mode "
-                "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
-                "ORDER BY s.pp DESC",
-                {"user_id": player.id, "mode": score.mode},
-            )
-
-            total_scores = len(best_scores)
-            top_100_pp = best_scores[:100]
-
-            # calculate new total weighted accuracy
-            weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
-            )
-            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
-            stats.acc = (weighted_acc * bonus_acc) / 100
-
-            # add acc to query
-            stats_query_l.append("acc = :acc")
-            stats_query_args["acc"] = stats.acc
-
-            # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
-            bonus_pp = 416.6667 * (1 - 0.95**total_scores)
-            stats.pp = round(weighted_pp + bonus_pp)
-
-            # add pp to query
-            stats_query_l.append("pp = :pp")
-            stats_query_args["pp"] = stats.pp
-
-            # update global & country ranking
-            stats.rank = await usecases.players.update_rank(player, score.mode)
-
-    # create a single querystring from the list of updates
-    stats_query = ", ".join(stats_query_l)
-
-    stats_query += " WHERE id = :user_id AND mode = :mode"
-    stats_query_args["user_id"] = player.id
-    stats_query_args["mode"] = score.mode.value
-
-    # send any stat changes to sql, and other players
-    await db_conn.execute(stats_query, stats_query_args)
+    # update the user's stats from the new score
+    await usecases.players.update_stats(player, score, beatmap)
 
     if not player.restricted:
         # enqueue new stats info to all other users
         app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-        # update beatmap with new stats
-        beatmap.plays += 1
-        if score.passed:
-            beatmap.passes += 1
-
-        await db_conn.execute(
-            "UPDATE maps SET plays = :plays, passes = :passes WHERE md5 = :map_md5",
-            {
-                "plays": beatmap.plays,
-                "passes": beatmap.passes,
-                "map_md5": beatmap.md5,
-            },
+        # update the beatmap's playcount (& passcount in if passed) db
+        asyncio.create_task(
+            usecases.beatmaps.update_playcounts(
+                beatmap,
+                increment_passes=score.passed,
+            ),
         )
 
     # update their recent score
@@ -838,14 +664,10 @@ async def submit_score(
 
     """ score submission charts """
 
-    if not score.passed or score.mode >= GameMode.RELAX_OSU:
-        # charts & achievements won't be shown ingame.
-        ret = b"error: no"
-
-    else:
-        # construct and send achievements & ranking charts to the client
+    if score.passed:
+        # unlock any achievements acquired from this score
+        achievements_unlocked = []
         if beatmap.awards_ranked_pp and not player.restricted:
-            achievements = []
             for achievement in await repositories.achievements.fetch_all():
                 if achievement.id in player.achievement_ids:
                     # player already has this achievement.
@@ -853,75 +675,34 @@ async def submit_score(
 
                 if achievement.condition(score, score.mode.as_vanilla):
                     await usecases.players.unlock_achievement(player, achievement)
-                    achievements.append(achievement)
+                    achievements_unlocked.append(achievement)
 
-            achievements_str = "/".join(map(repr, achievements))
-        else:
-            achievements_str = ""
-
-        # create score submission charts for osu! client to display
-
-        if score.prev_best:
-            beatmap_ranking_chart_entries = (
-                chart_entry("rank", score.prev_best.rank, score.rank),
-                chart_entry("rankedScore", score.prev_best.score, score.score),
-                chart_entry("totalScore", score.prev_best.score, score.score),
-                chart_entry("maxCombo", score.prev_best.max_combo, score.max_combo),
-                chart_entry(
-                    "accuracy",
-                    round(score.prev_best.acc, 2),
-                    round(score.acc, 2),
-                ),
-                chart_entry("pp", score.prev_best.pp, score.pp),
+        if score.mode in (
+            GameMode.VANILLA_OSU,
+            GameMode.VANILLA_TAIKO,
+            GameMode.VANILLA_CATCH,
+            GameMode.VANILLA_MANIA,
+        ):
+            # create the charts displayed in the osu! client under a score
+            ret = responses.score_submission_charts(
+                player,
+                beatmap,
+                player.gm_stats,
+                prev_stats,
+                score,
+                score.prev_best,  # type: ignore
+                achievements_unlocked,
             )
         else:
-            # no previous best score
-            beatmap_ranking_chart_entries = (
-                chart_entry("rank", None, score.rank),
-                chart_entry("rankedScore", None, score.score),
-                chart_entry("totalScore", None, score.score),
-                chart_entry("maxCombo", None, score.max_combo),
-                chart_entry("accuracy", None, round(score.acc, 2)),
-                chart_entry("pp", None, score.pp),
-            )
-
-        overall_ranking_chart_entries = (
-            chart_entry("rank", prev_stats.rank, stats.rank),
-            chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
-            chart_entry("totalScore", prev_stats.tscore, stats.tscore),
-            chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
-            chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
-            chart_entry("pp", prev_stats.pp, stats.pp),
-        )
-
-        submission_charts = [
-            # beatmap info chart
-            f"beatmapId:{beatmap.id}",
-            f"beatmapSetId:{beatmap.set_id}",
-            f"beatmapPlaycount:{beatmap.plays}",
-            f"beatmapPasscount:{beatmap.passes}",
-            f"approvedDate:{beatmap.last_update}",
-            "\n",
-            # beatmap ranking chart
-            "chartId:beatmap",
-            f"chartUrl:https://osu.{app.settings.DOMAIN}/beatmapsets/{beatmap.set_id}",
-            "chartName:Beatmap Ranking",
-            *beatmap_ranking_chart_entries,
-            f"onlineScoreId:{score.id}",
-            "\n",
-            # overall ranking chart
-            "chartId:overall",
-            f"chartUrl:https://{app.settings.DOMAIN}/u/{player.id}",
-            "chartName:Overall Ranking",
-            *overall_ranking_chart_entries,
-            f"achievements-new:{achievements_str}",
-        ]
-
-        ret = "|".join(submission_charts).encode()
+            # (charts are not sent with relax & autopilot)
+            ret = b"error: no"
+    else:
+        # (score failed)
+        ret = b"error: no"
 
     log(
         f"[{score.mode!r}] {player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {stats.pp:,}pp)",
+        f"({score.status!r}, {score.pp:,.2f}pp / {player.gm_stats.pp:,}pp)",
         Ansi.LGREEN,
     )
 
@@ -1321,7 +1102,7 @@ async def beatmap_comments_handler(
 
         resp = None  # empty resp is fine
 
-    app.state.loop.create_task(usecases.players.update_latest_activity(player))
+    asyncio.create_task(usecases.players.update_latest_activity(player))
     return resp
 
 

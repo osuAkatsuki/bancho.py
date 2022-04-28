@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 from typing import Mapping
+from typing import Optional
 
 import aiohttp
 
@@ -13,6 +14,8 @@ import app.state.services
 import app.state.sessions
 import app.utils
 from app.constants import regexes
+from app.objects.player import ClientDetails
+from app.objects.score import Score
 
 
 async def osu_registration(
@@ -100,3 +103,45 @@ async def osu_registration(
                 )
 
     return errors
+
+
+def score_submission_checksums(
+    score: Score,
+    unique_ids: str,
+    osu_version: str,
+    client_hash_decoded: str,
+    updated_beatmap_hash: str,
+    storyboard_checksum: Optional[str],
+    login_details: ClientDetails,
+):
+    """Validate score submission checksums and data are non-fraudulent."""
+    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
+    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
+    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
+
+    assert osu_version == f"{login_details.osu_version.date:%Y%m%d}"
+    assert client_hash_decoded == login_details.client_hash
+    assert login_details is not None
+
+    # assert unique ids (c1) are correct and match login params
+    assert (
+        unique_id1_md5 == login_details.uninstall_md5
+    ), f"unique_id1 mismatch ({unique_id1_md5} != {login_details.uninstall_md5})"
+    assert (
+        unique_id2_md5 == login_details.disk_signature_md5
+    ), f"unique_id2 mismatch ({unique_id2_md5} != {login_details.disk_signature_md5})"
+
+    # assert online checksums match
+    server_score_checksum = score.compute_online_checksum(
+        osu_version=osu_version,
+        osu_client_hash=client_hash_decoded,
+        storyboard_checksum=storyboard_checksum or "",
+    )
+    assert (
+        score.client_checksum == server_score_checksum
+    ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
+
+    # assert beatmap hashes match
+    assert (
+        updated_beatmap_hash == score.bmap_md5
+    ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {score.bmap_md5}"

@@ -116,5 +116,13 @@ async def update_status(beatmap_id: int, new_status: RankedStatus) -> None:
     cache[beatmap_id].status = new_status
 
 
+async def update_playcounts(beatmap_id: int, plays: int, passes: int) -> None:
+    """Update a beatmaps playcounts in the database."""
+    await app.state.services.database.execute(
+        "UPDATE maps SET plays = :plays, passes = :passes WHERE id = :beatmap_id",
+        {"plays": plays, "passes": passes, "beatmap_id": beatmap_id},
+    )
+
+
 ## delete
 # TODO: beatmap submission
