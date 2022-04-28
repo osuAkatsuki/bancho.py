@@ -61,7 +61,6 @@ from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.usecases.performance import ScoreDifficultyParams
 
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 FIRST_BANCHOPY_USER_ID = 3
 
@@ -171,7 +170,7 @@ def register(
 
 @register(ClientPackets.PING, restricted=True)
 class Ping(BasePacket):
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         pass  # ping be like
 
 
@@ -197,18 +196,18 @@ class ChangeAction(BasePacket):
 
         self.map_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         # update the user's status.
-        p.status.action = Action(self.action)
-        p.status.info_text = self.info_text
-        p.status.map_md5 = self.map_md5
-        p.status.mods = Mods(self.mods)
-        p.status.mode = GameMode(self.mode)
-        p.status.map_id = self.map_id
+        player.status.action = Action(self.action)
+        player.status.info_text = self.info_text
+        player.status.map_md5 = self.map_md5
+        player.status.mods = Mods(self.mods)
+        player.status.mode = GameMode(self.mode)
+        player.status.map_id = self.map_id
 
         # broadcast it to all online players.
-        if not p.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(p))
+        if not player.restricted:
+            app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
 
 IGNORED_CHANNELS = ["#highlight", "#userlog"]
@@ -349,7 +348,7 @@ class SendMessage(BasePacket):
 
             usecases.channels.send_msg_to_clients(channel, msg, sender=player)
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
         log(f"{player} @ {channel}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -367,7 +366,7 @@ class Logout(BasePacket):
 
         await usecases.players.logout(player)
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
 
 
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
@@ -611,6 +610,8 @@ async def login(
         }
 
     """ login credentials verified """
+
+    # TODO: move queries into repositories (perhaps with usecase layers)
 
     await db_conn.execute(
         "INSERT INTO ingame_logins "
@@ -881,7 +882,7 @@ async def login(
         Ansi.LCYAN,
     )
 
-    app.state.loop.create_task(usecases.players.update_latest_activity(player))
+    asyncio.create_task(usecases.players.update_latest_activity(player))
 
     return {"osu_token": player.token, "response_body": bytes(data)}
 
@@ -1187,7 +1188,7 @@ class SendPrivateMessage(BasePacket):
                 msg=msg,
             )
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
         log(f"{player} @ {target}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
 
 
@@ -1264,7 +1265,7 @@ class MatchCreate(BasePacket):
 
         await usecases.players.join_match(player, self.match, self.match.passwd)
         await usecases.multiplayer.send_match_state_to_clients(self.match)
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
 
         usecases.channels.send_bot(self.match.chat, f"Match created by {player.name}.")
         log(f"{player} created a new multiplayer match.")
@@ -1340,7 +1341,7 @@ class MatchJoin(BasePacket):
             )
             return
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
         await usecases.players.join_match(player, match, self.match_passwd)
         await usecases.multiplayer.send_match_state_to_clients(match)
 
@@ -1348,7 +1349,7 @@ class MatchJoin(BasePacket):
 @register(ClientPackets.PART_MATCH)
 class MatchPart(BasePacket):
     async def handle(self, player: Player) -> None:
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
         await usecases.players.leave_match(player)
 
 
@@ -1358,39 +1359,39 @@ class MatchChangeSlot(BasePacket):
         self.slot_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (m := player.match):
+        if not (match := player.match):
             return
 
         # read new slot ID
         if not 0 <= self.slot_id < 16:
             return
 
-        if m.slots[self.slot_id].status != SlotStatus.open:
+        if match.slots[self.slot_id].status != SlotStatus.open:
             log(f"{player} tried to move into non-open slot.", Ansi.LYELLOW)
             return
 
         # swap with current slot.
-        slot = m.get_slot(player)
+        slot = match.get_slot(player)
         assert slot is not None
 
-        m.slots[self.slot_id].copy_from(slot)
+        match.slots[self.slot_id].copy_from(slot)
         slot.reset()
 
         # technically not needed for host?
-        await usecases.multiplayer.send_match_state_to_clients(m)
+        await usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.MATCH_READY)
 class MatchReady(BasePacket):
     async def handle(self, player: Player) -> None:
-        if not (m := player.match):
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(player)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.status = SlotStatus.ready
-        await usecases.multiplayer.send_match_state_to_clients(m, lobby=False)
+        await usecases.multiplayer.send_match_state_to_clients(match, lobby=False)
 
 
 @register(ClientPackets.MATCH_LOCK)
@@ -1399,10 +1400,10 @@ class MatchLock(BasePacket):
         self.slot_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (m := player.match):
+        if not (match := player.match):
             return
 
-        if player is not m.host:
+        if player is not match.host:
             log(f"{player} attempted to lock match as non-host.", Ansi.LYELLOW)
             return
 
@@ -1410,12 +1411,12 @@ class MatchLock(BasePacket):
         if not 0 <= self.slot_id < 16:
             return
 
-        slot = m.slots[self.slot_id]
+        slot = match.slots[self.slot_id]
 
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
         else:
-            if slot.player is m.host:
+            if slot.player is match.host:
                 # don't allow the match host to kick
                 # themselves by clicking their crown
                 return
@@ -1428,7 +1429,7 @@ class MatchLock(BasePacket):
 
             slot.status = SlotStatus.locked
 
-        await usecases.multiplayer.send_match_state_to_clients(m)
+        await usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.MATCH_CHANGE_SETTINGS)
@@ -1782,7 +1783,6 @@ class MatchComplete(BasePacket):
         await usecases.multiplayer.send_match_state_to_clients(match)
 
         if match.is_scrimming:
-
             # determine winner, update match points & inform players.
             asyncio.create_task(update_matchpoints(match, was_playing))
 
@@ -1792,29 +1792,29 @@ class MatchChangeMods(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.mods = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        if m.freemods:
-            if p is m.host:
+        if match.freemods:
+            if player is match.host:
                 # allow host to set speed-changing mods.
-                m.mods = Mods(self.mods & SPEED_CHANGING_MODS)
+                match.mods = Mods(self.mods & SPEED_CHANGING_MODS)
 
             # set slot mods
-            slot = m.get_slot(p)
+            slot = match.get_slot(player)
             assert slot is not None
 
             slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
         else:
-            if p is not m.host:
-                log(f"{p} attempted to change mods as non-host.", Ansi.LYELLOW)
+            if player is not match.host:
+                log(f"{player} attempted to change mods as non-host.", Ansi.LYELLOW)
                 return
 
             # not freemods, set match mods.
-            m.mods = Mods(self.mods)
+            match.mods = Mods(self.mods)
 
-        await usecases.multiplayer.send_match_state_to_clients(m)
+        await usecases.multiplayer.send_match_state_to_clients(match)
 
 
 def is_playing(slot: Slot) -> bool:
@@ -1902,26 +1902,26 @@ class MatchHasBeatmap(BasePacket):
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
 class MatchSkipRequest(BasePacket):
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        slot = m.get_slot(p)
+        slot = match.get_slot(player)
         assert slot is not None
 
         slot.skipped = True
         await usecases.multiplayer.send_data_to_clients(
-            m,
-            app.packets.match_player_skipped(p.id),
+            match,
+            app.packets.match_player_skipped(player.id),
         )
 
-        for slot in m.slots:
+        for slot in match.slots:
             if slot.status == SlotStatus.playing and not slot.skipped:
                 return
 
         # all users have skipped, enqueue a skip.
         await usecases.multiplayer.send_data_to_clients(
-            m,
+            match,
             app.packets.match_skip(),
             lobby=False,
         )
@@ -1958,25 +1958,26 @@ class MatchTransferHost(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+    async def handle(self, player: Player) -> None:
+        if not (match := player.match):
             return
 
-        if p is not m.host:
-            log(f"{p} attempted to transfer host as non-host.", Ansi.LYELLOW)
+        if player is not match.host:
+            log(f"{player} attempted to transfer host as non-host.", Ansi.LYELLOW)
             return
 
         # read new slot ID
         if not 0 <= self.slot_id < 16:
             return
 
-        if not (t := m[self.slot_id].player):
-            log(f"{p} tried to transfer host to an empty slot?")
+        target = match[self.slot_id].player
+        if target is None:
+            log(f"{player} tried to transfer host to an empty slot?")
             return
 
-        m.host_id = t.id
-        m.host.enqueue(app.packets.match_transfer_host())
-        await usecases.multiplayer.send_match_state_to_clients(m)
+        match.host_id = target.id
+        match.host.enqueue(app.packets.match_transfer_host())
+        await usecases.multiplayer.send_match_state_to_clients(match)
 
 
 @register(ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST)
@@ -1984,17 +1985,18 @@ class TourneyMatchInfoRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
-        if not p.priv & Privileges.DONATOR:
+        if not player.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if match is None:
             return  # match not found
 
-        p.enqueue(app.packets.update_match(m, send_pw=False))
+        player.enqueue(app.packets.update_match(match, send_pw=False))
 
 
 @register(ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL)
@@ -2045,12 +2047,13 @@ class TourneyMatchLeaveChannel(BasePacket):
 @register(ClientPackets.FRIEND_ADD)
 class FriendAdd(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.player_id = reader.read_i32()
+        self.user_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
 
-        if not (target := app.state.sessions.players.get(id=self.player_id)):
-            log(f"{player} tried to add a user who is not online! ({self.player_id})")
+        target = app.state.sessions.players.get(id=self.user_id)
+        if target is None:
+            log(f"{player} tried to add a user who is not online! ({self.user_id})")
             return
 
         if target is app.state.sessions.bot:
@@ -2059,7 +2062,7 @@ class FriendAdd(BasePacket):
         if target.id in player.blocks:
             player.blocks.remove(target.id)
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
         await usecases.players.add_friend(player, target)
 
 
@@ -2069,15 +2072,16 @@ class FriendRemove(BasePacket):
         self.user_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (t := app.state.sessions.players.get(id=self.user_id)):
+        target = app.state.sessions.players.get(id=self.user_id)
+        if target is None:
             log(f"{player} tried to remove a user who is not online! ({self.user_id})")
             return
 
-        if t is app.state.sessions.bot:
+        if target is app.state.sessions.bot:
             return
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
-        await usecases.players.remove_friend(player, t)
+        asyncio.create_task(usecases.players.update_latest_activity(player))
+        await usecases.players.remove_friend(player, target)
 
 
 @register(ClientPackets.MATCH_CHANGE_TEAM)
@@ -2173,18 +2177,19 @@ class MatchInvite(BasePacket):
         if not player.match:
             return
 
-        if not (t := app.state.sessions.players.get(id=self.user_id)):
+        target = app.state.sessions.players.get(id=self.user_id)
+        if target is None:
             log(f"{player} tried to invite a user who is not online! ({self.user_id})")
             return
 
-        if t is app.state.sessions.bot:
+        if target is app.state.sessions.bot:
             usecases.players.send_bot(player, "I'm too busy!")
             return
 
-        t.enqueue(app.packets.match_invite(player, t.name))
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        target.enqueue(app.packets.match_invite(player, target.name))
+        asyncio.create_task(usecases.players.update_latest_activity(player))
 
-        log(f"{player} invited {t} to their match.")
+        log(f"{player} invited {target} to their match.")
 
 
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
@@ -2248,4 +2253,4 @@ class ToggleBlockingDMs(BasePacket):
     async def handle(self, player: Player) -> None:
         player.pm_private = self.value == 1
 
-        app.state.loop.create_task(usecases.players.update_latest_activity(player))
+        asyncio.create_task(usecases.players.update_latest_activity(player))

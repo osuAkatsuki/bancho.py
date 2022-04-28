@@ -1191,8 +1191,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                     f"Recalculation complete. | Elapsed: {elapsed}",
                 )
 
-        app.state.loop.create_task(recalc_all())
-
+        asyncio.create_task(recalc_all())
         return "Starting a full recalculation."
 
 

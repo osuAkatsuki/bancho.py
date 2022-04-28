@@ -13,7 +13,6 @@ import app.state.services
 import app.state.sessions
 import app.utils
 from app.constants.gamemodes import GameMode
-from app.objects.achievement import Achievement
 from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Grade

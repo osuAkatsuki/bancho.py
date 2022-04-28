@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -17,7 +16,6 @@ from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
-from app.objects.player import ClientDetails
 from app.objects.player import Player
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus

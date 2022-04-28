@@ -15,7 +15,6 @@ from typing import Callable
 from typing import Literal
 from typing import Mapping
 from typing import Optional
-from typing import TypeVar
 from typing import Union
 from urllib.parse import unquote
 from urllib.parse import unquote_plus
@@ -59,7 +58,6 @@ from app.objects import models
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
 from app.objects.player import Privileges
-from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn

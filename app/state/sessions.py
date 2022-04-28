@@ -9,7 +9,6 @@ import app.utils
 from app import repositories
 from app.logging import Ansi
 from app.logging import log
-from app.objects.achievement import Achievement
 from app.objects.collections import Matches
 from app.objects.collections import Players
 from app.objects.player import Player

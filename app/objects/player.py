@@ -32,7 +32,6 @@ from app.utils import escape_enum
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
-    from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.channel import Channel
 
