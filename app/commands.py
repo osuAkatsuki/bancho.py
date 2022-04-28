@@ -60,6 +60,7 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.usecases.performance import ScoreDifficultyParams
+from app.utils import make_safe_name
 from app.utils import seconds_readable
 
 try:
@@ -280,7 +281,7 @@ async def changename(ctx: Context) -> Optional[str]:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    safe_name = name.lower().replace(" ", "_")
+    safe_name = make_safe_name(name)
 
     if await app.state.services.database.fetch_one(
         "SELECT 1 FROM users WHERE safe_name = :safe_name",
