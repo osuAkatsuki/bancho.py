@@ -1382,6 +1382,30 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     await t.remove_privs(bits)
     return f"Updated {t}'s privileges."
 
+@command(Privileges.DEVELOPER, hidden=True)
+async def givedonor(ctx: Context) -> Optional[str]:
+    """Give donator status to a user for an specified amount of time."""
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !givedonor <name> <duration>"
+
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+        return "Could not find user."
+
+    if not (r_match := regexes.SCALED_DURATION.match(ctx.args[1])):
+        return "Invalid syntax: !givedonor <name> <duration>"
+
+    multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
+
+    duration = int(r_match["duration"]) * multiplier
+
+    args = {"time": time.time() + duration, "id": t.id} if t.donor_end < time.time() else {"time": t.donor_end + duration, "id": t.id}
+
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = :time WHERE id = :id",
+        args,
+    )
+
+    return f"Gave {t} {ctx.args[1]} of donator status."
 
 @command(Privileges.DEVELOPER)
 async def wipemap(ctx: Context) -> Optional[str]:
