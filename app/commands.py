@@ -898,6 +898,8 @@ async def user(ctx: Context) -> Optional[str]:
     else:
         last_np = None
 
+    osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
@@ -905,7 +907,7 @@ async def user(ctx: Context) -> Optional[str]:
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
-            f"osu! build: {p.client_details.osu_version.date} | Tourney: {p.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {p.tourney_client}",
             f"Silenced: {p.silenced} | Spectating: {p.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {p.recent_score}",
