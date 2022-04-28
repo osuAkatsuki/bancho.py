@@ -898,7 +898,11 @@ async def user(ctx: Context) -> Optional[str]:
     else:
         last_np = None
 
-    osu_version = p.client_details.osu_version.date if hasattr(p.client_details, "osu_version") else "Unknown"
+    osu_version = (
+        p.client_details.osu_version.date
+        if hasattr(p.client_details, "osu_version")
+        else "Unknown"
+    )
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
