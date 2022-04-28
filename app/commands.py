@@ -900,7 +900,7 @@ async def user(ctx: Context) -> Optional[str]:
 
     osu_version = (
         p.client_details.osu_version.date
-        if hasattr(p.client_details, "osu_version")
+        if p.online
         else "Unknown"
     )
     return "\n".join(
