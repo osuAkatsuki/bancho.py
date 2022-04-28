@@ -62,6 +62,7 @@ from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn
 from app.utils import escape_enum
+from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"

@@ -29,6 +29,7 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.utils import escape_enum
+from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
@@ -421,7 +422,7 @@ class Player:
     @staticmethod
     def make_safe(name: str) -> str:
         """Return a name safe for usage in sql."""
-        return name.lower().replace(" ", "_")
+        return make_safe_name(name)
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
