@@ -255,7 +255,7 @@ class Players(list[Player]):
         # try to get from sql.
         row = await app.state.services.database.fetch_one(
             "SELECT id, name, priv, pw_bcrypt, country, "
-            "silence_end, clan_id, clan_priv, api_key "
+            "silence_end, donor_end, clan_id, clan_priv, api_key "
             f"FROM users WHERE {attr} = :val",
             {"val": val},
         )

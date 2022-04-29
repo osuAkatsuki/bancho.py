@@ -254,6 +254,7 @@ class Player:
         "pm_private",
         "away_msg",
         "silence_end",
+        "donor_end",
         "in_lobby",
         "client_details",
         "pres_filter",
@@ -325,6 +326,7 @@ class Player:
         self.pm_private = extras.get("pm_private", False)
         self.away_msg: Optional[str] = None
         self.silence_end = extras.get("silence_end", 0)
+        self.donor_end = extras.get("donor_end", 0)
         self.in_lobby = False
 
         self.client_details: Optional[ClientDetails] = extras.get("client_details")
