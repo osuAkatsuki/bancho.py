@@ -1388,7 +1388,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
-    if not (timespan := timeparse("".join(ctx.args[1:]))):
+    if not (timespan := timeparse(ctx.args[1])):
         return "Invalid timespan."
 
     if t.donor_end < time.time():
