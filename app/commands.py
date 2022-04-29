@@ -895,12 +895,13 @@ async def user(ctx: Context) -> Optional[str]:
         last_np = None
 
     osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+    donator_info = f"until {timeago.format(p.donor_end)}" if p.donor_end > time.time() else "no"
 
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
             f"Privileges: {priv_list}",
-            f"Donator ends: {timeago.format(p.donor_end)}",
+            f"Donator: {donator_info}",
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
