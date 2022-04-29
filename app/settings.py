@@ -15,6 +15,8 @@ SERVER_PORT: Optional[int] = (
 )
 
 DB_DSN: DatabaseURL = config("DB_DSN", cast=DatabaseURL)
+TEST_DB_DSN: DatabaseURL = config("TEST_DB_DSN", cast=DatabaseURL)
+
 REDIS_DSN: str = config("REDIS_DSN")
 
 OSU_API_KEY: Secret = config("OSU_API_KEY", cast=Secret)
