@@ -1408,7 +1408,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
         {"end": timespan, "user_id": t.id},
     )
 
-    return f"Added {''.join(ctx.args[1:])} of donator status to {t}."
+    return f"Added {ctx.args[1]} of donator status to {t}."
 
 
 @command(Privileges.DEVELOPER)
