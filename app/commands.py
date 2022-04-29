@@ -822,8 +822,6 @@ SHORTHAND_REASONS = {
     "au": "using 3rd party programs (auto play)",
 }
 
-DURATION_MULTIPLIERS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
-
 
 @command(Privileges.MODERATOR, hidden=True)
 async def silence(ctx: Context) -> Optional[str]:
@@ -837,12 +835,9 @@ async def silence(ctx: Context) -> Optional[str]:
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    if not (r_match := regexes.SCALED_DURATION.match(ctx.args[1])):
-        return "Invalid syntax: !silence <name> <duration> <reason>"
+    if not (duration := timeparse(ctx.args[1])):
+        return "Invalid timespan."
 
-    multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-    duration = int(r_match["duration"]) * multiplier
     reason = " ".join(ctx.args[2:])
 
     if reason in SHORTHAND_REASONS:
@@ -900,11 +895,15 @@ async def user(ctx: Context) -> Optional[str]:
         last_np = None
 
     osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+    donator_info = (
+        f"until {timeago.format(p.donor_end)}" if p.donor_end > time.time() else "no"
+    )
 
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
             f"Privileges: {priv_list}",
+            f"Donator: {donator_info}",
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
@@ -1021,12 +1020,8 @@ async def shutdown(ctx: Context) -> Optional[str]:
         _signal = signal.SIGTERM
 
     if ctx.args:  # shutdown after a delay
-        if not (r_match := regexes.SCALED_DURATION.match(ctx.args[0])):
-            return f"Invalid syntax: !{ctx.trigger} <delay> <msg ...>"
-
-        multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-        delay = int(r_match["duration"]) * multiplier
+        if not (delay := timeparse(ctx.args[0])):
+            return "Invalid timespan."
 
         if delay < 15:
             return "Minimum delay is 15 seconds."
@@ -1325,33 +1320,6 @@ async def debug(ctx: Context) -> Optional[str]:
     return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
 
 
-@command(Privileges.ADMINISTRATOR, hidden=True)
-async def givedonator(ctx: Context) -> Optional[str]:
-    """Gives donator to a specified player (by name) for a specified time, such as '3h5m'."""
-    if len(ctx.args) < 2:
-        return "Invalid syntax: !givedonator <name> <duration>"
-
-    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
-        return "Could not find user."
-
-    seconds = timeparse(ctx.args[1])
-
-    if seconds is None:
-        return "Invalid timespan."
-
-    if t.donor_end < time.time():
-        seconds += int(time.time())
-    else:
-        seconds += t.donor_end
-
-    await app.state.services.database.execute(
-        "UPDATE users SET donor_end = :end WHERE id = :user_id",
-        {"end": seconds, "user_id": t.id},
-    )
-
-    return f"Added {ctx.args[1]} to the donator status of {t}."
-
-
 # NOTE: these commands will likely be removed
 #       with the addition of a good frontend.
 str_priv_dict = {
@@ -1416,6 +1384,31 @@ async def rmpriv(ctx: Context) -> Optional[str]:
         )
 
     return f"Updated {t}'s privileges."
+
+
+@command(Privileges.DEVELOPER, hidden=True)
+async def givedonator(ctx: Context) -> Optional[str]:
+    """Gives donator to a specified player (by name) for a specified amount of time, such as '3h5m'."""
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !givedonator <name> <duration>"
+
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+        return "Could not find user."
+
+    if not (timespan := timeparse(ctx.args[1])):
+        return "Invalid timespan."
+
+    if t.donor_end < time.time():
+        timespan += int(time.time())
+    else:
+        timespan += t.donor_end
+
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = :end WHERE id = :user_id",
+        {"end": timespan, "user_id": t.id},
+    )
+
+    return f"Added {ctx.args[1]} of donator status to {t}."
 
 
 @command(Privileges.DEVELOPER)
