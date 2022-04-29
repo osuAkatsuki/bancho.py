@@ -1406,7 +1406,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
-    
+
     if bits & Privileges.DONATOR:
         await app.state.services.database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
