@@ -822,6 +822,7 @@ SHORTHAND_REASONS = {
     "au": "using 3rd party programs (auto play)",
 }
 
+
 @command(Privileges.MODERATOR, hidden=True)
 async def silence(ctx: Context) -> Optional[str]:
     """Silence a specified player with a specified duration & reason."""
@@ -1315,6 +1316,7 @@ async def debug(ctx: Context) -> Optional[str]:
     app.settings.DEBUG = not app.settings.DEBUG
     return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
 
+
 # NOTE: these commands will likely be removed
 #       with the addition of a good frontend.
 str_priv_dict = {
@@ -1373,6 +1375,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     await t.remove_privs(bits)
     return f"Updated {t}'s privileges."
 
+
 @command(Privileges.DEVELOPER, hidden=True)
 async def givedonator(ctx: Context) -> Optional[str]:
     """Gives donator to a specified player (by name) for a specified amount of time, such as '3h5m'."""
@@ -1396,6 +1399,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
     )
 
     return f"Added {''.join(ctx.args[1:])} of donator status to {t}."
+
 
 @command(Privileges.DEVELOPER)
 async def wipemap(ctx: Context) -> Optional[str]:
