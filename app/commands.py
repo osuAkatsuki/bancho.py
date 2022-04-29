@@ -1376,6 +1376,13 @@ async def rmpriv(ctx: Context) -> Optional[str]:
         return "Could not find user."
 
     await t.remove_privs(bits)
+
+    if bits & Privileges.DONATOR:
+        await app.state.services.database.execute(
+            "UPDATE users SET donor_end = 0 WHERE id = :user_id",
+            {"user_id": t.id},
+        )
+
     return f"Updated {t}'s privileges."
 
 
