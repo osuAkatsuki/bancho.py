@@ -822,8 +822,6 @@ SHORTHAND_REASONS = {
     "au": "using 3rd party programs (auto play)",
 }
 
-DURATION_MULTIPLIERS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
-
 
 @command(Privileges.MODERATOR, hidden=True)
 async def silence(ctx: Context) -> Optional[str]:
@@ -837,12 +835,10 @@ async def silence(ctx: Context) -> Optional[str]:
     if t.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    if not (r_match := regexes.SCALED_DURATION.match(ctx.args[1])):
-        return "Invalid syntax: !silence <name> <duration> <reason>"
-
-    multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-    duration = int(r_match["duration"]) * multiplier
+    duration = timeparse(ctx.args[1])
+    if duration is None:
+        return "Invalid timespan."
+    
     reason = " ".join(ctx.args[2:])
 
     if reason in SHORTHAND_REASONS:
@@ -1021,12 +1017,10 @@ async def shutdown(ctx: Context) -> Optional[str]:
         _signal = signal.SIGTERM
 
     if ctx.args:  # shutdown after a delay
-        if not (r_match := regexes.SCALED_DURATION.match(ctx.args[0])):
-            return f"Invalid syntax: !{ctx.trigger} <delay> <msg ...>"
 
-        multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-        delay = int(r_match["duration"]) * multiplier
+        delay = timeparse(ctx.args[0])
+        if delay is None:
+            return "Invalid timespan."
 
         if delay < 15:
             return "Minimum delay is 15 seconds."
