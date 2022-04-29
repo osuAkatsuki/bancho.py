@@ -28,6 +28,7 @@ import app.settings
 import app.state
 import app.utils
 from app import commands
+from app import menus
 from app import repositories
 from app import usecases
 from app._typing import IPAddress
@@ -700,6 +701,7 @@ async def login(
     player.utc_offset = login_data["utc_offset"]
     player.pm_private = login_data["pm_private"]
     player.tourney_client = osu_version.stream == "tourney"
+    player.current_menu = menus.default.MAIN_MENU
 
     if not ip.is_private:
         geoloc = await usecases.geolocation.lookup(ip)
@@ -1271,36 +1273,6 @@ class MatchCreate(BasePacket):
         log(f"{player} created a new multiplayer match.")
 
 
-async def execute_menu_option(player: Player, key: int) -> None:
-    if key not in player.current_menu.options:
-        return
-
-    # this is one of their menu options, execute it.
-    cmd, data = player.current_menu.options[key]
-
-    if app.settings.DEBUG:
-        print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
-
-    if cmd == MenuCommands.Reset:
-        # go back to the main menu
-        player.current_menu = player.previous_menus[0]
-        player.previous_menus.clear()
-    elif cmd == MenuCommands.Back:
-        # return one menu back
-        player.current_menu = player.previous_menus.pop()
-        usecases.players.send_current_menu(player)
-    elif cmd == MenuCommands.Advance:
-        # advance to a new menu
-        assert isinstance(data, Menu)
-        player.previous_menus.append(player.current_menu)
-        player.current_menu = data
-        usecases.players.send_current_menu(player)
-    elif cmd == MenuCommands.Execute:
-        # execute a function on the current menu
-        assert isinstance(data, MenuFunction)
-        await data.callback(player)
-
-
 @register(ClientPackets.JOIN_MATCH)
 class MatchJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
@@ -1308,13 +1280,17 @@ class MatchJoin(BasePacket):
         self.match_passwd = reader.read_string()
 
     async def handle(self, player: Player) -> None:
-        is_menu_request = self.match_id >= 64  # max multi matches
+        if self.match_id >= 64:
+            # XXX: this is an implementation for in-game menus.
+            #      it is not related to regular endpoint behaviour
 
-        if is_menu_request or self.match_id < 0:
-            if is_menu_request:
-                # NOTE: this function is unrelated to mp.
-                await execute_menu_option(player, self.match_id)
+            # we sent the menu id as the map set id, so we can send
+            # menu options through beatmapset urls in the osu! chat
+            await usecases.players.execute_menu_option(player, self.match_id)
+            player.enqueue(app.packets.match_join_fail())
+            return
 
+        if self.match_id < 0:
             player.enqueue(app.packets.match_join_fail())
             return
 

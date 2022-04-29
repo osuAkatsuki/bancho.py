@@ -24,7 +24,6 @@ from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.objects.match import Match
 from app.objects.menu import Menu
-from app.objects.menu import menu_keygen
 from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
@@ -97,33 +96,6 @@ class Status:
     mods: Mods = Mods.NOMOD
     mode: GameMode = GameMode.VANILLA_OSU
     map_id: int = 0
-
-
-# # temporary menu-related stuff
-# async def bot_hello(p: Player) -> None:
-#     p.send_bot(f"hello {p.name}!")
-
-
-async def notif_hello(p: Player) -> None:
-    p.enqueue(app.packets.notification(f"hello {p.name}!"))
-
-
-MENU2 = Menu(
-    "Second Menu",
-    {
-        menu_keygen(): (MenuCommands.Back, None),
-        menu_keygen(): (MenuCommands.Execute, MenuFunction("notif_hello", notif_hello)),
-    },
-)
-
-MAIN_MENU = Menu(
-    "Main Menu",
-    {
-        # menu_keygen(): (MenuCommands.Execute, MenuFunction("bot_hello", bot_hello)),
-        menu_keygen(): (MenuCommands.Execute, MenuFunction("notif_hello", notif_hello)),
-        menu_keygen(): (MenuCommands.Advance, MENU2),
-    },
-)
 
 
 class LastNp(TypedDict):
@@ -270,7 +242,7 @@ class Player:
         last_recv_time: float = 0.0,
         recent_scores: Optional[MutableMapping[GameMode, Optional[int]]] = None,
         last_np: Optional[LastNp] = None,
-        current_menu: Menu = MAIN_MENU,
+        current_menu: Optional[Menu] = None,
         previous_menus: Optional[list[Menu]] = None,
         bot_client: bool = False,
         tourney_client: bool = False,

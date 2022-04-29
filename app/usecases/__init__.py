@@ -12,6 +12,7 @@ from . import error_reporting
 from . import geolocation
 from . import mail
 from . import mappools
+from . import menus
 from . import multiplayer
 from . import notes
 from . import performance

@@ -33,7 +33,3 @@ class Menu(NamedTuple):
 class MenuFunction(NamedTuple):
     name: str
     callback: Callable[[Player], Awaitable[None]]
-
-
-def menu_keygen() -> int:
-    return random.randint(64, 0x7FFFFFFF)  # (max_matches, int32_max)

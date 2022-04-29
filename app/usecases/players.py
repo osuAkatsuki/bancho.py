@@ -28,13 +28,16 @@ from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
+from app.objects.menu import Menu
+from app.objects.menu import MenuCommands
+from app.objects.menu import MenuFunction
+from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 
 if TYPE_CHECKING:
     from app.objects.achievement import Achievement
-    from app.objects.player import Player
 
 # TODO: organize this
 
@@ -829,34 +832,6 @@ async def update_stats(
     await app.state.services.database.execute(stats_query, stats_query_args)
 
 
-def send_menu_clear(player: Player) -> None:
-    """Clear the user's osu! chat with the bot
-    to make room for a new menu to be sent."""
-    # NOTE: the only issue with this is that it will
-    # wipe any messages the client can see from the bot
-    # (including any other channels). perhaps menus can
-    # be sent from a separate presence to prevent this?
-    player.enqueue(app.packets.user_silenced(app.state.sessions.bot.id))
-
-
-def send_current_menu(player: Player) -> None:
-    """Forward a standardized form of the user's
-    current menu to them via the osu! chat."""
-    msg = [player.current_menu.name]
-
-    for key, (cmd, data) in player.current_menu.options.items():
-        val = data.name if data else "Back"
-        msg.append(f"[osump://{key}/ {val}]")
-
-    chat_height = 10
-    lines_used = len(msg)
-    if lines_used < chat_height:
-        msg += [chr(8192)] * (chat_height - lines_used)
-
-    send_menu_clear(player)
-    send_bot(player, "\n".join(msg))
-
-
 async def update_latest_activity(player: Player) -> None:
     """Update the player's latest activity in the database."""
     await repositories.players.update_latest_activity(player.id)
@@ -919,3 +894,62 @@ async def add_favourite(player: Player, map_set_id: int) -> bytes:
         )
 
     return b""
+
+
+## menus
+
+
+def send_current_menu(player: Player) -> None:
+    """Forward a standardized form of the user's
+    current menu to them via the osu! chat."""
+    assert player.current_menu is not None
+
+    msg = [player.current_menu.name]
+
+    for key, (cmd, data) in player.current_menu.options.items():
+        val = data.name if data else "Back"
+        msg.append(f"[osump://{key}/ {val}]")  # NOTE: trailing / is required
+
+    chat_height = 10
+    lines_used = len(msg)
+    if lines_used < chat_height:
+        msg += [chr(8192)] * (chat_height - lines_used)
+
+    # clear any existing menus in the player's chat(s)
+    player.enqueue(app.packets.user_silenced(app.state.sessions.bot.id))
+
+    # send the new menu
+    send_bot(player, msg="\n".join(msg))
+
+
+async def execute_menu_option(player: Player, menu_id: int) -> None:
+    """Execute a menu option for a player."""
+    assert player.current_menu is not None
+
+    if menu_id not in player.current_menu.options:
+        return
+
+    # this is one of their menu options, execute it.
+    cmd, data = player.current_menu.options[menu_id]
+
+    if app.settings.DEBUG:
+        print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
+
+    if cmd == MenuCommands.Reset:
+        # go back to the main menu
+        player.current_menu = player.previous_menus[0]
+        player.previous_menus.clear()
+    elif cmd == MenuCommands.Back:
+        # return one menu back
+        player.current_menu = player.previous_menus.pop()
+        usecases.players.send_current_menu(player)
+    elif cmd == MenuCommands.Advance:
+        # advance to a new menu
+        assert isinstance(data, Menu)
+        player.previous_menus.append(player.current_menu)
+        player.current_menu = data
+        usecases.players.send_current_menu(player)
+    elif cmd == MenuCommands.Execute:
+        # execute a function on the current menu
+        assert isinstance(data, MenuFunction)
+        await data.callback(player)

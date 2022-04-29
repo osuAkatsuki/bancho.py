@@ -7,6 +7,7 @@ from . import constants
 from . import discord
 from . import housekeeping
 from . import logging
+from . import menus
 from . import objects
 from . import packets
 from . import repositories

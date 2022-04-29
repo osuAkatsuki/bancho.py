@@ -62,7 +62,6 @@ from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn
 from app.utils import escape_enum
-from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -70,6 +69,7 @@ BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
+MENU_ID_START = 2_000_000_000
 
 router = APIRouter(
     tags=["osu! web API"],
@@ -347,10 +347,20 @@ async def get_beatmap_set_information(
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
 ):
-    return await usecases.direct.search_set(
-        map_id,
-        map_set_id,
-    )
+    """# TODO: might use this for multiplayer, since osump:// won't work
+    if map_set_id is not None and map_set_id >= MENU_ID_START:
+        # XXX: this is an implementation for in-game menus.
+        #      it is not related to regular endpoint behaviour
+
+        # we sent the menu id as the map set id, so we can send
+        # menu options through beatmapset urls in the osu! chat
+        menu_id = map_set_id
+
+        await usecases.players.execute_menu_option(player, menu_id)
+        return None
+    """
+
+    return await usecases.direct.search_set(map_id, map_set_id)
 
 
 @router.post("/web/osu-submit-modular-selector.php")
@@ -489,10 +499,7 @@ async def submit_score(
             await usecases.scores.calculate_status(score, beatmap, player)
 
             if beatmap.status != RankedStatus.Pending:
-                score.rank = await usecases.scores.calculate_placement(
-                    score,
-                    beatmap,
-                )
+                score.rank = await usecases.scores.calculate_placement(score, beatmap)
         else:
             score.status = SubmissionStatus.FAILED
 
