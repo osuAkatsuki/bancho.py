@@ -838,7 +838,7 @@ async def silence(ctx: Context) -> Optional[str]:
     duration = timeparse(ctx.args[1])
     if duration is None:
         return "Invalid timespan."
-    
+
     reason = " ".join(ctx.args[2:])
 
     if reason in SHORTHAND_REASONS:
