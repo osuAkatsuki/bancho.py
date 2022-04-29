@@ -227,7 +227,7 @@ async def contextually_fetch_channel(
         else:
             return None
 
-        return await repositories.channels.fetch_by_name(f"#spec_{spec_id}")
+        return await repositories.channels.fetch(f"#spec_{spec_id}")
     elif channel_name == "#multiplayer":
         if not player.match:
             # they're not in a match?
@@ -235,7 +235,7 @@ async def contextually_fetch_channel(
 
         return player.match.chat
     else:
-        return await repositories.channels.fetch_by_name(channel_name)
+        return await repositories.channels.fetch(channel_name)
 
 
 @register(ClientPackets.SEND_PUBLIC_MESSAGE)
@@ -1912,7 +1912,7 @@ class ChannelJoin(BasePacket):
         if self.channel_name in IGNORED_CHANNELS:
             return
 
-        channel = await repositories.channels.fetch_by_name(self.channel_name)
+        channel = await repositories.channels.fetch(self.channel_name)
 
         if channel is None:
             log(
@@ -2087,7 +2087,7 @@ class ChannelPart(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = await repositories.channels.fetch_by_name(self.name)
+        channel = await repositories.channels.fetch(self.name)
 
         if channel is None:
             log(f"{player} tried to leave non-existent {self.name}.", Ansi.LYELLOW)

@@ -1116,7 +1116,7 @@ async def recalc(ctx: Context) -> Optional[str]:
     else:
         # recalc all plays on the server, on all maps
         # we'll log any errors that occur to the #staff channel (if it exists)
-        err_reporting_channel = await repositories.channels.fetch_by_name("#staff")
+        err_reporting_channel = await repositories.channels.fetch("#staff")
 
         async def recalc_all() -> None:
             if err_reporting_channel is not None:
@@ -2406,7 +2406,7 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan = await repositories.clans.create(name, tag, owner=ctx.player)
 
     # announce clan creation
-    announce_chan = await repositories.channels.fetch_by_name("#announce")
+    announce_chan = await repositories.channels.fetch("#announce")
     if announce_chan is not None:
         usecases.channels.send_msg_to_clients(
             channel=announce_chan,
@@ -2452,7 +2452,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     await usecases.clans.delete(clan)
 
     # announce clan disbanding
-    announce_chan = await repositories.channels.fetch_by_name("#announce")
+    announce_chan = await repositories.channels.fetch("#announce")
     if announce_chan is not None:
         msg = f"\x01ACTION disbanded {clan!r}."
         usecases.channels.send_msg_to_clients(

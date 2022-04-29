@@ -175,6 +175,7 @@ class PlayerSession(Session):
 """
 
 
+# TODO: refactor this into a session class
 class Player:
     """\
     Server side representation of a player; not necessarily online.

@@ -363,7 +363,7 @@ async def join_match(player: Player, match: Match, passwd: str) -> bool:
         log(f"{player} failed to join {match.chat}.", Ansi.LYELLOW)
         return False
 
-    lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+    lobby_channel = await repositories.channels.fetch("#lobby")
     if lobby_channel is not None and lobby_channel.players:
         leave_channel(player, lobby_channel)
 
@@ -426,7 +426,7 @@ async def leave_match(player: Player) -> None:
 
         app.state.sessions.matches.remove(player.match)
 
-        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        lobby_channel = await repositories.channels.fetch("#lobby")
         if lobby_channel is not None:
             usecases.channels.send_data_to_clients(
                 lobby_channel,
@@ -534,7 +534,7 @@ async def add_spectator(player: Player, other: Player) -> None:
     """Attempt to add `other` to `player`'s spectators."""
     chan_name = f"#spec_{player.id}"
 
-    spec_channel = await repositories.channels.fetch_by_name(chan_name)
+    spec_channel = await repositories.channels.fetch(chan_name)
     if spec_channel is None:
         # spectator chan doesn't exist, create it.
         spec_channel = await repositories.channels.create(
@@ -555,16 +555,16 @@ async def add_spectator(player: Player, other: Player) -> None:
 
     if not other.stealth:
         p_joined = app.packets.fellow_spectator_joined(other.id)
-        for s in player.spectators:
-            s.enqueue(p_joined)
-            other.enqueue(app.packets.fellow_spectator_joined(s.id))
+        for spectator in player.spectators:
+            spectator.enqueue(p_joined)
+            other.enqueue(app.packets.fellow_spectator_joined(spectator.id))
 
         player.enqueue(app.packets.spectator_joined(other.id))
     else:
         # player is admin in stealth, only give
         # other players data to us, not vice-versa.
-        for s in player.spectators:
-            other.enqueue(app.packets.fellow_spectator_joined(s.id))
+        for spectator in player.spectators:
+            other.enqueue(app.packets.fellow_spectator_joined(spectator.id))
 
     player.spectators.append(other)
     other.spectating = player
@@ -577,7 +577,7 @@ async def remove_spectator(player: Player, other: Player) -> None:
     player.spectators.remove(other)
     other.spectating = None
 
-    channel = await repositories.channels.fetch_by_name(f"#spec_{player.id}")
+    channel = await repositories.channels.fetch(f"#spec_{player.id}")
     assert channel is not None
 
     leave_channel(other, channel)

@@ -138,7 +138,7 @@ async def search_set(
     elif map_id is not None:
         k, v = ("id", map_id)
     else:
-        return  # invalid args
+        return None  # invalid args
 
     # Get all set data.
     # TODO: video support (needs db change)

@@ -219,7 +219,6 @@ async def osuGetFriends(
 async def get_beatmap_info(
     form_data: models.OsuBeatmapRequestForm,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     return await usecases.beatmaps.get_beatmap_info(
         player,
@@ -580,9 +579,7 @@ async def submit_score(
 
             if score.rank == 1 and not player.restricted:
                 # this is the new #1, post the play to #announce.
-                announce_channel = await repositories.channels.fetch_by_name(
-                    "#announce",
-                )
+                announce_channel = await repositories.channels.fetch("#announce")
 
                 if announce_channel is not None:
                     # Announce the user's #1 score.
@@ -896,7 +893,6 @@ async def get_beatmap_leaderboard(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()

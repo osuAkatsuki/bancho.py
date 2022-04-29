@@ -80,7 +80,7 @@ async def _fetch_by_name_database(name: str) -> Optional[Channel]:
     )
 
 
-async def fetch_by_name(name: str) -> Optional[Channel]:
+async def fetch(name: str) -> Optional[Channel]:
     """Fetch a channel from the cache, or database by name."""
     if channel := _fetch_by_name_cache(name):
         return channel
@@ -105,7 +105,7 @@ async def fetch_all() -> set[Channel]:
 
         channels = set()
         for name in channel_names:
-            if channel := await fetch_by_name(name):  # should never be false
+            if channel := await fetch(name):  # should never be false
                 channels.add(channel)
 
         return channels

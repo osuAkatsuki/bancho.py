@@ -90,7 +90,7 @@ async def send_data_to_clients(
     usecases.channels.send_data_to_clients(match.chat, data, immune)
 
     if lobby:
-        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        lobby_channel = await repositories.channels.fetch("#lobby")
         if lobby_channel is not None and lobby_channel.players:
             usecases.channels.send_data_to_clients(lobby_channel, data)
 
@@ -107,7 +107,7 @@ async def send_match_state_to_clients(match: Match, lobby: bool = True) -> None:
 
     # but not to those in the #lobby channel
     if lobby:
-        lobby_channel = await repositories.channels.fetch_by_name("#lobby")
+        lobby_channel = await repositories.channels.fetch("#lobby")
         if lobby_channel is not None and lobby_channel.players:
             usecases.channels.send_data_to_clients(
                 lobby_channel,
