@@ -33,6 +33,7 @@ from typing import Union
 
 import psutil
 import timeago
+from pytimeparse.timeparse import timeparse
 
 import app.logging
 import app.packets
@@ -896,6 +897,8 @@ async def user(ctx: Context) -> Optional[str]:
     else:
         last_np = None
 
+    osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
@@ -903,7 +906,7 @@ async def user(ctx: Context) -> Optional[str]:
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
-            f"osu! build: {p.client_details.osu_version.date} | Tourney: {p.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {p.tourney_client}",
             f"Silenced: {p.silenced} | Spectating: {p.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {p.recent_score}",
@@ -1344,6 +1347,33 @@ async def debug(ctx: Context) -> Optional[str]:
     """Toggle the console's debug setting."""
     app.settings.DEBUG = not app.settings.DEBUG
     return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
+
+
+@command(Privileges.ADMINISTRATOR, hidden=True)
+async def givedonator(ctx: Context) -> Optional[str]:
+    """Gives donator to a specified player (by name) for a specified time, such as '3h5m'."""
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !givedonator <name> <duration>"
+
+    if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
+        return "Could not find user."
+
+    seconds = timeparse(ctx.args[1])
+
+    if seconds is None:
+        return "Invalid timespan."
+
+    if t.donor_end < time.time():
+        seconds += int(time.time())
+    else:
+        seconds += t.donor_end
+
+    await app.state.services.database.execute(
+        "UPDATE users SET donor_end = :end WHERE id = :user_id",
+        {"end": seconds, "user_id": t.id},
+    )
+
+    return f"Added {ctx.args[1]} to the donator status of {t}."
 
 
 # NOTE: these commands will likely be removed
