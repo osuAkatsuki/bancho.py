@@ -13,8 +13,6 @@ OSU_VERSION = re.compile(
 USERNAME = re.compile(r"^[\w \[\]-]{2,15}$")
 EMAIL = re.compile(r"^[^@\s]{1,200}@[^@\s\.]{1,30}(?:\.[^@\.\s]{2,24})+$")
 
-SCALED_DURATION = re.compile(r"^(?P<duration>\d{1,6})" r"(?P<scale>s|m|h|d|w)$")
-
 TOURNEY_MATCHNAME = re.compile(
     r"^(?P<name>[a-zA-Z0-9_ ]+): "
     r"\((?P<T1>[a-zA-Z0-9_ ]+)\)"
