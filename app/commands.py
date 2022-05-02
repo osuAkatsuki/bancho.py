@@ -896,7 +896,9 @@ async def user(ctx: Context) -> Optional[str]:
 
     osu_version = p.client_details.osu_version.date if p.online else "Unknown"
     donator_info = (
-        f"True (ends {timeago.format(p.donor_end)})" if p.priv & Privileges.DONATOR else "False"
+        f"True (ends {timeago.format(p.donor_end)})"
+        if p.priv & Privileges.DONATOR
+        else "False"
     )
 
     return "\n".join(
