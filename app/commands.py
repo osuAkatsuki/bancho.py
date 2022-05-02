@@ -1378,6 +1378,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     await t.remove_privs(bits)
 
     if bits & Privileges.DONATOR:
+        t.donor_end = 0
         await app.state.services.database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
             {"user_id": t.id},
@@ -1403,6 +1404,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
     else:
         timespan += t.donor_end
 
+    t.donor_end = timespan
     await app.state.services.database.execute(
         "UPDATE users SET donor_end = :end WHERE id = :user_id",
         {"end": timespan, "user_id": t.id},
