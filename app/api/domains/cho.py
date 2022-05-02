@@ -543,7 +543,7 @@ async def login(
 
     user_info = await db_conn.fetch_one(
         "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
+        "silence_end, donor_end, clan_id, clan_priv, api_key "
         "FROM users WHERE safe_name = :name",
         {"name": app.utils.make_safe_name(login_data["username"])},
     )
