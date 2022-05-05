@@ -40,6 +40,7 @@ from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.utils import escape_enum
+from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
@@ -253,6 +254,7 @@ class Player:
         "pm_private",
         "away_msg",
         "silence_end",
+        "donor_end",
         "in_lobby",
         "client_details",
         "pres_filter",
@@ -324,6 +326,7 @@ class Player:
         self.pm_private = extras.get("pm_private", False)
         self.away_msg: Optional[str] = None
         self.silence_end = extras.get("silence_end", 0)
+        self.donor_end = extras.get("donor_end", 0)
         self.in_lobby = False
 
         self.client_details: Optional[ClientDetails] = extras.get("client_details")
@@ -470,7 +473,7 @@ class Player:
     @staticmethod
     def make_safe(name: str) -> str:
         """Return a name safe for usage in sql."""
-        return name.lower().replace(" ", "_")
+        return make_safe_name(name)
 
     def logout(self) -> None:
         """Log `self` out of the server."""
