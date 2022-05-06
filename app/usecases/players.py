@@ -199,16 +199,35 @@ async def remove_privileges(player: Player, bits: int) -> None:
         player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
-async def add_donator_time(player: Player, delta: timedelta) -> None:
-    await repositories.players.add_donator_time(player.id, delta)
+async def add_donator_time(player: Player, seconds: int) -> None:
+    """Add some time to a player's donator status."""
+    if player.priv & Privileges.DONATOR:
+        # add time to existing donator status
+        new_donor_end = player.donor_end + seconds
+    else:
+        # add a new donator status
+        new_donor_end = int(time.time()) + seconds
+
+    await repositories.players.set_donator_end(player.id, new_donor_end)
+    player.donor_end = new_donor_end
 
 
-async def remove_donator_time(player: Player, delta: timedelta) -> None:
-    await repositories.players.remove_donator_time(player.id, delta)
+async def remove_donator_time(player: Player, seconds: int) -> None:
+    """Remove some time from a player's donator status."""
+    if not player.priv & Privileges.DONATOR:
+        # player does not currently have donator status
+        return None
+
+    new_donor_end = player.donor_end - seconds
+
+    await repositories.players.set_donator_end(player.id, new_donor_end)
+    player.donor_end = new_donor_end
 
 
 async def reset_donator_time(player: Player) -> None:
-    await repositories.players.reset_donator_time(player.id)
+    """Reset a player's donator status."""
+    await repositories.players.set_donator_end(player.id, 0)
+    player.donor_end = 0
 
 
 async def restrict(player: Player, admin: Player, reason: str) -> None:

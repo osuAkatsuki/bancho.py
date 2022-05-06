@@ -236,6 +236,7 @@ class Player:
         pm_private: bool = False,
         away_msg: Optional[str] = None,
         silence_end: int = 0,
+        donor_end: int = 0,
         in_lobby: bool = False,
         client_details: Optional[ClientDetails] = None,
         pres_filter: PresenceFilter = PresenceFilter.Nil,
@@ -297,6 +298,7 @@ class Player:
         self.pm_private = pm_private
         self.away_msg = away_msg
         self.silence_end = silence_end
+        self.donor_end = donor_end
         self.in_lobby = in_lobby
 
         self.client_details = client_details

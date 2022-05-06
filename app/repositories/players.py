@@ -29,7 +29,7 @@ async def _fetch_user_info_sql(key: str, val: Any):  # TODO: type
     # WARNING: do not pass user input into `key`; sql injection
     return await app.state.services.database.fetch_one(
         "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
+        "silence_end, clan_id, clan_priv, api_key, donor_end "
         f"FROM users WHERE {key} = :{key}",
         {key: val},
     )
@@ -239,27 +239,11 @@ async def update_privs(player_id: int, new_privileges: int) -> None:
         player.priv = new_privileges
 
 
-async def add_donator_time(player_id: int, delta: timedelta) -> None:
-    """Add a period of time from a player's donation status."""
+async def set_donator_end(player_id: int, end: int) -> None:
+    """Set the time when a player's donation status ends."""
     await app.state.services.database.execute(
-        "UPDATE users SET donor_end = donor_end + :delta WHERE id = :id",
-        {"id": player_id, "delta": delta.total_seconds()},
-    )
-
-
-async def remove_donator_time(player_id: int, delta: timedelta) -> None:
-    """Remove a period of time from a player's donation status."""
-    await app.state.services.database.execute(
-        "UPDATE users SET donor_end = donor_end - :delta WHERE id = :id",
-        {"id": player_id, "delta": delta.total_seconds()},
-    )
-
-
-async def reset_donator_time(player_id: int) -> None:
-    """Reset the time left on a player's donation status."""
-    await app.state.services.database.execute(
-        "UPDATE users SET donor_end = 0 WHERE id = :id",
-        {"id": player_id},
+        "UPDATE users SET donor_end = :end WHERE id = :id",
+        {"id": player_id, "end": end},
     )
 
 

@@ -30,6 +30,7 @@ from typing import Union
 
 import psutil
 import timeago
+from pytimeparse.timeparse import timeparse
 
 import app.logging
 import app.packets
@@ -788,8 +789,6 @@ SHORTHAND_REASONS = {
     "au": "using 3rd party programs (auto play)",
 }
 
-DURATION_MULTIPLIERS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
-
 
 @command(Privileges.MODERATOR, hidden=True)
 async def silence(ctx: Context) -> Optional[str]:
@@ -804,13 +803,9 @@ async def silence(ctx: Context) -> Optional[str]:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    r_match = regexes.SCALED_DURATION.match(ctx.args[1])
-    if r_match is None:
-        return "Invalid syntax: !silence <name> <duration> <reason>"
+    if not (seconds := timeparse(ctx.args[1])):
+        return "Invalid timespan."
 
-    multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-    duration = int(r_match["duration"]) * multiplier
     reason = " ".join(ctx.args[2:])
 
     if reason in SHORTHAND_REASONS:
@@ -819,7 +814,7 @@ async def silence(ctx: Context) -> Optional[str]:
     await usecases.players.silence(
         player=target,
         admin=ctx.player,
-        duration=duration,
+        duration=seconds,
         reason=reason,
     )
     return f"{target} was silenced."
@@ -885,14 +880,23 @@ async def user(ctx: Context) -> Optional[str]:
     else:
         recent_score = None
 
+    osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+
+    donator_info = (
+        f"True (ends {timeago.format(p.donor_end)})"
+        if p.priv & Privileges.DONATOR
+        else "False"
+    )
+
     return "\n".join(
         (
             f'[{"Bot" if p.bot_client else "Player"}] {player_name} ({p.id})',
             f"Privileges: {privileges_to_str(p.priv)}",
+            f"Donator: {donator_info}",
             f"Channels: {[p._name for p in p.channels]}",
             f"Logged in: {timeago.format(p.login_time)}",
             f"Last server interaction: {timeago.format(p.last_recv_time)}",
-            f"osu! build: {p.client_details.osu_version.date} | Tourney: {p.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {p.tourney_client}",
             f"Silenced: {p.silenced} | Spectating: {p.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {recent_score}",
@@ -1015,15 +1019,10 @@ async def shutdown(ctx: Context) -> Optional[str]:
         _signal = signal.SIGTERM
 
     if ctx.args:  # shutdown after a delay
-        r_match = regexes.SCALED_DURATION.match(ctx.args[0])
-        if r_match is None:
-            return f"Invalid syntax: !{ctx.trigger} <delay> <msg ...>"
+        if not (seconds := timeparse(ctx.args[0])):
+            return "Invalid timespan."
 
-        multiplier = DURATION_MULTIPLIERS[r_match["scale"]]
-
-        delay = int(r_match["duration"]) * multiplier
-
-        if delay < 15:
+        if seconds < 15:
             return "Minimum delay is 15 seconds."
 
         if len(ctx.args) > 1:
@@ -1035,7 +1034,7 @@ async def shutdown(ctx: Context) -> Optional[str]:
 
             app.state.sessions.players.enqueue(app.packets.notification(alert_msg))
 
-        app.state.loop.call_later(delay, os.kill, os.getpid(), _signal)
+        app.state.loop.call_later(seconds, os.kill, os.getpid(), _signal)
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), _signal)
@@ -1262,7 +1261,29 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
     await usecases.players.remove_privileges(target, bits)
 
+    if bits & Privileges.DONATOR:
+        await usecases.players.reset_donator_time(target)
+
     return f"Updated {target}'s privileges."
+
+
+@command(Privileges.DEVELOPER, hidden=True)
+async def givedonator(ctx: Context) -> Optional[str]:
+    """Gives donator to a specified player (by name) for a specified amount of time, such as '3h5m'."""
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !givedonator <name> <duration>"
+
+    target = await repositories.players.fetch(name=ctx.args[0])
+    if target is None:
+        return "Could not find user."
+
+    if not (seconds := timeparse(ctx.args[1])):
+        return "Invalid timespan."
+
+    await usecases.players.add_privileges(target, Privileges.SUPPORTER)
+    await usecases.players.add_donator_time(target, seconds)
+
+    return f"Added {ctx.args[1]} of donator status to {target}."
 
 
 @command(Privileges.DEVELOPER)
