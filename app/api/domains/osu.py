@@ -119,13 +119,13 @@ def authenticate_player_session(
 async def osuError(
     username: Optional[str] = Form(None, alias="u"),
     pw_md5: Optional[str] = Form(None, alias="h"),
-    user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
+    user_id: int = Form(..., alias="i", ge=3, le=(1 << 31) - 1),
     osu_mode: OsuClientModes = Form(..., alias="osumode"),
     game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
     game_time: int = Form(..., alias="gametime", ge=0),
     audio_time: int = Form(..., alias="audiotime"),
     culture: str = Form(...),
-    map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
+    map_id: int = Form(..., alias="beatmap_id", ge=0, le=(1 << 31) - 1),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
     feedback: Optional[str] = Form(None),
@@ -889,8 +889,8 @@ async def get_beatmap_leaderboard(
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     map_filename: str = Query(..., alias="f"),  # TODO: regex?
     mode_arg: int = Query(..., alias="m", ge=0, le=3),
-    map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
-    mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
+    map_set_id: int = Query(..., alias="i", ge=-1, le=(1 << 31) - 1),
+    mods_arg: int = Query(..., alias="mods", ge=0, le=(1 << 31) - 1),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
 ):

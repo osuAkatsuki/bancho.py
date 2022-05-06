@@ -131,7 +131,7 @@ async def api_get_player_count():
 @router.get("/players/{player_id}/{scope}")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
-    player_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    player_id: Optional[int] = Query(None, alias="id", ge=3, le=(1 << 31) - 1),
     player_name: Optional[str] = Query(
         None,
         alias="name",
@@ -196,7 +196,7 @@ async def api_get_player_info(
 
 @router.get("/players/{player_id}/status")
 async def api_get_player_status(
-    player_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    player_id: Optional[int] = Query(None, alias="id", ge=3, le=(1 << 31) - 1),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return a players current status, if they are online."""
@@ -274,7 +274,7 @@ async def api_get_player_status(
 @router.get("/players/{player_id}/scores/{scope}")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
-    player_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    player_id: Optional[int] = Query(None, alias="id", ge=3, le=(1 << 31) - 1),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mods_arg: Optional[str] = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
@@ -416,7 +416,7 @@ async def api_get_player_scores(
 
 @router.get("/players/{player_id}/most-played-beatmaps")
 async def api_get_player_most_played(
-    player_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    player_id: Optional[int] = Query(None, alias="id", ge=3, le=(1 << 31) - 1),
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
@@ -479,7 +479,7 @@ async def api_get_player_most_played(
 
 @router.get("/beatmaps/{beatmap_id}")
 async def api_get_map_info(
-    beatmap_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    beatmap_id: Optional[int] = Query(None, alias="id", ge=3, le=(1 << 31) - 1),
     md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
 ):
     """Return information about a given beatmap."""
@@ -510,7 +510,7 @@ async def api_get_map_info(
 @router.get("/beatmaps/{beatmap_id}/scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
-    beatmap_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
+    beatmap_id: Optional[int] = Query(None, alias="id", ge=0, le=(1 << 31) - 1),
     map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: Optional[str] = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
@@ -807,7 +807,7 @@ async def api_get_global_leaderboard(
     sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, min=0, max=2_147_483_647),
+    offset: int = Query(0, min=0, max=(1 << 31) - 1),
     country: Optional[str] = Query(None, min_length=2, max_length=2),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
@@ -851,7 +851,7 @@ async def api_get_global_leaderboard(
 
 @router.get("/clans/{clan_id}")
 async def api_get_clan(
-    clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    clan_id: int = Query(..., alias="id", ge=1, le=(1 << 31) - 1),
 ):
     """Return information of a given clan."""
 
@@ -900,7 +900,7 @@ async def api_get_clan(
 
 @router.get("/mappools/{pool_id}")
 async def api_get_pool(
-    pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    pool_id: int = Query(..., alias="id", ge=1, le=(1 << 31) - 1),
 ):
     """Return information of a given mappool."""
 

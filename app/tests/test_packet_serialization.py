@@ -9,7 +9,7 @@ import app.packets
     ("test_input", "expected"),
     [
         (0, b"\x05\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x05\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\x05\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_user_id(test_input, expected):
@@ -113,7 +113,7 @@ def test_write_user_stats(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"\x0c\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x0c\x00\x00\x05\x00\x00\x00\xff\xff\xff\x7f\x00"),
+        ((1 << 31) - 1, b"\x0c\x00\x00\x05\x00\x00\x00\xff\xff\xff\x7f\x00"),
     ],
 )
 def test_write_logout(test_input, expected):
@@ -124,7 +124,7 @@ def test_write_logout(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"\x0d\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x0d\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\x0d\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_spectator_joined(test_input, expected):
@@ -135,7 +135,7 @@ def test_write_spectator_joined(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"\x0e\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x0e\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\x0e\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_spectator_left(test_input, expected):
@@ -156,7 +156,7 @@ def test_write_version_update():
     ("test_input", "expected"),
     [
         (0, b"\x16\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x16\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\x16\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_spectator_cant_spectate(test_input, expected):
@@ -206,7 +206,7 @@ def test_write_new_match(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"\x1c\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\x1c\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\x1c\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_dispose_match(test_input, expected):
@@ -237,7 +237,7 @@ def test_write_match_join_fail():
     ("test_input", "expected"),
     [
         (0, b"*\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"*\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"*\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_fellow_spectator_joined(test_input, expected):
@@ -248,7 +248,7 @@ def test_write_fellow_spectator_joined(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"+\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"+\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"+\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_fellow_spectator_left(test_input, expected):
@@ -333,7 +333,7 @@ def test_write_match_all_players_loaded():
     ("test_input", "expected"),
     [
         (0, b"9\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"9\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"9\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_match_player_failed(test_input, expected):
@@ -406,7 +406,7 @@ def test_write_channel_auto_join(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"G\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"G\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"G\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_bancho_privileges(test_input, expected):
@@ -434,7 +434,7 @@ def test_write_friends_list(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"K\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"K\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"K\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_protocol_version(test_input, expected):
@@ -466,7 +466,7 @@ def test_write_monitor():
     ("test_input", "expected"),
     [
         (0, b"Q\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"Q\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"Q\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_match_player_skipped(test_input, expected):
@@ -514,7 +514,7 @@ def test_write_user_presence(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"V\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"V\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"V\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_restart_server(test_input, expected):
@@ -552,7 +552,7 @@ def test_write_match_change_password(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"\\\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"\\\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"\\\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_silence_end(test_input, expected):
@@ -563,7 +563,7 @@ def test_write_silence_end(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"^\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"^\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"^\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_user_silenced(test_input, expected):
@@ -574,7 +574,7 @@ def test_write_user_silenced(test_input, expected):
     ("test_input", "expected"),
     [
         (0, b"_\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"_\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"_\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_user_presence_single(test_input, expected):
@@ -628,7 +628,7 @@ def test_write_version_update_forced():
     ("test_input", "expected"),
     [
         (0, b"g\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00"),
-        (2_147_483_647, b"g\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
+        ((1 << 31) - 1, b"g\x00\x00\x04\x00\x00\x00\xff\xff\xff\x7f"),
     ],
 )
 def test_write_switch_server(test_input, expected):
