@@ -1356,6 +1356,9 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
+    if bits & Privileges.DONATOR:
+        return "Please use the !givedonator command to assign donator privileges to players."
+
     await t.add_privs(bits)
     return f"Updated {t}'s privileges."
 
