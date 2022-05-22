@@ -1211,42 +1211,32 @@ async def recalc(ctx: Context) -> Optional[str]:
             f"[Recalc] {ctx.player} started a full recalculation.")
         st = time.time()
 
-        async with (
-            app.state.services.database.connection() as bmap_select_conn,
-            app.state.services.database.connection() as score_select_conn,
-            app.state.services.database.connection() as update_conn,
-        ):
-            cnt = 0
-            for bmap_row in await bmap_select_conn.fetch_all(
-                "SELECT id, md5 FROM maps WHERE passes > 0",
-            ):
-                cnt += 1
-                if cnt % 10 == 0:
-                    staff_chan.send_bot(f"[Recalc] Recalculated {cnt} maps.")
+        async with (app.state.services.database.connection() as score_select_conn):
+            queue = asyncio.Queue()
 
-                bmap_id = bmap_row["id"]
-                bmap_md5 = bmap_row["md5"]
+            async def pp_recalc_worker(staff_chan, queue: asyncio.Queue) -> None:
+                update_conn = app.state.services.database.connection()
+                while True:
+                    row = await queue.get()
 
-                osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                if not await ensure_local_osu_file(
-                    osu_file_path,
-                    bmap_id,
-                    bmap_md5,
-                ):
-                    staff_chan.send_bot(
-                        f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
-                    )
-                    continue
+                    bmap_id = row["bmap_id"]
+                    bmap_md5 = row["bmap_md5"]
+                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
+                    try:
+                        if not await ensure_local_osu_file(
+                            osu_file_path,
+                            bmap_id,
+                            bmap_md5,
+                        ):
+                            staff_chan.send_bot(
+                                f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
+                            )
+                            continue
+                    except:
+                        staff_chan.send_bot(f"[Recalc] Couldn't ensure {bmap_id} / {bmap_md5}")
+                        continue
 
-                app.logging.log(f"[Recalc] Recalculating bmap {bmap_id} ...", app.logging.Ansi.LCYAN)
-
-                for row in await score_select_conn.fetch_all(
-                        "SELECT id, n100, n50, mods, max_combo, nmiss, mode, score "
-                        "FROM scores "
-                        "WHERE map_md5 = :map_md5",
-                        {"map_md5": bmap_md5},
-                ):
-                    if row['mode'] != 3:
+                    if row["mode"] != 3:
                         score = {
                             "n100": row["n100"],
                             "n50": row["n50"],
@@ -1258,20 +1248,45 @@ async def recalc(ctx: Context) -> Optional[str]:
                         score = {
                             "score": row["score"]
                         }
-                    
-                    result = await calculate_performances(str(osu_file_path), row['mode'], row["mods"], [score])
+
+                    result = await calculate_performances(str(osu_file_path), row["mode"], row["mods"], [score])
                     pp = result[0]["performance"]
 
-                    score_id = row["id"]
+                    score_id = row["score_id"]
 
                     await update_conn.execute(
                         "UPDATE scores SET pp = :pp WHERE id = :score_id",
                         {"pp": pp, "score_id": score_id},
                     )
 
-                    app.logging.log(f"[Recalc] | Recalculated score {score_id} ...", app.logging.Ansi.LCYAN)
+                    app.logging.log(f"[Recalc] Recalculated score {score_id} ...", app.logging.Ansi.LCYAN)
 
                     await asyncio.sleep(0.01)
+
+                    queue.task_done()
+
+            tasks = []
+            for _ in range(3):
+                task = app.state.loop.create_task(pp_recalc_worker(staff_chan, queue))
+                tasks.append(task)
+
+            for row in await score_select_conn.fetch_all(
+                "SELECT maps.id AS bmap_id, maps.md5 AS bmap_md5, "
+                "scores.id AS score_id, scores.score, scores.max_combo, scores.n100, scores.n50, scores.nmiss, scores.mode, scores.mods "
+                "FROM scores "
+                "INNER JOIN maps "
+                "ON scores.map_md5 = maps.md5"
+            ):
+                await queue.put(row)
+            
+            while queue.qsize() != 0:
+                staff_chan.send_bot(f"[Recalc] Remaining scores: {queue.qsize()}")
+                await asyncio.sleep(5)
+            
+            await queue.join()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         elapsed = app.utils.seconds_readable(int(time.time() - st))
         staff_chan.send_bot(
