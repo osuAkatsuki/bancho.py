@@ -4,6 +4,7 @@ import math
 import subprocess
 from typing import Optional
 from typing import TypedDict
+import app
 
 import orjson
 
@@ -88,16 +89,19 @@ def calculate_performances_stc(
             raise Exception()
 
         stdout, _ = p.communicate()
-        obj = orjson.loads(stdout.decode())
-        
-        if mode == 4:
-            pp = obj["performance_attributes"]["aim"]
-        elif mode == 8:
-            pp = obj["performance_attributes"]["speed"]
-        else:
-            pp = obj["performance_attributes"]["pp"]
-        
-        sr = obj["difficulty_attributes"]["star_rating"]
+        try:
+            obj = orjson.loads(stdout.decode())
+            if mode == 4:
+                pp = obj["performance_attributes"]["aim"]
+            elif mode == 8:
+                pp = obj["performance_attributes"]["speed"]
+            else:
+                pp = obj["performance_attributes"]["pp"]
+            sr = obj["difficulty_attributes"]["star_rating"]
+        except orjson.JSONDecodeError:
+            app.logging.log(f"Error when calculating map {osu_file_path}", Ansi.LRED)
+            pp = 0.0
+            sr = 0.0
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
@@ -151,10 +155,14 @@ def calculate_performances_mania(
             raise Exception()
 
         stdout, _ = p.communicate()
-        obj = orjson.loads(stdout.decode())
-
-        pp = obj["performance_attributes"]["pp"]
-        sr = obj["difficulty_attributes"]["star_rating"]
+        try:
+            obj = orjson.loads(stdout.decode())
+            pp = obj["performance_attributes"]["pp"]
+            sr = obj["difficulty_attributes"]["star_rating"]
+        except orjson.JSONDecodeError:
+            app.logging.log(f"Error when calculating map {osu_file_path}", Ansi.LRED)
+            pp = 0.0
+            sr = 0.0
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
