@@ -1260,14 +1260,12 @@ async def recalc(ctx: Context) -> Optional[str]:
                         {"pp": pp, "score_id": score_id},
                     )
 
-                    app.logging.log(f"[Recalc] Recalculated score {score_id} ...", app.logging.Ansi.LCYAN)
-
                     await asyncio.sleep(0.01)
 
                     queue.task_done()
 
             tasks = []
-            for _ in range(3):
+            for _ in range(10):
                 task = app.state.loop.create_task(pp_recalc_worker(update_conn, staff_chan, queue))
                 tasks.append(task)
 
@@ -1282,7 +1280,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             
             while queue.qsize() != 0:
                 staff_chan.send_bot(f"[Recalc] Remaining scores: {queue.qsize()}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(10)
             
             await queue.join()
             for task in tasks:
