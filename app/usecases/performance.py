@@ -35,7 +35,8 @@ async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[i
     for score in scores:
         cmd = generate_cmd(osu_file_path, mode, mods, score)
         app.logging.log(f"[PP Calc] Prepared | calc {osu_file_path} : {cmd}", Ansi.GRAY)
-        proc = await asyncio.create_subprocess_shell(
+        proc = await asyncio.create_subprocess_exec(
+            OSU_TOOLS_EXEC_PATH,
             cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE)
@@ -84,7 +85,7 @@ def generate_cmd(osu_file_path: str, mode: int, mods: Optional[int], score: Scor
     else:
         mode_str = "mania"
 
-    cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
+    cmd = ["simulate", mode_str, "-j"]
 
     if mods is not None:
         cmd.append("-lm")
