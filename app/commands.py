@@ -1221,7 +1221,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                 "SELECT id, md5 FROM maps WHERE passes > 0",
             ):
                 cnt += 1
-                if cnt % 100 == 0:
+                if cnt % 10 == 0:
                     staff_chan.send_bot(f"[Recalc] Recalculated {cnt} maps.")
 
                 bmap_id = bmap_row["id"]
@@ -1237,6 +1237,8 @@ async def recalc(ctx: Context) -> Optional[str]:
                         f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
                     )
                     continue
+
+                app.logging.log(f"[Recalc] Recalculating bmap {bmap_id} ...", app.logging.Ansi.LCYAN)
 
                 for row in await score_select_conn.fetch_all(
                         "SELECT id, n100, n50, mods, max_combo, nmiss, mode, score "
@@ -1260,10 +1262,16 @@ async def recalc(ctx: Context) -> Optional[str]:
                     result = calculate_performances(str(osu_file_path), row['mode'], row["mods"], [score])
                     pp = result[0]["performance"]
 
+                    score_id = row["id"]
+
                     await update_conn.execute(
                         "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                        {"pp": pp, "score_id": row["id"]},
+                        {"pp": pp, "score_id": score_id},
                     )
+
+                    app.logging.log(f"[Recalc] | Recalculated score {score_id} ...", app.logging.Ansi.LCYAN)
+
+                    await asyncio.sleep(0.01)
 
         elapsed = app.utils.seconds_readable(int(time.time() - st))
         staff_chan.send_bot(
@@ -1282,7 +1290,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                 "SELECT id, country FROM users"
             ):
                 cnt += 1
-                if cnt % 20 == 0:
+                if cnt % 5 == 0:
                     staff_chan.send_bot(f"[Recalc] Recalculated {cnt} stats.")
                 for mode in (0, 1, 2, 3, 4, 5, 6, 8):
                     total_scores = await score_select_conn.fetch_all(
@@ -1313,22 +1321,28 @@ async def recalc(ctx: Context) -> Optional[str]:
                     bonus_pp = 416.6667 * (1 - 0.95**total_scores['nums'])
                     new_pp = round(weighted_pp + bonus_pp)
 
+                    user_id = user_row["id"]
+
                     await app.state.services.redis.zadd(
                         f"bancho:leaderboard:{mode}",
-                        {str(user_row["id"]): new_pp},
+                        {str(user_id): new_pp},
                     )
 
                     await app.state.services.redis.zadd(
                         f"bancho:leaderboard:{mode}:{user_row['country']}",
-                        {str(user_row["id"]): new_pp},
+                        {str(user_id): new_pp},
                     )
 
                     await update_conn.execute(
                         "UPDATE stats SET pp = :pp, acc = :acc "
                         "WHERE id = :user_id AND mode = :mode",
-                        {"user_id": user_row['id'], "mode": mode,
+                        {"user_id": user_id, "mode": mode,
                             "pp": new_pp, "acc": new_acc},
                     )
+
+                    app.logging.log(f"[Recalc] | Recalculated user {user_id} ...", app.logging.Ansi.LCYAN)
+
+                    await asyncio.sleep(0.01)
 
         elapsed = app.utils.seconds_readable(int(time.time() - st))
         staff_chan.send_bot(
