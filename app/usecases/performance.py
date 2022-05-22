@@ -194,8 +194,8 @@ def calculate_performances(
         )
     elif mode == 3:
         results = calculate_performances_mania(
-            mods,
             osu_file_path,
+            mods,
             scores,
         )
     else:
