@@ -1145,7 +1145,7 @@ class SendPrivateMessage(BasePacket):
                                     for score in app.settings.PP_CACHED_SCORES
                                 ]
 
-                            results = app.usecases.performance.calculate_performances(
+                            results = await app.usecases.performance.calculate_performances(
                                 osu_file_path=str(osu_file_path),
                                 mode=mode_vn,
                                 mods=int(mods) if mods is not None else None,

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 import math
 import subprocess
@@ -28,29 +29,69 @@ class ScoreDifficultyParams(TypedDict, total=False):
     # mania
     score: int
 
-
-def calculate_performances_stc(
-    mode: int,
-    mods: Optional[int],
-    osu_file_path: str,
-    scores: list[ScoreDifficultyParams],
-) -> list[DifficultyRating]:
+async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[int], scores: list[ScoreDifficultyParams]) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
-    
-    if mode in (0, 4, 8):
-        mode_str = 'osu'
-    elif mode in (1, 5):
-        mode_str = 'taiko'
-    elif mode in (2, 6):
-        mode_str = 'catch'
 
     for score in scores:
-        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
+        cmd = generate_cmd(osu_file_path, mode, mods, score)
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            app.logging.log(f"[PP Calc] Error occurred when calculating map {osu_file_path}: {stderr.decode()}", Ansi.LRED)
+            results.append({
+                "performance": 0.0,
+                "star_rating": 0.0,
+            })
+            continue
+        try:
+            obj = orjson.loads(stdout.decode())
+            if mode == 4:
+                pp = obj["performance_attributes"]["aim"]
+            elif mode == 8:
+                pp = obj["performance_attributes"]["speed"]
+            else:
+                pp = obj["performance_attributes"]["pp"]
+            sr = obj["difficulty_attributes"]["star_rating"]
+            if math.isnan(pp) or math.isinf(pp) or math.isnan(sr) or math.isinf(sr):
+                app.logging.log(f"[PP Calc] Abnormal value when calculating map {osu_file_path}", Ansi.LRED)
+                pp = 0.0
+                sr = 0.0
+        except orjson.JSONDecodeError:
+            app.logging.log(f"[PP Calc] JSON decode error when calculating map {osu_file_path}", Ansi.LRED)
+            pp = 0.0
+            sr = 0.0
+        
+        results.append({
+            "performance": pp,
+            "star_rating": sr,
+        })
+    
+    return results
 
-        if mods is not None:
-            cmd.append("-lm")
-            cmd.append(str(mods))
+def generate_cmd(osu_file_path: str, mode: int, mods: Optional[int], score: ScoreDifficultyParams) -> list[str]:
+    if mode in (0, 4, 8):
+        mode_str = "osu"
+    elif mode in (1, 5):
+        mode_str = "taiko"
+    elif mode in (2, 6):
+        mode_str = "catch"
+    else:
+        mode_str = "mania"
 
+    cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
+
+    if mods is not None:
+        cmd.append("-lm")
+        cmd.append(str(mods))
+
+    if mode_str == "mania":
+        if score.get("score") is not None:
+            cmd.append("-s")
+            cmd.append(str(score.get("score")))
+    else:
         if score.get("nmiss") is not None:
             cmd.append("-X")
             cmd.append(str(score.get("nmiss")))
@@ -71,134 +112,6 @@ def calculate_performances_stc(
                 cmd.append("-M")
                 cmd.append(str(score.get("n50")))
 
-        cmd.append(osu_file_path)
+    cmd.append(osu_file_path)
 
-        p = subprocess.Popen(
-            args=cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        if exit_code := p.wait():
-            _, stderr = p.communicate()
-            print(stderr.decode())
-            log(
-                f"Failed to calculate performance points for map {osu_file_path}",
-                Ansi.LRED,
-            )
-            raise Exception()
-
-        stdout, _ = p.communicate()
-        try:
-            obj = orjson.loads(stdout.decode())
-            if mode == 4:
-                pp = obj["performance_attributes"]["aim"]
-            elif mode == 8:
-                pp = obj["performance_attributes"]["speed"]
-            else:
-                pp = obj["performance_attributes"]["pp"]
-            sr = obj["difficulty_attributes"]["star_rating"]
-        except orjson.JSONDecodeError:
-            app.logging.log(f"Error when calculating map {osu_file_path}", Ansi.LRED)
-            pp = 0.0
-            sr = 0.0
-
-        if math.isnan(pp) or math.isinf(pp):
-            # TODO: report to logserver
-            pp = 0.0
-            sr = 0.0
-
-        results.append(
-            {
-                "performance": pp,
-                "star_rating": sr,
-            },
-        )
-
-    return results
-
-
-def calculate_performances_mania(
-    osu_file_path: str,
-    mods: Optional[int],
-    scores: list[ScoreDifficultyParams],
-) -> list[DifficultyRating]:
-    results: list[DifficultyRating] = []
-
-    for score in scores:
-        cmd = [OSU_TOOLS_EXEC_PATH, "simulate", "mania", "-j"]
-
-        if mods is not None:
-            cmd.append("-lm")
-            cmd.append(str(mods))
-
-
-        if score.get("score") is not None:
-            cmd.append("-s")
-            cmd.append(str(score.get("score")))
-
-        cmd.append(osu_file_path)
-
-        p = subprocess.Popen(
-            args=cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        if exit_code := p.wait():
-            _, stderr = p.communicate()
-            print(stderr.decode())
-            log(
-                f"Failed to calculate performance points for map {osu_file_path}",
-                Ansi.LRED,
-            )
-            raise Exception()
-
-        stdout, _ = p.communicate()
-        try:
-            obj = orjson.loads(stdout.decode())
-            pp = obj["performance_attributes"]["pp"]
-            sr = obj["difficulty_attributes"]["star_rating"]
-        except orjson.JSONDecodeError:
-            app.logging.log(f"Error when calculating map {osu_file_path}", Ansi.LRED)
-            pp = 0.0
-            sr = 0.0
-
-        if math.isnan(pp) or math.isinf(pp):
-            # TODO: report to logserver
-            pp = 0.0
-            sr = 0.0
-
-        results.append(
-            {
-                "performance": pp,
-                "star_rating": sr,
-            },
-        )
-
-    return results
-
-
-def calculate_performances(
-    osu_file_path: str,
-    mode: int,
-    mods: Optional[int],
-    scores: list[ScoreDifficultyParams],
-) -> list[DifficultyRating]:
-    if mode in (0, 1, 2, 4, 5, 6, 8):
-        results = calculate_performances_stc(
-            mode,
-            mods,
-            osu_file_path,
-            scores,
-        )
-    elif mode == 3:
-        results = calculate_performances_mania(
-            osu_file_path,
-            mods,
-            scores,
-        )
-    else:
-        raise NotImplementedError
-
-    return results
+    return cmd

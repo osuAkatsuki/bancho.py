@@ -558,7 +558,7 @@ async def _with(ctx: Context) -> Optional[str]:
             score_args["score"] = score * 1000
             msg_fields.append(f"{score}k")
 
-    result = app.usecases.performance.calculate_performances(
+    result = await app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         mode=mode_vn,
         mods=int(command_args["mods"]),
@@ -1259,7 +1259,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                             "score": row["score"]
                         }
                     
-                    result = calculate_performances(str(osu_file_path), row['mode'], row["mods"], [score])
+                    result = await calculate_performances(str(osu_file_path), row['mode'], row["mods"], [score])
                     pp = result[0]["performance"]
 
                     score_id = row["id"]

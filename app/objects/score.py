@@ -363,7 +363,7 @@ class Score:
         # TODO: idk if returns none
         return better_scores + 1  # if better_scores is not None else 1
 
-    def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
+    async def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
@@ -379,7 +379,7 @@ class Score:
                 "score": self.score,
             }
 
-        result = app.usecases.performance.calculate_performances(
+        result = await app.usecases.performance.calculate_performances(
             osu_file_path=str(osu_file_path),
             mode=mode_vn,
             mods=int(self.mods),

@@ -716,7 +716,7 @@ async def osuSubmitModularSelector(
 
     osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
     if await ensure_local_osu_file(osu_file_path, score.bmap.id, score.bmap.md5):
-        score.pp, score.sr = score.calculate_performance(osu_file_path)
+        score.pp, score.sr = await score.calculate_performance(osu_file_path)
 
         if score.passed:
             await score.calculate_status()
