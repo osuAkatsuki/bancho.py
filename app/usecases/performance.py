@@ -29,29 +29,31 @@ class ScoreDifficultyParams(TypedDict, total=False):
     # mania
     score: int
 
+def spawn_osu_tools(cmd) -> Optional[str]:
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        app.logging.log(f"[PP Calc] Error occurred when calculating map: {stderr.decode()}", Ansi.LRED)
+        return None
+    return stdout.decode()
+
 async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[int], scores: list[ScoreDifficultyParams]) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
     for score in scores:
         cmd = generate_cmd(osu_file_path, mode, mods, score)
-        app.logging.log(f"[PP Calc] Prepared | calc {osu_file_path} : {cmd}", Ansi.GRAY)
-        proc = await asyncio.create_subprocess_exec(
-            OSU_TOOLS_EXEC_PATH,
-            cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE)
-        app.logging.log(f"[PP Calc] Spawned | calc {osu_file_path}", Ansi.GRAY)
-        stdout, stderr = await proc.communicate()
-        app.logging.log(f"[PP Calc] Returned | calc {osu_file_path}", Ansi.GRAY)
-        if proc.returncode != 0:
-            app.logging.log(f"[PP Calc] Error occurred when calculating map {osu_file_path}: {stderr.decode()}", Ansi.LRED)
+        json = await asyncio.to_thread(spawn_osu_tools, cmd)
+        if json is None:
             results.append({
                 "performance": 0.0,
                 "star_rating": 0.0,
             })
             continue
         try:
-            obj = orjson.loads(stdout.decode())
+            obj = orjson.loads(json)
             if mode == 4:
                 pp = obj["performance_attributes"]["aim"]
             elif mode == 8:
@@ -67,7 +69,6 @@ async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[i
             app.logging.log(f"[PP Calc] JSON decode error when calculating map {osu_file_path}", Ansi.LRED)
             pp = 0.0
             sr = 0.0
-        app.logging.log(f"[PP Calc] Parsed | calc {osu_file_path}", Ansi.GRAY)
         results.append({
             "performance": pp,
             "star_rating": sr,
@@ -85,7 +86,7 @@ def generate_cmd(osu_file_path: str, mode: int, mods: Optional[int], score: Scor
     else:
         mode_str = "mania"
 
-    cmd = ["simulate", mode_str, "-j"]
+    cmd = [OSU_TOOLS_EXEC_PATH, "simulate", mode_str, "-j"]
 
     if mods is not None:
         cmd.append("-lm")
