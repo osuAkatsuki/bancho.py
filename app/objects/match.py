@@ -177,6 +177,9 @@ class Slot:
         self.loaded = False
         self.skipped = False
 
+    def has_player(self) -> bool:
+        return (self.status & SlotStatus.has_player) != 0
+
 
 class StartingTimers(TypedDict):
     start: Optional[TimerHandle]
@@ -374,6 +377,13 @@ class Match:
                 return s
 
         return None
+
+    def get_slot_by_id(self, s_id: int) -> Optional[Slot]:
+        """Return the slot by id."""
+        if s_id not in range(1, len(self.slots) + 1):
+            return None
+
+        return self.slots[s_id - 1]
 
     def get_slot_id(self, p: Player) -> Optional[int]:
         """Return the slot index containing a given player."""
