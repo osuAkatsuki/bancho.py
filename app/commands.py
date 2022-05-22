@@ -1211,11 +1211,12 @@ async def recalc(ctx: Context) -> Optional[str]:
             f"[Recalc] {ctx.player} started a full recalculation.")
         st = time.time()
 
-        async with (app.state.services.database.connection() as score_select_conn):
+        async with (
+            app.state.services.database.connection() as score_select_conn,
+            app.state.services.database.connection() as update_conn):
             queue = asyncio.Queue()
 
-            async def pp_recalc_worker(staff_chan, queue: asyncio.Queue) -> None:
-                update_conn = app.state.services.database.connection()
+            async def pp_recalc_worker(update_conn, staff_chan, queue: asyncio.Queue) -> None:
                 while True:
                     row = await queue.get()
 
@@ -1267,7 +1268,7 @@ async def recalc(ctx: Context) -> Optional[str]:
 
             tasks = []
             for _ in range(3):
-                task = app.state.loop.create_task(pp_recalc_worker(staff_chan, queue))
+                task = app.state.loop.create_task(pp_recalc_worker(update_conn, staff_chan, queue))
                 tasks.append(task)
 
             for row in await score_select_conn.fetch_all(

@@ -34,6 +34,7 @@ async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[i
 
     for score in scores:
         cmd = generate_cmd(osu_file_path, mode, mods, score)
+        app.logging.log(f"[PP Calc] Prepared to calc {osu_file_path} : {cmd}", Ansi.GRAY)
         proc = await asyncio.create_subprocess_shell(
             cmd,
             stdout=asyncio.subprocess.PIPE,
