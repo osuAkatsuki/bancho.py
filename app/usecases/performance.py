@@ -34,12 +34,14 @@ async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[i
 
     for score in scores:
         cmd = generate_cmd(osu_file_path, mode, mods, score)
-        app.logging.log(f"[PP Calc] Prepared to calc {osu_file_path} : {cmd}", Ansi.GRAY)
+        app.logging.log(f"[PP Calc] Prepared | calc {osu_file_path} : {cmd}", Ansi.GRAY)
         proc = await asyncio.create_subprocess_shell(
             cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE)
+        app.logging.log(f"[PP Calc] Spawned | calc {osu_file_path}", Ansi.GRAY)
         stdout, stderr = await proc.communicate()
+        app.logging.log(f"[PP Calc] Returned | calc {osu_file_path}", Ansi.GRAY)
         if proc.returncode != 0:
             app.logging.log(f"[PP Calc] Error occurred when calculating map {osu_file_path}: {stderr.decode()}", Ansi.LRED)
             results.append({
@@ -64,7 +66,7 @@ async def calculate_performances(osu_file_path: str, mode: int, mods: Optional[i
             app.logging.log(f"[PP Calc] JSON decode error when calculating map {osu_file_path}", Ansi.LRED)
             pp = 0.0
             sr = 0.0
-        
+        app.logging.log(f"[PP Calc] Parsed | calc {osu_file_path}", Ansi.GRAY)
         results.append({
             "performance": pp,
             "star_rating": sr,
