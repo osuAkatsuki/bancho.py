@@ -1055,18 +1055,19 @@ class Player:
     async def update_rank(self, mode: GameMode) -> int:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
+        
+        if not self.restricted:
+            # global rank
+            await app.state.services.redis.zadd(
+                f"bancho:leaderboard:{mode.value}",
+                {str(self.id): stats.pp},
+            )
 
-        # global rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}",
-            {str(self.id): stats.pp},
-        )
-
-        # country rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}:{country}",
-            {str(self.id): stats.pp},
-        )
+            # country rank
+            await app.state.services.redis.zadd(
+                f"bancho:leaderboard:{mode.value}:{country}",
+                {str(self.id): stats.pp},
+            )
 
         return await self.get_global_rank(mode)
 
