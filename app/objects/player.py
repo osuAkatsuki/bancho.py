@@ -1055,7 +1055,7 @@ class Player:
     async def update_rank(self, mode: GameMode) -> int:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
-        
+
         if not self.restricted:
             # global rank
             await app.state.services.redis.zadd(
