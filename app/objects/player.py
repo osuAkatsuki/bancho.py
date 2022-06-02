@@ -1056,17 +1056,18 @@ class Player:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
 
-        # global rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}",
-            {str(self.id): stats.pp},
-        )
+        if not self.restricted:
+            # global rank
+            await app.state.services.redis.zadd(
+                f"bancho:leaderboard:{mode.value}",
+                {str(self.id): stats.pp},
+            )
 
-        # country rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}:{country}",
-            {str(self.id): stats.pp},
-        )
+            # country rank
+            await app.state.services.redis.zadd(
+                f"bancho:leaderboard:{mode.value}:{country}",
+                {str(self.id): stats.pp},
+            )
 
         return await self.get_global_rank(mode)
 
