@@ -1002,7 +1002,7 @@ async def osuSubmitModularSelector(
 
             # calculate new total weighted pp
             weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
-            bonus_pp = 416.6667 * (1 - 0.95**total_scores)
+            bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
 
             # add pp to query
