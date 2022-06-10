@@ -1236,6 +1236,10 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if target is None:
         return "Could not find user."
 
+    if bits & Privileges.DONATOR:
+        # TODO: this could be nonblocking?
+        return "Please use the !givedonator command to assign donator privileges to players."
+
     await usecases.players.add_privileges(target, bits)
 
     return f"Updated {target}'s privileges."
