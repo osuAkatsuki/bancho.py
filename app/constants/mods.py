@@ -59,6 +59,11 @@ class Mods(IntFlag):
         for mod in Mods:
             if self.value & mod:
                 mod_str.append(_dict[mod])
+                
+        if self.value & Mods.NIGHTCORE:
+            mod_str = mod_str.replace("DT", "")
+        if self.value & Mods.PERFECT:
+            mod_str = mod_str.replace("SD", "")
 
         return "".join(mod_str)
 
