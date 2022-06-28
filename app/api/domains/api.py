@@ -25,7 +25,6 @@ from app.objects.clan import Clan
 from app.objects.player import Player
 from app.state.services import acquire_db_conn
 
-AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
@@ -55,7 +54,6 @@ router = APIRouter(tags=["bancho.py API"])
 
 # [Normal]
 # GET /calculate_pp: calculate & return pp for a given beatmap.
-# POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
 
 # TODO handlers
 # GET /get_friends: return a list of the player's friends.
@@ -961,28 +959,3 @@ async def api_get_pool(
 
 # NOTE: `Content-Type = application/json` is applied in the above decorator
 #                                         for the following api handlers.
-
-
-# @domain.route("/set_avatar", methods=["POST", "PUT"])
-# @requires_api_key
-# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
-#     """Update the tokenholder's avatar to a given file."""
-#     if "avatar" not in conn.files:
-#         return (400, JSON({"status": "must provide avatar file."}))
-
-#     ava_file = conn.files["avatar"]
-
-#     # block files over 4MB
-#     if len(ava_file) > (4 * 1024 * 1024):
-#         return (400, JSON({"status": "avatar file too large (max 4MB)."}))
-
-#     if ava_file[6:10] in (b"JFIF", b"Exif"):
-#         ext = "jpeg"
-#     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
-#         ext = "png"
-#     else:
-#         return (400, JSON({"status": "invalid file type."}))
-
-#     # write to the avatar file
-#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
-#     return JSON({"status": "success."})
