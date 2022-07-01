@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
+import logging
 import random
 from enum import IntEnum
 from enum import unique
@@ -51,9 +52,6 @@ from app._typing import OsuClientModes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.logging import Ansi
-from app.logging import log
-from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
@@ -175,14 +173,13 @@ async def osuError(
         screenshot_file,
     )
 
-    log(
+    logging.info(
         f'{player or "Offline user"} sent error report: {feedback} ({exception})',
-        Ansi.LCYAN,
     )
 
     # NOTE: this stacktrace can be a LOT of data
-    if app.settings.DEBUG and len(stacktrace) < 2000:
-        printc(stacktrace[:-2], Ansi.LMAGENTA)
+    if len(stacktrace) < 2000:
+        logging.debug(stacktrace[:-2])
 
 
 @router.post("/web/osu-screenshot.php")
@@ -204,7 +201,7 @@ async def osuScreenshot(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    log(f"{player} uploaded {data}.")
+    logging.info(f"{player} uploaded {data}.")
     return data
 
 
@@ -520,7 +517,7 @@ async def submit_score(
         "SELECT 1 FROM scores WHERE online_checksum = :checksum",
         {"checksum": score.client_checksum},
     ):
-        log(f"{player} submitted a duplicate score.", Ansi.LYELLOW)
+        logging.warning(f"{player} submitted a duplicate score.")
         return b"error: no"
 
     if fl_cheat_screenshot:
@@ -628,7 +625,7 @@ async def submit_score(
         # All submitted plays should have a replay.
         # If not, they may be using a score submitter.
         if len(replay_data) < 24 and not player.restricted:
-            log(f"{player} submitted a score without a replay!", Ansi.LRED)
+            logging.warning(f"{player} submitted a score without a replay!")
             await usecases.players.restrict(
                 player=player,
                 admin=app.state.sessions.bot,
@@ -703,10 +700,9 @@ async def submit_score(
         # (score failed)
         ret = b"error: no"
 
-    log(
+    logging.info(
         f"[{score.mode!r}] {player} submitted a score! "
         f"({score.status!r}, {score.pp:,.2f}pp / {player.gm_stats.pp:,}pp)",
-        Ansi.LGREEN,
     )
 
     return ret
@@ -1248,7 +1244,7 @@ async def get_updated_beatmap(map_filename: str, host: str = Header(...)):
 
         async with app.state.services.http_client.get(url) as resp:
             if not resp or resp.status != 200:
-                log(f"Could not find map {osu_file_path}!", Ansi.LRED)
+                logging.warning(f"Could not find map {osu_file_path}!")
                 return (404, b"")  # couldn't find on osu!'s server
 
             content = await resp.read()
@@ -1323,7 +1319,7 @@ async def register_account(
         if app.state.services.datadog is not None:
             app.state.services.datadog.increment("bancho.registrations")
 
-        log(f"<{username} ({player_id})> has registered!", Ansi.LGREEN)
+        logging.info(f"<{username} ({player_id})> has registered!")
 
     return b"ok"  # success
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import time
 import uuid
-from datetime import timedelta
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -20,7 +20,6 @@ from app.constants.gamemodes import GameMode
 from app.constants.privileges import Privileges
 from app.discord import DiscordWebhook
 from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.channel import Channel
 from app.objects.match import Match
@@ -157,7 +156,7 @@ async def logout(player: Player) -> None:
 
         app.state.sessions.players.enqueue(app.packets.logout(player.id))
 
-    log(f"{player} logged out.", Ansi.LYELLOW)
+    logging.info(f"{player} logged out.")
 
 
 async def update_name(player: Player, new_name: str) -> None:
@@ -261,7 +260,7 @@ async def restrict(player: Player, admin: Player, reason: str) -> None:
 
     log_msg = f"{admin} restricted {player} for: {reason}."
 
-    log(log_msg, Ansi.LRED)
+    logging.warning(log_msg)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
@@ -299,7 +298,7 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
 
     log_msg = f"{admin} unrestricted {player} for: {reason}."
 
-    log(log_msg, Ansi.LRED)
+    logging.warning(log_msg)
 
     if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
         webhook = DiscordWebhook(webhook_url, content=log_msg)
@@ -328,7 +327,7 @@ async def silence(player: Player, admin: Player, duration: int, reason: str) -> 
     if player.match:
         await leave_match(player)
 
-    log(f"Silenced {player}.", Ansi.LCYAN)
+    logging.info(f"Silenced {player}.")
 
 
 async def unsilence(player: Player, admin: Player) -> None:
@@ -345,13 +344,13 @@ async def unsilence(player: Player, admin: Player) -> None:
     # inform the user's client
     player.enqueue(app.packets.silence_end(0))
 
-    log(f"Unsilenced {player}.", Ansi.LCYAN)
+    logging.info(f"Unsilenced {player}.")
 
 
 async def join_match(player: Player, match: Match, passwd: str) -> bool:
     """Attempt to add a player to a multiplayer match."""
     if player.match:
-        log(f"{player} tried to join multiple matches?")
+        logging.warning(f"{player} tried to join multiple matches?")
         player.enqueue(app.packets.match_join_fail())
         return False
 
@@ -366,11 +365,11 @@ async def join_match(player: Player, match: Match, passwd: str) -> bool:
         # NOTE: staff members have override to pw and can
         # simply use any to join a pw protected match.
         if passwd != match.passwd and player not in app.state.sessions.players.staff:
-            log(f"{player} tried to join {match} w/ incorrect pw.", Ansi.LYELLOW)
+            logging.warning(f"{player} tried to join {match} w/ incorrect pw.")
             player.enqueue(app.packets.match_join_fail())
             return False
         if (slotID := match.get_free()) is None:
-            log(f"{player} tried to join a full match.", Ansi.LYELLOW)
+            logging.warning(f"{player} tried to join a full match.")
             player.enqueue(app.packets.match_join_fail())
             return False
 
@@ -379,7 +378,7 @@ async def join_match(player: Player, match: Match, passwd: str) -> bool:
         slotID = 0
 
     if not join_channel(player, match.chat):
-        log(f"{player} failed to join {match.chat}.", Ansi.LYELLOW)
+        logging.warning(f"{player} failed to join {match.chat}.")
         return False
 
     lobby_channel = await repositories.channels.fetch("#lobby")
@@ -409,8 +408,7 @@ async def join_match(player: Player, match: Match, passwd: str) -> bool:
 async def leave_match(player: Player) -> None:
     """Attempt to remove a player from their multiplayer match."""
     if not player.match:
-        if app.settings.DEBUG:
-            log(f"{player} tried leaving a match they're not in?", Ansi.LYELLOW)
+        logging.debug(f"{player} tried leaving a match they're not in?")
         return
 
     slot = player.match.get_slot(player)
@@ -430,7 +428,7 @@ async def leave_match(player: Player) -> None:
     if all(slot.empty() for slot in player.match.slots):
         # multi is now empty, chat has been removed.
         # remove the multi from the channels list.
-        log(f"Match {player.match} finished.")
+        logging.info(f"Match {player.match} finished.")
 
         # cancel any pending start timers
         if player.match.starting["start"] is not None:
@@ -509,8 +507,7 @@ def join_channel(player: Player, channel: Channel) -> bool:
             if usecases.channels.can_read(channel, p.priv):
                 p.enqueue(chan_info_packet)
 
-    if app.settings.DEBUG:
-        log(f"{player} joined {channel}.")
+    logging.debug(f"{player} joined {channel}.")
 
     return True
 
@@ -545,8 +542,7 @@ def leave_channel(player: Player, channel: Channel, kick: bool = True) -> None:
             if usecases.channels.can_read(channel, p.priv):
                 p.enqueue(chan_info_packet)
 
-    if app.settings.DEBUG:
-        log(f"{player} left {channel}.")
+    logging.debug(f"{player} left {channel}.")
 
 
 async def add_spectator(player: Player, other: Player) -> None:
@@ -569,7 +565,7 @@ async def add_spectator(player: Player, other: Player) -> None:
 
     # attempt to join their spectator channel.
     if not join_channel(other, spec_channel):
-        log(f"{player} failed to join {spec_channel}?", Ansi.LYELLOW)
+        logging.warning(f"{player} failed to join {spec_channel}?")
         return
 
     if not other.stealth:
@@ -588,7 +584,7 @@ async def add_spectator(player: Player, other: Player) -> None:
     player.spectators.append(other)
     other.spectating = player
 
-    log(f"{other} is now spectating {player}.")
+    logging.info(f"{other} is now spectating {player}.")
 
 
 async def remove_spectator(player: Player, other: Player) -> None:
@@ -619,16 +615,13 @@ async def remove_spectator(player: Player, other: Player) -> None:
             s.enqueue(fellow + c_info)
 
     player.enqueue(app.packets.spectator_left(other.id))
-    log(f"{other} is no longer spectating {player}.")
+    logging.info(f"{other} is no longer spectating {player}.")
 
 
 async def add_friend(player: Player, other: Player) -> None:
     """Attempt to add `p` to `player`'s friends."""
     if other.id in player.friends:
-        log(
-            f"{player} tried to add {other}, who is already their friend!",
-            Ansi.LYELLOW,
-        )
+        logging.warning(f"{player} tried to add {other}, who is already their friend!")
         return
 
     player.friends.add(other.id)
@@ -637,16 +630,13 @@ async def add_friend(player: Player, other: Player) -> None:
         {"user1": player.id, "user2": other.id},
     )
 
-    log(f"{player} friended {other}.")
+    logging.info(f"{player} friended {other}.")
 
 
 async def remove_friend(player: Player, other: Player) -> None:
     """Attempt to remove `p` from `player`'s friends."""
     if other.id not in player.friends:
-        log(
-            f"{player} tried to unfriend {other}, who is not their friend!",
-            Ansi.LYELLOW,
-        )
+        logging.warning(f"{player} tried to unfriend {other}, who is not their friend!")
         return
 
     player.friends.remove(other.id)
@@ -655,15 +645,14 @@ async def remove_friend(player: Player, other: Player) -> None:
         {"user1": player.id, "user2": other.id},
     )
 
-    log(f"{player} unfriended {other}.")
+    logging.info(f"{player} unfriended {other}.")
 
 
 async def add_block(player: Player, other: Player) -> None:
     """Attempt to add `p` to `player`'s blocks."""
     if other.id in player.blocks:
-        log(
+        logging.warning(
             f"{player} tried to block {other}, who they've already blocked!",
-            Ansi.LYELLOW,
         )
         return
 
@@ -673,16 +662,13 @@ async def add_block(player: Player, other: Player) -> None:
         {"user1": player.id, "user2": other.id},
     )
 
-    log(f"{player} blocked {other}.")
+    logging.info(f"{player} blocked {other}.")
 
 
 async def remove_block(player: Player, other: Player) -> None:
     """Attempt to remove `p` from `player`'s blocks."""
     if other.id not in player.blocks:
-        log(
-            f"{player} tried to unblock {other}, who they haven't blocked!",
-            Ansi.LYELLOW,
-        )
+        logging.warning(f"{player} tried to unblock {other}, who they haven't blocked!")
         return
 
     player.blocks.remove(other.id)
@@ -691,7 +677,7 @@ async def remove_block(player: Player, other: Player) -> None:
         {"user1": player.id, "user2": other.id},
     )
 
-    log(f"{player} unblocked {other}.")
+    logging.info(f"{player} unblocked {other}.")
 
 
 async def unlock_achievement(player: Player, achievement: Achievement) -> None:
@@ -951,8 +937,7 @@ async def execute_menu_option(player: Player, menu_id: int) -> None:
     # this is one of their menu options, execute it.
     cmd, data = player.current_menu.options[menu_id]
 
-    if app.settings.DEBUG:
-        print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
+    logging.debug(f"{Ansi.LMAGENTA!r}{cmd!r}{Ansi.RESET!r} {data}")
 
     if cmd == MenuCommands.Reset:
         # go back to the main menu

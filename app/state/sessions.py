@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import databases.core
 
 import app.state.services
 import app.utils
 from app import repositories
-from app.logging import Ansi
-from app.logging import log
 from app.objects.collections import Matches
 from app.objects.collections import Players
 from app.objects.player import Player
@@ -28,10 +27,7 @@ bot: Player
 
 
 async def cancel_housekeeping_tasks() -> None:
-    log(
-        f"-> Cancelling {len(housekeeping_tasks)} housekeeping tasks.",
-        Ansi.LMAGENTA,
-    )
+    logging.info(f"-> Cancelling {len(housekeeping_tasks)} housekeeping tasks.")
 
     # cancel housekeeping tasks
     for task in housekeeping_tasks:

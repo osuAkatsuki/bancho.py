@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import io
 import ipaddress
+import logging
 import os
 import shutil
 import socket
@@ -24,9 +25,6 @@ import requests
 from fastapi import status
 
 import app.settings
-from app.logging import Ansi
-from app.logging import log
-from app.logging import printc
 
 __all__ = (
     # TODO: organize/sort these
@@ -76,10 +74,9 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
     row = await db_conn.fetch_one("SELECT name FROM users WHERE id = 1")
 
     if not row:
-        log(
+        logging.warning(
             "Couldn't find bot account in the database, "
             "defaulting to BanchoBot for their name.",
-            Ansi.LYELLOW,
         )
         return "BanchoBot"
 
@@ -88,11 +85,11 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""
-    log("Downloading achievement images from mirror.", Ansi.LCYAN)
+    logging.info("Downloading achievement images from mirror.")
     resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
     if resp.status_code != status.HTTP_200_OK:
-        log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
+        logging.error("Failed to fetch from mirror, trying osu! servers.")
         return False
 
     with io.BytesIO(resp.content) as data:
@@ -116,14 +113,14 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
         for n in (500, 750, 1000, 2000):
             achs.append(f"osu-combo-{n}{res}.png")
 
-    log("Downloading achievement images from osu!.", Ansi.LCYAN)
+    logging.info("Downloading achievement images from osu!.")
 
     for ach in achs:
         resp = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
         if resp.status_code != 200:
             return False
 
-        log(f"Saving achievement: {ach}", Ansi.LCYAN)
+        logging.info(f"Saving achievement: {ach}")
         (achievements_path / ach).write_bytes(resp.content)
 
     return True
@@ -139,10 +136,10 @@ def download_achievement_images(achievements_path: Path) -> None:
         downloaded = _download_achievement_images_osu(achievements_path)
 
     if downloaded:
-        log("Downloaded all achievement images.", Ansi.LGREEN)
+        logging.info("Downloaded all achievement images.")
     else:
         # TODO: make the code safe in this state
-        log("Failed to download achievement images.", Ansi.LRED)
+        logging.error("Failed to download achievement images.")
         achievements_path.rmdir()
 
 
@@ -151,10 +148,10 @@ def download_default_avatar(default_avatar_path: Path) -> None:
     resp = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
 
     if resp.status_code != 200:
-        log("Failed to fetch default avatar.", Ansi.LRED)
+        logging.error("Failed to fetch default avatar.")
         return
 
-    log("Downloaded default avatar.", Ansi.LGREEN)
+    logging.info("Downloaded default avatar.")
     default_avatar_path.write_bytes(resp.content)
 
 
@@ -247,21 +244,16 @@ def _install_synchronous_excepthook() -> None:
             "module 'config' has no attribute",
         ):
             attr_name = value.args[0][34:-1]
-            log(
+            logging.warning(
                 "bancho.py's config has been updated, and has "
-                f"added a new `{attr_name}` attribute.",
-                Ansi.LMAGENTA,
-            )
-            log(
+                f"added a new `{attr_name}` attribute.\n\n"
                 "Please refer to it's value & example in "
                 "ext/config.sample.py for additional info.",
-                Ansi.LCYAN,
             )
             return
 
-        printc(
+        logging.error(
             f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
-            Ansi.RED,
         )
         real_excepthook(type_, value, traceback)  # type: ignore
 
@@ -340,20 +332,18 @@ def escape_enum(
 def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for bancho.py."""
     if sys.platform != "linux":
-        log("bancho.py currently only supports linux", Ansi.LRED)
+        logging.critical("bancho.py currently only supports linux")
         if sys.platform == "win32":
-            log(
+            logging.critical(
                 "you could also try wsl(2), i'd recommend ubuntu 18.04 "
                 "(i use it to test bancho.py)",
-                Ansi.LBLUE,
             )
         return 1
 
     if sys.version_info < (3, 9):
-        log(
+        logging.critical(
             "bancho.py uses many modern python features, "
             "and the minimum python version is 3.9.",
-            Ansi.LRED,
         )
         return 1
 
@@ -367,6 +357,8 @@ def ensure_local_services_are_running() -> int:
     # how people are using the software so that i can keep it
     # in mind while developing new features & refactoring.
 
+    # TODO: make these attempt to connect instead of checking in these strange ways
+
     if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
         # sql server running locally, make sure it's running
         for service in ("mysqld", "mariadb"):
@@ -379,11 +371,11 @@ def ensure_local_services_are_running() -> int:
                 stdout=subprocess.DEVNULL,
             )
             if pgrep_exit_code != 0:
-                log("Unable to connect to mysql server.", Ansi.LRED)
+                logging.critical("Unable to connect to mysql server.")
                 return 1
 
     if not os.path.exists("/var/run/redis/redis-server.pid"):
-        log("Unable to connect to redis server.", Ansi.LRED)
+        logging.critical("Unable to connect to redis server.")
         return 1
 
     return 0
@@ -415,18 +407,18 @@ def ensure_dependencies_and_requirements() -> int:
         or not (OPPAI_PATH / "pybind11").exists()
         or not any((OPPAI_PATH / "pybind11").iterdir())
     ):
-        log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
+        logging.warning("No oppai-ng submodule found, attempting to clone.")
         p = subprocess.Popen(
             args=["git", "submodule", "update", "--init", "--recursive"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         if exit_code := p.wait():
-            log("Failed to get git submodules.", Ansi.LRED)
+            logging.critical("Failed to get git submodules.")
             return exit_code
 
     if not (OPPAI_PATH / "oppai.so").exists():
-        log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
+        logging.warning("No oppai-ng library found, attempting to build.")
         p = subprocess.Popen(
             args=["./build"],
             cwd="oppai_ng",
@@ -436,25 +428,23 @@ def ensure_dependencies_and_requirements() -> int:
         if exit_code := p.wait():
             _, stderr = p.communicate()
             print(stderr.decode())
-            log("Failed to build oppai-ng automatically.", Ansi.LRED)
+            logging.critical("Failed to build oppai-ng automatically.")
             return exit_code
 
-        log(
-            "oppai-ng built, please start bancho.py again!",
-            Ansi.LMAGENTA,
-        )  # restart is required to fix imports
+        # restart is required to fix imports
+        # TODO: can we refactor this requirement out?
+        logging.warning("oppai-ng built, please start bancho.py again!")
 
         if OLD_OPPAI_PATH.exists():
             # they have the old oppai-ng folder on disk
             # they may have made changes to their pp system,
             # let them know that they can delete it & fork if needed
-            log(
+            logging.warning(
                 "Note that with the v4.2.1 migration, the oppai-ng folder was "
                 "moved to oppai_ng (note the underscore). Your old oppai-ng "
                 "folder still exists, and if you have made diverging changes "
                 "to your PP system, you'll need to update the new oppai_ng "
                 "submodule to apply those changes.",
-                Ansi.LMAGENTA,
             )
 
         return 1
@@ -487,23 +477,21 @@ def _install_debugging_hooks() -> None:
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if app.settings.DEVELOPER_MODE:
-        log("running in advanced mode", Ansi.LRED)
-    if app.settings.DEBUG:
-        log("running in debug mode", Ansi.LMAGENTA)
+        logging.warning("running in advanced mode")
+    if app.settings.LOG_LEVEL <= logging.DEBUG:
+        logging.warning("running in debug mode")
 
     # running on root grants the software potentally dangerous and
     # unnecessary power over the operating system and is not advised.
     if os.geteuid() == 0:
-        log(
+        logging.warning(
             "It is not recommended to run bancho.py as root, especially in production..",
-            Ansi.LYELLOW,
         )
 
         if app.settings.DEVELOPER_MODE:
-            log(
+            logging.warning(
                 "The risk is even greater with features "
                 "such as config.advanced enabled.",
-                Ansi.LRED,
             )
 
 

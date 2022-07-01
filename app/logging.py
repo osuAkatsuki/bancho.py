@@ -38,14 +38,14 @@ class Ansi(IntEnum):
 
 class RGB:
     @overload
-    def __init__(self, rgb: int) -> None:
+    def __init__(self, rgb: int, **kwargs) -> None:
         ...
 
     @overload
-    def __init__(self, r: int, g: int, b: int) -> None:
+    def __init__(self, r: int, g: int, b: int, **kwargs) -> None:
         ...
 
-    def __init__(self, *args) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         largs = len(args)
 
         if largs == 3:
@@ -64,15 +64,6 @@ class RGB:
         return f"\x1b[38;2;{self.r};{self.g};{self.b}m"
 
 
-class _Rainbow:
-    ...
-
-
-Rainbow = _Rainbow()
-
-Colour_Types = Union[Ansi, RGB, _Rainbow]
-
-
 def get_timestamp(full: bool = False, tz: Optional[datetime.tzinfo] = None) -> str:
     fmt = "%d/%m/%Y %I:%M:%S%p" if full else "%I:%M:%S%p"
     return f"{datetime.datetime.now(tz=tz):{fmt}}"
@@ -88,62 +79,17 @@ def set_timezone(tz: datetime.tzinfo) -> None:
     _log_tz = tz
 
 
-def printc(msg: str, col: Colour_Types, end: str = "\n") -> None:
-    """Print a string, in a specified ansi colour."""
-    print(f"{col!r}{msg}{Ansi.RESET!r}", end=end)
-
-
-def log(
-    msg: str,
-    col: Optional[Colour_Types] = None,
-    file: Optional[str] = None,
-    end: str = "\n",
-) -> None:
-    """\
-    Print a string, in a specified ansi colour with timestamp.
-
-    Allows for the functionality to write to a file as
-    well by passing the filepath with the `file` parameter.
-    """
-
-    ts_short = get_timestamp(full=False, tz=_log_tz)
-
-    if col:
-        if col is Rainbow:
-            print(f"{Ansi.GRAY!r}[{ts_short}] {_fmt_rainbow(msg, 2/3)}", end=end)
-            print(f"{Ansi.GRAY!r}[{ts_short}] {_fmt_rainbow(msg, 2/3)}", end=end)
-        else:
-            # normal colour
-            print(f"{Ansi.GRAY!r}[{ts_short}] {col!r}{msg}{Ansi.RESET!r}", end=end)
-    else:
-        print(f"{Ansi.GRAY!r}[{ts_short}]{Ansi.RESET!r} {msg}", end=end)
-
-    if file:
-        # log simple ascii output to file.
-        with open(file, "a+") as f:
-            f.write(f"[{get_timestamp(full=True, tz=_log_tz)}] {msg}\n")
-
-
-def rainbow_color_stops(
-    n: int = 10,
-    lum: float = 0.5,
-    end: float = 2 / 3,
-) -> list[tuple[float, float, float]]:
-    return [
-        (r * 255, g * 255, b * 255)
+def ansi_rgb_rainbow(msg: str, end: float = 2 / 3) -> str:
+    """Add ANSI colour escapes to `msg` to make it a rainbow."""
+    colours = [
+        RGB(int(r * 255), int(g * 255), int(b * 255))
         for r, g, b in [
-            colorsys.hls_to_rgb(end * i / (n - 1), lum, 1) for i in range(n)
+            colorsys.hls_to_rgb(h=end * i / (len(msg) - 1), l=0.5, s=1)
+            for i in range(len(msg))
         ]
     ]
 
-
-def _fmt_rainbow(msg: str, end: float = 2 / 3) -> str:
-    cols = [RGB(*map(int, rgb)) for rgb in rainbow_color_stops(n=len(msg), end=end)]
-    return "".join([f"{cols[i]!r}{c}" for i, c in enumerate(msg)]) + repr(Ansi.RESET)
-
-
-def print_rainbow(msg: str, rainbow_end: float = 2 / 3, end: str = "\n") -> None:
-    print(_fmt_rainbow(msg, rainbow_end), end=end)
+    return "".join([f"{colours[i]!r}{c}" for i, c in enumerate(msg)]) + repr(Ansi.RESET)
 
 
 # TODO: genericize this to all SI measurements?

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
@@ -8,8 +9,6 @@ from typing import Union
 import app.state.services
 from app import repositories
 from app.constants.mods import Mods
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.match import MapPool
 
@@ -34,7 +33,7 @@ async def _maps_from_sql(pool_id: int) -> MutableMapping[tuple[Mods, int], Beatm
             # NOTE: it's intentional that this removes
             # it from not only this pool, but all pools.
             # TODO: perhaps discord webhook?
-            log(f"Removing {map_id} from pool {pool_id} (not found).", Ansi.LRED)
+            logging.warning(f"Removing {map_id} from pool {pool_id} (not found).")
 
             await app.state.services.database.execute(
                 "DELETE FROM tourney_pool_maps WHERE map_id = :map_id",

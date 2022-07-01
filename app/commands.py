@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import math
 import os
 import pprint
@@ -46,8 +47,6 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.constants.privileges import privileges_to_str
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.match import Match
@@ -1192,13 +1191,6 @@ async def recalc(ctx: Context) -> Optional[str]:
 
         asyncio.create_task(recalc_all())
         return "Starting a full recalculation."
-
-
-@command(Privileges.DEVELOPER, hidden=True)
-async def debug(ctx: Context) -> Optional[str]:
-    """Toggle the console's debug setting."""
-    app.settings.DEBUG = not app.settings.DEBUG
-    return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
 
 
 # NOTE: these commands will likely be removed
@@ -2465,7 +2457,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
     for member_id in clan.member_ids:
         member = await repositories.players.fetch(id=member_id)
         if member is None:
-            log(f"Could not find a clan's member with id {member_id}.", Ansi.LYELLOW)
+            logging.warning(f"Could not find a clan's member with id {member_id}.")
             continue
 
         await usecases.clans.remove_member(clan, member)

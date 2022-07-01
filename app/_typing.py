@@ -5,9 +5,12 @@ from ipaddress import IPv6Address
 from typing import Literal
 from typing import Union
 
+AppEnvironments = Literal["local", "staging", "production"]
+
 IPAddress = Union[IPv4Address, IPv6Address]
 
 # some types used within the osu! client
+
 
 OsuClientModes = Literal[
     "Menu",

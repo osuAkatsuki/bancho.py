@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 from typing import TypedDict
 from typing import Union
 
 import app.settings
 import app.state.services
-from app.logging import Ansi
-from app.logging import log
-
 
 # TODO: move to models?
 class OsuAPIV1BeatmapResponse(TypedDict):
@@ -70,8 +68,7 @@ async def get_beatmaps(
 
     https://github.com/ppy/osu-api/wiki#apiget_beatmaps
     """
-    if app.settings.DEBUG:
-        log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
+    logging.debug(f"Doing osu!api (getbeatmaps) request {params}")
 
     if not app.settings.OSU_API_KEY:
         return None

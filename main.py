@@ -31,8 +31,11 @@ import uvicorn
 
 import app.utils
 import app.settings
-from app.logging import Ansi
-from app.logging import log
+
+logging.basicConfig(
+    level=app.settings.LOG_LEVEL,
+    format="%(asctime)s %(message)s",
+)
 
 
 def main(argv: Sequence[str]) -> int:
@@ -70,7 +73,7 @@ def main(argv: Sequence[str]) -> int:
 
     # check our internet connection status
     if not app.utils.check_connection(timeout=1.5):
-        log("No internet connection available.", Ansi.LYELLOW)
+        logging.warning("No internet connection available.")
 
     # show info & any contextual warnings.
     app.utils.display_startup_dialog()
@@ -100,10 +103,9 @@ def main(argv: Sequence[str]) -> int:
                 app.utils.processes_listening_on_unix_socket(app.settings.SERVER_ADDR)
                 != 0
             ):
-                log(
+                logging.critical(
                     f"There are other processes listening on {app.settings.SERVER_ADDR}.\n"
                     f"If you've lost it, bancho.py can be killed gracefully with SIGINT.",
-                    Ansi.LRED,
                 )
                 return 1
             else:
@@ -117,8 +119,8 @@ def main(argv: Sequence[str]) -> int:
     # run the server indefinitely
     uvicorn.run(
         "app.api.init_api:asgi_app",
-        reload=app.settings.DEBUG,
-        log_level=logging.WARNING,
+        reload=app.settings.APP_ENV == "local",
+        log_level=app.settings.LOG_LEVEL,
         server_header=False,
         date_header=False,
         # TODO: uvicorn calls .lower() on the key & value,

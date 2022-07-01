@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 import pickle
 import re
 import secrets
@@ -23,10 +24,7 @@ import pymysql
 import app.settings
 import app.state
 from app._typing import IPAddress
-from app.logging import Ansi
-from app.logging import log
-from app.logging import printc
-from app.logging import Rainbow
+from app.logging import ansi_rgb_rainbow
 
 if TYPE_CHECKING:
     import aiohttp
@@ -102,12 +100,11 @@ async def log_strange_occurrence(obj: object) -> None:
         ) as resp:
             if resp.status == 200 and (await resp.read()) == b"ok":
                 uploaded = True
-                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-                log("Thank you for your participation! <3", Rainbow)
+                logging.info("Logged strange occurrence to cmyui's server.")
+                logging.info(ansi_rgb_rainbow("Thank you for your participation! <3"))
             else:
-                log(
-                    f"Autoupload to cmyui's server failed (HTTP {resp.status})",
-                    Ansi.LRED,
+                logging.error(
+                    f"Failed to automatically report an exception to the bancho.py devs (HTTP {resp.status})",
                 )
 
     if not uploaded:
@@ -120,12 +117,9 @@ async def log_strange_occurrence(obj: object) -> None:
         log_file.touch(exist_ok=False)
         log_file.write_bytes(pickled_obj)
 
-        log("Logged strange occurrence to", Ansi.LYELLOW, end=" ")
-        printc("/".join(log_file.parts[-4:]), Ansi.LBLUE)
-
-        log(
+        logging.warning(f"Logged strange occurrence to {'/'.join(log_file.parts[-4:])}")
+        logging.warning(
             "Greatly appreciated if you could forward this to cmyui#0425 :)",
-            Ansi.LYELLOW,
         )
 
 
@@ -216,17 +210,15 @@ async def check_for_dependency_updates() -> None:
     async for module, current_ver, latest_ver in _get_latest_dependency_versions():
         if latest_ver > current_ver:
             updates_available = True
-            log(
+            logging.info(
                 f"{module} has an update available "
                 f"[{current_ver!r} -> {latest_ver!r}]",
-                Ansi.LMAGENTA,
             )
 
     if updates_available:
-        log(
+        logging.info(
             "Python modules can be updated with "
             "`python3.9 -m pip install -U <modules>`.",
-            Ansi.LMAGENTA,
         )
 
 
@@ -294,10 +286,7 @@ async def run_sql_migrations() -> None:
                 q_lines.append(line)
 
     if queries:
-        log(
-            f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
-            Ansi.LMAGENTA,
-        )
+        logging.info(f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).")
 
     # XXX: so it turns out we can't use a transaction here (at least with mysql)
     #      to roll back changes, as any structural changes to tables implicitly
@@ -307,13 +296,11 @@ async def run_sql_migrations() -> None:
             try:
                 await db_conn.execute(query)
             except pymysql.err.MySQLError as exc:
-                log(f"Failed: {query}", Ansi.GRAY)  # type: ignore
-                log(repr(exc))
-                log(
+                logging.critical(f"Failed: {query}", exc_info=exc)
+                logging.critical(
                     "SQL failed to update - unless you've been "
                     "modifying sql and know what caused this, "
                     "please please contact cmyui#0425.",
-                    Ansi.LRED,
                 )
                 raise KeyboardInterrupt from exc
         else:

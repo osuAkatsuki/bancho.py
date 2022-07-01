@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import struct
 import time
@@ -10,6 +11,7 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable
+from typing import cast
 from typing import Literal
 from typing import Optional
 from typing import Sequence
@@ -38,8 +40,6 @@ from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
-from app.logging import Ansi
-from app.logging import log
 from app.logging import magnitude_fmt_time
 from app.objects.channel import Channel
 from app.objects.match import Match
@@ -48,9 +48,6 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
-from app.objects.menu import Menu
-from app.objects.menu import MenuCommands
-from app.objects.menu import MenuFunction
 from app.objects.player import Action
 from app.objects.player import ClientDetails
 from app.objects.player import LastNp
@@ -245,7 +242,7 @@ class SendMessage(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if player.silenced:
-            log(f"{player} sent a message while silenced.", Ansi.LYELLOW)
+            logging.warning(f"{player} sent a message while silenced.")
             return
 
         msg = self.msg.text.strip()  # remove leading & trailing whitespace
@@ -259,16 +256,18 @@ class SendMessage(BasePacket):
 
         channel = await contextually_fetch_channel(player, recipient)
         if channel is None:
-            log(f"{player} wrote to non-existent {recipient}.", Ansi.LYELLOW)
+            logging.warning(f"{player} wrote to non-existent {recipient}.")
             return
 
         if player not in channel:
-            log(f"{player} wrote to {recipient} without being in it.")
+            logging.warning(f"{player} wrote to {recipient} without being in it.")
             return
 
         sufficient_privileges = usecases.channels.can_write(channel, player.priv)
         if not sufficient_privileges:
-            log(f"{player} wrote to {recipient} with insufficient privileges.")
+            logging.warning(
+                f"{player} wrote to {recipient} with insufficient privileges.",
+            )
             return
 
         # limit message length to 2k chars
@@ -350,7 +349,9 @@ class SendMessage(BasePacket):
             usecases.channels.send_msg_to_clients(channel, msg, sender=player)
 
         asyncio.create_task(usecases.players.update_latest_activity(player))
-        log(f"{player} @ {channel}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+        logging.info(f"{player} @ {channel}: {msg}")
+        with open(".data/logs/chat.log", "a") as f:
+            f.write(f"{player} @ {channel}: {msg}\n")
 
 
 @register(ClientPackets.LOGOUT, restricted=True)
@@ -512,7 +513,7 @@ async def login(
             day=int(match["date"][6:8]),
         ),
         revision=int(match["revision"]) if match["revision"] else None,
-        stream=match["stream"] or "stable",
+        stream=match["stream"] or "stable",  # type: ignore
     )
 
     # disallow login for clients older than 90 days
@@ -709,7 +710,7 @@ async def login(
         if geoloc is not None:
             player.geoloc = geoloc
         else:
-            log(f"Geolocation lookup for {ip} failed", Ansi.LRED)
+            logging.warning(f"Geolocation lookup for {ip} failed")
 
     player.client_details = ClientDetails(
         osu_version=osu_version,
@@ -879,9 +880,8 @@ async def login(
     user_os = "unix (wine)" if running_under_wine else "win32"
     country_code = player.geoloc["country"]["acronym"].upper()
 
-    log(
+    logging.info(
         f"{player} logged in from {country_code} using {login_data['osu_version']} on {user_os}",
-        Ansi.LCYAN,
     )
 
     asyncio.create_task(usecases.players.update_latest_activity(player))
@@ -897,9 +897,8 @@ class StartSpectating(BasePacket):
     async def handle(self, player: Player) -> None:
         new_host = app.state.sessions.players.get(id=self.target_id)
         if new_host is None:
-            log(
+            logging.warning(
                 f"{player} tried to spectate nonexistant id {self.target_id}.",
-                Ansi.LYELLOW,
             )
             return
 
@@ -933,7 +932,7 @@ class StopSpectating(BasePacket):
         host = player.spectating
 
         if not host:
-            log(f"{player} tried to stop spectating when they're not..?", Ansi.LRED)
+            logging.warning(f"{player} tried to stop spectating when they're not..?")
             return
 
         await usecases.players.remove_spectator(host, player)
@@ -967,7 +966,7 @@ class SpectateFrames(BasePacket):
 class CantSpectate(BasePacket):
     async def handle(self, player: Player) -> None:
         if not player.spectating:
-            log(f"{player} sent can't spectate while not spectating?", Ansi.LRED)
+            logging.warning(f"{player} sent can't spectate while not spectating?")
             return
 
         if player.stealth:
@@ -1103,8 +1102,7 @@ class SendPrivateMessage(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if player.silenced:
-            if app.settings.DEBUG:
-                log(f"{player} tried to send a dm while silenced.", Ansi.LYELLOW)
+            logging.debug(f"{player} tried to send a dm while silenced.")
             return
 
         # remove leading/trailing whitespace
@@ -1119,26 +1117,26 @@ class SendPrivateMessage(BasePacket):
         # players can receive messages offline through the mail system
         target = await repositories.players.fetch(name=target_name)
         if target is None:
-            if app.settings.DEBUG:
-                log(
-                    f"{player} tried to write to non-existent user {target_name}.",
-                    Ansi.LYELLOW,
-                )
+            logging.debug(
+                f"{player} tried to write to non-existent user {target_name}.",
+            )
             return
 
         if player.id in target.blocks:
             player.enqueue(app.packets.user_dm_blocked(target_name))
 
-            if app.settings.DEBUG:
-                log(f"{player} tried to message {target}, but they have them blocked.")
+            logging.debug(
+                f"{player} tried to message {target}, but they have them blocked.",
+            )
 
             return
 
         if target.pm_private and player.id not in target.friends:
             player.enqueue(app.packets.user_dm_blocked(target_name))
 
-            if app.settings.DEBUG:
-                log(f"{player} tried to message {target}, but they are blocking dms.")
+            logging.debug(
+                f"{player} tried to message {target}, but they are blocking dms.",
+            )
 
             return
 
@@ -1146,8 +1144,9 @@ class SendPrivateMessage(BasePacket):
             # if target is silenced, inform player.
             player.enqueue(app.packets.target_silenced(target_name))
 
-            if app.settings.DEBUG:
-                log(f"{player} tried to message {target}, but they are silenced.")
+            logging.debug(
+                f"{player} tried to message {target}, but they are silenced.",
+            )
 
             return
 
@@ -1191,7 +1190,10 @@ class SendPrivateMessage(BasePacket):
             )
 
         asyncio.create_task(usecases.players.update_latest_activity(player))
-        log(f"{player} @ {target}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+        logging.info(f"{player} @ {target}: {msg}")
+
+        with open(".data/logs/chat.log", "a") as f:
+            f.write(f"{player} @ {target}: {msg}\n")
 
 
 @register(ClientPackets.PART_LOBBY)
@@ -1270,7 +1272,7 @@ class MatchCreate(BasePacket):
         asyncio.create_task(usecases.players.update_latest_activity(player))
 
         usecases.channels.send_bot(self.match.chat, f"Match created by {player.name}.")
-        log(f"{player} created a new multiplayer match.")
+        logging.info(f"{player} created a new multiplayer match.")
 
 
 @register(ClientPackets.JOIN_MATCH)
@@ -1295,7 +1297,7 @@ class MatchJoin(BasePacket):
             return
 
         if not (match := app.state.sessions.matches[self.match_id]):
-            log(f"{player} tried to join a non-existant mp lobby?")
+            logging.warning(f"{player} tried to join a non-existant mp lobby?")
             player.enqueue(app.packets.match_join_fail())
             return
 
@@ -1343,7 +1345,7 @@ class MatchChangeSlot(BasePacket):
             return
 
         if match.slots[self.slot_id].status != SlotStatus.open:
-            log(f"{player} tried to move into non-open slot.", Ansi.LYELLOW)
+            logging.warning(f"{player} tried to move into non-open slot.")
             return
 
         # swap with current slot.
@@ -1380,7 +1382,7 @@ class MatchLock(BasePacket):
             return
 
         if player is not match.host:
-            log(f"{player} attempted to lock match as non-host.", Ansi.LYELLOW)
+            logging.warning(f"{player} attempted to lock match as non-host.")
             return
 
         # read new slot ID
@@ -1418,7 +1420,7 @@ class MatchChangeSettings(BasePacket):
             return
 
         if player is not match.host:
-            log(f"{player} attempted to change settings as non-host.", Ansi.LYELLOW)
+            logging.warning(f"{player} attempted to change settings as non-host.")
             return
 
         if self.new.freemods != match.freemods:
@@ -1534,7 +1536,7 @@ class MatchStart(BasePacket):
             return
 
         if player is not match.host:
-            log(f"{player} attempted to start match as non-host.", Ansi.LYELLOW)
+            logging.warning(f"{player} attempted to start match as non-host.")
             return
 
         await usecases.multiplayer.start(match)
@@ -1784,7 +1786,7 @@ class MatchChangeMods(BasePacket):
             slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
         else:
             if player is not match.host:
-                log(f"{player} attempted to change mods as non-host.", Ansi.LYELLOW)
+                logging.warning(f"{player} attempted to change mods as non-host.")
                 return
 
             # not freemods, set match mods.
@@ -1915,16 +1917,12 @@ class ChannelJoin(BasePacket):
         channel = await repositories.channels.fetch(self.channel_name)
 
         if channel is None:
-            log(
-                f"{player} tried to join non-existent {self.channel_name}",
-                Ansi.LYELLOW,
-            )
+            logging.warning(f"{player} tried to join non-existent {self.channel_name}")
             return
 
         if not usecases.players.join_channel(player, channel):
-            log(
+            logging.error(  # TODO: is this right?
                 f"{player} failed to join {self.channel_name}.",
-                Ansi.LYELLOW,
             )
             return
 
@@ -1939,7 +1937,7 @@ class MatchTransferHost(BasePacket):
             return
 
         if player is not match.host:
-            log(f"{player} attempted to transfer host as non-host.", Ansi.LYELLOW)
+            logging.warning(f"{player} attempted to transfer host as non-host.")
             return
 
         # read new slot ID
@@ -1948,7 +1946,7 @@ class MatchTransferHost(BasePacket):
 
         target = match[self.slot_id].player
         if target is None:
-            log(f"{player} tried to transfer host to an empty slot?")
+            logging.warning(f"{player} tried to transfer host to an empty slot?")
             return
 
         match.host_id = target.id
@@ -2029,7 +2027,9 @@ class FriendAdd(BasePacket):
 
         target = app.state.sessions.players.get(id=self.user_id)
         if target is None:
-            log(f"{player} tried to add a user who is not online! ({self.user_id})")
+            logging.warning(
+                f"{player} tried to add a user who is not online! ({self.user_id})",
+            )
             return
 
         if target is app.state.sessions.bot:
@@ -2050,7 +2050,9 @@ class FriendRemove(BasePacket):
     async def handle(self, player: Player) -> None:
         target = app.state.sessions.players.get(id=self.user_id)
         if target is None:
-            log(f"{player} tried to remove a user who is not online! ({self.user_id})")
+            logging.warning(
+                f"{player} tried to remove a user who is not online! ({self.user_id})",
+            )
             return
 
         if target is app.state.sessions.bot:
@@ -2090,11 +2092,11 @@ class ChannelPart(BasePacket):
         channel = await repositories.channels.fetch(self.name)
 
         if channel is None:
-            log(f"{player} tried to leave non-existent {self.name}.", Ansi.LYELLOW)
+            logging.warning(f"{player} tried to leave non-existent {self.name}.")
             return
 
         if player not in channel:
-            log(f"{player} tried to leave {self.name} before joining.", Ansi.LYELLOW)
+            logging.warning(f"{player} tried to leave {self.name} before joining.")
             return
 
         # leave the chan server-side.
@@ -2108,7 +2110,9 @@ class ReceiveUpdates(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if not 0 <= self.value < 3:
-            log(f"{player} tried to set his presence filter to {self.value}?")
+            logging.warning(
+                f"{player} tried to set his presence filter to {self.value}?",
+            )
             return
 
         player.pres_filter = PresenceFilter(self.value)
@@ -2155,7 +2159,9 @@ class MatchInvite(BasePacket):
 
         target = app.state.sessions.players.get(id=self.user_id)
         if target is None:
-            log(f"{player} tried to invite a user who is not online! ({self.user_id})")
+            logging.warning(
+                f"{player} tried to invite a user who is not online! ({self.user_id})",
+            )
             return
 
         if target is app.state.sessions.bot:
@@ -2165,7 +2171,7 @@ class MatchInvite(BasePacket):
         target.enqueue(app.packets.match_invite(player, target.name))
         asyncio.create_task(usecases.players.update_latest_activity(player))
 
-        log(f"{player} invited {target} to their match.")
+        logging.info(f"{player} invited {target} to their match.")
 
 
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
@@ -2178,7 +2184,7 @@ class MatchChangePassword(BasePacket):
             return
 
         if player is not match.host:
-            log(f"{player} attempted to change pw as non-host.", Ansi.LYELLOW)
+            logging.warning(f"{player} attempted to change pw as non-host.")
             return
 
         match.passwd = self.match.passwd

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import app.state.services
 from app._typing import IPAddress
-from app.logging import Ansi
-from app.logging import log
 from app.objects.geolocation import Geolocation
 from app.objects.geolocation import OSU_COUNTRY_CODES
 
@@ -46,7 +45,7 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[Geolocation]:
         url=f"http://ip-api.com/line/{ip}",
     ) as resp:
         if not resp or resp.status != 200:
-            log("Failed to get geoloc data: request failed.", Ansi.LRED)
+            logging.error("Failed to get geoloc data: request failed.")
             return None
 
         status, *lines = (await resp.text()).split("\n")
@@ -56,7 +55,7 @@ async def lookup_ipinfo(ip: IPAddress) -> Optional[Geolocation]:
             if err_msg == "invalid query":
                 err_msg += f" (ip: {ip})"
 
-            log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
+            logging.error(f"Failed to get geoloc data: {err_msg}.")
             return None
 
     acronym = lines[1].lower()

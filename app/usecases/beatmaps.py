@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -8,8 +9,6 @@ import app.settings
 import app.state.services
 import app.utils
 from app import repositories
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
@@ -31,8 +30,7 @@ async def ensure_local_osu_file(
         or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
     ):
         # need to get the file from the osu!api
-        if app.settings.DEBUG:
-            log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
+        logging.debug(f"Doing osu!api (.osu file) request {bmap_id}")
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
         async with app.state.services.http_client.get(url) as resp:
@@ -65,7 +63,7 @@ async def get_beatmap_info(
 ) -> bytes:
 
     num_requests = len(beatmap_filenames) + len(beatmap_ids)
-    log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
+    logging.info(f"{player} requested info for {num_requests} maps.")
 
     ret = []
 

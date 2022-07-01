@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
 
 import app.state.services
 from app import repositories
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import BeatmapSet
 from app.objects.beatmap import RankedStatus
@@ -80,10 +79,7 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
         beatmap = Beatmap.from_osuapi_response(api_bmap)
 
         if beatmap is None:
-            log(
-                f"Failed to parse beatmap from osu!api response: {api_bmap}",
-                Ansi.LRED,
-            )
+            logging.error(f"Failed to parse beatmap from osu!api response: {api_bmap}")
             continue
 
         if beatmap.id in current_maps:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -13,8 +14,6 @@ import app.state.services
 from app import repositories
 from app import usecases
 from app.constants.gamemodes import GameMode
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.player import Player
 from app.objects.score import Score
@@ -94,7 +93,7 @@ def parse_form_data_score_params(
         assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
     except AssertionError as exc:
         # TODO: perhaps better logging?
-        log(f"Failed to validate score multipart data: ({exc.args[0]})", Ansi.LRED)
+        logging.error(f"Failed to validate score multipart data: ({exc.args[0]})")
         return None
     else:
         return (

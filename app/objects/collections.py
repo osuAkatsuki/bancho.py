@@ -2,17 +2,14 @@
 # in a lot of these classes; needs refactor.
 from __future__ import annotations
 
+import logging
 from typing import Any
 from typing import Iterator
 from typing import Optional
 from typing import Sequence
 from typing import Union
 
-import app.settings
-import app.state
-import app.utils
 from app.constants.privileges import Privileges
-from app.logging import log
 from app.objects.match import Match
 from app.objects.player import Player
 from app.utils import make_safe_name
@@ -53,12 +50,11 @@ class Matches(list[Optional[Match]]):
             m.id = free
             self[free] = m
 
-            if app.settings.DEBUG:
-                log(f"{m} added to matches list.")
+            logging.debug(f"{m} added to matches list.")
 
             return True
         else:
-            log(f"Match list is full! Could not add {m}.")
+            logging.info(f"Match list is full! Could not add {m}.")
             return False
 
     # TODO: extend
@@ -70,8 +66,7 @@ class Matches(list[Optional[Match]]):
                 self[i] = None
                 break
 
-        if app.settings.DEBUG:
-            log(f"{m} removed from matches list.")
+        logging.debug(f"{m} removed from matches list.")
 
 
 class Players(list[Player]):
@@ -146,8 +141,7 @@ class Players(list[Player]):
     def append(self, p: Player) -> None:
         """Append `p` to the list."""
         if p in self:
-            if app.settings.DEBUG:
-                log(f"{p} double-added to global player list?")
+            logging.debug(f"{p} double-added to global player list?")
             return
 
         super().append(p)
@@ -155,8 +149,7 @@ class Players(list[Player]):
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
-            if app.settings.DEBUG:
-                log(f"{p} removed from player list when not online?")
+            logging.debug(f"{p} removed from player list when not online?")
             return
 
         super().remove(p)

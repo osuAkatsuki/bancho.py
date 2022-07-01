@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 import app.packets
@@ -9,8 +10,6 @@ import app.state
 from app import repositories
 from app import usecases
 from app.constants.privileges import Privileges
-from app.logging import Ansi
-from app.logging import log
 
 __all__ = ("initialize_housekeeping_tasks",)
 
@@ -19,7 +18,7 @@ OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
 
 async def initialize_housekeeping_tasks() -> None:
     """Create tasks for each housekeeping tasks."""
-    log("Initializing housekeeping tasks.", Ansi.LCYAN)
+    logging.info("Initializing housekeeping tasks.")
 
     loop = asyncio.get_running_loop()
 
@@ -38,8 +37,7 @@ async def initialize_housekeeping_tasks() -> None:
 async def _remove_expired_donation_privileges(interval: int) -> None:
     """Remove donation privileges from users with expired sessions."""
     while True:
-        if app.settings.DEBUG:
-            log("Removing expired donation privileges.", Ansi.LMAGENTA)
+        logging.debug("Removing expired donation privileges.")
 
         expired_donors = await app.state.services.database.fetch_all(
             "SELECT id FROM users "
@@ -59,7 +57,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
                     app.packets.notification("Your supporter status has expired."),
                 )
 
-            log(f"{player}'s supporter status has expired.", Ansi.LMAGENTA)
+            logging.info(f"{player}'s supporter status has expired.")
 
         await asyncio.sleep(interval)
 
@@ -73,7 +71,7 @@ async def _disconnect_ghosts(interval: int) -> None:
 
         for player in app.state.sessions.players:
             if current_time - player.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
-                log(f"Auto-dced {player}.", Ansi.LMAGENTA)
+                logging.info(f"Auto-dced {player}.")
                 await usecases.players.logout(player)
 
 

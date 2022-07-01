@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import pprint
 from typing import Any
@@ -25,8 +26,6 @@ import app.state
 import app.utils
 from app.api import domains
 from app.api import middlewares
-from app.logging import Ansi
-from app.logging import log
 
 
 class BanchoAPI(FastAPI):
@@ -70,7 +69,7 @@ def init_exception_handlers(asgi_app: BanchoAPI) -> None:
         exc: RequestValidationError,
     ) -> Response:
         """Wrapper around 422 validation errors to print out info for devs."""
-        log(f"Validation error on {request.url}", Ansi.LRED)
+        logging.error(f"Validation error on {request.url}")
         pprint.pprint(exc.errors())
 
         return ORJSONResponse(
@@ -113,10 +112,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
         app.state.loop = asyncio.get_running_loop()
 
         if os.geteuid() == 0:
-            log(
-                "Running the server with root privileges is not recommended.",
-                Ansi.LRED,
-            )
+            logging.error("Running the server with root privileges is not recommended.")
 
         app.state.services.http_client = aiohttp.ClientSession(
             json_serialize=lambda x: orjson.dumps(x).decode(),
@@ -140,8 +136,8 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         await app.housekeeping.initialize_housekeeping_tasks()
 
-        log("Startup process complete.", Ansi.LGREEN)
-        log(f"Listening @ {app.settings.SERVER_ADDR}", Ansi.LMAGENTA)
+        logging.info("Startup process complete.")
+        logging.info(f"Listening @ {app.settings.SERVER_ADDR}")
 
     @asgi_app.on_event("shutdown")
     async def on_shutdown() -> None:
