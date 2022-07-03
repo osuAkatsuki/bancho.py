@@ -24,10 +24,25 @@ SERVER_PORT: Optional[int] = (
     int(v) if (v := config("SERVER_PORT", default=None)) else None
 )
 
-DB_DSN = config("DB_DSN", cast=DatabaseURL)
-TEST_DB_DSN = config("TEST_DB_DSN", cast=DatabaseURL)
+DB_HOST = config("DB_HOST")
+DB_PORT = config("DB_PORT", cast=int)
+DB_USER = config("DB_USER")
+DB_PASS = config("DB_PASS")
+DB_NAME = config("DB_NAME")
 
-REDIS_DSN = config("REDIS_DSN")
+DB_DSN = DatabaseURL(
+    f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+)
+TEST_DB_DSN = DatabaseURL(
+    f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}_test",
+)
+
+REDIS_HOST = config("REDIS_HOST")
+REDIS_PORT = config("REDIS_PORT", cast=int)
+# TODO: support for redis auth?
+
+REDIS_DSN = f"redis://{REDIS_HOST}:{REDIS_PORT}"
+# TODO: TEST_REDIS_DSN?
 
 OSU_API_KEY = config("OSU_API_KEY", cast=Secret)
 

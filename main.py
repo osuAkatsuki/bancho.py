@@ -44,7 +44,7 @@ def main(argv: Sequence[str]) -> int:
 
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
-        app.utils.ensure_local_services_are_running,  # mysql (if local)
+        app.utils.ensure_required_services_are_running,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
         app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
     ):
@@ -72,7 +72,7 @@ def main(argv: Sequence[str]) -> int:
     app.utils._install_debugging_hooks()
 
     # check our internet connection status
-    if not app.utils.check_connection(timeout=1.5):
+    if not app.utils.check_internet_connection(timeout=1.5):
         logging.warning("No internet connection available.")
 
     # show info & any contextual warnings.

@@ -33,7 +33,7 @@ __all__ = (
     "download_achievement_images",
     "download_default_avatar",
     "seconds_readable",
-    "check_connection",
+    "check_internet_connection",
     "processes_listening_on_unix_socket",
     "running_via_asgi_webserver",
     "_install_synchronous_excepthook",
@@ -43,7 +43,7 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_local_services_are_running",
+    "ensure_required_services_are_running",
     "ensure_directory_structure",
     "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
@@ -174,22 +174,41 @@ def seconds_readable(seconds: int) -> str:
     return ":".join(r)
 
 
-def check_connection(timeout: float = 1.0) -> bool:
+def _test_connection(host: str, port: int, timeout: float = 1.0) -> bool:
+    """Test the connection to a specific (host, port) with a given timeout."""
+
+    # TODO: add support for unix sockets?
+
+    try:
+        with socket.create_connection(
+            address=(host, port),
+            timeout=timeout,
+        ):
+            pass
+    except OSError:
+        # connection failed
+        return False
+    else:
+        # connection succeeded
+        return True
+
+
+def check_internet_connection(timeout: float = 1.0) -> bool:
     """Check for an active internet connection."""
-    # attempt to connect to common dns servers
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        for addr in (
-            "1.1.1.1",
-            "1.0.0.1",  # cloudflare
-            "8.8.8.8",
-            "8.8.4.4",
-        ):  # google
-            try:
-                sock.connect((addr, 53))
-                return True
-            except OSError:
-                continue
+    for addr in (
+        # cloudflare dns servers
+        "1.1.1.1",
+        "1.0.0.1",
+        # google dns servers
+        "8.8.8.8",
+        "8.8.4.4",
+    ):
+        if _test_connection(
+            host=addr,
+            port=53,
+            timeout=timeout,
+        ):
+            return True
 
     # all connections failed
     return False
@@ -331,6 +350,9 @@ def escape_enum(
 
 def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for bancho.py."""
+
+    # TODO: extend support to all UNIX-based platforms
+
     if sys.platform != "linux":
         logging.critical("bancho.py currently only supports linux")
         if sys.platform == "win32":
@@ -350,33 +372,21 @@ def ensure_supported_platform() -> int:
     return 0
 
 
-def ensure_local_services_are_running() -> int:
+def ensure_required_services_are_running(timeout: float = 1.0) -> int:
     """Ensure all required services (mysql, redis) are running."""
-    # NOTE: if you have any problems with this, please contact me
-    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
-    # how people are using the software so that i can keep it
-    # in mind while developing new features & refactoring.
-
-    # TODO: make these attempt to connect instead of checking in these strange ways
-
-    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
-        # sql server running locally, make sure it's running
-        for service in ("mysqld", "mariadb"):
-            if os.path.exists(f"/var/run/{service}/{service}.pid"):
-                break
-        else:
-            # not found, try pgrep
-            pgrep_exit_code = subprocess.call(
-                ["pgrep", "mysqld"],
-                stdout=subprocess.DEVNULL,
+    for service_name, service_host, service_port in (
+        ("mysql", app.settings.DB_HOST, app.settings.DB_PORT),
+        ("redis", app.settings.REDIS_HOST, app.settings.REDIS_PORT),
+    ):
+        if not _test_connection(
+            host=service_host,
+            port=service_port,
+            timeout=timeout,
+        ):
+            logging.critical(
+                f"{service_name} is not running.",
             )
-            if pgrep_exit_code != 0:
-                logging.critical("Unable to connect to mysql server.")
-                return 1
-
-    if not os.path.exists("/var/run/redis/redis-server.pid"):
-        logging.critical("Unable to connect to redis server.")
-        return 1
+            return 1
 
     return 0
 
