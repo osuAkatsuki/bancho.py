@@ -41,7 +41,6 @@ we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
 - mysql (relational database)
 - nginx (http(s) reverse proxy)
-- certbot (ssl certificate tool)
 - cmake and build-essential (build tools for c/c++)
 
 as well as some others.
@@ -55,7 +54,7 @@ sudo add-apt-repository ppa:deadsnakes
 sudo apt install python3.9-dev python3.9-distutils \
                  cmake build-essential \
                  mysql-server redis-server \
-                 nginx certbot
+                 nginx
 
 # install python's package manager, pip
 # it's used to install python-specific dependencies
@@ -134,22 +133,6 @@ sql commands that can be run in sequence to create the base state we want.
 # import bancho.py's mysql structure to our new db
 # this runs the contents of the file as sql commands.
 mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
-```
-
-## creating an ssl certificate (to allow https traffic)
-```sh
-# you'll need to change:
-# - YOUR_EMAIL_ADDRESS
-# - YOUR_DOMAIN
-
-# generate an ssl certificate for your domain
-sudo certbot certonly \
-    --manual \
-    --preferred-challenges=dns \
-    --email YOUR_EMAIL_ADDRESS \
-    --server https://acme-v02.api.letsencrypt.org/directory \
-    --agree-tos \
-    -d *.YOUR_DOMAIN
 ```
 
 ## configuring a reverse proxy (we'll use nginx)
