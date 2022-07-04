@@ -86,4 +86,4 @@ DEVELOPER_MODE = config("DEVELOPER_MODE", cast=bool)
 ## WARNING: only touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.3.2"
+VERSION = "5.0.0"
