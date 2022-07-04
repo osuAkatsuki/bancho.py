@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 import databases
 import pytest
@@ -12,9 +11,6 @@ import app.state.services
 import app.state.sessions
 import app.utils
 from app.api.init_api import asgi_app
-
-if TYPE_CHECKING:
-    pass
 
 # scopes = ["session", "package", "module", "class", "function"]
 

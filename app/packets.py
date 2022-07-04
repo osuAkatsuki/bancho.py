@@ -20,9 +20,9 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Union
 
-# from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
+    # from app.objects.beatmap import BeatmapInfo
     from app.objects.match import Match
     from app.objects.player import Player
 

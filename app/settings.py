@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 from typing import cast
-from typing import TYPE_CHECKING
+from typing import Optional
 
 from databases import DatabaseURL
 from starlette.config import Config
 from starlette.datastructures import CommaSeparatedStrings
 from starlette.datastructures import Secret
 
-if TYPE_CHECKING:
-    from typing import Optional
-
-    from app._typing import AppEnvironments
+from app._typing import AppEnvironments
 
 config = Config(".env")
 
 # configuration options
 
-APP_ENV = cast("AppEnvironments", config("APP_ENV"))
+APP_ENV = cast(AppEnvironments, config("APP_ENV"))
 
 SERVER_ADDR: str = config("SERVER_ADDR")
 SERVER_PORT: Optional[int] = (

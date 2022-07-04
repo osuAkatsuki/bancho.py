@@ -6,7 +6,6 @@ import logging
 import time
 import uuid
 from typing import Optional
-from typing import TYPE_CHECKING
 
 import bcrypt
 
@@ -20,6 +19,7 @@ from app.constants.gamemodes import GameMode
 from app.constants.privileges import Privileges
 from app.discord import DiscordWebhook
 from app.logging import Ansi
+from app.objects.achievement import Achievement
 from app.objects.beatmap import Beatmap
 from app.objects.channel import Channel
 from app.objects.match import Match
@@ -34,9 +34,6 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
-
-if TYPE_CHECKING:
-    from app.objects.achievement import Achievement
 
 # TODO: organize this
 

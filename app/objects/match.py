@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import TimerHandle
 from collections import defaultdict
 from datetime import datetime as datetime
 from enum import IntEnum
@@ -20,8 +21,6 @@ from app.utils import escape_enum
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
-    from asyncio import TimerHandle
-
     from app.objects.beatmap import Beatmap
     from app.objects.player import Player
     from app.objects.channel import Channel

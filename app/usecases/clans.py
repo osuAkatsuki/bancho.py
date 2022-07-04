@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import app.state.services
 from app import repositories
 from app.constants.privileges import ClanPrivileges
 from app.objects.clan import Clan
 from app.objects.player import Player
-
-if TYPE_CHECKING:
-    from app.objects.player import Player
 
 
 # create

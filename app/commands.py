@@ -24,7 +24,6 @@ from typing import Mapping
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
-from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import TypeVar
 from typing import Union
@@ -49,6 +48,7 @@ from app.constants.privileges import Privileges
 from app.constants.privileges import privileges_to_str
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
+from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -63,8 +63,6 @@ try:
 except ModuleNotFoundError:
     pass  # utils will handle this for us
 
-if TYPE_CHECKING:
-    from app.objects.channel import Channel
 
 R = TypeVar("R")
 

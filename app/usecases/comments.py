@@ -3,12 +3,10 @@ from __future__ import annotations
 from typing import Any
 from typing import Mapping
 from typing import Optional
-from typing import TYPE_CHECKING
 
 import app.state.services
+from app.objects.player import Player
 
-if TYPE_CHECKING:
-    from app.objects.player import Player
 # create
 
 

@@ -12,10 +12,10 @@ from typing import AsyncIterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
-from typing import TYPE_CHECKING
 
+import aiohttp
 import aioredis
-import databases
+import databases.core
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import geoip2.database
@@ -25,10 +25,6 @@ import app.settings
 import app.state
 from app._typing import IPAddress
 from app.logging import ansi_rgb_rainbow
-
-if TYPE_CHECKING:
-    import aiohttp
-    import databases.core
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
