@@ -60,7 +60,7 @@ def main(argv: Sequence[str]) -> int:
         "-V",
         "--version",
         action="version",
-        version=f"%(prog)s v{app.settings.VERSION}",
+        version=f"bancho.py v{app.settings.VERSION}",
     )
 
     parser.parse_args(argv)
