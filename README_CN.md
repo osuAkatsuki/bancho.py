@@ -46,7 +46,7 @@ c.example.com
 
 ## 第一步：下载这个项目到你服务器本地
 ```sh
-# 克隆 bancho.py's 
+# 克隆 bancho.py's
 # 注意！你的服务器可能需要先安装git，尤其是全新的服务器
 git clone https://github.com/osuAkatsuki/bancho.py
 
@@ -139,7 +139,7 @@ quit
 ## 第四步：把刚刚我们新建的空数据库变成我们想要的样子
 我们现在已经建立了一个空的数据库。你可以把数据库理解成一个巨大的表格
 
-bancho.py 有很多 表 (tables) 去存各种东西, 例如, 名为 `users` 以及 `scores` 
+bancho.py 有很多 表 (tables) 去存各种东西, 例如, 名为 `users` 以及 `scores`
 的表用来存储他们相关的东西（字面意思）
 
 有很多 列 (columns) (竖直的) 存着 `user` or `score`里面不同的数据
@@ -195,7 +195,7 @@ sudo nginx -s reload
 
 ## 第七步：配置 bancho.py
 你可以在 `.env` 文件里解决所有与bancho.py程序相关的配置
-我们提供了一个样例文件 `.env.example`，你可以参考它来设置你自己的 
+我们提供了一个样例文件 `.env.example`，你可以参考它来设置你自己的
 ```sh
 # 把我们提供的样例文件制造一个副本，直接编辑他就可以了。你所有需要改
 # 的地方都在里面有标注/空缺。不用担心，就算你失败了，你也可以再来一次
