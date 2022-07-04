@@ -400,7 +400,7 @@ WELCOME_NOTIFICATION = app.packets.notification(
 
 OFFLINE_NOTIFICATION = app.packets.notification(
     "The server is currently running in offline mode; "
-    "some features will be unavailble.",
+    "some features will be unavailable.",
 )
 
 DELTA_90_DAYS = timedelta(days=90)
