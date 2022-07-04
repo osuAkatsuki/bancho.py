@@ -51,7 +51,7 @@ as well as some others.
 sudo add-apt-repository ppa:deadsnakes
 
 # install required programs for running bancho.py
-sudo apt install python3.9-dev python3.9-distutils \
+sudo apt install -y python3.9-dev python3.9-distutils \
                  cmake build-essential \
                  mysql-server redis-server \
                  nginx
