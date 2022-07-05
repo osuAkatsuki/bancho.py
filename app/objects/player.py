@@ -151,32 +151,68 @@ class ClientDetails:
     # TODO: __str__ to pack like osu! hashes?
 
 
-"""\
-TODO: refactor player into limited session classes
-
-class Session:
-    ...
+# TODO: split Account & Player up into more specialized classes for things
+#       like tournament manager & spectator clients, and bots.
 
 
-class TournamentSpectatorSession(Session):
-    ...
+class Account:
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        priv: int,
+        pw_bcrypt: Optional[str | bytes] = None,
+        stats: Optional[Mapping[GameMode, ModeData]] = None,
+        friends: Optional[set[int]] = None,
+        blocks: Optional[set[int]] = None,
+        clan_id: Optional[int] = None,
+        clan_priv: Optional[int] = None,
+        achievement_ids: Optional[set[int]] = None,
+        silence_end: int = 0,
+        donor_end: int = 0,
+        api_key: Optional[str] = None,
+    ) -> None:
+        self.id = id
+        self.name = name
+        self.safe_name = self.make_safe(self.name)
+        self.priv = priv  # TODO: rename to privileges
+
+        if pw_bcrypt is not None:
+            # support both str and bytes
+            if isinstance(pw_bcrypt, str):
+                self.pw_bcrypt = pw_bcrypt.encode()
+            elif isinstance(pw_bcrypt, bytes):
+                self.pw_bcrypt = pw_bcrypt
+            else:
+                raise NotImplementedError(
+                    "Player.pw_bcrypt parameter only supports `str | bytes`.",
+                )
+        else:
+            self.pw_bcrypt = None
+
+        self.stats = stats or {}
+
+        # userids, not player objects
+        self.friends = friends or set()
+        self.blocks = blocks or set()
+
+        self.clan_id = clan_id
+        self.clan_priv = clan_priv
+
+        self.achievement_ids = achievement_ids or set()
+
+        self.silence_end = silence_end
+        self.donor_end = donor_end
+
+        self.api_key = api_key
+
+    @staticmethod
+    def make_safe(name: str) -> str:
+        """Return a name safe for usage in sql."""
+        return make_safe_name(name)
 
 
-class TournamentManagerSession(Session):
-    ...
-
-
-class BotSession(Session):
-    ...
-
-
-class PlayerSession(Session):
-    ...
-"""
-
-
-# TODO: refactor this into a session class
-class Player:
+class Player(Account):
     """\
     Server side representation of a player; not necessarily online.
 
@@ -214,29 +250,17 @@ class Player:
 
     def __init__(
         self,
-        id: int,
-        name: str,
-        priv: int,
         token: Optional[str] = None,
-        pw_bcrypt: Optional[str | bytes] = None,
-        stats: Optional[Mapping[GameMode, ModeData]] = None,
         status: Optional[Status] = None,
-        friends: Optional[set[int]] = None,
-        blocks: Optional[set[int]] = None,
         channels: Optional[list[Channel]] = None,
         spectators: Optional[list[Player]] = None,
         spectating: Optional[Player] = None,
         match: Optional[Match] = None,
         stealth: bool = False,
-        clan_id: Optional[int] = None,
-        clan_priv: Optional[int] = None,
-        achievement_ids: Optional[set[int]] = None,
         geoloc: Optional[app.objects.geolocation.Geolocation] = None,
         utc_offset: int = 0,
-        pm_private: bool = False,
-        away_msg: Optional[str] = None,
-        silence_end: int = 0,
-        donor_end: int = 0,
+        pm_private: bool = False,  # TODO: should this be under Account?
+        away_msg: Optional[str] = None,  # TODO: should this be under Account?
         in_lobby: bool = False,
         client_details: Optional[ClientDetails] = None,
         pres_filter: PresenceFilter = PresenceFilter.Nil,
@@ -248,44 +272,19 @@ class Player:
         previous_menus: Optional[list[Menu]] = None,
         bot_client: bool = False,
         tourney_client: bool = False,
-        api_key: Optional[str] = None,
+        *args,
+        **kwargs,
     ) -> None:
-        self.id = id
-        self.name = name
-        self.safe_name = self.make_safe(self.name)
-        self.priv = priv  # TODO: rename to privileges
+        super().__init__(*args, **kwargs)
+
         self.token = token
-
-        if pw_bcrypt is not None:
-            # support both str and bytes
-            if isinstance(pw_bcrypt, str):
-                self.pw_bcrypt = pw_bcrypt.encode()
-            elif isinstance(pw_bcrypt, bytes):
-                self.pw_bcrypt = pw_bcrypt
-            else:
-                raise NotImplementedError(
-                    "Player.pw_bcrypt parameter only supports `str | bytes`.",
-                )
-        else:
-            self.pw_bcrypt = None
-
-        self.stats = stats or {}
         self.status = status or Status()
-
-        # userids, not player objects
-        self.friends = friends or set()
-        self.blocks = blocks or set()
 
         self.channels = channels or []
         self.spectators = spectators or []
         self.spectating = spectating or None
         self.match = match or None
         self.stealth = stealth
-
-        self.clan_id = clan_id
-        self.clan_priv = clan_priv
-
-        self.achievement_ids = achievement_ids or set()
 
         # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
         self.geoloc = geoloc or {
@@ -297,8 +296,6 @@ class Player:
         self.utc_offset = utc_offset
         self.pm_private = pm_private
         self.away_msg = away_msg
-        self.silence_end = silence_end
-        self.donor_end = donor_end
         self.in_lobby = in_lobby
 
         self.client_details = client_details
@@ -322,7 +319,6 @@ class Player:
         # subject to change in the future
         self.bot_client = bot_client
         self.tourney_client = tourney_client
-        self.api_key = api_key
 
         # packet queue
         self._queue = bytearray()
@@ -393,11 +389,6 @@ class Player:
         return self.recent_scores.get(self.status.mode)
 
     # TODO: from_row, to_row?
-
-    @staticmethod
-    def make_safe(name: str) -> str:
-        """Return a name safe for usage in sql."""
-        return make_safe_name(name)
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
