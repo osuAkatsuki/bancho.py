@@ -37,7 +37,7 @@ async def test_registration() -> None:
     # add md5 password to player info
     pw_md5 = hashlib.md5(real_player_info["pw_plaintext"].encode()).hexdigest().encode()
 
-    player = await repositories.players.fetch(id=player_id)
+    player = await repositories.players.fetch_by_id(player_id)
     assert player is not None
     assert usecases.players.validate_credentials(
         password=pw_md5,
@@ -49,7 +49,7 @@ async def test_registration() -> None:
 
 
 async def test_update_name():
-    player = await repositories.players.fetch(name="test_user")
+    player = await repositories.players.fetch_by_name("test_user")
     assert player is not None
 
     # test_user -> test_user2
@@ -62,7 +62,7 @@ async def test_update_name():
 
 
 async def test_privileges():
-    player = await repositories.players.fetch(name="test_user")
+    player = await repositories.players.fetch_by_name("test_user")
     assert player is not None
 
     await usecases.players.add_privileges(player, Privileges.MODERATOR)
@@ -86,12 +86,12 @@ async def test_privileges():
 
 
 async def test_donor_time():
-    player = await repositories.players.fetch(name="test_user")
+    player = await repositories.players.fetch_by_name("test_user")
     assert player is not None
 
 
 async def test_restrictions():
-    player = await repositories.players.fetch(name="test_user")
+    player = await repositories.players.fetch_by_name("test_user")
     assert player is not None
 
     # ensure we're unrestricted
@@ -117,7 +117,7 @@ async def test_restrictions():
 
 
 async def test_silences():
-    player = await repositories.players.fetch(name="test_user")
+    player = await repositories.players.fetch_by_name("test_user")
     assert player is not None
 
     # ensure we're unsilenced

@@ -564,7 +564,7 @@ async def login(
                     ),
                 }
 
-    player = await repositories.players.fetch(name=login_data["username"])
+    player = await repositories.players.fetch_by_name(login_data["username"])
 
     if player is None:
         # no account by this name exists.
@@ -1115,7 +1115,7 @@ class SendPrivateMessage(BasePacket):
 
         # NOTE: this intentionally fetches offline players
         # players can receive messages offline through the mail system
-        target = await repositories.players.fetch(name=target_name)
+        target = await repositories.players.fetch_by_name(target_name)
         if target is None:
             logging.debug(
                 f"{player} tried to write to non-existent user {target_name}.",

@@ -86,7 +86,7 @@ def authenticate_player_session(
         username: str = param_function(..., alias=username_alias),
         pw_md5: str = param_function(..., alias=pw_md5_alias),
     ) -> Player:
-        player = await repositories.players.fetch(name=unquote(username))
+        player = await repositories.players.fetch_by_name(unquote(username))
 
         if player and usecases.players.validate_credentials(
             password=pw_md5.encode(),
@@ -139,7 +139,7 @@ async def osuError(
 ):
     """Handle an error submitted from the osu! client."""
     if username and pw_md5:
-        player = await repositories.players.fetch(name=unquote(username))
+        player = await repositories.players.fetch_by_name(unquote(username))
 
         if player is None or not usecases.players.validate_credentials(
             password=pw_md5.encode(),
@@ -418,7 +418,7 @@ async def submit_score(
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
 
-    player = await repositories.players.fetch(name=unquote(username))
+    player = await repositories.players.fetch_by_name(unquote(username))
 
     if player is None or not usecases.players.validate_credentials(
         password=pw_md5.encode(),
@@ -1112,7 +1112,7 @@ async def mark_channel_as_read(
     if not (channel_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    target_player = await repositories.players.fetch(name=channel_name)
+    target_player = await repositories.players.fetch_by_name(channel_name)
 
     if target_player is not None:
         await usecases.mail.mark_as_read(

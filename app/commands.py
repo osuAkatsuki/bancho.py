@@ -202,7 +202,7 @@ async def roll(ctx: Context) -> Optional[str]:
 @command(Privileges.UNRESTRICTED, hidden=True)
 async def block(ctx: Context) -> Optional[str]:
     """Block another user from communicating with you."""
-    target = await repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch_by_name(" ".join(ctx.args))
 
     if target is None:
         return "Player not found."
@@ -223,7 +223,7 @@ async def block(ctx: Context) -> Optional[str]:
 @command(Privileges.UNRESTRICTED, hidden=True)
 async def unblock(ctx: Context) -> Optional[str]:
     """Unblock another user from communicating with you."""
-    target = await repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch_by_name(" ".join(ctx.args))
 
     if target is None:
         return "User not found."
@@ -273,7 +273,7 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Disallowed username; pick another."
 
     # username may already be in use by another player
-    if (await repositories.players.fetch(name=new_player_name)) is not None:
+    if (await repositories.players.fetch_by_name(new_player_name)) is not None:
         return "Username already taken by another player."
 
     await usecases.players.update_name(ctx.player, new_player_name)
@@ -316,7 +316,7 @@ async def maplink(ctx: Context) -> Optional[str]:
 async def recent(ctx: Context) -> Optional[str]:
     """Show information about a player's most recent score."""
     if ctx.args:
-        target = await repositories.players.fetch(name=" ".join(ctx.args))
+        target = await repositories.players.fetch_by_name(" ".join(ctx.args))
         if target is None:
             return "Player not found."
     else:
@@ -387,7 +387,7 @@ async def top(ctx: Context) -> Optional[str]:
             return "Invalid username."
 
         # specific player provided
-        player = await repositories.players.fetch(name=ctx.args[1])
+        player = await repositories.players.fetch_by_name(ctx.args[1])
         if player is None:
             return "Player not found."
     else:
@@ -643,7 +643,7 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in rows:
         # find player & map for each row, and add to output.
-        player = await repositories.players.fetch(id=player_id)
+        player = await repositories.players.fetch_by_id(player_id)
         if player is None:
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
@@ -731,7 +731,7 @@ ACTION_STRINGS = {
 @command(Privileges.MODERATOR, hidden=True)
 async def notes(ctx: Context) -> Optional[str]:
     """Retrieve the logs of a specified player by name."""
-    target = await repositories.players.fetch(name=" ".join(ctx.args))
+    target = await repositories.players.fetch_by_name(" ".join(ctx.args))
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -740,7 +740,7 @@ async def notes(ctx: Context) -> Optional[str]:
     output_lines = []
 
     for note in notes:
-        sender = await repositories.players.fetch(id=note["from"])
+        sender = await repositories.players.fetch_by_id(note["from"])
         if sender is None:
             return f"No notes found for {target}."
 
@@ -761,7 +761,7 @@ async def addnote(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -793,7 +793,7 @@ async def silence(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -823,7 +823,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !unsilence <name>"
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -851,7 +851,7 @@ async def user(ctx: Context) -> Optional[str]:
         p = ctx.player
     else:
         # username given, fetch the player
-        p = await repositories.players.fetch(name=" ".join(ctx.args))
+        p = await repositories.players.fetch_by_name(" ".join(ctx.args))
 
         if not p:
             return "Player not found."
@@ -909,7 +909,7 @@ async def restrict(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !restrict <name> <reason>"
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -940,7 +940,7 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return f'"{ctx.args[0]}" not found.'
 
@@ -1222,7 +1222,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return "Could not find user."
 
@@ -1249,7 +1249,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
         bits |= str_priv_dict[m]
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return "Could not find user."
 
@@ -1267,7 +1267,7 @@ async def givedonator(ctx: Context) -> Optional[str]:
     if len(ctx.args) < 2:
         return "Invalid syntax: !givedonator <name> <duration>"
 
-    target = await repositories.players.fetch(name=ctx.args[0])
+    target = await repositories.players.fetch_by_name(ctx.args[0])
     if target is None:
         return "Could not find user."
 
@@ -2335,7 +2335,7 @@ async def pool_list(ctx: Context) -> Optional[str]:
     l = [f"Mappools ({len(pools)})"]
 
     for pool in pools:
-        pool_creator = await repositories.players.fetch(id=pool.created_by)
+        pool_creator = await repositories.players.fetch_by_id(pool.created_by)
         assert pool_creator is not None
 
         l.append(
@@ -2362,7 +2362,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
     _date = pool.created_at.strftime("%Y-%m-%d")
     datetime_fmt = f"Created at {_time} on {_date}"
 
-    pool_creator = await repositories.players.fetch(id=pool.created_by)
+    pool_creator = await repositories.players.fetch_by_id(pool.created_by)
     assert pool_creator is not None
 
     l = [f"{pool.id}. {pool.name}, by {pool_creator} | {datetime_fmt}."]
@@ -2453,7 +2453,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
 
     # remove all members from the clan
     for member_id in clan.member_ids:
-        member = await repositories.players.fetch(id=member_id)
+        member = await repositories.players.fetch_by_id(member_id)
         if member is None:
             logging.warning(f"Could not find a clan's member with id {member_id}.")
             continue

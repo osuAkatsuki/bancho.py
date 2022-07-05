@@ -139,13 +139,16 @@ async def api_get_player_info(
     ),
 ):
     """Return information about a given player."""
-    if not (player_name or player_id) or (player_name and player_id):
+    if player_id is not None:
+        player = await repositories.players.fetch_by_id(player_id)
+    elif player_name is not None:
+        player = await repositories.players.fetch_by_name(player_name)
+    else:
         return ORJSONResponse(
-            {"status": "Must provide either id OR name!"},
+            {"status": "Must provide either id or name!"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    player = await repositories.players.fetch(player_id, player_name)
     if player is None:
         return ORJSONResponse(
             {"status": "Player not found."},
@@ -301,9 +304,9 @@ async def api_get_player_scores(
         )
 
     if username:
-        player = await repositories.players.fetch(name=username)
+        player = await repositories.players.fetch_by_name(username)
     elif player_id:
-        player = await repositories.players.fetch(id=player_id)
+        player = await repositories.players.fetch_by_id(player_id)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
@@ -436,9 +439,9 @@ async def api_get_player_most_played(
         )
 
     if player_id is not None:
-        p = await repositories.players.fetch(id=player_id)
+        p = await repositories.players.fetch_by_id(player_id)
     elif username is not None:
-        p = await repositories.players.fetch(name=username)
+        p = await repositories.players.fetch_by_name(username)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
@@ -869,11 +872,11 @@ async def api_get_clan(
     members: list[Player] = []
 
     for member_id in clan.member_ids:
-        member = await repositories.players.fetch(id=member_id)
+        member = await repositories.players.fetch_by_id(member_id)
         assert member is not None
         members.append(member)
 
-    owner = await repositories.players.fetch(id=clan.owner_id)
+    owner = await repositories.players.fetch_by_id(clan.owner_id)
     assert owner is not None
 
     return ORJSONResponse(
@@ -915,7 +918,7 @@ async def api_get_pool(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    pool_creator = await repositories.players.fetch(id=pool.created_by)
+    pool_creator = await repositories.players.fetch_by_id(pool.created_by)
     assert pool_creator is not None
 
     if pool_creator.clan_id is not None:
@@ -958,7 +961,7 @@ async def api_get_pool(
 
 #         # get player from api token
 #         player_id = app.state.sessions.api_keys[api_key]
-#         p = await repositories.players.fetch(player_id=player_id)
+#         p = await repositories.players.fetch_by_id(player_id)
 
 #         return await f(conn, p)
 

@@ -117,7 +117,7 @@ async def register(
 
 
 async def login(player_name: str, player_password_md5: bytes) -> Optional[Player]:
-    player = await repositories.players.fetch(name=player_name)
+    player = await repositories.players.fetch_by_name(player_name)
 
     if player and validate_credentials(
         password=player_password_md5,
