@@ -2411,9 +2411,8 @@ async def clan_create(ctx: Context) -> Optional[str]:
         clan = await repositories.clans.fetch_by_id(ctx.player.clan_id)
         return f"You're already a member of {clan!r}!"
 
-    # TODO:REFACTOR add support for fetching by name
-    # if await repositories.clans.fetch_by_name(name):
-    #     return "That name has already been claimed by another clan."
+    if await repositories.clans.fetch_by_name(name):
+        return "That name has already been claimed by another clan."
 
     if await repositories.clans.fetch_by_tag(tag):
         return "That tag has already been claimed by another clan."
