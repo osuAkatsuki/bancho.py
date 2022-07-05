@@ -740,7 +740,7 @@ async def login(
 
     # send all appropriate channel info to our player.
     # the osu! client will attempt to join the channels.
-    for channel in repositories.channels.cache.values():
+    for channel in repositories.channels.name_cache.values():
         if (
             not channel.auto_join  # TODO: is this correct?
             or not usecases.channels.can_read(channel, player.priv)

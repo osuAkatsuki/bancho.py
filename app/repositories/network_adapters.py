@@ -35,13 +35,22 @@ OUI_CACHE_MAX_AGE = 10 * 24 * 60 * 60  # (10 days)
 OUI_CSV_URL = "https://standards-oui.ieee.org/oui/oui.csv"
 OUI_CSV_CACHE_FILE = ".data/.oui_cache.csv"
 
+## in-memory cache
 
 cache: MutableMapping[str, OUIEntry] = {}
 
 
-# create
+def add_to_cache(oui_entry: OUIEntry) -> None:
+    cache[oui_entry.assignment] = oui_entry
 
-# read
+
+def remove_from_cache(oui_entry: OUIEntry) -> None:
+    del cache[oui_entry.assignment]
+
+
+## create
+
+## read
 
 
 def fetch_oui_info(address: str) -> Optional[OUIEntry]:
@@ -115,15 +124,6 @@ async def fetch_all() -> set[OUIEntry]:
         return oui_entries
 
 
-async def _populate_caches() -> None:
-    all_resources = await fetch_all()
+## update
 
-    for resource in all_resources:
-        cache[resource.assignment] = resource
-
-    return None
-
-
-# update
-
-# delete
+## delete

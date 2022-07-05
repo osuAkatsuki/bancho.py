@@ -11,7 +11,27 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import BeatmapSet
 from app.objects.beatmap import RankedStatus
 
-cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
+# TODO: this design is inconsistent with other repositories (for now)
+#       as i had been going in a different direction before i saw this
+#
+#       now i'm rethinking how i want to split up logic to interact
+#       with different data sources (e.g. memory, database, osu!api here)
+#
+#       need more time to think about it
+
+
+## in-memory cache
+
+id_cache: MutableMapping[int, BeatmapSet] = {}
+
+
+def add_to_cache(beatmap_set: BeatmapSet) -> None:
+    id_cache[beatmap_set.id] = beatmap_set
+
+
+def remove_from_cache(beatmap_set: BeatmapSet) -> None:
+    del id_cache[beatmap_set.id]
+
 
 ## create
 # TODO: beatmap submission
@@ -21,7 +41,7 @@ cache: MutableMapping[int, BeatmapSet] = {}  # {set_id: beatmap_set}
 
 def _fetch_by_id_cache(id: int) -> Optional[BeatmapSet]:
     """Fetch a beatmap set from the cache."""
-    return cache.get(id)
+    return id_cache.get(id)
 
 
 async def _fetch_by_id_database(id: int) -> Optional[BeatmapSet]:
@@ -102,7 +122,7 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
         {"id": beatmap_set.id, "last_osuapi_check": beatmap_set.last_osuapi_check},
     )
 
-    await replace_into_database(beatmap_set)
+    await replace(beatmap_set)
     return beatmap_set
 
 
@@ -112,12 +132,12 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
         return beatmap_set
 
     if beatmap_set := await _fetch_by_id_database(id):
-        cache[beatmap_set.id] = beatmap_set
+        add_to_cache(beatmap_set)
         # TODO: when should we cache the individual beatmaps?
         return beatmap_set
 
     if beatmap_set := await _fetch_by_id_osuapi(id):
-        cache[beatmap_set.id] = beatmap_set
+        add_to_cache(beatmap_set)
         # TODO: when should we cache the individual beatmaps?
         return beatmap_set
 
@@ -127,17 +147,21 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
 ## update
 
 
-async def update_status(beatmap_set_id: int, new_status: RankedStatus) -> None:
+async def update_status(id: int, new_status: RankedStatus) -> None:
     """Update all beatmaps in a set to a new ranked status in the database."""
 
     await app.state.services.database.execute(
         "UPDATE maps SET status = :status, frozen = 1 WHERE set_id = :set_id",
-        {"status": new_status, "set_id": beatmap_set_id},
+        {"status": new_status, "set_id": id},
     )
 
+    if beatmap_set := id_cache.get(id):
+        for beatmap in beatmap_set.maps:
+            beatmap.status = new_status
 
-async def replace_into_database(beatmap_set: BeatmapSet) -> None:
-    """Save the object's attributes into the database."""
+
+async def replace(beatmap_set: BeatmapSet) -> None:
+    """Replace the existing beatmap's attributes with new ones."""
     await app.state.services.database.execute_many(
         "REPLACE INTO maps ("
         "server, md5, id, set_id, "
@@ -182,6 +206,8 @@ async def replace_into_database(beatmap_set: BeatmapSet) -> None:
             for bmap in beatmap_set.maps
         ],
     )
+
+    # TODO: this should be updating cache!!!
 
 
 ## delete

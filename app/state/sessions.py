@@ -51,11 +51,15 @@ async def cancel_housekeeping_tasks() -> None:
 
 async def init_server_repository_caches() -> None:
     """Populate our ram cache of channels, clans, and mappools from the db."""
-    await repositories.channels._populate_caches()
-    await repositories.clans._populate_caches()
-    await repositories.mappools._populate_caches()
-    await repositories.network_adapters._populate_caches()
-    await repositories.achievements._populate_caches()
+    for repository in (
+        repositories.channels,
+        repositories.clans,
+        repositories.mappools,
+        repositories.network_adapters,
+        repositories.achievements,
+    ):
+        for resource in await repository.fetch_all():
+            repository.add_to_cache(resource)  # type: ignore
 
 
 async def populate_redis_overall_rankings() -> None:

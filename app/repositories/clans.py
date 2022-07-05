@@ -3,19 +3,44 @@ from __future__ import annotations
 from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
-from typing import Union
 
 import app.state.services
 from app.constants.privileges import ClanPrivileges
 from app.objects.clan import Clan
 from app.objects.player import Player
 
-ClanID = int
-ClanTag = str
 
-KeyTypes = Union[ClanID, ClanTag]
+## in-memory cache
 
-cache: MutableMapping[KeyTypes, Clan] = {}  # {id/tag: clan}
+id_cache: MutableMapping[int, Clan] = {}
+tag_cache: MutableMapping[str, Clan] = {}
+name_cache: MutableMapping[str, Clan] = {}
+
+
+def add_to_cache(clan: Clan) -> None:
+    id_cache[clan.id] = clan
+    tag_cache[clan.tag] = clan
+    name_cache[clan.name] = clan
+
+
+def remove_from_cache(clan: Clan) -> None:
+    del id_cache[clan.id]
+    del tag_cache[clan.tag]
+    del name_cache[clan.name]
+
+
+## helpers
+
+
+async def _member_ids_from_sql(clan_id: int) -> set[int]:
+    return {
+        row["id"]
+        for row in await app.state.services.database.fetch_all(
+            "SELECT id FROM users WHERE clan_id = :clan_id",
+            {"clan_id": clan_id},
+        )
+    }
+
 
 ## create
 
@@ -55,81 +80,92 @@ async def create(name: str, tag: str, owner: Player) -> Clan:
         },
     )
 
-    cache[clan.id] = clan
-    cache[clan.tag] = clan
-
+    add_to_cache(clan)
     return clan
 
 
 ## read
 
 
-# low level api
-# allow for fetching based on any supported key
+async def fetch_by_id(id: int) -> Optional[Clan]:
+    """Fetch a clan from the cache, or database by id."""
+    if clan := id_cache.get(id):
+        return clan
 
-
-def _fetch_by_key_cache(key: KeyTypes) -> Optional[Clan]:
-    """Fetch a clan from the cache by any supported key."""
-    return cache.get(key)
-
-
-async def _fetch_by_key_database(key: str, val: KeyTypes) -> Optional[Clan]:
-    """Fetch a clan from the database by any supported key."""
     row = await app.state.services.database.fetch_one(
-        f"SELECT * FROM clans WHERE {key} = :val",
-        {"val": val},
+        f"SELECT * FROM clans WHERE id = :id",
+        {"id": id},
     )
     if row is None:
         return None
 
-    # fetch member ids from sql
-    member_ids = {
-        row["id"]
-        for row in await app.state.services.database.fetch_all(
-            "SELECT id FROM users WHERE clan_id = :clan_id",
-            {"clan_id": row["id"]},
-        )
-    }
-
-    return Clan(
+    clan = Clan(
         id=row["id"],
         name=row["name"],
         tag=row["tag"],
         created_at=row["created_at"],
         owner_id=row["owner"],  # TODO: fix inconsistency
-        member_ids=member_ids,
+        member_ids=await _member_ids_from_sql(row["id"]),
     )
 
+    add_to_cache(clan)
+    return clan
 
-async def _fetch_by_key(key: str, val: KeyTypes) -> Optional[Clan]:
-    """Fetch a clan from the cache, or database by any supported key."""
-    if clan := _fetch_by_key_cache(val):
+
+async def fetch_by_name(name: str) -> Optional[Clan]:
+    """Fetch a clan from the cache, or database by name."""
+    if clan := name_cache.get(name):
         return clan
 
-    if clan := await _fetch_by_key_database(key, val):
-        cache[clan.id] = clan
-        return clan
+    row = await app.state.services.database.fetch_one(
+        f"SELECT * FROM clans WHERE name = :name",
+        {"name": name},
+    )
+    if row is None:
+        return None
 
-    return None
+    clan = Clan(
+        id=row["id"],
+        name=row["name"],
+        tag=row["tag"],
+        created_at=row["created_at"],
+        owner_id=row["owner"],  # TODO: fix inconsistency
+        member_ids=await _member_ids_from_sql(row["id"]),
+    )
+
+    add_to_cache(clan)
+    return clan
 
 
-# high level api
-
-
-async def fetch_by_id(id: ClanID) -> Optional[Clan]:
-    """Fetch a clan from the cache, or database by id."""
-    return await _fetch_by_key("id", id)
-
-
-async def fetch_by_tag(tag: ClanTag) -> Optional[Clan]:
+async def fetch_by_tag(tag: str) -> Optional[Clan]:
     """Fetch a clan from the cache, or database by tag."""
-    return await _fetch_by_key("tag", tag)
+    if clan := tag_cache.get(tag):
+        return clan
+
+    row = await app.state.services.database.fetch_one(
+        f"SELECT * FROM clans WHERE tag = :tag",
+        {"tag": tag},
+    )
+    if row is None:
+        return None
+
+    clan = Clan(
+        id=row["id"],
+        name=row["name"],
+        tag=row["tag"],
+        created_at=row["created_at"],
+        owner_id=row["owner"],  # TODO: fix inconsistency
+        member_ids=await _member_ids_from_sql(row["id"]),
+    )
+
+    add_to_cache(clan)
+    return clan
 
 
 async def fetch_all() -> set[Clan]:
     """Fetch all clans from the cache, or database."""
-    if cache:
-        return set(cache.values())
+    if id_cache:
+        return set(id_cache.values())
     else:
         clan_ids = {
             row["id"]
@@ -146,20 +182,9 @@ async def fetch_all() -> set[Clan]:
         return clans
 
 
-async def _populate_caches() -> None:
-    """Populate the cache with all values from the database."""
-    all_resources = await fetch_all()
+## update
 
-    for resource in all_resources:
-        cache[resource.id] = resource
-        cache[resource.tag] = resource
-
-    return None
-
-
-# update
-
-# delete
+## delete
 
 
 async def delete(clan: Clan) -> None:
@@ -169,5 +194,5 @@ async def delete(clan: Clan) -> None:
         {"clan_id": clan.id},
     )
 
-    del cache[clan.id]
-    del cache[clan.tag]
+    remove_from_cache(clan)
+    return None

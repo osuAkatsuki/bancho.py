@@ -3,8 +3,19 @@ from __future__ import annotations
 import app.state.services
 from app.objects.achievement import Achievement
 
+## in-memory cache
+
 # TODO: is this weird? all the others are mappings
-cache = set()
+cache: set[Achievement] = set()
+
+
+def add_to_cache(achievement: Achievement) -> None:
+    cache.add(achievement)
+
+
+def remove_from_cache(achievement: Achievement) -> None:
+    cache.remove(achievement)
+
 
 ## create
 
@@ -29,15 +40,6 @@ async def fetch_all() -> set[Achievement]:
             achievements.add(achievement)
 
         return achievements
-
-
-async def _populate_caches() -> None:
-    all_resources = await fetch_all()
-
-    for resource in all_resources:
-        cache.add(resource)
-
-    return None
 
 
 ## update

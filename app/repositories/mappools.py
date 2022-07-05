@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from typing import MutableMapping
 from typing import Optional
-from typing import Union
 
 import app.state.services
 from app import repositories
@@ -12,10 +11,25 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.match import MapPool
 
-cache: MutableMapping[Union[int, str], MapPool] = {}  # {id/name: pool}
+## in-memory cache
+
+id_cache: MutableMapping[int, MapPool] = {}
+name_cache: MutableMapping[str, MapPool] = {}
 
 
-# TODO: not sure about this one
+def add_to_cache(map_pool: MapPool) -> None:
+    id_cache[map_pool.id] = map_pool
+    name_cache[map_pool.name] = map_pool
+
+
+def remove_from_cache(map_pool: MapPool) -> None:
+    del id_cache[map_pool.id]
+    del name_cache[map_pool.name]
+
+
+## helpers
+
+
 async def _maps_from_sql(pool_id: int) -> MutableMapping[tuple[Mods, int], Beatmap]:
     """Retrieve all maps from sql to populate `self.maps`."""
     pool_maps: dict[tuple[Mods, int], Beatmap] = {}
@@ -69,7 +83,8 @@ async def create(name: str, created_by: int) -> MapPool:
         maps={},
     )
 
-    cache[pool.id] = pool
+    id_cache[pool.id] = pool
+    name_cache[pool.name] = pool
 
     return pool
 
@@ -77,13 +92,11 @@ async def create(name: str, created_by: int) -> MapPool:
 # read
 
 
-def _fetch_by_id_cache(id: int) -> Optional[MapPool]:
-    """Fetch a mappool from the cache by id."""
-    return cache.get(id)
+async def fetch_by_id(id: int) -> Optional[MapPool]:
+    """Fetch a mappool by id number."""
+    if map_pool := id_cache.get(id):
+        return map_pool
 
-
-async def _fetch_by_id_database(id: int) -> Optional[MapPool]:
-    """Fetch a mappool from the cache by id."""
     row = await app.state.services.database.fetch_one(
         "SELECT * FROM tourney_pools WHERE id = :id",
         {"id": id},
@@ -91,7 +104,7 @@ async def _fetch_by_id_database(id: int) -> Optional[MapPool]:
     if row is None:
         return None
 
-    return MapPool(
+    map_pool = MapPool(
         id=row["id"],
         name=row["name"],
         created_at=row["created_at"],
@@ -99,27 +112,15 @@ async def _fetch_by_id_database(id: int) -> Optional[MapPool]:
         maps=await _maps_from_sql(row["id"]),
     )
 
-
-async def fetch_by_id(id: int) -> Optional[MapPool]:
-    """Fetch a mappool from the cache, or database by name."""
-    if mappool := _fetch_by_id_cache(id):
-        return mappool
-
-    if mappool := await _fetch_by_id_database(id):
-        cache[mappool.id] = mappool
-        cache[mappool.name] = mappool
-        return mappool
-
-    return None
+    add_to_cache(map_pool)
+    return map_pool
 
 
-def _fetch_by_name_cache(name: str) -> Optional[MapPool]:
-    """Fetch a mappool from the cache by name."""
-    return cache.get(name)
+async def fetch_by_name(name: str) -> Optional[MapPool]:
+    """Fetch a mappool by name."""
+    if map_pool := name_cache.get(name):
+        return map_pool
 
-
-async def _fetch_by_name_database(name: str) -> Optional[MapPool]:
-    """Fetch a mappool from the cache by name."""
     row = await app.state.services.database.fetch_one(
         "SELECT * FROM tourney_pools WHERE name = :name",
         {"name": name},
@@ -127,7 +128,7 @@ async def _fetch_by_name_database(name: str) -> Optional[MapPool]:
     if row is None:
         return None
 
-    return MapPool(
+    map_pool = MapPool(
         id=row["id"],
         name=row["name"],
         created_at=row["created_at"],
@@ -135,24 +136,13 @@ async def _fetch_by_name_database(name: str) -> Optional[MapPool]:
         maps=await _maps_from_sql(row["id"]),
     )
 
-
-async def fetch_by_name(name: str) -> Optional[MapPool]:
-    """Fetch a mappool from the cache, or database by name."""
-    if mappool := _fetch_by_name_cache(name):
-        return mappool
-
-    if mappool := await _fetch_by_name_database(name):
-        cache[mappool.id] = mappool
-        cache[mappool.name] = mappool
-        return mappool
-
-    return None
+    return map_pool
 
 
 async def fetch_all() -> set[MapPool]:
     """Fetch all mappools from the cache, or database."""
-    if cache:
-        return set(cache.values())
+    if id_cache:
+        return set(id_cache.values())
     else:
         pool_ids = {
             row["id"]
@@ -169,24 +159,13 @@ async def fetch_all() -> set[MapPool]:
     return mappools
 
 
-async def _populate_caches() -> None:
-    """Populate the cache with all values from the database."""
-    all_resources = await fetch_all()
-
-    for resource in all_resources:
-        cache[resource.id] = resource
-        cache[resource.name] = resource
-
-    return None
-
-
 # update
 
 # delete
 
 
 async def delete(pool: MapPool) -> None:
-    """Delete a mappool from the cache and database."""
+    """Delete a mappool."""
     await app.state.services.database.execute(
         "DELETE FROM tourney_pools WHERE id = :pool_id",
         {"pool_id": pool.id},
@@ -197,7 +176,7 @@ async def delete(pool: MapPool) -> None:
         {"pool_id": pool.id},
     )
 
-    del cache[pool.id]
-    del cache[pool.name]
+    del id_cache[pool.id]
+    del name_cache[pool.name]
 
     return None

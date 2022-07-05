@@ -6,9 +6,20 @@ from typing import Optional
 import app.state.services
 from app.objects.channel import Channel
 
-cache: MutableMapping[str, Channel] = {}
+## in-memory cache
 
-# create
+name_cache: MutableMapping[str, Channel] = {}
+
+
+def add_to_cache(channel: Channel) -> None:
+    name_cache[channel.name] = channel
+
+
+def remove_from_cache(channel: Channel) -> None:
+    del name_cache[channel.name]
+
+
+## create
 
 
 async def create(
@@ -46,20 +57,19 @@ async def create(
         instance=instance,
     )
 
-    cache[channel.name] = channel
-
     # NOTE: if you'd like this new channel to be broadcasted to all the players
     # online, you'll need to send them a packet so the clients are aware of it.
 
+    add_to_cache(channel)
     return channel
 
 
-# read
+## read
 
 
 def _fetch_by_name_cache(name: str) -> Optional[Channel]:
     """Fetch a channel from the cache by name."""
-    return cache.get(name)
+    return name_cache.get(name)
 
 
 async def _fetch_by_name_database(name: str) -> Optional[Channel]:
@@ -93,8 +103,8 @@ async def fetch(name: str) -> Optional[Channel]:
 
 async def fetch_all() -> set[Channel]:
     """Fetch all channels from the cache, or database."""
-    if cache:
-        return set(cache.values())
+    if name_cache:
+        return set(name_cache.values())
     else:
         channel_names = {
             row["name"]
@@ -111,19 +121,9 @@ async def fetch_all() -> set[Channel]:
         return channels
 
 
-async def _populate_caches() -> None:
-    """Populate the cache with all values from the database."""
-    all_resources = await fetch_all()
+## update
 
-    for resource in all_resources:
-        cache[resource.name] = resource
-
-    return None
-
-
-# update
-
-# delete
+## delete
 
 
 def delete_instance(name: str) -> None:
@@ -131,7 +131,7 @@ def delete_instance(name: str) -> None:
     if channel := _fetch_by_name_cache(name):
         assert channel.instance, "Channel is not an instance."
 
-        del cache[channel.name]
+        remove_from_cache(channel)
     else:
         raise ValueError(f"Channel {name} not found in cache.")
 
@@ -142,7 +142,7 @@ async def delete(name: str) -> None:
     """Delete a channel from the cache and the database."""
 
     if channel := _fetch_by_name_cache(name):
-        del cache[channel.name]
+        remove_from_cache(channel)
     else:
         raise ValueError(f"Channel {name} not found in cache.")
 

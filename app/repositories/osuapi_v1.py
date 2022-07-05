@@ -8,7 +8,7 @@ from typing import Union
 import app.settings
 import app.state.services
 
-# TODO: move to models?
+# TODO: where should response models be located?
 class OsuAPIV1BeatmapResponse(TypedDict):
     """\
     A typed dictionary representing a beatmap from the v1 osu! API.

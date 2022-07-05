@@ -158,7 +158,7 @@ async def _update_if_available(beatmap_set: BeatmapSet) -> None:
 
         # update maps in sql
 
-        await repositories.beatmap_sets.replace_into_database(beatmap_set)
+        await repositories.beatmap_sets.replace(beatmap_set)
     else:
         # TODO: we have the map on disk but it's
         #       been removed from the osu!api.
