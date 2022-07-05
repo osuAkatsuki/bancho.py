@@ -180,7 +180,7 @@ if everything went well, you should be able to start your server up:
 
 and you should see something along the lines of:
 
-![ada](https://i.cmyui.xyz/ld-iZXysVXqwhM8.png)
+![tada](https://cdn.discordapp.com/attachments/616400094408736779/993705619498467369/ld-iZXysVXqwhM8.png)
 
 # Directory Structure
     .
