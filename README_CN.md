@@ -222,7 +222,7 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
 
 如果你看到了下面的提示，那么恭喜！你成功了
 
-![ada](https://i.cmyui.xyz/ld-iZXysVXqwhM8.png)
+![tada](https://cdn.discordapp.com/attachments/616400094408736779/993705619498467369/ld-iZXysVXqwhM8.png)
 
 # 文件目录
     .
