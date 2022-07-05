@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 from enum import IntEnum
 from enum import unique
 from typing import Union
@@ -49,7 +48,6 @@ class GameMode(IntEnum):
     AUTOPILOT_MANIA = 11  # unused
 
     @classmethod
-    @functools.lru_cache(maxsize=32)
     def from_params(cls, mode_vn: int, mods: Union[int, GameMode]) -> GameMode:
         mode = mode_vn
 
@@ -60,14 +58,9 @@ class GameMode(IntEnum):
 
         return cls(mode)
 
-    @functools.cached_property
+    @property
     def as_vanilla(self) -> int:
-        if self.value & self.AUTOPILOT_OSU:
-            return self.value - 8
-        elif self.value & self.RELAX_OSU:
-            return self.value - 4
-        else:
-            return self.value
+        return self.value % 4
 
     def __repr__(self) -> str:
         return GAMEMODE_REPR_LIST[self.value]
