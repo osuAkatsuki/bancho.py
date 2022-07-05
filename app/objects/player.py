@@ -174,7 +174,6 @@ class Account:
     ) -> None:
         self.id = id
         self.name = name
-        self.safe_name = self.make_safe(self.name)
         self.priv = priv  # TODO: rename to privileges
 
         if pw_bcrypt is not None:
@@ -206,10 +205,9 @@ class Account:
 
         self.api_key = api_key
 
-    @staticmethod
-    def make_safe(name: str) -> str:
-        """Return a name safe for usage in sql."""
-        return make_safe_name(name)
+    @property
+    def safe_name(self) -> str:
+        return make_safe_name(self.name)
 
 
 class Player(Account):
