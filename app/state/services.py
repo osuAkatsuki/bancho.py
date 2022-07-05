@@ -12,6 +12,7 @@ from typing import AsyncIterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
+from typing import TYPE_CHECKING
 
 import aiohttp
 import aioredis
@@ -25,6 +26,16 @@ import app.settings
 import app.state
 from app._typing import IPAddress
 from app.logging import ansi_rgb_rainbow
+
+
+if TYPE_CHECKING:
+    # XXX: reorder-python-imports removes redundant imports, meaning that the
+    # import of `databases.core` also imports databases. pyright however, does
+    # not support this behaviour and thus breaks the types from the parent module.
+    # sadly, neither party wishes to back down - we do this to work around this issue.
+    # https://github.com/asottile/reorder_python_imports/issues/221
+    # https://github.com/microsoft/pyright/issues/2964
+    import databases
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
