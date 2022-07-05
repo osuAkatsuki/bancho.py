@@ -120,7 +120,10 @@ async def get_country_rank(player_id: int, mode: GameMode, country: str) -> int:
 
 
 async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
-    """Retrieve `player`'s relationships from sql."""
+    """Retrieve `player`'s relationships."""
+    if player := id_cache.get(player_id):
+        return player.friends, player.blocks
+
     player_friends = set()
     player_blocks = set()
 
@@ -141,6 +144,9 @@ async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
 
 async def fetch_achievement_ids(player_id: int) -> set[int]:
     """Retrieve `player`'s achievements from sql."""
+    if player := id_cache.get(player_id):
+        return player.achievement_ids
+
     return {
         row["id"]
         for row in await app.state.services.database.fetch_all(
@@ -154,6 +160,9 @@ async def fetch_achievement_ids(player_id: int) -> set[int]:
 
 async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
     """Retrieve `player`'s stats (all modes) from sql."""
+    if player := id_cache.get(player_id):
+        return player.stats
+
     player_stats: Mapping[GameMode, ModeData] = {}
 
     for row in await app.state.services.database.fetch_all(
@@ -186,6 +195,9 @@ async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
 async def fetch_recent_scores(
     player_id: int,
 ) -> MutableMapping[GameMode, Optional[int]]:
+    if player := id_cache.get(player_id):
+        return player.recent_scores
+
     recent_scores: MutableMapping[GameMode, Optional[int]] = {}
 
     # TODO: is this doable in a single query?
