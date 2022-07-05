@@ -6,6 +6,7 @@ from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
 
+import app.packets
 import app.state.cache
 import app.state.services
 import app.state.sessions
@@ -261,6 +262,11 @@ async def update_privs(player_id: int, new_privileges: int) -> None:
 
     if player := id_cache.get(player_id):
         player.priv = new_privileges
+
+        if player.online:
+            # if they're online, send a packet
+            # to update their client-side privileges
+            player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
 async def set_donator_end(player_id: int, end: int) -> None:

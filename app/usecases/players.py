@@ -37,7 +37,7 @@ from app.objects.score import SubmissionStatus
 
 # TODO: organize this
 
-# utils
+# helpers
 
 
 # TODO: not really sure this should be here
@@ -50,6 +50,37 @@ def validate_credentials(password: bytes, hashed_password: bytes) -> bool:
             app.state.cache.bcrypt[hashed_password] = password
 
         return result
+
+
+# TODO: these seem more like something related to a repository
+
+
+async def publish_pp_to_redis(player: Player) -> None:
+    country_acronym = player.geoloc["country"]["acronym"]
+
+    for mode, stats in player.stats.items():
+        await app.state.services.redis.zadd(
+            f"bancho:leaderboard:{mode.value}",
+            {str(player.id): stats.pp},
+        )
+        await app.state.services.redis.zadd(
+            f"bancho:leaderboard:{mode.value}:{country_acronym}",
+            {str(player.id): stats.pp},
+        )
+
+
+async def remove_pp_from_redis(player: Player) -> None:
+    country_acronym = player.geoloc["country"]["acronym"]
+
+    for mode in player.stats.keys():
+        await app.state.services.redis.zrem(
+            f"bancho:leaderboard:{mode.value}",
+            player.id,
+        )
+        await app.state.services.redis.zrem(
+            f"bancho:leaderboard:{mode.value}:{country_acronym}",
+            player.id,
+        )
 
 
 # usecases
@@ -165,34 +196,17 @@ async def update_privileges(player: Player, new_privileges: int) -> None:
     """Update a player's privileges to a new value."""
     await repositories.players.update_privs(player.id, new_privileges)
 
-    if player.online:
-        # if they're online, send a packet
-        # to update their client-side privileges
-        player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
-
 
 async def add_privileges(player: Player, bits: int) -> None:
     """Update a player's privileges, adding some bits."""
-
     new_privileges = player.priv | bits
     await repositories.players.update_privs(player.id, new_privileges)
-
-    if player.online:
-        # if they're online, send a packet
-        # to update their client-side privileges
-        player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
 async def remove_privileges(player: Player, bits: int) -> None:
     """Update a player's privileges, removing some bits."""
-
     new_privileges = player.priv & ~bits
     await repositories.players.update_privs(player.id, new_privileges)
-
-    if player.online:
-        # if they're online, send a packet
-        # to update their client-side privileges
-        player.enqueue(app.packets.bancho_privileges(player.bancho_priv))
 
 
 async def add_donator_time(player: Player, seconds: int) -> None:
@@ -205,7 +219,6 @@ async def add_donator_time(player: Player, seconds: int) -> None:
         new_donor_end = int(time.time()) + seconds
 
     await repositories.players.set_donator_end(player.id, new_donor_end)
-    player.donor_end = new_donor_end
 
 
 async def remove_donator_time(player: Player, seconds: int) -> None:
@@ -217,30 +230,18 @@ async def remove_donator_time(player: Player, seconds: int) -> None:
     new_donor_end = player.donor_end - seconds
 
     await repositories.players.set_donator_end(player.id, new_donor_end)
-    player.donor_end = new_donor_end
 
 
 async def reset_donator_time(player: Player) -> None:
     """Reset a player's donator status."""
     await repositories.players.set_donator_end(player.id, 0)
-    player.donor_end = 0
 
 
 async def restrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
     await remove_privileges(player, Privileges.UNRESTRICTED)
 
-    country_acronym = player.geoloc["country"]["acronym"]
-
-    for mode in (0, 1, 2, 3, 4, 5, 6, 8):
-        await app.state.services.redis.zrem(
-            f"bancho:leaderboard:{mode}",
-            player.id,
-        )
-        await app.state.services.redis.zrem(
-            f"bancho:leaderboard:{mode}:{country_acronym}",
-            player.id,
-        )
+    await remove_pp_from_redis(player)
 
     await usecases.notes.create(
         action="restrict",
@@ -268,17 +269,7 @@ async def unrestrict(player: Player, admin: Player, reason: str) -> None:
     """Restrict a player with a reason, and log to sql."""
     await add_privileges(player, Privileges.UNRESTRICTED)
 
-    country_acronym = player.geoloc["country"]["acronym"]
-
-    for mode, stats in player.stats.items():
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}",
-            {str(player.id): stats.pp},
-        )
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}:{country_acronym}",
-            {str(player.id): stats.pp},
-        )
+    await publish_pp_to_redis(player)
 
     await repositories.notes.create(
         action="unrestrict",
@@ -682,23 +673,10 @@ async def unlock_achievement(player: Player, achievement: Achievement) -> None:
 
 
 async def update_rank(player: Player, mode: GameMode) -> int:
-    country = player.geoloc["country"]["acronym"]
-    stats = player.stats[mode]
-
     if player.restricted:
         global_rank = 0
     else:
-        # global rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}",
-            {str(player.id): stats.pp},
-        )
-
-        # country rank
-        await app.state.services.redis.zadd(
-            f"bancho:leaderboard:{mode.value}:{country}",
-            {str(player.id): stats.pp},
-        )
+        await publish_pp_to_redis(player)
 
         global_rank = await repositories.players.get_global_rank(player.id, mode)
 
