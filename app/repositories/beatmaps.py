@@ -123,6 +123,9 @@ async def update_playcounts(beatmap_id: int, plays: int, passes: int) -> None:
         {"plays": plays, "passes": passes, "beatmap_id": beatmap_id},
     )
 
+    cache[beatmap_id].plays = plays
+    cache[beatmap_id].passes = passes
+
 
 ## delete
 # TODO: beatmap submission
