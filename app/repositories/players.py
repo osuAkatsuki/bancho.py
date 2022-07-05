@@ -236,7 +236,6 @@ async def update_name(player_id: int, new_name: str) -> None:
         },
     )
 
-    # if we have a cache entry, update it
     if player := id_cache.get(player_id):
         del safe_name_cache[player.safe_name]
         safe_name_cache[new_safe_name] = player
@@ -261,6 +260,9 @@ async def set_donator_end(player_id: int, end: int) -> None:
         "UPDATE users SET donor_end = :end WHERE id = :id",
         {"id": player_id, "end": end},
     )
+
+    if player := id_cache.get(player_id):
+        player.donor_end = end
 
 
 async def silence_until(player_id: int, until: int) -> None:
@@ -291,6 +293,9 @@ async def update_latest_activity(player_id: int) -> None:
         "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
         {"user_id": player_id},
     )
+
+    # TODO: if i add `latest_activity` to Account model,
+    #       will have to update cached attribute here
 
 
 ## delete
