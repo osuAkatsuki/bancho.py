@@ -17,8 +17,21 @@ from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Grade
 
+## in-memory cache
+
 id_cache: MutableMapping[int, Player] = {}
 safe_name_cache: MutableMapping[str, Player] = {}
+
+
+def add_to_cache(player: Player) -> None:
+    id_cache[player.id] = player
+    safe_name_cache[player.safe_name] = player
+
+
+def remove_from_cache(player: Player) -> None:
+    del id_cache[player.id]
+    del safe_name_cache[player.safe_name]
+
 
 ## create
 
@@ -83,9 +96,7 @@ async def fetch_by_id(id: int) -> Player | None:
     if player is None:
         return None
 
-    id_cache[player.id] = player
-    safe_name_cache[player.safe_name] = player
-
+    add_to_cache(player)
     return player
 
 
@@ -100,9 +111,7 @@ async def fetch_by_name(name: str) -> Player | None:
     if player is None:
         return None
 
-    id_cache[player.id] = player
-    safe_name_cache[player.safe_name] = player
-
+    add_to_cache(player)
     return player
 
 

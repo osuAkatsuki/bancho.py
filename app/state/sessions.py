@@ -107,8 +107,8 @@ async def init_server_state(db_conn: databases.core.Connection) -> None:
         bot_client=True,
         token=None,
     )
-    repositories.players.id_cache[bot.id] = bot
-    repositories.players.safe_name_cache[bot.safe_name] = bot
+
+    repositories.players.add_to_cache(bot)
     players.append(bot)
 
     # static api keys
