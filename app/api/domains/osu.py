@@ -660,7 +660,7 @@ async def submit_score(
         )
 
     # update their recent score
-    player.recent_scores[score.mode] = score.id
+    player.recent_score_ids[score.mode] = score.id
 
     """ score submission charts """
 

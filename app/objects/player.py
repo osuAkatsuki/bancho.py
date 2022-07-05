@@ -264,7 +264,7 @@ class Player(Account):
         pres_filter: PresenceFilter = PresenceFilter.Nil,
         login_time: float = 0.0,
         last_recv_time: float = 0.0,
-        recent_scores: Optional[MutableMapping[GameMode, Optional[int]]] = None,
+        recent_score_ids: Optional[MutableMapping[GameMode, Optional[int]]] = None,
         last_np: Optional[LastNp] = None,
         current_menu: Optional[Menu] = None,
         previous_menus: Optional[list[Menu]] = None,
@@ -305,7 +305,7 @@ class Player(Account):
         # XXX: below is mostly implementation-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores = recent_scores or {mode: None for mode in GameMode}
+        self.recent_score_ids = recent_score_ids or {mode: None for mode in GameMode}
 
         # store the last beatmap /np'ed by the user.
         self.last_np = last_np
@@ -384,7 +384,7 @@ class Player(Account):
     @property  # TODO: should this be in repos, or usecases?
     def recent_score_id(self) -> Optional[int]:
         """The player's most recently submitted score."""
-        return self.recent_scores.get(self.status.mode)
+        return self.recent_score_ids.get(self.status.mode)
 
     # TODO: from_row, to_row?
 

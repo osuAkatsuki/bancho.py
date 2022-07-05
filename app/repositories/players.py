@@ -27,6 +27,7 @@ safe_name_cache: MutableMapping[str, Player] = {}
 
 # TODO: is it possible to have `val`s type depend on the key?
 async def _fetch(key: Literal["id", "safe_name"], val: Any) -> Optional[Player]:
+    """Retrieve a player from a given key and value."""
     assert key in ("id", "safe_name")
 
     user_info = await app.state.services.database.fetch_one(
@@ -54,19 +55,19 @@ async def _fetch(key: Literal["id", "safe_name"], val: Any) -> Optional[Player]:
         },
     }
 
-    achievements = await fetch_achievement_ids(player_id)
-    friends, blocks = await fetch_relationships(player_id)
     stats = await fetch_stats(player_id)
-    recent_scores = await fetch_recent_scores(player_id)
+    friends, blocks = await fetch_relationships(player_id)
+    achievement_ids = await fetch_achievement_ids(player_id)
+    recent_score_ids = await fetch_recent_score_ids(player_id)
 
     player = Player(
         **user_info,
         stats=stats,
         friends=friends,
         blocks=blocks,
-        achievement_ids=achievements,
+        achievement_ids=achievement_ids,
         geoloc=geolocation,
-        recent_scores=recent_scores,
+        recent_score_ids=recent_score_ids,
         token=None,
     )
 
@@ -74,6 +75,7 @@ async def _fetch(key: Literal["id", "safe_name"], val: Any) -> Optional[Player]:
 
 
 async def fetch_by_id(id: int) -> Player | None:
+    """Retrieve a player from their id number."""
     if player := id_cache.get(id):
         return player
 
@@ -88,6 +90,7 @@ async def fetch_by_id(id: int) -> Player | None:
 
 
 async def fetch_by_name(name: str) -> Player | None:
+    """Retrieve a player from their username."""
     safe_name = app.utils.make_safe_name(name)
 
     if player := safe_name_cache.get(safe_name):
@@ -104,6 +107,7 @@ async def fetch_by_name(name: str) -> Player | None:
 
 
 async def get_global_rank(player_id: int, mode: GameMode) -> int:
+    """Retrieve a player's performance-based rank in the world."""
     rank = await app.state.services.redis.zrevrank(
         f"bancho:leaderboard:{mode.value}",
         str(player_id),
@@ -112,6 +116,7 @@ async def get_global_rank(player_id: int, mode: GameMode) -> int:
 
 
 async def get_country_rank(player_id: int, mode: GameMode, country: str) -> int:
+    """Retrieve a player's performance-based rank in their country."""
     rank = await app.state.services.redis.zrevrank(
         f"bancho:leaderboard:{mode.value}:{country}",
         str(player_id),
@@ -120,7 +125,7 @@ async def get_country_rank(player_id: int, mode: GameMode, country: str) -> int:
 
 
 async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
-    """Retrieve `player`'s relationships."""
+    """Retrieve a player's relationships."""
     if player := id_cache.get(player_id):
         return player.friends, player.blocks
 
@@ -143,7 +148,7 @@ async def fetch_relationships(player_id: int) -> tuple[set[int], set[int]]:
 
 
 async def fetch_achievement_ids(player_id: int) -> set[int]:
-    """Retrieve `player`'s achievements from sql."""
+    """Retrieve a player's achievements."""
     if player := id_cache.get(player_id):
         return player.achievement_ids
 
@@ -159,7 +164,7 @@ async def fetch_achievement_ids(player_id: int) -> set[int]:
 
 
 async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
-    """Retrieve `player`'s stats (all modes) from sql."""
+    """Retrieve a player's stats (for all modes)."""
     if player := id_cache.get(player_id):
         return player.stats
 
@@ -192,13 +197,14 @@ async def fetch_stats(player_id: int) -> Mapping[GameMode, ModeData]:
     return player_stats
 
 
-async def fetch_recent_scores(
+async def fetch_recent_score_ids(
     player_id: int,
 ) -> MutableMapping[GameMode, Optional[int]]:
+    """Retrieve a player's recent scores (for all modes)."""
     if player := id_cache.get(player_id):
-        return player.recent_scores
+        return player.recent_score_ids
 
-    recent_scores: MutableMapping[GameMode, Optional[int]] = {}
+    recent_score_ids: MutableMapping[GameMode, Optional[int]] = {}
 
     # TODO: is this doable in a single query?
     for mode in (0, 1, 2, 3, 4, 5, 6, 8):
@@ -207,18 +213,18 @@ async def fetch_recent_scores(
             {"user_id": player_id, "mode": mode},
         )
         if row is None:
-            recent_scores[GameMode(mode)] = None
+            recent_score_ids[GameMode(mode)] = None
         else:
-            recent_scores[GameMode(mode)] = row["id"]
+            recent_score_ids[GameMode(mode)] = row["id"]
 
-    return recent_scores
+    return recent_score_ids
 
 
 ## update
 
 
 async def update_name(player_id: int, new_name: str) -> None:
-    """Update a player's name to a new value, by id."""
+    """Update a player's name to a new value by id."""
     new_safe_name = app.utils.make_safe_name(new_name)
 
     await app.state.services.database.execute(
@@ -239,7 +245,7 @@ async def update_name(player_id: int, new_name: str) -> None:
 
 
 async def update_privs(player_id: int, new_privileges: int) -> None:
-    """Update a player's privileges to a new value, by id."""
+    """Update a player's privileges to a new value by id."""
     await app.state.services.database.execute(
         "UPDATE users SET priv = :priv WHERE id = :user_id",
         {"priv": new_privileges, "user_id": player_id},
@@ -250,7 +256,7 @@ async def update_privs(player_id: int, new_privileges: int) -> None:
 
 
 async def set_donator_end(player_id: int, end: int) -> None:
-    """Set the time when a player's donation status ends."""
+    """Set the time when a player's donation status ends by id."""
     await app.state.services.database.execute(
         "UPDATE users SET donor_end = :end WHERE id = :id",
         {"id": player_id, "end": end},
@@ -258,7 +264,7 @@ async def set_donator_end(player_id: int, end: int) -> None:
 
 
 async def silence_until(player_id: int, until: int) -> None:
-    """Silence a player until a certain time."""
+    """Silence a player until a certain time by id."""
     await app.state.services.database.execute(
         "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
         {"silence_end": until, "user_id": player_id},
@@ -269,7 +275,7 @@ async def silence_until(player_id: int, until: int) -> None:
 
 
 async def unsilence(player_id: int) -> None:
-    """Unsilence a player."""
+    """Remove a player's silence by id."""
     await app.state.services.database.execute(
         "UPDATE users SET silence_end = 0 WHERE id = :user_id",
         {"user_id": player_id},
@@ -280,6 +286,7 @@ async def unsilence(player_id: int) -> None:
 
 
 async def update_latest_activity(player_id: int) -> None:
+    """Update a player's latest activity date by id."""
     await app.state.services.database.execute(
         "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
         {"user_id": player_id},
