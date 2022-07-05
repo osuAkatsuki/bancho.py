@@ -565,18 +565,12 @@ async def add_spectator(player: Player, other: Player) -> None:
         logging.warning(f"{player} failed to join {spec_channel}?")
         return
 
-    if not other.stealth:
-        p_joined = app.packets.fellow_spectator_joined(other.id)
-        for spectator in player.spectators:
-            spectator.enqueue(p_joined)
-            other.enqueue(app.packets.fellow_spectator_joined(spectator.id))
+    p_joined = app.packets.fellow_spectator_joined(other.id)
+    for spectator in player.spectators:
+        spectator.enqueue(p_joined)
+        other.enqueue(app.packets.fellow_spectator_joined(spectator.id))
 
-        player.enqueue(app.packets.spectator_joined(other.id))
-    else:
-        # player is admin in stealth, only give
-        # other players data to us, not vice-versa.
-        for spectator in player.spectators:
-            other.enqueue(app.packets.fellow_spectator_joined(spectator.id))
+    player.enqueue(app.packets.spectator_joined(other.id))
 
     player.spectators.append(other)
     other.spectating = player

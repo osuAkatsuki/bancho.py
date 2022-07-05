@@ -907,17 +907,14 @@ class StartSpectating(BasePacket):
                 # host hasn't changed, they didn't have
                 # the map but have downloaded it.
 
-                if not player.stealth:
-                    # NOTE: player would have already received the other
-                    # fellow spectators, so no need to resend them.
-                    new_host.enqueue(app.packets.spectator_joined(player.id))
+                new_host.enqueue(app.packets.spectator_joined(player.id))
 
-                    spectator_joined_packet = app.packets.fellow_spectator_joined(
-                        player.id,
-                    )
-                    for spectator in new_host.spectators:
-                        if spectator is not player:
-                            spectator.enqueue(spectator_joined_packet)
+                spectator_joined_packet = app.packets.fellow_spectator_joined(
+                    player.id,
+                )
+                for spectator in new_host.spectators:
+                    if spectator is not player:
+                        spectator.enqueue(spectator_joined_packet)
 
                 return
 
@@ -967,10 +964,6 @@ class CantSpectate(BasePacket):
     async def handle(self, player: Player) -> None:
         if not player.spectating:
             logging.warning(f"{player} sent can't spectate while not spectating?")
-            return
-
-        if player.stealth:
-            # don't send spectator packets in stealth mode
             return
 
         data = app.packets.spectator_cant_spectate(player.id)

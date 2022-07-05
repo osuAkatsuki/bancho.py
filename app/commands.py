@@ -1045,16 +1045,6 @@ async def shutdown(ctx: Context) -> Optional[str]:
 
 
 @command(Privileges.DEVELOPER)
-async def stealth(ctx: Context) -> Optional[str]:
-    """Toggle the developer's stealth, allowing them to be hidden."""
-    # NOTE: this command is a large work in progress and currently
-    # half works; eventually it will be moved to the Admin level.
-    ctx.player.stealth = not ctx.player.stealth
-
-    return f'Stealth {"enabled" if ctx.player.stealth else "disabled"}.'
-
-
-@command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> Optional[str]:
     """Recalculate pp for a given map, or all maps."""
     # NOTE: at the moment this command isn't very optimal and re-parses

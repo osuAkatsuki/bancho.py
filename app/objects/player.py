@@ -254,7 +254,6 @@ class Player(Account):
         spectators: Optional[list[Player]] = None,
         spectating: Optional[Player] = None,
         match: Optional[Match] = None,
-        stealth: bool = False,
         geoloc: Optional[app.objects.geolocation.Geolocation] = None,
         utc_offset: int = 0,
         pm_private: bool = False,  # TODO: should this be under Account?
@@ -282,7 +281,6 @@ class Player(Account):
         self.spectators = spectators or []
         self.spectating = spectating or None
         self.match = match or None
-        self.stealth = stealth
 
         # TODO: store geolocation {ip:geoloc} store as a repository, store ip reference in other objects
         self.geoloc = geoloc or {
