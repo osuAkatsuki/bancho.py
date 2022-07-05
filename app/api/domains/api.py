@@ -162,7 +162,16 @@ async def api_get_player_info(
 
     # fetch user's info if requested
     if scope in ("info", "all"):
-        api_data["info"] = player.to_row()  # TODO:REFACTOR
+        # TODO: something like Player.to_row()?
+        api_data["info"] = {
+            "id": player.id,
+            "name": player.name,
+            "safe_name": player.safe_name,
+            "priv": player.priv,
+            "clan_id": player.clan_id,
+            "country": player.geoloc["country"]["acronym"],
+            "silence_end": player.silence_end,
+        }
 
     # fetch user's stats if requested
     if scope in ("stats", "all"):
