@@ -706,8 +706,10 @@ async def api_get_replay(
     # create a buffer to construct the replay output
     replay_data = bytearray()
 
+    mode_vn = row["mode"] % 4
+
     # pack first section of headers.
-    replay_data += struct.pack("<Bi", row["mode"], 20200207)  # TODO: osuver
+    replay_data += struct.pack("<Bi", mode_vn, 20200207)  # TODO: osuver
     replay_data += app.packets.write_string(row["map_md5"])
     replay_data += app.packets.write_string(row["username"])
     replay_data += app.packets.write_string(replay_md5)
