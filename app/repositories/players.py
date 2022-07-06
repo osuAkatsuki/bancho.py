@@ -93,12 +93,11 @@ async def fetch_by_id(id: int) -> Player | None:
     if player := id_cache.get(id):
         return player
 
-    player = await _fetch("id", id)
-    if player is None:
-        return None
+    if player := await _fetch("id", id):
+        add_to_cache(player)
+        return player
 
-    add_to_cache(player)
-    return player
+    return None
 
 
 async def fetch_by_name(name: str) -> Player | None:
@@ -300,6 +299,63 @@ async def unsilence(player_id: int) -> None:
 
     if player := id_cache.get(player_id):
         player.silence_end = 0
+
+
+async def friend_other_player(player_id: int, other_id: int) -> None:
+    """Add another player to a player's friends by id."""
+    await app.state.services.database.execute(
+        "REPLACE INTO relationships (user1, user2, type) VALUES (:user1, :user2, 'friend')",
+        {"user1": player_id, "user2": other_id},
+    )
+
+    if player := id_cache.get(player_id):
+        player.friends.add(other_id)
+        player.blocks.discard(other_id)
+
+
+async def unfriend_other_player(player_id: int, other_id: int) -> None:
+    """Remove another player from a player's friends by id."""
+    await app.state.services.database.execute(
+        "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
+        {"user1": player_id, "user2": other_id},
+    )
+
+    if player := id_cache.get(player_id):
+        player.friends.remove(other_id)
+
+
+async def block_other_player(player_id: int, other_id: int) -> None:
+    """Add another player to a player's blocks by id."""
+    await app.state.services.database.execute(
+        "REPLACE INTO relationships VALUES (:user1, :user2, 'block')",
+        {"user1": player_id, "user2": other_id},
+    )
+
+    if player := id_cache.get(player_id):
+        player.blocks.add(other_id)
+        player.friends.discard(other_id)
+
+
+async def unblock_other_player(player_id: int, other_id: int) -> None:
+    """Remove another player from a player's blocks by id."""
+    await app.state.services.database.execute(
+        "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
+        {"user1": player_id, "user2": other_id},
+    )
+
+    if player := id_cache.get(player_id):
+        player.blocks.remove(other_id)
+
+
+async def unlock_achievement(player_id: int, achievement_id: int) -> None:
+    """Unlock a specific achievement for a player."""
+    await app.state.services.database.execute(
+        "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
+        {"user_id": player_id, "ach_id": achievement_id},
+    )
+
+    if player := id_cache.get(player_id):
+        player.achievement_ids.add(achievement_id)
 
 
 async def update_latest_activity(player_id: int) -> None:

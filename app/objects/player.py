@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import app.objects.geolocation
-import app.packets
 import app.settings
 import app.state.services
 from app._typing import IPAddress
@@ -24,8 +23,6 @@ from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.objects.match import Match
 from app.objects.menu import Menu
-from app.objects.menu import MenuCommands
-from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.utils import escape_enum
 from app.utils import make_safe_name

@@ -1,40 +1,41 @@
 from __future__ import annotations
 
+from typing import Any
+from typing import Literal
+from typing import Mapping
+from typing import MutableMapping
 from typing import Optional
-from typing import Union
 
+import app.settings
 import app.state.services
-from app import repositories
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 
-BeatmapID = int
-BeatmapMD5 = str
+## in-memory cache
 
-KeyTypes = Union[BeatmapID, BeatmapMD5]
+id_cache: Mapping[int, Beatmap] = {}
+md5_cache: MutableMapping[str, Beatmap] = {}
 
-cache: dict[KeyTypes, Beatmap] = {}
+
+def add_to_cache(beatmap: Beatmap) -> None:
+    id_cache[beatmap.id] = beatmap
+    md5_cache[beatmap.md5] = beatmap
+
+
+def remove_from_cache(beatmap: Beatmap) -> None:
+    del id_cache[beatmap.id]
+    del md5_cache[beatmap.md5]
+
 
 ## create
 # TODO: beatmap submission
 
 ## read
 
+# TODO: is it possible to have `val`s type depend on the key?
+async def _fetch(key: Literal["id", "md5"], val: Any) -> Optional[Beatmap]:
+    assert key in ("id", "md5")
 
-# low level api
-# allows for fetching based on any supported key
-
-
-def _fetch_by_key_cache(val: KeyTypes) -> Optional[Beatmap]:
-    """Fetch a map from the cache by any supported key."""
-    if beatmap := cache.get(val):
-        return beatmap
-
-    return None
-
-
-async def _fetch_by_key_database(key: str, val: KeyTypes) -> Optional[Beatmap]:
-    """Fetch a map from the database by any supported key."""
     row = await app.state.services.database.fetch_one(
         "SELECT md5, id, set_id, "
         "artist, title, version, creator, "
@@ -43,64 +44,56 @@ async def _fetch_by_key_database(key: str, val: KeyTypes) -> Optional[Beatmap]:
         "plays, passes, mode, bpm, "
         "cs, od, ar, hp, diff "
         "FROM maps "
-        f"WHERE {key} = :val",
-        {"val": val},
+        f"WHERE {key} = :{key}",
+        {key: val},
     )
-    if row is None:
-        return None
-
-    return Beatmap(**row)
-
-
-async def _fetch_by_key_osuapi(key: str, val: KeyTypes) -> Optional[Beatmap]:
-    """Fetch a map from the osuapi by any supported key."""
-    if key == "md5":
-        params = {"h": val}
-    elif key == "id":
-        params = {"b": val}
-    else:
-        raise NotImplementedError
-
-    api_data = await repositories.osuapi_v1.get_beatmaps(**params)
-
-    if not api_data:  # None or []
-        return None
-
-    # TODO: is it possible for this to be a map we already have?
-    #       might need to vary logic based on frozen status
-
-    return Beatmap.from_osuapi_response(api_data[0])
-
-
-async def _fetch_by_key(key: str, val: KeyTypes) -> Optional[Beatmap]:
-    """Fetch a map from the cache, database, or osuapi by any supported key."""
-    if beatmap := _fetch_by_key_cache(val):
+    if row:
+        beatmap = Beatmap(**row)
+        add_to_cache(beatmap)
         return beatmap
 
-    if beatmap := await _fetch_by_key_database(key, val):
-        cache[beatmap.md5] = beatmap
-        cache[beatmap.id] = beatmap
+    if app.settings.OSU_API_KEY:
+        # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
+        async with app.state.services.http_client.get(
+            url="https://old.ppy.sh/api/get_beatmaps",
+            params={
+                "b" if key == "id" else "h": val,
+                "k": app.settings.OSU_API_KEY,
+            },
+        ) as resp:
+            if resp.status != 200:
+                return None
+
+            api_data = await resp.json()
+
+        if api_data:  # None or []
+            beatmap = Beatmap.from_osuapi_response(api_data[0])
+            add_to_cache(beatmap)
+            return beatmap
+
+    return None
+
+
+async def fetch_by_id(id: int) -> Optional[Beatmap]:
+    if beatmap := id_cache.get(id):
         return beatmap
 
-    if beatmap := await _fetch_by_key_osuapi(key, val):
-        cache[beatmap.md5] = beatmap
-        cache[beatmap.id] = beatmap
+    if beatmap := await _fetch("id", id):
+        add_to_cache(beatmap)
         return beatmap
 
     return None
 
 
-# high level api
-
-
 async def fetch_by_md5(md5: str) -> Optional[Beatmap]:
-    """Fetch a beatmap from the cache, database, or osuapi by md5."""
-    return await _fetch_by_key("md5", md5)
+    if beatmap := md5_cache.get(md5):
+        return beatmap
 
+    if beatmap := await _fetch("md5", md5):
+        add_to_cache(beatmap)
+        return beatmap
 
-async def fetch_by_id(id: int) -> Optional[Beatmap]:
-    """Fetch a beatmap from the cache, database, or osuapi by id."""
-    return await _fetch_by_key("id", id)
+    return None
 
 
 ## update
@@ -113,7 +106,8 @@ async def update_status(beatmap_id: int, new_status: RankedStatus) -> None:
         {"status": new_status, "map_id": beatmap_id},
     )
 
-    cache[beatmap_id].status = new_status
+    if beatmap := id_cache.get(beatmap_id):
+        beatmap.status = new_status
 
 
 async def update_playcounts(beatmap_id: int, plays: int, passes: int) -> None:
@@ -123,8 +117,9 @@ async def update_playcounts(beatmap_id: int, plays: int, passes: int) -> None:
         {"plays": plays, "passes": passes, "beatmap_id": beatmap_id},
     )
 
-    cache[beatmap_id].plays = plays
-    cache[beatmap_id].passes = passes
+    if beatmap := id_cache.get(beatmap_id):
+        beatmap.plays = plays
+        beatmap.passes = passes
 
 
 ## delete

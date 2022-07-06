@@ -10,5 +10,6 @@ from . import match
 from . import menu
 from . import models
 from . import network_adapters
+from . import nomination_requests
 from . import player
 from . import score

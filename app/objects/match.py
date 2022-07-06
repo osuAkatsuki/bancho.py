@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
 
-import app.packets
 import app.settings
 import app.state
 from app.constants.gamemodes import GameMode
@@ -21,6 +20,7 @@ from app.utils import escape_enum
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
+    from app.packets import MultiplayerMatch
     from app.objects.beatmap import Beatmap
     from app.objects.player import Player
     from app.objects.channel import Channel
@@ -208,7 +208,7 @@ class Match:
         self.tourney_clients: set[int] = set()  # player ids
 
     @classmethod
-    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> Match:
+    def from_parsed_match(cls, parsed_match: MultiplayerMatch) -> Match:
         obj = cls()
         obj.mods = Mods(parsed_match.mods)
 

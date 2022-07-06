@@ -9,11 +9,13 @@ from . import client_versioning
 from . import comments
 from . import direct
 from . import error_reporting
+from . import favourite_beatmap_sets
 from . import geolocation
 from . import mail
 from . import mappools
 from . import menus
 from . import multiplayer
+from . import nomination_requests
 from . import notes
 from . import performance
 from . import players

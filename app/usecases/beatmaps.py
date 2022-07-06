@@ -172,11 +172,6 @@ async def update_status(beatmap: Beatmap, new_status: RankedStatus) -> None:
 
 async def update_playcounts(beatmap: Beatmap, increment_passes: bool) -> None:
     """Update a beatmaps playcounts in cache and the database."""
-    beatmap.plays += 1
-
-    if increment_passes:
-        beatmap.passes += 1
-
     await repositories.beatmaps.update_playcounts(
         beatmap.id,
         beatmap.plays,

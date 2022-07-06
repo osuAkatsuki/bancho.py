@@ -1468,7 +1468,7 @@ class MatchChangeSettings(BasePacket):
                 match.map_id = bmap.id
                 match.map_md5 = bmap.md5
                 match.map_name = bmap.full_name
-                match.mode = bmap.mode
+                match.mode = GameMode(bmap.mode)
             else:
                 match.map_id = self.new.map_id
                 match.map_md5 = self.new.map_md5
@@ -2032,7 +2032,7 @@ class FriendAdd(BasePacket):
             player.blocks.remove(target.id)
 
         asyncio.create_task(usecases.players.update_latest_activity(player))
-        await usecases.players.add_friend(player, target)
+        await usecases.players.friend_other_player(player, target)
 
 
 @register(ClientPackets.FRIEND_REMOVE)
@@ -2052,7 +2052,7 @@ class FriendRemove(BasePacket):
             return
 
         asyncio.create_task(usecases.players.update_latest_activity(player))
-        await usecases.players.remove_friend(player, target)
+        await usecases.players.unfriend_other_player(player, target)
 
 
 @register(ClientPackets.MATCH_CHANGE_TEAM)

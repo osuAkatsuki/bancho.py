@@ -213,10 +213,7 @@ async def block(ctx: Context) -> Optional[str]:
     if target.id in ctx.player.blocks:
         return f"{target.name} already blocked!"
 
-    if target.id in ctx.player.friends:
-        ctx.player.friends.remove(target.id)
-
-    await usecases.players.add_block(ctx.player, target)
+    await usecases.players.block_other_player(ctx.player, target)
     return f"Added {target.name} to blocked users."
 
 
@@ -234,7 +231,7 @@ async def unblock(ctx: Context) -> Optional[str]:
     if target.id not in ctx.player.blocks:
         return f"{target.name} not blocked!"
 
-    await usecases.players.remove_block(ctx.player, target)
+    await usecases.players.unblock_other_player(ctx.player, target)
     return f"Removed {target.name} from blocked users."
 
 
@@ -583,12 +580,7 @@ async def request(ctx: Context) -> Optional[str]:
     if beatmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    await app.state.services.database.execute(
-        "INSERT INTO map_requests "
-        "(map_id, player_id, datetime, active) "
-        "VALUES (:map_id, :user_id, NOW(), 1)",
-        {"map_id": beatmap.id, "user_id": ctx.player.id},
-    )
+    await usecases.nomination_requests.create(ctx.player, beatmap.id)
 
     return "Request submitted."
 
@@ -632,28 +624,30 @@ async def requests(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    rows = await app.state.services.database.fetch_all(
-        "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
-    )
+    nomination_requests = await usecases.nomination_requests.fetch_all()
 
-    if not rows:
+    if not nomination_requests:
         return "The queue is clean! (0 map request(s))"
 
-    l = [f"Total requests: {len(rows)}"]
+    l = [f"Total requests: {len(nomination_requests)}"]
 
-    for (map_id, player_id, dt) in rows:
+    for nomination_request in nomination_requests:
         # find player & map for each row, and add to output.
-        player = await repositories.players.fetch_by_id(player_id)
+        player = await repositories.players.fetch_by_id(nomination_request.player_id)
         if player is None:
-            l.append(f"Failed to find requesting player ({player_id})?")
+            l.append(
+                f"Failed to find requesting player ({nomination_request.player_id})?",
+            )
             continue
 
-        beatmap = await repositories.beatmaps.fetch_by_id(map_id)
+        beatmap = await repositories.beatmaps.fetch_by_id(nomination_request.map_id)
         if beatmap is None:
-            l.append(f"Failed to find requested map ({map_id})?")
+            l.append(f"Failed to find requested map ({nomination_request.map_id})?")
             continue
 
-        l.append(f"[{player.embed} @ {dt:%b %d %I:%M%p}] {beatmap.embed}.")
+        l.append(
+            f"[{player.embed} @ {nomination_request.created_at:%b %d %I:%M%p}] {beatmap.embed}.",
+        )
 
     return "\n".join(l)
 
@@ -2534,12 +2528,12 @@ async def clan_list(ctx: Context) -> Optional[str]:
     else:
         offset = 0
 
-    if offset >= (total_clans := len(repositories.clans.cache)):
+    if offset >= (total_clans := len(repositories.clans.id_cache)):
         return "No clans found."
 
     msg = [f"bancho.py clans listing ({total_clans} total)."]
 
-    for idx, clan in enumerate(repositories.clans.cache.values(), offset):
+    for idx, clan in enumerate(repositories.clans.id_cache.values(), offset):
         msg.append(f"{idx + 1}. {clan!r}")
 
     return "\n".join(msg)

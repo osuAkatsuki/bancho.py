@@ -232,7 +232,7 @@ def format_favourites(favourite_beatmap_set_ids: list[int]) -> bytes:
 async def get_favourite_beatmap_sets(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ):
-    resp = await usecases.players.get_favourite_beatmap_sets(player)
+    resp = await usecases.favourite_beatmap_sets.fetch_set_ids(player)
     return format_favourites(resp)
 
 
@@ -241,7 +241,10 @@ async def add_favourite_beatmap(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
 ):
-    return await usecases.players.add_favourite(player, map_set_id)
+    if usecases.favourite_beatmap_sets.exists(player, map_set_id):
+        return b"You've already favourited this beatmap!"
+
+    return await usecases.favourite_beatmap_sets.create(player, map_set_id)
 
 
 @router.get("/web/lastfm.php")

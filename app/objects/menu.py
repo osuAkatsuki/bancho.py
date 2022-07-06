@@ -2,7 +2,6 @@
 # the concept and is subject to major refactoring
 from __future__ import annotations
 
-import random
 from enum import IntEnum
 from enum import unique
 from typing import Awaitable

@@ -600,37 +600,29 @@ async def remove_spectator(player: Player, other: Player) -> None:
     logging.info(f"{other} is no longer spectating {player}.")
 
 
-async def add_friend(player: Player, other: Player) -> None:
+async def friend_other_player(player: Player, other: Player) -> None:
     """Attempt to add `p` to `player`'s friends."""
     if other.id in player.friends:
         logging.warning(f"{player} tried to add {other}, who is already their friend!")
         return
 
-    player.friends.add(other.id)
-    await app.state.services.database.execute(
-        "REPLACE INTO relationships (user1, user2, type) VALUES (:user1, :user2, 'friend')",
-        {"user1": player.id, "user2": other.id},
-    )
+    await repositories.players.friend_other_player(player.id, other.id)
 
     logging.info(f"{player} friended {other}.")
 
 
-async def remove_friend(player: Player, other: Player) -> None:
+async def unfriend_other_player(player: Player, other: Player) -> None:
     """Attempt to remove `p` from `player`'s friends."""
     if other.id not in player.friends:
         logging.warning(f"{player} tried to unfriend {other}, who is not their friend!")
         return
 
-    player.friends.remove(other.id)
-    await app.state.services.database.execute(
-        "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
-        {"user1": player.id, "user2": other.id},
-    )
+    await repositories.players.unfriend_other_player(player.id, other.id)
 
     logging.info(f"{player} unfriended {other}.")
 
 
-async def add_block(player: Player, other: Player) -> None:
+async def block_other_player(player: Player, other: Player) -> None:
     """Attempt to add `p` to `player`'s blocks."""
     if other.id in player.blocks:
         logging.warning(
@@ -638,38 +630,25 @@ async def add_block(player: Player, other: Player) -> None:
         )
         return
 
-    player.blocks.add(other.id)
-    await app.state.services.database.execute(
-        "REPLACE INTO relationships VALUES (:user1, :user2, 'block')",
-        {"user1": player.id, "user2": other.id},
-    )
+    await repositories.players.block_other_player(player.id, other.id)
 
     logging.info(f"{player} blocked {other}.")
 
 
-async def remove_block(player: Player, other: Player) -> None:
+async def unblock_other_player(player: Player, other: Player) -> None:
     """Attempt to remove `p` from `player`'s blocks."""
     if other.id not in player.blocks:
         logging.warning(f"{player} tried to unblock {other}, who they haven't blocked!")
         return
 
-    player.blocks.remove(other.id)
-    await app.state.services.database.execute(
-        "DELETE FROM relationships WHERE user1 = :user1 AND user2 = :user2",
-        {"user1": player.id, "user2": other.id},
-    )
+    await repositories.players.unblock_other_player(player.id, other.id)
 
     logging.info(f"{player} unblocked {other}.")
 
 
 async def unlock_achievement(player: Player, achievement: Achievement) -> None:
-    """Unlock `ach` for `player`, storing in both cache & sql."""
-    await app.state.services.database.execute(
-        "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
-        {"user_id": player.id, "ach_id": achievement.id},
-    )
-
-    player.achievement_ids.add(achievement.id)
+    """Unlock a specific achievement for a player."""
+    await repositories.players.unlock_achievement(player.id, achievement.id)
 
 
 async def update_rank(player: Player, mode: GameMode) -> int:
@@ -683,6 +662,7 @@ async def update_rank(player: Player, mode: GameMode) -> int:
     return global_rank
 
 
+# TODO: this should be quite a bit more in repositories :)
 async def update_stats(
     player: Player,
     score: Score,
@@ -840,34 +820,6 @@ def send_bot(player: Player, msg: str) -> None:
             sender_id=bot.id,
         ),
     )
-
-
-async def get_favourite_beatmap_sets(player: Player) -> list[int]:
-    """Return a list of the user's favourite map set ids."""
-    rows = await app.state.services.database.fetch_all(
-        "SELECT setid FROM favourites WHERE userid = :user_id",
-        {"user_id": player.id},
-    )
-
-    return [row["setid"] for row in rows]
-
-
-async def add_favourite(player: Player, map_set_id: int) -> bytes:
-    async with app.state.services.database.connection() as db_conn:
-        # check if they already have this favourited.
-        if await db_conn.fetch_one(
-            "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
-            {"user_id": player.id, "set_id": map_set_id},
-        ):
-            return b"You've already favourited this beatmap!"
-
-        # add favourite
-        await db_conn.execute(
-            "INSERT INTO favourites VALUES (:user_id, :set_id)",
-            {"user_id": player.id, "set_id": map_set_id},
-        )
-
-    return b""
 
 
 ## menus
