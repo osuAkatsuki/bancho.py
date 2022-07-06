@@ -96,6 +96,18 @@ async def fetch_by_md5(md5: str) -> Optional[Beatmap]:
     return None
 
 
+async def fetch_rating(beatmap_md5: str) -> Optional[float]:
+    row = await app.state.services.database.fetch_one(
+        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
+        {"map_md5": beatmap_md5},
+    )
+
+    if row is None:
+        return None
+
+    return row["rating"]
+
+
 ## update
 
 

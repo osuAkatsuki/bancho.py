@@ -120,7 +120,7 @@ async def get_beatmap_info(
 
 def _filename_exists_cache(filename: str) -> bool:
     """Fetch whether a map exists in the cache by filename."""
-    for beatmap in repositories.beatmaps.cache.values():
+    for beatmap in repositories.beatmaps.id_cache.values():
         if filename == beatmap.filename:
             return True
     else:
@@ -151,15 +151,7 @@ async def filename_exists(filename: str) -> bool:
 
 async def fetch_rating(beatmap: Beatmap) -> Optional[float]:
     """Fetch the beatmap's rating from sql."""
-    row = await app.state.services.database.fetch_one(
-        "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
-        {"map_md5": beatmap.md5},
-    )
-
-    if row is None:
-        return None
-
-    return row["rating"]
+    return await repositories.beatmaps.fetch_rating(beatmap.md5)
 
 
 # update
