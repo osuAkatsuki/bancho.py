@@ -33,9 +33,7 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def getbeatmaps(
-    **params: Union[str, int]
-) -> Optional[list[dict[str, Any]]]:
+async def getbeatmaps(**params: Union[str, int]) -> Optional[list[dict[str, Any]]]:
     """Fetch data from the osu!api with a beatmap's md5."""
 
     # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
