@@ -1893,37 +1893,38 @@ async def register_account(
                 # localhost, unknown country
                 country_acronym = "xx"
 
-        # add to `users` table.
-        user_id = await db_conn.execute(
-            "INSERT INTO users "
-            "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
-            "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
-            {
-                "name": username,
-                "safe_name": safe_name,
-                "email": email,
-                "pw_bcrypt": pw_bcrypt,
-                "country": country_acronym,
-            },
-        )
+        async with db_conn.transaction():
+            # add to `users` table.
+            user_id = await db_conn.execute(
+                "INSERT INTO users "
+                "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
+                "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
+                {
+                    "name": username,
+                    "safe_name": safe_name,
+                    "email": email,
+                    "pw_bcrypt": pw_bcrypt,
+                    "country": country_acronym,
+                },
+            )
 
-        # add to `stats` table.
-        await db_conn.execute_many(
-            "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
-            [
-                {"user_id": user_id, "mode": mode}
-                for mode in (
-                    0,  # vn!std
-                    1,  # vn!taiko
-                    2,  # vn!catch
-                    3,  # vn!mania
-                    4,  # rx!std
-                    5,  # rx!taiko
-                    6,  # rx!catch
-                    8,  # ap!std
-                )
-            ],
-        )
+            # add to `stats` table.
+            await db_conn.execute_many(
+                "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
+                [
+                    {"user_id": user_id, "mode": mode}
+                    for mode in (
+                        0,  # vn!std
+                        1,  # vn!taiko
+                        2,  # vn!catch
+                        3,  # vn!mania
+                        4,  # rx!std
+                        5,  # rx!taiko
+                        6,  # rx!catch
+                        8,  # ap!std
+                    )
+                ],
+            )
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")
