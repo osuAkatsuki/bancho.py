@@ -106,9 +106,8 @@ async def bancho_handler(
 
     if osu_token is None:
         # the client is performing a login
-        async with app.state.sessions.players._lock:
-            async with app.state.services.database.connection() as db_conn:
-                login_data = await login(await request.body(), ip, db_conn)
+        async with app.state.services.database.connection() as db_conn:
+            login_data = await login(await request.body(), ip, db_conn)
 
         return Response(
             content=login_data["response_body"],
