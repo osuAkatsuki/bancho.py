@@ -121,14 +121,6 @@ async def _fetch_by_id_osuapi(id: int) -> Optional[BeatmapSet]:
 
         beatmap_set.maps.append(beatmap)
 
-    await app.state.services.database.execute(
-        "REPLACE INTO mapsets "
-        "(server, id, last_osuapi_check) "
-        'VALUES ("osu!", :id, :last_osuapi_check)',
-        {"id": beatmap_set.id, "last_osuapi_check": beatmap_set.last_osuapi_check},
-    )
-
-    await replace(beatmap_set)
     return beatmap_set
 
 
@@ -143,6 +135,8 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
         return beatmap_set
 
     if beatmap_set := await _fetch_by_id_osuapi(id):
+        await replace_into_database(beatmap_set)
+
         add_to_cache(beatmap_set)
 
         return beatmap_set
@@ -166,8 +160,16 @@ async def update_status(id: int, new_status: RankedStatus) -> None:
             beatmap.status = new_status
 
 
-async def replace(beatmap_set: BeatmapSet) -> None:
+async def replace_into_database(beatmap_set: BeatmapSet) -> None:
     """Replace the existing beatmap's attributes with new ones."""
+
+    await app.state.services.database.execute(
+        "REPLACE INTO mapsets "
+        "(server, id, last_osuapi_check) "
+        'VALUES ("osu!", :id, :last_osuapi_check)',
+        {"id": beatmap_set.id, "last_osuapi_check": beatmap_set.last_osuapi_check},
+    )
+
     await app.state.services.database.execute_many(
         "REPLACE INTO maps ("
         "server, md5, id, set_id, "
@@ -212,12 +214,6 @@ async def replace(beatmap_set: BeatmapSet) -> None:
             for bmap in beatmap_set.maps
         ],
     )
-
-    # update cached data
-    remove_from_cache(beatmap_set)
-    new_beatmap_set = await fetch_by_id(beatmap_set.id)
-    assert new_beatmap_set is not None
-    add_to_cache(new_beatmap_set)
 
 
 ## delete
