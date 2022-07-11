@@ -735,9 +735,7 @@ async def post_beatmap_rating(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if rating is None:
-        # check if we have the map in our cache;
-        # if not, the map probably doesn't exist.
-        beatmap = repositories.beatmaps._fetch_by_key_cache(map_md5)
+        beatmap = await repositories.beatmaps.fetch_by_md5(map_md5)
         if beatmap is None:
             return b"no exist"
 
