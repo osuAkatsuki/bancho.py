@@ -72,13 +72,7 @@ def has_expired_cache(beatmap_set: BeatmapSet) -> bool:
 
 
 async def update_status(beatmap_set: BeatmapSet, new_status: RankedStatus) -> None:
-    """Update all beatmaps in a set to a new ranked status in cache and the database."""
-
-    # update in cache
-    for beatmap in beatmap_set.maps:
-        beatmap.status = new_status
-
-    # update in database
+    """Update all beatmaps in a set to a new ranked status."""
     await repositories.beatmap_sets.update_status(beatmap_set.id, new_status)
 
 

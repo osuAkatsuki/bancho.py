@@ -28,9 +28,15 @@ id_cache: MutableMapping[int, BeatmapSet] = {}
 def add_to_cache(beatmap_set: BeatmapSet) -> None:
     id_cache[beatmap_set.id] = beatmap_set
 
+    for beatmap in beatmap_set.maps:
+        repositories.beatmaps.add_to_cache(beatmap)
+
 
 def remove_from_cache(beatmap_set: BeatmapSet) -> None:
     del id_cache[beatmap_set.id]
+
+    for beatmap in beatmap_set.maps:
+        repositories.beatmaps.remove_from_cache(beatmap)
 
 
 ## create
@@ -133,12 +139,12 @@ async def fetch_by_id(id: int) -> Optional[BeatmapSet]:
 
     if beatmap_set := await _fetch_by_id_database(id):
         add_to_cache(beatmap_set)
-        # TODO: when should we cache the individual beatmaps?
+
         return beatmap_set
 
     if beatmap_set := await _fetch_by_id_osuapi(id):
         add_to_cache(beatmap_set)
-        # TODO: when should we cache the individual beatmaps?
+
         return beatmap_set
 
     return None
@@ -207,7 +213,11 @@ async def replace(beatmap_set: BeatmapSet) -> None:
         ],
     )
 
-    # TODO: this should be updating cache!!!
+    # update cached data
+    remove_from_cache(beatmap_set)
+    new_beatmap_set = await fetch_by_id(beatmap_set.id)
+    assert new_beatmap_set is not None
+    add_to_cache(new_beatmap_set)
 
 
 ## delete
