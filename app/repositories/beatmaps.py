@@ -52,13 +52,17 @@ async def _fetch(key: Literal["id", "md5"], val: Any) -> Optional[Beatmap]:
         add_to_cache(beatmap)
         return beatmap
 
-    if app.settings.OSU_API_KEY:
+    # TODO: allow for multiple to be given
+    # TODO: per-api key rate limiting
+    api_key = str(app.settings.OSU_API_KEY)
+
+    if api_key:
         # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
         async with app.state.services.http_client.get(
             url="https://old.ppy.sh/api/get_beatmaps",
             params={
                 "b" if key == "id" else "h": val,
-                "k": app.settings.OSU_API_KEY,
+                "k": api_key,
             },
         ) as resp:
             if resp.status != 200:
