@@ -179,10 +179,7 @@ class Matches(list[Optional[Match]]):
 class Players(list[Player]):
     """The currently active players on the server."""
 
-    __slots__ = ("_lock",)
-
     def __init__(self, *args, **kwargs):
-        self._lock = asyncio.Lock()
         super().__init__(*args, **kwargs)
 
     def __iter__(self) -> Iterator[Player]:
