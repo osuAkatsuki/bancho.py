@@ -1398,7 +1398,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
 @command(Privileges.DEVELOPER, hidden=True)
 async def givedonator(ctx: Context) -> Optional[str]:
-    """Gives donator to a specified player (by name) for a specified amount of time, such as '3h5m'."""
+    """Give donator status to a specified player for a specified duration."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !givedonator <name> <duration>"
 
