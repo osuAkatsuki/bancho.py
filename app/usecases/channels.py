@@ -104,4 +104,4 @@ def remove_channel(channel: Channel, player: Player) -> None:
 
     if channel.instance and not channel.players:
         # delete instanced channels once all players have left
-        repositories.channels.delete_instance(channel.name)
+        repositories.channels.delete_instance(channel._name)

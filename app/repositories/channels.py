@@ -12,11 +12,11 @@ name_cache: MutableMapping[str, Channel] = {}
 
 
 def add_to_cache(channel: Channel) -> None:
-    name_cache[channel.name] = channel
+    name_cache[channel._name] = channel
 
 
 def remove_from_cache(channel: Channel) -> None:
-    del name_cache[channel.name]
+    del name_cache[channel._name]
 
 
 ## create
