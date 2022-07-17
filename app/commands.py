@@ -682,8 +682,12 @@ async def _map(ctx: Context) -> Optional[str]:
     bmap = ctx.player.last_np["bmap"]
     new_status = RankedStatus(status_to_id(ctx.args[0]))
 
-    if bmap.status == new_status:
-        return f"{bmap.embed} is already {new_status!s}!"
+    if ctx.args[1] == "map":
+        if bmap.status == new_status:
+            return f"{bmap.embed} is already {new_status!s}!"
+    else:  # ctx.args[1] == "set"
+        if all(map.status == new_status for map in bmap.set.maps):
+            return f"All maps from the set are already {new_status!s}!"
 
     # update sql & cache based on scope
     # XXX: not sure if getting md5s from sql
