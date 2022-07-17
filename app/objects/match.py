@@ -576,7 +576,7 @@ class Match:
             if ffa:
                 msg.append(
                     f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
-                    f"[Match avg. {add_suffix(int(sum(scores.values()) / len(scores)))}])",
+                    f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
                 )
 
                 wmp = self.match_points[winner]
