@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  mysql:
+    image: mysql
+    environment:
+      MYSQL_USER: osu
+      MYSQL_PASSWORD: open
+      MYSQL_DATABASE: bancho
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+    volumes:
+      - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  bancho:
+    build: .
+    depends_on:
+      - mysql
+    tty: true
+
