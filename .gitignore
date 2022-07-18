@@ -6,5 +6,6 @@ _testing/
 *.lprof
 ext/GeoLite2-City.mmdb
 .env
+/ext/nginx.conf
 tools/migrate_v420/go.sum
 tools/migrate_v420/scoreMigrator

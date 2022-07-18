@@ -31,10 +31,11 @@ git clone https://github.com/osuAkatsuki/bancho.py
 cd bancho.py
 
 # clone bancho.py's dependencies' repositories
-git submodule update --init
+git submodule update --recursive --init
 ```
 
 ## installing bancho.py's requirements
+
 bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 
 we aim to minimize our dependencies, but still rely on ones such as
@@ -44,96 +45,24 @@ we aim to minimize our dependencies, but still rely on ones such as
 - certbot (ssl certificate tool)
 - cmake and build-essential (build tools for c/c++)
 
-as well as some others.
+these dependencies are all retrieved by and contained within docker containers.
+all you need to install on your system is `docker` and `docker-compose`, and ensure
+that your user is a member of the `docker` group if your package manager doesn't do
+that for you. you may need to log out and back in.
+
+## configuring bancho.py
+all configuration for the osu! server (bancho.py) itself can be done from the
+`.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
-# python3.9 is often not available natively,
-# but we can rely on deadsnakes to provide it.
-# https://github.com/deadsnakes/python3.9
-sudo add-apt-repository ppa:deadsnakes
+# create a configuration file from the sample provided
+cp .env.example .env
 
-# install required programs for running bancho.py
-sudo apt install python3.9-dev python3.9-distutils \
-                 cmake build-essential \
-                 mysql-server redis-server \
-                 nginx certbot
+# you'll want to configure *at least* the three marked (XXX) variables,
+# as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
+# (e.g. beatmaps).
 
-# install python's package manager, pip
-# it's used to install python-specific dependencies
-wget https://bootstrap.pypa.io/get-pip.py
-python3.9 get-pip.py && rm get-pip.py
-
-# make sure pip and setuptools are up to date
-python3.9 -m pip install -U pip setuptools
-
-# install bancho.py's python-specific dependencies
-python3.9 -m pip install -r requirements.txt
-```
-
-## creating a database for bancho.py
-you will need to create a database for bancho.py to store persistent data.
-
-the server uses this database to store metadata & logs, such as user accounts
-and stats, beatmaps and beatmapsets, chat channels, tourney mappools and more.
-
-```sh
-# login to mysql's shell with root - the default admin account
-
-# note that this shell can be rather dangerous - it allows users
-# to perform arbitrary sql commands to interact with the database.
-
-# it's also very useful, powerful, and quick when used correctly.
-mysql -u root -p
-```
-
-from this mysql shell, we'll want to create a database, create a user account,
-and give the user full permissions to the database.
-
-then, later on, we'll configure bancho.py to use this database as well.
-```sql
-# you'll need to change:
-# - YOUR_DB_NAME
-# - YOUR_DB_USER
-# - YOUR_DB_PASSWORD
-
-# create a database for bancho.py to use
-CREATE DATABASE YOUR_DB_NAME;
-
-# create a user to use the bancho.py database
-CREATE USER 'YOUR_DB_USER'@'localhost' IDENTIFIED BY 'YOUR_DB_PASSWORD';
-
-# grant the user full access to all tables in the bancho.py database
-GRANT ALL PRIVILEGES ON YOUR_DB_NAME.* TO 'YOUR_DB_USER'@'localhost';
-
-# make sure privilege changes are applied immediately.
-FLUSH PRIVILEGES;
-
-# exit the mysql shell, back to bash
-quit
-```
-
-## setting up the database's structure for bancho.py
-we've now created an empty database - databases are full of 2-dimensional
-tables of data.
-
-bancho.py has many tables it uses to organize information, for example, there
-are tables like `users` and `scores` for storing their respective information.
-
-the columns (vertical) represent the types of data stored for a `user` or `score`.
-for example, the number of 300s in a score, or the privileges of a user.
-
-the rows (horizontal) represent the individual items or events in a table.
-for example, an individual score in the scores table.
-
-this base state of the database is stored in `ext/base.sql`; it's a bunch of
-sql commands that can be run in sequence to create the base state we want.
-```sh
-# you'll need to change:
-# - YOUR_DB_NAME
-# - YOUR_DB_USER
-
-# import bancho.py's mysql structure to our new db
-# this runs the contents of the file as sql commands.
-mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
+# open the configuration file for editing
+nano .env
 ```
 
 ## creating an ssl certificate (to allow https traffic)
@@ -158,32 +87,12 @@ in terms of configuration. nginx is an open-source and efficient web server we'l
 be using for this guide, but feel free to check out others, like caddy and h2o.
 
 ```sh
-# copy the example nginx config to /etc/nginx/sites-available,
-# and make a symbolic link to /etc/nginx/sites-enabled
-sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
-sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
+# copy the example nginx configuration file 
+cp ext/nginx.conf.example ext/nginx.conf
 
 # now, you can edit the config file.
 # the spots you'll need to change are marked.
-sudo nano /etc/nginx/sites-available/bancho.conf
-
-# reload config from disk
-sudo nginx -s reload
-```
-
-## configuring bancho.py
-all configuration for the osu! server (bancho.py) itself can be done from the
-`.env` file. we provide an example `.env.example` file which you can use as a base.
-```sh
-# create a configuration file from the sample provided
-cp .env.example .env
-
-# you'll want to configure *at least* DB_DSN (the database connection url),
-# as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
-# (e.g. beatmaps).
-
-# open the configuration file for editing
-nano .env
+nano ext/nginx.conf
 ```
 
 ## congratulations! you just setup an osu! private server
@@ -191,8 +100,9 @@ nano .env
 if everything went well, you should be able to start your server up:
 
 ```sh
-# start the server
-./main.py
+# start the server. (note: you may have to start the
+# services one-by-one until a future update does it automatically)
+docker-compose up
 ```
 
 and you should see something along the lines of:
