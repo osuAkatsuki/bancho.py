@@ -98,8 +98,6 @@ class Command(NamedTuple):
 
 
 class CommandSet:
-    __slots__ = ("trigger", "doc", "commands")
-
     def __init__(self, trigger: str, doc: str) -> None:
         self.trigger = trigger
         self.doc = doc

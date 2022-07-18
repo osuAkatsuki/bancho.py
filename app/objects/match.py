@@ -98,8 +98,6 @@ class MatchTeamTypes(IntEnum):
 
 
 class MapPool:
-    __slots__ = ("id", "name", "created_at", "created_by", "maps")
-
     def __init__(
         self,
         id: int,
@@ -149,8 +147,6 @@ class MapPool:
 
 class Slot:
     """An individual player slot in an osu! multiplayer match."""
-
-    __slots__ = ("player", "status", "team", "mods", "loaded", "skipped")
 
     def __init__(self) -> None:
         self.player: Optional[Player] = None
@@ -207,38 +203,6 @@ class Match:
     use_pp_scoring: `bool`
         Whether pp should be used as a win condition override during scrims.
     """
-
-    __slots__ = (
-        "id",
-        "name",
-        "passwd",
-        "host_id",
-        "_refs",
-        "map_id",
-        "map_md5",
-        "map_name",
-        "prev_map_id",
-        "mods",
-        "freemods",
-        "mode",
-        "chat",
-        "slots",
-        #'type',
-        "team_type",
-        "win_condition",
-        "in_progress",
-        "starting",
-        "seed",
-        "pool",  # mappool currently selected
-        # scrimmage stuff
-        "is_scrimming",
-        "match_points",
-        "bans",
-        "winners",
-        "winning_pts",
-        "use_pp_scoring",
-        "tourney_clients",
-    )
 
     def __init__(self) -> None:
         self.id = 0

@@ -17,8 +17,6 @@ __all__ = ("Clan",)
 class Clan:
     """A class to represent a single bancho.py clan."""
 
-    __slots__ = ("id", "name", "tag", "created_at", "owner_id", "member_ids")
-
     def __init__(
         self,
         id: int,
