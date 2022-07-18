@@ -24,6 +24,7 @@ from typing import Awaitable
 from typing import Callable
 from typing import Mapping
 from typing import NamedTuple
+from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 from typing import TYPE_CHECKING
@@ -1016,7 +1017,7 @@ async def switchserv(ctx: Context) -> Optional[str]:
 
 
 @command(Privileges.ADMINISTRATOR, aliases=["restart"])
-async def shutdown(ctx: Context) -> Optional[str]:
+async def shutdown(ctx: Context) -> Union[Optional[str], NoReturn]:
     """Gracefully shutdown the server."""
     if ctx.trigger == "restart":
         _signal = signal.SIGUSR1
@@ -1043,7 +1044,6 @@ async def shutdown(ctx: Context) -> Optional[str]:
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), _signal)
-        return ":D"
 
 
 """ Developer commands
