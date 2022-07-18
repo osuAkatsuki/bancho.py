@@ -4,12 +4,15 @@ services:
   mysql:
     image: mysql
     environment:
-      MYSQL_USER: osu
-      MYSQL_PASSWORD: open
-      MYSQL_DATABASE: bancho
-      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  redis:
+    image: redis
 
   bancho:
     build: .
@@ -20,6 +23,8 @@ services:
   nginx:
     image: nginx
     volumes:
-      - ./ext/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./ext/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
+      - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
     ports:
-      - "80"
+      - 443:443

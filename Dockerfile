@@ -11,7 +11,7 @@ RUN cmake . -DPYTHON_EXECUTABLE=/usr/local/bin/python -G "Unix Makefiles" && mak
 # install python dependencies
 WORKDIR /
 COPY requirements.txt ./
-RUN pip install -r requirements.txt cryptography
+RUN pip install -r requirements.txt
 
 # copy the source code in last, so that it doesn't
 # repeat the previous steps for each change

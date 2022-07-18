@@ -11,6 +11,7 @@ certifi==2021.10.8
 cffi==1.15.0
 charset-normalizer==2.0.12
 click==8.0.4
+cryptography==37.0.4
 databases==0.5.5
 datadog==0.44.0
 fastapi==0.75.0

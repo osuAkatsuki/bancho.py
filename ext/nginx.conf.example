@@ -1,10 +1,6 @@
 # NOTE: if you wish to only connect using fallback, you can
 # remove all ssl related content from the configuration.
 
-upstream bancho {
-	server unix:/tmp/bancho.sock fail_timeout=0;
-}
-
 # c[e4]?.ppy.sh is used for bancho
 # osu.ppy.sh is used for /web, /api, etc.
 # a.ppy.sh is used for osu! avatars
@@ -13,11 +9,12 @@ server {
 	listen 443 ssl;
 
 	# XXX: you'll need to edit this to match your domain (mine's cmyui.xyz)
-	server_name ~^(?:c[e4]?|osu|a|b|api)\.cmyui\.xyz$;
+	server_name ~^(?:c[e4]?|osu|a|b|api)\.example\.com$;
 
-	# XXX: you'll need to edit this to match your certificate and key
-	ssl_certificate     /etc/letsencrypt/live/cmyui.xyz/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/cmyui.xyz/privkey.pem;
+	# these paths are hardcoded in docker-compose.yml so now
+	# you don't need to change these unless you changed that.
+	ssl_certificate     /etc/ssl/certs/bancho.pem;
+	ssl_certificate_key /etc/ssl/private/bancho.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
@@ -36,11 +33,12 @@ server {
 	listen 443 ssl;
 
 	# XXX: you'll need to edit this to match your domain (mine's cmyui.xyz)
-	server_name assets.cmyui.xyz;
+	server_name assets.example.com;
 
-	# XXX: you'll need to edit this to match your certificate and key
-	ssl_certificate     /etc/letsencrypt/live/cmyui.xyz/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/cmyui.xyz/privkey.pem;
+	# these paths are hardcoded in docker-compose.yml so now
+	# you don't need to change these unless you changed that.
+	ssl_certificate     /etc/ssl/certs/bancho.pem;
+	ssl_certificate_key /etc/ssl/private/bancho.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
