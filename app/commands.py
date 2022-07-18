@@ -2340,6 +2340,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
         "SELECT * FROM tourney_pools WHERE name = :name",
         {"name": name},
     )
+    assert row is not None
 
     row = dict(row)  # make mutable copy
 
