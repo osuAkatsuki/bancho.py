@@ -337,7 +337,10 @@ async def recent(ctx: Context) -> Optional[str]:
         target = ctx.player
 
     if not (s := target.recent_score):
-        return "No scores found :o (only saves per play session)"
+        return "No scores found (only saves per play session)."
+
+    if s.bmap is None:
+        return "We don't have a beatmap on file for your recent score."
 
     l = [f"[{s.mode!r}] {s.bmap.embed}", f"{s.acc:.2f}%"]
 
