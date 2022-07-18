@@ -43,6 +43,7 @@ we aim to minimize our dependencies, but still rely on ones such as
 - nginx (http(s) reverse proxy)
 - certbot (ssl certificate tool)
 - cmake and build-essential (build tools for c/c++)
+- redis (in memory database)
 
 as well as some others.
 ```sh
