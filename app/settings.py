@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from databases import DatabaseURL
 from starlette.config import Config
 from starlette.datastructures import CommaSeparatedStrings
@@ -17,72 +15,42 @@ REDIS_DSN = config("REDIS_DSN")
 
 OSU_API_KEY = config("OSU_API_KEY", cast=Secret)
 
-DOMAIN = config("DOMAIN", default="cmyui.xyz")
-MIRROR_URL = config("MIRROR_URL", default="https://api.chimu.moe/v1")
+DOMAIN = config("DOMAIN")
+MIRROR_URL = config("MIRROR_URL")
 
-COMMAND_PREFIX = config("COMMAND_PREFIX", default="!")
+COMMAND_PREFIX = config("COMMAND_PREFIX")
 
-SEASONAL_BGS = config(
-    "SEASONAL_BGS",
-    cast=CommaSeparatedStrings,
-    default=CommaSeparatedStrings(
-        [
-            "https://akatsuki.pw/static/flower.png",
-            "https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg",
-        ],
-    ),
-)
+SEASONAL_BGS = config("SEASONAL_BGS", cast=CommaSeparatedStrings)
 
-MENU_ICON_URL = config(
-    "MENU_ICON_URL",
-    default="https://akatsuki.pw/static/logos/logo_ingame.png",
-)
-MENU_ONCLICK_URL = config("MENU_ONCLICK_URL", default="https://akatsuki.pw")
+MENU_ICON_URL = config("MENU_ICON_URL")
+MENU_ONCLICK_URL = config("MENU_ONCLICK_URL")
 
 DATADOG_API_KEY = config("DATADOG_API_KEY", cast=Secret)
 DATADOG_APP_KEY = config("DATADOG_APP_KEY", cast=Secret)
 
-DEBUG = config("DEBUG", cast=bool, default=False)
-REDIRECT_OSU_URLS = config("REDIRECT_OSU_URLS", cast=bool, default=True)
+DEBUG = config("DEBUG", cast=bool)
+REDIRECT_OSU_URLS = config("REDIRECT_OSU_URLS", cast=bool)
 
 PP_CACHED_ACCURACIES = [
-    int(acc)
-    for acc in config(
-        "PP_CACHED_ACCS",
-        cast=CommaSeparatedStrings,
-    )
+    int(acc) for acc in config("PP_CACHED_ACCS", cast=CommaSeparatedStrings)
 ]
 PP_CACHED_SCORES = [
-    int(score)
-    for score in config(
-        "PP_CACHED_SCORES",
-        cast=CommaSeparatedStrings,
-    )
+    int(score) for score in config("PP_CACHED_SCORES", cast=CommaSeparatedStrings)
 ]
 
-DISALLOWED_NAMES = config(
-    "DISALLOWED_NAMES",
-    cast=CommaSeparatedStrings,
-)
-DISALLOWED_PASSWORDS = config(
-    "DISALLOWED_PASSWORDS",
-    cast=CommaSeparatedStrings,
-)
+DISALLOWED_NAMES = config("DISALLOWED_NAMES", cast=CommaSeparatedStrings)
+DISALLOWED_PASSWORDS = config("DISALLOWED_PASSWORDS", cast=CommaSeparatedStrings)
 
 DISCORD_AUDIT_LOG_WEBHOOK = config("DISCORD_AUDIT_LOG_WEBHOOK")
 
-AUTOMATICALLY_REPORT_PROBLEMS = config(
-    "AUTOMATICALLY_REPORT_PROBLEMS",
-    cast=bool,
-    default=True,
-)
+AUTOMATICALLY_REPORT_PROBLEMS = config("AUTOMATICALLY_REPORT_PROBLEMS", cast=bool)
 
 # advanced dev settings
 
 ## WARNING touch this once you've
 ##          read through what it enables.
 ##          you could put your server at risk.
-DEVELOPER_MODE = config("DEVELOPER_MODE", cast=bool, default=False)
+DEVELOPER_MODE = config("DEVELOPER_MODE", cast=bool)
 
 ## WARNING touch this if you know how
 ##          the migrations system works.
