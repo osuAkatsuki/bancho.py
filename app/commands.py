@@ -73,7 +73,6 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from app.objects.channel import Channel
 
-R = TypeVar("R")
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -1605,6 +1604,8 @@ if app.settings.DEVELOPER_MODE:
 # The commands below for multiplayer match management.
 # Most commands are open to player usage.
 """
+
+R = TypeVar("R", bound=Optional[str])
 
 
 def ensure_match(
