@@ -40,6 +40,7 @@ bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
 - mysql (relational database)
+- redis (in memory database)
 - nginx (http(s) reverse proxy)
 - certbot (ssl certificate tool)
 - cmake and build-essential (build tools for c/c++)
