@@ -18,7 +18,10 @@ services:
     build: .
     depends_on:
       - mysql
+      - redis
     tty: true
+    volumes:
+      - data:/.data
 
   nginx:
     image: nginx
@@ -26,5 +29,9 @@ services:
       - ./ext/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
       - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
+      - data:/.data:ro
     ports:
       - 443:443
+
+volumes:
+  data:
