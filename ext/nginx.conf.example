@@ -26,7 +26,19 @@ server {
 		add_header Access-Control-Allow-Origin *;
 		proxy_redirect off;
 		proxy_pass http://bancho;
+
+		# uncomment these and the following location block in order to
+		# redirect non-bancho pages to a custom web server (in this case,
+		# the "web" service in docker-compose.yml)
+
+#		error_page 404 = @others;
+#		proxy_intercept_errors on;
 	}
+
+#	location @others {
+#		proxy_pass http://web;
+#	}
+
 }
 
 server {

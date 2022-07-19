@@ -23,6 +23,12 @@ services:
     volumes:
       - data:/.data
 
+  # modify this service to make it start up your own non-bancho
+  # web server (for user profiles, beatmap listings, etc.). if
+  # you do not have one, simply comment out or delete this.
+  web:
+    build: web
+
   nginx:
     image: nginx
     volumes:
