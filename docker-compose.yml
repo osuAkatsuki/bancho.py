@@ -28,6 +28,10 @@ services:
   # you do not have one, simply comment out or delete this.
   web:
     build: web
+    environment:
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
 
   nginx:
     image: nginx
