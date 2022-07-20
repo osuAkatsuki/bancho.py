@@ -25,7 +25,7 @@ different setup processes.
 ## download the osu! server codebase onto your machine
 ```sh
 # clone bancho.py's repository
-git clone https://github.com/osuAkatsuki/bancho.py
+git clone https://github.com/osuAkatsuki/bancho.py.git
 
 # enter bancho.py's new directory
 cd bancho.py
@@ -84,6 +84,9 @@ sudo certbot certonly \
     -d *.YOUR_DOMAIN
 ```
 
+put the key and certificate somewhere on your server, and then
+modify the two `SSL_..._PATH` variables in `.env` for them.
+
 ## configuring a reverse proxy (we'll use nginx)
 bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
 in terms of configuration. nginx is an open-source and efficient web server we'll
@@ -105,8 +108,19 @@ if everything went well, you should be able to start your server up:
 ```sh
 # start the server. note: you may have to start the services
 # one-by-one until some future update does it automatically:
-# in order: mysql -> redis -> bancho -> web -> nginx.
-docker-compose up
+
+docker-compose up -d mysql
+# wait about a minute or two the first time to wait for mysql to init
+
+docker-compose up -d redis
+docker-compose up -d bancho
+# maybe wait a minute here too
+
+docker-compose up -d web
+# the above is not needed if you removed web before
+
+docker-compose up -d nginx
+# done!
 ```
 
 and you should see something along the lines of:
