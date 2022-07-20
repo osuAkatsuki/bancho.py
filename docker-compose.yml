@@ -41,7 +41,7 @@ services:
       - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
       - data:/.data:ro
     ports:
-      - 443:443
+      - ${HOST_PORT}:443
 
 volumes:
   data:

@@ -65,6 +65,9 @@ cp .env.example .env
 nano .env
 ```
 
+you also probably want to modify or remove the `web` service from the `docker-compose.yml`
+depending on whether you have a front-facing website for your osu server.
+
 ## creating an ssl certificate (to allow https traffic)
 ```sh
 # you'll need to change:
@@ -100,8 +103,9 @@ nano ext/nginx.conf
 if everything went well, you should be able to start your server up:
 
 ```sh
-# start the server. (note: you may have to start the
-# services one-by-one until a future update does it automatically)
+# start the server. note: you may have to start the services
+# one-by-one until some future update does it automatically:
+# in order: mysql -> redis -> bancho -> web -> nginx.
 docker-compose up
 ```
 
