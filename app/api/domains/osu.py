@@ -327,7 +327,7 @@ async def osuAddFavourite(
 
     # add favourite
     await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id)",
+        "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
         {"user_id": player.id, "set_id": map_set_id},
     )
 

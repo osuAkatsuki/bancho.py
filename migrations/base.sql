@@ -71,6 +71,7 @@ create table favourites
 (
 	userid int not null,
 	setid int not null,
+	fav_time int default 0 not null,
 	primary key (userid, setid)
 );
 
