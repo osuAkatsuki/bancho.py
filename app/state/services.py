@@ -235,8 +235,6 @@ async def log_strange_occurrence(obj: object) -> None:
 
 
 class Version:
-    __slots__ = ("major", "minor", "micro")
-
     def __init__(self, major: int, minor: int, micro: int) -> None:
         self.major = major
         self.minor = minor

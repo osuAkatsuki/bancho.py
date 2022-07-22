@@ -1151,7 +1151,8 @@ async def getReplay(
         return
 
     # increment replay views for this score
-    app.state.loop.create_task(score.increment_replay_views())
+    if player.id != score.player.id:
+        app.state.loop.create_task(score.increment_replay_views())
 
     return FileResponse(file)
 
