@@ -62,7 +62,8 @@ bancho.py 的代码库有大约15,000行，我们致力于减少我们需要的�
 
 但是你还是需要安装这些哦：(别急！一步步来)
 - python (bancho.py就是拿这个写的~)
-- mysql (数据库~)
+- MySQL (数据库~)
+- Redis (一种缓存数据库，与MySQL不同的是，他把频繁的数据存储到缓存中，读取速度更快)
 - nginx (用于反向代理)
 - certbot (用于搞SSL证书)
 - cmake and build-essential ( c/c++ 的 build tools )
