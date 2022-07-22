@@ -116,36 +116,6 @@ class Score:
         value will always be accurate for any score.
     """
 
-    __slots__ = (
-        "id",
-        "bmap",
-        "player",
-        "mode",
-        "mods",
-        "pp",
-        "sr",
-        "score",
-        "max_combo",
-        "acc",
-        "n300",
-        "n100",
-        "n50",
-        "nmiss",
-        "ngeki",
-        "nkatu",
-        "grade",
-        "rank",
-        "passed",
-        "perfect",
-        "status",
-        "client_time",
-        "server_time",
-        "time_elapsed",
-        "client_flags",
-        "client_checksum",
-        "prev_best",
-    )
-
     def __init__(self):
         # TODO: check whether the reamining Optional's should be
         self.id: Optional[int] = None

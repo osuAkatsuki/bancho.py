@@ -244,32 +244,6 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    __slots__ = (
-        "set",
-        "md5",
-        "id",
-        "set_id",
-        "artist",
-        "title",
-        "version",
-        "creator",
-        "last_update",
-        "total_length",
-        "max_combo",
-        "status",
-        "frozen",
-        "plays",
-        "passes",
-        "mode",
-        "bpm",
-        "cs",
-        "od",
-        "ar",
-        "hp",
-        "diff",
-        "filename",
-    )
-
     def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
         self.set = map_set
 
@@ -587,8 +561,6 @@ class BeatmapSet:
       await BeatmapSet._update_if_available() -> None
       await BeatmapSet._save_to_sql() -> None
     """
-
-    __slots__ = ("id", "last_osuapi_check", "maps")
 
     def __init__(
         self,

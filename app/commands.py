@@ -24,6 +24,7 @@ from typing import Awaitable
 from typing import Callable
 from typing import Mapping
 from typing import NamedTuple
+from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 from typing import TYPE_CHECKING
@@ -72,7 +73,6 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from app.objects.channel import Channel
 
-R = TypeVar("R")
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -98,8 +98,6 @@ class Command(NamedTuple):
 
 
 class CommandSet:
-    __slots__ = ("trigger", "doc", "commands")
-
     def __init__(self, trigger: str, doc: str) -> None:
         self.trigger = trigger
         self.doc = doc
@@ -338,7 +336,10 @@ async def recent(ctx: Context) -> Optional[str]:
         target = ctx.player
 
     if not (s := target.recent_score):
-        return "No scores found :o (only saves per play session)"
+        return "No scores found (only saves per play session)."
+
+    if s.bmap is None:
+        return "We don't have a beatmap on file for your recent score."
 
     l = [f"[{s.mode!r}] {s.bmap.embed}", f"{s.acc:.2f}%"]
 
@@ -682,8 +683,12 @@ async def _map(ctx: Context) -> Optional[str]:
     bmap = ctx.player.last_np["bmap"]
     new_status = RankedStatus(status_to_id(ctx.args[0]))
 
-    if bmap.status == new_status:
-        return f"{bmap.embed} is already {new_status!s}!"
+    if ctx.args[1] == "map":
+        if bmap.status == new_status:
+            return f"{bmap.embed} is already {new_status!s}!"
+    else:  # ctx.args[1] == "set"
+        if all(map.status == new_status for map in bmap.set.maps):
+            return f"All maps from the set are already {new_status!s}!"
 
     # update sql & cache based on scope
     # XXX: not sure if getting md5s from sql
@@ -1014,7 +1019,7 @@ async def switchserv(ctx: Context) -> Optional[str]:
 
 
 @command(Privileges.ADMINISTRATOR, aliases=["restart"])
-async def shutdown(ctx: Context) -> Optional[str]:
+async def shutdown(ctx: Context) -> Union[Optional[str], NoReturn]:
     """Gracefully shutdown the server."""
     if ctx.trigger == "restart":
         _signal = signal.SIGUSR1
@@ -1041,7 +1046,6 @@ async def shutdown(ctx: Context) -> Optional[str]:
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), _signal)
-        return ":D"
 
 
 """ Developer commands
@@ -1394,7 +1398,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
 @command(Privileges.DEVELOPER, hidden=True)
 async def givedonator(ctx: Context) -> Optional[str]:
-    """Gives donator to a specified player (by name) for a specified amount of time, such as '3h5m'."""
+    """Give donator status to a specified player for a specified duration."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !givedonator <name> <duration>"
 
@@ -1600,6 +1604,8 @@ if app.settings.DEVELOPER_MODE:
 # The commands below for multiplayer match management.
 # Most commands are open to player usage.
 """
+
+R = TypeVar("R", bound=Optional[str])
 
 
 def ensure_match(
@@ -2335,6 +2341,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
         "SELECT * FROM tourney_pools WHERE name = :name",
         {"name": name},
     )
+    assert row is not None
 
     row = dict(row)  # make mutable copy
 
@@ -2660,15 +2667,13 @@ async def clan_info(ctx: Context) -> Optional[str]:
 @clan_commands.add(Privileges.NORMAL)
 async def clan_leave(ctx: Context):
     """Leaves the clan you're in."""
-    p = await app.state.sessions.players.from_cache_or_sql(name=ctx.player.name)
-
-    if not p.clan:
+    if not ctx.player.clan:
         return "You're not in a clan."
-    elif p.clan_priv == ClanPrivileges.Owner:
+    elif ctx.player.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    await p.clan.remove_member(p)
-    return f"You have successfully left {p.clan!r}."
+    await ctx.player.clan.remove_member(ctx.player)
+    return f"You have successfully left {ctx.player.clan!r}."
 
 
 # TODO: !clan inv, !clan join, !clan leave

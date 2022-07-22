@@ -313,8 +313,6 @@ class BanchoPacketReader:
     ...         await packet.handle()
     """
 
-    __slots__ = ("body_view", "packet_map", "current_len")
-
     def __init__(self, body_view: memoryview, packet_map: PacketMap) -> None:
         self.body_view = body_view  # readonly
         self.packet_map = packet_map
