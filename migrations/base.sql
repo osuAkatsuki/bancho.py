@@ -426,6 +426,6 @@ insert into achievements (id, file, name, `desc`, cond) values (78, 'all-intro-d
 insert into achievements (id, file, name, `desc`, cond) values (79, 'all-intro-flashlight', 'Are You Afraid Of The Dark?', "Harder than it looks, probably because it\'s hard to look.", 'score.mods & 1024');
 insert into achievements (id, file, name, `desc`, cond) values (80, 'all-intro-easy', 'Dial It Right Back', 'Sometimes you just want to take it easy.', 'score.mods & 2');
 insert into achievements (id, file, name, `desc`, cond) values (81, 'all-intro-nofail', 'Risk Averse', 'Safety nets are fun!', 'score.mods & 1');
-insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-nightcore', 'Sweet Rave Party', 'Founded in the fine tradition of changing things that were just fine as they were.', 'score.mods & 576');
+insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-nightcore', 'Sweet Rave Party', 'Founded in the fine tradition of changing things that were just fine as they were.', 'score.mods & 512');
 insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-halftime', 'Slowboat', 'You got there. Eventually.', 'score.mods & 256');
 insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-spunout', 'Burned Out', 'One cannot always spin to win.', 'score.mods & 4096');
