@@ -88,6 +88,11 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""
+
+    # NOTE: this is currently disabled as there's
+    #       not much benefit to maintaining it
+    return False
+
     log("Downloading achievement images from mirror.", Ansi.LCYAN)
     resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
