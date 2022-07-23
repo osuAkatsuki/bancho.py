@@ -387,7 +387,6 @@ update stats set mode = 8 where mode = 7;
 alter table maps change server server enum('osu!', 'private') default 'osu!' not null;
 alter table mapsets change server server enum('osu!', 'private') default 'osu!' not null;
 
-
 # v4.3.2
 insert into achievements (id, file, name, `desc`, cond) values (73, 'mania-secret-meganekko', 'A meganekko approaches', 'Congratulations, you met Maria!', 'mode_vn == 3');
 insert into achievements (id, file, name, `desc`, cond) values (74, 'all-intro-suddendeath', 'Finality', 'High stakes, no regrets.', 'mode_vn == 0 and score.mods == 32')
