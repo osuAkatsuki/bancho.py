@@ -429,4 +429,3 @@ insert into achievements (id, file, name, `desc`, cond) values (81, 'all-intro-n
 insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-nightcore', 'Sweet Rave Party', 'Founded in the fine tradition of changing things that were just fine as they were.', 'mode_vn == 0 and score.mods & 576');
 insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-halftime', 'Slowboat', 'You got there. Eventually.', 'mode_vn == 0 and score.mods & 256');
 insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-spunout', 'Burned Out', 'One cannot always spin to win.', 'mode_vn == 0 and score.mods & 4096');
-
