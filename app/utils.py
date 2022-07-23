@@ -88,6 +88,11 @@ async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
     """Download all used achievement images (using mirror's zip)."""
+
+    # NOTE: this is currently disabled as there's
+    #       not much benefit to maintaining it
+    return False
+
     log("Downloading achievement images from mirror.", Ansi.LCYAN)
     resp = requests.get("https://cmyui.xyz/achievement_images.zip")
 
@@ -106,15 +111,30 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
     """Download all used achievement images (one by one, from osu!)."""
     achs: list[str] = []
 
-    for res in ("", "@2x"):
-        for gm in ("osu", "taiko", "fruits", "mania"):
+    for resolution in ("", "@2x"):
+        for mode in ("osu", "taiko", "fruits", "mania"):
             # only osu!std has 9 & 10 star pass/fc medals.
-            for n in range(1, 1 + (10 if gm == "osu" else 8)):
-                achs.append(f"{gm}-skill-pass-{n}{res}.png")
-                achs.append(f"{gm}-skill-fc-{n}{res}.png")
+            for star_rating in range(1, 1 + (10 if mode == "osu" else 8)):
+                achs.append(f"{mode}-skill-pass-{star_rating}{resolution}.png")
+                achs.append(f"{mode}-skill-fc-{star_rating}{resolution}.png")
 
-        for n in (500, 750, 1000, 2000):
-            achs.append(f"osu-combo-{n}{res}.png")
+        for combo in (500, 750, 1000, 2000):
+            achs.append(f"osu-combo-{combo}{resolution}.png")
+
+        for mod in (
+            "suddendeath",
+            "hidden",
+            "perfect",
+            "hardrock",
+            "doubletime",
+            "flashlight",
+            "easy",
+            "nofail",
+            "nightcore",
+            "halftime",
+            "spunout",
+        ):
+            achs.append(f"all-intro-{mod}{resolution}.png")
 
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
