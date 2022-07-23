@@ -116,6 +116,21 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
         for n in (500, 750, 1000, 2000):
             achs.append(f"osu-combo-{n}{res}.png")
 
+        for mod in (
+            "suddendeath",
+            "hidden",
+            "perfect",
+            "hardrock",
+            "doubletime",
+            "flashlight",
+            "easy",
+            "nofail",
+            "nightcore",
+            "halftime",
+            "spunout",
+        ):
+            achs.append(f"all-intro-{mod}{res}.png")
+
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
     for ach in achs:
