@@ -417,3 +417,16 @@ insert into achievements (id, file, name, `desc`, cond) values (69, 'mania-skill
 insert into achievements (id, file, name, `desc`, cond) values (70, 'mania-skill-fc-6', 'Level Breaker', 'Finesse beyond reason', 'score.perfect and 6 <= score.sr < 7 and mode_vn == 3');
 insert into achievements (id, file, name, `desc`, cond) values (71, 'mania-skill-fc-7', 'Step Up', 'A precipice rarely seen.', 'score.perfect and 7 <= score.sr < 8 and mode_vn == 3');
 insert into achievements (id, file, name, `desc`, cond) values (72, 'mania-skill-fc-8', 'Behind The Veil', 'Supernatural!', 'score.perfect and 8 <= score.sr < 9 and mode_vn == 3');
+insert into achievements (id, file, name, `desc`, cond) values (73, 'mania-secret-meganekko', 'A meganekko approaches', 'Congratulations, you met Maria!', 'mode_vn == 3');
+insert into achievements (id, file, name, `desc`, cond) values (74, 'all-intro-suddendeath', 'Finality', 'High stakes, no regrets.', 'mode_vn == 0 and score.mods == 32')
+insert into achievements (id, file, name, `desc`, cond) values (75, 'all-intro-hidden', 'Blindsight', 'I can see just perfectly', 'mode_vn == 0 and score.mods & 8');
+insert into achievements (id, file, name, `desc`, cond) values (76, 'all-intro-perfect', 'Perfectionist', 'Accept nothing but the best.', 'mode_vn == 0 and score.mods & 16416');
+insert into achievements (id, file, name, `desc`, cond) values (77, 'all-intro-hardrock', 'Rock Around The Clock', "You can\'t stop the rock.", 'mode_vn == 0 and score.mods & 16');
+insert into achievements (id, file, name, `desc`, cond) values (78, 'all-intro-doubletime', 'Time And A Half', "Having a right ol\' time. One and a half of them, almost.", 'mode_vn == 0 and score.mods & 64');
+insert into achievements (id, file, name, `desc`, cond) values (79, 'all-intro-flashlight', 'Are You Afraid Of The Dark?', "Harder than it looks, probably because it\'s hard to look.", 'mode_vn == 0 and score.mods & 1024');
+insert into achievements (id, file, name, `desc`, cond) values (80, 'all-intro-easy', 'Dial It Right Back', 'Sometimes you just want to take it easy.', 'mode_vn == 0 and score.mods & 2');
+insert into achievements (id, file, name, `desc`, cond) values (81, 'all-intro-nofail', 'Risk Averse', 'Safety nets are fun!', 'mode_vn == 0 and score.mods & 1');
+insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-nightcore', 'Sweet Rave Party', 'Founded in the fine tradition of changing things that were just fine as they were.', 'mode_vn == 0 and score.mods & 576');
+insert into achievements (id, file, name, `desc`, cond) values (82, 'all-intro-halftime', 'Slowboat', 'You got there. Eventually.', 'mode_vn == 0 and score.mods & 256');
+insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-spunout', 'Burned Out', 'One cannot always spin to win.', 'mode_vn == 0 and score.mods & 4096');
+
