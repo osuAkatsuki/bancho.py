@@ -417,7 +417,7 @@ insert into achievements (id, file, name, `desc`, cond) values (69, 'mania-skill
 insert into achievements (id, file, name, `desc`, cond) values (70, 'mania-skill-fc-6', 'Level Breaker', 'Finesse beyond reason', 'score.perfect and 6 <= score.sr < 7 and mode_vn == 3');
 insert into achievements (id, file, name, `desc`, cond) values (71, 'mania-skill-fc-7', 'Step Up', 'A precipice rarely seen.', 'score.perfect and 7 <= score.sr < 8 and mode_vn == 3');
 insert into achievements (id, file, name, `desc`, cond) values (72, 'mania-skill-fc-8', 'Behind The Veil', 'Supernatural!', 'score.perfect and 8 <= score.sr < 9 and mode_vn == 3');
-insert into achievements (id, file, name, `desc`, cond) values (73, 'mania-secret-meganekko', 'A meganekko approaches', 'Congratulations, you met Maria!', 'mode_vn == 3');
+insert into achievements (id, file, name, `desc`, cond) values (73, 'mania-secret-meganekko', 'A meganekko approaches', 'Congratulations, you met Maria!', 'mode_vn == 3 and score.combo >= 100');
 insert into achievements (id, file, name, `desc`, cond) values (74, 'all-intro-suddendeath', 'Finality', 'High stakes, no regrets.', 'mode_vn == 0 and score.mods == 32')
 insert into achievements (id, file, name, `desc`, cond) values (75, 'all-intro-hidden', 'Blindsight', 'I can see just perfectly', 'mode_vn == 0 and score.mods & 8');
 insert into achievements (id, file, name, `desc`, cond) values (76, 'all-intro-perfect', 'Perfectionist', 'Accept nothing but the best.', 'mode_vn == 0 and score.mods & 16416');
