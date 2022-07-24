@@ -163,18 +163,18 @@ class Webhook:
 
         return orjson.dumps(payload).decode()
 
-    async def post(self, http: Optional[aiohttp.ClientSession] = None) -> None:
+    async def post(self, http_client: Optional[aiohttp.ClientSession] = None) -> None:
         """Post the webhook in JSON format."""
-        _http = http or aiohttp.ClientSession(
+        _http_client = http_client or aiohttp.ClientSession(
             json_serialize=lambda x: orjson.dumps(x).decode(),
         )
 
         # TODO: if `self.file is not None`, then we should
         #       use multipart/form-data instead of json payload.
         headers = {"Content-Type": "application/json"}
-        async with _http.post(self.url, data=self.json, headers=headers) as resp:
+        async with _http_client.post(self.url, data=self.json, headers=headers) as resp:
             if not resp or resp.status != 204:
                 return  # failed
 
-        if not http:
-            await _http.close()
+        if not http_client:
+            await _http_client.close()

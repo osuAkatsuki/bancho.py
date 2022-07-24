@@ -49,7 +49,7 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
         # https://doc.kitsu.moe/
         url = "https://kitsu.moe/api/get_beatmaps"
 
-    async with app.state.services.http.get(url, params=params) as response:
+    async with app.state.services.http_client.get(url, params=params) as response:
         response_data = await response.json()
         if response.status == 200 and response_data:  # (data may be [])
             return response_data
@@ -73,7 +73,7 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if resp.status != 200:
                 if 400 <= resp.status < 500:
                     # client error, report this to cmyui

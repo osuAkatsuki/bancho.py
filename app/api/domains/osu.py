@@ -326,7 +326,7 @@ async def osuAddFavourite(
 
     # add favourite
     await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id)",
+        "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
         {"user_id": player.id, "set_id": map_set_id},
     )
 
@@ -450,7 +450,7 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    async with app.state.services.http.get(search_url, params=params) as resp:
+    async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
                 # chimu uses 404 for no maps found
@@ -1637,7 +1637,10 @@ async def checkUpdates(
         return cache[action]
 
     url = "https://old.ppy.sh/web/check-updates.php"
-    async with app.state.services.http.get(url, params=request.query_params) as resp:
+    async with app.state.services.http_client.get(
+        url,
+        params=request.query_params,
+    ) as resp:
         if not resp or resp.status != 200:
             return (503, b"")  # failed to get data from osu
 
@@ -1664,6 +1667,7 @@ if app.settings.REDIRECT_OSU_URLS:
     for pattern in (
         "/beatmapsets/{_}",
         "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
         "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
@@ -1752,7 +1756,7 @@ async def get_updated_beatmap(
         # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
 
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f"Could not find map {osu_file_path}!", Ansi.LRED)
                 return (404, b"")  # couldn't find on osu!'s server
