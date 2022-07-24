@@ -495,7 +495,9 @@ async def login(
     # if the appropriate setting is enabled, disallow login for clients older than X days
     # X days defined by the appropriate setting.
     if app.settings.DISALLOW_OLD_CLIENTS:
-        if osu_version.date < (date.today() - timedelta(days=int(app.settings.CLIENT_TIMEDELTA))):
+        if osu_version.date < (
+            date.today() - timedelta(days=int(app.settings.CLIENT_TIMEDELTA))
+        ):
             return {
                 "osu_token": "client-too-old",
                 "response_body": (
