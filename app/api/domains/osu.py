@@ -1622,7 +1622,7 @@ async def checkUpdates(
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
 ):
-    return
+    return b""
 
     # NOTE: this code is unused now.
     # it was only used with server switchers,
