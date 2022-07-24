@@ -7,7 +7,6 @@ import struct
 import time
 from datetime import date
 from datetime import datetime
-from datetime import timedelta
 from pathlib import Path
 from typing import Callable
 from typing import Literal
@@ -58,8 +57,10 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.state import services
 from app.usecases.performance import ScoreDifficultyParams
 
+OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -492,14 +493,37 @@ async def login(
         stream=match["stream"] or "stable",
     )
 
-    # disallow login for clients older than 180 days
-    if osu_version.date < (date.today() - timedelta(days=180)):
-        return {
-            "osu_token": "client-too-old",
-            "response_body": (
-                app.packets.version_update_forced() + app.packets.user_id(-2)
-            ),
-        }
+    if app.settings.DISALLOW_OLD_CLIENTS:
+        osu_client_stream = osu_version.stream
+        if osu_client_stream in ("stable", "beta"):
+            osu_client_stream += "40"  # TODO: why?
+
+        allowed_client_versions = set()
+
+        async with services.http_client.get(
+            OSU_API_V2_CHANGELOG_URL,
+            params={"stream": osu_client_stream},
+        ) as resp:
+            for build in (await resp.json())["builds"]:
+                version = date(
+                    int(build["version"][0:4]),
+                    int(build["version"][4:6]),
+                    int(build["version"][6:8]),
+                )
+                allowed_client_versions.add(version)
+
+                if any(entry["major"] for entry in build["changelog_entries"]):
+                    # this build is a major iteration to the client
+                    # don't allow anything older than this
+                    break
+
+        if osu_version.date not in allowed_client_versions:
+            return {
+                "osu_token": "client-too-old",
+                "response_body": (
+                    app.packets.version_update_forced() + app.packets.user_id(-2)
+                ),
+            }
 
     running_under_wine = login_data["adapters_str"] == "runningunderwine"
     adapters = [a for a in login_data["adapters_str"][:-1].split(".")]
