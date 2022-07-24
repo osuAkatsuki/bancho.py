@@ -50,7 +50,7 @@ import app.settings
 import app.state
 import app.utils
 from app.constants import regexes
-from app.constants.clientflags import ClientFlags
+from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.logging import Ansi
@@ -383,9 +383,9 @@ async def lastFM(
         # client not to send any more for now.
         return b"-3"
 
-    flags = ClientFlags(int(beatmap_id_or_hidden_flag[1:]))
+    flags = LastFMFlags(int(beatmap_id_or_hidden_flag[1:]))
 
-    if flags & (ClientFlags.HQ_ASSEMBLY | ClientFlags.HQ_FILE):
+    if flags & (LastFMFlags.HQ_ASSEMBLY | LastFMFlags.HQ_FILE):
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
@@ -400,7 +400,7 @@ async def lastFM(
 
         return b"-3"
 
-    if flags & ClientFlags.REGISTRY_EDITS:
+    if flags & LastFMFlags.REGISTRY_EDITS:
         # Player has registry edits left from
         # hq!osu's multiaccounting tool. This
         # does not necessarily mean they are
@@ -439,7 +439,11 @@ async def lastFM(
         return b"-3"
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
-    if flags & (ClientFlags.libeay32Library | ClientFlags.aqnMenuSample):
+    if flags & (
+        LastFMFlags.SDL2_LIBRARY
+        | LastFMFlags.OPENSSL_LIBRARY
+        | LastFMFlags.AQN_MENU_SAMPLE
+    ):
         # AQN has been detected in the client, either
         # through the 'libeay32.dll' library being found
         # onboard, or from the menu sound being played in
