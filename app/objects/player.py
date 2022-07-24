@@ -542,7 +542,7 @@ class Player:
 
         if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.state.services.http)
+            await webhook.post(app.state.services.http_client)
 
         if self.online:
             # log the user out if they're offline, this
@@ -583,7 +583,7 @@ class Player:
 
         if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.state.services.http)
+            await webhook.post(app.state.services.http_client)
 
         if self.online:
             # log the user out if they're offline, this
