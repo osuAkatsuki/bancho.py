@@ -2581,9 +2581,6 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    if "full_name" in ctx.player.__dict__:
-        del ctx.player.full_name  # wipe cached_property
-
     await app.state.services.database.execute(
         "UPDATE users "
         "SET clan_id = :clan_id, "
@@ -2628,8 +2625,6 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-            if "full_name" in member.__dict__:
-                del member.full_name  # wipe cached_property
 
     await app.state.services.database.execute(
         "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",

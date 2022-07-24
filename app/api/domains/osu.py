@@ -1102,8 +1102,6 @@ async def osuSubmitModularSelector(
 
     # update their recent score
     score.player.recent_scores[score.mode] = score
-    if "recent_score" in score.player.__dict__:
-        del score.player.recent_score  # wipe cached_property
 
     """ score submission charts """
 
