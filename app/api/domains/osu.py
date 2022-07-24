@@ -393,6 +393,11 @@ async def lastFM(
             admin=app.state.sessions.bot,
             reason=f"hq!osu running ({flags})",
         )
+
+        # refresh their client state
+        if player.online:
+            player.logout()
+
         return b"-3"
 
     if flags & ClientFlags.REGISTRY_EDITS:
@@ -407,6 +412,11 @@ async def lastFM(
                 admin=app.state.sessions.bot,
                 reason="hq!osu relife 1/32",
             )
+
+            # refresh their client state
+            if player.online:
+                player.logout()
+
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
