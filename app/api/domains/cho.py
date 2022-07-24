@@ -579,7 +579,8 @@ async def login(
     user_info = dict(user_info)  # make a mutable copy
 
     if osu_version.stream == "tourney" and not (
-        user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
+        user_info["priv"] & Privileges.DONATOR
+        and user_info["priv"] & Privileges.UNRESTRICTED
     ):
         # trying to use tourney client with insufficient privileges.
         return {
@@ -679,7 +680,7 @@ async def login(
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
             if not all(
-                [hw_match["priv"] & Privileges.NORMAL for hw_match in hw_matches],
+                [hw_match["priv"] & Privileges.UNRESTRICTED for hw_match in hw_matches],
             ):
                 return {
                     "osu_token": "contact-staff",

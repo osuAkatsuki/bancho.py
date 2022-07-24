@@ -381,7 +381,7 @@ class Player:
     def bancho_priv(self) -> ClientPrivileges:
         """The player's privileges according to the client."""
         ret = ClientPrivileges(0)
-        if self.priv & Privileges.NORMAL:
+        if self.priv & Privileges.UNRESTRICTED:
             ret |= ClientPrivileges.PLAYER
         if self.priv & Privileges.DONATOR:
             ret |= ClientPrivileges.SUPPORTER
@@ -396,7 +396,7 @@ class Player:
     @property
     def restricted(self) -> bool:
         """Return whether the player is restricted."""
-        return not self.priv & Privileges.NORMAL
+        return not self.priv & Privileges.UNRESTRICTED
 
     @property
     def gm_stats(self) -> ModeData:
@@ -507,7 +507,7 @@ class Player:
 
     async def restrict(self, admin: Player, reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
-        await self.remove_privs(Privileges.NORMAL)
+        await self.remove_privs(Privileges.UNRESTRICTED)
 
         await app.state.services.database.execute(
             "INSERT INTO logs "
@@ -540,7 +540,7 @@ class Player:
 
     async def unrestrict(self, admin: Player, reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
-        await self.add_privs(Privileges.NORMAL)
+        await self.add_privs(Privileges.UNRESTRICTED)
 
         await app.state.services.database.execute(
             "INSERT INTO logs "
