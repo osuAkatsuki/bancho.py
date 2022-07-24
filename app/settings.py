@@ -31,6 +31,9 @@ DATADOG_APP_KEY = config("DATADOG_APP_KEY", cast=Secret)
 DEBUG = config("DEBUG", cast=bool)
 REDIRECT_OSU_URLS = config("REDIRECT_OSU_URLS", cast=bool)
 
+DISALLOW_OLD_CLIENTS = config("DISALLOW_OLD_CLIENTS", cast=bool)
+CLIENT_TIMEDELTA = config("CLIENT_TIMEDELTA")
+
 PP_CACHED_ACCURACIES = [
     int(acc) for acc in config("PP_CACHED_ACCS", cast=CommaSeparatedStrings)
 ]
