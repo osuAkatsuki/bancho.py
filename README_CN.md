@@ -73,13 +73,13 @@ bancho.py 的代码库有大约15,000行，我们致力于减少我们需要的�
 # python3.9 现在并不能直接装,
 # 这里我们拿deadsnakes来搞
 # https://github.com/deadsnakes/python3.9
-sudo add-apt-repository ppa:deadsnakes
+sudo add-apt-repository -y ppa:deadsnakes
 
 # 安装所有的依赖(dependence)
-sudo apt install python3.9-dev python3.9-distutils \
-                 cmake build-essential \
-                 mysql-server redis-server \
-                 nginx certbot
+sudo apt install -y python3.9-dev python3.9-distutils \
+                   cmake build-essential \
+                   mysql-server redis-server \
+                   nginx certbot
 
 # 安装python的包管理器, pip
 # pip是用来安装和python有关的包
