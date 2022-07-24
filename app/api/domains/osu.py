@@ -1691,7 +1691,7 @@ async def get_screenshot(
 
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 
 
