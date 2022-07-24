@@ -1596,7 +1596,9 @@ async def osuSeasonal():
 
 @router.get("/web/bancho_connect.php")
 async def banchoConnect(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    # NOTE: this is disabled as this endpoint can be called
+    #       before a player has been granted a session
+    # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
     active_endpoint: Optional[str] = Query(None, alias="fail"),
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
