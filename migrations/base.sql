@@ -71,6 +71,7 @@ create table favourites
 (
 	userid int not null,
 	setid int not null,
+	created_at int default 0 not null,
 	primary key (userid, setid)
 );
 
