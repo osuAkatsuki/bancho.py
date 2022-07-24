@@ -451,10 +451,6 @@ async def login(
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
 
-    Some notes:
-      this must be called with app.state.sessions.players._lock held.
-      we return a tuple of (response_bytes, user_token) on success.
-
     Request format:
       username\npasswd_md5\nosu_version|utc_offset|display_city|client_hashes|pm_private\n
 
