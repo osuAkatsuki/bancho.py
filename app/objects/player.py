@@ -552,7 +552,7 @@ class Player:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http_client)
 
-        # if refresh their client state
+        # refresh their client state
         if self.online:
             self.logout()
 
