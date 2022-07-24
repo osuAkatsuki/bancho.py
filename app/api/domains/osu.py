@@ -117,27 +117,61 @@ def authenticate_player_session(
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
+OsuClientModes = Literal[
+    "Menu",
+    "Edit",
+    "Play",
+    "Exit",
+    "SelectEdit",
+    "SelectPlay",
+    "SelectDrawings",
+    "Rank",
+    "Update",
+    "Busy",
+    "Unknown",
+    "Lobby",
+    "MatchSetup",
+    "SelectMulti",
+    "RankingVs",
+    "OnlineSelection",
+    "OptionsOffsetWizard",
+    "RankingTagCoop",
+    "RankingTeam",
+    "BeatmapImport",
+    "PackageUpdater",
+    "Benchmark",
+    "Tourney",
+    "Charts",
+]
+
+OsuClientGameModes = Literal[
+    "Osu",
+    "Taiko",
+    "CatchTheBeat",
+    "OsuMania",
+]
+
 
 @router.post("/web/osu-error.php")
 async def osuError(
     username: Optional[str] = Form(None, alias="u"),
     pw_md5: Optional[str] = Form(None, alias="h"),
     user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: str = Form(..., alias="osumode"),
-    game_mode: str = Form(..., alias="gamemode"),
+    osu_mode: OsuClientModes = Form(..., alias="osumode"),
+    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
     game_time: int = Form(..., alias="gametime", ge=0),
     audio_time: int = Form(..., alias="audiotime"),
     culture: str = Form(...),
     map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
-    feedback: str = Form(...),
+    feedback: Optional[str] = Form(None),
     stacktrace: str = Form(...),
     soft: bool = Form(...),
     map_count: int = Form(..., alias="beatmap_count", ge=0),
     compatibility: bool = Form(...),
-    ram: int = Form(...),
-    osu_ver: str = Form(..., alias="version"),
+    ram_used: int = Form(..., alias="ram", ge=0),
+    osu_version: str = Form(..., alias="version"),
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
     screenshot_file: Optional[UploadFile] = File(None, alias="ss"),
