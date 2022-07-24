@@ -51,6 +51,7 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.player import Action
 from app.objects.player import ClientDetails
+from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.player import Player
 from app.objects.player import PresenceFilter
@@ -486,7 +487,7 @@ async def login(
             day=int(match["date"][6:8]),
         ),
         revision=int(match["revision"]) if match["revision"] else None,
-        stream=match["stream"] or "stable",
+        stream=OsuStream(match["stream"] or "stable"),
     )
 
     if app.settings.DISALLOW_OLD_CLIENTS:
