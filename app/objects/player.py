@@ -552,9 +552,8 @@ class Player:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http_client)
 
+        # if refresh their client state
         if self.online:
-            # log the user out if they're offline, this
-            # will simply relog them and refresh their app.state
             self.logout()
 
     async def unrestrict(self, admin: Player, reason: str) -> None:

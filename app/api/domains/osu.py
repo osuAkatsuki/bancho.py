@@ -755,6 +755,11 @@ async def osuSubmitModularSelector(
         #     admin=app.state.sessions.bot,
         #     reason="Mismatching hashes on score submission",
         # )
+
+        # refresh their client state
+        # if player.online:
+        #     player.logout()
+
         # return b"error: ban"
 
     # all data read from submission.
@@ -820,6 +825,10 @@ async def osuSubmitModularSelector(
                 admin=app.state.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
+
+            # refresh their client state
+            if score.player.online:
+                score.player.logout()
         """
 
     """ Score submission checks completed; submit the score. """
@@ -941,6 +950,10 @@ async def osuSubmitModularSelector(
                 admin=app.state.sessions.bot,
                 reason="submitted score with no replay",
             )
+
+            # refresh their client state
+            if score.player.online:
+                score.player.logout()
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can

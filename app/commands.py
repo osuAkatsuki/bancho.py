@@ -947,6 +947,10 @@ async def restrict(ctx: Context) -> Optional[str]:
 
     await t.restrict(admin=ctx.player, reason=reason)
 
+    # refresh their client state
+    if t.online:
+        t.logout()
+
     return f"{t} was restricted."
 
 
@@ -972,6 +976,10 @@ async def unrestrict(ctx: Context) -> Optional[str]:
         reason = SHORTHAND_REASONS[reason]
 
     await t.unrestrict(ctx.player, reason)
+
+    # refresh their client state
+    if t.online:
+        t.logout()
 
     return f"{t} was unrestricted."
 
