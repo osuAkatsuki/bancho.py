@@ -30,7 +30,7 @@ class Privileges(IntFlag):
     ALUMNI = 1 << 7
 
     # staff permissions, able to manage server app.state.
-    TOURNAMENT = 1 << 10  # able to manage match state without host.
+    TOURNEY_MANAGER = 1 << 10  # able to manage match state without host.
     NOMINATOR = 1 << 11  # able to manage maps ranked status.
     MODERATOR = 1 << 12  # able to manage users (level 1).
     ADMINISTRATOR = 1 << 13  # able to manage users (level 2).

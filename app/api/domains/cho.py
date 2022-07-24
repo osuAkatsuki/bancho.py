@@ -868,7 +868,7 @@ async def login(
                     Privileges.STAFF
                     | Privileges.NOMINATOR
                     | Privileges.WHITELISTED
-                    | Privileges.TOURNAMENT
+                    | Privileges.TOURNEY_MANAGER
                     | Privileges.DONATOR
                     | Privileges.ALUMNI,
                 )

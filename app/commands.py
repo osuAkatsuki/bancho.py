@@ -1343,7 +1343,7 @@ str_priv_dict = {
     "supporter": Privileges.SUPPORTER,
     "premium": Privileges.PREMIUM,
     "alumni": Privileges.ALUMNI,
-    "tournament": Privileges.TOURNAMENT,
+    "tournament": Privileges.TOURNEY_MANAGER,
     "nominator": Privileges.NOMINATOR,
     "mod": Privileges.MODERATOR,
     "admin": Privileges.ADMINISTRATOR,
@@ -1634,7 +1634,8 @@ def ensure_match(
             return None
 
         if f is not mp_help and (
-            ctx.player not in match.refs and not ctx.player.priv & Privileges.TOURNAMENT
+            ctx.player not in match.refs
+            and not ctx.player.priv & Privileges.TOURNEY_MANAGER
         ):
             # doesn't have privs to use !mp commands (allow help).
             return None
@@ -2309,7 +2310,7 @@ async def mp_pick(ctx: Context, match: Match) -> Optional[str]:
 """
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["h"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["h"], hidden=True)
 async def pool_help(ctx: Context) -> Optional[str]:
     """Show all documented mappool commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
@@ -2325,7 +2326,7 @@ async def pool_help(ctx: Context) -> Optional[str]:
     return "\n".join(cmds)
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["c"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["c"], hidden=True)
 async def pool_create(ctx: Context) -> Optional[str]:
     """Add a new mappool to the database."""
     if len(ctx.args) != 1:
@@ -2362,7 +2363,7 @@ async def pool_create(ctx: Context) -> Optional[str]:
     return f"{name} created."
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["del", "d"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["del", "d"], hidden=True)
 async def pool_delete(ctx: Context) -> Optional[str]:
     """Remove a mappool from the database."""
     if len(ctx.args) != 1:
@@ -2390,7 +2391,7 @@ async def pool_delete(ctx: Context) -> Optional[str]:
     return f"{name} deleted."
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["a"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["a"], hidden=True)
 async def pool_add(ctx: Context) -> Optional[str]:
     """Add a new map to a mappool in the database."""
     if len(ctx.args) != 2:
@@ -2437,7 +2438,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     return f"{bmap.embed} added to {name}."
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["rm", "r"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["rm", "r"], hidden=True)
 async def pool_remove(ctx: Context) -> Optional[str]:
     """Remove a map from a mappool in the database."""
     if len(ctx.args) != 2:
@@ -2472,7 +2473,7 @@ async def pool_remove(ctx: Context) -> Optional[str]:
     return f"{mods_slot} removed from {name}."
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["l"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> Optional[str]:
     """List all existing mappools information."""
     if not (pools := app.state.sessions.pools):
@@ -2489,7 +2490,7 @@ async def pool_list(ctx: Context) -> Optional[str]:
     return "\n".join(l)
 
 
-@pool_commands.add(Privileges.TOURNAMENT, aliases=["i"], hidden=True)
+@pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["i"], hidden=True)
 async def pool_info(ctx: Context) -> Optional[str]:
     """Get all information for a specific mappool."""
     if len(ctx.args) != 1:
