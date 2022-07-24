@@ -492,14 +492,16 @@ async def login(
         stream=match["stream"] or "stable",
     )
 
-    # disallow login for clients older than 180 days
-    if osu_version.date < (date.today() - timedelta(days=180)):
-        return {
-            "osu_token": "client-too-old",
-            "response_body": (
-                app.packets.version_update_forced() + app.packets.user_id(-2)
-            ),
-        }
+    # if the appropriate setting is enabled, disallow login for clients older than X days
+    # X days defined by the appropriate setting.
+    if app.settings.DISALLOW_OLD_CLIENTS:
+        if osu_version.date < (date.today() - timedelta(days=int(app.settings.CLIENT_TIMEDELTA))):
+            return {
+                "osu_token": "client-too-old",
+                "response_body": (
+                    app.packets.version_update_forced() + app.packets.user_id(-2)
+                ),
+            }
 
     running_under_wine = login_data["adapters_str"] == "runningunderwine"
     adapters = [a for a in login_data["adapters_str"][:-1].split(".")]
