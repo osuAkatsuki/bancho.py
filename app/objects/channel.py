@@ -30,23 +30,12 @@ class Channel:
         this is useful for things like multiplayer, spectator, etc.
     """
 
-    __slots__ = (
-        "_name",
-        "name",
-        "topic",
-        "players",
-        "read_priv",
-        "write_priv",
-        "auto_join",
-        "instance",
-    )
-
     def __init__(
         self,
         name: str,
         topic: str,
-        read_priv: Privileges = Privileges.NORMAL,
-        write_priv: Privileges = Privileges.NORMAL,
+        read_priv: Privileges = Privileges.UNRESTRICTED,
+        write_priv: Privileges = Privileges.UNRESTRICTED,
         auto_join: bool = True,
         instance: bool = False,
     ) -> None:

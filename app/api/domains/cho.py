@@ -7,7 +7,6 @@ import struct
 import time
 from datetime import date
 from datetime import datetime
-from datetime import timedelta
 from pathlib import Path
 from typing import Callable
 from typing import Literal
@@ -52,14 +51,17 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.player import Action
 from app.objects.player import ClientDetails
+from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.player import Player
 from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.state import services
 from app.usecases.performance import ScoreDifficultyParams
 
+OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -382,8 +384,6 @@ OFFLINE_NOTIFICATION = app.packets.notification(
     "some features will be unavailable.",
 )
 
-DELTA_90_DAYS = timedelta(days=90)
-
 
 class LoginResponse(TypedDict):
     osu_token: str
@@ -452,10 +452,6 @@ async def login(
     Login has no specific packet, but happens when the osu!
     client sends a request without an 'osu-token' header.
 
-    Some notes:
-      this must be called with app.state.sessions.players._lock held.
-      we return a tuple of (response_bytes, user_token) on success.
-
     Request format:
       username\npasswd_md5\nosu_version|utc_offset|display_city|client_hashes|pm_private\n
 
@@ -491,17 +487,40 @@ async def login(
             day=int(match["date"][6:8]),
         ),
         revision=int(match["revision"]) if match["revision"] else None,
-        stream=match["stream"] or "stable",
+        stream=OsuStream(match["stream"] or "stable"),
     )
 
-    # disallow login for clients older than 90 days
-    if osu_version.date < (date.today() - DELTA_90_DAYS):
-        return {
-            "osu_token": "client-too-old",
-            "response_body": (
-                app.packets.version_update_forced() + app.packets.user_id(-2)
-            ),
-        }
+    if app.settings.DISALLOW_OLD_CLIENTS:
+        osu_client_stream = osu_version.stream
+        if osu_client_stream in ("stable", "beta"):
+            osu_client_stream += "40"  # TODO: why?
+
+        allowed_client_versions = set()
+
+        async with services.http_client.get(
+            OSU_API_V2_CHANGELOG_URL,
+            params={"stream": osu_client_stream},
+        ) as resp:
+            for build in (await resp.json())["builds"]:
+                version = date(
+                    int(build["version"][0:4]),
+                    int(build["version"][4:6]),
+                    int(build["version"][6:8]),
+                )
+                allowed_client_versions.add(version)
+
+                if any(entry["major"] for entry in build["changelog_entries"]):
+                    # this build is a major iteration to the client
+                    # don't allow anything older than this
+                    break
+
+        if osu_version.date not in allowed_client_versions:
+            return {
+                "osu_token": "client-too-old",
+                "response_body": (
+                    app.packets.version_update_forced() + app.packets.user_id(-2)
+                ),
+            }
 
     running_under_wine = login_data["adapters_str"] == "runningunderwine"
     adapters = [a for a in login_data["adapters_str"][:-1].split(".")]
@@ -560,7 +579,8 @@ async def login(
     user_info = dict(user_info)  # make a mutable copy
 
     if osu_version.stream == "tourney" and not (
-        user_info["priv"] & Privileges.DONATOR and user_info["priv"] & Privileges.NORMAL
+        user_info["priv"] & Privileges.DONATOR
+        and user_info["priv"] & Privileges.UNRESTRICTED
     ):
         # trying to use tourney client with insufficient privileges.
         return {
@@ -660,7 +680,7 @@ async def login(
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
             if not all(
-                [hw_match["priv"] & Privileges.NORMAL for hw_match in hw_matches],
+                [hw_match["priv"] & Privileges.UNRESTRICTED for hw_match in hw_matches],
             ):
                 return {
                     "osu_token": "contact-staff",
@@ -848,7 +868,7 @@ async def login(
                     Privileges.STAFF
                     | Privileges.NOMINATOR
                     | Privileges.WHITELISTED
-                    | Privileges.TOURNAMENT
+                    | Privileges.TOURNEY_MANAGER
                     | Privileges.DONATOR
                     | Privileges.ALUMNI,
                 )

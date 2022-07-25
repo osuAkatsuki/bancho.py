@@ -16,7 +16,7 @@ class Privileges(IntFlag):
     """Server side user privileges."""
 
     # privileges intended for all normal players.
-    NORMAL = 1 << 0  # is an unbanned player.
+    UNRESTRICTED = 1 << 0  # is an unbanned player.
     VERIFIED = 1 << 1  # has logged in to the server in-game.
 
     # has bypass to low-ceiling anticheat measures (trusted).
@@ -30,7 +30,7 @@ class Privileges(IntFlag):
     ALUMNI = 1 << 7
 
     # staff permissions, able to manage server app.state.
-    TOURNAMENT = 1 << 10  # able to manage match state without host.
+    TOURNEY_MANAGER = 1 << 10  # able to manage match state without host.
     NOMINATOR = 1 << 11  # able to manage maps ranked status.
     MODERATOR = 1 << 12  # able to manage users (level 1).
     ADMINISTRATOR = 1 << 13  # able to manage users (level 2).

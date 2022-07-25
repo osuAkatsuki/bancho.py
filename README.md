@@ -41,6 +41,7 @@ bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
 - mysql (relational database)
+- redis (in memory database)
 - nginx (http(s) reverse proxy)
 - certbot (ssl certificate tool)
 - cmake and build-essential (build tools for c/c++)
@@ -93,7 +94,7 @@ in terms of configuration. nginx is an open-source and efficient web server we'l
 be using for this guide, but feel free to check out others, like caddy and h2o.
 
 ```sh
-# copy the example nginx configuration file 
+# copy the example nginx configuration file
 cp ext/nginx.conf.example ext/nginx.conf
 
 # now, you can edit the config file.

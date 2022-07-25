@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
-from typing import Union
 
 import app.settings
 import app.state
@@ -33,25 +32,27 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def osuapiv1_getbeatmaps(
-    **params: Union[str, int]
-) -> Optional[list[dict[str, Any]]]:
-    """Fetch data from the osu!api with a beatmap's md5."""
+async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
+    """\
+    Fetch data from the osu!api with a beatmap's md5.
+
+    Optionally use Kitsu's API if the user has not provided an osu! api key.
+    """
     if app.settings.DEBUG:
-        log(f"Doing osu!api (getbeatmaps) request {params}", Ansi.LMAGENTA)
+        log(f"Doing api (getbeatmaps) request {params}", Ansi.LMAGENTA)
 
-    if not app.settings.OSU_API_KEY:
-        return None
+    if app.settings.OSU_API_KEY:
+        # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
+        url = "https://old.ppy.sh/api/get_beatmaps"
+        params["k"] = str(app.settings.OSU_API_KEY)
+    else:
+        # https://doc.kitsu.moe/
+        url = "https://kitsu.moe/api/get_beatmaps"
 
-    params["k"] = str(app.settings.OSU_API_KEY)
-
-    # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
-    async with app.state.services.http.get(
-        url="https://old.ppy.sh/api/get_beatmaps",
-        params=params,
-    ) as resp:
-        if resp and resp.status == 200 and resp.content.total_bytes != 2:  # b'[]'
-            return await resp.json()
+    async with app.state.services.http_client.get(url, params=params) as response:
+        response_data = await response.json()
+        if response.status == 200 and response_data:  # (data may be [])
+            return response_data
 
     return None
 
@@ -72,7 +73,7 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if resp.status != 200:
                 if 400 <= resp.status < 500:
                     # client error, report this to cmyui
@@ -243,32 +244,6 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    __slots__ = (
-        "set",
-        "md5",
-        "id",
-        "set_id",
-        "artist",
-        "title",
-        "version",
-        "creator",
-        "last_update",
-        "total_length",
-        "max_combo",
-        "status",
-        "frozen",
-        "plays",
-        "passes",
-        "mode",
-        "bpm",
-        "cs",
-        "od",
-        "ar",
-        "hp",
-        "diff",
-        "filename",
-    )
-
     def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
         self.set = map_set
 
@@ -394,8 +369,8 @@ class Beatmap:
                     # set found in db
                     set_id = res["set_id"]
                 else:
-                    # set not found in db, try osu!api
-                    api_data = await osuapiv1_getbeatmaps(h=md5)
+                    # set not found in db, try api
+                    api_data = await api_get_beatmaps(h=md5)
 
                     if not api_data:
                         return None
@@ -431,8 +406,8 @@ class Beatmap:
                 # set found in db
                 set_id = res["set_id"]
             else:
-                # set not found in db, try osu!api
-                api_data = await osuapiv1_getbeatmaps(b=bid)
+                # set not found in db, try getting via api
+                api_data = await api_get_beatmaps(b=bid)
 
                 if not api_data:
                     return None
@@ -587,8 +562,6 @@ class BeatmapSet:
       await BeatmapSet._save_to_sql() -> None
     """
 
-    __slots__ = ("id", "last_osuapi_check", "maps")
-
     def __init__(
         self,
         id: int,
@@ -664,12 +637,9 @@ class BeatmapSet:
         return current_datetime > (self.last_osuapi_check + check_delta)
 
     async def _update_if_available(self) -> None:
-        """Fetch newest data from the osu!api, check for differences
+        """Fetch newest data from the api, check for differences
         and propogate any update into our cache & database."""
-        if not app.settings.OSU_API_KEY:
-            return
-
-        if api_data := await osuapiv1_getbeatmaps(s=self.id):
+        if api_data := await api_get_beatmaps(s=self.id):
             old_maps = {bmap.id: bmap for bmap in self.maps}
             new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
 
@@ -876,7 +846,7 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the osu!api by set id."""
-        if api_data := await osuapiv1_getbeatmaps(s=bsid):
+        if api_data := await api_get_beatmaps(s=bsid):
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset bancho.py support

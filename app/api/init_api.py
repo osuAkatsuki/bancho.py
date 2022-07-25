@@ -119,7 +119,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
                 Ansi.LRED,
             )
 
-        app.state.services.http = aiohttp.ClientSession(
+        app.state.services.http_client = aiohttp.ClientSession(
             json_serialize=lambda x: orjson.dumps(x).decode(),
         )
         await app.state.services.database.connect()
@@ -152,7 +152,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         # shutdown services
 
-        await app.state.services.http.close()
+        await app.state.services.http_client.close()
         await app.state.services.database.disconnect()
         await app.state.services.redis.close()
 
@@ -167,7 +167,6 @@ def init_events(asgi_app: BanchoAPI) -> None:
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
     for domain in ("ppy.sh", app.settings.DOMAIN):
-        asgi_app.host(f"a.{domain}", domains.ava.router)
 
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)

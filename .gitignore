@@ -9,3 +9,4 @@ ext/GeoLite2-City.mmdb
 /ext/nginx.conf
 tools/migrate_v420/go.sum
 tools/migrate_v420/scoreMigrator
+venv/

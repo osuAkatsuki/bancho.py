@@ -209,12 +209,12 @@ class Players(list[Player]):
     @property
     def restricted(self) -> set[Player]:
         """Return a set of the current restricted players."""
-        return {p for p in self if not p.priv & Privileges.NORMAL}
+        return {p for p in self if not p.priv & Privileges.UNRESTRICTED}
 
     @property
     def unrestricted(self) -> set[Player]:
         """Return a set of the current unrestricted players."""
-        return {p for p in self if p.priv & Privileges.NORMAL}
+        return {p for p in self if p.priv & Privileges.UNRESTRICTED}
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
@@ -528,7 +528,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
         id=1,
         name=bot_name,
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
-        priv=Privileges.NORMAL,
+        priv=Privileges.UNRESTRICTED,
         bot_client=True,
     )
     app.state.sessions.players.append(app.state.sessions.bot)

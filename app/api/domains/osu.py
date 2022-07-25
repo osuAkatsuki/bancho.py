@@ -50,7 +50,7 @@ import app.settings
 import app.state
 import app.utils
 from app.constants import regexes
-from app.constants.clientflags import ClientFlags
+from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.logging import Ansi
@@ -71,7 +71,6 @@ from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 
-AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
@@ -118,27 +117,61 @@ def authenticate_player_session(
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
+OsuClientModes = Literal[
+    "Menu",
+    "Edit",
+    "Play",
+    "Exit",
+    "SelectEdit",
+    "SelectPlay",
+    "SelectDrawings",
+    "Rank",
+    "Update",
+    "Busy",
+    "Unknown",
+    "Lobby",
+    "MatchSetup",
+    "SelectMulti",
+    "RankingVs",
+    "OnlineSelection",
+    "OptionsOffsetWizard",
+    "RankingTagCoop",
+    "RankingTeam",
+    "BeatmapImport",
+    "PackageUpdater",
+    "Benchmark",
+    "Tourney",
+    "Charts",
+]
+
+OsuClientGameModes = Literal[
+    "Osu",
+    "Taiko",
+    "CatchTheBeat",
+    "OsuMania",
+]
+
 
 @router.post("/web/osu-error.php")
 async def osuError(
     username: Optional[str] = Form(None, alias="u"),
     pw_md5: Optional[str] = Form(None, alias="h"),
     user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: str = Form(..., alias="osumode"),
-    game_mode: str = Form(..., alias="gamemode"),
+    osu_mode: OsuClientModes = Form(..., alias="osumode"),
+    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
     game_time: int = Form(..., alias="gametime", ge=0),
     audio_time: int = Form(..., alias="audiotime"),
     culture: str = Form(...),
     map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
-    feedback: str = Form(...),
+    feedback: Optional[str] = Form(None),
     stacktrace: str = Form(...),
     soft: bool = Form(...),
     map_count: int = Form(..., alias="beatmap_count", ge=0),
     compatibility: bool = Form(...),
-    ram: int = Form(...),
-    osu_ver: str = Form(..., alias="version"),
+    ram_used: int = Form(..., alias="ram", ge=0),
+    osu_version: str = Form(..., alias="version"),
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
     screenshot_file: Optional[UploadFile] = File(None, alias="ss"),
@@ -327,7 +360,7 @@ async def osuAddFavourite(
 
     # add favourite
     await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id)",
+        "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
         {"user_id": player.id, "set_id": map_set_id},
     )
 
@@ -350,9 +383,9 @@ async def lastFM(
         # client not to send any more for now.
         return b"-3"
 
-    flags = ClientFlags(int(beatmap_id_or_hidden_flag[1:]))
+    flags = LastFMFlags(int(beatmap_id_or_hidden_flag[1:]))
 
-    if flags & (ClientFlags.HQ_ASSEMBLY | ClientFlags.HQ_FILE):
+    if flags & (LastFMFlags.HQ_ASSEMBLY | LastFMFlags.HQ_FILE):
         # Player is currently running hq!osu; could possibly
         # be a separate client, buuuut prooobably not lol.
 
@@ -360,9 +393,14 @@ async def lastFM(
             admin=app.state.sessions.bot,
             reason=f"hq!osu running ({flags})",
         )
+
+        # refresh their client state
+        if player.online:
+            player.logout()
+
         return b"-3"
 
-    if flags & ClientFlags.REGISTRY_EDITS:
+    if flags & LastFMFlags.REGISTRY_EDITS:
         # Player has registry edits left from
         # hq!osu's multiaccounting tool. This
         # does not necessarily mean they are
@@ -374,6 +412,11 @@ async def lastFM(
                 admin=app.state.sessions.bot,
                 reason="hq!osu relife 1/32",
             )
+
+            # refresh their client state
+            if player.online:
+                player.logout()
+
             return b"-3"
 
         # TODO: make a tool to remove the flags & send this as a dm.
@@ -396,7 +439,11 @@ async def lastFM(
         return b"-3"
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
-    if flags & (ClientFlags.libeay32Library | ClientFlags.aqnMenuSample):
+    if flags & (
+        LastFMFlags.SDL2_LIBRARY
+        | LastFMFlags.OPENSSL_LIBRARY
+        | LastFMFlags.AQN_MENU_SAMPLE
+    ):
         # AQN has been detected in the client, either
         # through the 'libeay32.dll' library being found
         # onboard, or from the menu sound being played in
@@ -451,7 +498,7 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    async with app.state.services.http.get(search_url, params=params) as resp:
+    async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
                 # chimu uses 404 for no maps found
@@ -708,6 +755,11 @@ async def osuSubmitModularSelector(
         #     admin=app.state.sessions.bot,
         #     reason="Mismatching hashes on score submission",
         # )
+
+        # refresh their client state
+        # if player.online:
+        #     player.logout()
+
         # return b"error: ban"
 
     # all data read from submission.
@@ -773,6 +825,10 @@ async def osuSubmitModularSelector(
                 admin=app.state.sessions.bot,
                 reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
             )
+
+            # refresh their client state
+            if score.player.online:
+                score.player.logout()
         """
 
     """ Score submission checks completed; submit the score. """
@@ -894,6 +950,10 @@ async def osuSubmitModularSelector(
                 admin=app.state.sessions.bot,
                 reason="submitted score with no replay",
             )
+
+            # refresh their client state
+            if score.player.online:
+                score.player.logout()
         else:
             # TODO: the replay is currently sent from the osu!
             # client compressed with LZMA; this compression can
@@ -1042,8 +1102,6 @@ async def osuSubmitModularSelector(
 
     # update their recent score
     score.player.recent_scores[score.mode] = score
-    if "recent_score" in score.player.__dict__:
-        del score.player.recent_score  # wipe cached_property
 
     """ score submission charts """
 
@@ -1152,7 +1210,8 @@ async def getReplay(
         return
 
     # increment replay views for this score
-    app.state.loop.create_task(score.increment_replay_views())
+    if player.id != score.player.id:
+        app.state.loop.create_task(score.increment_replay_views())
 
     return FileResponse(file)
 
@@ -1596,7 +1655,9 @@ async def osuSeasonal():
 
 @router.get("/web/bancho_connect.php")
 async def banchoConnect(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    # NOTE: this is disabled as this endpoint can be called
+    #       before a player has been granted a session
+    # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
     active_endpoint: Optional[str] = Query(None, alias="fail"),
     net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
@@ -1620,7 +1681,7 @@ async def checkUpdates(
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
 ):
-    return
+    return b""
 
     # NOTE: this code is unused now.
     # it was only used with server switchers,
@@ -1637,7 +1698,10 @@ async def checkUpdates(
         return cache[action]
 
     url = "https://old.ppy.sh/web/check-updates.php"
-    async with app.state.services.http.get(url, params=request.query_params) as resp:
+    async with app.state.services.http_client.get(
+        url,
+        params=request.query_params,
+    ) as resp:
         if not resp or resp.status != 200:
             return (503, b"")  # failed to get data from osu
 
@@ -1664,6 +1728,7 @@ if app.settings.REDIRECT_OSU_URLS:
     for pattern in (
         "/beatmapsets/{_}",
         "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
         "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
@@ -1685,7 +1750,7 @@ async def get_screenshot(
 
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 
 
@@ -1752,7 +1817,7 @@ async def get_updated_beatmap(
         # map not found, or out of date; get from osu!
         url = f"https://old.ppy.sh/osu/{res['id']}"
 
-        async with app.state.services.http.get(url) as resp:
+        async with app.state.services.http_client.get(url) as resp:
             if not resp or resp.status != 200:
                 log(f"Could not find map {osu_file_path}!", Ansi.LRED)
                 return (404, b"")  # couldn't find on osu!'s server
