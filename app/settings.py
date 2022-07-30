@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from databases import DatabaseURL
 from starlette.config import Config
 from starlette.datastructures import CommaSeparatedStrings
 from starlette.datastructures import Secret
@@ -10,8 +9,19 @@ config = Config(".env")
 SERVER_ADDR = config("SERVER_ADDR")
 SERVER_PORT = int(v) if (v := config("SERVER_PORT", default=None)) else None
 
-DB_DSN = config("DB_DSN", cast=DatabaseURL)
-REDIS_DSN = config("REDIS_DSN")
+DB_HOST = config("DB_HOST")
+DB_PORT = config("DB_PORT", cast=int)
+DB_USER = config("DB_USER")
+DB_PASS = config("DB_PASS")
+DB_NAME = config("DB_NAME")
+DB_DSN = f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+REDIS_HOST = config("REDIS_HOST")
+REDIS_PORT = config("REDIS_PORT", cast=int)
+REDIS_USER = config("REDIS_USER")
+REDIS_PASS = config("REDIS_PASS")
+REDIS_DB = config("REDIS_DB", cast=int)
+REDIS_DSN = f"redis://{REDIS_USER}:{REDIS_PASS}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 OSU_API_KEY = config("OSU_API_KEY", cast=Secret)
 
