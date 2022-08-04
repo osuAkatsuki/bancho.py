@@ -8,7 +8,8 @@ from typing import Literal
 from typing import Optional
 
 import databases.core
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi import HTTPException
 from fastapi import status
 from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
@@ -21,7 +22,8 @@ from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
-from app.objects.beatmap import Beatmap, BeatmapSet
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import BeatmapSet
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.state.services import acquire_db_conn
@@ -64,7 +66,10 @@ router = APIRouter(tags=["bancho.py API"])
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
-async def check_player(api_key: str, priv: Privileges = Privileges.UNRESTRICTED) -> Player:
+
+async def check_player(
+    api_key: str, priv: Privileges = Privileges.UNRESTRICTED,
+) -> Player:
     if api_key not in app.state.sessions.api_keys:
         raise HTTPException(status_code=401, detail={"status": "Invaild API Key."})
     player_id = app.state.sessions.api_keys[api_key]
@@ -947,19 +952,16 @@ async def api_get_pool(
         },
     )
 
+
 @router.get("/update_maps")
 async def api_update_maps(api_key: str, sid: int):
     await check_player(api_key, Privileges.NOMINATOR)
     set = await BeatmapSet.from_bsid(sid)
     if set is None:
         return ORJSONResponse(
-            {"status": "Beatmapset not found."},
-            status_code=status.HTTP_404_NOT_FOUND
+            {"status": "Beatmapset not found."}, status_code=status.HTTP_404_NOT_FOUND,
         )
     await set.force_update()
     return ORJSONResponse(
-        {
-            "status": "Success!",
-            "sid": set.id
-        }, 
-        status_code=status.HTTP_200_OK)
+        {"status": "Success!", "sid": set.id}, status_code=status.HTTP_200_OK,
+    )

@@ -735,6 +735,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
     return f"{bmap.embed} updated to {new_status!s}."
 
+
 @command(Privileges.NOMINATOR, hidden=True)
 async def _update_maps(ctx: Context) -> Optional[str]:
     if time.time() >= ctx.player.last_np["timeout"]:
