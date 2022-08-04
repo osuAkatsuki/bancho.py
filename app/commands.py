@@ -735,6 +735,18 @@ async def _map(ctx: Context) -> Optional[str]:
 
     return f"{bmap.embed} updated to {new_status!s}."
 
+@command(Privileges.NOMINATOR, hidden=True)
+async def _update_maps(ctx: Context) -> Optional[str]:
+    if time.time() >= ctx.player.last_np["timeout"]:
+        return "Please /np a map first!"
+
+    bmap = ctx.player.last_np["bmap"]
+    try:
+        await bmap.set.force_update()
+    except:
+        return "An error occurred when updating maps."
+    return "All maps from the set are updated!"
+
 
 """ Mod commands
 # The commands below are somewhat dangerous,

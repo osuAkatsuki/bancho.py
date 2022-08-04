@@ -8,7 +8,7 @@ from typing import Literal
 from typing import Optional
 
 import databases.core
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi import status
 from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
@@ -20,7 +20,8 @@ import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.objects.beatmap import Beatmap
+from app.constants.privileges import Privileges
+from app.objects.beatmap import Beatmap, BeatmapSet
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.state.services import acquire_db_conn
@@ -62,6 +63,15 @@ router = APIRouter(tags=["bancho.py API"])
 # POST/PUT /set_player_info: update user information (updates whatever received).
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
+
+async def check_player(api_key: str, priv: Privileges = Privileges.UNRESTRICTED) -> Player:
+    if api_key not in app.state.sessions.api_keys:
+        raise HTTPException(status_code=401, detail={"status": "Invaild API Key."})
+    player_id = app.state.sessions.api_keys[api_key]
+    player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
+    if not player.priv & priv:
+        raise HTTPException(status_code=403, detail={"status": "No Permission."})
+    return player
 
 
 def format_clan_basic(clan: Clan) -> dict[str, object]:
@@ -817,7 +827,7 @@ async def api_get_match(
 
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
-    sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
+    sort: Literal["tscore", "rscore", "pp", "acc", "plays", "playtime"] = "pp",
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
@@ -937,52 +947,19 @@ async def api_get_pool(
         },
     )
 
-
-# def requires_api_key(f: Callable) -> Callable:
-#     @wraps(f)
-#     async def wrapper(conn: Connection) -> HTTPResponse:
-#         conn.resp_headers["Content-Type"] = "application/json"
-#         if "Authorization" not in conn.headers:
-#             return (400, JSON({"status": "Must provide authorization token."}))
-
-#         api_key = conn.headers["Authorization"]
-
-#         if api_key not in app.state.sessions.api_keys:
-#             return (401, JSON({"status": "Unknown authorization token."}))
-
-#         # get player from api token
-#         player_id = app.state.sessions.api_keys[api_key]
-#         p = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-
-#         return await f(conn, p)
-
-#     return wrapper
-
-
-# NOTE: `Content-Type = application/json` is applied in the above decorator
-#                                         for the following api handlers.
-
-
-# @domain.route("/set_avatar", methods=["POST", "PUT"])
-# @requires_api_key
-# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
-#     """Update the tokenholder's avatar to a given file."""
-#     if "avatar" not in conn.files:
-#         return (400, JSON({"status": "must provide avatar file."}))
-
-#     ava_file = conn.files["avatar"]
-
-#     # block files over 4MB
-#     if len(ava_file) > (4 * 1024 * 1024):
-#         return (400, JSON({"status": "avatar file too large (max 4MB)."}))
-
-#     if ava_file[6:10] in (b"JFIF", b"Exif"):
-#         ext = "jpeg"
-#     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
-#         ext = "png"
-#     else:
-#         return (400, JSON({"status": "invalid file type."}))
-
-#     # write to the avatar file
-#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
-#     return JSON({"status": "success."})
+@router.get("/update_maps")
+async def api_update_maps(api_key: str, sid: int):
+    await check_player(api_key, Privileges.NOMINATOR)
+    set = await BeatmapSet.from_bsid(sid)
+    if set is None:
+        return ORJSONResponse(
+            {"status": "Beatmapset not found."},
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    await set.force_update()
+    return ORJSONResponse(
+        {
+            "status": "Success!",
+            "sid": set.id
+        }, 
+        status_code=status.HTTP_200_OK)
