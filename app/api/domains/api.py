@@ -68,7 +68,8 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 
 async def check_player(
-    api_key: str, priv: Privileges = Privileges.UNRESTRICTED,
+    api_key: str,
+    priv: Privileges = Privileges.UNRESTRICTED,
 ) -> Player:
     if api_key not in app.state.sessions.api_keys:
         raise HTTPException(status_code=401, detail={"status": "Invaild API Key."})
@@ -959,9 +960,11 @@ async def api_update_maps(api_key: str, sid: int):
     set = await BeatmapSet.from_bsid(sid)
     if set is None:
         return ORJSONResponse(
-            {"status": "Beatmapset not found."}, status_code=status.HTTP_404_NOT_FOUND,
+            {"status": "Beatmapset not found."},
+            status_code=status.HTTP_404_NOT_FOUND,
         )
     await set.force_update()
     return ORJSONResponse(
-        {"status": "Success!", "sid": set.id}, status_code=status.HTTP_200_OK,
+        {"status": "Success!", "sid": set.id},
+        status_code=status.HTTP_200_OK,
     )
