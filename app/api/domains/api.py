@@ -9,14 +9,14 @@ from typing import Optional
 
 import databases.core
 from fastapi import APIRouter
+from fastapi import Header
 from fastapi import HTTPException
 from fastapi import status
-from fastapi import Header
 from fastapi.param_functions import Depends
-from fastapi.security.oauth2 import SecurityScopes
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
+from fastapi.security.oauth2 import SecurityScopes
 
 import app.packets
 import app.state
@@ -67,19 +67,25 @@ router = APIRouter(tags=["bancho.py API"])
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
+
 async def get_player(
-    security_scopes: SecurityScopes, api_key: str = Header(alias='Authorization', default=None)
+    security_scopes: SecurityScopes,
+    api_key: str = Header(alias="Authorization", default=None),
 ):
     if api_key is None:
-        raise HTTPException(status_code=400, detail={"status": "Must provide authorization token."})
+        raise HTTPException(
+            status_code=400, detail={"status": "Must provide authorization token."},
+        )
     if api_key not in app.state.sessions.api_keys:
-        raise HTTPException(status_code=401, detail={"status": "Unknown authorization token."})
+        raise HTTPException(
+            status_code=401, detail={"status": "Unknown authorization token."},
+        )
     player_id = app.state.sessions.api_keys[api_key]
     player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
     for scope in security_scopes.scopes:
         priv = Privileges[scope.upper()]
         if not player.priv & priv:
-            raise HTTPException(status_code=403, detail={"status": "No Permission."}) 
+            raise HTTPException(status_code=403, detail={"status": "No Permission."})
     return player
 
 

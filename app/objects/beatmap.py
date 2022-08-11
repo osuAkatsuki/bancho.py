@@ -691,7 +691,7 @@ class BeatmapSet:
             self.maps = updated_maps
 
             # save changes to sql
-            
+
             if map_md5s_to_delete:
                 # delete maps
                 await app.state.services.database.execute(
@@ -739,7 +739,6 @@ class BeatmapSet:
                 "DELETE FROM mapsets WHERE id = :set_id",
                 {"set_id": self.id},
             )
-            
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
