@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import hashlib
 from collections import defaultdict
@@ -661,6 +660,7 @@ class BeatmapSet:
                 else:
                     new_map = new_maps[old_id]
                     new_status = RankedStatus.from_osuapi(new_maps[old_id]["approved"])
+                    # Map status may change without md5 changed (Qualified -> Ranked)
                     if old_map.md5 == new_map["file_md5"] and (
                         old_map.frozen or old_map.status == new_status
                     ):
@@ -691,7 +691,7 @@ class BeatmapSet:
             self.maps = updated_maps
 
             # save changes to sql
-
+            
             if map_md5s_to_delete:
                 # delete maps
                 await app.state.services.database.execute(
@@ -739,18 +739,7 @@ class BeatmapSet:
                 "DELETE FROM mapsets WHERE id = :set_id",
                 {"set_id": self.id},
             )
-
-    async def force_update(self) -> None:
-        await self._update_if_available()
-        app.state.cache.beatmapset.pop(self.id, None)  # drop cache if exist
-        for each_map in self.maps:
-            app.state.cache.beatmap.pop(each_map.md5, None)  # drop cache if exist
-            app.state.cache.beatmap.pop(each_map.id, None)  # drop cache if exist
-            app.state.cache.unsubmitted.discard(each_map.md5)  # drop cache if exist
-            app.state.cache.needs_update.discard(each_map.md5)  # drop cache if exist
-        osu_file_path = BEATMAPS_PATH / f"{each_map.id}.osu"
-        await ensure_local_osu_file(osu_file_path, each_map.id, each_map.md5)
-        await asyncio.sleep(0.5)
+            
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""

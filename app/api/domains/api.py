@@ -11,7 +11,9 @@ import databases.core
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import status
+from fastapi import Header
 from fastapi.param_functions import Depends
+from fastapi.security.oauth2 import SecurityScopes
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
@@ -23,7 +25,6 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import BeatmapSet
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.state.services import acquire_db_conn
@@ -54,7 +55,7 @@ router = APIRouter(tags=["bancho.py API"])
 # GET /get_leaderboard: return the top players for a given mode & sort condition
 
 # Authorized (requires valid api key, passed as 'Authorization' header)
-# NOTE: authenticated handlers may have privilege requirements.
+# NOTE: Use fastapi security as dependencies to get the player with priv scopes check
 
 # [Normal]
 # GET /calculate_pp: calculate & return pp for a given beatmap.
@@ -66,17 +67,19 @@ router = APIRouter(tags=["bancho.py API"])
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
-
-async def check_player(
-    api_key: str,
-    priv: Privileges = Privileges.UNRESTRICTED,
-) -> Player:
+async def get_player(
+    security_scopes: SecurityScopes, api_key: str = Header(alias='Authorization', default=None)
+):
+    if api_key is None:
+        raise HTTPException(status_code=400, detail={"status": "Must provide authorization token."})
     if api_key not in app.state.sessions.api_keys:
-        raise HTTPException(status_code=401, detail={"status": "Invaild API Key."})
+        raise HTTPException(status_code=401, detail={"status": "Unknown authorization token."})
     player_id = app.state.sessions.api_keys[api_key]
     player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-    if not player.priv & priv:
-        raise HTTPException(status_code=403, detail={"status": "No Permission."})
+    for scope in security_scopes.scopes:
+        priv = Privileges[scope.upper()]
+        if not player.priv & priv:
+            raise HTTPException(status_code=403, detail={"status": "No Permission."}) 
     return player
 
 
@@ -951,20 +954,4 @@ async def api_get_pool(
                 for (mods, slot), bmap in pool.maps.items()
             },
         },
-    )
-
-
-@router.get("/update_maps")
-async def api_update_maps(api_key: str, sid: int):
-    await check_player(api_key, Privileges.NOMINATOR)
-    set = await BeatmapSet.from_bsid(sid)
-    if set is None:
-        return ORJSONResponse(
-            {"status": "Beatmapset not found."},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    await set.force_update()
-    return ORJSONResponse(
-        {"status": "Success!", "sid": set.id},
-        status_code=status.HTTP_200_OK,
     )
