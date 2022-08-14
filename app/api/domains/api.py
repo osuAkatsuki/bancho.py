@@ -972,6 +972,7 @@ async def api_get_pool(
         },
     )
 
+
 @router.post("/submit_score")
 async def api_submit_score(
     user: Player = Security(get_player, scopes=["Staff"]),
@@ -995,7 +996,7 @@ async def api_submit_score(
     foreign_score_id: int = Form(default=0),
     userid: int = Form(...),
 ):
-    if server != 'offline' and foreign_score_id == 0:
+    if server != "offline" and foreign_score_id == 0:
         return {
             "status": 400,
             "msg": "Any online scores should have foreign_score_id",

@@ -404,7 +404,7 @@ insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-s
 alter table favourites add created_at int default 0 not null;
 
 # v4.6.1
-create table scores_foreign  
+create table scores_foreign
 (
   id int not null,
   server varchar(32) charset utf8 not null,

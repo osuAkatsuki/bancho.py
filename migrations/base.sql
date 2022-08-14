@@ -317,7 +317,7 @@ create table users
 		unique (safe_name)
 );
 
-create table scores_foreign  
+create table scores_foreign
 (
   id int not null,
   server varchar(32) charset utf8 not null,
