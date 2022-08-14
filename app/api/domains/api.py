@@ -3,26 +3,39 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from datetime import datetime
 from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
 
 import databases.core
 from fastapi import APIRouter
+from fastapi import File
+from fastapi import Form
+from fastapi import Header
+from fastapi import HTTPException
 from fastapi import status
+from fastapi import UploadFile
 from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
+from fastapi.param_functions import Security
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
+from fastapi.security.oauth2 import SecurityScopes
 
 import app.packets
 import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
 from app.objects.clan import Clan
 from app.objects.player import Player
+from app.objects.score import Grade
+from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 from app.state.services import acquire_db_conn
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -53,15 +66,37 @@ router = APIRouter(tags=["bancho.py API"])
 # Authorized (requires valid api key, passed as 'Authorization' header)
 # NOTE: authenticated handlers may have privilege requirements.
 
-# [Normal]
-# GET /calculate_pp: calculate & return pp for a given beatmap.
-# POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
+# [Staff]
+# POST /submit_score: submit a score with the arguments and replay file.
 
 # TODO handlers
 # GET /get_friends: return a list of the player's friends.
 # POST/PUT /set_player_info: update user information (updates whatever received).
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
+
+
+async def get_player(
+    security_scopes: SecurityScopes,
+    api_key: str = Header(alias="Authorization", default=None),
+):
+    if api_key is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "Must provide authorization token."},
+        )
+    if api_key not in app.state.sessions.api_keys:
+        raise HTTPException(
+            status_code=401,
+            detail={"status": "Unknown authorization token."},
+        )
+    player_id = app.state.sessions.api_keys[api_key]
+    player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
+    for scope in security_scopes.scopes:
+        priv = Privileges[scope.upper()]
+        if not player.priv & priv:
+            raise HTTPException(status_code=403, detail={"status": "No Permission."})
+    return player
 
 
 def format_clan_basic(clan: Clan) -> dict[str, object]:
@@ -937,52 +972,127 @@ async def api_get_pool(
         },
     )
 
-
-# def requires_api_key(f: Callable) -> Callable:
-#     @wraps(f)
-#     async def wrapper(conn: Connection) -> HTTPResponse:
-#         conn.resp_headers["Content-Type"] = "application/json"
-#         if "Authorization" not in conn.headers:
-#             return (400, JSON({"status": "Must provide authorization token."}))
-
-#         api_key = conn.headers["Authorization"]
-
-#         if api_key not in app.state.sessions.api_keys:
-#             return (401, JSON({"status": "Unknown authorization token."}))
-
-#         # get player from api token
-#         player_id = app.state.sessions.api_keys[api_key]
-#         p = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-
-#         return await f(conn, p)
-
-#     return wrapper
-
-
-# NOTE: `Content-Type = application/json` is applied in the above decorator
-#                                         for the following api handlers.
-
-
-# @domain.route("/set_avatar", methods=["POST", "PUT"])
-# @requires_api_key
-# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
-#     """Update the tokenholder's avatar to a given file."""
-#     if "avatar" not in conn.files:
-#         return (400, JSON({"status": "must provide avatar file."}))
-
-#     ava_file = conn.files["avatar"]
-
-#     # block files over 4MB
-#     if len(ava_file) > (4 * 1024 * 1024):
-#         return (400, JSON({"status": "avatar file too large (max 4MB)."}))
-
-#     if ava_file[6:10] in (b"JFIF", b"Exif"):
-#         ext = "jpeg"
-#     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
-#         ext = "png"
-#     else:
-#         return (400, JSON({"status": "invalid file type."}))
-
-#     # write to the avatar file
-#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
-#     return JSON({"status": "success."})
+@router.post("/submit_score")
+async def api_submit_score(
+    user: Player = Security(get_player, scopes=["Staff"]),
+    replay_file: UploadFile = File(default=None),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
+    map_md5: str = Form(...),
+    score_value: int = Form(..., alias="score"),
+    max_combo: int = Form(...),
+    mods: int = Form(...),
+    n300: int = Form(...),
+    n100: int = Form(...),
+    n50: int = Form(...),
+    nmiss: int = Form(...),
+    ngeki: int = Form(...),
+    nkatu: int = Form(...),
+    mode: int = Form(...),
+    perfect: bool = Form(default=False),
+    playtime: int = Form(...),
+    grade: str = Form(...),
+    server: str = Form(...),
+    foreign_score_id: int = Form(default=0),
+    userid: int = Form(...),
+):
+    if server != 'offline' and foreign_score_id == 0:
+        return {
+            "status": 400,
+            "msg": "Any online scores should have foreign_score_id",
+        }
+    # Check whether we have the map
+    bmap = await Beatmap.from_md5(map_md5)
+    if bmap is None:
+        return {
+            "status": 400,
+            "msg": "Couldn't find a beatmap on that md5",
+        }
+    osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
+    await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5)
+    # Make a score manually to calc pp and acc
+    score: Score = Score()
+    score.score = score_value
+    score.max_combo = max_combo
+    score.mods = Mods(mods)
+    score.n300 = n300
+    score.n100 = n100
+    score.n50 = n50
+    score.nmiss = nmiss
+    score.ngeki = ngeki
+    score.nkatu = nkatu
+    score.mode = GameMode.from_params(mode, score.mods)
+    score.server_time = datetime.utcfromtimestamp(float(playtime))
+    score.player = await app.state.sessions.players.from_cache_or_sql(id=userid)
+    score.grade = Grade.from_str(grade)
+    score.bmap = bmap
+    score.acc = score.calculate_accuracy()
+    score.pp = score.calculate_performance(osu_file_path)[0]
+    await score.calculate_status()
+    # This is required in the submission like progress
+    if score.status == SubmissionStatus.BEST:
+        await db_conn.execute(
+            "UPDATE scores SET status = 1 "
+            "WHERE status = 2 AND map_md5 = :map_md5 "
+            "AND userid = :user_id AND mode = :mode",
+            {
+                "map_md5": score.bmap.md5,
+                "user_id": score.player.id,
+                "mode": score.mode,
+            },
+        )
+    # Insert score into sql
+    is_foreign_table_exist = (
+        await db_conn.fetch_one(
+            "SELECT table_name FROM information_schema.TABLES WHERE table_name = 'scores_foreign'",
+        )
+    ) is not None
+    new_id = await db_conn.execute(
+        "INSERT INTO scores "
+        "VALUES (NULL, "
+        ":map_md5, :score, :pp, :acc, "
+        ":max_combo, :mods, :n300, :n100, "
+        ":n50, :nmiss, :ngeki, :nkatu, "
+        ":grade, :status, :mode, :play_time, "
+        ":time_elapsed, :client_flags, :user_id, :perfect, "
+        ":checksum)",
+        {
+            "map_md5": map_md5,
+            "score": score_value,
+            "pp": score.pp,
+            "acc": score.acc,
+            "max_combo": max_combo,
+            "mods": mods,
+            "n300": n300,
+            "n100": n100,
+            "n50": n50,
+            "nmiss": nmiss,
+            "ngeki": ngeki,
+            "nkatu": nkatu,
+            "grade": score.grade.name,
+            "status": score.status,
+            "mode": score.mode,
+            "play_time": score.server_time,
+            "time_elapsed": 0,
+            "client_flags": 0,
+            "user_id": score.player.id,
+            "perfect": perfect,
+            "checksum": "outer submit",
+        },
+    )
+    if is_foreign_table_exist:
+        await db_conn.execute(
+            "INSERT INTO scores_foreign "
+            "VALUES (:id, :server, :foreign_score_id, :recipient_id, :has_replay, FALSE, NOW())",
+            {
+                "id": new_id,
+                "server": server,
+                "foreign_score_id": foreign_score_id,
+                "recipient_id": user.id,
+                "has_replay": replay_file is not None,
+            },
+        )
+    # Download replay into the folder
+    if replay_file is not None:
+        replay_file_path = REPLAYS_PATH / f"{new_id}.osr"
+        replay_file_path.write_bytes(await replay_file.read())
+    return {"status": 200, "score_id": new_id}

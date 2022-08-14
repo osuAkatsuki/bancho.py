@@ -317,6 +317,18 @@ create table users
 		unique (safe_name)
 );
 
+create table scores_foreign  
+(
+  id int not null,
+  server varchar(32) charset utf8 not null,
+  foreign_score_id int not null,
+  recipient_id int not null,
+  has_replay tinyint(1) not null,
+  is_verified tinyint(1) not null,
+  receipt_time datetime not null,
+  primary key (id)
+)
+
 insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bcrypt, creation_time, latest_activity)
 values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@akatsuki.pw',
         '_______________________my_cool_bcrypt_______________________', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
@@ -83,6 +84,16 @@ def init_exception_handlers(asgi_app: BanchoAPI) -> None:
 def init_middlewares(asgi_app: BanchoAPI) -> None:
     """Initialize our app's middleware stack."""
     asgi_app.add_middleware(middlewares.MetricsMiddleware)
+    asgi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            f"http://osu.{app.settings.DOMAIN}",
+            f"https://osu.{app.settings.DOMAIN}",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @asgi_app.middleware("http")
     async def http_middleware(
