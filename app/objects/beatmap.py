@@ -665,7 +665,9 @@ class BeatmapSet:
                         bmap._parse_from_osuapi_resp(new_map)
                         updated_maps.append(bmap)
                     else:
-                        # map is the same, make no changes
+                        # map md5 is the same, but status maybe changed (qualified to ranked)
+                        if not old_map.frozen: # frozen map should not update status
+                            old_map.status = RankedStatus.from_osuapi(new_map['approved'])
                         updated_maps.append(old_map)  # TODO: is this needed?
 
             # find maps that aren't in our current state, and add them
