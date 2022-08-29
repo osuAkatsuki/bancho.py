@@ -289,10 +289,10 @@ async def osuGetBeatmapInfo(
         # convert from bancho.py -> osu!api status
         row["status"] = bancho_to_osuapi_status(row["status"])
 
-        # try to get the user's grades on the map osu!
-        # only allows us to send back one per gamemode,
-        # so we'll just send back relax for the time being..
-        # XXX: perhaps user-customizable in the future?
+        # try to get the user's grades on the map
+        # NOTE: osu! only allows us to send back one per gamemode,
+        #       so we've decided to send back *vanilla* grades.
+        #       (in theory we could make this user-customizable)
         grades = ["N", "N", "N", "N"]
 
         await db_conn.execute(
@@ -302,7 +302,7 @@ async def osuGetBeatmapInfo(
             {
                 "map_md5": row["md5"],
                 "user_id": player.id,
-                "mode": player.status.mode,
+                "mode": player.status.mode.as_vanilla,
             },
         )
 
@@ -313,7 +313,7 @@ async def osuGetBeatmapInfo(
             {
                 "map_md5": row["md5"],
                 "user_id": player.id,
-                "mode": player.status.mode,
+                "mode": player.status.mode.as_vanilla,
             },
         ):
             grades[score["mode"]] = score["grade"]
