@@ -682,6 +682,7 @@ class BeatmapSet:
                     bmap.passes = 0
                     bmap.plays = 0
 
+                    bmap.set = self
                     updated_maps.append(bmap)
 
             # save changes to cache
