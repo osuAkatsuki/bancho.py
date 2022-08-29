@@ -817,7 +817,7 @@ async def api_get_match(
 
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
-    sort: Literal["tscore", "rscore", "pp", "acc"] = "pp",
+    sort: Literal["tscore", "rscore", "pp", "acc", "plays", "playtime"] = "pp",
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
