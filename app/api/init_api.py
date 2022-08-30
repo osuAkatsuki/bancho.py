@@ -18,6 +18,7 @@ from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.requests import ClientDisconnect
 
 import app.bg_loops
 import app.settings
@@ -96,6 +97,10 @@ def init_middlewares(asgi_app: BanchoAPI) -> None:
 
         try:
             return await call_next(request)
+        except ClientDisconnect:
+            # client disconnected from the server
+            # while we were reading the body.
+            return Response("Client is stupppod")
         except RuntimeError as exc:
             if exc.args[0] == "No response returned.":
                 # client disconnected from the server
