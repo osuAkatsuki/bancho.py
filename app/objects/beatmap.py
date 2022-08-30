@@ -218,7 +218,7 @@ class Beatmap:
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
-      Beatmap.url -> str # https://osu.cmyui.xyz/beatmaps/321
+      Beatmap.url -> str # https://osu.cmyui.xyz/beatmapsets/123/321
       Beatmap.embed -> str # [{url} {full}]
 
       Beatmap.has_leaderboard -> bool
@@ -288,7 +288,7 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmaps/{self.id}"
+        return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.set.id}/{self.id}"
 
     @property
     def embed(self) -> str:

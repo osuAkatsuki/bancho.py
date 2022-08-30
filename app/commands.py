@@ -366,7 +366,7 @@ async def recent(ctx: Context) -> Optional[str]:
 
 
 TOP_SCORE_FMTSTR = (
-    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmaps/{bmapid} "
+    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmapsets/{map_set_id}/{map_id} "
     "{artist} - {title} [{version}]]"
 )
 
@@ -406,7 +406,7 @@ async def top(ctx: Context) -> Optional[str]:
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
     scores = await app.state.services.database.fetch_all(
-        "SELECT s.pp, b.artist, b.title, b.version, b.id AS bmapid "
+        "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
         "FROM scores s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
