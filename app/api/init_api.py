@@ -13,12 +13,12 @@ from fastapi import FastAPI
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from starlette.requests import ClientDisconnect
 from fastapi.openapi.utils import get_openapi
 from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.requests import ClientDisconnect
 
 import app.bg_loops
 import app.settings
