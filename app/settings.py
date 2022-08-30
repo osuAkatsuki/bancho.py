@@ -71,4 +71,4 @@ DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 ## WARNING touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.6.2"
+VERSION = "4.6.3"
