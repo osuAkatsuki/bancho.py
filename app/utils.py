@@ -45,7 +45,7 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_local_services_are_running",
+    "ensure_connected_services",
     "ensure_directory_structure",
     "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
@@ -380,31 +380,22 @@ def ensure_supported_platform() -> int:
     return 0
 
 
-def ensure_local_services_are_running() -> int:
-    """Ensure all required services (mysql, redis) are running."""
-    # NOTE: if you have any problems with this, please contact me
-    # @cmyui#0425/cmyuiosu@gmail.com. i'm interested in knowing
-    # how people are using the software so that i can keep it
-    # in mind while developing new features & refactoring.
+def ensure_connected_services(timeout: float = 1.0) -> int:
+    """Ensure connected service connections are functional and running."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
+        try:
+            sock.connect((app.settings.DB_HOST, app.settings.DB_PORT))
+        except OSError:
+            log("Unable to connect to mysql server.", Ansi.LRED)
+            return 1
 
-    if app.settings.DB_DSN.hostname in ("localhost", "127.0.0.1", None):
-        # sql server running locally, make sure it's running
-        for service in ("mysqld", "mariadb"):
-            if os.path.exists(f"/var/run/{service}/{service}.pid"):
-                break
-        else:
-            # not found, try pgrep
-            pgrep_exit_code = subprocess.call(
-                ["pgrep", "mysqld"],
-                stdout=subprocess.DEVNULL,
-            )
-            if pgrep_exit_code != 0:
-                log("Unable to connect to mysql server.", Ansi.LRED)
-                return 1
-
-    # if not os.path.exists("/var/run/redis/redis-server.pid"):
-    #     log("Unable to connect to redis server.", Ansi.LRED)
-    #     return 1
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.connect((app.settings.REDIS_HOST, app.settings.REDIS_PORT))
+        except OSError:
+            log("Unable to connect to redis server.", Ansi.LRED)
+            return 1
 
     return 0
 

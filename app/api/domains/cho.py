@@ -491,7 +491,7 @@ async def login(
     )
 
     if app.settings.DISALLOW_OLD_CLIENTS:
-        osu_client_stream = osu_version.stream
+        osu_client_stream = osu_version.stream.value
         if osu_client_stream in ("stable", "beta"):
             osu_client_stream += "40"  # TODO: why?
 

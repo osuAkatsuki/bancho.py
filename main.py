@@ -4,7 +4,7 @@
 bancho.py is an in-progress osu! server implementation for developers of all levels
 of experience interested in hosting their own osu private server instance(s).
 
-the project is developed primarily by the osu!Akatsuki (https://akatsuki.pw/) team,
+the project is developed primarily by the Akatsuki (https://akatsuki.pw) team,
 and our aim is to create the most easily maintainable, reliable, and feature-rich
 osu! server implementation available.
 
@@ -41,7 +41,7 @@ def main(argv: Sequence[str]) -> int:
 
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
-        app.utils.ensure_local_services_are_running,  # mysql (if local)
+        app.utils.ensure_connected_services,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
         app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
     ):
@@ -51,7 +51,7 @@ def main(argv: Sequence[str]) -> int:
     """ Parse and handle command-line arguments. """
 
     parser = argparse.ArgumentParser(
-        description=("An open-source osu! server implementation by osu!Akatsuki."),
+        description=("An open-source osu! server implementation by Akatsuki."),
     )
     parser.add_argument(
         "-V",
