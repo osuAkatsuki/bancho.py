@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 from typing import TYPE_CHECKING
 
 import databases.core
@@ -24,7 +25,7 @@ class Clan:
         tag: str,
         created_at: datetime,
         owner_id: int,
-        member_ids: set[int] = set(),
+        member_ids: Optional[set[int]] = None,
     ) -> None:
         """A class representing one of bancho.py's clans."""
         self.id = id
@@ -33,6 +34,10 @@ class Clan:
         self.created_at = created_at
 
         self.owner_id = owner_id  # userid
+
+        if member_ids is None:
+            member_ids = set()
+
         self.member_ids = member_ids  # userids
 
     async def add_member(self, p: Player) -> None:
