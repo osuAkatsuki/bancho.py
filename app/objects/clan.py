@@ -35,7 +35,7 @@ class Clan:
 
         self.owner_id = owner_id  # userid
 
-        if self.member_ids is None:
+        if member_ids is None:
             member_ids = set()
 
         self.member_ids = member_ids  # userids
