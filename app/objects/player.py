@@ -826,7 +826,7 @@ class Player:
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
                 name=chan_name,
-                topic=f"{self.name}'s spectator channel.'",
+                topic=f"{self.name}'s spectator channel.",
                 auto_join=False,
                 instance=True,
             )
