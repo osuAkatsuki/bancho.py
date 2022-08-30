@@ -22,7 +22,7 @@ idna==3.3
 maxminddb==2.2.0
 multidict==6.0.2
 orjson==3.6.7
-peace-performance-python==1.1.2
+peace-performance-python==2.0.0
 psutil==5.9.0
 py3rijndael==0.3.3
 pycparser==2.21
