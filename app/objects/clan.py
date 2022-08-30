@@ -33,7 +33,11 @@ class Clan:
         self.created_at = created_at
 
         self.owner_id = owner_id  # userid
-        self.member_ids = member_ids or set()  # userids
+
+        if self.member_ids is None:
+            member_ids = set()
+
+        self.member_ids = member_ids  # userids
 
     async def add_member(self, p: Player) -> None:
         """Add a given player to the clan's members."""
