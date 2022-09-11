@@ -231,7 +231,6 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
     |   ├── api                 # code related to handling external requests
     |   |   ├── domains           # endpoints that can be reached from externally
     |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
-    |   |   |   ├── ava.py        # endpoints available @ https://a.ppy.sh
     |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
     |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
     |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh
