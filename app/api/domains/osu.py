@@ -1650,7 +1650,7 @@ async def osuMarkAsRead(
 
 @router.get("/web/osu-getseasonal.php")
 async def osuSeasonal():
-    return ORJSONResponse(app.settings.SEASONAL_BGS._items)
+    return ORJSONResponse(app.settings.SEASONAL_BGS)
 
 
 @router.get("/web/bancho_connect.php")
