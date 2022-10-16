@@ -131,10 +131,10 @@ class CommandSet:
 
 
 # TODO: refactor help commands into some base ver
-#       since they're all the same anyways lol.
+#       since they're all the same anyway lol.
 
 # not sure if this should be in glob or not,
-# trying to think of some use cases lol..
+# trying to think of some use cases lol...
 regular_commands = []
 command_sets = [
     mp_commands := CommandSet("mp", "Multiplayer commands."),
@@ -322,7 +322,7 @@ async def maplink(ctx: Context) -> Optional[str]:
         return "No map found!"
 
     # gatari.pw & nerina.pw are pretty much the only
-    # reliable mirrors i know of? perhaps beatconnect
+    # reliable mirrors I know of? perhaps beatconnect
     return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full_name}]"
 
 
@@ -693,7 +693,7 @@ async def _map(ctx: Context) -> Optional[str]:
     # update sql & cache based on scope
     # XXX: not sure if getting md5s from sql
     # for updating cache would be faster?
-    # surely this will not scale as well..
+    # surely this will not scale as well...
 
     async with app.state.services.database.connection() as db_conn:
         if ctx.args[1] == "set":
@@ -1082,7 +1082,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     if not 0 < amount <= 100_000:
         return "Amount must be in range 1-100k."
 
-    # we start at half way through
+    # we start at halfway through
     # the i32 space for fake user ids.
     FAKE_ID_START = 0x7FFFFFFF >> 1
 
@@ -1209,7 +1209,7 @@ async def stealth(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> Optional[str]:
     """Recalculate pp for a given map, or all maps."""
-    # NOTE: at the moment this command isn't very optimal and re-parses
+    # NOTE: at the moment this command isn't very optimal and reparses
     # the beatmap file each iteration; this will be heavily improved.
     if len(ctx.args) != 1 or ctx.args[0] not in ("map", "all"):
         return "Invalid syntax: !recalc <map/all>"
@@ -1703,7 +1703,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
                 match.starting["time"] = None
 
                 # make sure player didn't leave the
-                # match since queueing this start lol..
+                # match since queueing this start lol...
                 if ctx.player not in match:
                     match.chat.send_bot("Player left match? (cancelled)")
                     return
@@ -2685,7 +2685,7 @@ async def clan_leave(ctx: Context):
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["l"])
 async def clan_list(ctx: Context) -> Optional[str]:
-    """List all existing clans information."""
+    """List all existing clans' information."""
     if ctx.args:
         if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
             return "Invalid syntax: !clan list (page)"
