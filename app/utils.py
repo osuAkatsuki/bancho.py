@@ -150,7 +150,7 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
 
 
 def download_achievement_images(achievements_path: Path) -> None:
-    """Download all used achievement images (using best available source)."""
+    """Download all used achievement images (using the best available source)."""
     # try using my cmyui.xyz mirror (zip file)
     downloaded = _download_achievement_images_mirror(achievements_path)
 
@@ -475,7 +475,7 @@ def ensure_dependencies_and_requirements() -> int:
 
 def setup_runtime_environment() -> None:
     """Configure the server's runtime environment."""
-    # install a hook to catch exceptions outside of the event loop,
+    # install a hook to catch exceptions outside the event loop,
     # which will handle various situations where the error details
     # can be cleared up for the developer; for example it will explain
     # that the config has been updated when an unknown attribute is
