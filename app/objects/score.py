@@ -170,7 +170,7 @@ class Score:
 
     @classmethod
     async def from_sql(cls, score_id: int) -> Optional[Score]:
-        """Create a score object from sql using it's scoreid."""
+        """Create a score object from sql using its scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
         row = await app.state.services.database.fetch_one(
