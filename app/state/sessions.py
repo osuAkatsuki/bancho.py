@@ -29,7 +29,7 @@ housekeeping_tasks: set[asyncio.Task] = set()
 bot: Player
 
 
-# usecases
+# use cases
 
 
 async def cancel_housekeeping_tasks() -> None:
