@@ -554,7 +554,7 @@ async def osuSearchSetHandler(
     # TODO: refactor this to use the new internal bmap(set) api
 
     # Since we only need set-specific data, we can basically
-    # just do same same query with either bid or bsid.
+    # just do same query with either bid or bsid.
 
     if map_set_id is not None:
         # this is just a normal request
@@ -673,7 +673,7 @@ async def osuSubmitModularSelector(
     """Handle a score submission from an osu! client with an active session."""
 
     # NOTE: the bancho protocol uses the "score" parameter name for both
-    # the base64'ed score data, as well as the replay file in the multipart
+    # the base64'ed score data, and the replay file in the multipart
     # starlette/fastapi do not support this, so we've moved it out
     score_parameters = parse_form_data_score_params(await request.form())
     if score_parameters is None:
@@ -1035,7 +1035,7 @@ async def osuSubmitModularSelector(
             # fetch scores sorted by pp for total acc/pp calc
             # NOTE: we select all plays (and not just top100)
             # because bonus pp counts the total amount of ranked
-            # scores. i'm aware this scales horribly and it'll
+            # scores. I'm aware this scales horribly, and it'll
             # likely be split into two queries in the future.
             best_scores = await db_conn.fetch_all(
                 "SELECT s.pp, s.acc FROM scores s "
@@ -1427,7 +1427,7 @@ async def getScores(
 
     if not bmap:
         # map not found, figure out whether it needs an
-        # update or isn't submitted using it's filename.
+        # update or isn't submitted using its filename.
 
         if has_set_id and map_set_id not in app.state.cache.beatmapset:
             # set not cached, it doesn't exist
@@ -1811,7 +1811,7 @@ async def get_updated_beatmap(
         osu_file_path.exists()
         and res["md5"] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
     ):
-        # up to date map found on disk.
+        # up-to-date map found on disk.
         content = osu_file_path.read_bytes()
     else:
         # map not found, or out of date; get from osu!
