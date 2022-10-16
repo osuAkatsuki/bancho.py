@@ -131,7 +131,7 @@ class Webhook:
     def json(self):
         if not any([self.content, self.file, self.embeds]):
             raise Exception(
-                "Webhook must contain atleast one " "of (content, file, embeds).",
+                "Webhook must contain at least one " "of (content, file, embeds).",
             )
 
         if self.content and len(self.content) > 2000:
