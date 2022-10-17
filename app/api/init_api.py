@@ -92,7 +92,7 @@ def init_middlewares(asgi_app: BanchoAPI) -> None:
     ) -> Response:
         # if an osu! client is waiting on leaderboard data
         # and switches to another leaderboard, it will cancel
-        # the previous request mid-way, resulting in a large
+        # the previous request midway, resulting in a large
         # error in the console. this is to catch that :)
 
         try:

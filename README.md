@@ -137,7 +137,7 @@ sql commands that can be run in sequence to create the base state we want.
 mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
 ```
 
-## creating an ssl certificate (to allow https traffic)
+## creating a ssl certificate (to allow https traffic)
 ```sh
 # you'll need to change:
 # - YOUR_EMAIL_ADDRESS
@@ -187,7 +187,7 @@ cp .env.example .env
 nano .env
 ```
 
-## congratulations! you just setup an osu! private server
+## congratulations! you just set up an osu! private server
 
 if everything went well, you should be able to start your server up:
 

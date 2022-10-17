@@ -84,7 +84,7 @@ async def _disconnect_ghosts(interval: int) -> None:
 
 
 async def _update_bot_status(interval: int) -> None:
-    """Reroll the bot's status, every `interval`."""
+    """Re roll the bot status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
         app.packets.bot_stats.cache_clear()

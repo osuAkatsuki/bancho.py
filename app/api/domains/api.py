@@ -747,7 +747,7 @@ async def api_get_replay(
     replay_data += struct.pack("<i", len(raw_replay_data))
     replay_data += raw_replay_data
 
-    # pack additional info info buffer.
+    # pack additional info buffer.
     replay_data += struct.pack("<q", score_id)
 
     # NOTE: target practice sends extra mods, but

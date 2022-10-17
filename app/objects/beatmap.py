@@ -206,7 +206,7 @@ class Beatmap:
     """A class representing an osu! beatmap.
 
     This class provides a high level api which should always be the
-    preferred method of fetching beatmaps due to it's housekeeping.
+    preferred method of fetching beatmaps due to its housekeeping.
     It will perform caching & invalidation, handle map updates while
     minimizing osu!api requests, and always use the most efficient
     method available to fetch the beatmap's information, while
@@ -468,7 +468,7 @@ class Beatmap:
         else:
             self.max_combo = 0
 
-        # if a map is 'frozen', we keep it's status
+        # if a map is 'frozen', we keep its status
         # even after an update from the osu!api.
         if not getattr(self, "frozen", False):
             osuapi_status = int(osuapi_resp["approved"])
@@ -538,7 +538,7 @@ class BeatmapSet:
 
     Like the Beatmap class, this class provides a high level api
     which should always be the preferred method of fetching beatmaps
-    due to it's housekeeping. It will perform caching & invalidation,
+    due to its housekeeping. It will perform caching & invalidation,
     handle map updates while minimizing osu!api requests, and always
     use the most efficient method available to fetch the beatmap's
     information, while maintaining a low overhead.
@@ -587,7 +587,7 @@ class BeatmapSet:
         return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
 
     def all_officially_ranked_or_approved(self) -> bool:
-        """Whether all of the maps in the set are
+        """Whether all the maps in the set are
         ranked or approved on official servers."""
         for bmap in self.maps:
             if (
@@ -598,7 +598,7 @@ class BeatmapSet:
         return True
 
     def all_officially_loved(self) -> bool:
-        """Whether all of the maps in the set are
+        """Whether all the maps in the set are
         loved on official servers."""
         for bmap in self.maps:
             if (
@@ -622,7 +622,7 @@ class BeatmapSet:
         last_map_update = max(bmap.last_update for bmap in self.maps)
         update_delta = current_datetime - last_map_update
 
-        # with a minimum of 2 hours, add 5 hours per year since it's update.
+        # with a minimum of 2 hours, add 5 hours per year since its update.
         # the formula for this is subject to adjustment in the future.
         check_delta = timedelta(hours=2 + ((5 / 365) * update_delta.days))
 
@@ -637,7 +637,7 @@ class BeatmapSet:
         return current_datetime > (self.last_osuapi_check + check_delta)
 
     async def _update_if_available(self) -> None:
-        """Fetch newest data from the api, check for differences
+        """Fetch the newest data from the api, check for differences
         and propogate any update into our cache & database."""
         if api_data := await api_get_beatmaps(s=self.id):
             old_maps = {bmap.id: bmap for bmap in self.maps}

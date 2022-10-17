@@ -774,7 +774,7 @@ class Player:
 
         if c.instance:
             # instanced channel, only send the players
-            # who are currently inside of the instance
+            # who are currently inside the instance
             for p in c.players:
                 p.enqueue(chan_info_packet)
         else:
@@ -805,7 +805,7 @@ class Player:
 
         if c.instance:
             # instanced channel, only send the players
-            # who are currently inside of the instance
+            # who are currently inside the instance
             for p in c.players:
                 p.enqueue(chan_info_packet)
         else:
