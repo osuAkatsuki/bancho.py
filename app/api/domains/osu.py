@@ -453,10 +453,11 @@ async def lastFM(
     """
 
 
-# bancho.py supports both cheesegull mirrors & chimu.moe.
-# chimu.moe handles things a bit differently than cheesegull,
+# bancho.py supports cheesegull mirrors, chimu.moe and nasuya.xyz.
+# chimu.moe and nasuya.xyz handle things a bit differently than cheesegull,
 # and has some extra features we'll eventually use more of.
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
+USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
 
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
@@ -481,6 +482,8 @@ async def osuSearchHandler(
 ):
     if USING_CHIMU:
         search_url = f"{app.settings.MIRROR_URL}/search"
+    elif USING_NASUYA:
+        search_url = f"{app.settings.MIRROR_URL}/api/v1/search"
     else:
         search_url = f"{app.settings.MIRROR_URL}/api/search"
 
@@ -498,6 +501,10 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
+    if USING_NASUYA:
+        # nasuya can serialize to direct for us
+        params["osu_direct"] = 1
+   
     async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
@@ -506,6 +513,10 @@ async def osuSearchHandler(
                     return b"0"
 
             return b"-1\nFailed to retrieve data from the beatmap mirror."
+
+        if USING_NASUYA:
+            # nasuya returns in osu!direct format
+            return await resp.read()
 
         result = await resp.json()
 
