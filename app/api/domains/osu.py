@@ -503,7 +503,7 @@ async def osuSearchHandler(
 
     if USING_NASUYA:
         # nasuya can serialize to direct for us
-        params["osu_direct"] = 1
+        params["osu_direct"] = True
 
     async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
