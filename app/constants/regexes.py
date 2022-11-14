@@ -24,3 +24,8 @@ TOURNEY_MATCHNAME = re.compile(
 MAPPOOL_PICK = re.compile(r"^([a-zA-Z]+)([0-9]+)$")
 
 BEST_OF = re.compile(r"^(?:bo)?(\d{1,2})$")
+
+
+OSU_FILENAME = re.compile(
+    r"^(?P<artist>.+) - (?P<title>.+) (?:\((?P<creator>.+)\))?(?: \[(?P<version>.+)\])?\.osu$",
+)
