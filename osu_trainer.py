@@ -132,6 +132,7 @@ def calculate_multiplied_od(od: float, multiplier: float) -> float:
 def create_edited_osu_file(
     original_version: str,
     new_version: str,
+    new_beatmap_id: int,
     current_osu_file_content: str,
     edits: dict[str, str],
 ) -> str:
@@ -255,7 +256,7 @@ def create_edited_osu_file(
                 [
                     # before: 28,285.71428571428583333333333333,4,1,1,100,1,0
                     # after:  34,342.857142857143,4,1,1,100,1,0
-                    str(int(int(split[0]) / rate_change)),
+                    str(int(float(split[0]) / rate_change)),
                     str(float(split[1]) / rate_change) if split[6] == "1" else split[1],
                     # f"{float(split[1]) / rate_change:.12f}",
                     split[2],  # TODO: tiny differences on this vs. osu trainer?
@@ -290,7 +291,7 @@ def create_edited_osu_file(
 
             # rewrite hit object
             split = line.split(",", maxsplit=5)
-            assert len(split) == 6, split
+            assert len(split) == 6, split  # TODO: this is 5 on mythologia's end
             osu_file_lines[i] = ",".join(
                 [
                     # before: 0,0,0,0,0,0:0:0:0:
@@ -348,9 +349,17 @@ def create_edited_osu_file(
             count=1,
         )
 
+    # update beatmap id
+    osu_file_content = re.sub(
+        pattern=r"\nBeatmapID:\d+\n",
+        repl=rf"\nBeatmapID:{new_beatmap_id}\n",
+        string=osu_file_content,
+        count=1,
+    )
+
     # update version
     osu_file_content = re.sub(
-        pattern=rf"\nVersion:{original_version}\n",
+        pattern=rf"\nVersion:{re.escape(original_version)}\n",
         repl=f"\nVersion:{new_version}\n",
         string=osu_file_content,
         count=1,
