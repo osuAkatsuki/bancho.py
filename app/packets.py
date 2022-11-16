@@ -584,7 +584,7 @@ def write_i32_list(l: Collection[int]) -> bytearray:
     ret = bytearray(len(l).to_bytes(2, "little"))
 
     for i in l:
-        ret += i.to_bytes(4, "little")
+        ret += i.to_bytes(4, "little", signed=True)
 
     return ret
 
