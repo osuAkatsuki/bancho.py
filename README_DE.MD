@@ -38,7 +38,7 @@ git submodule update --init
 ```
 
 ## Installation der Anforderungen von bancho.py
-bancho.py ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Giganten gebaut wurde.
+bancho.py ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
 
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 - python (Programmiersprache)
@@ -48,7 +48,7 @@ Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Ab
 - certbot (ssl-Zertifikatstool)
 - cmake und build-essential (Build-Werkzeuge für C/C++)
 
-als auch einige andere.
+als auch einige andere angewiesen.
 ```sh
 # python3.9 ist oft nicht nativ verfügbar,
 # aber wir können uns auf Deadsnakes verlassen, um es bereitzustellen.
