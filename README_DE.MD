@@ -42,6 +42,7 @@ bancho.py ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Rie
 
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 - python (Programmiersprache)
+- rust (Programmiersprache)
 - mysql (relationale Datenbank)
 - redis (speicherinterne Datenbank)
 - nginx (http(s)-Reverse-Proxy)
@@ -60,6 +61,9 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     cmake build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
+# Installieren rust
+curl https://sh.rustup.rs -sSf | bash -s -- -y
 
 # Installieren Sie den Paketmanager von Python, pip
 # Er wird verwendet, um python-spezifische Abhängigkeiten zu installieren
