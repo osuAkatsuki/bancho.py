@@ -65,10 +65,7 @@ from app.usecases.performance import ScoreDifficultyParams
 from app.utils import make_safe_name
 from app.utils import seconds_readable
 
-try:
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
+from rosu_pp_py import Beatmap as RosuBeatmap, Calculator
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -490,26 +487,30 @@ def parse__with__command_args(
         }
     else:  # mode == 4
         if not args or len(args) > 2:
-            return ParsingError("Invalid syntax: !with <score/mods ...>")
+            return ParsingError("Invalid syntax: !with <acc/mods ...>")
 
-        score = 1000
-        mods = Mods.NOMOD
+        acc = mods = None
 
-        for param in (p.strip("+k") for p in args):
-            if param.isdecimal():  # acc
-                if not 0 <= (score := int(param)) <= 1000:
-                    return ParsingError("Invalid score.")
-                if score <= 500:
-                    return ParsingError("<=500k score is always 0pp.")
-            elif len(param) % 2 == 0:
-                mods = Mods.from_modstr(param)
+        # Parse acc and mods from arguments.
+        for arg in [str.lower(arg) for arg in args]:
+            arg_stripped = arg.removeprefix("+").removesuffix("%")
+            if (
+                mods is None
+                and arg_stripped.isalpha()
+                and len(arg_stripped) % 2 == 0
+            ):
+                mods = Mods.from_modstr(arg_stripped)
                 mods = mods.filter_invalid_combos(mode)
+            elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
+                acc = float(arg_stripped)
+                if not 0 <= acc <= 100:
+                    return ParsingError("Invalid accuracy.")
             else:
-                return ParsingError("Invalid syntax: !with <score/mods ...>")
+                return ParsingError(f"Unknown argument: {arg}")
 
         return {
             "mods": mods,
-            "score": score,
+            "acc": acc,
         }
 
 
@@ -557,9 +558,9 @@ async def _with(ctx: Context) -> Optional[str]:
             msg_fields.append(f"{acc:.2f}%")
 
     else:  # mode_vn == 3
-        if (score := command_args["score"]) is not None:
-            score_args["score"] = score * 1000
-            msg_fields.append(f"{score}k")
+        if (acc := command_args["acc"]) is not None:
+            score_args["acc"] = acc
+            msg_fields.append(f"{acc:.2f}%")
 
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
@@ -1229,24 +1230,58 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as score_select_conn,
             app.state.services.database.connection() as update_conn,
         ):
-            with OppaiWrapper() as ezpp:
-                ezpp.set_mode(0)  # TODO: other modes
-                for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                    # TODO: this should be using an async generator
-                    for row in await score_select_conn.fetch_all(
-                        "SELECT id, acc, mods, max_combo, nmiss "
-                        "FROM scores "
-                        "WHERE map_md5 = :map_md5 AND mode = :mode",
-                        {"map_md5": bmap.md5, "mode": mode},
-                    ):
-                        ezpp.set_mods(row["mods"])
-                        ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                        ezpp.set_combo(row["max_combo"])
-                        ezpp.set_accuracy_percent(row["acc"])
 
-                        ezpp.calculate(str(osu_file_path))
+            map = RosuBeatmap(path = str(osu_file_path))
+            for mode in GameMode.valid_gamemodes():
+                # TODO: this should be using an async generator
+                for row in await score_select_conn.fetch_all(
+                    "SELECT id, acc, mods, max_combo, nmiss,"
+                    "n300, n100, n50, ngeki, nkatu "
+                    "FROM scores "
+                    "WHERE map_md5 = :map_md5 AND mode = :mode",
+                    {"map_md5": bmap.md5, "mode": mode},
+                ):
+                    # standard, taiko and catch
+                    if (mode in 
+                        (GameMode.VANILLA_OSU, GameMode.RELAX_OSU, GameMode.AUTOPILOT_OSU, 
+                        GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO, 
+                        GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                        
+                        mode_int = GameMode.VANILLA_OSU
+                        if (mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO)):
+                            mode_int = GameMode.VANILLA_TAIKO
+                        elif (mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                            mode_int = GameMode.VANILLA_CATCH
+                        
+                        calculator = Calculator(mods = row["mods"], mode = mode_int)
+                        calculator.set_acc(row["acc"])
+                        calculator.set_n_misses(row["nmiss"])
+                        calculator.set_combo(row["max_combo"])
 
-                        pp = ezpp.get_pp()
+                        result = calculator.performance(map)
+
+                        pp = result.pp
+
+                        if math.isinf(pp) or math.isnan(pp):
+                            continue
+
+                        await update_conn.execute(
+                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                            {"pp": pp, "score_id": row["id"]},
+                        )
+                    # mania
+                    elif (mode == GameMode.VANILLA_MANIA):
+                        calculator = Calculator(mods = row["mods"], mode = GameMode.VANILLA_MANIA)
+                        calculator.set_n_geki(row["ngeki"])
+                        calculator.set_n300(row["n300"])
+                        calculator.set_n_katu(row["nkatu"])
+                        calculator.set_n100(row["n100"])
+                        calculator.set_n50(row["n50"])
+                        calculator.set_n_misses(row["nmiss"])
+
+                        result = calculator.performance(map)
+
+                        pp = result.pp
 
                         if math.isinf(pp) or math.isnan(pp):
                             continue
@@ -1288,24 +1323,57 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    with OppaiWrapper() as ezpp:
-                        ezpp.set_mode(0)  # TODO: other modes
-                        for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                            # TODO: this should be using an async generator
-                            for row in await score_select_conn.fetch_all(
-                                "SELECT id, acc, mods, max_combo, nmiss "
-                                "FROM scores "
-                                "WHERE map_md5 = :map_md5 AND mode = :mode",
-                                {"map_md5": bmap_md5, "mode": mode},
-                            ):
-                                ezpp.set_mods(row["mods"])
-                                ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                                ezpp.set_combo(row["max_combo"])
-                                ezpp.set_accuracy_percent(row["acc"])
+                    map = RosuBeatmap(path = str(osu_file_path))
+                    for mode in GameMode.valid_gamemodes():
+                        # TODO: this should be using an async generator
+                        for row in await score_select_conn.fetch_all(
+                            "SELECT id, acc, mods, max_combo, nmiss, "
+                            "n300, n100, n50, ngeki, nkatu "
+                            "FROM scores "
+                            "WHERE map_md5 = :map_md5 AND mode = :mode",
+                            {"map_md5": bmap_md5, "mode": mode},
+                        ):
+                            # standard, taiko and catch
+                            if (mode in 
+                                (GameMode.VANILLA_OSU, GameMode.RELAX_OSU, GameMode.AUTOPILOT_OSU, 
+                                GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO, 
+                                GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
 
-                                ezpp.calculate(str(osu_file_path))
+                                modeInt = GameMode.VANILLA_OSU
+                                if (mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO)):
+                                    modeInt = GameMode.VANILLA_TAIKO
+                                elif (mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                                    modeInt = GameMode.VANILLA_CATCH
 
-                                pp = ezpp.get_pp()
+                                calculator = Calculator(mods = row["mods"], mode = modeInt)
+                                calculator.set_acc(row["acc"])
+                                calculator.set_n_misses(row["nmiss"])
+                                calculator.set_combo(row["max_combo"])
+
+                                result = calculator.performance(map)
+
+                                pp = result.pp
+
+                                if math.isinf(pp) or math.isnan(pp):
+                                    continue
+
+                                await update_conn.execute(
+                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
+                                    {"pp": pp, "score_id": row["id"]},
+                                )
+                            # mania
+                            elif (mode == GameMode.VANILLA_MANIA):
+                                calculator = Calculator(mods = row["mods"], mode = mode)
+                                calculator.set_n_geki(row["ngeki"])
+                                calculator.set_n300(row["n300"])
+                                calculator.set_n_katu(row["nkatu"])
+                                calculator.set_n100(row["n100"])
+                                calculator.set_n50(row["n50"])
+                                calculator.set_n_misses(row["nmiss"])
+
+                                result = calculator.performance(map)
+
+                                pp = result.pp
 
                                 if math.isinf(pp) or math.isnan(pp):
                                     continue

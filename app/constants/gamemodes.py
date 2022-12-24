@@ -58,6 +58,15 @@ class GameMode(IntEnum):
             mode += 4
 
         return cls(mode)
+    
+    @classmethod
+    @functools.cache
+    def valid_gamemodes(cls) -> list[GameMode]:
+        ret = []
+        for mode in cls:
+            if mode not in (cls.RELAX_MANIA, cls.AUTOPILOT_TAIKO, cls.AUTOPILOT_CATCH, cls.AUTOPILOT_MANIA):
+                ret.append(mode)
+        return ret
 
     @functools.cached_property
     def as_vanilla(self) -> int:

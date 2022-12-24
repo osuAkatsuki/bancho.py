@@ -1153,15 +1153,10 @@ class SendPrivateMessage(BasePacket):
                             else:
                                 mods = None
 
-                            if mode_vn in (0, 1, 2):
+                            if mode_vn in (0, 1, 2, 3):
                                 scores: list[ScoreDifficultyParams] = [
                                     {"acc": acc}
                                     for acc in app.settings.PP_CACHED_ACCURACIES
-                                ]
-                            else:  # mode_vn == 3
-                                scores: list[ScoreDifficultyParams] = [
-                                    {"score": score}
-                                    for score in app.settings.PP_CACHED_SCORES
                                 ]
 
                             results = app.usecases.performance.calculate_performances(
@@ -1171,19 +1166,11 @@ class SendPrivateMessage(BasePacket):
                                 scores=scores,
                             )
 
-                            if mode_vn in (0, 1, 2):
+                            if mode_vn in (0, 1, 2, 3):
                                 resp_msg = " | ".join(
                                     f"{acc}%: {result['performance']:,.2f}pp"
                                     for acc, result in zip(
                                         app.settings.PP_CACHED_ACCURACIES,
-                                        results,
-                                    )
-                                )
-                            else:  # mode_vn == 3
-                                resp_msg = " | ".join(
-                                    f"{score // 1000:.0f}k: {result['performance']:,.2f}pp"
-                                    for score, result in zip(
-                                        app.settings.PP_CACHED_SCORES,
                                         results,
                                     )
                                 )

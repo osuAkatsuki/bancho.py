@@ -344,7 +344,12 @@ class Score:
             }
         else:  # mode_vn == 3
             score_args: ScoreDifficultyParams = {
-                "score": self.score,
+                "n320": self.ngeki,
+                "n300": self.n300,
+                "n200": self.nkatu,
+                "n100": self.n100,
+                "n50": self.n50,
+                "nmiss": self.nmiss,
             }
 
         result = app.usecases.performance.calculate_performances(
