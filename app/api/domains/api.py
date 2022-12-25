@@ -121,7 +121,7 @@ async def api_search(
     # assign placeholders (bindparams()) to these queries,
     # and this will let us bind those safely and efficiently.
     results_query = text(
-        "SELECT COUNT(id) FROM users WHERE name AND priv >= 3 LIKE :search_clause",
+        "SELECT COUNT(id) FROM users WHERE name LIKE :search_clause AND priv >= 3",
     )  # we will only need to lookup users who have Privileges.VERIFIED
     rows_query = text(
         "SELECT id, name FROM users WHERE name LIKE :search_clause AND priv >= 3 ORDER BY id ASC",
@@ -138,12 +138,16 @@ async def api_search(
     results = await db_conn.fetch_val(results_query)
     rows = await db_conn.fetch_all(rows_query)
 
-    # return the response
-    response = ORJSONResponse(
-        {"status": "success", "results": results, "result": [dict(row) for row in rows]},
-    )
-
-    return response
+    # if the search returns nothing, we tell that to the user.
+    if results < 1:
+        return ORJSONResponse(
+            {"status": "error", "message": "nothing was found matching those parameters!"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    else: # else, we return whatever matches we found
+        return ORJSONResponse(
+            {"status": "success", "results": results, "result": [dict(row) for row in rows]},
+        )
 
 
 @router.get("/get_player_count")
