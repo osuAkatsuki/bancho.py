@@ -141,12 +141,19 @@ async def api_search(
     # if the search returns nothing, we tell that to the user.
     if results < 1:
         return ORJSONResponse(
-            {"status": "error", "message": "nothing was found matching those parameters!"},
+            {
+                "status": "error",
+                "message": "nothing was found matching those parameters!",
+            },
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    else: # else, we return whatever matches we found
+    else:  # else, we return whatever matches we found
         return ORJSONResponse(
-            {"status": "success", "results": results, "result": [dict(row) for row in rows]},
+            {
+                "status": "success",
+                "results": results,
+                "result": [dict(row) for row in rows],
+            },
         )
 
 
