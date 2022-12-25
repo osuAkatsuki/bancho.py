@@ -6,7 +6,6 @@ import struct
 from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
-from sqlalchemy import text
 
 import databases.core
 from fastapi import APIRouter
@@ -15,6 +14,7 @@ from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text
 
 import app.packets
 import app.state
@@ -109,18 +109,23 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "diff": m.diff,
     }
 
+
 @router.get("/search")
 async def api_search(
-    search: Optional[str] = Query(None, alias='src'),
+    search: Optional[str] = Query(None, alias="src"),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Search for users on the server by name."""
-    
+
     # we're using text() here because we are going to
-    # assign placeholders (bindparams()) to these queries, 
+    # assign placeholders (bindparams()) to these queries,
     # and this will let us bind those safely and efficiently.
-    results_query = text("SELECT COUNT(id) FROM users WHERE name AND priv >= 3 LIKE :search_clause") # we will only need to lookup users who have Privileges.VERIFIED
-    rows_query = text("SELECT id, name FROM users WHERE name LIKE :search_clause AND priv >= 3 ORDER BY id ASC") # to save on host resources and prevent useless requests
+    results_query = text(
+        "SELECT COUNT(id) FROM users WHERE name AND priv >= 3 LIKE :search_clause",
+    )  # we will only need to lookup users who have Privileges.VERIFIED
+    rows_query = text(
+        "SELECT id, name FROM users WHERE name LIKE :search_clause AND priv >= 3 ORDER BY id ASC",
+    )  # to save on host resources and prevent useless requests
 
     # using parameterised queries helps prevent against sql injections
     # and will also allow the database engine to cache our queries,
@@ -135,14 +140,11 @@ async def api_search(
 
     # return the response
     response = ORJSONResponse(
-        {
-            "status": "success",
-            "results": results,
-            "result": [dict(row) for row in rows]
-        }
+        {"status": "success", "results": results, "result": [dict(row) for row in rows]},
     )
 
     return response
+
 
 @router.get("/get_player_count")
 async def api_get_player_count():
