@@ -120,22 +120,13 @@ async def api_search_players(
         {"search": f"%{search}%" if search is not None else None},
     )
 
-    if len(rows) == 0:
-        return ORJSONResponse(
-            {
-                "status": "error",
-                "message": "nothing was found matching those parameters!",
-            },
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    else:
-        return ORJSONResponse(
-            {
-                "status": "success",
-                "results": len(rows),
-                "result": [dict(row) for row in rows],
-            },
-        )
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "results": len(rows),
+            "result": [dict(row) for row in rows],
+        },
+    )
 
 
 @router.get("/get_player_count")
