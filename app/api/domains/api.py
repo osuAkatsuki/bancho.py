@@ -118,7 +118,7 @@ async def api_search_players(
 
     # execute the query using the database connection
     rows = await db_conn.fetch_all(
-        "SELECT id, name FROM users WHERE name LIKE :search AND priv >= 3 ORDER BY id ASC",
+        "SELECT id, name FROM users WHERE name LIKE :search AND priv & 3 = 3 ORDER BY id ASC",
         {"search": f"%{search}%"},
     )
 
