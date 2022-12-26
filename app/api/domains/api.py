@@ -39,7 +39,7 @@ router = APIRouter(tags=["bancho.py API"])
 # or keep up with changes to https://github.com/JKBGL/gulag-api-docs.
 
 # Unauthorized (no api key required)
-# GET /search: returns a list of matching users, based on a passed string, sorted by ascending ID.
+# GET /search_players: returns a list of matching users, based on a passed string, sorted by ascending ID.
 # GET /get_player_count: return total registered & online player counts.
 # GET /get_player_info: return info or stats for a given player.
 # GET /get_player_status: return a player's current status, if online.
@@ -110,8 +110,8 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
     }
 
 
-@router.get("/search")
-async def api_search(
+@router.get("/search_players")
+async def api_search_players(
     search: Optional[str] = Query(None, alias="q", min=2, max=32),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
@@ -121,10 +121,10 @@ async def api_search(
     # assign placeholders (bindparams()) to these queries,
     # and this will let us bind those safely and efficiently.
     results_query = text(
-        "SELECT COUNT(id) FROM users WHERE name LIKE :search_clause AND priv >= 3",
+        "SELECT COUNT(id) FROM users WHERE name LIKE :search_clause AND priv & 3 = 3",
     )  # we will only need to lookup users who have Privileges.VERIFIED
     rows_query = text(
-        "SELECT id, name FROM users WHERE name LIKE :search_clause AND priv >= 3 ORDER BY id ASC",
+        "SELECT id, name FROM users WHERE name LIKE :search_clause AND priv & 3 = 3 ORDER BY id ASC",
     )  # to save on host resources and prevent useless requests
 
     # using parameterised queries helps prevent against sql injections
