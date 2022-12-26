@@ -14,7 +14,6 @@ from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
-from sqlalchemy import text
 
 import app.packets
 import app.state
@@ -117,29 +116,14 @@ async def api_search_players(
 ):
     """Search for users on the server by name."""
 
-    # we're using text() here because we are going to
-    # assign placeholders (bindparams()) to these queries,
-    # and this will let us bind those safely and efficiently.
-    results_query = text(
-        "SELECT COUNT(id) FROM users WHERE name LIKE :search_clause AND priv & 3 = 3",
-    )  # we will only need to lookup users who have Privileges.VERIFIED
-    rows_query = text(
-        "SELECT id, name FROM users WHERE name LIKE :search_clause AND priv & 3 = 3 ORDER BY id ASC",
-    )  # to save on host resources and prevent useless requests
-
-    # using parameterised queries helps prevent against sql injections
-    # and will also allow the database engine to cache our queries,
-    # making these lookups faster in the future
-    search_clause = f"%{search}%" if search else None
-    results_query = results_query.bindparams(search_clause=search_clause)
-    rows_query = rows_query.bindparams(search_clause=search_clause)
-
-    # execute the queries using the database connection
-    results = await db_conn.fetch_val(results_query)
-    rows = await db_conn.fetch_all(rows_query)
+    # execute the query using the database connection
+    rows = await db_conn.fetch_all(
+        "SELECT id, name FROM users WHERE name LIKE :search AND priv >= 3 ORDER BY id ASC", 
+        {"search": f"%{search}%"}
+        )
 
     # if the search returns nothing, we tell that to the user.
-    if results < 1:
+    if len(rows) == 0:
         return ORJSONResponse(
             {
                 "status": "error",
@@ -151,7 +135,7 @@ async def api_search_players(
         return ORJSONResponse(
             {
                 "status": "success",
-                "results": results,
+                "results": len(rows),
                 "result": [dict(row) for row in rows],
             },
         )
