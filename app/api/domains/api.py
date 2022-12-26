@@ -115,14 +115,11 @@ async def api_search_players(
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Search for users on the server by name."""
-
-    # execute the query using the database connection
     rows = await db_conn.fetch_all(
         "SELECT id, name FROM users WHERE name LIKE :search AND priv & 3 = 3 ORDER BY id ASC",
         {"search": f"%{search}%" if search is not None else None},
     )
 
-    # if the search returns nothing, we tell that to the user.
     if len(rows) == 0:
         return ORJSONResponse(
             {
@@ -131,7 +128,7 @@ async def api_search_players(
             },
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    else:  # else, we return whatever matches we found
+    else:
         return ORJSONResponse(
             {
                 "status": "success",
