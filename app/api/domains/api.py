@@ -112,7 +112,7 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
 
 @router.get("/search")
 async def api_search(
-    search: Optional[str] = Query(None, alias="q"),
+    search: Optional[str] = Query(None, alias="q", min=2, max=32),
     db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Search for users on the server by name."""
