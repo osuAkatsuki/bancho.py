@@ -1227,7 +1227,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as update_conn,
         ):
 
-            map = RosuBeatmap(path=str(osu_file_path))
+            calc_bmap = RosuBeatmap(path=str(osu_file_path))
             for mode in GameMode.valid_gamemodes():
                 # TODO: this should be using an async generator
                 for row in await score_select_conn.fetch_all(
@@ -1259,7 +1259,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         calculator.set_n_misses(row["nmiss"])
                         calculator.set_combo(row["max_combo"])
 
-                        result = calculator.performance(map)
+                        result = calculator.performance(calc_bmap)
 
                         pp = result.pp
 
@@ -1283,7 +1283,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         calculator.set_n50(row["n50"])
                         calculator.set_n_misses(row["nmiss"])
 
-                        result = calculator.performance(map)
+                        result = calculator.performance(calc_bmap)
 
                         pp = result.pp
 
@@ -1327,7 +1327,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    map = RosuBeatmap(path=str(osu_file_path))
+                    calc_bmap = RosuBeatmap(path=str(osu_file_path))
                     for mode in GameMode.valid_gamemodes():
                         # TODO: this should be using an async generator
                         for row in await score_select_conn.fetch_all(
@@ -1365,7 +1365,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 calculator.set_n_misses(row["nmiss"])
                                 calculator.set_combo(row["max_combo"])
 
-                                result = calculator.performance(map)
+                                result = calculator.performance(calc_bmap)
 
                                 pp = result.pp
 
@@ -1386,7 +1386,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                                 calculator.set_n50(row["n50"])
                                 calculator.set_n_misses(row["nmiss"])
 
-                                result = calculator.performance(map)
+                                result = calculator.performance(calc_bmap)
 
                                 pp = result.pp
 

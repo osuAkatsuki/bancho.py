@@ -31,7 +31,7 @@ def calculate_performances_std(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path=osu_file_path)
+    calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
@@ -44,7 +44,7 @@ def calculate_performances_std(
         if combo != None:
             calculator.set_combo(combo)
 
-        result = calculator.performance(map)
+        result = calculator.performance(calc_bmap)
 
         pp = result.pp
         sr = result.difficulty.stars
@@ -72,7 +72,7 @@ def calculate_performances_taiko(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path=osu_file_path)
+    calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
@@ -85,7 +85,7 @@ def calculate_performances_taiko(
         if combo != None:
             calculator.set_combo(combo)
 
-        result = calculator.performance(map)
+        result = calculator.performance(calc_bmap)
 
         pp = result.pp
         sr = result.difficulty.stars
@@ -113,7 +113,7 @@ def calculate_performances_catch(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path=osu_file_path)
+    calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
@@ -126,7 +126,7 @@ def calculate_performances_catch(
         if combo != None:
             calculator.set_combo(combo)
 
-        result = calculator.performance(map)
+        result = calculator.performance(calc_bmap)
 
         pp = result.pp
         sr = result.difficulty.stars
@@ -154,7 +154,7 @@ def calculate_performances_mania(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path=osu_file_path)
+    calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"]
@@ -170,7 +170,7 @@ def calculate_performances_mania(
             calculator.set_n50(score["n50"])
             calculator.set_n_misses(score["nmiss"])
 
-        result = calculator.performance(map)
+        result = calculator.performance(calc_bmap)
 
         pp = result.pp
         sr = result.difficulty.stars
