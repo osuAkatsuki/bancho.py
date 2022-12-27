@@ -140,6 +140,10 @@ def create_edited_osu_file(
     if not edits:
         raise Exception("why u calling me with no edits")
 
+    osu_file_format_version = int(
+        current_osu_file_content.split("\n", maxsplit=1)[0].rsplit("v")[1],
+    )
+
     osu_file_content = current_osu_file_content
 
     print("creating new file contents")
