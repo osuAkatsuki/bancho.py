@@ -35,6 +35,8 @@ from typing import Union
 import psutil
 import timeago
 from pytimeparse.timeparse import timeparse
+from rosu_pp_py import Beatmap as RosuBeatmap
+from rosu_pp_py import Calculator
 
 import app.logging
 import app.packets
@@ -64,8 +66,6 @@ from app.objects.score import SubmissionStatus
 from app.usecases.performance import ScoreDifficultyParams
 from app.utils import make_safe_name
 from app.utils import seconds_readable
-
-from rosu_pp_py import Beatmap as RosuBeatmap, Calculator
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -494,11 +494,7 @@ def parse__with__command_args(
         # Parse acc and mods from arguments.
         for arg in [str.lower(arg) for arg in args]:
             arg_stripped = arg.removeprefix("+").removesuffix("%")
-            if (
-                mods is None
-                and arg_stripped.isalpha()
-                and len(arg_stripped) % 2 == 0
-            ):
+            if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
                 mods = Mods.from_modstr(arg_stripped)
                 mods = mods.filter_invalid_combos(mode)
             elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
@@ -1231,7 +1227,7 @@ async def recalc(ctx: Context) -> Optional[str]:
             app.state.services.database.connection() as update_conn,
         ):
 
-            map = RosuBeatmap(path = str(osu_file_path))
+            map = RosuBeatmap(path=str(osu_file_path))
             for mode in GameMode.valid_gamemodes():
                 # TODO: this should be using an async generator
                 for row in await score_select_conn.fetch_all(
@@ -1242,18 +1238,23 @@ async def recalc(ctx: Context) -> Optional[str]:
                     {"map_md5": bmap.md5, "mode": mode},
                 ):
                     # standard, taiko and catch
-                    if (mode in 
-                        (GameMode.VANILLA_OSU, GameMode.RELAX_OSU, GameMode.AUTOPILOT_OSU, 
-                        GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO, 
-                        GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
-                        
+                    if mode in (
+                        GameMode.VANILLA_OSU,
+                        GameMode.RELAX_OSU,
+                        GameMode.AUTOPILOT_OSU,
+                        GameMode.VANILLA_TAIKO,
+                        GameMode.RELAX_TAIKO,
+                        GameMode.VANILLA_CATCH,
+                        GameMode.RELAX_CATCH,
+                    ):
+
                         mode_int = GameMode.VANILLA_OSU
-                        if (mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO)):
+                        if mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO):
                             mode_int = GameMode.VANILLA_TAIKO
-                        elif (mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                        elif mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH):
                             mode_int = GameMode.VANILLA_CATCH
-                        
-                        calculator = Calculator(mods = row["mods"], mode = mode_int)
+
+                        calculator = Calculator(mods=row["mods"], mode=mode_int)
                         calculator.set_acc(row["acc"])
                         calculator.set_n_misses(row["nmiss"])
                         calculator.set_combo(row["max_combo"])
@@ -1270,8 +1271,11 @@ async def recalc(ctx: Context) -> Optional[str]:
                             {"pp": pp, "score_id": row["id"]},
                         )
                     # mania
-                    elif (mode == GameMode.VANILLA_MANIA):
-                        calculator = Calculator(mods = row["mods"], mode = GameMode.VANILLA_MANIA)
+                    elif mode == GameMode.VANILLA_MANIA:
+                        calculator = Calculator(
+                            mods=row["mods"],
+                            mode=GameMode.VANILLA_MANIA,
+                        )
                         calculator.set_n_geki(row["ngeki"])
                         calculator.set_n300(row["n300"])
                         calculator.set_n_katu(row["nkatu"])
@@ -1323,7 +1327,7 @@ async def recalc(ctx: Context) -> Optional[str]:
                         )
                         continue
 
-                    map = RosuBeatmap(path = str(osu_file_path))
+                    map = RosuBeatmap(path=str(osu_file_path))
                     for mode in GameMode.valid_gamemodes():
                         # TODO: this should be using an async generator
                         for row in await score_select_conn.fetch_all(
@@ -1334,18 +1338,29 @@ async def recalc(ctx: Context) -> Optional[str]:
                             {"map_md5": bmap_md5, "mode": mode},
                         ):
                             # standard, taiko and catch
-                            if (mode in 
-                                (GameMode.VANILLA_OSU, GameMode.RELAX_OSU, GameMode.AUTOPILOT_OSU, 
-                                GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO, 
-                                GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                            if mode in (
+                                GameMode.VANILLA_OSU,
+                                GameMode.RELAX_OSU,
+                                GameMode.AUTOPILOT_OSU,
+                                GameMode.VANILLA_TAIKO,
+                                GameMode.RELAX_TAIKO,
+                                GameMode.VANILLA_CATCH,
+                                GameMode.RELAX_CATCH,
+                            ):
 
                                 modeInt = GameMode.VANILLA_OSU
-                                if (mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO)):
+                                if mode in (
+                                    GameMode.VANILLA_TAIKO,
+                                    GameMode.RELAX_TAIKO,
+                                ):
                                     modeInt = GameMode.VANILLA_TAIKO
-                                elif (mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH)):
+                                elif mode in (
+                                    GameMode.VANILLA_CATCH,
+                                    GameMode.RELAX_CATCH,
+                                ):
                                     modeInt = GameMode.VANILLA_CATCH
 
-                                calculator = Calculator(mods = row["mods"], mode = modeInt)
+                                calculator = Calculator(mods=row["mods"], mode=modeInt)
                                 calculator.set_acc(row["acc"])
                                 calculator.set_n_misses(row["nmiss"])
                                 calculator.set_combo(row["max_combo"])
@@ -1362,8 +1377,8 @@ async def recalc(ctx: Context) -> Optional[str]:
                                     {"pp": pp, "score_id": row["id"]},
                                 )
                             # mania
-                            elif (mode == GameMode.VANILLA_MANIA):
-                                calculator = Calculator(mods = row["mods"], mode = mode)
+                            elif mode == GameMode.VANILLA_MANIA:
+                                calculator = Calculator(mods=row["mods"], mode=mode)
                                 calculator.set_n_geki(row["ngeki"])
                                 calculator.set_n300(row["n300"])
                                 calculator.set_n_katu(row["nkatu"])

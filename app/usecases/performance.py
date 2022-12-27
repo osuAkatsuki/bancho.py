@@ -4,7 +4,8 @@ import math
 from typing import Optional
 from typing import TypedDict
 
-from rosu_pp_py import Beatmap, Calculator
+from rosu_pp_py import Beatmap
+from rosu_pp_py import Calculator
 
 
 class DifficultyRating(TypedDict):
@@ -24,24 +25,23 @@ class ManiaScore(TypedDict):
     score: Optional[int]
 
 
-
 def calculate_performances_std(
     osu_file_path: str,
     scores: list[StdTaikoCatchScore],
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path = osu_file_path)
+    map = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
         nmisses = score["nmiss"] if score["nmiss"] != None else 0
         combo = score["combo"]
 
-        calculator = Calculator(mods = mods)
+        calculator = Calculator(mods=mods)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if (combo != None):
+        if combo != None:
             calculator.set_combo(combo)
 
         result = calculator.performance(map)
@@ -72,17 +72,17 @@ def calculate_performances_taiko(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path = osu_file_path)
+    map = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
         nmisses = score["nmiss"] if score["nmiss"] != None else 0
         combo = score["combo"]
 
-        calculator = Calculator(mods = mods, mode = 1)
+        calculator = Calculator(mods=mods, mode=1)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if (combo != None):
+        if combo != None:
             calculator.set_combo(combo)
 
         result = calculator.performance(map)
@@ -113,17 +113,17 @@ def calculate_performances_catch(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path = osu_file_path)
+    map = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"] if score["acc"] != None else 100.00
         nmisses = score["nmiss"] if score["nmiss"] != None else 0
         combo = score["combo"]
 
-        calculator = Calculator(mods = mods, mode = 2)
+        calculator = Calculator(mods=mods, mode=2)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if (combo != None):
+        if combo != None:
             calculator.set_combo(combo)
 
         result = calculator.performance(map)
@@ -154,13 +154,13 @@ def calculate_performances_mania(
 ) -> list[DifficultyRating]:
     results: list[DifficultyRating] = []
 
-    map = Beatmap(path = osu_file_path)
+    map = Beatmap(path=osu_file_path)
     for score in scores:
         mods = score["mods"] if score["mods"] != None else 0
         acc = score["acc"]
-        
-        calculator = Calculator(mods = mods, mode = 3)
-        if (acc != None):
+
+        calculator = Calculator(mods=mods, mode=3)
+        if acc != None:
             calculator.set_acc(acc)
         else:
             calculator.set_n_geki(score["n320"])
