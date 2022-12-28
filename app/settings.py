@@ -53,7 +53,6 @@ DEBUG = read_bool(os.environ["DEBUG"])
 REDIRECT_OSU_URLS = read_bool(os.environ["REDIRECT_OSU_URLS"])
 
 PP_CACHED_ACCURACIES = [int(acc) for acc in read_list(os.environ["PP_CACHED_ACCS"])]
-PP_CACHED_SCORES = [int(pp) for pp in read_list(os.environ["PP_CACHED_SCORES"])]
 
 DISALLOWED_NAMES = read_list(os.environ["DISALLOWED_NAMES"])
 DISALLOWED_PASSWORDS = read_list(os.environ["DISALLOWED_PASSWORDS"])

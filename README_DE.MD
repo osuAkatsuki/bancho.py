@@ -42,11 +42,12 @@ bancho.py ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Rie
 
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 - python (Programmiersprache)
+- rust (Programmiersprache)
 - mysql (relationale Datenbank)
 - redis (speicherinterne Datenbank)
 - nginx (http(s)-Reverse-Proxy)
 - certbot (ssl-Zertifikatstool)
-- cmake und build-essential (Build-Werkzeuge für C/C++)
+- build-essential (Build-Werkzeuge für C/C++)
 
 als auch einige andere angewiesen.
 ```sh
@@ -57,9 +58,12 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # Installiere die erforderlichen Programme für die Ausführung von bancho.py
 sudo apt install -y python3.9-dev python3.9-distutils \
-                    cmake build-essential \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
+# Installieren rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Installieren Sie den Paketmanager von Python, pip
 # Er wird verwendet, um python-spezifische Abhängigkeiten zu installieren
