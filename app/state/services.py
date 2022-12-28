@@ -429,9 +429,3 @@ async def run_sql_migrations() -> None:
                     "micro": latest_ver.micro,
                 },
             )
-
-
-async def acquire_db_conn() -> AsyncIterator["databases.core.Connection"]:
-    """Decorator to acquire a database connection for a handler."""
-    async with database.connection() as conn:
-        yield conn

@@ -59,7 +59,7 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.state import services
-from app.usecases.performance import ScoreDifficultyParams
+from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
@@ -1153,40 +1153,27 @@ class SendPrivateMessage(BasePacket):
                             else:
                                 mods = None
 
-                            if mode_vn in (0, 1, 2):
-                                scores: list[ScoreDifficultyParams] = [
-                                    {"acc": acc}
-                                    for acc in app.settings.PP_CACHED_ACCURACIES
-                                ]
-                            else:  # mode_vn == 3
-                                scores: list[ScoreDifficultyParams] = [
-                                    {"score": score}
-                                    for score in app.settings.PP_CACHED_SCORES
-                                ]
+                            scores = [
+                                ScoreParams(
+                                    mode=mode_vn,
+                                    mods=int(mods) if mods else None,
+                                    acc=acc,
+                                )
+                                for acc in app.settings.PP_CACHED_ACCURACIES
+                            ]
 
                             results = app.usecases.performance.calculate_performances(
                                 osu_file_path=str(osu_file_path),
-                                mode=mode_vn,
-                                mods=int(mods) if mods is not None else None,
                                 scores=scores,
                             )
 
-                            if mode_vn in (0, 1, 2):
-                                resp_msg = " | ".join(
-                                    f"{acc}%: {result['performance']:,.2f}pp"
-                                    for acc, result in zip(
-                                        app.settings.PP_CACHED_ACCURACIES,
-                                        results,
-                                    )
+                            resp_msg = " | ".join(
+                                f"{acc}%: {result['performance']:,.2f}pp"
+                                for acc, result in zip(
+                                    app.settings.PP_CACHED_ACCURACIES,
+                                    results,
                                 )
-                            else:  # mode_vn == 3
-                                resp_msg = " | ".join(
-                                    f"{score // 1000:.0f}k: {result['performance']:,.2f}pp"
-                                    for score, result in zip(
-                                        app.settings.PP_CACHED_SCORES,
-                                        results,
-                                    )
-                                )
+                            )
 
                             elapsed = time.time_ns() - pp_calc_st
                             resp_msg += f" | Elapsed: {magnitude_fmt_time(elapsed)}"

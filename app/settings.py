@@ -1,69 +1,75 @@
 from __future__ import annotations
 
-from starlette.config import Config
-from starlette.datastructures import CommaSeparatedStrings
-from starlette.datastructures import Secret
+import os
 
-config = Config(".env")
+from dotenv import load_dotenv
 
-SERVER_ADDR = config("SERVER_ADDR")
-SERVER_PORT = int(v) if (v := config("SERVER_PORT", default=None)) else None
+load_dotenv()
 
-DB_HOST = config("DB_HOST")
-DB_PORT = config("DB_PORT", cast=int)
-DB_USER = config("DB_USER")
-DB_PASS = config("DB_PASS")
-DB_NAME = config("DB_NAME")
+
+def read_bool(value: str) -> bool:
+    return value.lower() in ("true", "1", "yes")
+
+
+def read_list(value: str) -> list[str]:
+    return value.split(",") if value else []
+
+
+SERVER_ADDR = os.environ["SERVER_ADDR"]
+SERVER_PORT = int(v) if (v := os.getenv("SERVER_PORT", None)) else None
+
+DB_HOST = os.environ["DB_HOST"]
+DB_PORT = int(os.environ["DB_PORT"])
+DB_USER = os.environ["DB_USER"]
+DB_PASS = os.environ["DB_PASS"]
+DB_NAME = os.environ["DB_NAME"]
 DB_DSN = f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-REDIS_HOST = config("REDIS_HOST")
-REDIS_PORT = config("REDIS_PORT", cast=int)
-REDIS_USER = config("REDIS_USER")
-REDIS_PASS = config("REDIS_PASS")
-REDIS_DB = config("REDIS_DB", cast=int)
-REDIS_DSN = f"redis://{REDIS_USER}:{REDIS_PASS}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+REDIS_HOST = os.environ["REDIS_HOST"]
+REDIS_PORT = int(os.environ["REDIS_PORT"])
+REDIS_USER = os.environ["REDIS_USER"]
+REDIS_PASS = os.environ["REDIS_PASS"]
+REDIS_DB = int(os.environ["REDIS_DB"])
 
-OSU_API_KEY = config("OSU_API_KEY", cast=Secret)
+REDIS_AUTH_STRING = f"{REDIS_USER}:{REDIS_PASS}@" if REDIS_USER and REDIS_PASS else ""
+REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
-DOMAIN = config("DOMAIN")
-MIRROR_URL = config("MIRROR_URL")
+OSU_API_KEY = os.environ["OSU_API_KEY"]
 
-COMMAND_PREFIX = config("COMMAND_PREFIX")
+DOMAIN = os.environ["DOMAIN"]
+MIRROR_URL = os.environ["MIRROR_URL"]
 
-SEASONAL_BGS = config("SEASONAL_BGS", cast=CommaSeparatedStrings)
+COMMAND_PREFIX = os.environ["COMMAND_PREFIX"]
 
-MENU_ICON_URL = config("MENU_ICON_URL")
-MENU_ONCLICK_URL = config("MENU_ONCLICK_URL")
+SEASONAL_BGS = read_list(os.environ["SEASONAL_BGS"])
 
-DATADOG_API_KEY = config("DATADOG_API_KEY", cast=Secret)
-DATADOG_APP_KEY = config("DATADOG_APP_KEY", cast=Secret)
+MENU_ICON_URL = os.environ["MENU_ICON_URL"]
+MENU_ONCLICK_URL = os.environ["MENU_ONCLICK_URL"]
 
-DEBUG = config("DEBUG", cast=bool)
-REDIRECT_OSU_URLS = config("REDIRECT_OSU_URLS", cast=bool)
+DATADOG_API_KEY = os.environ["DATADOG_API_KEY"]
+DATADOG_APP_KEY = os.environ["DATADOG_APP_KEY"]
 
-PP_CACHED_ACCURACIES = [
-    int(acc) for acc in config("PP_CACHED_ACCS", cast=CommaSeparatedStrings)
-]
-PP_CACHED_SCORES = [
-    int(score) for score in config("PP_CACHED_SCORES", cast=CommaSeparatedStrings)
-]
+DEBUG = read_bool(os.environ["DEBUG"])
+REDIRECT_OSU_URLS = read_bool(os.environ["REDIRECT_OSU_URLS"])
 
-DISALLOWED_NAMES = config("DISALLOWED_NAMES", cast=CommaSeparatedStrings)
-DISALLOWED_PASSWORDS = config("DISALLOWED_PASSWORDS", cast=CommaSeparatedStrings)
-DISALLOW_OLD_CLIENTS = config("DISALLOW_OLD_CLIENTS", cast=bool)
+PP_CACHED_ACCURACIES = [int(acc) for acc in read_list(os.environ["PP_CACHED_ACCS"])]
 
-DISCORD_AUDIT_LOG_WEBHOOK = config("DISCORD_AUDIT_LOG_WEBHOOK")
+DISALLOWED_NAMES = read_list(os.environ["DISALLOWED_NAMES"])
+DISALLOWED_PASSWORDS = read_list(os.environ["DISALLOWED_PASSWORDS"])
+DISALLOW_OLD_CLIENTS = read_bool(os.environ["DISALLOW_OLD_CLIENTS"])
 
-AUTOMATICALLY_REPORT_PROBLEMS = config("AUTOMATICALLY_REPORT_PROBLEMS", cast=bool)
+DISCORD_AUDIT_LOG_WEBHOOK = os.environ["DISCORD_AUDIT_LOG_WEBHOOK"]
+
+AUTOMATICALLY_REPORT_PROBLEMS = read_bool(os.environ["AUTOMATICALLY_REPORT_PROBLEMS"])
 
 # advanced dev settings
 
 ## WARNING touch this once you've
 ##          read through what it enables.
 ##          you could put your server at risk.
-DEVELOPER_MODE = config("DEVELOPER_MODE", cast=bool)
+DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 
 ## WARNING touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.6.0"
+VERSION = "4.6.4"

@@ -65,7 +65,6 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
-from app.state.services import acquire_db_conn
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -267,7 +266,6 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
@@ -276,7 +274,7 @@ async def osuGetBeatmapInfo(
 
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
-        row = await db_conn.fetch_one(
+        row = await app.state.services.database.fetch_one(
             "SELECT id, set_id, status, md5 FROM maps WHERE filename = :filename",
             {"filename": map_filename},
         )
@@ -289,31 +287,31 @@ async def osuGetBeatmapInfo(
         # convert from bancho.py -> osu!api status
         row["status"] = bancho_to_osuapi_status(row["status"])
 
-        # try to get the user's grades on the map osu!
-        # only allows us to send back one per gamemode,
-        # so we'll just send back relax for the time being..
-        # XXX: perhaps user-customizable in the future?
+        # try to get the user's grades on the map
+        # NOTE: osu! only allows us to send back one per gamemode,
+        #       so we've decided to send back *vanilla* grades.
+        #       (in theory we could make this user-customizable)
         grades = ["N", "N", "N", "N"]
 
-        await db_conn.execute(
+        await app.state.services.database.execute(
             "SELECT grade, mode FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
                 "map_md5": row["md5"],
                 "user_id": player.id,
-                "mode": player.status.mode,
+                "mode": player.status.mode.as_vanilla,
             },
         )
 
-        for score in await db_conn.fetch_all(
+        for score in await app.state.services.database.fetch_all(
             "SELECT grade, mode FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
                 "map_md5": row["md5"],
                 "user_id": player.id,
-                "mode": player.status.mode,
+                "mode": player.status.mode.as_vanilla,
             },
         ):
             grades[score["mode"]] = score["grade"]
@@ -335,9 +333,8 @@ async def osuGetBeatmapInfo(
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
-    rows = await db_conn.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT setid FROM favourites WHERE userid = :user_id",
         {"user_id": player.id},
     )
@@ -349,7 +346,6 @@ async def osuGetFavourites(
 async def osuAddFavourite(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     # check if they already have this favourited.
     if await app.state.services.database.fetch_one(
@@ -453,10 +449,11 @@ async def lastFM(
     """
 
 
-# bancho.py supports both cheesegull mirrors & chimu.moe.
-# chimu.moe handles things a bit differently than cheesegull,
+# bancho.py supports cheesegull mirrors, chimu.moe and nasuya.xyz.
+# chimu.moe and nasuya.xyz handle things a bit differently than cheesegull,
 # and has some extra features we'll eventually use more of.
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
+USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
 
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
@@ -481,6 +478,8 @@ async def osuSearchHandler(
 ):
     if USING_CHIMU:
         search_url = f"{app.settings.MIRROR_URL}/search"
+    elif USING_NASUYA:
+        search_url = f"{app.settings.MIRROR_URL}/api/v1/search"
     else:
         search_url = f"{app.settings.MIRROR_URL}/api/search"
 
@@ -498,6 +497,10 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
+    if USING_NASUYA:
+        # nasuya can serialize to direct for us
+        params["osu_direct"] = True
+
     async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
             if USING_CHIMU:
@@ -506,6 +509,10 @@ async def osuSearchHandler(
                     return b"0"
 
             return b"-1\nFailed to retrieve data from the beatmap mirror."
+
+        if USING_NASUYA:
+            # nasuya returns in osu!direct format
+            return await resp.read()
 
         result = await resp.json()
 
@@ -549,12 +556,11 @@ async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: Optional[int] = Query(None, alias="s"),
     map_id: Optional[int] = Query(None, alias="b"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     # TODO: refactor this to use the new internal bmap(set) api
 
     # Since we only need set-specific data, we can basically
-    # just do same same query with either bid or bsid.
+    # just do same query with either bid or bsid.
 
     if map_set_id is not None:
         # this is just a normal request
@@ -565,7 +571,7 @@ async def osuSearchSetHandler(
         return  # invalid args
 
     # Get all set data.
-    bmapset = await db_conn.fetch_one(
+    bmapset = await app.state.services.database.fetch_one(
         "SELECT DISTINCT set_id, artist, "
         "title, status, creator, last_update "
         f"FROM maps WHERE {k} = :v",
@@ -668,12 +674,11 @@ async def osuSubmitModularSelector(
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
     fl_cheat_screenshot: Optional[bytes] = File(None, alias="i"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Handle a score submission from an osu! client with an active session."""
 
     # NOTE: the bancho protocol uses the "score" parameter name for both
-    # the base64'ed score data, as well as the replay file in the multipart
+    # the base64'ed score data, and the replay file in the multipart
     # starlette/fastapi do not support this, so we've moved it out
     score_parameters = parse_form_data_score_params(await request.form())
     if score_parameters is None:
@@ -753,7 +758,7 @@ async def osuSubmitModularSelector(
 
         # await player.restrict(
         #     admin=app.state.sessions.bot,
-        #     reason="Mismatching hashes on score submission",
+        #     reason="mismatching hashes on score submission",
         # )
 
         # refresh their client state
@@ -799,7 +804,7 @@ async def osuSubmitModularSelector(
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
     # Check for score duplicates
-    if await db_conn.fetch_one(
+    if await app.state.services.database.fetch_one(
         "SELECT 1 FROM scores WHERE online_checksum = :checksum",
         {"checksum": score.client_checksum},
     ):
@@ -873,7 +878,7 @@ async def osuSubmitModularSelector(
                 scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
                 # If there was previously a score on the map, add old #1.
-                prev_n1 = await db_conn.fetch_one(
+                prev_n1 = await app.state.services.database.fetch_one(
                     "SELECT u.id, name FROM users u "
                     "INNER JOIN scores s ON u.id = s.userid "
                     "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
@@ -894,7 +899,7 @@ async def osuSubmitModularSelector(
         # this score is our best score.
         # update any preexisting personal best
         # records with SubmissionStatus.SUBMITTED.
-        await db_conn.execute(
+        await app.state.services.database.execute(
             "UPDATE scores SET status = 1 "
             "WHERE status = 2 AND map_md5 = :map_md5 "
             "AND userid = :user_id AND mode = :mode",
@@ -905,7 +910,7 @@ async def osuSubmitModularSelector(
             },
         )
 
-    score.id = await db_conn.execute(
+    score.id = await app.state.services.database.execute(
         "INSERT INTO scores "
         "VALUES (NULL, "
         ":map_md5, :score, :pp, :acc, "
@@ -1035,9 +1040,9 @@ async def osuSubmitModularSelector(
             # fetch scores sorted by pp for total acc/pp calc
             # NOTE: we select all plays (and not just top100)
             # because bonus pp counts the total amount of ranked
-            # scores. i'm aware this scales horribly and it'll
+            # scores. I'm aware this scales horribly, and it'll
             # likely be split into two queries in the future.
-            best_scores = await db_conn.fetch_all(
+            best_scores = await app.state.services.database.fetch_all(
                 "SELECT s.pp, s.acc FROM scores s "
                 "INNER JOIN maps m ON s.map_md5 = m.md5 "
                 "WHERE s.userid = :user_id AND s.mode = :mode "
@@ -1080,7 +1085,7 @@ async def osuSubmitModularSelector(
     stats_query_args["mode"] = score.mode.value
 
     # send any stat changes to sql, and other players
-    await db_conn.execute(stats_query, stats_query_args)
+    await app.state.services.database.execute(stats_query, stats_query_args)
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
@@ -1091,7 +1096,7 @@ async def osuSubmitModularSelector(
         if score.passed:
             score.bmap.passes += 1
 
-        await db_conn.execute(
+        await app.state.services.database.execute(
             "UPDATE maps SET plays = :plays, passes = :passes WHERE md5 = :map_md5",
             {
                 "plays": score.bmap.plays,
@@ -1223,7 +1228,6 @@ async def osuRate(
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if rating is None:
         # check if we have the map in our cache;
@@ -1239,7 +1243,7 @@ async def osuRate(
 
         # osu! client is checking whether we can rate the map or not.
         has_previous_rating = (
-            await db_conn.fetch_one(
+            await app.state.services.database.fetch_one(
                 "SELECT 1 FROM ratings WHERE map_md5 = :map_md5 AND userid = :user_id",
                 {"map_md5": map_md5, "user_id": player.id},
             )
@@ -1252,14 +1256,14 @@ async def osuRate(
             return b"ok"
     else:
         # the client is submitting a rating for the map.
-        await db_conn.execute(
+        await app.state.services.database.execute(
             "INSERT INTO ratings VALUES (:user_id, :map_md5, :rating)",
             {"user_id": player.id, "map_md5": map_md5, "rating": int(rating)},
         )
 
     ratings = [
         row[0]
-        for row in await db_conn.fetch_all(
+        for row in await app.state.services.database.fetch_all(
             "SELECT rating FROM ratings WHERE map_md5 = :map_md5",
             {"map_md5": map_md5},
         )
@@ -1316,50 +1320,49 @@ async def get_leaderboard_scores(
     # TODO: customizability of the number of scores
     query.append("ORDER BY _score DESC LIMIT 50")
 
-    async with app.state.services.database.connection() as db_conn:
-        score_rows = await app.state.services.database.fetch_all(
-            " ".join(query),
-            params,
+    score_rows = await app.state.services.database.fetch_all(
+        " ".join(query),
+        params,
+    )
+
+    if score_rows:  # None or []
+        # fetch player's personal best score
+        personal_best_score_row = await app.state.services.database.fetch_one(
+            f"SELECT id, {scoring_metric} AS _score, "
+            "max_combo, n50, n100, n300, "
+            "nmiss, nkatu, ngeki, perfect, mods, "
+            "UNIX_TIMESTAMP(play_time) time "
+            "FROM scores "
+            "WHERE map_md5 = :map_md5 AND mode = :mode "
+            "AND userid = :user_id AND status = 2 "
+            "ORDER BY _score DESC LIMIT 1",
+            {"map_md5": map_md5, "mode": mode, "user_id": player.id},
         )
 
-        if score_rows:  # None or []
-            # fetch player's personal best score
-            personal_best_score_row = await db_conn.fetch_one(
-                f"SELECT id, {scoring_metric} AS _score, "
-                "max_combo, n50, n100, n300, "
-                "nmiss, nkatu, ngeki, perfect, mods, "
-                "UNIX_TIMESTAMP(play_time) time "
-                "FROM scores "
-                "WHERE map_md5 = :map_md5 AND mode = :mode "
-                "AND userid = :user_id AND status = 2 "
-                "ORDER BY _score DESC LIMIT 1",
-                {"map_md5": map_md5, "mode": mode, "user_id": player.id},
+        if personal_best_score_row:
+            # calculate the rank of the score.
+            p_best_rank = 1 + await app.state.services.database.fetch_val(
+                "SELECT COUNT(*) FROM scores s "
+                "INNER JOIN users u ON u.id = s.userid "
+                "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+                "AND s.status = 2 AND u.priv & 1 "
+                f"AND s.{scoring_metric} > :score",
+                {
+                    "map_md5": map_md5,
+                    "mode": mode,
+                    "score": personal_best_score_row["_score"],
+                },
+                column=0,  # COUNT(*)
             )
 
-            if personal_best_score_row:
-                # calculate the rank of the score.
-                p_best_rank = 1 + await db_conn.fetch_val(
-                    "SELECT COUNT(*) FROM scores s "
-                    "INNER JOIN users u ON u.id = s.userid "
-                    "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-                    "AND s.status = 2 AND u.priv & 1 "
-                    f"AND s.{scoring_metric} > :score",
-                    {
-                        "map_md5": map_md5,
-                        "mode": mode,
-                        "score": personal_best_score_row["_score"],
-                    },
-                    column=0,  # COUNT(*)
-                )
-
-                # attach rank to personal best row
-                personal_best_score_row = dict(personal_best_score_row)
-                personal_best_score_row["rank"] = p_best_rank
-            else:
-                personal_best_score_row = None
+            # attach rank to personal best row
+            personal_best_score_row = dict(personal_best_score_row)
+            personal_best_score_row["rank"] = p_best_rank
         else:
-            score_rows = []
             personal_best_score_row = None
+    else:
+        score_rows = []
+        personal_best_score_row = None
 
     return score_rows, personal_best_score_row
 
@@ -1384,7 +1387,6 @@ async def getScores(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
@@ -1427,7 +1429,7 @@ async def getScores(
 
     if not bmap:
         # map not found, figure out whether it needs an
-        # update or isn't submitted using it's filename.
+        # update or isn't submitted using its filename.
 
         if has_set_id and map_set_id not in app.state.cache.beatmapset:
             # set not cached, it doesn't exist
@@ -1553,7 +1555,6 @@ async def osuComment(
     colour: Optional[str] = Form(None, alias="f", min_length=6, max_length=6),
     start_time: Optional[int] = Form(None, alias="starttime"),
     comment: Optional[str] = Form(None, min_length=1, max_length=80),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if action == "get":
         # client is requesting all comments
@@ -1633,14 +1634,13 @@ async def osuComment(
 async def osuMarkAsRead(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if not (t_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
     if t := await app.state.sessions.players.from_cache_or_sql(name=t_name):
         # mark any unread mail from this user as read.
-        await db_conn.execute(
+        await app.state.services.database.execute(
             "UPDATE `mail` SET `read` = 1 "
             "WHERE `to_id` = :to AND `from_id` = :from "
             "AND `read` = 0",
@@ -1650,7 +1650,7 @@ async def osuMarkAsRead(
 
 @router.get("/web/osu-getseasonal.php")
 async def osuSeasonal():
-    return ORJSONResponse(app.settings.SEASONAL_BGS._items)
+    return ORJSONResponse(app.settings.SEASONAL_BGS)
 
 
 @router.get("/web/bancho_connect.php")
@@ -1779,7 +1779,6 @@ async def get_updated_beatmap(
     request: Request,
     map_filename: str,
     host: str = Header(...),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
@@ -1811,7 +1810,7 @@ async def get_updated_beatmap(
         osu_file_path.exists()
         and res["md5"] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
     ):
-        # up to date map found on disk.
+        # up-to-date map found on disk.
         content = osu_file_path.read_bytes()
     else:
         # map not found, or out of date; get from osu!
@@ -1848,7 +1847,6 @@ async def register_account(
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
     cloudflare_country: Optional[str] = Header(None, alias="CF-IPCountry"),
     #
     # TODO: allow nginx to be optional
@@ -1882,7 +1880,7 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        if await db_conn.fetch_one(
+        if await app.state.services.database.fetch_one(
             "SELECT 1 FROM users WHERE safe_name = :safe_name",
             {"safe_name": safe_name},
         ):
@@ -1894,7 +1892,7 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        if await db_conn.fetch_one(
+        if await app.state.services.database.fetch_one(
             "SELECT 1 FROM users WHERE email = :email",
             {"email": email},
         ):
@@ -1958,9 +1956,9 @@ async def register_account(
                 # localhost, unknown country
                 country_acronym = "xx"
 
-        async with db_conn.transaction():
+        async with app.state.services.database.transaction():
             # add to `users` table.
-            user_id = await db_conn.execute(
+            user_id = await app.state.services.database.execute(
                 "INSERT INTO users "
                 "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
                 "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
@@ -1974,7 +1972,7 @@ async def register_account(
             )
 
             # add to `stats` table.
-            await db_conn.execute_many(
+            await app.state.services.database.execute_many(
                 "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
                 [
                     {"user_id": user_id, "mode": mode}

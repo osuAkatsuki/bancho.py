@@ -228,7 +228,7 @@ npstr2mod_dict = {
     "|9K|": Mods.KEY9,
     # XXX: kinda mood that there's no way
     # to tell K1-K4 co-op from /np, but
-    # scores won't submit or anything so
+    # scores won't submit or anything, so
     # it's not ultimately a problem.
     "|10K|": Mods.KEY5 | Mods.KEYCOOP,
     "|12K|": Mods.KEY6 | Mods.KEYCOOP,
