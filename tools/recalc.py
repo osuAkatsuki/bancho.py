@@ -80,7 +80,7 @@ async def recalculate_score(
 
     if DEBUG:
         print(
-            f"Recalculated score ID {score['id']} ({score['pp']:.3f} -> {new_pp:.3f}pp)",
+            f"Recalculated score ID {score['id']} ({score['pp']:.3f}pp -> {new_pp:.3f}pp)",
         )
 
 
