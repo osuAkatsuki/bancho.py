@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.9
 from __future__ import annotations
 
+import argparse
 import asyncio
 import math
 import os
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 from typing import Awaitable
 from typing import Iterator
+from typing import Optional
+from typing import Sequence
 
 import aioredis
 import databases
@@ -30,6 +33,7 @@ except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
 
+DEBUG = False
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
@@ -74,7 +78,10 @@ async def recalculate_score(
         {"new_pp": new_pp, "id": score["id"]},
     )
 
-    print(f"Recalculated score ID {score['id']} ({score['pp']:.3f} -> {new_pp:.3f}pp)")
+    if DEBUG:
+        print(
+            f"Recalculated score ID {score['id']} ({score['pp']:.3f} -> {new_pp:.3f}pp)",
+        )
 
 
 async def process_score_chunk(
@@ -144,7 +151,8 @@ async def recalculate_user(
             {str(id): pp},
         )
 
-    print(f"Recalculated user ID {id} ({pp:.3f}pp, {acc:.3f}%)")
+    if DEBUG:
+        print(f"Recalculated user ID {id} ({pp:.3f}pp, {acc:.3f}%)")
 
 
 async def process_user_chunk(
@@ -188,17 +196,27 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
         await process_score_chunk(score_chunk, ctx)
 
 
-async def main() -> int:
-    modes = [
-        int(mode)
-        for mode in input("Enter modes (comma delimited) to recalc: ").split(",")
-    ]
-    relax_bits = [
-        int(bit)
-        for bit in input(
-            "Enter relax bits (0, 1, 2 - comma delimited) to recalc: ",
-        ).split(",")
-    ]
+async def main(argv: Optional[Sequence[str]] = None) -> int:
+    argv = argv if argv is not None else sys.argv[1:]
+    if len(argv) == 0:
+        argv = ["--help"]
+
+    parser = argparse.ArgumentParser(description="Recalculate performance for scores")
+
+    parser.add_argument("-d", "--debug", action="store_true")
+
+    parser.add_argument(
+        "-m",
+        "--mode",
+        nargs=argparse.ONE_OR_MORE,
+        required=True,
+        # would love to do things like "vn!std", but "!" will break interpretation
+        choices=["0", "1", "2", "3", "4", "5", "6", "8"],
+    )
+    args = parser.parse_args(argv)
+
+    global DEBUG
+    DEBUG = args.debug
 
     db = databases.Database(app.settings.DB_DSN)
     await db.connect()
@@ -207,14 +225,28 @@ async def main() -> int:
 
     ctx = Context(db, redis)
 
-    for mode in modes:
-        bits = [0]
-        if mode in (0, 1, 2):
-            bits = relax_bits
+    for mode in args.mode:
+        mode = GameMode(int(mode)).as_vanilla
+        if mode in [
+            GameMode.VANILLA_OSU,
+            GameMode.VANILLA_TAIKO,
+            GameMode.VANILLA_CATCH,
+            GameMode.VANILLA_MANIA,
+        ]:
+            rx = 0
+        elif mode in [
+            GameMode.RELAX_OSU,
+            GameMode.RELAX_TAIKO,
+            GameMode.RELAX_CATCH,
+        ]:
+            rx = 1
+        elif mode in [
+            GameMode.AUTOPILOT_OSU,
+        ]:
+            rx = 2
 
-        for bit in bits:
-            await recalculate_mode_scores(mode, bit, ctx)
-            await recalculate_mode_users(mode, bit, ctx)
+        await recalculate_mode_scores(mode, rx, ctx)
+        await recalculate_mode_users(mode, rx, ctx)
 
     await db.disconnect()
     await redis.close()
