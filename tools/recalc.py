@@ -167,7 +167,7 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
     scores = [
         dict(row)
         for row in await ctx.database.fetch_all(
-            "SELECT *, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
+            "SELECT scores.id, mode, mods, acc, nmiss, max_combo, map_md5, pp, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
             "WHERE status = 2 AND mode = :mode ORDER BY pp DESC",
             {"mode": game_mode.value},
         )
