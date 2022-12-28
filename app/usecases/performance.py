@@ -42,15 +42,15 @@ def calculate_performances(
 
     for score in scores:
         # assert either acc OR 300/100/50/geki/katu/miss is present, but not both
-        if (score.acc is None) == (
-            score.n300 is None
-            and score.n100 is None
-            and score.n50 is None
-            and score.ngeki is None
-            and score.nkatu is None
-            and score.nmiss is None
-        ):
-            raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
+        # if (score.acc is None) == (
+        #     score.n300 is None
+        #     and score.n100 is None
+        #     and score.n50 is None
+        #     and score.ngeki is None
+        #     and score.nkatu is None
+        #     and score.nmiss is None
+        # ):
+        #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
 
         calculator = Calculator(
             mode=score.mode,
