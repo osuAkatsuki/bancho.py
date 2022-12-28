@@ -47,7 +47,7 @@ Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Ab
 - redis (speicherinterne Datenbank)
 - nginx (http(s)-Reverse-Proxy)
 - certbot (ssl-Zertifikatstool)
-- cmake und build-essential (Build-Werkzeuge für C/C++)
+- build-essential (Build-Werkzeuge für C/C++)
 
 als auch einige andere angewiesen.
 ```sh
@@ -58,7 +58,7 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # Installiere die erforderlichen Programme für die Ausführung von bancho.py
 sudo apt install -y python3.9-dev python3.9-distutils \
-                    cmake build-essential \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
 
