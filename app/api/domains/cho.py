@@ -1153,12 +1153,12 @@ class SendPrivateMessage(BasePacket):
                             else:
                                 mods = None
 
-                            scores: list[ScoreParams] = [
-                                {
-                                    "mode": mode_vn,
-                                    "mods": int(mods) if mods else None,
-                                    "acc": acc,
-                                }
+                            scores = [
+                                ScoreParams(
+                                    mode=mode_vn,
+                                    mods=int(mods) if mods else None,
+                                    acc=acc,
+                                )
                                 for acc in app.settings.PP_CACHED_ACCURACIES
                             ]
 

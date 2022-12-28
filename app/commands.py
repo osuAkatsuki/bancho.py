@@ -501,22 +501,22 @@ async def _with(ctx: Context) -> Optional[str]:
 
     msg_fields = []
 
-    score_args: ScoreParams = {"mode": mode_vn}
+    score_args = ScoreParams(mode=mode_vn)
 
     if (mods := command_args.get("mods")) is not None:
-        score_args["mods"] = mods
+        score_args.mods = mods
         msg_fields.append(f"{mods!r}")
 
     if (nmiss := command_args["nmiss"]) is not None:
-        score_args["nmiss"] = nmiss
+        score_args.nmiss = nmiss
         msg_fields.append(f"{nmiss}m")
 
     if (combo := command_args["combo"]) is not None:
-        score_args["combo"] = combo
+        score_args.combo = combo
         msg_fields.append(f"{combo}x")
 
     if (acc := command_args["acc"]) is not None:
-        score_args["acc"] = acc
+        score_args.acc = acc
         msg_fields.append(f"{acc:.2f}%")
 
     result = app.usecases.performance.calculate_performances(
