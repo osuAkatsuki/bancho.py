@@ -63,7 +63,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams
+from app.usecases.performance import ScoreParams
 from app.utils import make_safe_name
 from app.utils import seconds_readable
 
@@ -509,7 +509,7 @@ async def _with(ctx: Context) -> Optional[str]:
     if (mods := command_args.get("mods")) is not None:
         msg_fields.append(f"{mods!r}")
 
-    score_args: ScoreDifficultyParams = {}
+    score_args: ScoreParams = {}
 
     # include mode-specific fields
     if mode_vn in (0, 1, 2):

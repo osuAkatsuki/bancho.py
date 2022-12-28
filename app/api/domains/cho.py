@@ -59,7 +59,7 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.state import services
-from app.usecases.performance import ScoreDifficultyParams
+from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
@@ -1154,7 +1154,7 @@ class SendPrivateMessage(BasePacket):
                                 mods = None
 
                             if mode_vn in (0, 1, 2, 3):
-                                scores: list[ScoreDifficultyParams] = [
+                                scores: list[ScoreParams] = [
                                     {"acc": acc}
                                     for acc in app.settings.PP_CACHED_ACCURACIES
                                 ]
