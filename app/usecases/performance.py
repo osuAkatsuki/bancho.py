@@ -33,15 +33,15 @@ def calculate_performances_std(
 
     calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
-        mods = score["mods"] if score["mods"] != None else 0
-        acc = score["acc"] if score["acc"] != None else 100.00
-        nmisses = score["nmiss"] if score["nmiss"] != None else 0
+        mods = score["mods"] if score["mods"] is not None else 0
+        acc = score["acc"] if score["acc"] is not None else 100.00
+        nmisses = score["nmiss"] if score["nmiss"] is not None else 0
         combo = score["combo"]
 
         calculator = Calculator(mods=mods)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if combo != None:
+        if combo is not None:
             calculator.set_combo(combo)
 
         result = calculator.performance(calc_bmap)
@@ -74,15 +74,15 @@ def calculate_performances_taiko(
 
     calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
-        mods = score["mods"] if score["mods"] != None else 0
-        acc = score["acc"] if score["acc"] != None else 100.00
-        nmisses = score["nmiss"] if score["nmiss"] != None else 0
+        mods = score["mods"] if score["mods"] is not None else 0
+        acc = score["acc"] if score["acc"] is not None else 100.00
+        nmisses = score["nmiss"] if score["nmiss"] is not None else 0
         combo = score["combo"]
 
         calculator = Calculator(mods=mods, mode=1)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if combo != None:
+        if combo is not None:
             calculator.set_combo(combo)
 
         result = calculator.performance(calc_bmap)
@@ -115,15 +115,15 @@ def calculate_performances_catch(
 
     calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
-        mods = score["mods"] if score["mods"] != None else 0
-        acc = score["acc"] if score["acc"] != None else 100.00
-        nmisses = score["nmiss"] if score["nmiss"] != None else 0
+        mods = score["mods"] if score["mods"] is not None else 0
+        acc = score["acc"] if score["acc"] is not None else 100.00
+        nmisses = score["nmiss"] if score["nmiss"] is not None else 0
         combo = score["combo"]
 
         calculator = Calculator(mods=mods, mode=2)
         calculator.set_acc(acc)
         calculator.set_n_misses(nmisses)
-        if combo != None:
+        if combo is not None:
             calculator.set_combo(combo)
 
         result = calculator.performance(calc_bmap)
@@ -156,11 +156,11 @@ def calculate_performances_mania(
 
     calc_bmap = Beatmap(path=osu_file_path)
     for score in scores:
-        mods = score["mods"] if score["mods"] != None else 0
+        mods = score["mods"] if score["mods"] is not None else 0
         acc = score["acc"]
 
         calculator = Calculator(mods=mods, mode=3)
-        if acc != None:
+        if acc is not None:
             calculator.set_acc(acc)
         else:
             calculator.set_n_geki(score["n320"])
