@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import copy
 import importlib
-import math
 import os
 import pprint
 import random
@@ -34,8 +32,6 @@ from typing import Union
 
 import psutil
 import timeago
-from akatsuki_pp_py import Beatmap as RosuBeatmap
-from akatsuki_pp_py import Calculator
 from pytimeparse.timeparse import timeparse
 
 import app.logging
@@ -1178,208 +1174,10 @@ async def stealth(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> Optional[str]:
     """Recalculate pp for a given map, or all maps."""
-    # NOTE: at the moment this command isn't very optimal and reparses
-    # the beatmap file each iteration; this will be heavily improved.
-    if len(ctx.args) != 1 or ctx.args[0] not in ("map", "all"):
-        return "Invalid syntax: !recalc <map/all>"
-
-    if ctx.args[0] == "map":
-        # by specific map, use their last /np
-        if time.time() >= ctx.player.last_np["timeout"]:
-            return "Please /np a map first!"
-
-        bmap: Beatmap = ctx.player.last_np["bmap"]
-
-        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
-            return "Mapfile could not be found; this incident has been reported."
-
-        async with (
-            app.state.services.database.connection() as score_select_conn,
-            app.state.services.database.connection() as update_conn,
-        ):
-
-            calc_bmap = RosuBeatmap(path=str(osu_file_path))
-            for mode in GameMode.valid_gamemodes():
-                # TODO: this should be using an async generator
-                for row in await score_select_conn.fetch_all(
-                    "SELECT id, acc, mods, max_combo, nmiss,"
-                    "n300, n100, n50, ngeki, nkatu "
-                    "FROM scores "
-                    "WHERE map_md5 = :map_md5 AND mode = :mode",
-                    {"map_md5": bmap.md5, "mode": mode},
-                ):
-                    # standard, taiko and catch
-                    if mode in (
-                        GameMode.VANILLA_OSU,
-                        GameMode.RELAX_OSU,
-                        GameMode.AUTOPILOT_OSU,
-                        GameMode.VANILLA_TAIKO,
-                        GameMode.RELAX_TAIKO,
-                        GameMode.VANILLA_CATCH,
-                        GameMode.RELAX_CATCH,
-                    ):
-
-                        mode_int = GameMode.VANILLA_OSU
-                        if mode in (GameMode.VANILLA_TAIKO, GameMode.RELAX_TAIKO):
-                            mode_int = GameMode.VANILLA_TAIKO
-                        elif mode in (GameMode.VANILLA_CATCH, GameMode.RELAX_CATCH):
-                            mode_int = GameMode.VANILLA_CATCH
-
-                        calculator = Calculator(mods=row["mods"], mode=mode_int)
-                        calculator.set_acc(row["acc"])
-                        calculator.set_n_misses(row["nmiss"])
-                        calculator.set_combo(row["max_combo"])
-
-                        result = calculator.performance(calc_bmap)
-
-                        pp = result.pp
-
-                        if math.isinf(pp) or math.isnan(pp):
-                            continue
-
-                        await update_conn.execute(
-                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                            {"pp": pp, "score_id": row["id"]},
-                        )
-                    # mania
-                    elif mode == GameMode.VANILLA_MANIA:
-                        calculator = Calculator(
-                            mods=row["mods"],
-                            mode=GameMode.VANILLA_MANIA,
-                        )
-                        calculator.set_n_geki(row["ngeki"])
-                        calculator.set_n300(row["n300"])
-                        calculator.set_n_katu(row["nkatu"])
-                        calculator.set_n100(row["n100"])
-                        calculator.set_n50(row["n50"])
-                        calculator.set_n_misses(row["nmiss"])
-
-                        result = calculator.performance(calc_bmap)
-
-                        pp = result.pp
-
-                        if math.isinf(pp) or math.isnan(pp):
-                            continue
-
-                        await update_conn.execute(
-                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                            {"pp": pp, "score_id": row["id"]},
-                        )
-
-        return "Map recalculated."
-    else:
-        # recalc all plays on the server, on all maps
-        staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
-
-        async def recalc_all() -> None:
-            staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
-            st = time.time()
-
-            async with (
-                app.state.services.database.connection() as bmap_select_conn,
-                app.state.services.database.connection() as score_select_conn,
-                app.state.services.database.connection() as update_conn,
-            ):
-                # TODO: should be aiter
-                for bmap_row in await bmap_select_conn.fetch_all(
-                    "SELECT id, md5 FROM maps WHERE passes > 0",
-                ):
-                    bmap_id = bmap_row["id"]
-                    bmap_md5 = bmap_row["md5"]
-
-                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                    if not await ensure_local_osu_file(
-                        osu_file_path,
-                        bmap_id,
-                        bmap_md5,
-                    ):
-                        staff_chan.send_bot(
-                            f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
-                        )
-                        continue
-
-                    calc_bmap = RosuBeatmap(path=str(osu_file_path))
-                    for mode in GameMode.valid_gamemodes():
-                        # TODO: this should be using an async generator
-                        for row in await score_select_conn.fetch_all(
-                            "SELECT id, acc, mods, max_combo, nmiss, "
-                            "n300, n100, n50, ngeki, nkatu "
-                            "FROM scores "
-                            "WHERE map_md5 = :map_md5 AND mode = :mode",
-                            {"map_md5": bmap_md5, "mode": mode},
-                        ):
-                            # standard, taiko and catch
-                            if mode in (
-                                GameMode.VANILLA_OSU,
-                                GameMode.RELAX_OSU,
-                                GameMode.AUTOPILOT_OSU,
-                                GameMode.VANILLA_TAIKO,
-                                GameMode.RELAX_TAIKO,
-                                GameMode.VANILLA_CATCH,
-                                GameMode.RELAX_CATCH,
-                            ):
-
-                                modeInt = GameMode.VANILLA_OSU
-                                if mode in (
-                                    GameMode.VANILLA_TAIKO,
-                                    GameMode.RELAX_TAIKO,
-                                ):
-                                    modeInt = GameMode.VANILLA_TAIKO
-                                elif mode in (
-                                    GameMode.VANILLA_CATCH,
-                                    GameMode.RELAX_CATCH,
-                                ):
-                                    modeInt = GameMode.VANILLA_CATCH
-
-                                calculator = Calculator(mods=row["mods"], mode=modeInt)
-                                calculator.set_acc(row["acc"])
-                                calculator.set_n_misses(row["nmiss"])
-                                calculator.set_combo(row["max_combo"])
-
-                                result = calculator.performance(calc_bmap)
-
-                                pp = result.pp
-
-                                if math.isinf(pp) or math.isnan(pp):
-                                    continue
-
-                                await update_conn.execute(
-                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                    {"pp": pp, "score_id": row["id"]},
-                                )
-                            # mania
-                            elif mode == GameMode.VANILLA_MANIA:
-                                calculator = Calculator(mods=row["mods"], mode=mode)
-                                calculator.set_n_geki(row["ngeki"])
-                                calculator.set_n300(row["n300"])
-                                calculator.set_n_katu(row["nkatu"])
-                                calculator.set_n100(row["n100"])
-                                calculator.set_n50(row["n50"])
-                                calculator.set_n_misses(row["nmiss"])
-
-                                result = calculator.performance(calc_bmap)
-
-                                pp = result.pp
-
-                                if math.isinf(pp) or math.isnan(pp):
-                                    continue
-
-                                await update_conn.execute(
-                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                    {"pp": pp, "score_id": row["id"]},
-                                )
-
-                    # leave at least 1/100th of
-                    # a second for handling conns.
-                    await asyncio.sleep(0.01)
-
-            elapsed = app.utils.seconds_readable(int(time.time() - st))
-            staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
-
-        app.state.loop.create_task(recalc_all())
-
-        return "Starting a full recalculation."
+    return (
+        "Please use tools/recalc.py instead.\n"
+        "If you need any support, join our Discord @ https://discord.gg/ShEQgUx."
+    )
 
 
 @command(Privileges.DEVELOPER, hidden=True)
