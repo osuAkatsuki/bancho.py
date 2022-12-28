@@ -38,6 +38,7 @@ router = APIRouter(tags=["bancho.py API"])
 # or keep up with changes to https://github.com/JKBGL/gulag-api-docs.
 
 # Unauthorized (no api key required)
+# GET /search_players: returns a list of matching users, based on a passed string, sorted by ascending ID.
 # GET /get_player_count: return total registered & online player counts.
 # GET /get_player_info: return info or stats for a given player.
 # GET /get_player_status: return a player's current status, if online.
@@ -106,6 +107,30 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
+
+
+@router.get("/search_players")
+async def api_search_players(
+    search: Optional[str] = Query(None, alias="q", min=2, max=32),
+    db_conn: databases.core.Connection = Depends(acquire_db_conn),
+):
+    """Search for users on the server by name."""
+    rows = await db_conn.fetch_all(
+        "SELECT id, name "
+        "FROM users "
+        "WHERE name LIKE COALESCE(:name, name) "
+        "AND priv & 3 = 3 "
+        "ORDER BY id ASC",
+        {"name": f"%{search}%" if search is not None else None},
+    )
+
+    return ORJSONResponse(
+        {
+            "status": "success",
+            "results": len(rows),
+            "result": [dict(row) for row in rows],
+        },
+    )
 
 
 @router.get("/get_player_count")
