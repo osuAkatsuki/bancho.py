@@ -45,10 +45,7 @@ async def create(
         INSERT INTO stats (id, mode)
         VALUES (:id, :mode)
     """
-    params = {
-        "id": player_id,
-        "mode": mode,
-    }
+    params = {"id": player_id, "mode": mode}
     rec_id = await app.state.services.database.execute(query, params)
 
     query = f"""\
@@ -56,17 +53,43 @@ async def create(
           FROM stats
          WHERE id = :id
     """
-    params = {
-        "id": rec_id,
-    }
+    params = {"id": rec_id}
     rec = await app.state.services.database.fetch_one(query, params)
     return rec
 
 
-async def fetch_one(
-    player_id: int,
-    mode: int,
-) -> Optional[dict[str, Any]]:
+async def create_all_modes(player_id: int) -> list[dict[str, Any]]:
+    """Create new player stats entries for each game mode in the database."""
+    query = f"""\
+        INSERT INTO stats (id, mode)
+             VALUES (:id, :mode)
+    """
+    params_list = [
+        {"id": player_id, "mode": mode}
+        for mode in (
+            0,  # vn!std
+            1,  # vn!taiko
+            2,  # vn!catch
+            3,  # vn!mania
+            4,  # rx!std
+            5,  # rx!taiko
+            6,  # rx!catch
+            8,  # ap!std
+        )
+    ]
+    await app.state.services.database.execute_many(query, params_list)
+
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM stats
+         WHERE id = :id
+    """
+    params = {"id": player_id}
+    recs = await app.state.services.database.fetch_all(query, params)
+    return recs
+
+
+async def fetch_one(player_id: int, mode: int) -> Optional[dict[str, Any]]:
     """Fetch a player stats entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -74,10 +97,7 @@ async def fetch_one(
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
-        "id": player_id,
-        "mode": mode,
-    }
+    params = {"id": player_id, "mode": mode}
     rec = await app.state.services.database.fetch_one(query, params)
     return rec
 
@@ -94,14 +114,18 @@ async def fetch_count() -> int:
 
 
 async def fetch_many(
+    player_id: Optional[int] = None,
+    mode: Optional[int] = None,
     page: Optional[int] = None,
     page_size: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     query = f"""\
         SELECT {READ_PARAMS}
           FROM stats
+         WHERE id = COALESCE(:id, id)
+           AND mode = COALESCE(:mode, mode)
     """
-    params = {}
+    params = {"id": player_id, "mode": mode}
 
     if page is not None and page_size is not None:
         query += """\
@@ -179,10 +203,7 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
-        "id": player_id,
-        "mode": mode,
-    }
+    params = {"id": player_id, "mode": mode}
     rec = await app.state.services.database.fetch_one(query, params)
     return rec
 
