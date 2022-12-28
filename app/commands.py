@@ -501,35 +501,26 @@ async def _with(ctx: Context) -> Optional[str]:
 
     msg_fields = []
 
-    # include mods regardless of mode
+    score_args: ScoreParams = {"mode": mode_vn}
+
     if (mods := command_args.get("mods")) is not None:
+        score_args["mods"] = mods
         msg_fields.append(f"{mods!r}")
 
-    score_args: ScoreParams = {}
+    if (nmiss := command_args["nmiss"]) is not None:
+        score_args["nmiss"] = nmiss
+        msg_fields.append(f"{nmiss}m")
 
-    # include mode-specific fields
-    if mode_vn in (0, 1, 2):
-        if (nmiss := command_args["nmiss"]) is not None:
-            score_args["nmiss"] = nmiss
-            msg_fields.append(f"{nmiss}m")
+    if (combo := command_args["combo"]) is not None:
+        score_args["combo"] = combo
+        msg_fields.append(f"{combo}x")
 
-        if (combo := command_args["combo"]) is not None:
-            score_args["combo"] = combo
-            msg_fields.append(f"{combo}x")
-
-        if (acc := command_args["acc"]) is not None:
-            score_args["acc"] = acc
-            msg_fields.append(f"{acc:.2f}%")
-
-    else:  # mode_vn == 3
-        if (acc := command_args["acc"]) is not None:
-            score_args["acc"] = acc
-            msg_fields.append(f"{acc:.2f}%")
+    if (acc := command_args["acc"]) is not None:
+        score_args["acc"] = acc
+        msg_fields.append(f"{acc:.2f}%")
 
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
-        mode=mode_vn,
-        mods=int(command_args["mods"]) if command_args["mods"] is not None else 0,
         scores=[score_args],  # calculate one score
     )
 

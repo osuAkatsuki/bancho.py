@@ -336,26 +336,22 @@ class Score:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
-        if mode_vn in (0, 1, 2):
-            score_args: ScoreParams = {
-                "acc": self.acc,
-                "combo": self.max_combo,
-                "nmiss": self.nmiss,
-            }
-        else:  # mode_vn == 3
-            score_args: ScoreParams = {
-                "n320": self.ngeki,
-                "n300": self.n300,
-                "n200": self.nkatu,
-                "n100": self.n100,
-                "n50": self.n50,
-                "nmiss": self.nmiss,
-            }
+        score_args: ScoreParams = {
+            "mode": mode_vn,
+            "mods": int(self.mods),
+            "combo": self.max_combo,
+            # prefer to use the score's specific params that add up to the acc
+            # "acc": self.acc,
+            "ngeki": self.ngeki,
+            "n300": self.n300,
+            "nkatu": self.nkatu,
+            "n100": self.n100,
+            "n50": self.n50,
+            "nmiss": self.nmiss,
+        }
 
         result = app.usecases.performance.calculate_performances(
             osu_file_path=str(osu_file_path),
-            mode=mode_vn,
-            mods=int(self.mods),
             scores=[score_args],
         )
 

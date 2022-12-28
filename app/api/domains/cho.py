@@ -1153,27 +1153,27 @@ class SendPrivateMessage(BasePacket):
                             else:
                                 mods = None
 
-                            if mode_vn in (0, 1, 2, 3):
-                                scores: list[ScoreParams] = [
-                                    {"acc": acc}
-                                    for acc in app.settings.PP_CACHED_ACCURACIES
-                                ]
+                            scores: list[ScoreParams] = [
+                                {
+                                    "mode": mode_vn,
+                                    "mods": int(mods) if mods else None,
+                                    "acc": acc,
+                                }
+                                for acc in app.settings.PP_CACHED_ACCURACIES
+                            ]
 
                             results = app.usecases.performance.calculate_performances(
                                 osu_file_path=str(osu_file_path),
-                                mode=mode_vn,
-                                mods=int(mods) if mods is not None else None,
                                 scores=scores,
                             )
 
-                            if mode_vn in (0, 1, 2, 3):
-                                resp_msg = " | ".join(
-                                    f"{acc}%: {result['performance']:,.2f}pp"
-                                    for acc, result in zip(
-                                        app.settings.PP_CACHED_ACCURACIES,
-                                        results,
-                                    )
+                            resp_msg = " | ".join(
+                                f"{acc}%: {result['performance']:,.2f}pp"
+                                for acc, result in zip(
+                                    app.settings.PP_CACHED_ACCURACIES,
+                                    results,
                                 )
+                            )
 
                             elapsed = time.time_ns() - pp_calc_st
                             resp_msg += f" | Elapsed: {magnitude_fmt_time(elapsed)}"
