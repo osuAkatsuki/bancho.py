@@ -32,7 +32,6 @@ python-dotenv==0.20.0
 python-multipart==0.0.5
 pytimeparse==1.1.8
 requests==2.27.1
-rosu-pp-py==0.9.1
 six==1.16.0
 sniffio==1.2.0
 SQLAlchemy==1.4.32
@@ -43,3 +42,4 @@ urllib3==1.26.9
 uvicorn==0.17.6
 uvloop==0.16.0
 yarl==1.7.2
+git+https://github.com/osuAkatsuki/akatsuki-pp-py

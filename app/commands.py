@@ -35,8 +35,8 @@ from typing import Union
 import psutil
 import timeago
 from pytimeparse.timeparse import timeparse
-from rosu_pp_py import Beatmap as RosuBeatmap
-from rosu_pp_py import Calculator
+from akatsuki_pp_py import Beatmap as RosuBeatmap
+from akatsuki_pp_py import Calculator
 
 import app.logging
 import app.packets

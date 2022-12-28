@@ -4,8 +4,8 @@ import math
 from typing import Optional
 from typing import TypedDict
 
-from rosu_pp_py import Beatmap
-from rosu_pp_py import Calculator
+from akatsuki_pp_py import Beatmap
+from akatsuki_pp_py import Calculator
 
 
 class DifficultyRating(TypedDict):
