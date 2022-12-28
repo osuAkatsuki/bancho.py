@@ -133,6 +133,8 @@ async def recalculate_user(
             {str(id): pp},
         )
 
+    print(f"Recalculated user ID {id} ({pp}pp, {acc:.2f}%")
+
 
 async def process_user_chunk(
     chunk: list[int],
