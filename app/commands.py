@@ -34,9 +34,9 @@ from typing import Union
 
 import psutil
 import timeago
-from pytimeparse.timeparse import timeparse
 from akatsuki_pp_py import Beatmap as RosuBeatmap
 from akatsuki_pp_py import Calculator
+from pytimeparse.timeparse import timeparse
 
 import app.logging
 import app.packets
@@ -442,57 +442,27 @@ def parse__with__command_args(
     # tried to balance complexity vs correctness for this function
     # TODO: it can surely be cleaned up further - need to rethink it?
 
-    if mode in (0, 1, 2):
-        if not args or len(args) > 4:
-            return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
+    if not args or len(args) > 4:
+        return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
 
-        # !with 95% 1m 429x hddt
-        acc = mods = combo = nmiss = None
+    # !with 95% 1m 429x hddt
+    acc = mods = combo = nmiss = None
 
-        # parse acc, misses, combo and mods from arguments.
-        # tried to balance complexity vs correctness here
-        for arg in [str.lower(arg) for arg in args]:
-            # mandatory suffix, combo & nmiss
-            if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
-                combo = int(arg[:-1])
-                # if combo > bmap.max_combo:
-                #    return "Invalid combo."
-            elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
-                nmiss = int(arg[:-1])
-                # TODO: store nobjects?
-                # if nmiss > bmap.max_combo:
-                #    return "Invalid misscount."
-            else:
-                # optional prefix/suffix, mods & accuracy
-                arg_stripped = arg.removeprefix("+").removesuffix("%")
-                if (
-                    mods is None
-                    and arg_stripped.isalpha()
-                    and len(arg_stripped) % 2 == 0
-                ):
-                    mods = Mods.from_modstr(arg_stripped)
-                    mods = mods.filter_invalid_combos(mode)
-                elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
-                    acc = float(arg_stripped)
-                    if not 0 <= acc <= 100:
-                        return ParsingError("Invalid accuracy.")
-                else:
-                    return ParsingError(f"Unknown argument: {arg}")
-
-        return {
-            "acc": acc,
-            "mods": mods,
-            "combo": combo,
-            "nmiss": nmiss,
-        }
-    else:  # mode == 4
-        if not args or len(args) > 2:
-            return ParsingError("Invalid syntax: !with <acc/mods ...>")
-
-        acc = mods = None
-
-        # Parse acc and mods from arguments.
-        for arg in [str.lower(arg) for arg in args]:
+    # parse acc, misses, combo and mods from arguments.
+    # tried to balance complexity vs correctness here
+    for arg in (str.lower(arg) for arg in args):
+        # mandatory suffix, combo & nmiss
+        if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
+            combo = int(arg[:-1])
+            # if combo > bmap.max_combo:
+            #    return "Invalid combo."
+        elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
+            nmiss = int(arg[:-1])
+            # TODO: store nobjects?
+            # if nmiss > bmap.combo:
+            #    return "Invalid misscount."
+        else:
+            # optional prefix/suffix, mods & accuracy
             arg_stripped = arg.removeprefix("+").removesuffix("%")
             if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
                 mods = Mods.from_modstr(arg_stripped)
@@ -504,10 +474,12 @@ def parse__with__command_args(
             else:
                 return ParsingError(f"Unknown argument: {arg}")
 
-        return {
-            "mods": mods,
-            "acc": acc,
-        }
+    return {
+        "acc": acc,
+        "mods": mods,
+        "combo": combo,
+        "nmiss": nmiss,
+    }
 
 
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
@@ -561,7 +533,7 @@ async def _with(ctx: Context) -> Optional[str]:
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         mode=mode_vn,
-        mods=int(command_args["mods"]),
+        mods=int(command_args["mods"]) if command_args["mods"] is not None else 0,
         scores=[score_args],  # calculate one score
     )
 
