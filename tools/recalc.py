@@ -1,19 +1,21 @@
+#!/usr/bin/env python3.9
+from __future__ import annotations
+
+import asyncio
+import math
 import os
 import sys
-import asyncio
-
-import databases
-import aioredis
-import math
-
-from typing import Iterator
-from typing import Any
-from typing import Awaitable
-from akatsuki_pp_py import Beatmap
-from akatsuki_pp_py import Calculator
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from typing import Any
+from typing import Awaitable
+from typing import Iterator
+
+import aioredis
+import databases
+from akatsuki_pp_py import Beatmap
+from akatsuki_pp_py import Calculator
 
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
@@ -117,7 +119,8 @@ async def recalculate_user(
     )
 
     user_info = await ctx.database.fetch_one(
-        "SELECT country, privileges FROM users WHERE id = :id", {"id": id}
+        "SELECT country, privileges FROM users WHERE id = :id",
+        {"id": id},
     )
     if user_info is None:
         raise Exception(f"Unknown user ID {id}?")
@@ -192,7 +195,7 @@ async def main() -> int:
     relax_bits = [
         int(bit)
         for bit in input(
-            "Enter relax bits (0, 1, 2 - comma delimited) to recalc: "
+            "Enter relax bits (0, 1, 2 - comma delimited) to recalc: ",
         ).split(",")
     ]
 
