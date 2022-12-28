@@ -764,7 +764,7 @@ async def osuSubmitModularSelector(
 
         # await player.restrict(
         #     admin=app.state.sessions.bot,
-        #     reason="Mismatching hashes on score submission",
+        #     reason="mismatching hashes on score submission",
         # )
 
         # refresh their client state
