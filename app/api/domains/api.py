@@ -23,7 +23,6 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
-from app.state.services import acquire_db_conn
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -112,10 +111,9 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
 @router.get("/search_players")
 async def api_search_players(
     search: Optional[str] = Query(None, alias="q", min=2, max=32),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Search for users on the server by name."""
-    rows = await db_conn.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT id, name "
         "FROM users "
         "WHERE name LIKE COALESCE(:name, name) "
@@ -451,7 +449,6 @@ async def api_get_player_most_played(
     username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
@@ -487,7 +484,7 @@ async def api_get_player_most_played(
     mode = GameMode(mode_arg)
 
     # fetch & return info from sql
-    rows = await db_conn.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT m.md5, m.id, m.set_id, m.status, "
         "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
         "FROM scores s "
@@ -546,7 +543,6 @@ async def api_get_map_scores(
     mods_arg: Optional[str] = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return the top n scores on a given beatmap."""
     if mode_arg in (
@@ -635,7 +631,7 @@ async def api_get_map_scores(
     query.append(f"ORDER BY {sort} DESC LIMIT :limit")
     params["limit"] = limit
 
-    rows = await db_conn.fetch_all(" ".join(query), params)
+    rows = await app.state.services.database.fetch_all(" ".join(query), params)
 
     return ORJSONResponse(
         {
@@ -648,10 +644,9 @@ async def api_get_map_scores(
 @router.get("/get_score_info")
 async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return information about a given score."""
-    row = await db_conn.fetch_one(
+    row = await app.state.services.database.fetch_one(
         "SELECT map_md5, score, pp, acc, max_combo, mods, "
         "n300, n100, n50, nmiss, ngeki, nkatu, grade, status, "
         "mode, play_time, time_elapsed, perfect "
@@ -675,7 +670,6 @@ async def api_get_score_info(
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = False,
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     """Return a given replay (including headers)."""
 
@@ -703,7 +697,7 @@ async def api_get_replay(
 
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await db_conn.fetch_one(
+    row = await app.state.services.database.fetch_one(
         "SELECT u.name username, m.md5 map_md5, "
         "m.artist, m.title, m.version, "
         "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
@@ -847,7 +841,6 @@ async def api_get_global_leaderboard(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: Optional[str] = Query(None, min_length=2, max_length=2),
-    db_conn: databases.core.Connection = Depends(acquire_db_conn),
 ):
     if mode_arg in (
         GameMode.RELAX_MANIA,
@@ -869,7 +862,7 @@ async def api_get_global_leaderboard(
         query_conditions.append("u.country = :country")
         query_parameters["country"] = country
 
-    rows = await db_conn.fetch_all(
+    rows = await app.state.services.database.fetch_all(
         "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
         "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
         "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
