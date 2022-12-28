@@ -116,8 +116,12 @@ async def api_search_players(
 ):
     """Search for users on the server by name."""
     rows = await db_conn.fetch_all(
-        "SELECT id, name FROM users WHERE name LIKE :search AND priv & 3 = 3 ORDER BY id ASC",
-        {"search": f"%{search}%" if search is not None else None},
+        "SELECT id, name "
+        "FROM users "
+        "WHERE name LIKE COALESCE(:name, name) "
+        "AND priv & 3 = 3 "
+        "ORDER BY id ASC",
+        {"name": f"%{search}%" if search is not None else None},
     )
 
     return ORJSONResponse(
