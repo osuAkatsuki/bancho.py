@@ -17,13 +17,13 @@ services:
       - ${DB_PORT}:${DB_PORT}
     expose:
       - ${DB_PORT}
-  
+
   redis:
     image: redis
     container_name: bpy_redis
     ports:
       - '${REDIS_PORT}:${REDIS_PORT}'
-  
+
   bancho:
     build: .
     container_name: bpy_bancho
@@ -35,7 +35,7 @@ services:
       - .env
     volumes:
       - data:/.data
-  
+
   nginx:
     image: nginx
     container_name: bpy_nginx
