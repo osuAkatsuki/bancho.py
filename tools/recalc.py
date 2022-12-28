@@ -20,12 +20,15 @@ from akatsuki_pp_py import Calculator
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
-
-from app.constants.privileges import Privileges
-from app.constants.mods import Mods
-from app.constants.gamemodes import GameMode
-from app.objects.beatmap import ensure_local_osu_file
-import app.settings
+try:
+    from app.constants.privileges import Privileges
+    from app.constants.mods import Mods
+    from app.constants.gamemodes import GameMode
+    from app.objects.beatmap import ensure_local_osu_file
+    import app.settings
+except ModuleNotFoundError:
+    print("\x1b[;91mMust run from tools/ directory\x1b[m")
+    raise
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -52,7 +55,7 @@ async def recalculate_score(
         ctx.beatmaps[score["map_id"]] = beatmap
 
     calculator = Calculator(
-        mode=score["mode"],
+        mode=GameMode(score["mode"]).as_vanilla,
         mods=score["mods"],
         acc=score["acc"],
         n_misses=score["nmiss"],
@@ -64,12 +67,14 @@ async def recalculate_score(
     if math.isnan(new_pp) or math.isinf(new_pp):
         new_pp = 0.0
 
+    new_pp = min(new_pp, 9999.999)
+
     await ctx.database.execute(
         "UPDATE scores SET pp = :new_pp WHERE id = :id",
         {"new_pp": new_pp, "id": score["id"]},
     )
 
-    print(f"Recalculated score ID {score['id']} ({score['pp']:.2f} -> {new_pp:.2f}pp)")
+    print(f"Recalculated score ID {score['id']} ({score['pp']:.3f} -> {new_pp:.3f}pp)")
 
 
 async def process_score_chunk(
@@ -101,6 +106,9 @@ async def recalculate_user(
     )
 
     total_scores = len(best_scores)
+    if not total_scores:
+        return
+
     top_100_pp = best_scores[:100]
 
     # calculate new total weighted accuracy
@@ -119,13 +127,13 @@ async def recalculate_user(
     )
 
     user_info = await ctx.database.fetch_one(
-        "SELECT country, privileges FROM users WHERE id = :id",
+        "SELECT country, priv FROM users WHERE id = :id",
         {"id": id},
     )
     if user_info is None:
         raise Exception(f"Unknown user ID {id}?")
 
-    if user_info["privileges"] & Privileges.UNRESTRICTED:
+    if user_info["priv"] & Privileges.UNRESTRICTED:
         await ctx.redis.zadd(
             f"bancho:leaderboard:{game_mode.value}",
             {str(id): pp},
@@ -136,7 +144,7 @@ async def recalculate_user(
             {str(id): pp},
         )
 
-    print(f"Recalculated user ID {id} ({pp}pp, {acc:.2f}%")
+    print(f"Recalculated user ID {id} ({pp:.3f}pp, {acc:.3f}%)")
 
 
 async def process_user_chunk(
@@ -170,8 +178,8 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
     scores = [
         dict(row)
         for row in await ctx.database.fetch_all(
-            "SELECT scores.id, mode, mods, acc, nmiss, max_combo, map_md5, pp, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
-            "WHERE status = 2 AND mode = :mode ORDER BY pp DESC",
+            "SELECT scores.id, scores.mode, scores.mods, scores.acc, nmiss, scores.max_combo, scores.map_md5, scores.pp, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
+            "WHERE scores.status = 2 AND scores.mode = :mode ORDER BY scores.pp DESC",
             {"mode": game_mode.value},
         )
     ]
@@ -181,13 +189,6 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
 
 
 async def main() -> int:
-    db = databases.Database(app.settings.DB_DSN)
-    await db.connect()
-
-    redis = await aioredis.from_url(app.settings.REDIS_DSN)
-
-    ctx = Context(db, redis)
-
     modes = [
         int(mode)
         for mode in input("Enter modes (comma delimited) to recalc: ").split(",")
@@ -198,6 +199,13 @@ async def main() -> int:
             "Enter relax bits (0, 1, 2 - comma delimited) to recalc: ",
         ).split(",")
     ]
+
+    db = databases.Database(app.settings.DB_DSN)
+    await db.connect()
+
+    redis = await aioredis.from_url(app.settings.REDIS_DSN)
+
+    ctx = Context(db, redis)
 
     for mode in modes:
         bits = [0]
