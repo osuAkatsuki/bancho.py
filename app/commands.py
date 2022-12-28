@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import copy
 import importlib
-import math
 import os
 import pprint
 import random
@@ -61,14 +59,9 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
-from app.usecases.performance import ScoreDifficultyParams
+from app.usecases.performance import ScoreParams
 from app.utils import make_safe_name
 from app.utils import seconds_readable
-
-try:
-    from oppai_ng.oppai import OppaiWrapper
-except ModuleNotFoundError:
-    pass  # utils will handle this for us
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -131,10 +124,10 @@ class CommandSet:
 
 
 # TODO: refactor help commands into some base ver
-#       since they're all the same anyways lol.
+#       since they're all the same anyway lol.
 
 # not sure if this should be in glob or not,
-# trying to think of some use cases lol..
+# trying to think of some use cases lol...
 regular_commands = []
 command_sets = [
     mp_commands := CommandSet("mp", "Multiplayer commands."),
@@ -322,7 +315,7 @@ async def maplink(ctx: Context) -> Optional[str]:
         return "No map found!"
 
     # gatari.pw & nerina.pw are pretty much the only
-    # reliable mirrors i know of? perhaps beatconnect
+    # reliable mirrors I know of? perhaps beatconnect
     return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full_name}]"
 
 
@@ -366,7 +359,7 @@ async def recent(ctx: Context) -> Optional[str]:
 
 
 TOP_SCORE_FMTSTR = (
-    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmaps/{bmapid} "
+    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmapsets/{map_set_id}/{map_id} "
     "{artist} - {title} [{version}]]"
 )
 
@@ -406,7 +399,7 @@ async def top(ctx: Context) -> Optional[str]:
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
     scores = await app.state.services.database.fetch_all(
-        "SELECT s.pp, b.artist, b.title, b.version, b.id AS bmapid "
+        "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
         "FROM scores s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
         "WHERE s.userid = :user_id "
@@ -445,72 +438,44 @@ def parse__with__command_args(
     # tried to balance complexity vs correctness for this function
     # TODO: it can surely be cleaned up further - need to rethink it?
 
-    if mode in (0, 1, 2):
-        if not args or len(args) > 4:
-            return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
+    if not args or len(args) > 4:
+        return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
 
-        # !with 95% 1m 429x hddt
-        acc = mods = combo = nmiss = None
+    # !with 95% 1m 429x hddt
+    acc = mods = combo = nmiss = None
 
-        # parse acc, misses, combo and mods from arguments.
-        # tried to balance complexity vs correctness here
-        for arg in [str.lower(arg) for arg in args]:
-            # mandatory suffix, combo & nmiss
-            if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
-                combo = int(arg[:-1])
-                # if combo > bmap.max_combo:
-                #    return "Invalid combo."
-            elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
-                nmiss = int(arg[:-1])
-                # TODO: store nobjects?
-                # if nmiss > bmap.max_combo:
-                #    return "Invalid misscount."
-            else:
-                # optional prefix/suffix, mods & accuracy
-                arg_stripped = arg.removeprefix("+").removesuffix("%")
-                if (
-                    mods is None
-                    and arg_stripped.isalpha()
-                    and len(arg_stripped) % 2 == 0
-                ):
-                    mods = Mods.from_modstr(arg_stripped)
-                    mods = mods.filter_invalid_combos(mode)
-                elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
-                    acc = float(arg_stripped)
-                    if not 0 <= acc <= 100:
-                        return ParsingError("Invalid accuracy.")
-                else:
-                    return ParsingError(f"Unknown argument: {arg}")
-
-        return {
-            "acc": acc,
-            "mods": mods,
-            "combo": combo,
-            "nmiss": nmiss,
-        }
-    else:  # mode == 4
-        if not args or len(args) > 2:
-            return ParsingError("Invalid syntax: !with <score/mods ...>")
-
-        score = 1000
-        mods = Mods.NOMOD
-
-        for param in (p.strip("+k") for p in args):
-            if param.isdecimal():  # acc
-                if not 0 <= (score := int(param)) <= 1000:
-                    return ParsingError("Invalid score.")
-                if score <= 500:
-                    return ParsingError("<=500k score is always 0pp.")
-            elif len(param) % 2 == 0:
-                mods = Mods.from_modstr(param)
+    # parse acc, misses, combo and mods from arguments.
+    # tried to balance complexity vs correctness here
+    for arg in (str.lower(arg) for arg in args):
+        # mandatory suffix, combo & nmiss
+        if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
+            combo = int(arg[:-1])
+            # if combo > bmap.max_combo:
+            #    return "Invalid combo."
+        elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
+            nmiss = int(arg[:-1])
+            # TODO: store nobjects?
+            # if nmiss > bmap.combo:
+            #    return "Invalid misscount."
+        else:
+            # optional prefix/suffix, mods & accuracy
+            arg_stripped = arg.removeprefix("+").removesuffix("%")
+            if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
+                mods = Mods.from_modstr(arg_stripped)
                 mods = mods.filter_invalid_combos(mode)
+            elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
+                acc = float(arg_stripped)
+                if not 0 <= acc <= 100:
+                    return ParsingError("Invalid accuracy.")
             else:
-                return ParsingError("Invalid syntax: !with <score/mods ...>")
+                return ParsingError(f"Unknown argument: {arg}")
 
-        return {
-            "mods": mods,
-            "score": score,
-        }
+    return {
+        "acc": acc,
+        "mods": mods,
+        "combo": combo,
+        "nmiss": nmiss,
+    }
 
 
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
@@ -536,35 +501,26 @@ async def _with(ctx: Context) -> Optional[str]:
 
     msg_fields = []
 
-    # include mods regardless of mode
+    score_args = ScoreParams(mode=mode_vn)
+
     if (mods := command_args.get("mods")) is not None:
+        score_args.mods = mods
         msg_fields.append(f"{mods!r}")
 
-    score_args: ScoreDifficultyParams = {}
+    if (nmiss := command_args["nmiss"]) is not None:
+        score_args.nmiss = nmiss
+        msg_fields.append(f"{nmiss}m")
 
-    # include mode-specific fields
-    if mode_vn in (0, 1, 2):
-        if (nmiss := command_args["nmiss"]) is not None:
-            score_args["nmiss"] = nmiss
-            msg_fields.append(f"{nmiss}m")
+    if (combo := command_args["combo"]) is not None:
+        score_args.combo = combo
+        msg_fields.append(f"{combo}x")
 
-        if (combo := command_args["combo"]) is not None:
-            score_args["combo"] = combo
-            msg_fields.append(f"{combo}x")
-
-        if (acc := command_args["acc"]) is not None:
-            score_args["acc"] = acc
-            msg_fields.append(f"{acc:.2f}%")
-
-    else:  # mode_vn == 3
-        if (score := command_args["score"]) is not None:
-            score_args["score"] = score * 1000
-            msg_fields.append(f"{score}k")
+    if (acc := command_args["acc"]) is not None:
+        score_args.acc = acc
+        msg_fields.append(f"{acc:.2f}%")
 
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
-        mode=mode_vn,
-        mods=int(command_args["mods"]),
         scores=[score_args],  # calculate one score
     )
 
@@ -693,7 +649,7 @@ async def _map(ctx: Context) -> Optional[str]:
     # update sql & cache based on scope
     # XXX: not sure if getting md5s from sql
     # for updating cache would be faster?
-    # surely this will not scale as well..
+    # surely this will not scale as well...
 
     async with app.state.services.database.connection() as db_conn:
         if ctx.args[1] == "set":
@@ -1082,7 +1038,7 @@ async def fakeusers(ctx: Context) -> Optional[str]:
     if not 0 < amount <= 100_000:
         return "Amount must be in range 1-100k."
 
-    # we start at half way through
+    # we start at halfway through
     # the i32 space for fake user ids.
     FAKE_ID_START = 0x7FFFFFFF >> 1
 
@@ -1209,122 +1165,10 @@ async def stealth(ctx: Context) -> Optional[str]:
 @command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> Optional[str]:
     """Recalculate pp for a given map, or all maps."""
-    # NOTE: at the moment this command isn't very optimal and re-parses
-    # the beatmap file each iteration; this will be heavily improved.
-    if len(ctx.args) != 1 or ctx.args[0] not in ("map", "all"):
-        return "Invalid syntax: !recalc <map/all>"
-
-    if ctx.args[0] == "map":
-        # by specific map, use their last /np
-        if time.time() >= ctx.player.last_np["timeout"]:
-            return "Please /np a map first!"
-
-        bmap: Beatmap = ctx.player.last_np["bmap"]
-
-        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-        if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
-            return "Mapfile could not be found; this incident has been reported."
-
-        async with (
-            app.state.services.database.connection() as score_select_conn,
-            app.state.services.database.connection() as update_conn,
-        ):
-            with OppaiWrapper() as ezpp:
-                ezpp.set_mode(0)  # TODO: other modes
-                for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                    # TODO: this should be using an async generator
-                    for row in await score_select_conn.fetch_all(
-                        "SELECT id, acc, mods, max_combo, nmiss "
-                        "FROM scores "
-                        "WHERE map_md5 = :map_md5 AND mode = :mode",
-                        {"map_md5": bmap.md5, "mode": mode},
-                    ):
-                        ezpp.set_mods(row["mods"])
-                        ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                        ezpp.set_combo(row["max_combo"])
-                        ezpp.set_accuracy_percent(row["acc"])
-
-                        ezpp.calculate(str(osu_file_path))
-
-                        pp = ezpp.get_pp()
-
-                        if math.isinf(pp) or math.isnan(pp):
-                            continue
-
-                        await update_conn.execute(
-                            "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                            {"pp": pp, "score_id": row["id"]},
-                        )
-
-        return "Map recalculated."
-    else:
-        # recalc all plays on the server, on all maps
-        staff_chan = app.state.sessions.channels["#staff"]  # log any errs here
-
-        async def recalc_all() -> None:
-            staff_chan.send_bot(f"{ctx.player} started a full recalculation.")
-            st = time.time()
-
-            async with (
-                app.state.services.database.connection() as bmap_select_conn,
-                app.state.services.database.connection() as score_select_conn,
-                app.state.services.database.connection() as update_conn,
-            ):
-                # TODO: should be aiter
-                for bmap_row in await bmap_select_conn.fetch_all(
-                    "SELECT id, md5 FROM maps WHERE passes > 0",
-                ):
-                    bmap_id = bmap_row["id"]
-                    bmap_md5 = bmap_row["md5"]
-
-                    osu_file_path = BEATMAPS_PATH / f"{bmap_id}.osu"
-                    if not await ensure_local_osu_file(
-                        osu_file_path,
-                        bmap_id,
-                        bmap_md5,
-                    ):
-                        staff_chan.send_bot(
-                            f"[Recalc] Couldn't find {bmap_id} / {bmap_md5}",
-                        )
-                        continue
-
-                    with OppaiWrapper() as ezpp:
-                        ezpp.set_mode(0)  # TODO: other modes
-                        for mode in (0, 4, 8):  # vn!std, rx!std, ap!std
-                            # TODO: this should be using an async generator
-                            for row in await score_select_conn.fetch_all(
-                                "SELECT id, acc, mods, max_combo, nmiss "
-                                "FROM scores "
-                                "WHERE map_md5 = :map_md5 AND mode = :mode",
-                                {"map_md5": bmap_md5, "mode": mode},
-                            ):
-                                ezpp.set_mods(row["mods"])
-                                ezpp.set_nmiss(row["nmiss"])  # clobbers acc
-                                ezpp.set_combo(row["max_combo"])
-                                ezpp.set_accuracy_percent(row["acc"])
-
-                                ezpp.calculate(str(osu_file_path))
-
-                                pp = ezpp.get_pp()
-
-                                if math.isinf(pp) or math.isnan(pp):
-                                    continue
-
-                                await update_conn.execute(
-                                    "UPDATE scores SET pp = :pp WHERE id = :score_id",
-                                    {"pp": pp, "score_id": row["id"]},
-                                )
-
-                    # leave at least 1/100th of
-                    # a second for handling conns.
-                    await asyncio.sleep(0.01)
-
-            elapsed = app.utils.seconds_readable(int(time.time() - st))
-            staff_chan.send_bot(f"Recalculation complete. | Elapsed: {elapsed}")
-
-        app.state.loop.create_task(recalc_all())
-
-        return "Starting a full recalculation."
+    return (
+        "Please use tools/recalc.py instead.\n"
+        "If you need any support, join our Discord @ https://discord.gg/ShEQgUx."
+    )
 
 
 @command(Privileges.DEVELOPER, hidden=True)
@@ -1703,7 +1547,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
                 match.starting["time"] = None
 
                 # make sure player didn't leave the
-                # match since queueing this start lol..
+                # match since queueing this start lol...
                 if ctx.player not in match:
                     match.chat.send_bot("Player left match? (cancelled)")
                     return
@@ -2685,7 +2529,7 @@ async def clan_leave(ctx: Context):
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["l"])
 async def clan_list(ctx: Context) -> Optional[str]:
-    """List all existing clans information."""
+    """List all existing clans' information."""
     if ctx.args:
         if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
             return "Invalid syntax: !clan list (page)"

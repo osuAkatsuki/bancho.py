@@ -62,11 +62,12 @@ bancho.py 的代码库有大约15,000行，我们致力于减少我们需要的�
 
 但是你还是需要安装这些哦：(别急！一步步来)
 - python (bancho.py就是拿这个写的~)
+- rust (编程语言)
 - mysql (数据库~)
 - redis (一种缓存数据库，与mysql不同的是，他把频繁的数据存储到缓存中，读取速度更快)
 - nginx (用于反向代理)
 - certbot (用于搞SSL证书)
-- cmake and build-essential ( c/c++ 的 build tools )
+- build-essential ( c/c++ 的 build tools )
 
 当然还有些别的，跟着下面的步骤走就可以全都安装咯~
 ```sh
@@ -77,9 +78,12 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # 安装所有的依赖(dependence)
 sudo apt install -y python3.9-dev python3.9-distutils \
-                    cmake build-essential \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
+# 安装rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 安装python的包管理器, pip
 # pip是用来安装和python有关的包
@@ -231,7 +235,6 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
     |   ├── api                 # code related to handling external requests
     |   |   ├── domains           # endpoints that can be reached from externally
     |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
-    |   |   |   ├── ava.py        # endpoints available @ https://a.ppy.sh
     |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
     |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
     |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh

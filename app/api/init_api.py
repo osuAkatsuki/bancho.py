@@ -18,6 +18,7 @@ from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.requests import ClientDisconnect
 
 import app.bg_loops
 import app.settings
@@ -91,11 +92,15 @@ def init_middlewares(asgi_app: BanchoAPI) -> None:
     ) -> Response:
         # if an osu! client is waiting on leaderboard data
         # and switches to another leaderboard, it will cancel
-        # the previous request mid-way, resulting in a large
+        # the previous request midway, resulting in a large
         # error in the console. this is to catch that :)
 
         try:
             return await call_next(request)
+        except ClientDisconnect:
+            # client disconnected from the server
+            # while we were reading the body.
+            return Response("Client is stupppod")
         except RuntimeError as exc:
             if exc.args[0] == "No response returned.":
                 # client disconnected from the server

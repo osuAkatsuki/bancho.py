@@ -62,8 +62,6 @@ DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
-OPPAI_PATH = Path.cwd() / "oppai_ng"
-OLD_OPPAI_PATH = Path.cwd() / "oppai-ng"
 
 
 def make_safe_name(name: str) -> str:
@@ -150,7 +148,7 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
 
 
 def download_achievement_images(achievements_path: Path) -> None:
-    """Download all used achievement images (using best available source)."""
+    """Download all used achievement images (using the best available source)."""
     # try using my cmyui.xyz mirror (zip file)
     downloaded = _download_achievement_images_mirror(achievements_path)
 
@@ -419,63 +417,9 @@ def ensure_directory_structure() -> int:
     return 0
 
 
-def ensure_dependencies_and_requirements() -> int:
-    """Make sure all of bancho.py's dependencies are ready."""
-    if (
-        not OPPAI_PATH.exists()
-        or not (OPPAI_PATH / "pybind11").exists()
-        or not any((OPPAI_PATH / "pybind11").iterdir())
-    ):
-        log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["git", "submodule", "update", "--init", "--recursive"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to get git submodules.", Ansi.LRED)
-            return exit_code
-
-    if not (OPPAI_PATH / "oppai.so").exists():
-        log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["./build"],
-            cwd="oppai_ng",
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        if exit_code := p.wait():
-            _, stderr = p.communicate()
-            print(stderr.decode())
-            log("Failed to build oppai-ng automatically.", Ansi.LRED)
-            return exit_code
-
-        log(
-            "oppai-ng built, please start bancho.py again!",
-            Ansi.LMAGENTA,
-        )  # restart is required to fix imports
-
-        if OLD_OPPAI_PATH.exists():
-            # they have the old oppai-ng folder on disk
-            # they may have made changes to their pp system,
-            # let them know that they can delete it & fork if needed
-            log(
-                "Note that with the v4.2.1 migration, the oppai-ng folder was "
-                "moved to oppai_ng (note the underscore). Your old oppai-ng "
-                "folder still exists, and if you have made diverging changes "
-                "to your PP system, you'll need to update the new oppai_ng "
-                "submodule to apply those changes.",
-                Ansi.LMAGENTA,
-            )
-
-        return 1
-
-    return 0
-
-
 def setup_runtime_environment() -> None:
     """Configure the server's runtime environment."""
-    # install a hook to catch exceptions outside of the event loop,
+    # install a hook to catch exceptions outside the event loop,
     # which will handle various situations where the error details
     # can be cleared up for the developer; for example it will explain
     # that the config has been updated when an unknown attribute is

@@ -774,7 +774,7 @@ class Player:
 
         if c.instance:
             # instanced channel, only send the players
-            # who are currently inside of the instance
+            # who are currently inside the instance
             for p in c.players:
                 p.enqueue(chan_info_packet)
         else:
@@ -805,7 +805,7 @@ class Player:
 
         if c.instance:
             # instanced channel, only send the players
-            # who are currently inside of the instance
+            # who are currently inside the instance
             for p in c.players:
                 p.enqueue(chan_info_packet)
         else:
@@ -826,7 +826,7 @@ class Player:
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
                 name=chan_name,
-                topic=f"{self.name}'s spectator channel.'",
+                topic=f"{self.name}'s spectator channel.",
                 auto_join=False,
                 instance=True,
             )

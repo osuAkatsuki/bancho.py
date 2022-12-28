@@ -584,7 +584,7 @@ def write_i32_list(l: Collection[int]) -> bytearray:
     ret = bytearray(len(l).to_bytes(2, "little"))
 
     for i in l:
-        ret += i.to_bytes(4, "little")
+        ret += i.to_bytes(4, "little", signed=True)
 
     return ret
 
@@ -628,7 +628,7 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
     ret = bytearray(struct.pack("<HbbI", m.id, m.in_progress, 0, m.mods))
     ret += write_string(m.name)
 
-    # osu expects \x0b\x00 if there's a password but it's
+    # osu expects \x0b\x00 if there's a password, but it's
     # not being sent, and \x00 if there's no password.
     if m.passwd:
         if send_pw:
@@ -989,7 +989,7 @@ def match_start(m: Match) -> bytes:
 # packet id: 48
 # NOTE: this is actually unused, since it's
 #       much faster to just send the bytes back
-#       rather than parsing them.. though I might
+#       rather than parsing them. Though I might
 #       end up doing it eventually for security reasons
 def match_score_update(frame: ScoreFrame) -> bytes:
     return write(ServerPackets.MATCH_SCORE_UPDATE, (frame, osuTypes.scoreframe))
@@ -1094,7 +1094,7 @@ def monitor() -> bytes:
     # screenshot your desktop (and send it to osu! servers), then trigger
     # the processlist to be sent to bancho as well (also now unused).
 
-    # this doesn't work on newer clients, and i had no plans
+    # this doesn't work on newer clients, and I had no plans
     # of trying to put it to use - just coded for completion.
     return write(ServerPackets.MONITOR)
 
@@ -1249,7 +1249,7 @@ def account_restricted() -> bytes:
 # packet id: 105
 # NOTE: deprecated
 def rtx(msg: str) -> bytes:
-    # bit of a weird one, sends a request to the client
+    # a bit of a weird one, sends a request to the client
     # to show some visual effects on screen for 5 seconds:
     # - black screen, freezes game, beeps loudly.
     # within the next 3-8 seconds at random.
