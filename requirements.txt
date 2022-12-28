@@ -16,6 +16,7 @@ datadog==0.44.0
 fastapi==0.75.0
 frozenlist==1.3.0
 geoip2==4.5.0
+git+https://github.com/osuAkatsuki/akatsuki-pp-py
 greenlet==1.1.2
 h11==0.13.0
 idna==3.3
@@ -42,4 +43,3 @@ urllib3==1.26.9
 uvicorn==0.17.6
 uvloop==0.16.0
 yarl==1.7.2
-git+https://github.com/osuAkatsuki/akatsuki-pp-py
