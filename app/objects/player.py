@@ -39,6 +39,7 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -1018,15 +1019,7 @@ class Player:
 
     async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for row in await db_conn.fetch_all(
-            "SELECT mode, tscore, rscore, pp, acc, "
-            "plays, playtime, max_combo, total_hits, "
-            "xh_count, x_count, sh_count, s_count, a_count "
-            "FROM stats "
-            "WHERE id = :user_id",
-            {"user_id": self.id},
-        ):
-            row = dict(row)  # make mutable copy
+        for row in await stats_repo.fetch_many(player_id=self.id):
             mode = row.pop("mode")
 
             # calculate player's rank.

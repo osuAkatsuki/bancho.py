@@ -7,10 +7,8 @@ from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
 
-import databases.core
 from fastapi import APIRouter
 from fastapi import status
-from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
@@ -23,6 +21,7 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
+from app.repositories import stats as stats_repo
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -202,14 +201,9 @@ async def api_get_player_info(
         api_data["stats"] = {}
 
         # get all stats
-        rows = await app.state.services.database.fetch_all(
-            "SELECT mode, tscore, rscore, pp, plays, playtime, acc, max_combo, "
-            "xh_count, x_count, sh_count, s_count, a_count FROM stats "
-            "WHERE id = :userid",
-            {"userid": resolved_user_id},
-        )
+        all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
 
-        for idx, mode_stats in enumerate([dict(row) for row in rows]):
+        for idx, mode_stats in enumerate(all_stats):
             rank = await app.state.services.redis.zrevrank(
                 f"bancho:leaderboard:{idx}",
                 str(resolved_user_id),

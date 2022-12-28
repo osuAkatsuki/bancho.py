@@ -65,6 +65,7 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -1972,22 +1973,7 @@ async def register_account(
             )
 
             # add to `stats` table.
-            await app.state.services.database.execute_many(
-                "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
-                [
-                    {"user_id": user_id, "mode": mode}
-                    for mode in (
-                        0,  # vn!std
-                        1,  # vn!taiko
-                        2,  # vn!catch
-                        3,  # vn!mania
-                        4,  # rx!std
-                        5,  # rx!taiko
-                        6,  # rx!catch
-                        8,  # ap!std
-                    )
-                ],
-            )
+            await stats_repo.create_all_modes(player_id=user_id)
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")
