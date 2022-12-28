@@ -63,7 +63,7 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     nginx certbot
 
 # Installieren rust
-curl https://sh.rustup.rs -sSf | bash -s -- -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Installieren Sie den Paketmanager von Python, pip
 # Er wird verwendet, um python-spezifische Abhängigkeiten zu installieren

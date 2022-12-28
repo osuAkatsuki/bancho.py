@@ -83,7 +83,7 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     nginx certbot
 
 # 安装rust
-curl https://sh.rustup.rs -sSf | bash -s -- -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 安装python的包管理器, pip
 # pip是用来安装和python有关的包

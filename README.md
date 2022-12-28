@@ -60,7 +60,7 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     nginx certbot
 
 # install rust
-curl https://sh.rustup.rs -sSf | bash -s -- -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # install python's package manager, pip
 # it's used to install python-specific dependencies
