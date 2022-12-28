@@ -58,6 +58,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreDifficultyParams
 
@@ -559,11 +560,9 @@ async def login(
                     ),
                 }
 
-    user_info = await db_conn.fetch_one(
-        "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = :name",
-        {"name": app.utils.make_safe_name(login_data["username"])},
+    user_info = await players_repo.fetch_one(
+        name=login_data["username"],
+        fetch_all_fields=True,
     )
 
     if user_info is None:

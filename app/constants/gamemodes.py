@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 from enum import IntEnum
 from enum import unique
 

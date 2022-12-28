@@ -34,7 +34,7 @@ from app.utils import make_safe_name
 READ_PARAMS = textwrap.dedent(
     """\
         id, name, safe_name, email, priv, country, silence_end, donor_end, creation_time,
-        last_activity, clan_id, clan_priv, preferred_mode, play_style, custom_badge_name,
+        latest_activity, clan_id, clan_priv, preferred_mode, play_style, custom_badge_name,
         custom_badge_icon, userpage_content
     """,
 )
@@ -48,8 +48,8 @@ async def create(
 ) -> dict[str, Any]:
     """Create a new player in the database."""
     query = f"""\
-        INSERT INTO users (name, safe_name, email, pw_bcrypt, country)
-             VALUES (:name, :safe_name, :email, :pw_bcrypt, :country)
+        INSERT INTO users (name, safe_name, email, pw_bcrypt, country, :creation_time, :latest_activity)
+             VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())
     """
     params = {
         "name": name,
@@ -74,15 +74,16 @@ async def create(
 
 async def fetch_one(
     id: Optional[int] = None,
-    safe_name: Optional[str] = None,
+    name: Optional[str] = None,
     email: Optional[str] = None,
+    fetch_all_fields: bool = False,  # TODO: probably remove this if possible
 ) -> dict[str, Any]:
     """Fetch a single player from the database."""
-    if not (id or safe_name or email):
+    if not (id or name or email):
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
-        SELECT {READ_PARAMS}
+        SELECT {'*' if fetch_all_fields else READ_PARAMS}
           FROM users
          WHERE id = COALESCE(:id, id)
            AND safe_name = COALESCE(:safe_name, safe_name)
@@ -90,11 +91,42 @@ async def fetch_one(
     """
     params = {
         "id": id,
-        "safe_name": safe_name,
+        "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return rec
+
+
+async def fetch_count(
+    priv: Optional[int] = None,
+    country: Optional[str] = None,
+    clan_id: Optional[int] = None,
+    clan_priv: Optional[int] = None,
+    preferred_mode: Optional[int] = None,
+    play_style: Optional[int] = None,
+) -> int:
+    """Fetch the number of players in the database."""
+    query = f"""\
+        SELECT COUNT(*) AS count
+          FROM users
+         WHERE priv = COALESCE(:priv, priv)
+           AND country = COALESCE(:country, country)
+           AND clan_id = COALESCE(:clan_id, clan_id)
+           AND clan_priv = COALESCE(:clan_priv, clan_priv)
+           AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
+           AND play_style = COALESCE(:play_style, play_style)
+    """
+    params = {
+        "priv": priv,
+        "country": country,
+        "clan_id": clan_id,
+        "clan_priv": clan_priv,
+        "preferred_mode": preferred_mode,
+        "play_style": play_style,
+    }
+    rec = await app.state.services.database.fetch_one(query, params)
+    return rec["count"]
 
 
 async def fetch_many(
@@ -104,8 +136,8 @@ async def fetch_many(
     clan_priv: Optional[int] = None,
     preferred_mode: Optional[int] = None,
     play_style: Optional[int] = None,
-    page: int = 1,
-    page_size: int = 100,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """Fetch multiple players from the database."""
     query = f"""\
@@ -117,8 +149,6 @@ async def fetch_many(
            AND clan_priv = COALESCE(:clan_priv, clan_priv)
            AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
            AND play_style = COALESCE(:play_style, play_style)
-         LIMIT :limit
-        OFFSET :offset
     """
     params = {
         "priv": priv,
@@ -127,9 +157,16 @@ async def fetch_many(
         "clan_priv": clan_priv,
         "preferred_mode": preferred_mode,
         "play_style": play_style,
-        "limit": page_size,
-        "offset": (page - 1) * page_size,
     }
+
+    if page is not None and page_size is not None:
+        query += """\
+            LIMIT :limit
+           OFFSET :offset
+        """
+        params["limit"] = page_size
+        params["offset"] = (page - 1) * page_size
+
     recs = await app.state.services.database.fetch_all(query, params)
     return recs
 
@@ -143,7 +180,7 @@ async def update(
     silence_end: Optional[int] = None,
     donor_end: Optional[int] = None,
     creation_time: Optional[int] = None,
-    last_activity: Optional[int] = None,
+    latest_activity: Optional[int] = None,
     clan_id: Optional[int] = None,
     clan_priv: Optional[int] = None,
     preferred_mode: Optional[int] = None,
@@ -163,7 +200,7 @@ async def update(
                silence_end = COALESCE(:silence_end, silence_end),
                donor_end = COALESCE(:donor_end, donor_end),
                creation_time = COALESCE(:creation_time, creation_time),
-               last_activity = COALESCE(:last_activity, last_activity),
+               latest_activity = COALESCE(:latest_activity, latest_activity),
                clan_id = COALESCE(:clan_id, clan_id),
                clan_priv = COALESCE(:clan_priv, clan_priv),
                preferred_mode = COALESCE(:preferred_mode, preferred_mode),
@@ -176,14 +213,14 @@ async def update(
     params = {
         "id": id,
         "name": name,
-        "safe_name": make_safe_name(name),
+        "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
         "priv": priv,
         "country": country,
         "silence_end": silence_end,
         "donor_end": donor_end,
         "creation_time": creation_time,
-        "last_activity": last_activity,
+        "latest_activity": latest_activity,
         "clan_id": clan_id,
         "clan_priv": clan_priv,
         "preferred_mode": preferred_mode,
