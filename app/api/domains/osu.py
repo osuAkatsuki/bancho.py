@@ -873,7 +873,7 @@ async def osuSubmitModularSelector(
                 ]
 
                 if score.mods:
-                    ann.insert(1, f"+{score.mods!r}")
+                    ann.insert(1, f"+{Mods.to_string(score.mods)}")
 
                 scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
@@ -1410,7 +1410,7 @@ async def getScores(
         else:
             mode_arg += 8
 
-    mods = Mods(mods_arg)
+    mods = mods_arg
     mode = GameMode(mode_arg)
 
     # attempt to update their stats if their
