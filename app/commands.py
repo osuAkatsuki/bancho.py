@@ -461,7 +461,7 @@ def parse__with__command_args(
             # optional prefix/suffix, mods & accuracy
             arg_stripped = arg.removeprefix("+").removesuffix("%")
             if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
-                mods = Mods.from_modstr(param)
+                mods = Mods.from_modstr(arg_stripped)
                 mods = Mods.filter_invalid_combos(mods, mode)
             elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
                 acc = float(arg_stripped)
