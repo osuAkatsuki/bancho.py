@@ -337,7 +337,7 @@ async def recent(ctx: Context) -> Optional[str]:
     l = [f"[{s.mode!r}] {s.bmap.embed}", f"{s.acc:.2f}%"]
 
     if s.mods:
-        l.insert(1, f"+{s.mods!r}")
+        l.insert(1, f"+{Mods.to_string(s.mods)}")
 
     l = [" ".join(l)]
 
@@ -505,7 +505,7 @@ async def _with(ctx: Context) -> Optional[str]:
 
     if (mods := command_args.get("mods")) is not None:
         score_args.mods = mods
-        msg_fields.append(f"{mods!r}")
+        msg_fields.append(f"{Mods.to_string(mods)}")
 
     if (nmiss := command_args["nmiss"]) is not None:
         score_args.nmiss = nmiss
@@ -2351,7 +2351,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
     for (mods, slot), bmap in pool.maps.items():
-        l.append(f"{mods!r}{slot}: {bmap.embed}")
+        l.append(f"{Mods.to_string(mods)}{slot}: {bmap.embed}")
 
     return "\n".join(l)
 
