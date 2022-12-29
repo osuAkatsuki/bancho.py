@@ -203,7 +203,7 @@ class ChangeAction(BasePacket):
         p.status.action = Action(self.action)
         p.status.info_text = self.info_text
         p.status.map_md5 = self.map_md5
-        p.status.mods = Mods(self.mods)
+        p.status.mods = self.mods
         p.status.mode = GameMode(self.mode)
         p.status.map_id = self.map_id
 
@@ -1617,13 +1617,13 @@ class MatchChangeMods(BasePacket):
         if m.freemods:
             if p is m.host:
                 # allow host to set speed-changing mods.
-                m.mods = Mods(self.mods & SPEED_CHANGING_MODS)
+                m.mods = self.mods & SPEED_CHANGING_MODS
 
             # set slot mods
             slot = m.get_slot(p)
             assert slot is not None
 
-            slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
+            slot.mods = self.mods & ~SPEED_CHANGING_MODS
         else:
             if p is not m.host:
                 log(f"{p} attempted to change mods as non-host.", Ansi.LYELLOW)
