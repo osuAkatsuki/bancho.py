@@ -4,6 +4,7 @@ import functools
 
 __all__ = ("Mods",)
 
+
 class Mods:
     NOMOD = 0
     NOFAIL = 1 << 0
@@ -93,7 +94,9 @@ class Mods:
         if (mods & cls.EASY) and (mods & cls.HARDROCK):
             mods &= ~cls.HARDROCK  # (EZ)HR
 
-        if (mods & (cls.NOFAIL | cls.RELAX | cls.AUTOPILOT)) and (mods & cls.SUDDENDEATH):
+        if (mods & (cls.NOFAIL | cls.RELAX | cls.AUTOPILOT)) and (
+            mods & cls.SUDDENDEATH
+        ):
             mods &= ~cls.SUDDENDEATH  # (NF|RX|AP)SD
         if (mods & (cls.NOFAIL | cls.RELAX | cls.AUTOPILOT)) and (mods & cls.PERFECT):
             mods &= ~cls.PERFECT  # (NF|RX|AP)PF
@@ -115,7 +118,7 @@ class Mods:
                 mods &= ~cls.AUTOPILOT  # (SO|RX)AP
 
         if mode_vn == 3:
-            mods &= ~cls.RELAX 
+            mods &= ~cls.RELAX
             if (mods & cls.HIDDEN) and (mods & cls.FADEIN):
                 mods &= ~cls.FADEIN  # (HD)FI
 
@@ -173,7 +176,7 @@ class Mods:
                 mods |= mod_dict[m]
 
         return mods
-    
+
     @classmethod
     def from_np(cls, s: str, mode_vn: int) -> int:
         mods = 0
@@ -223,7 +226,7 @@ class Mods:
                 mods |= npstr2mod_dict[mod_str]
 
         return cls.filter_invalid_combos(mods, mode_vn)
-    
+
 
 KEY_MODS = (
     Mods.KEY1
