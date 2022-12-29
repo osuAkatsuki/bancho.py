@@ -220,7 +220,7 @@ class Score:
         s.passed = s.status != 0
         s.status = SubmissionStatus(s.status)
         s.grade = Grade.from_str(s.grade)
-        s.mods = Mods(s.mods)
+        s.mods = s.mods
         s.mode = GameMode(s.mode)
         s.client_flags = ClientFlags(s.client_flags)
 
@@ -264,7 +264,7 @@ class Score:
         s.max_combo = int(data[8])
         s.perfect = data[9] == "True"
         s.grade = Grade.from_str(data[10])
-        s.mods = Mods(int(data[11]))
+        s.mods = int(data[11])
         s.passed = data[12] == "True"
         s.mode = GameMode.from_params(int(data[13]), s.mods)
         s.client_time = datetime.strptime(data[14], "%y%m%d%H%M%S")
