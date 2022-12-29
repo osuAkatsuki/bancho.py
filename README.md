@@ -255,7 +255,60 @@ and you should see something along the lines of:
 
 # enabling https traffic
 ## using cloudflare (flex)
-TODO
+first of all you need a cloudflare account, to create one go to https://dash.cloudflare.com/sign-up, enter your email and password and click on `create account`
+
+![Step 1](https://i.imgur.com/mEhxCgO.png)
+
+now you have to enter your domain. this has to be your actual domain (e.g. `banchopy.com` or `banchopy.net`) and mustn't include any domain-specific hostnames (e.g. `www.banchopy.com` or similar)
+
+![Step 2](https://i.imgur.com/dIHdmza.png)
+
+then you have to choose your plan, for us it should be enough with the `Free plan`, you can also upgrade later if you need it
+
+![Step 3](https://i.imgur.com/ZpV2SvS.png)
+
+now you'll have to copy the nameservers required by Cloudflare to your domain registrar. once you've done this, click on `check nameservers`
+
+![Step 4](https://i.imgur.com/GMqVXsF.png)
+
+once you have finished the above you'll have to add some dns records (A records) so that the necessary domains are being pointed to the ip where bancho.py is running
+
+<table>
+    <tr>
+        <th>
+        <ul>
+            <li>a.yourdomain.com</li>
+            <li>api.yourdomain.com</li>
+            <li>assets.yourdomain.com</li>
+            <li>c1.yourdomain.com</li>
+            <li>c2.yourdomain.com</li>
+            <li>c3.yourdomain.com</li>
+            <li>c4.yourdomain.com</li>
+            <li>c5.yourdomain.com</li>
+            <li>c6.yourdomain.com</li>
+            <li>ce.yourdomain.com</li>
+            <li>cho.yourdomain.com</li>
+            <li>c.yourdomain.com</li>
+            <li>yourdomain.com</li>
+            <li>i.yourdomain.com</li>
+            <li>map.yourdomain.com</li>
+            <li>osu.yourdomain.com</li>
+            <li>s.yourdomain.com</li>
+            <li>web.yourdomain.com</li>   
+        </ul>
+        <th>
+            <img src="https://i.imgur.com/2NUyEQJ.png" alt="Step 5">
+        </th>
+    </tr>
+</table>
+
+then go to SSL/TTL > overwiew and activate SSL flex
+
+![Step 6](https://i.imgur.com/txfPE1o.png)
+
+it's also recommended to activate the option to always use HTTPS, you can enable it in SSL/TTL > edge certificates
+
+![Step 7](https://i.imgur.com/1Q7ybLd.png)
 ## using an own ssl certificate
 
 ```sh
