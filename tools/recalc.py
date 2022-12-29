@@ -15,6 +15,7 @@ from typing import Iterator
 from typing import Optional
 from typing import Sequence
 
+import aiohttp
 import aioredis
 import databases
 from akatsuki_pp_py import Beatmap
@@ -29,6 +30,7 @@ try:
     from app.constants.gamemodes import GameMode
     from app.objects.beatmap import ensure_local_osu_file
     import app.settings
+    import app.state.services
 except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
@@ -218,6 +220,8 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     global DEBUG
     DEBUG = args.debug
 
+    app.state.services.http_client = aiohttp.ClientSession()
+
     db = databases.Database(app.settings.DB_DSN)
     await db.connect()
 
@@ -248,6 +252,7 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
         await recalculate_mode_scores(mode, rx, ctx)
         await recalculate_mode_users(mode, rx, ctx)
 
+    await app.state.services.http_client.close()
     await db.disconnect()
     await redis.close()
 
