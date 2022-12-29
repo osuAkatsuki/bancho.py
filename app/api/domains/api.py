@@ -363,7 +363,7 @@ async def api_get_player_scores(
 
         if mods_arg.isdecimal():
             # parse from int form
-            mods = Mods(int(mods_arg))
+            mods = int(mods_arg)
         else:
             # parse from string form
             mods = Mods.from_modstr(mods_arg)
@@ -585,7 +585,7 @@ async def api_get_map_scores(
 
         if mods_arg.isdecimal():
             # parse from int form
-            mods = Mods(int(mods_arg))
+            mods = int(mods_arg)
         else:
             # parse from string form
             mods = Mods.from_modstr(mods_arg)
@@ -949,7 +949,7 @@ async def api_get_pool(
             "created_at": pool.created_at,
             "created_by": format_player_basic(pool.created_by),
             "maps": {
-                f"{mods!r}{slot}": format_map_basic(bmap)
+                f"{Mods.to_string(mods)}{slot}": format_map_basic(bmap)
                 for (mods, slot), bmap in pool.maps.items()
             },
         },
