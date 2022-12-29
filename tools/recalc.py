@@ -30,7 +30,7 @@ try:
     from app.constants.gamemodes import GameMode
     from app.objects.beatmap import ensure_local_osu_file
     import app.settings
-    import app.state
+    import app.state.services
 except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
