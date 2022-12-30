@@ -542,7 +542,7 @@ async def login(
     if p := app.state.sessions.players.get(name=login_data["username"]):
         # player is already logged in - allow this only for tournament clients
 
-        if not (osu_version.stream == "tourney" or p.tourney_client):
+        if not (osu_version.stream == "tourney" or p.tourney_client or p.irc_client):
             # neither session is a tournament client, disallow
 
             if (login_time - p.last_recv_time) > 10:
@@ -1076,7 +1076,7 @@ class SendPrivateMessage(BasePacket):
 
         if t is not app.state.sessions.bot:
             # target is not bot, send the message normally if online
-            if t.online:
+            if t.online or t.irc_client:
                 t.send(msg, sender=p)
             else:
                 # inform user they're offline, but
@@ -1239,6 +1239,7 @@ class MatchCreate(BasePacket):
         # create the channel and add it
         # to the global channel list as
         # an instanced channel.
+        print(f"#multi_{self.match.id}")
         chan = Channel(
             name=f"#multi_{self.match.id}",
             topic=f"MID {self.match.id}'s multiplayer channel.",

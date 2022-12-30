@@ -86,6 +86,14 @@ class Channel:
             sender_id=sender.id,
         )
 
+        if not sender.irc_client:
+            msg_split_line = msg.split("\n")
+
+            for line in msg_split_line:
+                if line == msg_split_line[:1] and line == "":
+                    continue
+                app.state.services.irc.bancho_message(sender.name, self._name, line)
+
         for p in self.players:
             if sender.id not in p.blocks and (to_self or p.id != sender.id):
                 p.enqueue(data)
@@ -98,6 +106,13 @@ class Channel:
 
         if msg_len >= 31979:  # TODO ??????????
             msg = f"message would have crashed games ({msg_len} chars)"
+
+        msg_split_line = msg.split("\n")
+
+        for line in msg_split_line:
+            if line == msg_split_line[:1] and line == "":
+                continue
+            app.state.services.irc.bancho_message(bot.name, self._name, line)
 
         self.enqueue(
             app.packets.send_message(
@@ -123,6 +138,9 @@ class Channel:
         """Add `p` to the channel's players."""
         self.players.append(p)
 
+        if not p.irc_client:
+            app.state.services.irc.bancho_join(p, self)
+
     def remove(self, p: Player) -> None:
         """Remove `p` from the channel's players."""
         self.players.remove(p)
@@ -132,6 +150,9 @@ class Channel:
             # is the last member leaving, just remove
             # the channel from the global list.
             app.state.sessions.channels.remove(self)
+
+        if not p.irc_client:
+            app.state.services.irc.bancho_part(p, self)
 
     def enqueue(self, data: bytes, immune: Sequence[int] = []) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""

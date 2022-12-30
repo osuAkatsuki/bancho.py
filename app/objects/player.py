@@ -329,8 +329,10 @@ class Player:
             self.enqueue = lambda data: None  # type: ignore
 
         self.tourney_client = extras.get("tourney_client", False)
+        self.irc_client = extras.get("irc_client", False)
 
         self.api_key = extras.get("api_key", None)
+        self.irc_key = extras.get("irc_key", None)
 
         # packet queue
         self._queue = bytearray()
@@ -446,6 +448,9 @@ class Player:
         # leave channels
         while self.channels:
             self.leave_channel(self.channels[0], kick=False)
+
+        if "irc_client" in self.__dict__:
+            del self.irc_client
 
         # remove from playerlist and
         # enqueue logout to all users.
@@ -1091,6 +1096,14 @@ class Player:
 
     def send(self, msg: str, sender: Player, chan: Optional[Channel] = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
+        if not sender.irc_client:
+            msg_split_line = msg.split("\n")
+
+            for line in msg_split_line:
+                if line == msg_split_line[:1] and line == "":
+                    continue
+                app.state.services.irc.bancho_message(sender.name, self.name, line)
+
         self.enqueue(
             app.packets.send_message(
                 sender=sender.name,
@@ -1103,6 +1116,13 @@ class Player:
     def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to `self` from bot."""
         bot = app.state.sessions.bot
+
+        msg_split_line = msg.split("\n")
+
+        for line in msg_split_line:
+            if line == msg_split_line[:1] and line == "":
+                continue
+            app.state.services.irc.bancho_message(bot.name, self.name, line)
 
         self.enqueue(
             app.packets.send_message(

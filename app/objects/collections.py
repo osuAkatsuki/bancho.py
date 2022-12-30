@@ -225,7 +225,7 @@ class Players(list[Player]):
     @staticmethod
     def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("token", "id", "name"):
+        for attr in ("token", "irc_key", "id", "name"):
             if (val := kwargs.pop(attr, None)) is not None:
                 if attr == "name":
                     attr = "safe_name"
@@ -236,7 +236,7 @@ class Players(list[Player]):
             raise ValueError("Incorrect call to Players.get()")
 
     def get(self, **kwargs: object) -> Optional[Player]:
-        """Get a player by token, id, or name from cache."""
+        """Get a player by token, irc_key, id, or name from cache."""
         attr, val = self._parse_attr(kwargs)
 
         for p in self:
@@ -246,7 +246,7 @@ class Players(list[Player]):
         return None
 
     async def get_sql(self, **kwargs: object) -> Optional[Player]:
-        """Get a player by token, id, or name from sql."""
+        """Get a player by token, irc_key, id, or name from sql."""
         attr, val = self._parse_attr(kwargs)
 
         # try to get from sql.

@@ -402,3 +402,7 @@ insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-s
 
 # v4.4.3
 alter table favourites add created_at int default 0 not null;
+
+# v4.6.5
+alter table users add irc_key char(36) default NULL null;
+create unique index users_irc_key_uindex on users (irc_key);

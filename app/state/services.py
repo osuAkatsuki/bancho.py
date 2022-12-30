@@ -24,6 +24,7 @@ import pymysql
 import app.settings
 import app.state
 from app._typing import IPAddress
+from app.irc import IRCServer
 from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
@@ -46,6 +47,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
+irc: IRCServer
 
 geoloc_db: Optional[geoip2.database.Reader] = None
 if GEOLOC_DB_FILE.exists():

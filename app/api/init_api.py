@@ -26,6 +26,7 @@ import app.state
 import app.utils
 from app.api import domains
 from app.api import middlewares
+from app.irc import IRCServer
 from app.logging import Ansi
 from app.logging import log
 from app.objects import collections
@@ -127,8 +128,11 @@ def init_events(asgi_app: BanchoAPI) -> None:
         app.state.services.http_client = aiohttp.ClientSession(
             json_serialize=lambda x: orjson.dumps(x).decode(),
         )
+        app.state.services.irc = IRCServer(6667, app.state.loop)
+
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
+        await app.state.services.irc.start()
 
         if app.state.services.datadog is not None:
             app.state.services.datadog.start(
