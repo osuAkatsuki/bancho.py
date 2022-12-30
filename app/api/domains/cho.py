@@ -1239,7 +1239,6 @@ class MatchCreate(BasePacket):
         # create the channel and add it
         # to the global channel list as
         # an instanced channel.
-        print(f"#multi_{self.match.id}")
         chan = Channel(
             name=f"#multi_{self.match.id}",
             topic=f"MID {self.match.id}'s multiplayer channel.",
