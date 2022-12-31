@@ -532,8 +532,11 @@ async def _with(ctx: Context) -> Optional[str]:
 @command(Privileges.UNRESTRICTED, aliases=["req"])
 async def request(ctx: Context) -> Optional[str]:
     """Request a beatmap for nomination."""
-    if ctx.args:
-        return "Invalid syntax: !request"
+    if (
+        len(ctx.args) < 1
+        or ctx.args[0] not in ("rank", "ranked", "love", "loved")
+    ):
+        return "Invalid syntax: !request <ranked/loved> [optional comment]"
 
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
@@ -543,11 +546,13 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
+    status = "ranked" if ctx.args[0] == "rank" or ctx.args[0] == "ranked" else "loved";
+    
     await app.state.services.database.execute(
         "INSERT INTO map_requests "
-        "(map_id, player_id, datetime, active) "
-        "VALUES (:map_id, :user_id, NOW(), 1)",
-        {"map_id": bmap.id, "user_id": ctx.player.id},
+        "(map_id, requested_status, comment, player_id, datetime, active) "
+        "VALUES (:map_id, :status, :comment, :user_id, NOW(), 1)",
+        {"map_id": bmap.id, "status": status, "comment": "".join(ctx.args[1:]), "user_id": ctx.player.id},
     )
 
     return "Request submitted."
@@ -593,15 +598,15 @@ async def requests(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !requests"
 
     rows = await app.state.services.database.fetch_all(
-        "SELECT map_id, player_id, datetime FROM map_requests WHERE active = 1",
+        "SELECT id, map_id, requested_status, comment, player_id, datetime FROM map_requests WHERE active = 1",
     )
 
     if not rows:
-        return "The queue is clean! (0 map request(s))"
+        return "The queue is clean!"
 
     l = [f"Total requests: {len(rows)}"]
 
-    for (map_id, player_id, dt) in rows:
+    for (id, map_id, requested_status, comment, player_id, dt) in rows:
         # find player & map for each row, and add to output.
         if not (p := await app.state.sessions.players.from_cache_or_sql(id=player_id)):
             l.append(f"Failed to find requesting player ({player_id})?")
@@ -611,9 +616,30 @@ async def requests(ctx: Context) -> Optional[str]:
             l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        l.append(f"[{p.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
+        l.append(f"#{id}: {bmap.embed}\n({dt:%b %d %I:%M%p}) Requested for "
+                 + f"{requested_status} by {p.embed}. "
+                 + f"{'No additional comment was specified.' if comment == '' else f'Additional comment: {comment}'}")
 
     return "\n".join(l)
+
+@command(Privileges.NOMINATOR, aliases=["dr"], hidden=True)
+async def declinerequest(ctx: Context) -> Optional[str]:
+    """Removes a map request by it's ID."""
+    if len(ctx.args) != 1:
+        return "Invalid syntax: !declinerequest <ID>"
+
+    if await app.state.services.database.fetch(
+        "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
+        {"id": ctx.args[0]}
+    ):
+        return f"No active map request with ID #{ctx.args[0]} found."
+    
+    await app.state.services.database.execute(
+        "UPDATE map_requests SET active = 0 WHERE id = :id",
+        {"id": ctx.args[0]}
+    )
+
+    return f"Map request #{ctx.args[0]} was declined."
 
 
 _status_str_to_int_map = {"unrank": 0, "rank": 2, "love": 5}
