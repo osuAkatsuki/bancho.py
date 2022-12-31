@@ -403,7 +403,7 @@ insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-s
 # v4.4.3
 alter table favourites add created_at int default 0 not null;
 
-# v4.4.4
+# v4.6.4
 alter table map_requests add requested_status varchar(6) default '' not null;
 alter table map_requests add comment text default '' not null;
 
