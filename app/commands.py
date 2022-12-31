@@ -628,7 +628,7 @@ async def declinerequest(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 1:
         return "Invalid syntax: !declinerequest <ID>"
 
-    if await app.state.services.database.fetch(
+    if await app.state.services.database.fetch_one(
         "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
         {"id": ctx.args[0]}
     ):
