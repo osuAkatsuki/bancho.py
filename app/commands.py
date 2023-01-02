@@ -1465,7 +1465,15 @@ def ensure_match(
 ) -> Callable[[Context], Awaitable[Optional[R]]]:
     @wraps(f)
     async def wrapper(ctx: Context) -> Optional[R]:
-        match = ctx.player.match
+        if ctx.player.irc_client:
+            chan = app.state.sessions.channels.get_by_name(ctx.recipient._name)
+
+            for p in chan.players:
+                if not p.irc_client:
+                    match = p.match
+                    break
+        else:
+            match = ctx.player.match
 
         # multi set is a bit of a special case,
         # as we do some additional checks.
@@ -1483,7 +1491,6 @@ def ensure_match(
         ):
             # doesn't have privs to use !mp commands (allow help).
             return None
-
         return await f(ctx, match)
 
     return wrapper
@@ -1754,7 +1761,7 @@ async def mp_addref(ctx: Context, match: Match) -> Optional[str]:
     if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t not in match:
+    if t not in match and not t.irc_client:
         return "User must be in the current match!"
 
     if t in match.refs:
