@@ -1,7 +1,7 @@
 FROM python:3.9-alpine
 
 # install apps dependencies
-RUN apk update && apk add \
+RUN apk add --no-cache \
     git \
     bash \
     curl \
