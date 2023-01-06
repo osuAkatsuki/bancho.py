@@ -519,7 +519,7 @@ async def login(
             return {
                 "osu_token": "client-too-old",
                 "response_body": (
-                    app.packets.version_update_forced() + app.packets.user_id(-2)
+                    app.packets.version_update() + app.packets.user_id(-2)
                 ),
             }
 
