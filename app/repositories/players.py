@@ -78,7 +78,7 @@ async def fetch_one(
     name: Optional[str] = None,
     email: Optional[str] = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> dict[str, Any] | None:
+) -> Optional[dict[str, Any]]:
     """Fetch a single player from the database."""
     if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
@@ -191,7 +191,7 @@ async def update(
     custom_badge_icon: Optional[str] = None,
     userpage_content: Optional[str] = None,
     api_key: Optional[str] = None,
-) -> dict[str, Any] | None:
+) -> Optional[dict[str, Any]]:
     """Update a player in the database."""
     query = """\
         UPDATE users
