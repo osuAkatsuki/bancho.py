@@ -709,7 +709,6 @@ class Player:
                 for alert in self.match.starting["alerts"]:
                     alert.cancel()
 
-                # i guess unnecessary but i'm ocd
                 self.match.starting = None
 
             app.state.sessions.matches.remove(self.match)
