@@ -2,8 +2,6 @@
 # in a lot of these classes; needs refactor.
 from __future__ import annotations
 
-import asyncio
-from typing import Any
 from typing import Iterable
 from typing import Iterator
 from typing import Optional
@@ -26,6 +24,7 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
+from app.repositories import players as players_repo
 from app.utils import make_safe_name
 
 __all__ = (
@@ -222,72 +221,71 @@ class Players(list[Player]):
             if p not in immune:
                 p.enqueue(data)
 
-    @staticmethod
-    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
-        """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("token", "id", "name"):
-            if (val := kwargs.pop(attr, None)) is not None:
-                if attr == "name":
-                    attr = "safe_name"
-                    val = make_safe_name(val)
-
-                return attr, val
-        else:
-            raise ValueError("Incorrect call to Players.get()")
-
-    def get(self, **kwargs: object) -> Optional[Player]:
+    def get(
+        self,
+        token: Optional[str] = None,
+        id: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
-        attr, val = self._parse_attr(kwargs)
-
         for p in self:
-            if getattr(p, attr) == val:
-                return p
+            if token is not None:
+                if p.token == token:
+                    return p
+            elif id is not None:
+                if p.id == id:
+                    return p
+            elif name is not None:
+                if p.safe_name == make_safe_name(name):
+                    return p
 
         return None
 
-    async def get_sql(self, **kwargs: object) -> Optional[Player]:
+    async def get_sql(
+        self,
+        id: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> Optional[Player]:
         """Get a player by token, id, or name from sql."""
-        attr, val = self._parse_attr(kwargs)
-
         # try to get from sql.
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, name, priv, pw_bcrypt, country, "
-            "silence_end, donor_end, clan_id, clan_priv, api_key "
-            f"FROM users WHERE {attr} = :val",
-            {"val": val},
+        player = await players_repo.fetch_one(
+            id=id,
+            name=name,
+            fetch_all_fields=True,
         )
-
-        if not row:
+        if player is None:
             return None
 
-        row = dict(row)
-
         # encode pw_bcrypt from str -> bytes.
-        row["pw_bcrypt"] = row["pw_bcrypt"].encode()
+        player["pw_bcrypt"] = player["pw_bcrypt"].encode()
 
-        if row["clan_id"] != 0:
-            row["clan"] = app.state.sessions.clans.get(id=row["clan_id"])
-            row["clan_priv"] = ClanPrivileges(row["clan_priv"])
+        if player["clan_id"] != 0:
+            player["clan"] = app.state.sessions.clans.get(id=player["clan_id"])
+            player["clan_priv"] = ClanPrivileges(player["clan_priv"])
         else:
-            row["clan"] = row["clan_priv"] = None
+            player["clan"] = player["clan_priv"] = None
 
         # country from acronym to {acronym, numeric}
-        row["geoloc"] = {
+        player["geoloc"] = {
             "latitude": 0.0,  # TODO
             "longitude": 0.0,
             "country": {
-                "acronym": row["country"],
-                "numeric": app.state.services.country_codes[row["country"]],
+                "acronym": player["country"],
+                "numeric": app.state.services.country_codes[player["country"]],
             },
         }
 
-        return Player(**row, token="")
+        return Player(**player, token="")
 
-    async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
+    async def from_cache_or_sql(
+        self,
+        id: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
-        if p := self.get(**kwargs):
+        if p := self.get(id=id, name=name):
             return p
-        elif p := await self.get_sql(**kwargs):
+        elif p := await self.get_sql(id=id, name=name):
             return p
 
         return None
@@ -306,6 +304,8 @@ class Players(list[Player]):
             if not (p := await self.get_sql(name=name)):
                 # no player found in sql either.
                 return None
+
+        assert p.pw_bcrypt is not None
 
         if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
             return p
@@ -359,22 +359,19 @@ class MapPools(list[MapPool]):
         else:
             return super().__getitem__(index)
 
-    @staticmethod
-    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
-        """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("id", "name"):
-            if (val := kwargs.pop(attr, None)) is not None:
-                return attr, val
-        else:
-            raise ValueError("Incorrect call to MapPools.get()")
-
-    def get(self, **kwargs: object) -> Optional[MapPool]:
+    def get(
+        self,
+        id: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> Optional[MapPool]:
         """Get a mappool by id, or name from cache."""
-        attr, val = self._parse_attr(kwargs)
-
         for p in self:
-            if getattr(p, attr) == val:
-                return p
+            if id is not None:
+                if p.id == id:
+                    return p
+            elif name is not None:
+                if p.name == name:
+                    return p
 
         return None
 
@@ -468,17 +465,23 @@ class Clans(list[Clan]):
         else:
             return o in self
 
-    def get(self, **kwargs: object) -> Optional[Clan]:
+    def get(
+        self,
+        id: Optional[int] = None,
+        name: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
-        for attr in ("name", "tag", "id"):
-            if val := kwargs.pop(attr, None):
-                break
-        else:
-            raise ValueError("Incorrect call to Clans.get()")
-
         for c in self:
-            if getattr(c, attr) == val:
-                return c
+            if id is not None:
+                if c.id == id:
+                    return c
+            elif name is not None:
+                if c.name == name:
+                    return c
+            elif tag is not None:
+                if c.tag == tag:
+                    return c
 
         return None
 
@@ -521,12 +524,14 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     await app.state.sessions.clans.prepare(db_conn)
     await app.state.sessions.pools.prepare(db_conn)
 
-    bot_name = await app.utils.fetch_bot_name(db_conn)
+    bot = await players_repo.fetch_one(id=1)
+    if bot is None:
+        raise RuntimeError("Bot account not found in database.")
 
     # create bot & add it to online players
     app.state.sessions.bot = Player(
         id=1,
-        name=bot_name,
+        name=bot["name"],
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
         priv=Privileges.UNRESTRICTED,
         bot_client=True,

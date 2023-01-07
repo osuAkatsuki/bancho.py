@@ -8,6 +8,7 @@ import databases.core
 
 import app.state
 from app.constants.privileges import ClanPrivileges
+from app.repositories import players as players_repo
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -93,11 +94,9 @@ class Clan:
         # clan 'mods', so fetching rank here may
         # be a good idea to sort people into
         # different roles.
-        for row in await db_conn.fetch_all(
-            "SELECT id FROM users WHERE clan_id = :clan_id",
-            {"clan_id": self.id},
-        ):
-            self.member_ids.add(row["id"])
+        members = await players_repo.fetch_many(clan_id=self.id)
+        for member in members:
+            self.member_ids.add(member["id"])
 
     def __repr__(self) -> str:
         return f"[{self.tag}] {self.name}"

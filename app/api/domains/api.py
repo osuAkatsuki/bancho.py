@@ -21,6 +21,7 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
+from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -133,20 +134,13 @@ async def api_search_players(
 @router.get("/get_player_count")
 async def api_get_player_count():
     """Get the current amount of online players."""
-    # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
-    # NOTE: -1 is for the bot, and will have to change
-    # if we ever make some sort of bot creation system.
-    total_users = await app.state.services.database.fetch_val(
-        "SELECT COUNT(*) FROM users",
-        column=0,
-    )
-
     return ORJSONResponse(
         {
             "status": "success",
             "counts": {
+                # -1 for the bot, who is always online
                 "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": total_users,
+                "total": await players_repo.fetch_count(),
             },
         },
     )
@@ -167,19 +161,9 @@ async def api_get_player_info(
 
     # get user info from username or user id
     if username:
-        user_info = await app.state.services.database.fetch_one(
-            "SELECT id, name, safe_name, "
-            "priv, clan_id, country, silence_end, donor_end "
-            "FROM users WHERE safe_name = :username",
-            {"username": username.lower()},
-        )
+        user_info = await players_repo.fetch_one(name=username)
     else:  # if user_id
-        user_info = await app.state.services.database.fetch_one(
-            "SELECT id, name, safe_name, "
-            "priv, clan_id, country, silence_end, donor_end "
-            "FROM users WHERE id = :userid",
-            {"userid": user_id},
-        )
+        user_info = await players_repo.fetch_one(id=user_id)
 
     if user_info is None:
         return ORJSONResponse(
@@ -250,15 +234,9 @@ async def api_get_player_status(
         # no such player online, return their last seen time if they exist in sql
 
         if username:
-            row = await app.state.services.database.fetch_one(
-                "SELECT latest_activity FROM users WHERE id = :id",
-                {"id": username},
-            )
-        else:  # if user_id
-            row = await app.state.services.database.fetch_one(
-                "SELECT latest_activity FROM users WHERE id = :id",
-                {"id": user_id},
-            )
+            row = await players_repo.fetch_one(name=username)
+        else:  # if userid
+            row = await players_repo.fetch_one(id=user_id)
 
         if not row:
             return ORJSONResponse(
