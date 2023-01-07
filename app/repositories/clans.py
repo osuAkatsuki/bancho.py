@@ -65,8 +65,8 @@ async def fetch_one(
 
     query = f"""\
         SELECT {READ_PARAMS}
-        FROM clans
-        WHERE id = :id
+          FROM clans
+         WHERE id = :id
     """
     params = {"id": id, "name": name, "tag": tag, "owner": owner}
     rec = await app.state.services.database.fetch_one(query, params)
@@ -76,7 +76,7 @@ async def fetch_one(
 async def fetch_count() -> int:
     """Fetch the number of clans in the database."""
     query = """\
-        SELECT COUNT(*) as count
+        SELECT COUNT(*) AS count
           FROM clans
     """
     rec = await app.state.services.database.fetch_one(query)
