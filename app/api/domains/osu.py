@@ -64,6 +64,7 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
@@ -274,18 +275,11 @@ async def osuGetBeatmapInfo(
 
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, set_id, status, md5 FROM maps WHERE filename = :filename",
-            {"filename": map_filename},
-        )
 
-        if not row:
+        beatmap = await maps_repo.fetch_one(server="osu!", filename=map_filename)
+
+        if not beatmap:
             continue
-
-        row = dict(row)  # make mutable copy
-
-        # convert from bancho.py -> osu!api status
-        row["status"] = bancho_to_osuapi_status(row["status"])
 
         # try to get the user's grades on the map
         # NOTE: osu! only allows us to send back one per gamemode,
@@ -298,7 +292,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -309,7 +303,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -318,7 +312,12 @@ async def osuGetBeatmapInfo(
 
         ret.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
-                **row, i=idx, grades="|".join(grades)
+                i=idx,
+                id=beatmap["id"],
+                set_id=beatmap["set_id"],
+                md5=beatmap["md5"],
+                status=bancho_to_osuapi_status(beatmap["status"]),
+                grades="|".join(grades),
             ),
         )
 
@@ -1451,9 +1450,9 @@ async def getScores(
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
             map_exists = (
-                await app.state.services.database.fetch_one(
-                    "SELECT 1 FROM maps WHERE filename = :filename",
-                    {"filename": map_filename},
+                await maps_repo.fetch_one(
+                    server="osu!",
+                    filename=map_filename,
                 )
                 is not None
             )
@@ -1789,7 +1788,7 @@ async def get_updated_beatmap(
 
     return
 
-    # NOTE: this code is unused now.
+    # NOTE: this code is unused now. ඞ
     # it was only used with server switchers,
     # which bancho.py has deprecated support for.
 

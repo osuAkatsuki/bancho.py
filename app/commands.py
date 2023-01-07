@@ -60,6 +60,7 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
+from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
 from app.utils import seconds_readable
@@ -651,10 +652,10 @@ async def _map(ctx: Context) -> Optional[str]:
 
             # select all map ids for clearing map requests.
             map_ids = [
-                row[0]
-                for row in await db_conn.fetch_all(
-                    "SELECT id FROM maps WHERE set_id = :set_id",
-                    {"set_id": bmap.set_id},
+                row["id"]
+                for row in await maps_repo.fetch_many(
+                    server="osu!",
+                    set_id=bmap.set_id,
                 )
             ]
 
@@ -663,10 +664,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
-                {"status": new_status, "map_id": bmap.id},
-            )
+            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 
