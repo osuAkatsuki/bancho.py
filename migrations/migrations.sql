@@ -404,6 +404,6 @@ insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-s
 alter table favourites add created_at int default 0 not null;
 
 # v4.6.5
-alter table map_requests add requested_status varchar(6) default '' not null;
-alter table map_requests add comment text default '' not null;
+alter table map_requests add requested_status varchar(6) default '' not null after map_id;
+alter table map_requests add comment text default '' not null after requested_status ;
 
