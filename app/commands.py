@@ -59,6 +59,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
+from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
 from app.utils import seconds_readable
@@ -2450,10 +2451,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
             return "You're not a member of a clan!"
 
     # delete clan from sql
-    await app.state.services.database.execute(
-        "DELETE FROM clans WHERE id = :clan_id",
-        {"clan_id": clan.id},
-    )
+    await clans_repo.delete(clan.id)
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
@@ -2462,11 +2460,7 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-
-    await app.state.services.database.execute(
-        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",
-        {"clan_id": clan.id},
-    )
+        await players_repo.update(member_id, clan_id=0, clan_priv=0)
 
     # remove clan from cache
     app.state.sessions.clans.remove(clan)

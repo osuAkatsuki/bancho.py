@@ -85,7 +85,8 @@ async def fetch_count() -> int:
 
 
 async def fetch_many(
-    page: Optional[int] = None, page_size: Optional[int] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """Fetch many clans from the database."""
     query = f"""\

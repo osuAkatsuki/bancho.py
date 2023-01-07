@@ -8,6 +8,7 @@ import databases.core
 
 import app.state
 from app.constants.privileges import ClanPrivileges
+from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 
 if TYPE_CHECKING:
@@ -58,32 +59,20 @@ class Clan:
         self.member_ids.remove(p.id)
 
         async with app.state.services.database.connection() as db_conn:
-            await db_conn.execute(
-                "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = :user_id",
-                {"user_id": p.id},
-            )
+            await players_repo.update(p.id, clan_id=0, clan_priv=0)
 
             if not self.member_ids:
                 # no members left, disband clan.
-                await db_conn.execute(
-                    "DELETE FROM clans WHERE id = :clan_id",
-                    {"clan_id": self.id},
-                )
+                await clans_repo.delete(self.id)
             elif p.id == self.owner_id:
                 # owner leaving and members left,
                 # transfer the ownership.
                 # TODO: prefer officers
                 self.owner_id = next(iter(self.member_ids))
 
-                await db_conn.execute(
-                    "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
-                    {"user_id": self.owner_id, "clan_id": self.id},
-                )
+                await clans_repo.update(self.id, owner=self.owner_id)
 
-                await db_conn.execute(
-                    "UPDATE users SET clan_priv = 3 WHERE id = :user_id",
-                    {"user_id": self.owner_id},
-                )
+                await players_repo.update(self.owner_id, clan_priv=3)
 
         p.clan = None
         p.clan_priv = None
