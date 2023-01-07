@@ -541,7 +541,22 @@ async def osuSearchHandler(
             key=lambda m: m["DifficultyRating"],
         )
         diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
+            [
+                DIRECT_MAP_INFO_FMTSTR.format(
+                    DifficultyRating=row["DifficultyRating"],
+                    # XXX: this is a bug that exists on official servers (lmao)
+                    # | is used to delimit the set data, so the difficulty name
+                    # cannot contain this or it will be ignored. we fix it here
+                    # by using a different character.
+                    DiffName=row["DiffName"].replace("|", "I"),
+                    CS=row["CS"],
+                    OD=row["OD"],
+                    AR=row["AR"],
+                    HP=row["HP"],
+                    Mode=row["Mode"],
+                )
+                for row in diff_sorted_maps
+            ],
         )
 
         ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
