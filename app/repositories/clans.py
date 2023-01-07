@@ -22,6 +22,7 @@ READ_PARAMS = textwrap.dedent(
     """,
 )
 
+
 async def create(
     name: str,
     tag: str,
@@ -51,6 +52,7 @@ async def create(
     assert rec is not None
     return rec
 
+
 async def fetch_one(
     id: Optional[int] = None,
     name: Optional[str] = None,
@@ -66,14 +68,10 @@ async def fetch_one(
         FROM clans
         WHERE id = :id
     """
-    params = {
-        "id": id,
-        "name": name,
-        "tag": tag,
-        "owner": owner
-    }
+    params = {"id": id, "name": name, "tag": tag, "owner": owner}
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
+
 
 async def fetch_count() -> int:
     """Fetch the number of clans in the database."""
@@ -85,9 +83,9 @@ async def fetch_count() -> int:
     assert rec is not None
     return rec["count"]
 
+
 async def fetch_many(
-    page: Optional[int] = None,
-    page_size: Optional[int] = None
+    page: Optional[int] = None, page_size: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """Fetch many clans from the database."""
     query = f"""\
@@ -106,6 +104,7 @@ async def fetch_many(
 
     recs = await app.state.services.database.fetch_all(query, params)
     return [dict(rec) for rec in recs]
+
 
 async def update(
     id: int,
@@ -140,6 +139,7 @@ async def update(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
+
 
 async def delete(id: int) -> Optional[dict[str, Any]]:
     """Delete a clan from the database."""
