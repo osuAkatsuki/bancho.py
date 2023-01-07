@@ -1017,20 +1017,25 @@ class Player:
     async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         for row in await stats_repo.fetch_many(player_id=self.id):
-            mode = row.pop("mode")
-
-            # calculate player's rank.
-            row["rank"] = await self.get_global_rank(GameMode(mode))
-
-            row["grades"] = {
-                Grade.XH: row.pop("xh_count"),
-                Grade.X: row.pop("x_count"),
-                Grade.SH: row.pop("sh_count"),
-                Grade.S: row.pop("s_count"),
-                Grade.A: row.pop("a_count"),
-            }
-
-            self.stats[GameMode(mode)] = ModeData(**row)
+            game_mode = GameMode(row["mode"])
+            self.stats[game_mode] = ModeData(
+                tscore=row["tscore"],
+                rscore=row["rscore"],
+                pp=row["pp"],
+                acc=row["acc"],
+                plays=row["plays"],
+                playtime=row["playtime"],
+                max_combo=row["max_combo"],
+                total_hits=row["total_hits"],
+                rank=await self.get_global_rank(game_mode),
+                grades={
+                    Grade.XH: row.pop("xh_count"),
+                    Grade.X: row.pop("x_count"),
+                    Grade.SH: row.pop("sh_count"),
+                    Grade.S: row.pop("s_count"),
+                    Grade.A: row.pop("a_count"),
+                },
+            )
 
     def send_menu_clear(self) -> None:
         """Clear the user's osu! chat with the bot
