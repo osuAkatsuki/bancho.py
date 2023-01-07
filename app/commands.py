@@ -626,11 +626,11 @@ async def requests(ctx: Context) -> Optional[str]:
 
     return "\n".join(l)
 
-@command(Privileges.NOMINATOR, aliases=["dr"], hidden=True)
+@command(Privileges.NOMINATOR, aliases=["dr", "decline"], hidden=True)
 async def declinerequest(ctx: Context) -> Optional[str]:
     """Removes a map request by it's ID."""
     if len(ctx.args) != 1:
-        return "Invalid syntax: !declinerequest <ID>"
+        return "Invalid syntax: !declinerequest <requestid>"
 
     if await app.state.services.database.fetch_one(
         "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
