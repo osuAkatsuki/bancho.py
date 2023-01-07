@@ -58,6 +58,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
 
@@ -518,7 +519,7 @@ async def login(
             return {
                 "osu_token": "client-too-old",
                 "response_body": (
-                    app.packets.version_update_forced() + app.packets.user_id(-2)
+                    app.packets.version_update() + app.packets.user_id(-2)
                 ),
             }
 
@@ -559,11 +560,9 @@ async def login(
                     ),
                 }
 
-    user_info = await db_conn.fetch_one(
-        "SELECT id, name, priv, pw_bcrypt, country, "
-        "silence_end, clan_id, clan_priv, api_key "
-        "FROM users WHERE safe_name = :name",
-        {"name": app.utils.make_safe_name(login_data["username"])},
+    user_info = await players_repo.fetch_one(
+        name=login_data["username"],
+        fetch_all_fields=True,
     )
 
     if user_info is None:
@@ -710,11 +709,23 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.state.services.fetch_geoloc_db(ip)
+            geoloc = app.state.services.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
+            geoloc = await app.state.services.fetch_geoloc_web(ip)
+            if geoloc is None:
+                return {
+                    "osu_token": "login-failed",
+                    "response_body": (
+                        app.packets.notification(
+                            f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
+                        )
+                        + app.packets.user_id(-1)
+                    ),
+                }
+
+        user_info["geoloc"] = geoloc
 
         if db_country == "xx":
             # bugfix for old bancho.py versions when

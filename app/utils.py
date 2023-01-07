@@ -17,7 +17,6 @@ from typing import Optional
 from typing import TypedDict
 from typing import TypeVar
 
-import databases.core
 import orjson
 import pymysql
 import requests
@@ -31,7 +30,6 @@ from app.logging import printc
 __all__ = (
     # TODO: organize/sort these
     "make_safe_name",
-    "fetch_bot_name",
     "download_achievement_images",
     "download_default_avatar",
     "seconds_readable",
@@ -66,21 +64,6 @@ DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
-
-
-async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
-    """Fetch the bot's name from the database, if available."""
-    row = await db_conn.fetch_one("SELECT name FROM users WHERE id = 1")
-
-    if not row:
-        log(
-            "Couldn't find bot account in the database, "
-            "defaulting to BanchoBot for their name.",
-            Ansi.LYELLOW,
-        )
-        return "BanchoBot"
-
-    return row["name"]
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
