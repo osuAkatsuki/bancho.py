@@ -270,6 +270,9 @@ class Score:
         storyboard_checksum: str,
     ) -> str:
         """Validate the online checksum of the score."""
+        assert self.player is not None
+        assert self.bmap is not None
+
         return hashlib.md5(
             "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}".format(
                 self.n100 + self.n300,
@@ -297,6 +300,8 @@ class Score:
     """Methods to calculate internal data for a score."""
 
     async def calculate_placement(self) -> int:
+        assert self.bmap is not None
+
         if self.mode >= GameMode.RELAX_OSU:
             scoring_metric = "pp"
             score = self.pp
@@ -348,28 +353,28 @@ class Score:
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
-        # find any other `status = 2` scores we have
-        # on the map. If there are any, store
-        res = await app.state.services.database.fetch_one(
-            "SELECT id, pp FROM scores "
-            "WHERE userid = :user_id AND map_md5 = :map_md5 "
-            "AND mode = :mode AND status = 2",
-            {
-                "user_id": self.player.id,
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-            },
+        assert self.player is not None
+        assert self.bmap is not None
+
+        recs = await scores_repo.fetch_many(
+            user_id=self.player.id,
+            map_md5=self.bmap.md5,
+            mode=self.mode,
+            status=SubmissionStatus.BEST,
         )
 
-        if res:
+        if recs:
+            rec = recs[0]
+
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res["id"])
+            self.prev_best = await Score.from_sql(rec["id"])
+            assert self.prev_best is not None
 
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > res["pp"]:
+            if self.pp > rec["pp"]:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
@@ -437,6 +442,8 @@ class Score:
         # TODO: move replay views to be per-score rather than per-user
         assert self.player is not None
 
+        # TODO: apparently cached stats don't store replay views?
+        #       need to refactor that to be able to use stats_repo here
         await app.state.services.database.execute(
             f"UPDATE stats "
             "SET replay_views = replay_views + 1 "
