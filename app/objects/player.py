@@ -704,15 +704,12 @@ class Player:
             log(f"Match {self.match} finished.")
 
             # cancel any pending start timers
-            if self.match.starting["start"] is not None:
+            if self.match.starting is not None:
                 self.match.starting["start"].cancel()
                 for alert in self.match.starting["alerts"]:
                     alert.cancel()
 
-                # i guess unnecessary but i'm ocd
-                self.match.starting["start"] = None
-                self.match.starting["alerts"] = None
-                self.match.starting["time"] = None
+                self.match.starting = None
 
             app.state.sessions.matches.remove(self.match)
 

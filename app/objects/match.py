@@ -175,9 +175,9 @@ class Slot:
 
 
 class StartingTimers(TypedDict):
-    start: Optional[TimerHandle]
-    alerts: Optional[list[TimerHandle]]
-    time: Optional[float]
+    start: TimerHandle
+    alerts: list[TimerHandle]
+    time: float
 
 
 class Match:
@@ -229,7 +229,7 @@ class Match:
         self.win_condition = MatchWinConditions.score
 
         self.in_progress = False
-        self.starting: StartingTimers = {"start": None, "alerts": None, "time": None}
+        self.starting: Optional[StartingTimers] = None
         self.seed = 0  # used for mania random mod
 
         self.pool: Optional[MapPool] = None
