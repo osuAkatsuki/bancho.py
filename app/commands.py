@@ -537,6 +537,10 @@ async def request(ctx: Context) -> Optional[str]:
         or ctx.args[0] not in ("rank", "ranked", "love", "loved")
     ):
         return "Invalid syntax: !request <ranked/loved> [optional comment]"
+    
+    comment = "".join(ctx.args[1:])
+    if(len(ctx.args) > 1 && len(comment) > 512)
+       return "The maximum length for the comment is 512 characters."
 
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
@@ -552,7 +556,7 @@ async def request(ctx: Context) -> Optional[str]:
         "INSERT INTO map_requests "
         "(map_id, requested_status, comment, player_id, datetime, active) "
         "VALUES (:map_id, :status, :comment, :user_id, NOW(), 1)",
-        {"map_id": bmap.id, "status": status, "comment": "".join(ctx.args[1:]), "user_id": ctx.player.id},
+        {"map_id": bmap.id, "status": status, "comment": comment, "user_id": ctx.player.id},
     )
 
     return "Request submitted."
