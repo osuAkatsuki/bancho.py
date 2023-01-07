@@ -808,7 +808,7 @@ class BeatmapSet:
 
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
-            for row in await maps_repo.fetch_many(set_id=bsid):
+            for row in await maps_repo.fetch_many(server="osu!", set_id=bsid):
                 bmap = Beatmap(
                     md5=row["md5"],
                     id=row["id"],

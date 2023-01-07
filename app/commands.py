@@ -652,7 +652,11 @@ async def _map(ctx: Context) -> Optional[str]:
 
             # select all map ids for clearing map requests.
             map_ids = [
-                row["id"] for row in await maps_repo.fetch_many(set_id=bmap.set_id)
+                row["id"]
+                for row in await maps_repo.fetch_many(
+                    server="osu!",
+                    set_id=bmap.set_id,
+                )
             ]
 
             for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
@@ -660,10 +664,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
-                {"status": new_status, "map_id": bmap.id},
-            )
+            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 
