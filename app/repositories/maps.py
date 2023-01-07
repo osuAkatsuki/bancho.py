@@ -122,7 +122,7 @@ async def create(
 
 
 async def fetch_one(
-    server: Optional[str]="osu!",
+    server: Optional[str] = "osu!",
     id: Optional[int] = None,
     md5: Optional[str] = None,
     filename: Optional[str] = None,
@@ -186,7 +186,7 @@ async def fetch_count(
 
 
 async def fetch_many(
-    server: Optinal[str]="osu!",
+    server: Optinal[str] = "osu!",
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
