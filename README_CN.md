@@ -75,6 +75,7 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # 安装所有的依赖(dependence)
 sudo apt install -y python3.9-dev python3.9-distutils \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
 
