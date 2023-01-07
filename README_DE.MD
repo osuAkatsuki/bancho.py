@@ -32,9 +32,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # gebe das neue Verzeichnis von bancho.py ein
 cd bancho.py
-
-# und klone die Repositories der Abhängigkeiten von bancho.py
-git submodule update --init
 ```
 
 ## Installation der Anforderungen von bancho.py
