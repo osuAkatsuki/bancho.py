@@ -1029,11 +1029,11 @@ class Player:
                 total_hits=row["total_hits"],
                 rank=await self.get_global_rank(game_mode),
                 grades={
-                    Grade.XH: row.pop("xh_count"),
-                    Grade.X: row.pop("x_count"),
-                    Grade.SH: row.pop("sh_count"),
-                    Grade.S: row.pop("s_count"),
-                    Grade.A: row.pop("a_count"),
+                    Grade.XH: row["xh_count"],
+                    Grade.X: row["x_count"],
+                    Grade.SH: row["sh_count"],
+                    Grade.S: row["s_count"],
+                    Grade.A: row["a_count"],
                 },
             )
 
