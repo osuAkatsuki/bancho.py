@@ -154,7 +154,6 @@ async def fetch_many(
            AND status = COALESCE(:status, status)
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
-         ORDER BY score DESC
     """
     params = {
         "mods": mods,
