@@ -109,9 +109,13 @@ async def create(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM beatmaps
-         WHERE id = :id
+         WHERE server = :server,
+           AND id = :id
     """
-    params = {"id": rec_id}
+    params = {
+        "server": server,
+        "id": rec_id,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
     return dict(rec)
@@ -176,7 +180,7 @@ async def fetch_count(
         "mode": mode,
         "frozen": frozen,
     }
-    rec = await app.state.services.database.fetch_one(query)
+    rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
     return rec["count"]
 
@@ -342,6 +346,7 @@ async def delete(server: str, id: int) -> Optional[dict[str, Any]]:
     """
     params = {
         "server": server,
+        "id": id,
     }
     await app.state.services.database.execute(query, params)
     return dict(rec)
