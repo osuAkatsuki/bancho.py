@@ -847,7 +847,7 @@ async def user(ctx: Context) -> Optional[str]:
     osu_version = p.client_details.osu_version.date if p.online else "Unknown"
     donator_info = (
         f"True (ends {timeago.format(p.donor_end)})"
-        if p.priv & Privileges.DONATOR
+        if p.priv & Privileges.DONATOR != 0
         else "False"
     )
 
@@ -1201,7 +1201,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
-    if bits & Privileges.DONATOR:
+    if bits & Privileges.DONATOR != 0:
         return "Please use the !givedonator command to assign donator privileges to players."
 
     await t.add_privs(bits)
@@ -1227,7 +1227,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
     await t.remove_privs(bits)
 
-    if bits & Privileges.DONATOR:
+    if bits & Privileges.DONATOR != 0:
         t.donor_end = 0
         await app.state.services.database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
