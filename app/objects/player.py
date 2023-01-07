@@ -39,6 +39,7 @@ from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -704,15 +705,12 @@ class Player:
             log(f"Match {self.match} finished.")
 
             # cancel any pending start timers
-            if self.match.starting["start"] is not None:
+            if self.match.starting is not None:
                 self.match.starting["start"].cancel()
                 for alert in self.match.starting["alerts"]:
                     alert.cancel()
 
-                # i guess unnecessary but i'm ocd
-                self.match.starting["start"] = None
-                self.match.starting["alerts"] = None
-                self.match.starting["time"] = None
+                self.match.starting = None
 
             app.state.sessions.matches.remove(self.match)
 
@@ -1018,29 +1016,26 @@ class Player:
 
     async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for row in await db_conn.fetch_all(
-            "SELECT mode, tscore, rscore, pp, acc, "
-            "plays, playtime, max_combo, total_hits, "
-            "xh_count, x_count, sh_count, s_count, a_count "
-            "FROM stats "
-            "WHERE id = :user_id",
-            {"user_id": self.id},
-        ):
-            row = dict(row)  # make mutable copy
-            mode = row.pop("mode")
-
-            # calculate player's rank.
-            row["rank"] = await self.get_global_rank(GameMode(mode))
-
-            row["grades"] = {
-                Grade.XH: row.pop("xh_count"),
-                Grade.X: row.pop("x_count"),
-                Grade.SH: row.pop("sh_count"),
-                Grade.S: row.pop("s_count"),
-                Grade.A: row.pop("a_count"),
-            }
-
-            self.stats[GameMode(mode)] = ModeData(**row)
+        for row in await stats_repo.fetch_many(player_id=self.id):
+            game_mode = GameMode(row["mode"])
+            self.stats[game_mode] = ModeData(
+                tscore=row["tscore"],
+                rscore=row["rscore"],
+                pp=row["pp"],
+                acc=row["acc"],
+                plays=row["plays"],
+                playtime=row["playtime"],
+                max_combo=row["max_combo"],
+                total_hits=row["total_hits"],
+                rank=await self.get_global_rank(game_mode),
+                grades={
+                    Grade.XH: row["xh_count"],
+                    Grade.X: row["x_count"],
+                    Grade.SH: row["sh_count"],
+                    Grade.S: row["s_count"],
+                    Grade.A: row["a_count"],
+                },
+            )
 
     def send_menu_clear(self) -> None:
         """Clear the user's osu! chat with the bot

@@ -24,7 +24,6 @@ from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
 import bcrypt
-import databases.core
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
@@ -65,8 +64,9 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import players as players_repo
+from app.repositories import stats as stats_repo
 from app.utils import escape_enum
-from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 
@@ -1853,8 +1853,6 @@ async def register_account(
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
     real_ip: str = Header(..., alias="X-Real-IP"),
 ):
-    safe_name = make_safe_name(username)
-
     if not all((username, email, pw_plaintext)):
         return Response(
             content=b"Missing required params",
@@ -1880,10 +1878,7 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        if await app.state.services.database.fetch_one(
-            "SELECT 1 FROM users WHERE safe_name = :safe_name",
-            {"safe_name": safe_name},
-        ):
+        if await players_repo.fetch_one(name=username):
             errors["username"].append("Username already taken by another player.")
 
     # Emails must:
@@ -1892,10 +1887,7 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        if await app.state.services.database.fetch_one(
-            "SELECT 1 FROM users WHERE email = :email",
-            {"email": email},
-        ):
+        if await players_repo.fetch_one(email=email):
             errors["user_email"].append("Email already taken by another player.")
 
     # Passwords must:
@@ -1958,41 +1950,20 @@ async def register_account(
 
         async with app.state.services.database.transaction():
             # add to `users` table.
-            user_id = await app.state.services.database.execute(
-                "INSERT INTO users "
-                "(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) "
-                "VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())",
-                {
-                    "name": username,
-                    "safe_name": safe_name,
-                    "email": email,
-                    "pw_bcrypt": pw_bcrypt,
-                    "country": country_acronym,
-                },
+            player = await players_repo.create(
+                name=username,
+                email=email,
+                pw_bcrypt=pw_bcrypt,
+                country=country_acronym,
             )
 
             # add to `stats` table.
-            await app.state.services.database.execute_many(
-                "INSERT INTO stats (id, mode) VALUES (:user_id, :mode)",
-                [
-                    {"user_id": user_id, "mode": mode}
-                    for mode in (
-                        0,  # vn!std
-                        1,  # vn!taiko
-                        2,  # vn!catch
-                        3,  # vn!mania
-                        4,  # rx!std
-                        5,  # rx!taiko
-                        6,  # rx!catch
-                        8,  # ap!std
-                    )
-                ],
-            )
+            await stats_repo.create_all_modes(player_id=player["id"])
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")
 
-        log(f"<{username} ({user_id})> has registered!", Ansi.LGREEN)
+        log(f"<{username} ({player['id']})> has registered!", Ansi.LGREEN)
 
     return b"ok"  # success
 
