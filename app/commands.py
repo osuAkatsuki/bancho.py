@@ -539,7 +539,7 @@ async def request(ctx: Context) -> Optional[str]:
         return "Invalid syntax: !request <ranked/loved> [optional comment]"
     
     comment = "".join(ctx.args[1:])
-    if(len(ctx.args) > 1 && len(comment) > 512)
+    if len(ctx.args) > 1 and len(comment) > 512:
        return "The maximum length for the comment is 512 characters."
 
     if time.time() >= ctx.player.last_np["timeout"]:
