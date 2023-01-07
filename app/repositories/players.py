@@ -69,7 +69,8 @@ async def create(
         "id": rec_id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
-    return rec
+    assert rec is not None
+    return dict(rec)
 
 
 async def fetch_one(
@@ -77,7 +78,7 @@ async def fetch_one(
     name: Optional[str] = None,
     email: Optional[str] = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Fetch a single player from the database."""
     if not (id or name or email):
         raise ValueError("Must provide at least one parameter.")
@@ -95,7 +96,7 @@ async def fetch_one(
         "email": email,
     }
     rec = await app.state.services.database.fetch_one(query, params)
-    return rec
+    return dict(rec) if rec is not None else None
 
 
 async def fetch_count(
@@ -126,6 +127,7 @@ async def fetch_count(
         "play_style": play_style,
     }
     rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
     return rec["count"]
 
 
@@ -168,7 +170,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     recs = await app.state.services.database.fetch_all(query, params)
-    return recs
+    return [dict(rec) for rec in recs]
 
 
 async def update(
@@ -188,7 +190,7 @@ async def update(
     custom_badge_name: Optional[str] = None,
     custom_badge_icon: Optional[str] = None,
     userpage_content: Optional[str] = None,
-) -> None:
+) -> dict[str, Any] | None:
     """Update a player in the database."""
     query = f"""\
         UPDATE users
@@ -240,7 +242,7 @@ async def update(
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
-    return rec
+    return dict(rec) if rec is not None else None
 
 
 # TODO: delete?
