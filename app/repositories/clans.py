@@ -50,7 +50,7 @@ async def create(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec
+    return dict(rec)
 
 
 async def fetch_one(
@@ -75,7 +75,7 @@ async def fetch_one(
 
 async def fetch_count() -> int:
     """Fetch the number of clans in the database."""
-    query = f"""\
+    query = """\
         SELECT COUNT(*) as count
           FROM clans
     """
@@ -112,9 +112,9 @@ async def update(
     name: Optional[str] = None,
     tag: Optional[str] = None,
     owner: Optional[int] = None,
-) -> dict[str, Any]:
+) -> Optional[dict[str, Any]]:
     """Update a clan in the database."""
-    query = f"""\
+    query = """\
         UPDATE clans
            SET name = :name,
                tag = :tag,
@@ -156,7 +156,7 @@ async def delete(id: int) -> Optional[dict[str, Any]]:
     if rec is None:
         return None
 
-    query = f"""\
+    query = """\
         DELETE FROM clans
          WHERE id = :id
     """
