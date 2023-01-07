@@ -64,6 +64,7 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
@@ -274,18 +275,11 @@ async def osuGetBeatmapInfo(
 
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, set_id, status, md5 FROM maps WHERE filename = :filename",
-            {"filename": map_filename},
-        )
 
-        if not row:
+        beatmap = await maps_repo.fetch_one(server="osu!", filename=map_filename)
+
+        if not beatmap:
             continue
-
-        row = dict(row)  # make mutable copy
-
-        # convert from bancho.py -> osu!api status
-        row["status"] = bancho_to_osuapi_status(row["status"])
 
         # try to get the user's grades on the map
         # NOTE: osu! only allows us to send back one per gamemode,
@@ -298,7 +292,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -309,7 +303,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -318,7 +312,12 @@ async def osuGetBeatmapInfo(
 
         ret.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
-                **row, i=idx, grades="|".join(grades)
+                i=idx,
+                id=beatmap["id"],
+                set_id=beatmap["set_id"],
+                md5=beatmap["md5"],
+                status=bancho_to_osuapi_status(beatmap["status"]),
+                grades="|".join(grades),
             ),
         )
 
@@ -455,12 +454,14 @@ async def lastFM(
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
 USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
 
+DIRECT_SET_ID_SPELLING = "SetId" if USING_CHIMU else "SetID"
+
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
     "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"
     "0|{{HasVideo}}|0|0|0|{{diffs}}"  # 0s are threadid, has_story,
     # filesize, filesize_novid.
-).format(setid_spelling="SetId" if USING_CHIMU else "SetID")
+).format(setid_spelling=DIRECT_SET_ID_SPELLING)
 
 DIRECT_MAP_INFO_FMTSTR = (
     "[{DifficultyRating:.2f}⭐] {DiffName} "
@@ -483,7 +484,7 @@ async def osuSearchHandler(
     else:
         search_url = f"{app.settings.MIRROR_URL}/api/search"
 
-    params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
+    params: dict[str, Any] = {"amount": 100, "offset": page_num * 100}
 
     # eventually we could try supporting these,
     # but it mostly depends on the mirror.
@@ -541,11 +542,41 @@ async def osuSearchHandler(
             bmap["ChildrenBeatmaps"],
             key=lambda m: m["DifficultyRating"],
         )
+
+        def handle_invalid_characters(s: str) -> str:
+            # XXX: this is a bug that exists on official servers (lmao)
+            # | is used to delimit the set data, so the difficulty name
+            # cannot contain this or it will be ignored. we fix it here
+            # by using a different character.
+            return s.replace("|", "I")
+
         diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
+            [
+                DIRECT_MAP_INFO_FMTSTR.format(
+                    DifficultyRating=row["DifficultyRating"],
+                    DiffName=handle_invalid_characters(row["DiffName"]),
+                    CS=row["CS"],
+                    OD=row["OD"],
+                    AR=row["AR"],
+                    HP=row["HP"],
+                    Mode=row["Mode"],
+                )
+                for row in diff_sorted_maps
+            ],
         )
 
-        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
+        ret.append(
+            DIRECT_SET_INFO_FMTSTR.format(
+                Artist=handle_invalid_characters(bmap["Artist"]),
+                Title=handle_invalid_characters(bmap["Title"]),
+                Creator=bmap["Creator"],
+                RankedStatus=bmap["RankedStatus"],
+                LastUpdate=bmap["LastUpdate"],
+                HasVideo=bmap["HasVideo"],
+                diffs=diffs_str,
+                **{DIRECT_SET_ID_SPELLING: bmap[DIRECT_SET_ID_SPELLING]},
+            ),
+        )
 
     return "\n".join(ret).encode()
 
@@ -1451,9 +1482,9 @@ async def getScores(
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
             map_exists = (
-                await app.state.services.database.fetch_one(
-                    "SELECT 1 FROM maps WHERE filename = :filename",
-                    {"filename": map_filename},
+                await maps_repo.fetch_one(
+                    server="osu!",
+                    filename=map_filename,
                 )
                 is not None
             )
@@ -1789,7 +1820,7 @@ async def get_updated_beatmap(
 
     return
 
-    # NOTE: this code is unused now.
+    # NOTE: this code is unused now. ඞ
     # it was only used with server switchers,
     # which bancho.py has deprecated support for.
 
