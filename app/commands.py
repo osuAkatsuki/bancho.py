@@ -2450,20 +2450,18 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if not (clan := ctx.player.clan):
             return "You're not a member of a clan!"
 
-    # delete clan from sql
     await clans_repo.delete(clan.id)
+    app.state.sessions.clans.remove(clan)
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.member_ids:
+        await players_repo.update(member_id, clan_id=0, clan_priv=0)
+
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-        await players_repo.update(member_id, clan_id=0, clan_priv=0)
-
-    # remove clan from cache
-    app.state.sessions.clans.remove(clan)
 
     # announce clan disbanding
     if announce_chan := app.state.sessions.channels["#announce"]:

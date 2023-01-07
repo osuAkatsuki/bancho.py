@@ -511,14 +511,15 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         for row in await clans_repo.fetch_many():
+            clan_members = await players_repo.fetch_many(clan_id=row["id"])
             clan = Clan(
                 id=row["id"],
                 name=row["name"],
                 tag=row["tag"],
                 created_at=row["created_at"],
                 owner_id=row["owner"],
+                member_ids={member["id"] for member in clan_members},
             )
-            await clan.members_from_sql(db_conn)
             self.append(clan)
 
 

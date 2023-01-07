@@ -71,21 +71,10 @@ class Clan:
                 self.owner_id = next(iter(self.member_ids))
 
                 await clans_repo.update(self.id, owner=self.owner_id)
-
                 await players_repo.update(self.owner_id, clan_priv=3)
 
         p.clan = None
         p.clan_priv = None
-
-    async def members_from_sql(self, db_conn: databases.core.Connection) -> None:
-        """Fetch all members from sql."""
-        # TODO: in the future, we'll want to add
-        # clan 'mods', so fetching rank here may
-        # be a good idea to sort people into
-        # different roles.
-        members = await players_repo.fetch_many(clan_id=self.id)
-        for member in members:
-            self.member_ids.add(member["id"])
 
     def __repr__(self) -> str:
         return f"[{self.tag}] {self.name}"
