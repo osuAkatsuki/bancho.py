@@ -45,7 +45,10 @@ async def create(
         INSERT INTO stats (id, mode)
         VALUES (:id, :mode)
     """
-    params = {"id": player_id, "mode": mode}
+    params = {
+        "id": player_id,
+        "mode": mode,
+    }
     rec_id = await app.state.services.database.execute(query, params)
 
     query = f"""\
@@ -53,9 +56,12 @@ async def create(
           FROM stats
          WHERE id = :id
     """
-    params = {"id": rec_id}
+    params = {
+        "id": rec_id,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
-    return rec
+    assert rec is not None
+    return dict(rec)
 
 
 async def create_all_modes(player_id: int) -> list[dict[str, Any]]:
@@ -84,9 +90,11 @@ async def create_all_modes(player_id: int) -> list[dict[str, Any]]:
           FROM stats
          WHERE id = :id
     """
-    params = {"id": player_id}
+    params = {
+        "id": player_id,
+    }
     recs = await app.state.services.database.fetch_all(query, params)
-    return recs
+    return [dict(rec) for rec in recs]
 
 
 async def fetch_one(player_id: int, mode: int) -> Optional[dict[str, Any]]:
@@ -97,19 +105,30 @@ async def fetch_one(player_id: int, mode: int) -> Optional[dict[str, Any]]:
          WHERE id = :id
            AND mode = :mode
     """
-    params = {"id": player_id, "mode": mode}
+    params = {
+        "id": player_id,
+        "mode": mode,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
-    return rec
+    return dict(rec) if rec is not None else None
 
 
-async def fetch_count() -> int:
-    query = f"""\
+async def fetch_count(
+    player_id: Optional[int] = None,
+    mode: Optional[int] = None,
+) -> int:
+    query = """\
         SELECT COUNT(*) AS count
           FROM stats
+         WHERE id = COALESCE(:id, id)
+           AND mode = COALESCE(:mode, mode)
     """
-    params = None
-
+    params = {
+        "id": player_id,
+        "mode": mode,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
     return rec["count"]
 
 
@@ -125,7 +144,10 @@ async def fetch_many(
          WHERE id = COALESCE(:id, id)
            AND mode = COALESCE(:mode, mode)
     """
-    params = {"id": player_id, "mode": mode}
+    params = {
+        "id": player_id,
+        "mode": mode,
+    }
 
     if page is not None and page_size is not None:
         query += """\
@@ -136,7 +158,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     recs = await app.state.services.database.fetch_all(query, params)
-    return recs
+    return [dict(rec) for rec in recs]
 
 
 async def update(
@@ -158,7 +180,7 @@ async def update(
     a_count: Optional[int] = None,
 ):
     """Update a player stats entry in the database."""
-    query = f"""\
+    query = """\
         UPDATE stats
            SET tscore = COALESCE(:tscore, tscore),
                rscore = COALESCE(:rscore, rscore),
@@ -203,7 +225,10 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params = {"id": player_id, "mode": mode}
+    params = {
+        "id": player_id,
+        "mode": mode,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
     return rec
 
