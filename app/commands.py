@@ -278,7 +278,7 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await players_repo.update(id=ctx.player.id, name=name)
+    await players_repo.update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -559,7 +559,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await players_repo.update(id=ctx.player.id, api_key=ctx.player.api_key)
+    await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(
