@@ -13,8 +13,8 @@ install-dev:
 update:
 	pipenv update --dev
 	make test
-	pipenv requirements >> requirements.txt
-	pipenv requirements --dev >> requirements-dev.txt
+	pipenv requirements > requirements.txt
+	pipenv requirements --dev > requirements-dev.txt
 
 clean:
 	pipenv --rm
