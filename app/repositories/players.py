@@ -48,7 +48,7 @@ async def create(
 ) -> dict[str, Any]:
     """Create a new player in the database."""
     query = f"""\
-        INSERT INTO users (name, safe_name, email, pw_bcrypt, country, :creation_time, :latest_activity)
+        INSERT INTO users (name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity)
              VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())
     """
     params = {
