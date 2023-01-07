@@ -201,7 +201,7 @@ async def fetch_many(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE COALESCE(:server, server)
+         WHERE server = COALESCE(:server, server)
            AND set_id = COALESCE(:set_id, set_id)
            AND status = COALESCE(:status, status)
            AND artist = COALESCE(:artist, artist)
