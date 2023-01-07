@@ -186,7 +186,7 @@ async def fetch_count(
 
 
 async def fetch_many(
-    server: Optinal[str] = None,
+    server: Optional[str] = None,
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
