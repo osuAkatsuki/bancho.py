@@ -1,26 +1,4 @@
 -i https://pypi.org/simple
-attrs==22.2.0 ; python_version >= '3.6'
-black==22.12.0
-cfgv==3.3.1 ; python_full_version >= '3.6.1'
-click==8.1.3 ; python_version >= '3.7'
-distlib==0.3.6
-exceptiongroup==1.1.0 ; python_version < '3.11'
-filelock==3.9.0 ; python_version >= '3.7'
-identify==2.5.12 ; python_version >= '3.7'
-iniconfig==2.0.0 ; python_version >= '3.7'
-mypy-extensions==0.4.3
-nodeenv==1.7.0 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6'
-packaging==22.0 ; python_version >= '3.7'
-pathspec==0.10.3 ; python_version >= '3.7'
-platformdirs==2.6.2 ; python_version >= '3.7'
-pluggy==1.0.0 ; python_version >= '3.6'
-pre-commit==2.21.0
-pytest==7.2.0
-pyyaml==6.0 ; python_version >= '3.6'
-setuptools==65.6.3 ; python_version >= '3.7'
-tomli==2.0.1 ; python_full_version < '3.11.0a7'
-typing-extensions==4.4.0 ; python_version >= '3.7'
-virtualenv==20.17.1 ; python_version >= '3.6'
 aiohttp==3.8.3
 aiomysql==0.1.1
 aioredis==2.0.1
@@ -28,34 +6,56 @@ aiosignal==1.3.1 ; python_version >= '3.7'
 git+https://github.com/osuAkatsuki/akatsuki-pp-py@31ecea34db51a4c11d9c77bad67e9d23e80f2331#egg=akatsuki-pp-py
 anyio==3.6.2 ; python_full_version >= '3.6.2'
 async-timeout==4.0.2 ; python_version >= '3.6'
+attrs==22.2.0 ; python_version >= '3.6'
 bcrypt==4.0.1
+black==22.12.0
 certifi==2022.12.7 ; python_version >= '3.6'
+cfgv==3.3.1 ; python_full_version >= '3.6.1'
 charset-normalizer==2.1.1 ; python_full_version >= '3.6.0'
+click==8.1.3 ; python_version >= '3.7'
 databases[mysql]==0.7.0
 datadog==0.44.0
+distlib==0.3.6
+exceptiongroup==1.1.0 ; python_version < '3.11'
 fastapi==0.88.0
+filelock==3.9.0 ; python_version >= '3.7'
 frozenlist==1.3.3 ; python_version >= '3.7'
 geoip2==4.6.0
 greenlet==2.0.1 ; python_version >= '3' and platform_machine == 'aarch64' or (platform_machine == 'ppc64le' or (platform_machine == 'x86_64' or (platform_machine == 'amd64' or (platform_machine == 'AMD64' or (platform_machine == 'win32' or platform_machine == 'WIN32')))))
 h11==0.14.0 ; python_version >= '3.7'
+identify==2.5.12 ; python_version >= '3.7'
 idna==3.4 ; python_version >= '3.5'
+iniconfig==2.0.0 ; python_version >= '3.7'
 maxminddb==2.2.0
 multidict==6.0.4 ; python_version >= '3.7'
+mypy-extensions==0.4.3
+nodeenv==1.7.0 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6'
 orjson==3.8.4
+packaging==22.0 ; python_version >= '3.7'
+pathspec==0.10.3 ; python_version >= '3.7'
+platformdirs==2.6.2 ; python_version >= '3.7'
+pluggy==1.0.0 ; python_version >= '3.6'
+pre-commit==2.21.0
 psutil==5.9.4
 py3rijndael==0.3.3
 pydantic==1.10.4 ; python_version >= '3.7'
 pymysql==1.0.2 ; python_version >= '3.6'
+pytest==7.2.0
 python-dotenv==0.21.0
 python-multipart==0.0.5
 pytimeparse==1.1.8
+pyyaml==6.0 ; python_version >= '3.6'
 requests==2.28.1
+setuptools==65.6.3 ; python_version >= '3.7'
 six==1.16.0 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
 sniffio==1.3.0 ; python_version >= '3.7'
 sqlalchemy==1.4.46
 starlette==0.22.0 ; python_version >= '3.7'
 timeago==1.0.16
+tomli==2.0.1 ; python_full_version < '3.11.0a7'
+typing-extensions==4.4.0 ; python_version >= '3.7'
 urllib3==1.26.13 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5'
 uvicorn==0.20.0
 uvloop==0.17.0
+virtualenv==20.17.1 ; python_version >= '3.6'
 yarl==1.8.2 ; python_version >= '3.7'
