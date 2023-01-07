@@ -454,12 +454,14 @@ async def lastFM(
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
 USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
 
+DIRECT_SET_ID_SPELLING = "SetId" if USING_CHIMU else "SetID"
+
 DIRECT_SET_INFO_FMTSTR = (
     "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
     "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"
     "0|{{HasVideo}}|0|0|0|{{diffs}}"  # 0s are threadid, has_story,
     # filesize, filesize_novid.
-).format(setid_spelling="SetId" if USING_CHIMU else "SetID")
+).format(setid_spelling=DIRECT_SET_ID_SPELLING)
 
 DIRECT_MAP_INFO_FMTSTR = (
     "[{DifficultyRating:.2f}⭐] {DiffName} "
@@ -482,7 +484,7 @@ async def osuSearchHandler(
     else:
         search_url = f"{app.settings.MIRROR_URL}/api/search"
 
-    params: dict[str, object] = {"amount": 100, "offset": page_num * 100}
+    params: dict[str, Any] = {"amount": 100, "offset": page_num * 100}
 
     # eventually we could try supporting these,
     # but it mostly depends on the mirror.
@@ -540,11 +542,41 @@ async def osuSearchHandler(
             bmap["ChildrenBeatmaps"],
             key=lambda m: m["DifficultyRating"],
         )
+
+        def handle_invalid_characters(s: str) -> str:
+            # XXX: this is a bug that exists on official servers (lmao)
+            # | is used to delimit the set data, so the difficulty name
+            # cannot contain this or it will be ignored. we fix it here
+            # by using a different character.
+            return s.replace("|", "I")
+
         diffs_str = ",".join(
-            [DIRECT_MAP_INFO_FMTSTR.format(**row) for row in diff_sorted_maps],
+            [
+                DIRECT_MAP_INFO_FMTSTR.format(
+                    DifficultyRating=row["DifficultyRating"],
+                    DiffName=handle_invalid_characters(row["DiffName"]),
+                    CS=row["CS"],
+                    OD=row["OD"],
+                    AR=row["AR"],
+                    HP=row["HP"],
+                    Mode=row["Mode"],
+                )
+                for row in diff_sorted_maps
+            ],
         )
 
-        ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
+        ret.append(
+            DIRECT_SET_INFO_FMTSTR.format(
+                Artist=handle_invalid_characters(bmap["Artist"]),
+                Title=handle_invalid_characters(bmap["Title"]),
+                Creator=bmap["Creator"],
+                RankedStatus=bmap["RankedStatus"],
+                LastUpdate=bmap["LastUpdate"],
+                HasVideo=bmap["HasVideo"],
+                diffs=diffs_str,
+                **{DIRECT_SET_ID_SPELLING: bmap[DIRECT_SET_ID_SPELLING]},
+            ),
+        )
 
     return "\n".join(ret).encode()
 
