@@ -1669,13 +1669,13 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
         # host mods -> central mods.
         match.freemods = False
 
-        host = match.get_host_slot()
-        assert host is not None
+        host_slot = match.get_host_slot()
+        assert host_slot is not None
 
         # the match keeps any speed-changing mods,
         # and also takes any mods the host has enabled.
         match.mods &= SPEED_CHANGING_MODS
-        match.mods |= host.mods
+        match.mods |= host_slot.mods
 
         for s in match.slots:
             if s.status & SlotStatus.has_player:
