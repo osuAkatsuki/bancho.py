@@ -11,7 +11,6 @@ bcrypt = "*"
 datadog = "*"
 fastapi = "*"
 geoip2 = "*"
-databases = {extras = ["mysql"], version = "*"}
 maxminddb = "*"
 orjson = "*"
 psutil = "*"
@@ -22,8 +21,9 @@ timeago = "*"
 uvicorn = "*"
 uvloop = "*"
 py3rijndael = "*"
-sqlalchemy = "*"
 pytimeparse = "*"
+sqlalchemy = "1.4.41"
+databases = {extras = ["mysql"], version = "0.5.5"}
 
 [dev-packages]
 pytest = "*"
