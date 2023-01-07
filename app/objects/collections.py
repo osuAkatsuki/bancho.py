@@ -283,7 +283,7 @@ class Players(list[Player]):
         name: Optional[str] = None,
     ) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
-        if p := self.get(id, name):
+        if p := self.get(id=id, name=name):
             return p
         elif p := await self.get_sql(id, name):
             return p
@@ -304,6 +304,8 @@ class Players(list[Player]):
             if not (p := await self.get_sql(name=name)):
                 # no player found in sql either.
                 return None
+
+        assert p.pw_bcrypt is not None
 
         if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
             return p
@@ -523,6 +525,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     await app.state.sessions.pools.prepare(db_conn)
 
     bot = await players_repo.fetch_one(id=1)
+    assert bot is not None
 
     # create bot & add it to online players
     app.state.sessions.bot = Player(
