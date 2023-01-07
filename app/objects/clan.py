@@ -63,6 +63,7 @@ class Clan:
         if not self.member_ids:
             # no members left, disband clan.
             await clans_repo.delete(self.id)
+            app.state.sessions.clans.remove(self)
         elif p.id == self.owner_id:
             # owner leaving and members left,
             # transfer the ownership.
