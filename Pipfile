@@ -1,0 +1,35 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+akatsuki-pp-py = {git = "https://github.com/osuAkatsuki/akatsuki-pp-py"}
+aiohttp = "*"
+aioredis = "*"
+bcrypt = "*"
+datadog = "*"
+fastapi = "*"
+geoip2 = "*"
+databases = {extras = ["mysql"], version = "*"}
+maxminddb = "*"
+orjson = "*"
+psutil = "*"
+python-dotenv = "*"
+python-multipart = "*"
+requests = "*"
+timeago = "*"
+uvicorn = "*"
+uvloop = "*"
+py3rijndael = "*"
+sqlalchemy = "*"
+pytimeparse = "*"
+
+[dev-packages]
+pytest = "*"
+pre-commit = "*"
+black = "*"
+reorder-python-imports = "*"
+
+[requires]
+python_version = "3.9"
