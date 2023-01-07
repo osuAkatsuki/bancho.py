@@ -55,6 +55,7 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # Installiere die erforderlichen Programme für die Ausführung von bancho.py
 sudo apt install -y python3.9-dev python3.9-distutils \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
 
