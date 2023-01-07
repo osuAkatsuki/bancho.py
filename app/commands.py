@@ -59,6 +59,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
+from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
 from app.utils import seconds_readable
@@ -277,7 +278,7 @@ async def changename(ctx: Context) -> Optional[str]:
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await players_repo.update(id=ctx.player.id, name=name)
+    await players_repo.update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -558,7 +559,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await players_repo.update(id=ctx.player.id, api_key=ctx.player.api_key)
+    await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(
@@ -2393,17 +2394,16 @@ async def clan_create(ctx: Context) -> Optional[str]:
 
     created_at = datetime.now()
 
-    # add clan to sql (generates id)
-    clan_id = await app.state.services.database.execute(
-        "INSERT INTO clans "
-        "(name, tag, created_at, owner) "
-        "VALUES (:name, :tag, :created_at, :user_id)",
-        {"name": name, "tag": tag, "created_at": created_at, "user_id": ctx.player.id},
+    # add clan to sql
+    clan = await clans_repo.create(
+        name=name,
+        tag=tag,
+        owner=ctx.player.id,
     )
 
     # add clan to cache
     clan = Clan(
-        id=clan_id,
+        id=clan["id"],
         name=name,
         tag=tag,
         created_at=created_at,
@@ -2418,12 +2418,10 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    await app.state.services.database.execute(
-        "UPDATE users "
-        "SET clan_id = :clan_id, "
-        "clan_priv = 3 "  # ClanPrivileges.Owner
-        "WHERE id = :user_id",
-        {"clan_id": clan_id, "user_id": ctx.player.id},
+    await players_repo.update(
+        ctx.player.id,
+        clan_id=clan.id,
+        clan_priv=ClanPrivileges.Owner,
     )
 
     # announce clan creation
@@ -2449,27 +2447,18 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if not (clan := ctx.player.clan):
             return "You're not a member of a clan!"
 
-    # delete clan from sql
-    await app.state.services.database.execute(
-        "DELETE FROM clans WHERE id = :clan_id",
-        {"clan_id": clan.id},
-    )
+    await clans_repo.delete(clan.id)
+    app.state.sessions.clans.remove(clan)
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.member_ids:
+        await players_repo.update(member_id, clan_id=0, clan_priv=0)
+
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-
-    await app.state.services.database.execute(
-        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",
-        {"clan_id": clan.id},
-    )
-
-    # remove clan from cache
-    app.state.sessions.clans.remove(clan)
 
     # announce clan disbanding
     if announce_chan := app.state.sessions.channels["#announce"]:

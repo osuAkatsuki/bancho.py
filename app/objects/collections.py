@@ -24,6 +24,7 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
+from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
 
@@ -509,11 +510,16 @@ class Clans(list[Clan]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM clans"):
-            row = dict(row)  # make a mutable copy
-            row["owner_id"] = row.pop("owner")
-            clan = Clan(**row)
-            await clan.members_from_sql(db_conn)
+        for row in await clans_repo.fetch_many():
+            clan_members = await players_repo.fetch_many(clan_id=row["id"])
+            clan = Clan(
+                id=row["id"],
+                name=row["name"],
+                tag=row["tag"],
+                created_at=row["created_at"],
+                owner_id=row["owner"],
+                member_ids={member["id"] for member in clan_members},
+            )
             self.append(clan)
 
 
