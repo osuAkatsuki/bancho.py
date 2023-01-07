@@ -51,7 +51,7 @@ as well as some others.
 sudo add-apt-repository -y ppa:deadsnakes
 
 # install required programs for running bancho.py
-sudo apt install -y python3.9-dev python3.9-distutils pipenv \
+sudo apt install -y python3.9-dev python3.9-distutils \
                     build-essential \
                     mysql-server redis-server \
                     nginx certbot
@@ -65,7 +65,7 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # make sure pip and setuptools are up to date
-python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -U pip setuptools pipenv
 
 # install bancho.py's python-specific dependencies
 # (if you plan to work as a dev, you can use `make install-dev`)
