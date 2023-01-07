@@ -629,21 +629,42 @@ async def requests(ctx: Context) -> Optional[str]:
 @command(Privileges.NOMINATOR, aliases=["dr", "decline"], hidden=True)
 async def declinerequest(ctx: Context) -> Optional[str]:
     """Removes a map request by it's ID."""
-    if len(ctx.args) != 1:
-        return "Invalid syntax: !declinerequest <requestid>"
+    if len(ctx.args) > 1:
+        return "Invalid syntax: !declinerequest [requestid]"
+    
+    # If declined via request id
+    if len(ctx.args) == 1:
+        if not await app.state.services.database.fetch_one(
+            "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
+            {"id": ctx.args[0]}
+        ):
+            return f"No active map request with ID #{ctx.args[0]} found."
+    
+        await app.state.services.database.execute(
+            "UPDATE map_requests SET active = 0 WHERE id = :id",
+            {"id": ctx.args[0]}
+        )
 
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
-        {"id": ctx.args[0]}
+        return f"Map request #{ctx.args[0]} was declined."
+    
+    # If declined via /np
+    if time.time() >= ctx.player.last_np["timeout"]:
+        return "Please /np a map first!"
+
+    bmap = ctx.player.last_np["bmap"]
+
+    if not await app.state.services.database.fetch_one(
+        "SELECT 1 FROM map_requests WHERE active = 1 AND map_id = :map_id",
+        {"map_id": bmap.id}
     ):
-        return f"No active map request with ID #{ctx.args[0]} found."
+        return f"No active map request for the beatmap {bmap.id} found."
     
     await app.state.services.database.execute(
-        "UPDATE map_requests SET active = 0 WHERE id = :id",
-        {"id": ctx.args[0]}
+        "UPDATE map_requests SET active = 0 WHERE map_id = :map_id",
+        {"map_id": bmap.id}
     )
 
-    return f"Map request #{ctx.args[0]} was declined."
+    return f"All map requests for the beatmap {bmap.id} were declined."
 
 
 _status_str_to_int_map = {"unrank": 0, "rank": 2, "love": 5}
