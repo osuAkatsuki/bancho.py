@@ -22,6 +22,7 @@ from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.repositories import players as players_repo
+from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -618,22 +619,15 @@ async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
 ):
     """Return information about a given score."""
-    row = await app.state.services.database.fetch_one(
-        "SELECT map_md5, score, pp, acc, max_combo, mods, "
-        "n300, n100, n50, nmiss, ngeki, nkatu, grade, status, "
-        "mode, play_time, time_elapsed, perfect "
-        "FROM scores "
-        "WHERE id = :score_id",
-        {"score_id": score_id},
-    )
+    score = await scores_repo.fetch_one(score_id)
 
-    if not row:
+    if score is None:
         return ORJSONResponse(
             {"status": "Score not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return ORJSONResponse({"status": "success", "score": dict(row)})
+    return ORJSONResponse({"status": "success", "score": score})
 
 
 # TODO: perhaps we can do something to make these count towards replay views,

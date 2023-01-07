@@ -66,6 +66,7 @@ from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
+from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -287,26 +288,11 @@ async def osuGetBeatmapInfo(
         #       (in theory we could make this user-customizable)
         grades = ["N", "N", "N", "N"]
 
-        await app.state.services.database.execute(
-            "SELECT grade, mode FROM scores "
-            "WHERE map_md5 = :map_md5 AND userid = :user_id "
-            "AND mode = :mode AND status = 2",
-            {
-                "map_md5": beatmap["md5"],
-                "user_id": player.id,
-                "mode": player.status.mode.as_vanilla,
-            },
-        )
-
-        for score in await app.state.services.database.fetch_all(
-            "SELECT grade, mode FROM scores "
-            "WHERE map_md5 = :map_md5 AND userid = :user_id "
-            "AND mode = :mode AND status = 2",
-            {
-                "map_md5": beatmap["md5"],
-                "user_id": player.id,
-                "mode": player.status.mode.as_vanilla,
-            },
+        for score in await scores_repo.fetch_many(
+            map_md5=beatmap["md5"],
+            user_id=player.id,
+            mode=player.status.mode.as_vanilla,
+            status=SubmissionStatus.BEST,
         ):
             grades[score["mode"]] = score["grade"]
 
