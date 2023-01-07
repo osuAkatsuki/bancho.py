@@ -108,7 +108,7 @@ async def fetch_count(
     play_style: Optional[int] = None,
 ) -> int:
     """Fetch the number of players in the database."""
-    query = f"""\
+    query = """\
         SELECT COUNT(*) AS count
           FROM users
          WHERE priv = COALESCE(:priv, priv)
@@ -193,7 +193,7 @@ async def update(
     api_key: Optional[str] = None,
 ) -> dict[str, Any] | None:
     """Update a player in the database."""
-    query = f"""\
+    query = """\
         UPDATE users
            SET name = COALESCE(:name, name),
                safe_name = COALESCE(:safe_name, safe_name),
