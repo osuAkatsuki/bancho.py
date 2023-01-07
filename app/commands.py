@@ -2394,17 +2394,16 @@ async def clan_create(ctx: Context) -> Optional[str]:
 
     created_at = datetime.now()
 
-    # add clan to sql (generates id)
-    clan_id = await app.state.services.database.execute(
-        "INSERT INTO clans "
-        "(name, tag, created_at, owner) "
-        "VALUES (:name, :tag, :created_at, :user_id)",
-        {"name": name, "tag": tag, "created_at": created_at, "user_id": ctx.player.id},
+    # add clan to sql
+    clan = await clans_repo.create(
+        name=name,
+        tag=tag,
+        owner=ctx.player.id,
     )
 
     # add clan to cache
     clan = Clan(
-        id=clan_id,
+        id=clan["id"],
         name=name,
         tag=tag,
         created_at=created_at,
@@ -2419,12 +2418,10 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    await app.state.services.database.execute(
-        "UPDATE users "
-        "SET clan_id = :clan_id, "
-        "clan_priv = 3 "  # ClanPrivileges.Owner
-        "WHERE id = :user_id",
-        {"clan_id": clan_id, "user_id": ctx.player.id},
+    await players_repo.update(
+        ctx.player.id,
+        clan_id=clan.id,
+        clan_priv=ClanPrivileges.Owner,
     )
 
     # announce clan creation

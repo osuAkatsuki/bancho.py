@@ -58,20 +58,19 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.member_ids.remove(p.id)
 
-        async with app.state.services.database.connection() as db_conn:
-            await players_repo.update(p.id, clan_id=0, clan_priv=0)
+        await players_repo.update(p.id, clan_id=0, clan_priv=0)
 
-            if not self.member_ids:
-                # no members left, disband clan.
-                await clans_repo.delete(self.id)
-            elif p.id == self.owner_id:
-                # owner leaving and members left,
-                # transfer the ownership.
-                # TODO: prefer officers
-                self.owner_id = next(iter(self.member_ids))
+        if not self.member_ids:
+            # no members left, disband clan.
+            await clans_repo.delete(self.id)
+        elif p.id == self.owner_id:
+            # owner leaving and members left,
+            # transfer the ownership.
+            # TODO: prefer officers
+            self.owner_id = next(iter(self.member_ids))
 
-                await clans_repo.update(self.id, owner=self.owner_id)
-                await players_repo.update(self.owner_id, clan_priv=3)
+            await clans_repo.update(self.id, owner=self.owner_id)
+            await players_repo.update(self.owner_id, clan_priv=ClanPrivileges.Owner)
 
         p.clan = None
         p.clan_priv = None
