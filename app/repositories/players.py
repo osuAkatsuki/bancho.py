@@ -80,7 +80,7 @@ async def fetch_one(
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
 ) -> dict[str, Any] | None:
     """Fetch a single player from the database."""
-    if not (id or name or email):
+    if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
