@@ -525,7 +525,8 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     await app.state.sessions.pools.prepare(db_conn)
 
     bot = await players_repo.fetch_one(id=1)
-    assert bot is not None
+    if bot is None:
+        raise RuntimeError("Bot account not found in database.")
 
     # create bot & add it to online players
     app.state.sessions.bot = Player(
