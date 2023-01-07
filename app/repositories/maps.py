@@ -121,21 +121,27 @@ async def create(
 
 async def fetch_one(
     server: str,
-    id: int,
+    id: Optional[int] = None,
+    md5: Optional[str] = None,
+    filename: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Fetch a beatmap entry from the database."""
-    if id is None and server is None:
+    if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM beatmaps
          WHERE server = :server
-              AND id = :id
+              AND id = COALESCE(:id, id)
+              AND md5 = COALESCE(:md5, md5)
+              AND filename = COALESCE(:filename, filename)
     """
     params = {
-        "id": id,
         "server": server,
+        "id": id,
+        "md5": md5,
+        "filename": filename,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
