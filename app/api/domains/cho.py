@@ -709,11 +709,23 @@ async def login(
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            user_info["geoloc"] = app.state.services.fetch_geoloc_db(ip)
+            geoloc = app.state.services.fetch_geoloc_db(ip)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
-            user_info["geoloc"] = await app.state.services.fetch_geoloc_web(ip)
+            geoloc = await app.state.services.fetch_geoloc_web(ip)
+            if geoloc is None:
+                return {
+                    "osu_token": "login-failed",
+                    "response_body": (
+                        app.packets.notification(
+                            f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
+                        )
+                        + app.packets.user_id(-1)
+                    ),
+                }
+
+        user_info["geoloc"] = geoloc
 
         if db_country == "xx":
             # bugfix for old bancho.py versions when
