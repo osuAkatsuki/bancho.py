@@ -287,17 +287,6 @@ async def osuGetBeatmapInfo(
         #       (in theory we could make this user-customizable)
         grades = ["N", "N", "N", "N"]
 
-        await app.state.services.database.execute(
-            "SELECT grade, mode FROM scores "
-            "WHERE map_md5 = :map_md5 AND userid = :user_id "
-            "AND mode = :mode AND status = 2",
-            {
-                "map_md5": beatmap["md5"],
-                "user_id": player.id,
-                "mode": player.status.mode.as_vanilla,
-            },
-        )
-
         for score in await app.state.services.database.fetch_all(
             "SELECT grade, mode FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
