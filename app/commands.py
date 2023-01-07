@@ -1635,7 +1635,10 @@ async def mp_mods(ctx: Context, match: Match) -> Optional[str]:
             match.mods = mods & SPEED_CHANGING_MODS
 
         # set slot mods
-        match.get_slot(ctx.player).mods = mods & ~SPEED_CHANGING_MODS
+        slot = match.get_slot(ctx.player)
+        assert slot is not None
+
+        slot.mods = mods & ~SPEED_CHANGING_MODS
     else:
         # not freemods, set match mods.
         match.mods = mods
@@ -1666,7 +1669,9 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
         # host mods -> central mods.
         match.freemods = False
 
-        host = match.get_host_slot()  # should always exist
+        host = match.get_host_slot()
+        assert host is not None
+
         # the match keeps any speed-changing mods,
         # and also takes any mods the host has enabled.
         match.mods &= SPEED_CHANGING_MODS
@@ -2569,7 +2574,7 @@ async def process_commands(
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
+        if trigger in cmd.triggers and p.priv & cmd.priv != 0:
             # found matching trigger with sufficient privs
             try:
                 res = await cmd.callback(
