@@ -654,7 +654,13 @@ class BeatmapSet:
                     map_md5s_to_delete.add(old_map.md5)
                 else:
                     new_map = new_maps[old_id]
-                    if old_map.md5 != new_map["file_md5"]:
+                    new_ranked_status = RankedStatus.from_osuapi(
+                        int(new_map["approved"]),
+                    )
+                    if (
+                        old_map.md5 != new_map["file_md5"]
+                        or old_map.status != new_ranked_status
+                    ):
                         # update map from old_maps
                         bmap = old_maps[old_id]
                         bmap._parse_from_osuapi_resp(new_map)
