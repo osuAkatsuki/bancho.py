@@ -64,6 +64,7 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
@@ -274,15 +275,11 @@ async def osuGetBeatmapInfo(
 
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, set_id, status, md5 FROM maps WHERE filename = :filename",
-            {"filename": map_filename},
-        )
+
+        row = await maps_repo.fetch_one(server="osu!", filename=map_filename)
 
         if not row:
             continue
-
-        row = dict(row)  # make mutable copy
 
         # convert from bancho.py -> osu!api status
         row["status"] = bancho_to_osuapi_status(row["status"])
@@ -1451,12 +1448,8 @@ async def getScores(
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
             map_exists = (
-                await app.state.services.database.fetch_one(
-                    "SELECT 1 FROM maps WHERE filename = :filename",
-                    {"filename": map_filename},
-                )
-                is not None
-            )
+                await maps_repo.fetch_one(server="osu!", filename=map_filename)
+            ) is not None
 
         if map_exists:
             # map can be updated.
@@ -1789,7 +1782,7 @@ async def get_updated_beatmap(
 
     return
 
-    # NOTE: this code is unused now.
+    # NOTE: this code is unused now. ඞ
     # it was only used with server switchers,
     # which bancho.py has deprecated support for.
 

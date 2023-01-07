@@ -18,6 +18,7 @@ import app.utils
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
+from app.repositories import maps as maps_repo
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -360,10 +361,7 @@ class Beatmap:
 
             if set_id <= 0:
                 # set id not provided - fetch it from the map md5
-                res = await app.state.services.database.fetch_one(
-                    "SELECT set_id FROM maps WHERE md5 = :map_md5",
-                    {"map_md5": md5},
-                )
+                res = await maps_repo.fetch_one(server="osu!", md5=md5)
 
                 if res is not None:
                     # set found in db
@@ -397,10 +395,7 @@ class Beatmap:
             # to be efficient, we want to cache the whole set
             # at once rather than caching the individual map
 
-            res = await app.state.services.database.fetch_one(
-                "SELECT set_id FROM maps WHERE id = :map_id",
-                {"map_id": bid},
-            )
+            res = await maps_repo.fetch_one(server="osu!", id=bid)
 
             if res is not None:
                 # set found in db
@@ -813,17 +808,7 @@ class BeatmapSet:
 
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
-            for row in await db_conn.fetch_all(
-                "SELECT md5, id, set_id, "
-                "artist, title, version, creator, "
-                "filename, last_update, total_length, "
-                "max_combo, status, frozen, "
-                "plays, passes, mode, bpm, "
-                "cs, od, ar, hp, diff "
-                "FROM maps "
-                "WHERE set_id = :set_id",
-                {"set_id": bsid},
-            ):
+            for row in await maps_repo.fetch_many(set_id=bsid):
                 bmap = Beatmap(**row, map_set=bmap_set)
 
                 # XXX: tempfix for bancho.py <v3.4.1,
@@ -835,9 +820,10 @@ class BeatmapSet:
                         .translate(IGNORED_BEATMAP_CHARS)
                     )
 
-                    await app.state.services.database.execute(
-                        "UPDATE maps SET filename = :filename WHERE id = :map_id",
-                        {"filename": bmap.filename, "map_id": bmap.id},
+                    await maps_repo.update(
+                        server="osu!",
+                        id=bmap.id,
+                        filename=bmap.filename,
                     )
 
                 bmap_set.maps.append(bmap)
