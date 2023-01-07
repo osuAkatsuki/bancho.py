@@ -122,6 +122,7 @@ async def fetch_one(id: int) -> Optional[dict[str, Any]]:
 
 
 async def fetch_count(
+    map_md5: Optional[str] = None,
     mods: Optional[int] = None,
     status: Optional[int] = None,
     mode: Optional[int] = None,
@@ -130,12 +131,14 @@ async def fetch_count(
     query = """\
         SELECT COUNT(*) AS count
           FROM scores
-         WHERE mods = COALESCE(:mods, mods)
+         WHERE map_md5 = COALESCE(:map_md5, map_md5)
+           AND mods = COALESCE(:mods, mods)
            AND status = COALESCE(:status, status)
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
     params = {
+        "map_md5": map_md5,
         "mods": mods,
         "status": status,
         "mode": mode,
@@ -146,6 +149,7 @@ async def fetch_count(
 
 
 async def fetch_many(
+    map_md5: Optional[str] = None,
     mods: Optional[int] = None,
     status: Optional[int] = None,
     mode: Optional[int] = None,
@@ -156,12 +160,14 @@ async def fetch_many(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
-         WHERE mods = COALESCE(:mods, mods)
+         WHERE map_md5 = COALESCE(:map_md5, map_md5)
+           AND mods = COALESCE(:mods, mods)
            AND status = COALESCE(:status, status)
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
     params = {
+        "map_md5": map_md5,
         "mods": mods,
         "status": status,
         "mode": mode,
