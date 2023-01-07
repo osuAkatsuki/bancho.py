@@ -15,3 +15,6 @@ update:
 	@make test
 	@pipenv requirements >> requirements.txt
 	@pipenv requirements --dev >> requirements-dev.txt
+
+run:
+	@pipenv run python main.py
