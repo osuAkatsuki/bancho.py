@@ -1510,7 +1510,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
     if not ctx.args:
         # !mp start
-        if match.starting["start"] is not None:
+        if match.starting is not None:
             time_remaining = int(match.starting["time"] - time.time())
             return f"Match starting in {time_remaining} seconds."
 
@@ -1519,7 +1519,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
     else:
         if ctx.args[0].isdecimal():
             # !mp start N
-            if match.starting["start"] is not None:
+            if match.starting is not None:
                 time_remaining = int(match.starting["time"] - time.time())
                 return f"Match starting in {time_remaining} seconds."
 
@@ -1531,9 +1531,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
             def _start() -> None:
                 """Remove any pending timers & start the match."""
                 # remove start & alert timers
-                match.starting["start"] = None
-                match.starting["alerts"] = None
-                match.starting["time"] = None
+                match.starting = None
 
                 # make sure player didn't leave the
                 # match since queueing this start lol...
@@ -1550,27 +1548,27 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            match.starting["start"] = app.state.loop.call_later(duration, _start)
-            match.starting["alerts"] = [
-                app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
-                for t in (60, 30, 10, 5, 4, 3, 2, 1)
-                if t < duration
-            ]
-            match.starting["time"] = time.time() + duration
+            match.starting = {
+                "start": app.state.loop.call_later(duration, _start),
+                "alerts": [
+                    app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                    for t in (60, 30, 10, 5, 4, 3, 2, 1)
+                    if t < duration
+                ],
+                "time": time.time() + duration,
+            }
 
             return f"Match will start in {duration} seconds."
         elif ctx.args[0] in ("cancel", "c"):
             # !mp start cancel
-            if match.starting["start"] is None:
+            if match.starting is None:
                 return "Match timer not active!"
 
             match.starting["start"].cancel()
             for alert in match.starting["alerts"]:
                 alert.cancel()
 
-            match.starting["start"] = None
-            match.starting["alerts"] = None
-            match.starting["time"] = None
+            match.starting = None
 
             return "Match timer cancelled."
         elif ctx.args[0] not in ("force", "f"):
