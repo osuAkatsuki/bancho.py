@@ -1958,7 +1958,7 @@ async def register_account(
             )
 
             # add to `stats` table.
-            await stats_repo.create_all_modes(player_id=user_id)
+            await stats_repo.create_all_modes(player_id=player["id"])
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")
