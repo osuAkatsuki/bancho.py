@@ -546,7 +546,7 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    status = "ranked" if ctx.args[0] == "rank" or ctx.args[0] == "ranked" else "loved";
+    status = "ranked" if ctx.args[0] == "rank" or ctx.args[0] == "ranked" else "loved"
     
     await app.state.services.database.execute(
         "INSERT INTO map_requests "
