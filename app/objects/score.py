@@ -16,6 +16,7 @@ from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.repositories import scores as scores_repo
 from app.usecases.performance import ScoreParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -171,50 +172,38 @@ class Score:
     @classmethod
     async def from_sql(cls, score_id: int) -> Optional[Score]:
         """Create a score object from sql using its scoreid."""
-        # XXX: perhaps in the future this should take a gamemode rather
-        # than just the sql table? just faster on the current setup :P
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, map_md5, userid, pp, score, "
-            "max_combo, mods, acc, n300, n100, n50, "
-            "nmiss, ngeki, nkatu, grade, perfect, "
-            "status, mode, play_time, "
-            "time_elapsed, client_flags, online_checksum "
-            "FROM scores WHERE id = :score_id",
-            {"score_id": score_id},
-        )
+        rec = await scores_repo.fetch_one(score_id)
 
-        if not row:
+        if rec is None:
             return None
 
         s = cls()
 
-        s.id = row[0]
-        s.bmap = await Beatmap.from_md5(row[1])
-        s.player = await app.state.sessions.players.from_cache_or_sql(id=row[2])
+        s.id = rec["id"]
+        s.bmap = await Beatmap.from_md5(rec["map_md5"])
+        s.player = await app.state.sessions.players.from_cache_or_sql(id=rec["userid"])
 
         s.sr = 0.0  # TODO
 
-        (
-            s.pp,
-            s.score,
-            s.max_combo,
-            s.mods,
-            s.acc,
-            s.n300,
-            s.n100,
-            s.n50,
-            s.nmiss,
-            s.ngeki,
-            s.nkatu,
-            s.grade,
-            s.perfect,
-            s.status,
-            s.mode,
-            s.server_time,
-            s.time_elapsed,
-            s.client_flags,
-            s.client_checksum,
-        ) = row[3:]
+        s.pp = rec["pp"]
+        s.score = rec["score"]
+        s.max_combo = rec["max_combo"]
+        s.mods = rec["mods"]
+        s.acc = rec["acc"]
+        s.n300 = rec["n300"]
+        s.n100 = rec["n100"]
+        s.n50 = rec["n50"]
+        s.nmiss = rec["nmiss"]
+        s.ngeki = rec["ngeki"]
+        s.nkatu = rec["nkatu"]
+        s.grade = rec["grade"]
+        s.perfect = rec["perfect"]
+        s.status = rec["status"]
+        s.mode = rec["mode"]
+        s.server_time = rec["play_time"]
+        s.time_elapsed = rec["time_elapsed"]
+        s.client_flags = rec["client_flags"]
+        s.client_checksum = rec["online_checksum"]
 
         # fix some types
         s.passed = s.status != 0
