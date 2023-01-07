@@ -380,7 +380,15 @@ class Beatmap:
 
             if beatmap_set is not None:
                 # the beatmap set has been cached - fetch beatmap from cache
-                bmap = await cls._from_md5_cache(md5, check_updates=False)
+                bmap = await cls._from_md5_cache(md5)
+
+                # XXX:HACK in this case, BeatmapSet.from_bsid will have
+                # ensured the map is up to date, so we can just return it
+                return bmap
+
+        if bmap is not None:
+            if bmap.set._cache_expired():
+                await bmap.set._update_if_available()
 
         return bmap
 
@@ -414,7 +422,15 @@ class Beatmap:
 
             if beatmap_set is not None:
                 # the beatmap set has been cached - fetch beatmap from cache
-                bmap = await cls._from_bid_cache(bid, check_updates=False)
+                bmap = await cls._from_bid_cache(bid)
+
+                # XXX:HACK in this case, BeatmapSet.from_bsid will have
+                # ensured the map is up to date, so we can just return it
+                return bmap
+
+        if bmap is not None:
+            if bmap.set._cache_expired():
+                await bmap.set._update_if_available()
 
         return bmap
 
@@ -484,36 +500,14 @@ class Beatmap:
         self.diff = float(osuapi_resp["difficultyrating"])
 
     @staticmethod
-    async def _from_md5_cache(
-        md5: str,
-        check_updates: bool = True,
-    ) -> Optional[Beatmap]:
+    async def _from_md5_cache(md5: str) -> Optional[Beatmap]:
         """Fetch a map from the cache by md5."""
-        if md5 in app.state.cache.beatmap:
-            bmap: Beatmap = app.state.cache.beatmap[md5]
-
-            if check_updates and bmap.set._cache_expired():
-                await bmap.set._update_if_available()
-
-            return bmap
-
-        return None
+        return app.state.cache.beatmap.get(md5, None)
 
     @staticmethod
-    async def _from_bid_cache(
-        bid: int,
-        check_updates: bool = True,
-    ) -> Optional[Beatmap]:
+    async def _from_bid_cache(bid: int) -> Optional[Beatmap]:
         """Fetch a map from the cache by id."""
-        if bid in app.state.cache.beatmap:
-            bmap: Beatmap = app.state.cache.beatmap[bid]
-
-            if check_updates and bmap.set._cache_expired():
-                await bmap.set._update_if_available()
-
-            return bmap
-
-        return None
+        return app.state.cache.beatmap.get(bid, None)
 
     async def fetch_rating(self) -> Optional[float]:
         """Fetch the beatmap's rating from sql."""
@@ -789,15 +783,7 @@ class BeatmapSet:
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the cache by set id."""
-        if bsid in app.state.cache.beatmapset:
-            bmap_set: BeatmapSet = app.state.cache.beatmapset[bsid]
-
-            if bmap_set._cache_expired():
-                await bmap_set._update_if_available()
-
-            return app.state.cache.beatmapset[bsid]
-
-        return None
+        return app.state.cache.beatmapset.get(bsid, None)
 
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional[BeatmapSet]:
