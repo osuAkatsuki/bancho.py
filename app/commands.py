@@ -2492,8 +2492,8 @@ async def clan_info(ctx: Context) -> Optional[str]:
 
     # get members privs from sql
     clan_members = await players_repo.fetch_many(clan_id=clan.id)
-    for member in sorted(clan_members, key=lambda m: m.clan_priv, reverse=True):
-        priv_str = ("Member", "Officer", "Owner")[member.clan_priv - 1]
+    for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
+        priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
         msg.append(f"[{priv_str}] {member['name']}")
 
     return "\n".join(msg)
