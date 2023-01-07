@@ -43,7 +43,7 @@ READ_PARAMS = textwrap.dedent(
 async def create(
     name: str,
     email: str,
-    pw_bcrypt: str,
+    pw_bcrypt: bytes,
     country: str,
 ) -> dict[str, Any]:
     """Create a new player in the database."""
