@@ -542,15 +542,19 @@ async def osuSearchHandler(
             bmap["ChildrenBeatmaps"],
             key=lambda m: m["DifficultyRating"],
         )
+
+        def handle_invalid_characters(s: str) -> str:
+            # XXX: this is a bug that exists on official servers (lmao)
+            # | is used to delimit the set data, so the difficulty name
+            # cannot contain this or it will be ignored. we fix it here
+            # by using a different character.
+            return s.replace("|", "I")
+
         diffs_str = ",".join(
             [
                 DIRECT_MAP_INFO_FMTSTR.format(
                     DifficultyRating=row["DifficultyRating"],
-                    # XXX: this is a bug that exists on official servers (lmao)
-                    # | is used to delimit the set data, so the difficulty name
-                    # cannot contain this or it will be ignored. we fix it here
-                    # by using a different character.
-                    DiffName=row["DiffName"].replace("|", "I"),
+                    DiffName=handle_invalid_characters(row["DiffName"]),
                     CS=row["CS"],
                     OD=row["OD"],
                     AR=row["AR"],
@@ -563,8 +567,8 @@ async def osuSearchHandler(
 
         ret.append(
             DIRECT_SET_INFO_FMTSTR.format(
-                Artist=bmap["Artist"].replace("|", "I"),
-                Title=bmap["Title"].replace("|", "I"),
+                Artist=handle_invalid_characters(bmap["Artist"]),
+                Title=handle_invalid_characters(bmap["Title"]),
                 Creator=bmap["Creator"],
                 RankedStatus=bmap["RankedStatus"],
                 LastUpdate=bmap["LastUpdate"],
