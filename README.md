@@ -29,9 +29,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # enter bancho.py's new directory
 cd bancho.py
-
-# clone bancho.py's dependencies' repositories
-git submodule update --init
 ```
 
 ## installing bancho.py's requirements
