@@ -285,7 +285,7 @@ class Players(list[Player]):
         """Try to get player from cache, or sql as fallback."""
         if p := self.get(id=id, name=name):
             return p
-        elif p := await self.get_sql(id, name):
+        elif p := await self.get_sql(id=id, name=name):
             return p
 
         return None
