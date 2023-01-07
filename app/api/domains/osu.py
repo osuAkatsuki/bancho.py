@@ -276,13 +276,10 @@ async def osuGetBeatmapInfo(
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
 
-        row = await maps_repo.fetch_one(server="osu!", filename=map_filename)
+        beatmap = await maps_repo.fetch_one(server="osu!", filename=map_filename)
 
-        if not row:
+        if not beatmap:
             continue
-
-        # convert from bancho.py -> osu!api status
-        row["status"] = bancho_to_osuapi_status(row["status"])
 
         # try to get the user's grades on the map
         # NOTE: osu! only allows us to send back one per gamemode,
@@ -295,7 +292,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -306,7 +303,7 @@ async def osuGetBeatmapInfo(
             "WHERE map_md5 = :map_md5 AND userid = :user_id "
             "AND mode = :mode AND status = 2",
             {
-                "map_md5": row["md5"],
+                "map_md5": beatmap["md5"],
                 "user_id": player.id,
                 "mode": player.status.mode.as_vanilla,
             },
@@ -315,7 +312,12 @@ async def osuGetBeatmapInfo(
 
         ret.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
-                **row, i=idx, grades="|".join(grades)
+                i=idx,
+                id=beatmap["id"],
+                set_id=beatmap["set_id"],
+                md5=beatmap["md5"],
+                status=bancho_to_osuapi_status(beatmap["status"]),
+                grades="|".join(grades),
             ),
         )
 
@@ -1448,8 +1450,12 @@ async def getScores(
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
             map_exists = (
-                await maps_repo.fetch_one(server="osu!", filename=map_filename)
-            ) is not None
+                await maps_repo.fetch_one(
+                    server="osu!",
+                    filename=map_filename,
+                )
+                is not None
+            )
 
         if map_exists:
             # map can be updated.

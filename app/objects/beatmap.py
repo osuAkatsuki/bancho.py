@@ -361,11 +361,11 @@ class Beatmap:
 
             if set_id <= 0:
                 # set id not provided - fetch it from the map md5
-                res = await maps_repo.fetch_one(server="osu!", md5=md5)
+                rec = await maps_repo.fetch_one(server="osu!", md5=md5)
 
-                if res is not None:
+                if rec is not None:
                     # set found in db
-                    set_id = res["set_id"]
+                    set_id = rec["set_id"]
                 else:
                     # set not found in db, try api
                     api_data = await api_get_beatmaps(h=md5)
@@ -395,11 +395,11 @@ class Beatmap:
             # to be efficient, we want to cache the whole set
             # at once rather than caching the individual map
 
-            res = await maps_repo.fetch_one(server="osu!", id=bid)
+            rec = await maps_repo.fetch_one(server="osu!", id=bid)
 
-            if res is not None:
+            if rec is not None:
                 # set found in db
-                set_id = res["set_id"]
+                set_id = rec["set_id"]
             else:
                 # set not found in db, try getting via api
                 api_data = await api_get_beatmaps(b=bid)
@@ -809,22 +809,47 @@ class BeatmapSet:
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
             for row in await maps_repo.fetch_many(set_id=bsid):
-                bmap = Beatmap(**row, map_set=bmap_set)
+                bmap = Beatmap(
+                    md5=row["md5"],
+                    id=row["id"],
+                    set_id=row["set_id"],
+                    artist=row["artist"],
+                    title=row["title"],
+                    version=row["version"],
+                    creator=row["creator"],
+                    last_update=row["last_update"],
+                    total_length=row["total_length"],
+                    max_combo=row["max_combo"],
+                    status=row["status"],
+                    frozen=row["frozen"],
+                    plays=row["plays"],
+                    passes=row["passes"],
+                    mode=row["mode"],
+                    bpm=row["bpm"],
+                    cs=row["cs"],
+                    od=row["od"],
+                    ar=row["ar"],
+                    hp=row["hp"],
+                    diff=row["diff"],
+                    filename=row["filename"],
+                    map_set=bmap_set,
+                )
 
                 # XXX: tempfix for bancho.py <v3.4.1,
                 # where filenames weren't stored.
                 if not bmap.filename:
                     bmap.filename = (
                         ("{artist} - {title} ({creator}) [{version}].osu")
-                        .format(**row)
+                        .format(
+                            artist=row["artist"],
+                            title=row["title"],
+                            creator=row["creator"],
+                            version=row["version"],
+                        )
                         .translate(IGNORED_BEATMAP_CHARS)
                     )
 
-                    await maps_repo.update(
-                        server="osu!",
-                        id=bmap.id,
-                        filename=bmap.filename,
-                    )
+                    await maps_repo.update("osu!", bmap.id, filename=bmap.filename)
 
                 bmap_set.maps.append(bmap)
 
