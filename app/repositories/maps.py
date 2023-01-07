@@ -70,16 +70,14 @@ async def create(
 ) -> dict[str, Any]:
     """Create a new beatmap entry in the database."""
     query = f"""\
-        INSERT INTO beatmaps (
-            server, id, set_id, status, md5, artist, title, version, creator, filename,
-            last_update, total_length, max_combo, frozen, plays, passes, mode, bpm, cs,
-            ar, od, hp, diff
-        )
-        VALUES (
-            :server, :id, :set_id, :status, :md5, :artist, :title, :version, :creator,
-            :filename, :last_update, :total_length, :max_combo, :frozen, :plays, :passes,
-            :mode, :bpm, :cs, :ar, :od, :hp, :diff
-        )
+        INSERT INTO beatmaps (server, id, set_id, status, md5, artist, title,
+                              version, creator, filename, last_update,
+                              total_length, max_combo, frozen, plays, passes,
+                              mode, bpm, cs, ar, od, hp, diff)
+             VALUES (:server, :id, :set_id, :status, :md5, :artist, :title,
+                     :version, :creator, :filename, :last_update, :total_length,
+                     :max_combo, :frozen, :plays, :passes, :mode, :bpm, :cs, :ar,
+                     :od, :hp, :diff)
     """
     params = {
         "server": server,
@@ -133,9 +131,9 @@ async def fetch_one(
         SELECT {READ_PARAMS}
           FROM beatmaps
          WHERE server = :server
-              AND id = COALESCE(:id, id)
-              AND md5 = COALESCE(:md5, md5)
-              AND filename = COALESCE(:filename, filename)
+           AND id = COALESCE(:id, id)
+           AND md5 = COALESCE(:md5, md5)
+           AND filename = COALESCE(:filename, filename)
     """
     params = {
         "server": server,
@@ -159,14 +157,14 @@ async def fetch_count(
     """Fetch the number of beatmaps in the database."""
     query = """\
         SELECT COUNT(*) AS count
-            FROM beatmaps
+          FROM beatmaps
         WHERE set_id = COALESCE(:set_id, set_id)
-            AND status = COALESCE(:status, status)
-            AND artist = COALESCE(:artist, artist)
-            AND creator = COALESCE(:creator, creator)
-            AND filename = COALESCE(:filename, filename)
-            AND mode = COALESCE(:mode, mode)
-            AND frozen = COALESCE(:frozen, frozen)
+          AND status = COALESCE(:status, status)
+          AND artist = COALESCE(:artist, artist)
+          AND creator = COALESCE(:creator, creator)
+          AND filename = COALESCE(:filename, filename)
+          AND mode = COALESCE(:mode, mode)
+          AND frozen = COALESCE(:frozen, frozen)
 
     """
     params = {
@@ -197,14 +195,14 @@ async def fetch_many(
     """Fetch a list of beatmaps from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
-            FROM beatmaps
-        WHERE set_id = COALESCE(:set_id, set_id)
-            AND status = COALESCE(:status, status)
-            AND artist = COALESCE(:artist, artist)
-            AND creator = COALESCE(:creator, creator)
-            AND filename = COALESCE(:filename, filename)
-            AND mode = COALESCE(:mode, mode)
-            AND frozen = COALESCE(:frozen, frozen)
+          FROM beatmaps
+         WHERE set_id = COALESCE(:set_id, set_id)
+           AND status = COALESCE(:status, status)
+           AND artist = COALESCE(:artist, artist)
+           AND creator = COALESCE(:creator, creator)
+           AND filename = COALESCE(:filename, filename)
+           AND mode = COALESCE(:mode, mode)
+           AND frozen = COALESCE(:frozen, frozen)
     """
     params = {
         "set_id": set_id,
@@ -254,7 +252,7 @@ async def update(
     diff: Optional[float] = None,
 ) -> Optional[dict[str, Any]]:
     """Update a beatmap entry in the database."""
-    query = f"""\
+    query = """\
         UPDATE beatmaps
            SET set_id = COALESCE(:set_id, set_id),
                status = COALESCE(:status, status),
@@ -281,8 +279,8 @@ async def update(
            AND id = :id
     """
     params = {
-        "id": id,
         "server": server,
+        "id": id,
         "set_id": set_id,
         "status": status,
         "md5": md5,
@@ -309,13 +307,13 @@ async def update(
 
     query = f"""\
         SELECT {READ_PARAMS}
-            FROM beatmaps
+          FROM beatmaps
         WHERE server = :server
-            AND id = :id
+          AND id = :id
     """
     params = {
-        "id": id,
         "server": server,
+        "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
@@ -325,25 +323,24 @@ async def delete(server: str, id: int) -> Optional[dict[str, Any]]:
     """Delete a beatmap entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
-            FROM beatmaps
+          FROM beatmaps
         WHERE server = :server
-            AND id = :id
+          AND id = :id
     """
     params = {
-        "id": id,
         "server": server,
+        "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     if rec is None:
         return None
 
-    query = f"""\
+    query = """\
         DELETE FROM beatmaps
-        WHERE server = :server
-            AND id = :id
+              WHERE server = :server
+                AND id = :id
     """
     params = {
-        "id": id,
         "server": server,
     }
     await app.state.services.database.execute(query, params)
