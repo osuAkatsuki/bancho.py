@@ -122,7 +122,7 @@ async def create(
 
 
 async def fetch_one(
-    server: str,
+    server: Optional[str]="osu!",
     id: Optional[int] = None,
     md5: Optional[str] = None,
     filename: Optional[str] = None,
@@ -134,7 +134,7 @@ async def fetch_one(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = :server
+         WHERE server = COALESCE(:server, server)
            AND id = COALESCE(:id, id)
            AND md5 = COALESCE(:md5, md5)
            AND filename = COALESCE(:filename, filename)
@@ -186,7 +186,7 @@ async def fetch_count(
 
 
 async def fetch_many(
-    server: str,
+    server: Optinal[str]="osu!",
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
@@ -201,7 +201,7 @@ async def fetch_many(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = :server
+         WHERE COALESCE(:server, server)
            AND set_id = COALESCE(:set_id, set_id)
            AND status = COALESCE(:status, status)
            AND artist = COALESCE(:artist, artist)
