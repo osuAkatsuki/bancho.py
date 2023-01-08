@@ -52,9 +52,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # 进入到 bancho.py 的目录
 cd bancho.py
-
-# 克隆 bancho.py 的依赖(dependence)目录
-git submodule update --init
 ```
 
 ## 第二步：安装bancho.py所需的依赖
@@ -91,10 +88,11 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # 更新python3.9和pip到最新
-python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -U pip setuptools pipenv
 
-# 安装所有bancho.py使用的与python有关的包
-python3.9 -m pip install -r requirements.txt
+# 安装所有bancho.py使用的与python有关的包(外部依赖)
+# (如果你想要使用开发环境，那么下面请使用`make install-dev`)
+make install
 ```
 
 ## 第三步：给bancho.py开一个数据库！
@@ -104,12 +102,16 @@ python3.9 -m pip install -r requirements.txt
 and stats), 譜面(beatmaps and beatmapsets), 聊天(chat channels)等等
 
 ```sh
+# 开启数据库服务
+sudo service mysql start
+
 # 以 root 用户登录mysql（注意如果你已经是root用户的话直接输mysql
 # 然后回车就可以啦）
 
-# 现在请小心谨慎，因为当你进入SQL以后你就可以完全操作数据库了
+# 现在请小心谨慎，因为你给他的错误命令他会在很短的时间内执行完毕，
+# 不给你后悔的机会
 
-mysql -u root -p
+sudo mysql
 ```
 
 现在，我们会：
@@ -222,7 +224,7 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
 
 ```sh
 # 运行私服啦
-./main.py
+make run
 ```
 
 如果你看到了下面的提示，那么恭喜！你成功了

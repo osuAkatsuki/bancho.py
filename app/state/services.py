@@ -7,7 +7,6 @@ import re
 import secrets
 from pathlib import Path
 from typing import AsyncGenerator
-from typing import AsyncIterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional

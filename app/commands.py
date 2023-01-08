@@ -59,8 +59,10 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
+from app.repositories import clans as clans_repo
+from app.repositories import maps as maps_repo
+from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
-from app.utils import make_safe_name
 from app.utils import seconds_readable
 
 if TYPE_CHECKING:
@@ -259,7 +261,7 @@ async def reconnect(ctx: Context) -> Optional[str]:
     return None
 
 
-@command(Privileges.DONATOR)
+@command(Privileges.SUPPORTER)
 async def changename(ctx: Context) -> Optional[str]:
     """Change your username."""
     name = " ".join(ctx.args).strip()
@@ -273,19 +275,11 @@ async def changename(ctx: Context) -> Optional[str]:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    safe_name = make_safe_name(name)
-
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM users WHERE safe_name = :safe_name",
-        {"safe_name": safe_name},
-    ):
+    if await players_repo.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await app.state.services.database.execute(
-        "UPDATE users SET name = :name, safe_name = :safe_name WHERE id = :user_id",
-        {"name": name, "safe_name": safe_name, "user_id": ctx.player.id},
-    )
+    await players_repo.update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -532,15 +526,12 @@ async def _with(ctx: Context) -> Optional[str]:
 @command(Privileges.UNRESTRICTED, aliases=["req"])
 async def request(ctx: Context) -> Optional[str]:
     """Request a beatmap for nomination."""
-    if (
-        len(ctx.args) < 1
-        or ctx.args[0] not in ("rank", "ranked", "love", "loved")
-    ):
+    if len(ctx.args) < 1 or ctx.args[0] not in ("rank", "ranked", "love", "loved"):
         return "Invalid syntax: !request <ranked/loved> [optional comment]"
-    
+
     comment = "".join(ctx.args[1:])
     if len(ctx.args) > 1 and len(comment) > 512:
-       return "The maximum length for the comment is 512 characters."
+        return "The maximum length for the comment is 512 characters."
 
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
@@ -551,12 +542,17 @@ async def request(ctx: Context) -> Optional[str]:
         return "Only pending maps may be requested for status change."
 
     status = "ranked" if ctx.args[0] == "rank" or ctx.args[0] == "ranked" else "loved"
-    
+
     await app.state.services.database.execute(
         "INSERT INTO map_requests "
         "(map_id, requested_status, comment, player_id, datetime, active) "
         "VALUES (:map_id, :status, :comment, :user_id, NOW(), 1)",
-        {"map_id": bmap.id, "status": status, "comment": comment, "user_id": ctx.player.id},
+        {
+            "map_id": bmap.id,
+            "status": status,
+            "comment": comment,
+            "user_id": ctx.player.id,
+        },
     )
 
     return "Request submitted."
@@ -575,10 +571,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await app.state.services.database.execute(
-        "UPDATE users SET api_key = :api_key WHERE id = :user_id",
-        {"api_key": ctx.player.api_key, "user_id": ctx.player.id},
-    )
+    await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     ctx.player.enqueue(
@@ -620,33 +613,36 @@ async def requests(ctx: Context) -> Optional[str]:
             l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        l.append(f"#{id}: {bmap.embed}\n({dt:%b %d %I:%M%p}) Requested for "
-                 + f"{requested_status} by {p.embed}. "
-                 + f"{'No additional comment was specified.' if comment == '' else f'Additional comment: {comment}'}")
+        l.append(
+            f"#{id}: {bmap.embed}\n({dt:%b %d %I:%M%p}) Requested for "
+            + f"{requested_status} by {p.embed}. "
+            + f"{'No additional comment was specified.' if comment == '' else f'Additional comment: {comment}'}",
+        )
 
     return "\n".join(l)
+
 
 @command(Privileges.NOMINATOR, aliases=["dr", "decline"], hidden=True)
 async def declinerequest(ctx: Context) -> Optional[str]:
     """Removes a map request by it's ID."""
     if len(ctx.args) > 1:
         return "Invalid syntax: !declinerequest [requestid]"
-    
+
     # If declined via request id
     if len(ctx.args) == 1:
         if not await app.state.services.database.fetch_one(
             "SELECT 1 FROM map_requests WHERE active = 1 AND id = :id",
-            {"id": ctx.args[0]}
+            {"id": ctx.args[0]},
         ):
             return f"No active map request with ID #{ctx.args[0]} found."
-    
+
         await app.state.services.database.execute(
             "UPDATE map_requests SET active = 0 WHERE id = :id",
-            {"id": ctx.args[0]}
+            {"id": ctx.args[0]},
         )
 
         return f"Map request #{ctx.args[0]} was declined."
-    
+
     # If declined via /np
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
@@ -655,13 +651,13 @@ async def declinerequest(ctx: Context) -> Optional[str]:
 
     if not await app.state.services.database.fetch_one(
         "SELECT 1 FROM map_requests WHERE active = 1 AND map_id = :map_id",
-        {"map_id": bmap.id}
+        {"map_id": bmap.id},
     ):
         return f"No active map request for the beatmap {bmap.id} found."
-    
+
     await app.state.services.database.execute(
         "UPDATE map_requests SET active = 0 WHERE map_id = :map_id",
-        {"map_id": bmap.id}
+        {"map_id": bmap.id},
     )
 
     return f"All map requests for the beatmap {bmap.id} were declined."
@@ -712,10 +708,10 @@ async def _map(ctx: Context) -> Optional[str]:
 
             # select all map ids for clearing map requests.
             map_ids = [
-                row[0]
-                for row in await db_conn.fetch_all(
-                    "SELECT id FROM maps WHERE set_id = :set_id",
-                    {"set_id": bmap.set_id},
+                row["id"]
+                for row in await maps_repo.fetch_many(
+                    server="osu!",
+                    set_id=bmap.set_id,
                 )
             ]
 
@@ -724,10 +720,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE id = :map_id",
-                {"status": new_status, "map_id": bmap.id},
-            )
+            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 
@@ -909,7 +902,7 @@ async def user(ctx: Context) -> Optional[str]:
     osu_version = p.client_details.osu_version.date if p.online else "Unknown"
     donator_info = (
         f"True (ends {timeago.format(p.donor_end)})"
-        if p.priv & Privileges.DONATOR
+        if p.priv & Privileges.DONATOR != 0
         else "False"
     )
 
@@ -1263,7 +1256,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
     if not (t := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])):
         return "Could not find user."
 
-    if bits & Privileges.DONATOR:
+    if bits & Privileges.DONATOR != 0:
         return "Please use the !givedonator command to assign donator privileges to players."
 
     await t.add_privs(bits)
@@ -1289,7 +1282,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
 
     await t.remove_privs(bits)
 
-    if bits & Privileges.DONATOR:
+    if bits & Privileges.DONATOR != 0:
         t.donor_end = 0
         await app.state.services.database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
@@ -1572,7 +1565,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
     if not ctx.args:
         # !mp start
-        if match.starting["start"] is not None:
+        if match.starting is not None:
             time_remaining = int(match.starting["time"] - time.time())
             return f"Match starting in {time_remaining} seconds."
 
@@ -1581,7 +1574,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
     else:
         if ctx.args[0].isdecimal():
             # !mp start N
-            if match.starting["start"] is not None:
+            if match.starting is not None:
                 time_remaining = int(match.starting["time"] - time.time())
                 return f"Match starting in {time_remaining} seconds."
 
@@ -1593,9 +1586,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
             def _start() -> None:
                 """Remove any pending timers & start the match."""
                 # remove start & alert timers
-                match.starting["start"] = None
-                match.starting["alerts"] = None
-                match.starting["time"] = None
+                match.starting = None
 
                 # make sure player didn't leave the
                 # match since queueing this start lol...
@@ -1612,27 +1603,27 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            match.starting["start"] = app.state.loop.call_later(duration, _start)
-            match.starting["alerts"] = [
-                app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
-                for t in (60, 30, 10, 5, 4, 3, 2, 1)
-                if t < duration
-            ]
-            match.starting["time"] = time.time() + duration
+            match.starting = {
+                "start": app.state.loop.call_later(duration, _start),
+                "alerts": [
+                    app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                    for t in (60, 30, 10, 5, 4, 3, 2, 1)
+                    if t < duration
+                ],
+                "time": time.time() + duration,
+            }
 
             return f"Match will start in {duration} seconds."
         elif ctx.args[0] in ("cancel", "c"):
             # !mp start cancel
-            if match.starting["start"] is None:
+            if match.starting is None:
                 return "Match timer not active!"
 
             match.starting["start"].cancel()
             for alert in match.starting["alerts"]:
                 alert.cancel()
 
-            match.starting["start"] = None
-            match.starting["alerts"] = None
-            match.starting["time"] = None
+            match.starting = None
 
             return "Match timer cancelled."
         elif ctx.args[0] not in ("force", "f"):
@@ -1699,7 +1690,10 @@ async def mp_mods(ctx: Context, match: Match) -> Optional[str]:
             match.mods = mods & SPEED_CHANGING_MODS
 
         # set slot mods
-        match.get_slot(ctx.player).mods = mods & ~SPEED_CHANGING_MODS
+        slot = match.get_slot(ctx.player)
+        assert slot is not None
+
+        slot.mods = mods & ~SPEED_CHANGING_MODS
     else:
         # not freemods, set match mods.
         match.mods = mods
@@ -1730,11 +1724,13 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
         # host mods -> central mods.
         match.freemods = False
 
-        host = match.get_host_slot()  # should always exist
+        host_slot = match.get_host_slot()
+        assert host_slot is not None
+
         # the match keeps any speed-changing mods,
         # and also takes any mods the host has enabled.
         match.mods &= SPEED_CHANGING_MODS
-        match.mods |= host.mods
+        match.mods |= host_slot.mods
 
         for s in match.slots:
             if s.status & SlotStatus.has_player:
@@ -2452,17 +2448,16 @@ async def clan_create(ctx: Context) -> Optional[str]:
 
     created_at = datetime.now()
 
-    # add clan to sql (generates id)
-    clan_id = await app.state.services.database.execute(
-        "INSERT INTO clans "
-        "(name, tag, created_at, owner) "
-        "VALUES (:name, :tag, :created_at, :user_id)",
-        {"name": name, "tag": tag, "created_at": created_at, "user_id": ctx.player.id},
+    # add clan to sql
+    clan = await clans_repo.create(
+        name=name,
+        tag=tag,
+        owner=ctx.player.id,
     )
 
     # add clan to cache
     clan = Clan(
-        id=clan_id,
+        id=clan["id"],
         name=name,
         tag=tag,
         created_at=created_at,
@@ -2477,12 +2472,10 @@ async def clan_create(ctx: Context) -> Optional[str]:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    await app.state.services.database.execute(
-        "UPDATE users "
-        "SET clan_id = :clan_id, "
-        "clan_priv = 3 "  # ClanPrivileges.Owner
-        "WHERE id = :user_id",
-        {"clan_id": clan_id, "user_id": ctx.player.id},
+    await players_repo.update(
+        ctx.player.id,
+        clan_id=clan.id,
+        clan_priv=ClanPrivileges.Owner,
     )
 
     # announce clan creation
@@ -2508,27 +2501,18 @@ async def clan_disband(ctx: Context) -> Optional[str]:
         if not (clan := ctx.player.clan):
             return "You're not a member of a clan!"
 
-    # delete clan from sql
-    await app.state.services.database.execute(
-        "DELETE FROM clans WHERE id = :clan_id",
-        {"clan_id": clan.id},
-    )
+    await clans_repo.delete(clan.id)
+    app.state.sessions.clans.remove(clan)
 
     # remove all members from the clan,
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.member_ids:
+        await players_repo.update(member_id, clan_id=0, clan_priv=0)
+
         if member := app.state.sessions.players.get(id=member_id):
             member.clan = None
             member.clan_priv = None
-
-    await app.state.services.database.execute(
-        "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE clan_id = :clan_id",
-        {"clan_id": clan.id},
-    )
-
-    # remove clan from cache
-    app.state.sessions.clans.remove(clan)
 
     # announce clan disbanding
     if announce_chan := app.state.sessions.channels["#announce"]:
@@ -2550,15 +2534,10 @@ async def clan_info(ctx: Context) -> Optional[str]:
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    for row in await app.state.services.database.fetch_all(
-        "SELECT name, clan_priv "
-        "FROM users "
-        "WHERE clan_id = :clan_id "
-        "ORDER BY clan_priv DESC",
-        {"clan_id": clan.id},
-    ):
-        priv_str = ("Member", "Officer", "Owner")[row["clan_priv"] - 1]
-        msg.append(f"[{priv_str}] {row['name']}")
+    clan_members = await players_repo.fetch_many(clan_id=clan.id)
+    for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
+        priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
+        msg.append(f"[{priv_str}] {member['name']}")
 
     return "\n".join(msg)
 
