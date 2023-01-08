@@ -24,6 +24,7 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
+from app.repositories import achievements as achievements_repo
 from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
@@ -545,7 +546,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.players.append(app.state.sessions.bot)
 
     # global achievements (sorted by vn gamemodes)
-    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
+    for row in await achievements_repo.fetch_many():
         # NOTE: achievement conditions are stored as stringified python
         # expressions in the database to allow for extensive customizability.
         row = dict(row)
