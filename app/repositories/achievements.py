@@ -171,7 +171,6 @@ async def delete(
     query = """\
         DELETE FROM achievements
          WHERE id = :id
-
     """
     params = {
         "id": id,
