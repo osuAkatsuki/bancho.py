@@ -71,7 +71,7 @@ async def fetch_one(
         SELECT {READ_PARAMS}
           FROM channels
          WHERE id = COALESCE(:id, id)
-            AND name = COALESCE(:name, name)
+           AND name = COALESCE(:name, name)
     """
     params = {
         "id": id,
