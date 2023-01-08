@@ -85,7 +85,6 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
                 zip.writestr(f"{os.path.split(avatar)[-1]}", file.read())
 
         # Add the chat logs from .data/logs/chat.log
-        # TODO: Improve parsing because currently channel messages seem to be ignored
         chatlog = StringIO()
         file = open(app.utils.DATA_PATH / "logs/chat.log")
         while True:
