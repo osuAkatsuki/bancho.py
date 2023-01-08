@@ -24,8 +24,8 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
-from app.repositories import channels as channels_repo
 from app.repositories import achievements as achievements_repo
+from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
