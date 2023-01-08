@@ -44,6 +44,7 @@ from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
+from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.menu import Menu
@@ -1219,7 +1220,7 @@ class LobbyJoin(BasePacket):
 @register(ClientPackets.CREATE_MATCH)
 class MatchCreate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.match = Match.from_parsed_match(reader.read_match())
+        self.match_data = reader.read_match()
 
     async def handle(self, p: Player) -> None:
         # TODO: match validation..?
@@ -1241,7 +1242,9 @@ class MatchCreate(BasePacket):
             )
             return
 
-        if not app.state.sessions.matches.append(self.match):
+        match_id = app.state.sessions.matches.get_free()
+
+        if match_id is None:
             # failed to create match (match slots full).
             p.send_bot("Failed to create match (no slots available).")
             p.enqueue(app.packets.match_join_fail())
@@ -1250,20 +1253,38 @@ class MatchCreate(BasePacket):
         # create the channel and add it
         # to the global channel list as
         # an instanced channel.
-        chan = Channel(
-            name=f"#multi_{self.match.id}",
-            topic=f"MID {self.match.id}'s multiplayer channel.",
+        chat_channel = Channel(
+            name=f"#multi_{self.match_data.id}",
+            topic=f"MID {self.match_data.id}'s multiplayer channel.",
             auto_join=False,
             instance=True,
         )
 
-        app.state.sessions.channels.append(chan)
-        self.match.chat = chan
+        match = Match(
+            id=match_id,
+            name=self.match_data.name,
+            password=self.match_data.passwd,
+            map_name=self.match_data.map_name,
+            map_id=self.match_data.map_id,
+            map_md5=self.match_data.map_md5,
+            # TODO: validate no security hole exists
+            host_id=self.match_data.host_id,
+            mode=GameMode(self.match_data.mode),
+            mods=Mods(self.match_data.mods),
+            win_condition=MatchWinConditions(self.match_data.win_condition),
+            team_type=MatchTeamTypes(self.match_data.team_type),
+            freemods=bool(self.match_data.freemods),
+            seed=self.match_data.seed,
+            chat_channel=chat_channel,
+        )
+
+        app.state.sessions.channels.append(chat_channel)
+        match.chat = chat_channel
 
         p.update_latest_activity_soon()
-        p.join_match(self.match, self.match.passwd)
+        p.join_match(match, self.match_data.passwd)
 
-        self.match.chat.send_bot(f"Match created by {p.name}.")
+        match.chat.send_bot(f"Match created by {p.name}.")
         log(f"{p} created a new multiplayer match.")
 
 
@@ -1354,38 +1375,38 @@ class MatchChangeSlot(BasePacket):
         self.slot_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
         # read new slot ID
         if not 0 <= self.slot_id < 16:
             return
 
-        if m.slots[self.slot_id].status != SlotStatus.open:
+        if p.match.slots[self.slot_id].status != SlotStatus.open:
             log(f"{p} tried to move into non-open slot.", Ansi.LYELLOW)
             return
 
         # swap with current slot.
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
-        m.slots[self.slot_id].copy_from(slot)
+        p.match.slots[self.slot_id].copy_from(slot)
         slot.reset()
 
-        m.enqueue_state()  # technically not needed for host?
+        p.match.enqueue_state()  # technically not needed for host?
 
 
 @register(ClientPackets.MATCH_READY)
 class MatchReady(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.status = SlotStatus.ready
-        m.enqueue_state(lobby=False)
+        p.match.enqueue_state(lobby=False)
 
 
 @register(ClientPackets.MATCH_LOCK)
@@ -1394,10 +1415,10 @@ class MatchLock(BasePacket):
         self.slot_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if p is not m.host:
+        if p is not p.match.host:
             log(f"{p} attempted to lock match as non-host.", Ansi.LYELLOW)
             return
 
@@ -1405,12 +1426,12 @@ class MatchLock(BasePacket):
         if not 0 <= self.slot_id < 16:
             return
 
-        slot = m.slots[self.slot_id]
+        slot = p.match.slots[self.slot_id]
 
         if slot.status == SlotStatus.locked:
             slot.status = SlotStatus.open
         else:
-            if slot.player is m.host:
+            if slot.player is p.match.host:
                 # don't allow the match host to kick
                 # themselves by clicking their crown
                 return
@@ -1423,84 +1444,86 @@ class MatchLock(BasePacket):
 
             slot.status = SlotStatus.locked
 
-        m.enqueue_state()
+        p.match.enqueue_state()
 
 
 @register(ClientPackets.MATCH_CHANGE_SETTINGS)
 class MatchChangeSettings(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.new = Match.from_parsed_match(reader.read_match())
+        self.match_data = reader.read_match()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if p is not m.host:
+        if p is not p.match.host:
             log(f"{p} attempted to change settings as non-host.", Ansi.LYELLOW)
             return
 
-        if self.new.freemods != m.freemods:
+        if self.match_data.freemods != p.match.freemods:
             # freemods status has been changed.
-            m.freemods = self.new.freemods
+            p.match.freemods = self.match_data.freemods
 
-            if self.new.freemods:
+            if self.match_data.freemods:
                 # match mods -> active slot mods.
-                for s in m.slots:
+                for s in p.match.slots:
                     if s.status & SlotStatus.has_player:
                         # the slot takes any non-speed
                         # changing mods from the match.
-                        s.mods = m.mods & ~SPEED_CHANGING_MODS
+                        s.mods = p.match.mods & ~SPEED_CHANGING_MODS
 
                 # keep only speed-changing mods.
-                m.mods &= SPEED_CHANGING_MODS
+                p.match.mods &= SPEED_CHANGING_MODS
             else:
                 # host mods -> match mods.
-                host = m.get_host_slot()  # should always exist
+                host = p.match.get_host_slot()  # should always exist
                 assert host is not None
 
                 # the match keeps any speed-changing mods,
                 # and also takes any mods the host has enabled.
-                m.mods &= SPEED_CHANGING_MODS
-                m.mods |= host.mods
+                p.match.mods &= SPEED_CHANGING_MODS
+                p.match.mods |= host.mods
 
-                for s in m.slots:
+                for s in p.match.slots:
                     if s.status & SlotStatus.has_player:
                         s.mods = Mods.NOMOD
 
-        if self.new.map_id == -1:
+        if self.match_data.map_id == -1:
             # map being changed, unready players.
-            m.unready_players(expected=SlotStatus.ready)
-            m.prev_map_id = m.map_id
+            p.match.unready_players(expected=SlotStatus.ready)
+            p.match.prev_map_id = p.match.map_id
 
-            m.map_id = -1
-            m.map_md5 = ""
-            m.map_name = ""
-        elif m.map_id == -1:
-            if m.prev_map_id != self.new.map_id:
+            p.match.map_id = -1
+            p.match.map_md5 = ""
+            p.match.map_name = ""
+        elif p.match.map_id == -1:
+            if p.match.prev_map_id != self.match_data.map_id:
                 # new map has been chosen, send to match chat.
-                m.chat.send_bot(f"Selected: {self.new.map_embed}.")
+                map_url = f"https://osu.{app.settings.DOMAIN}/beatmapsets/#/{self.match_data.map_id}"
+                map_embed = f"[{map_url} {self.match_data.map_name}]"
+                p.match.chat.send_bot(f"Selected: {map_embed}.")
 
             # use our serverside version if we have it, but
             # still allow for users to pick unknown maps.
-            bmap = await Beatmap.from_md5(self.new.map_md5)
+            bmap = await Beatmap.from_md5(self.match_data.map_md5)
 
             if bmap:
-                m.map_id = bmap.id
-                m.map_md5 = bmap.md5
-                m.map_name = bmap.full_name
-                m.mode = bmap.mode
+                p.match.map_id = bmap.id
+                p.match.map_md5 = bmap.md5
+                p.match.map_name = bmap.full_name
+                p.match.mode = bmap.mode
             else:
-                m.map_id = self.new.map_id
-                m.map_md5 = self.new.map_md5
-                m.map_name = self.new.map_name
-                m.mode = self.new.mode
+                p.match.map_id = self.match_data.map_id
+                p.match.map_md5 = self.match_data.map_md5
+                p.match.map_name = self.match_data.map_name
+                p.match.mode = GameMode(self.match_data.mode)
 
-        if m.team_type != self.new.team_type:
+        if p.match.team_type != self.match_data.team_type:
             # if theres currently a scrim going on, only allow
             # team type to change by using the !mp teams command.
-            if m.is_scrimming:
+            if p.match.is_scrimming:
                 _team = ("head-to-head", "tag-coop", "team-vs", "tag-team-vs")[
-                    self.new.team_type
+                    self.match_data.team_type
                 ]
 
                 msg = (
@@ -1508,11 +1531,11 @@ class MatchChangeSettings(BasePacket):
                     "the overall score - to do so, please use the "
                     f"!mp teams {_team} command."
                 )
-                m.chat.send_bot(msg)
+                p.match.chat.send_bot(msg)
             else:
                 # find the new appropriate default team.
                 # defaults are (ffa: neutral, teams: red).
-                if self.new.team_type in (
+                if self.match_data.team_type in (
                     MatchTeamTypes.head_to_head,
                     MatchTeamTypes.tag_coop,
                 ):
@@ -1522,37 +1545,37 @@ class MatchChangeSettings(BasePacket):
 
                 # change each active slots team to
                 # fit the correspoding team type.
-                for s in m.slots:
+                for s in p.match.slots:
                     if s.status & SlotStatus.has_player:
                         s.team = new_t
 
                 # change the matches'.
-                m.team_type = self.new.team_type
+                p.match.team_type = MatchTeamTypes(self.match_data.team_type)
 
-        if m.win_condition != self.new.win_condition:
+        if p.match.win_condition != self.match_data.win_condition:
             # win condition changing; if `use_pp_scoring`
             # is enabled, disable it. always use new cond.
-            if m.use_pp_scoring:
-                m.use_pp_scoring = False
+            if p.match.use_pp_scoring:
+                p.match.use_pp_scoring = False
 
-            m.win_condition = self.new.win_condition
+            p.match.win_condition = MatchWinConditions(self.match_data.win_condition)
 
-        m.name = self.new.name
+        p.match.name = self.match_data.name
 
-        m.enqueue_state()
+        p.match.enqueue_state()
 
 
 @register(ClientPackets.MATCH_START)
 class MatchStart(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if p is not m.host:
+        if p is not p.match.host:
             log(f"{p} attempted to start match as non-host.", Ansi.LYELLOW)
             return
 
-        m.start()
+        p.match.start()
 
 
 @register(ClientPackets.MATCH_SCORE_UPDATE)
@@ -1564,31 +1587,34 @@ class MatchScoreUpdate(BasePacket):
         # this runs very frequently in matches,
         # so it's written to run pretty quick.
 
-        if not (m := p.match):
+        if p.match is None:
             return
+
+        slot_id = p.match.get_slot_id(p)
+        assert slot_id is not None
 
         # if scorev2 is enabled, read an extra 8 bytes.
         buf = bytearray(b"0\x00\x00")
         buf += len(self.play_data).to_bytes(4, "little")
         buf += self.play_data
-        buf[11] = m.get_slot_id(p)
+        buf[11] = slot_id
 
-        m.enqueue(bytes(buf), lobby=False)
+        p.match.enqueue(bytes(buf), lobby=False)
 
 
 @register(ClientPackets.MATCH_COMPLETE)
 class MatchComplete(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.status = SlotStatus.complete
 
         # check if there are any players that haven't finished.
-        if any([s.status == SlotStatus.playing for s in m.slots]):
+        if any([s.status == SlotStatus.playing for s in p.match.slots]):
             return
 
         # find any players just sitting in the multi room
@@ -1597,23 +1623,27 @@ class MatchComplete(BasePacket):
         # the ones who are playing (just new match info).
         not_playing = [
             s.player.id
-            for s in m.slots
+            for s in p.match.slots
             if s.status & SlotStatus.has_player and s.status != SlotStatus.complete
         ]
 
         was_playing = [
-            s for s in m.slots if s.player and s.player.id not in not_playing
+            s for s in p.match.slots if s.player and s.player.id not in not_playing
         ]
 
-        m.unready_players(expected=SlotStatus.complete)
+        p.match.unready_players(expected=SlotStatus.complete)
 
-        m.in_progress = False
-        m.enqueue(app.packets.match_complete(), lobby=False, immune=not_playing)
-        m.enqueue_state()
+        p.match.in_progress = False
+        p.match.enqueue(
+            app.packets.match_complete(),
+            lobby=False,
+            immune=not_playing,
+        )
+        p.match.enqueue_state()
 
-        if m.is_scrimming:
+        if p.match.is_scrimming:
             # determine winner, update match points & inform players.
-            asyncio.create_task(m.update_matchpoints(was_playing))
+            asyncio.create_task(p.match.update_matchpoints(was_playing))
 
 
 @register(ClientPackets.MATCH_CHANGE_MODS)
@@ -1622,28 +1652,28 @@ class MatchChangeMods(BasePacket):
         self.mods = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if m.freemods:
-            if p is m.host:
+        if p.match.freemods:
+            if p is p.match.host:
                 # allow host to set speed-changing mods.
-                m.mods = Mods(self.mods & SPEED_CHANGING_MODS)
+                p.match.mods = Mods(self.mods & SPEED_CHANGING_MODS)
 
             # set slot mods
-            slot = m.get_slot(p)
+            slot = p.match.get_slot(p)
             assert slot is not None
 
             slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
         else:
-            if p is not m.host:
+            if p is not p.match.host:
                 log(f"{p} attempted to change mods as non-host.", Ansi.LYELLOW)
                 return
 
             # not freemods, set match mods.
-            m.mods = Mods(self.mods)
+            p.match.mods = Mods(self.mods)
 
-        m.enqueue_state()
+        p.match.enqueue_state()
 
 
 def is_playing(slot: Slot) -> bool:
@@ -1653,92 +1683,92 @@ def is_playing(slot: Slot) -> bool:
 @register(ClientPackets.MATCH_LOAD_COMPLETE)
 class MatchLoadComplete(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
         # our player has loaded in and is ready to play.
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.loaded = True
 
         # check if all players are loaded,
         # if so, tell all players to begin.
-        if not any(map(is_playing, m.slots)):
-            m.enqueue(app.packets.match_all_players_loaded(), lobby=False)
+        if not any(map(is_playing, p.match.slots)):
+            p.match.enqueue(app.packets.match_all_players_loaded(), lobby=False)
 
 
 @register(ClientPackets.MATCH_NO_BEATMAP)
 class MatchNoBeatmap(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.status = SlotStatus.no_map
-        m.enqueue_state(lobby=False)
+        p.match.enqueue_state(lobby=False)
 
 
 @register(ClientPackets.MATCH_NOT_READY)
 class MatchNotReady(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.status = SlotStatus.not_ready
-        m.enqueue_state(lobby=False)
+        p.match.enqueue_state(lobby=False)
 
 
 @register(ClientPackets.MATCH_FAILED)
 class MatchFailed(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
         # find the player's slot id, and enqueue that
         # they've failed to all other players in the match.
-        slot_id = m.get_slot_id(p)
+        slot_id = p.match.get_slot_id(p)
         assert slot_id is not None
 
-        m.enqueue(app.packets.match_player_failed(slot_id), lobby=False)
+        p.match.enqueue(app.packets.match_player_failed(slot_id), lobby=False)
 
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
 class MatchHasBeatmap(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.status = SlotStatus.not_ready
-        m.enqueue_state(lobby=False)
+        p.match.enqueue_state(lobby=False)
 
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
 class MatchSkipRequest(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         slot.skipped = True
-        m.enqueue(app.packets.match_player_skipped(p.id))
+        p.match.enqueue(app.packets.match_player_skipped(p.id))
 
-        for slot in m.slots:
+        for slot in p.match.slots:
             if slot.status == SlotStatus.playing and not slot.skipped:
                 return
 
         # all users have skipped, enqueue a skip.
-        m.enqueue(app.packets.match_skip(), lobby=False)
+        p.match.enqueue(app.packets.match_skip(), lobby=False)
 
 
 @register(ClientPackets.CHANNEL_JOIN, restricted=True)
@@ -1763,10 +1793,10 @@ class MatchTransferHost(BasePacket):
         self.slot_id = reader.read_i32()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if p is not m.host:
+        if p is not p.match.host:
             log(f"{p} attempted to transfer host as non-host.", Ansi.LYELLOW)
             return
 
@@ -1774,13 +1804,13 @@ class MatchTransferHost(BasePacket):
         if not 0 <= self.slot_id < 16:
             return
 
-        if not (t := m[self.slot_id].player):
+        if not (t := p.match.slots[self.slot_id].player):
             log(f"{p} tried to transfer host to an empty slot?")
             return
 
-        m.host_id = t.id
-        m.host.enqueue(app.packets.match_transfer_host())
-        m.enqueue_state()
+        p.match.host_id = t.id
+        p.match.host.enqueue(app.packets.match_transfer_host())
+        p.match.enqueue_state()
 
 
 @register(ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST)
@@ -1795,10 +1825,11 @@ class TourneyMatchInfoRequest(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if match is None:
             return  # match not found
 
-        p.enqueue(app.packets.update_match(m, send_pw=False))
+        p.enqueue(app.packets.update_match(match, send_pw=False))
 
 
 @register(ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL)
@@ -1813,17 +1844,18 @@ class TourneyMatchJoinChannel(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if match is None:
             return  # match not found
 
-        for s in m.slots:
+        for s in match.slots:
             if s.player is not None:
                 if p.id == s.player.id:
                     return  # playing in the match
 
         # attempt to join match chan
-        if p.join_channel(m.chat):
-            m.tourney_clients.add(p.id)
+        if p.join_channel(match.chat):
+            match.tourney_clients.add(p.id)
 
 
 @register(ClientPackets.TOURNAMENT_LEAVE_MATCH_CHANNEL)
@@ -1838,12 +1870,13 @@ class TourneyMatchLeaveChannel(BasePacket):
         if not p.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (m := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if match is None:
             return  # match not found
 
         # attempt to join match chan
-        p.leave_channel(m.chat)
-        m.tourney_clients.remove(p.id)
+        p.leave_channel(match.chat)
+        match.tourney_clients.remove(p.id)
 
 
 @register(ClientPackets.FRIEND_ADD)
@@ -1886,11 +1919,11 @@ class FriendRemove(BasePacket):
 @register(ClientPackets.MATCH_CHANGE_TEAM)
 class MatchChangeTeam(BasePacket):
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
         # toggle team
-        slot = m.get_slot(p)
+        slot = p.match.get_slot(p)
         assert slot is not None
 
         if slot.team == MatchTeams.blue:
@@ -1898,7 +1931,7 @@ class MatchChangeTeam(BasePacket):
         else:
             slot.team = MatchTeams.blue
 
-        m.enqueue_state(lobby=False)
+        p.match.enqueue_state(lobby=False)
 
 
 @register(ClientPackets.CHANNEL_PART, restricted=True)
@@ -1993,18 +2026,18 @@ class MatchInvite(BasePacket):
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
 class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.match = Match.from_parsed_match(reader.read_match())
+        self.match = reader.read_match()
 
     async def handle(self, p: Player) -> None:
-        if not (m := p.match):
+        if p.match is None:
             return
 
-        if p is not m.host:
+        if p is not p.match.host:
             log(f"{p} attempted to change pw as non-host.", Ansi.LYELLOW)
             return
 
-        m.passwd = self.match.passwd
-        m.enqueue_state()
+        p.match.passwd = self.match.passwd
+        p.match.enqueue_state()
 
 
 @register(ClientPackets.USER_PRESENCE_REQUEST)
