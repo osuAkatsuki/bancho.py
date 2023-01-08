@@ -380,7 +380,15 @@ class Beatmap:
 
             if beatmap_set is not None:
                 # the beatmap set has been cached - fetch beatmap from cache
-                bmap = await cls._from_md5_cache(md5, check_updates=False)
+                bmap = await cls._from_md5_cache(md5)
+
+                # XXX:HACK in this case, BeatmapSet.from_bsid will have
+                # ensured the map is up to date, so we can just return it
+                return bmap
+
+        if bmap is not None:
+            if bmap.set._cache_expired():
+                await bmap.set._update_if_available()
 
         return bmap
 
@@ -414,7 +422,15 @@ class Beatmap:
 
             if beatmap_set is not None:
                 # the beatmap set has been cached - fetch beatmap from cache
-                bmap = await cls._from_bid_cache(bid, check_updates=False)
+                bmap = await cls._from_bid_cache(bid)
+
+                # XXX:HACK in this case, BeatmapSet.from_bsid will have
+                # ensured the map is up to date, so we can just return it
+                return bmap
+
+        if bmap is not None:
+            if bmap.set._cache_expired():
+                await bmap.set._update_if_available()
 
         return bmap
 
@@ -484,36 +500,14 @@ class Beatmap:
         self.diff = float(osuapi_resp["difficultyrating"])
 
     @staticmethod
-    async def _from_md5_cache(
-        md5: str,
-        check_updates: bool = True,
-    ) -> Optional[Beatmap]:
+    async def _from_md5_cache(md5: str) -> Optional[Beatmap]:
         """Fetch a map from the cache by md5."""
-        if md5 in app.state.cache.beatmap:
-            bmap: Beatmap = app.state.cache.beatmap[md5]
-
-            if check_updates and bmap.set._cache_expired():
-                await bmap.set._update_if_available()
-
-            return bmap
-
-        return None
+        return app.state.cache.beatmap.get(md5, None)
 
     @staticmethod
-    async def _from_bid_cache(
-        bid: int,
-        check_updates: bool = True,
-    ) -> Optional[Beatmap]:
+    async def _from_bid_cache(bid: int) -> Optional[Beatmap]:
         """Fetch a map from the cache by id."""
-        if bid in app.state.cache.beatmap:
-            bmap: Beatmap = app.state.cache.beatmap[bid]
-
-            if check_updates and bmap.set._cache_expired():
-                await bmap.set._update_if_available()
-
-            return bmap
-
-        return None
+        return app.state.cache.beatmap.get(bid, None)
 
     async def fetch_rating(self) -> Optional[float]:
         """Fetch the beatmap's rating from sql."""
@@ -581,33 +575,33 @@ class BeatmapSet:
         """The online url for this beatmap set."""
         return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
 
-    def all_officially_ranked_or_approved(self) -> bool:
+    def all_officially_ranked_or_approved_or_frozen(self) -> bool:
         """Whether all the maps in the set are
         ranked or approved on official servers."""
-        for bmap in self.maps:
-            if (
-                bmap.status not in (RankedStatus.Ranked, RankedStatus.Approved)
-                or bmap.frozen  # ranked/approved, but only on bancho.py
-            ):
-                return False
-        return True
+        return all(
+            # ranked status has been edited on bancho.py
+            bmap.frozen or
+            # ranked status is ranked or approved on bancho
+            bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
+            for bmap in self.maps
+        )
 
-    def all_officially_loved(self) -> bool:
+    def all_officially_loved_or_frozen(self) -> bool:
         """Whether all the maps in the set are
         loved on official servers."""
-        for bmap in self.maps:
-            if (
-                bmap.status != RankedStatus.Loved
-                or bmap.frozen  # loved, but only on bancho.py
-            ):
-                return False
-        return True
+        return all(
+            # ranked status has been edited on bancho.py
+            bmap.frozen or
+            # ranked status is loved on bancho
+            bmap.status == RankedStatus.Loved
+            for bmap in self.maps
+        )
 
     def _cache_expired(self) -> bool:
         """Whether the cached version of the set is
         expired and needs an update from the osu!api."""
         # ranked & approved maps are update-locked.
-        if self.all_officially_ranked_or_approved():
+        if self.all_officially_ranked_or_approved_or_frozen():
             return False
 
         current_datetime = datetime.now()
@@ -623,7 +617,7 @@ class BeatmapSet:
 
         # we'll consider it much less likely for a loved map to be updated;
         # it's possible but the mapper will remove their leaderboard doing so.
-        if self.all_officially_loved():
+        if self.all_officially_loved_or_frozen():
             # TODO: it's still possible for this to happen and the delta can span
             # over multiple days quite easily here, there should be a command to
             # force a cache invalidation on the set. (normal privs if spam protected)
@@ -654,7 +648,13 @@ class BeatmapSet:
                     map_md5s_to_delete.add(old_map.md5)
                 else:
                     new_map = new_maps[old_id]
-                    if old_map.md5 != new_map["file_md5"]:
+                    new_ranked_status = RankedStatus.from_osuapi(
+                        int(new_map["approved"]),
+                    )
+                    if (
+                        old_map.md5 != new_map["file_md5"]
+                        or old_map.status != new_ranked_status
+                    ):
                         # update map from old_maps
                         bmap = old_maps[old_id]
                         bmap._parse_from_osuapi_resp(new_map)
@@ -783,15 +783,7 @@ class BeatmapSet:
     @staticmethod
     async def _from_bsid_cache(bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the cache by set id."""
-        if bsid in app.state.cache.beatmapset:
-            bmap_set: BeatmapSet = app.state.cache.beatmapset[bsid]
-
-            if bmap_set._cache_expired():
-                await bmap_set._update_if_available()
-
-            return app.state.cache.beatmapset[bsid]
-
-        return None
+        return app.state.cache.beatmapset.get(bsid, None)
 
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> Optional[BeatmapSet]:

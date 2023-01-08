@@ -52,9 +52,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # 进入到 bancho.py 的目录
 cd bancho.py
-
-# 克隆 bancho.py 的依赖(dependence)目录
-git submodule update --init
 ```
 
 ## 第二步：安装bancho.py所需的依赖
