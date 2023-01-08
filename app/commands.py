@@ -1666,7 +1666,7 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
         match.freemods = True
 
         for s in match.slots:
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 # the slot takes any non-speed
                 # changing mods from the match.
                 s.mods = match.mods & ~SPEED_CHANGING_MODS
@@ -1685,7 +1685,7 @@ async def mp_freemods(ctx: Context, match: Match) -> Optional[str]:
         match.mods |= host_slot.mods
 
         for s in match.slots:
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 s.mods = Mods.NOMOD
 
     match.enqueue_state()
@@ -1844,7 +1844,7 @@ async def mp_teams(ctx: Context, match: Match) -> Optional[str]:
     # change each active slots team to
     # fit the correspoding team type.
     for s in match.slots:
-        if s.status & SlotStatus.has_player:
+        if s.player is not None:
             s.team = new_t
 
     if match.is_scrimming:
@@ -2135,7 +2135,7 @@ async def mp_pick(ctx: Context, match: Match) -> Optional[str]:
         match.freemods = False
 
         for s in match.slots:
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 s.mods = Mods.NOMOD
 
     # update match mods to the picked map.
@@ -2197,11 +2197,19 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     row = dict(row)  # make mutable copy
 
-    row["created_by"] = await app.state.sessions.players.from_cache_or_sql(
+    pool_creator = await app.state.sessions.players.from_cache_or_sql(
         id=row["created_by"],
     )
+    assert pool_creator is not None
 
-    app.state.sessions.pools.append(MapPool(**row))
+    app.state.sessions.pools.append(
+        MapPool(
+            id=row["id"],
+            name=row["name"],
+            created_at=row["created_at"],
+            created_by=pool_creator,
+        ),
+    )
 
     return f"{name} created."
 

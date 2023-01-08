@@ -57,7 +57,7 @@ class SlotStatus(IntEnum):
     complete = 64
     quit = 128
 
-    has_player = not_ready | ready | no_map | playing | complete
+    # has_player = not_ready | ready | no_map | playing | complete
 
 
 @unique
@@ -113,7 +113,7 @@ class MapPool:
         self.maps: dict[
             tuple[Mods, int],
             Beatmap,
-        ] = {}  # {(mods: Mods, slot: int): Beatmap(), ...}
+        ] = {}
 
     def __repr__(self) -> str:
         return f"<{self.name}>"
@@ -204,33 +204,49 @@ class Match:
         Whether pp should be used as a win condition override during scrims.
     """
 
-    def __init__(self) -> None:
-        self.id = 0
-        self.name = ""
-        self.passwd = ""
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        password: str,
+        map_name: str,
+        map_id: int,
+        map_md5: str,
+        host_id: int,
+        mode: GameMode,
+        mods: Mods,
+        win_condition: MatchWinConditions,
+        team_type: MatchTeamTypes,
+        freemods: bool,
+        seed: int,
+        chat_channel: Channel,
+    ) -> None:
+        self.id = id
+        self.name = name
+        self.passwd = password
 
-        self.host_id = 0
+        self.host_id = host_id
         self._refs: set[Player] = set()
 
-        self.map_id = 0
-        self.map_md5 = ""
-        self.map_name = ""
+        self.map_id = map_id
+        self.map_md5 = map_md5
+        self.map_name = map_name
         self.prev_map_id = 0  # previously chosen map
 
-        self.mods = Mods.NOMOD
-        self.mode = GameMode.VANILLA_OSU
-        self.freemods = False
+        self.mods = mods
+        self.mode = mode
+        self.freemods = freemods
 
-        self.chat: Optional[Channel] = None  # multiplayer
+        self.chat = chat_channel
         self.slots = [Slot() for _ in range(16)]
 
         # self.type = MatchTypes.standard
-        self.team_type = MatchTeamTypes.head_to_head
-        self.win_condition = MatchWinConditions.score
+        self.team_type = team_type
+        self.win_condition = win_condition
 
         self.in_progress = False
         self.starting: Optional[StartingTimers] = None
-        self.seed = 0  # used for mania random mod
+        self.seed = seed  # used for mania random mod
 
         self.pool: Optional[MapPool] = None
 
@@ -243,40 +259,6 @@ class Match:
         self.use_pp_scoring = False  # only for scrims
 
         self.tourney_clients: set[int] = set()  # player ids
-
-    @classmethod
-    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> Match:
-        obj = cls()
-        obj.mods = Mods(parsed_match.mods)
-
-        obj.name = parsed_match.name
-        obj.passwd = parsed_match.passwd
-
-        obj.map_name = parsed_match.map_name
-        obj.map_id = parsed_match.map_id
-        obj.map_md5 = parsed_match.map_md5
-
-        for slot, status, team, mods in zip(
-            obj.slots,
-            parsed_match.slot_statuses,
-            parsed_match.slot_teams,
-            parsed_match.slot_mods or [0] * 16,
-        ):
-            slot.status = SlotStatus(status)
-            slot.team = MatchTeams(team)
-            slot.mods = Mods(mods)
-
-        # TODO: validate there is no hole here?
-        obj.host_id = parsed_match.host_id
-
-        obj.mode = GameMode(parsed_match.mode)
-        obj.win_condition = MatchWinConditions(parsed_match.win_condition)
-        obj.team_type = MatchTeamTypes(parsed_match.team_type)
-        obj.freemods = parsed_match.freemods
-
-        obj.seed = parsed_match.seed
-
-        return obj
 
     @property  # TODO: test cache speed
     def host(self) -> Player:
@@ -314,20 +296,6 @@ class Match:
 
         return refs
 
-    def __contains__(self, player: Player) -> bool:
-        return player in {s.player for s in self.slots}
-
-    @overload
-    def __getitem__(self, index: int) -> Slot:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Slot]:
-        ...
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Slot, list[Slot]]:
-        return self.slots[index]
-
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
@@ -358,7 +326,7 @@ class Match:
     def get_host_slot(self) -> Optional[Slot]:
         """Return the slot containing the host."""
         for s in self.slots:
-            if s.status & SlotStatus.has_player and s.player is self.host:
+            if s.player is not None and s.player is self.host:
                 return s
 
         return None
@@ -409,7 +377,7 @@ class Match:
 
         for s in self.slots:
             # start each player who has the map.
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 if s.status != SlotStatus.no_map:
                     s.status = SlotStatus.playing
                 else:

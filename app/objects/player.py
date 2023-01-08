@@ -699,7 +699,7 @@ class Player:
 
         self.leave_channel(self.match.chat)
 
-        if all(slot.empty() for slot in self.match.slots):
+        if all(s.empty() for s in self.match.slots):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f"Match {self.match} finished.")
@@ -721,7 +721,7 @@ class Player:
             if self is self.match.host:
                 # player was host, trasnfer to first occupied slot
                 for s in self.match.slots:
-                    if s.status & SlotStatus.has_player:
+                    if s.player is not None:
                         self.match.host_id = s.player.id
                         self.match.host.enqueue(app.packets.match_transfer_host())
                         break
