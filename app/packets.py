@@ -1171,11 +1171,11 @@ def restart_server(ms: int) -> bytes:
 
 
 # packet id: 88
-def match_invite(player: Player, t_name: str) -> bytes:
+def match_invite(player: Player, target_name: str) -> bytes:
     msg = f"Come join my game: {player.match.embed}."
     return write(
         ServerPackets.MATCH_INVITE,
-        ((player.name, msg, t_name, player.id), osuTypes.message),
+        ((player.name, msg, target_name, player.id), osuTypes.message),
     )
 
 
