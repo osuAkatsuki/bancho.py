@@ -86,13 +86,13 @@ def format_clan_basic(clan: Clan) -> dict[str, object]:
     }
 
 
-def format_player_basic(p: Player) -> dict[str, object]:
+def format_player_basic(player: Player) -> dict[str, object]:
     return {
-        "id": p.id,
-        "name": p.name,
-        "country": p.geoloc["country"]["acronym"],
-        "clan": format_clan_basic(p.clan) if p.clan else None,
-        "online": p.online,
+        "id": player.id,
+        "name": player.name,
+        "country": player.geoloc["country"]["acronym"],
+        "clan": format_clan_basic(player.clan) if player.clan else None,
+        "online": player.online,
     }
 
 
@@ -506,16 +506,16 @@ async def api_get_player_most_played(
         )
 
     if user_id is not None:
-        p = await app.state.sessions.players.from_cache_or_sql(id=user_id)
+        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
     elif username is not None:
-        p = await app.state.sessions.players.from_cache_or_sql(name=username)
+        player = await app.state.sessions.players.from_cache_or_sql(name=username)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not p:
+    if not player:
         return ORJSONResponse(
             {"status": "Player not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -536,7 +536,7 @@ async def api_get_player_most_played(
         "GROUP BY s.map_md5 "
         "ORDER BY plays DESC "
         "LIMIT :limit",
-        {"user_id": p.id, "mode": mode, "limit": limit},
+        {"user_id": player.id, "mode": mode, "limit": limit},
     )
 
     return ORJSONResponse(
@@ -844,7 +844,9 @@ async def api_get_match(
                 "mods": int(match.mods),
                 "seed": match.seed,
                 "host": {"id": match.host.id, "name": match.host.name},
-                "refs": [{"id": p.id, "name": p.name} for p in match.refs],
+                "refs": [
+                    {"id": player.id, "name": player.name} for player in match.refs
+                ],
                 "in_progress": match.in_progress,
                 "is_scrimming": match.is_scrimming,
                 "map": {
@@ -997,7 +999,7 @@ async def api_get_pool(
 
 # @domain.route("/set_avatar", methods=["POST", "PUT"])
 # @requires_api_key
-# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
+# async def api_set_avatar(conn: Connection, player: Player) -> HTTPResponse:
 #     """Update the tokenholder's avatar to a given file."""
 #     if "avatar" not in conn.files:
 #         return (400, JSON({"status": "must provide avatar file."}))
@@ -1016,5 +1018,5 @@ async def api_get_pool(
 #         return (400, JSON({"status": "invalid file type."}))
 
 #     # write to the avatar file
-#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
+#     (AVATARS_PATH / f"{player.id}.{ext}").write_bytes(ava_file)
 #     return JSON({"status": "success."})
