@@ -134,7 +134,7 @@ class Matches(list[Optional[Match]]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
-        super().__init__([None] * 64)  # TODO: customizability?
+        super().__init__([None] * app.settings.MAX_MATCHES)
 
     def __iter__(self) -> Iterator[Optional[Match]]:
         return super().__iter__()
