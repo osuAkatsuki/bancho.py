@@ -18,7 +18,7 @@ import app.state.services
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, file, name, desc, cond
+        id, file, name, `desc`, cond
     """,
 )
 
