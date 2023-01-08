@@ -57,7 +57,7 @@ class SlotStatus(IntEnum):
     complete = 64
     quit = 128
 
-    has_player = not_ready | ready | no_map | playing | complete
+    # has_player = not_ready | ready | no_map | playing | complete
 
 
 @unique
@@ -262,9 +262,9 @@ class Match:
 
     @property  # TODO: test cache speed
     def host(self) -> Player:
-        p = app.state.sessions.players.get(id=self.host_id)
-        assert p is not None
-        return p
+        player = app.state.sessions.players.get(id=self.host_id)
+        assert player is not None
+        return player
 
     @property
     def url(self) -> str:
@@ -296,37 +296,21 @@ class Match:
 
         return refs
 
-    # TODO: delete these
-
-    def __contains__(self, p: Player) -> bool:
-        return p in {s.player for s in self.slots}
-
-    @overload
-    def __getitem__(self, index: int) -> Slot:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Slot]:
-        ...
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Slot, list[Slot]]:
-        return self.slots[index]
-
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
-    def get_slot(self, p: Player) -> Optional[Slot]:
+    def get_slot(self, player: Player) -> Optional[Slot]:
         """Return the slot containing a given player."""
         for s in self.slots:
-            if p is s.player:
+            if player is s.player:
                 return s
 
         return None
 
-    def get_slot_id(self, p: Player) -> Optional[int]:
+    def get_slot_id(self, player: Player) -> Optional[int]:
         """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
-            if p is s.player:
+            if player is s.player:
                 return idx
 
         return None
@@ -342,7 +326,7 @@ class Match:
     def get_host_slot(self) -> Optional[Slot]:
         """Return the slot containing the host."""
         for s in self.slots:
-            if s.status & SlotStatus.has_player and s.player is self.host:
+            if s.player is not None and s.player is self.host:
                 return s
 
         return None
@@ -393,7 +377,7 @@ class Match:
 
         for s in self.slots:
             # start each player who has the map.
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 if s.status != SlotStatus.no_map:
                     s.status = SlotStatus.playing
                 else:
@@ -489,8 +473,8 @@ class Match:
 
         scores, didnt_submit = await self.await_submissions(was_playing)
 
-        for p in didnt_submit:
-            self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
+        for player in didnt_submit:
+            self.chat.send_bot(f"{player} didn't submit a score (timeout: 10s).")
 
         if scores:
             ffa = self.team_type in (
