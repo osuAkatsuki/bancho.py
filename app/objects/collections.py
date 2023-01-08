@@ -25,6 +25,7 @@ from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories import achievements as achievements_repo
+from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
@@ -117,7 +118,7 @@ class Channels(list[Channel]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM channels"):
+        for row in await channels_repo.fetch_many():
             self.append(
                 Channel(
                     name=row["name"],
