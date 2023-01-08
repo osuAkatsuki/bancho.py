@@ -1800,7 +1800,7 @@ async def get_updated_beatmap(
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['path']}",
+            url=f"https://osu.ppy.sh{request['raw_path'].decode()}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
