@@ -88,32 +88,32 @@ class Channels(list[Channel]):
 
     def get_by_name(self, name: str) -> Optional[Channel]:
         """Get a channel from the list by `name`."""
-        for c in self:
-            if c._name == name:
-                return c
+        for channel in self:
+            if channel._name == name:
+                return channel
 
         return None
 
-    def append(self, c: Channel) -> None:
-        """Append `c` to the list."""
-        super().append(c)
+    def append(self, channel: Channel) -> None:
+        """Append `channel` to the list."""
+        super().append(channel)
 
         if app.settings.DEBUG:
-            log(f"{c} added to channels list.")
+            log(f"{channel} added to channels list.")
 
-    def extend(self, cs: Iterable[Channel]) -> None:
-        """Extend the list with `cs`."""
-        super().extend(cs)
-
-        if app.settings.DEBUG:
-            log(f"{cs} added to channels list.")
-
-    def remove(self, c: Channel) -> None:
-        """Remove `c` from the list."""
-        super().remove(c)
+    def extend(self, channels: Iterable[Channel]) -> None:
+        """Extend the list with `channels`."""
+        super().extend(channels)
 
         if app.settings.DEBUG:
-            log(f"{c} removed from channels list.")
+            log(f"{channels} added to channels list.")
+
+    def remove(self, channel: Channel) -> None:
+        """Remove `channel` from the list."""
+        super().remove(channel)
+
+        if app.settings.DEBUG:
+            log(f"{channel} removed from channels list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
@@ -144,38 +144,38 @@ class Matches(list[Optional[Match]]):
 
     def get_free(self) -> Optional[int]:
         """Return the first free match id from `self`."""
-        for idx, m in enumerate(self):
-            if m is None:
+        for idx, match in enumerate(self):
+            if match is None:
                 return idx
 
         return None
 
-    def append(self, m: Match) -> bool:
-        """Append `m` to the list."""
+    def append(self, match: Match) -> bool:
+        """Append `match` to the list."""
         if (free := self.get_free()) is not None:
             # set the id of the match to the lowest available free.
-            m.id = free
-            self[free] = m
+            match.id = free
+            self[free] = match
 
             if app.settings.DEBUG:
-                log(f"{m} added to matches list.")
+                log(f"{match} added to matches list.")
 
             return True
         else:
-            log(f"Match list is full! Could not add {m}.")
+            log(f"Match list is full! Could not add {match}.")
             return False
 
     # TODO: extend
 
-    def remove(self, m: Match) -> None:
-        """Remove `m` from the list."""
+    def remove(self, match: Match) -> None:
+        """Remove `match` from the list."""
         for i, _m in enumerate(self):
-            if m is _m:
+            if match is _m:
                 self[i] = None
                 break
 
         if app.settings.DEBUG:
-            log(f"{m} removed from matches list.")
+            log(f"{match} removed from matches list.")
 
 
 class Players(list[Player]):
@@ -187,13 +187,13 @@ class Players(list[Player]):
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
-    def __contains__(self, p: Union[Player, str]) -> bool:
+    def __contains__(self, player: Union[Player, str]) -> bool:
         # allow us to either pass in the player
         # obj, or the player name as a string.
-        if isinstance(p, str):
-            return p in (player.name for player in self)
+        if isinstance(player, str):
+            return player in (player.name for player in self)
         else:
-            return super().__contains__(p)
+            return super().__contains__(player)
 
     def __repr__(self) -> str:
         return f'[{", ".join(map(repr, self))}]'
@@ -220,9 +220,9 @@ class Players(list[Player]):
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
-        for p in self:
-            if p not in immune:
-                p.enqueue(data)
+        for player in self:
+            if player not in immune:
+                player.enqueue(data)
 
     def get(
         self,
@@ -231,16 +231,16 @@ class Players(list[Player]):
         name: Optional[str] = None,
     ) -> Optional[Player]:
         """Get a player by token, id, or name from cache."""
-        for p in self:
+        for player in self:
             if token is not None:
-                if p.token == token:
-                    return p
+                if player.token == token:
+                    return player
             elif id is not None:
-                if p.id == id:
-                    return p
+                if player.id == id:
+                    return player
             elif name is not None:
-                if p.safe_name == make_safe_name(name):
-                    return p
+                if player.safe_name == make_safe_name(name):
+                    return player
 
         return None
 
@@ -286,10 +286,10 @@ class Players(list[Player]):
         name: Optional[str] = None,
     ) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
-        if p := self.get(id=id, name=name):
-            return p
-        elif p := await self.get_sql(id=id, name=name):
-            return p
+        if player := self.get(id=id, name=name):
+            return player
+        elif player := await self.get_sql(id=id, name=name):
+            return player
 
         return None
 
@@ -300,38 +300,38 @@ class Players(list[Player]):
         sql: bool = False,
     ) -> Optional[Player]:
         """Return a player with a given name & pw_md5, from cache or sql."""
-        if not (p := self.get(name=name)):
+        if not (player := self.get(name=name)):
             if not sql:  # not to fetch from sql.
                 return None
 
-            if not (p := await self.get_sql(name=name)):
+            if not (player := await self.get_sql(name=name)):
                 # no player found in sql either.
                 return None
 
-        assert p.pw_bcrypt is not None
+        assert player.pw_bcrypt is not None
 
-        if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
-            return p
+        if app.state.cache.bcrypt[player.pw_bcrypt] == pw_md5.encode():
+            return player
 
         return None
 
-    def append(self, p: Player) -> None:
+    def append(self, player: Player) -> None:
         """Append `p` to the list."""
-        if p in self:
+        if player in self:
             if app.settings.DEBUG:
-                log(f"{p} double-added to global player list?")
+                log(f"{player} double-added to global player list?")
             return
 
-        super().append(p)
+        super().append(player)
 
-    def remove(self, p: Player) -> None:
+    def remove(self, player: Player) -> None:
         """Remove `p` from the list."""
-        if p not in self:
+        if player not in self:
             if app.settings.DEBUG:
-                log(f"{p} removed from player list when not online?")
+                log(f"{player} removed from player list when not online?")
             return
 
-        super().remove(p)
+        super().remove(player)
 
 
 class MapPools(list[MapPool]):
@@ -368,13 +368,13 @@ class MapPools(list[MapPool]):
         name: Optional[str] = None,
     ) -> Optional[MapPool]:
         """Get a mappool by id, or name from cache."""
-        for p in self:
+        for player in self:
             if id is not None:
-                if p.id == id:
-                    return p
+                if player.id == id:
+                    return player
             elif name is not None:
-                if p.name == name:
-                    return p
+                if player.name == name:
+                    return player
 
         return None
 
@@ -388,32 +388,32 @@ class MapPools(list[MapPool]):
 
     def get_by_name(self, name: str) -> Optional[MapPool]:
         """Get a pool from the list by `name`."""
-        for p in self:
-            if p.name == name:
-                return p
+        for player in self:
+            if player.name == name:
+                return player
 
         return None
 
-    def append(self, m: MapPool) -> None:
-        """Append `m` to the list."""
-        super().append(m)
+    def append(self, mappool: MapPool) -> None:
+        """Append `mappool` to the list."""
+        super().append(mappool)
 
         if app.settings.DEBUG:
-            log(f"{m} added to mappools list.")
+            log(f"{mappool} added to mappools list.")
 
-    def extend(self, ms: Iterable[MapPool]) -> None:
-        """Extend the list with `ms`."""
-        super().extend(ms)
-
-        if app.settings.DEBUG:
-            log(f"{ms} added to mappools list.")
-
-    def remove(self, m: MapPool) -> None:
-        """Remove `m` from the list."""
-        super().remove(m)
+    def extend(self, mappools: Iterable[MapPool]) -> None:
+        """Extend the list with `mappools`."""
+        super().extend(mappools)
 
         if app.settings.DEBUG:
-            log(f"{m} removed from mappools list.")
+            log(f"{mappools} added to mappools list.")
+
+    def remove(self, mappool: MapPool) -> None:
+        """Remove `mappool` from the list."""
+        super().remove(mappool)
+
+        if app.settings.DEBUG:
+            log(f"{mappool} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
@@ -475,39 +475,39 @@ class Clans(list[Clan]):
         tag: Optional[str] = None,
     ) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
-        for c in self:
+        for clan in self:
             if id is not None:
-                if c.id == id:
-                    return c
+                if clan.id == id:
+                    return clan
             elif name is not None:
-                if c.name == name:
-                    return c
+                if clan.name == name:
+                    return clan
             elif tag is not None:
-                if c.tag == tag:
-                    return c
+                if clan.tag == tag:
+                    return clan
 
         return None
 
-    def append(self, c: Clan) -> None:
-        """Append `c` to the list."""
-        super().append(c)
+    def append(self, clan: Clan) -> None:
+        """Append `clan` to the list."""
+        super().append(clan)
 
         if app.settings.DEBUG:
-            log(f"{c} added to clans list.")
+            log(f"{clan} added to clans list.")
 
-    def extend(self, cs: Iterable[Clan]) -> None:
-        """Extend the list with `cs`."""
-        super().extend(cs)
-
-        if app.settings.DEBUG:
-            log(f"{cs} added to clans list.")
-
-    def remove(self, c: Clan) -> None:
-        """Remove `m` from the list."""
-        super().remove(c)
+    def extend(self, clans: Iterable[Clan]) -> None:
+        """Extend the list with `clans`."""
+        super().extend(clans)
 
         if app.settings.DEBUG:
-            log(f"{c} removed from clans list.")
+            log(f"{clans} added to clans list.")
+
+    def remove(self, clan: Clan) -> None:
+        """Remove `clan` from the list."""
+        super().remove(clan)
+
+        if app.settings.DEBUG:
+            log(f"{clan} removed from clans list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
