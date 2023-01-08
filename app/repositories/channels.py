@@ -184,8 +184,8 @@ async def delete(
     """Delete a channel from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
-            FROM channels
-              WHERE name = :name
+          FROM channels
+         WHERE name = :name
     """
     params = {
         "name": name,
