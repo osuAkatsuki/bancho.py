@@ -296,22 +296,6 @@ class Match:
 
         return refs
 
-    # TODO: delete these
-
-    def __contains__(self, p: Player) -> bool:
-        return p in {s.player for s in self.slots}
-
-    @overload
-    def __getitem__(self, index: int) -> Slot:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Slot]:
-        ...
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Slot, list[Slot]]:
-        return self.slots[index]
-
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
