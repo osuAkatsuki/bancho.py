@@ -81,7 +81,7 @@ async def fetch_one(
 async def fetch_count() -> int:
     """Fetch the number of achievements."""
     query = """\
-        SELECT COUNT(*) as count
+        SELECT COUNT(*) AS count
           FROM achievements
     """
     params = {}
