@@ -484,7 +484,7 @@ class BanchoPacketReader:
 
     def read_match(self) -> MultiplayerMatch:
         """Read an osu! match from the internal buffer."""
-        m = MultiplayerMatch(
+        match = MultiplayerMatch(
             id=self.read_i16(),
             in_progress=self.read_i8() == 1,
             powerplay=self.read_i8(),
@@ -499,22 +499,22 @@ class BanchoPacketReader:
             # ^^ up to slot_ids, as it relies on slot_statuses ^^
         )
 
-        for status in m.slot_statuses:
+        for status in match.slot_statuses:
             if status & 124 != 0:  # slot has a player
-                m.slot_ids.append(self.read_i32())
+                match.slot_ids.append(self.read_i32())
 
-        m.host_id = self.read_i32()
-        m.mode = self.read_i8()
-        m.win_condition = self.read_i8()
-        m.team_type = self.read_i8()
-        m.freemods = self.read_i8() == 1
+        match.host_id = self.read_i32()
+        match.mode = self.read_i8()
+        match.win_condition = self.read_i8()
+        match.team_type = self.read_i8()
+        match.freemods = self.read_i8() == 1
 
-        if m.freemods:
-            m.slot_mods = [self.read_i32() for _ in range(16)]
+        if match.freemods:
+            match.slot_mods = [self.read_i32() for _ in range(16)]
 
-        m.seed = self.read_i32()  # used for mania random mod
+        match.seed = self.read_i32()  # used for mania random mod
 
-        return m
+        return match
 
     def read_scoreframe(self) -> ScoreFrame:
         sf = ScoreFrame(*SCOREFRAME_FMT.unpack_from(self.body_view[:29]))
@@ -612,12 +612,12 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
 #    ret = bytearray(len(maps).to_bytes(4, 'little'))
 #
 #    # Write files
-#    for m in maps:
+#    for map in maps:
 #        ret += struct.pack('<hiiiBbbbb',
-#            m.id, m.map_id, m.set_id, m.thread_id, m.status,
-#            m.osu_rank, m.fruits_rank, m.taiko_rank, m.mania_rank
+#            map.id, map.map_id, map.set_id, map.thread_id, map.status,
+#            map.osu_rank, map.fruits_rank, map.taiko_rank, map.mania_rank
 #        )
-#        ret += write_string(m.map_md5)
+#        ret += write_string(map.map_md5)
 #
 #    return ret
 
@@ -792,13 +792,13 @@ BOT_STATUSES = (
 
 
 @cache
-def bot_stats(p: Player) -> bytes:
+def bot_stats(player: Player) -> bytes:
     # pick at random from list of potential statuses.
     status_id, status_txt = random.choice(BOT_STATUSES)
 
     return write(
         ServerPackets.USER_STATS,
-        (p.id, osuTypes.i32),  # id
+        (player.id, osuTypes.i32),  # id
         (status_id, osuTypes.u8),  # action
         (status_txt, osuTypes.string),  # info_text
         ("", osuTypes.string),  # map_md5
@@ -855,8 +855,8 @@ def _user_stats(
 
 
 # TODO: this is implementation-specific, move it out
-def user_stats(p: Player) -> bytes:
-    gm_stats = p.gm_stats
+def user_stats(player: Player) -> bytes:
+    gm_stats = player.gm_stats
     if gm_stats.pp > 0x7FFF:
         # HACK: if pp is over osu!'s ingame cap,
         # we can instead display it as ranked score
@@ -868,13 +868,13 @@ def user_stats(p: Player) -> bytes:
 
     return write(
         ServerPackets.USER_STATS,
-        (p.id, osuTypes.i32),
-        (p.status.action, osuTypes.u8),
-        (p.status.info_text, osuTypes.string),
-        (p.status.map_md5, osuTypes.string),
-        (p.status.mods, osuTypes.i32),
-        (p.status.mode.as_vanilla, osuTypes.u8),
-        (p.status.map_id, osuTypes.i32),
+        (player.id, osuTypes.i32),
+        (player.status.action, osuTypes.u8),
+        (player.status.info_text, osuTypes.string),
+        (player.status.map_md5, osuTypes.string),
+        (player.status.mods, osuTypes.i32),
+        (player.status.mode.as_vanilla, osuTypes.u8),
+        (player.status.map_id, osuTypes.i32),
         (rscore, osuTypes.i64),
         (gm_stats.acc / 100.0, osuTypes.f32),
         (gm_stats.plays, osuTypes.i32),
@@ -1110,11 +1110,11 @@ def match_player_skipped(user_id: int) -> bytes:
 # friends list, their presence is requested
 # *very* frequently; only build it once.
 @cache
-def bot_presence(p: Player) -> bytes:
+def bot_presence(player: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
-        (p.id, osuTypes.i32),
-        (p.name, osuTypes.string),
+        (player.id, osuTypes.i32),
+        (player.name, osuTypes.string),
         (-5 + 24, osuTypes.u8),
         (245, osuTypes.u8),  # satellite provider
         (31, osuTypes.u8),
@@ -1150,17 +1150,17 @@ def _user_presence(
 
 
 # TODO: this is implementation-specific, move it out
-def user_presence(p: Player) -> bytes:
+def user_presence(player: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
-        (p.id, osuTypes.i32),
-        (p.name, osuTypes.string),
-        (p.utc_offset + 24, osuTypes.u8),
-        (p.geoloc["country"]["numeric"], osuTypes.u8),
-        (p.bancho_priv | (p.status.mode.as_vanilla << 5), osuTypes.u8),
-        (p.geoloc["longitude"], osuTypes.f32),
-        (p.geoloc["latitude"], osuTypes.f32),
-        (p.gm_stats.rank, osuTypes.i32),
+        (player.id, osuTypes.i32),
+        (player.name, osuTypes.string),
+        (player.utc_offset + 24, osuTypes.u8),
+        (player.geoloc["country"]["numeric"], osuTypes.u8),
+        (player.bancho_priv | (player.status.mode.as_vanilla << 5), osuTypes.u8),
+        (player.geoloc["longitude"], osuTypes.f32),
+        (player.geoloc["latitude"], osuTypes.f32),
+        (player.gm_stats.rank, osuTypes.i32),
     )
 
 
@@ -1171,11 +1171,11 @@ def restart_server(ms: int) -> bytes:
 
 
 # packet id: 88
-def match_invite(p: Player, t_name: str) -> bytes:
-    msg = f"Come join my game: {p.match.embed}."
+def match_invite(player: Player, t_name: str) -> bytes:
+    msg = f"Come join my game: {player.match.embed}."
     return write(
         ServerPackets.MATCH_INVITE,
-        ((p.name, msg, t_name, p.id), osuTypes.message),
+        ((player.name, msg, t_name, player.id), osuTypes.message),
     )
 
 

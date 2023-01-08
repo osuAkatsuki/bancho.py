@@ -382,12 +382,14 @@ async def top(ctx: Context) -> Optional[str]:
 
         # specific player provided
         if not (
-            p := await app.state.sessions.players.from_cache_or_sql(name=ctx.args[1])
+            player := await app.state.sessions.players.from_cache_or_sql(
+                name=ctx.args[1],
+            )
         ):
             return "Player not found."
     else:
         # no player provided, use self
-        p = ctx.player
+        player = ctx.player
 
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
@@ -401,14 +403,14 @@ async def top(ctx: Context) -> Optional[str]:
         "AND s.status = 2 "
         "AND b.status in (2, 3) "
         "ORDER BY s.pp DESC LIMIT 10",
-        {"user_id": p.id, "mode": mode},
+        {"user_id": player.id, "mode": mode},
     )
 
     if not scores:
         return "No scores"
 
     return "\n".join(
-        [f"Top 10 scores for {p.embed} ({ctx.args[0]})."]
+        [f"Top 10 scores for {player.embed} ({ctx.args[0]})."]
         + [
             TOP_SCORE_FMTSTR.format(idx=idx + 1, domain=app.settings.DOMAIN, **s)
             for idx, s in enumerate(scores)
@@ -594,7 +596,9 @@ async def requests(ctx: Context) -> Optional[str]:
 
     for (map_id, player_id, dt) in rows:
         # find player & map for each row, and add to output.
-        if not (p := await app.state.sessions.players.from_cache_or_sql(id=player_id)):
+        if not (
+            player := await app.state.sessions.players.from_cache_or_sql(id=player_id)
+        ):
             l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
@@ -602,7 +606,7 @@ async def requests(ctx: Context) -> Optional[str]:
             l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        l.append(f"[{p.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
+        l.append(f"[{player.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
 
     return "\n".join(l)
 
@@ -826,44 +830,48 @@ async def user(ctx: Context) -> Optional[str]:
     """Return general information about a given user."""
     if not ctx.args:
         # no username specified, use ctx.player
-        p = ctx.player
+        player = ctx.player
     else:
         # username given, fetch the player
-        p = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+        player = await app.state.sessions.players.from_cache_or_sql(
+            name=" ".join(ctx.args),
+        )
 
         if not p:
             return "Player not found."
 
     priv_list = [
-        priv.name for priv in Privileges if p.priv & priv and bin(priv).count("1") == 1
+        priv.name
+        for priv in Privileges
+        if player.priv & priv and bin(priv).count("1") == 1
     ][::-1]
 
-    if time.time() < p.last_np["timeout"]:
-        last_np = p.last_np["bmap"].embed
+    if time.time() < player.last_np["timeout"]:
+        last_np = player.last_np["bmap"].embed
     else:
         last_np = None
 
-    osu_version = p.client_details.osu_version.date if p.online else "Unknown"
+    osu_version = player.client_details.osu_version.date if player.online else "Unknown"
     donator_info = (
-        f"True (ends {timeago.format(p.donor_end)})"
-        if p.priv & Privileges.DONATOR != 0
+        f"True (ends {timeago.format(player.donor_end)})"
+        if player.priv & Privileges.DONATOR != 0
         else "False"
     )
 
     return "\n".join(
         (
-            f'[{"Bot" if p.bot_client else "Player"}] {p.full_name} ({p.id})',
+            f'[{"Bot" if player.bot_client else "Player"}] {player.full_name} ({player.id})',
             f"Privileges: {priv_list}",
             f"Donator: {donator_info}",
-            f"Channels: {[p._name for p in p.channels]}",
-            f"Logged in: {timeago.format(p.login_time)}",
-            f"Last server interaction: {timeago.format(p.last_recv_time)}",
-            f"osu! build: {osu_version} | Tourney: {p.tourney_client}",
-            f"Silenced: {p.silenced} | Spectating: {p.spectating}",
+            f"Channels: {[c._name for c in player.channels]}",
+            f"Logged in: {timeago.format(player.login_time)}",
+            f"Last server interaction: {timeago.format(player.last_recv_time)}",
+            f"osu! build: {osu_version} | Tourney: {player.tourney_client}",
+            f"Silenced: {player.silenced} | Spectating: {player.spectating}",
             f"Last /np: {last_np}",
-            f"Recent score: {p.recent_score}",
-            f"Match: {p.match}",
-            f"Spectators: {p.spectators}",
+            f"Recent score: {player.recent_score}",
+            f"Match: {player.match}",
+            f"Spectators: {player.spectators}",
         ),
     )
 
@@ -2529,7 +2537,7 @@ class CommandResponse(TypedDict):
 
 
 async def process_commands(
-    p: Player,
+    player: Player,
     target: Union["Channel", Player],
     msg: str,
 ) -> Optional[CommandResponse]:
@@ -2561,12 +2569,12 @@ async def process_commands(
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and p.priv & cmd.priv == cmd.priv:
+        if trigger in cmd.triggers and player.priv & cmd.priv == cmd.priv:
             # found matching trigger with sufficient privs
             try:
                 res = await cmd.callback(
                     Context(
-                        player=p,
+                        player=player,
                         trigger=trigger,
                         args=args,
                         recipient=target,
