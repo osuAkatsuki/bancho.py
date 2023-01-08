@@ -577,7 +577,7 @@ class Player:
             # will simply relog them and refresh their app.state
             self.logout()
 
-    async def silence(self, admin: Player, duration: int, reason: str) -> None:
+    async def silence(self, admin: Player, duration: float, reason: str) -> None:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
@@ -594,7 +594,7 @@ class Player:
         )
 
         # inform the user's client.
-        self.enqueue(app.packets.silence_end(duration))
+        self.enqueue(app.packets.silence_end(int(duration)))
 
         # wipe their messages from any channels.
         app.state.sessions.players.enqueue(app.packets.user_silenced(self.id))
