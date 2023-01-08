@@ -959,14 +959,14 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def unlock_achievement(self, achievment: "Achievement") -> None:
-        """Unlock `achievment` for `self`, storing in both cache & sql."""
+    async def unlock_achievement(self, achievement: "Achievement") -> None:
+        """Unlock `achievement` for `self`, storing in both cache & sql."""
         await app.state.services.database.execute(
             "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
-            {"user_id": self.id, "ach_id": achievment.id},
+            {"user_id": self.id, "ach_id": achievement.id},
         )
 
-        self.achievements.add(achievment)
+        self.achievements.add(achievement)
 
     async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s relationships from sql."""
