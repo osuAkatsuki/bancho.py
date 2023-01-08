@@ -20,7 +20,7 @@ update:
 	pipenv requirements --dev > requirements-dev.txt
 
 clean:
-	pipenv --rm
+	pipenv clean
 
 run:
 	pipenv run python main.py
