@@ -845,7 +845,7 @@ async def user(ctx: Context) -> Optional[str]:
         for priv in Privileges
         if player.priv & priv and bin(priv).count("1") == 1
     ][::-1]
-    if player.last_np is not None and time.time() < p.last_np["timeout"]:
+    if player.last_np is not None and time.time() < player.last_np["timeout"]:
         last_np = p.last_np["bmap"].embed
     else:
         last_np = None
