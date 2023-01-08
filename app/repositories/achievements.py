@@ -129,7 +129,6 @@ async def update(
                desc = COALESCE(:desc, desc),
                cond = COALESCE(:cond, cond)
          WHERE id = :id
-
     """
     params = {
         "id": id,
