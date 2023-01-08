@@ -33,7 +33,6 @@ async def create(
     query = """\
         INSERT INTO achievements (file, name, desc, cond)
              VALUES (:file, :name, :desc, :cond)
-
     """
     params = {
         "file": file,
