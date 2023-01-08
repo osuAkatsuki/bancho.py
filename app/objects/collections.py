@@ -547,11 +547,15 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
 
     # global achievements (sorted by vn gamemodes)
     for row in await achievements_repo.fetch_many():
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        row = dict(row)
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
+        achievement = Achievement(
+            id=row["id"],
+            file=row["file"],
+            name=row["name"],
+            desc=row["desc"],
+            # NOTE: achievement conditions are stored as stringified python
+            # expressions in the database to allow for extensive customizability.
+            cond=eval(f'lambda score, mode_vn: {row.pop("cond")}'),
+        )
 
         app.state.sessions.achievements.append(achievement)
 
