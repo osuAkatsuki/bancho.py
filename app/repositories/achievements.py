@@ -63,6 +63,7 @@ async def fetch_one(
     """Fetch a single achievement."""
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
+
     query = f"""\
         SELECT {READ_PARAMS}
           FROM achievements
@@ -169,7 +170,7 @@ async def delete(
 
     query = """\
         DELETE FROM achievements
-         WHERE id = :id
+              WHERE id = :id
     """
     params = {
         "id": id,
