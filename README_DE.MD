@@ -68,10 +68,11 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # Stellen Sie sicher, dass pip und setuptools auf dem neuesten Stand sind.
-python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -U pip setuptools pipenv
 
 # Installiere die python-spezifischen Abhängigkeiten von bancho.py
-python3.9 -m pip install -r requirements.txt
+# (wenn Sie planen, als Entwickler zu arbeiten, können Sie `make install-dev` verwenden)
+make install
 ```
 
 ## Erstellen einer Datenbank für bancho.py
@@ -81,6 +82,9 @@ Der Server benutzt diese Datenbank, um Metadaten und Logs zu speichern, wie z.B.
 und Statistiken, Beatmaps und Beatmapsets, Chat-Kanäle, Turnier-Mappools und mehr.
 
 ```sh
+# Starten Sie Ihren Datenbankserver
+sudo service mysql start
+
 # Melden Sie sich in der Shell von mysql mit root an - dem Standard-Admin-Konto.
 
 # Beachten Sie, dass diese Shell ziemlich gefährlich sein kann - sie erlaubt Benutzern
@@ -197,7 +201,7 @@ Wenn alles gut gegangen ist, sollten Sie in der Lage sein, Ihren Server zu start
 
 ```sh
 # Starte den Server.
-./main.py
+make run
 ```
 
 und Sie sollten sowas in der Art sehen:
