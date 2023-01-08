@@ -1697,7 +1697,7 @@ async def mp_host(ctx: Context, match: Match) -> Optional[str]:
     if t is match.host:
         return "They're already host, silly!"
 
-    if t not in match:
+    if t not in {slot.player for slot in match.slots}:
         return "Found no such player in the match."
 
     match.host_id = t.id
@@ -1745,7 +1745,7 @@ async def mp_addref(ctx: Context, match: Match) -> Optional[str]:
     if not (t := app.state.sessions.players.get(name=ctx.args[0])):
         return "Could not find a user by that name."
 
-    if t not in match:
+    if t not in {slot.player for slot in match.slots}:
         return "User must be in the current match!"
 
     if t in match.refs:
