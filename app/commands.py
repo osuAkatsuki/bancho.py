@@ -2189,11 +2189,19 @@ async def pool_create(ctx: Context) -> Optional[str]:
 
     row = dict(row)  # make mutable copy
 
-    row["created_by"] = await app.state.sessions.players.from_cache_or_sql(
+    pool_creator = await app.state.sessions.players.from_cache_or_sql(
         id=row["created_by"],
     )
+    assert pool_creator is not None
 
-    app.state.sessions.pools.append(MapPool(**row))
+    app.state.sessions.pools.append(
+        MapPool(
+            id=row["id"],
+            name=row["name"],
+            created_at=row["created_at"],
+            created_by=pool_creator,
+        ),
+    )
 
     return f"{name} created."
 
