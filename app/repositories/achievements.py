@@ -158,8 +158,8 @@ async def delete(
     """Delete an existing achievement."""
     query = f"""\
         SELECT {READ_PARAMS}
-            FROM achievements
-              WHERE id = :id
+          FROM achievements
+         WHERE id = :id
     """
     params = {
         "id": id,
