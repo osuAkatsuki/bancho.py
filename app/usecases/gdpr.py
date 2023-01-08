@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import re
+import os.path
 import csv
 import zipfile
+import glob
 from io import BytesIO
 from io import StringIO
 
 import app.state
+import app.settings
+import app.utils
+from app.constants import regexes
 
+# All user-data related tables and their WHERE query to select the user-related rows
 table_queries = {
     "clans": "owner = :id",
     "client_hashes": "userid = :id",
@@ -25,13 +32,14 @@ table_queries = {
 
 
 async def generate_table_csv(table: str, user_id: int) -> str:
-
+    """Generates the CSV as a string for the specified table from the table dictionary and user id."""
     if not table in table_queries:
         raise KeyError("Table not found.")
 
     output = StringIO()
     writer = csv.writer(output, strict=True)
-
+    
+    # fetch the column names for the CSV column row
     columns = await app.state.services.database.fetch_all(
         f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = :table",
         {"table": table},
@@ -51,7 +59,7 @@ async def generate_table_csv(table: str, user_id: int) -> str:
 
 
 async def generate_csvs(user_id: int) -> dict[str, str]:
-
+    """Generates all CSVs for all tables in the table dictionary for the specified user id."""
     csvs = {}
 
     for table in table_queries.keys():
@@ -61,12 +69,49 @@ async def generate_csvs(user_id: int) -> dict[str, str]:
 
 
 async def generate_zip_archive(user_id: int) -> BytesIO:
-
+    """Generates the whole user-data package as a zip archive and returns the BytesIO object."""
     output = BytesIO()
-
+    
     with zipfile.ZipFile(output, "a", zipfile.ZIP_STORED, False) as zip:
+        
+        # Add the sql data CSV files to the zip archive
         for table, csv in (await generate_csvs(user_id)).items():
-            zip.writestr(f"{table}.csv", csv)
+            zip.writestr(f"data/{table}.csv", csv)
+            
+        # Add the user avatar to the zip archive
+        avatars = glob.glob(str(app.utils.DATA_PATH / "avatars") + f"/{user_id}.*")
+        for avatar in avatars:
+            with open(avatar, "rb") as file:
+                zip.writestr(f"{os.path.split(avatar)[-1]}", file.read())
+                
+        # Add the chat logs from .data/logs/chat.log
+        # TODO: Improve parsing because currently channel messages seem to be ignored
+        chatlog = StringIO()
+        file = open(app.utils.DATA_PATH / "logs/chat.log", "r")
+        while True:
+            line = file.readline()
+            if not line:
+                break
+            
+            matches = re.findall(regexes.CHAT_LOG_USER_ID, ":".join(line.split(':')[:3]))
+            print(matches)
+            if len(matches) >= 2:
+                if matches[0] == str(user_id):
+                    chatlog.write(f"{line}\n")
+                if matches[1] == str(user_id):
+                    chatlog.write(f"{line}\n")
+                    
+        chatlog.seek(0)
+        zip.writestr("chat.log", chatlog.getvalue())
+                
+        # Get the score ids of all passed scores of the user and add their replays to the archive
+        #score_ids = await app.state.services.database.fetch_all(
+        #    "SELECT id FROM scores WHERE userid = :userid AND status > 0",
+        #    {"userid": user_id}
+        #)
+        #for id in (x["id"] for x in score_ids):
+        #    with open(app.utils.DATA_PATH / f"osr/{id}.osr", "rb") as file:
+        #        zip.writestr(f"replays/{id}.osr", file.read())
 
     output.seek(0)
     return output
