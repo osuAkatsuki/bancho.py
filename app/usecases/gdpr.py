@@ -96,7 +96,7 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
                 regexes.CHAT_LOG_USER_ID,
                 ":".join(line.split(":")[:3]),
             )
-            
+
             if len(matches) > 0 and matches[0] == str(user_id):
                 chatlog.write(line)
             if len(matches) > 1 and matches[1] == str(user_id):

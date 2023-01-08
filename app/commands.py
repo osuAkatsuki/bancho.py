@@ -168,10 +168,10 @@ def command(
 
 @command(Privileges.UNRESTRICTED)
 async def gdpr(ctx: Context) -> Optional[str]:
-  
+
     if ctx.recipient is not app.state.sessions.bot:
         return "This command can only be used in DM with bot."
-      
+
     code = str(uuid.uuid4())
 
     for _code, (user_id) in dict(app.state.sessions.gdpr_codes).items():
