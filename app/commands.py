@@ -526,12 +526,8 @@ async def _with(ctx: Context) -> Optional[str]:
 @command(Privileges.UNRESTRICTED, aliases=["req"])
 async def request(ctx: Context) -> Optional[str]:
     """Request a beatmap for nomination."""
-    if len(ctx.args) < 1 or ctx.args[0] not in ("rank", "ranked", "love", "loved"):
+    if len(ctx.args) < 1:
         return "Invalid syntax: !request <ranked/loved> [optional comment]"
-
-    comment = "".join(ctx.args[1:])
-    if len(ctx.args) > 1 and len(comment) > 512:
-        return "The maximum length for the comment is 512 characters."
 
     if time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
@@ -541,7 +537,25 @@ async def request(ctx: Context) -> Optional[str]:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    status = "ranked" if ctx.args[0] == "rank" or ctx.args[0] == "ranked" else "loved"
+    if ctx.args[0] in ("ranked", "rank"):
+        if bmap.status == RankedStatus.Ranked:
+            return "This map is already ranked."
+
+        status = "ranked"
+    elif ctx.args[0] in ("loved", "love"):
+        if bmap.status == RankedStatus.Loved:
+            return "This map is already loved."
+
+        status = "loved"
+    else:
+        status = None
+
+    if len(ctx.args) > 1:
+        comment = " ".join(ctx.args[1:])
+        if len(comment) > 512:
+            return "The maximum length for the comment is 512 characters."
+    else:
+        comment = None
 
     await app.state.services.database.execute(
         "INSERT INTO map_requests "
@@ -616,7 +630,7 @@ async def requests(ctx: Context) -> Optional[str]:
         l.append(
             f"#{id}: {bmap.embed}\n({dt:%b %d %I:%M%p}) Requested for "
             + f"{requested_status} by {p.embed}. "
-            + f"{'No additional comment was specified.' if comment == '' else f'Additional comment: {comment}'}",
+            + (f"Additional comment: {comment}" if comment else ""),
         )
 
     return "\n".join(l)
