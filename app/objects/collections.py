@@ -24,6 +24,8 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
+from app.repositories import achievements as achievements_repo
+from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
@@ -116,7 +118,7 @@ class Channels(list[Channel]):
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM channels"):
+        for row in await channels_repo.fetch_many():
             self.append(
                 Channel(
                     name=row["name"],
@@ -545,12 +547,16 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.players.append(app.state.sessions.bot)
 
     # global achievements (sorted by vn gamemodes)
-    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        row = dict(row)
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
+    for row in await achievements_repo.fetch_many():
+        achievement = Achievement(
+            id=row["id"],
+            file=row["file"],
+            name=row["name"],
+            desc=row["desc"],
+            # NOTE: achievement conditions are stored as stringified python
+            # expressions in the database to allow for extensive customizability.
+            cond=eval(f'lambda score, mode_vn: {row.pop("cond")}'),
+        )
 
         app.state.sessions.achievements.append(achievement)
 
