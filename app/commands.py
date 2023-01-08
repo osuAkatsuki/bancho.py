@@ -38,8 +38,8 @@ import app.logging
 import app.packets
 import app.settings
 import app.state
-import app.usecases.performance
 import app.usecases.gdpr
+import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -165,6 +165,7 @@ def command(
 # and are granted to any unbanned players.
 """
 
+
 @command(Privileges.UNRESTRICTED)
 async def gdpr(ctx: Context) -> Optional[str]:
     code = str(uuid.uuid4())
@@ -173,7 +174,10 @@ async def gdpr(ctx: Context) -> Optional[str]:
         if user_id is ctx.player.id:
             del app.state.sessions.gdpr_codes[_code]
 
-    app.state.sessions.gdpr_codes[code] = (ctx.player.id, time.time() + 3) # code expires after 5 minutes
+    app.state.sessions.gdpr_codes[code] = (
+        ctx.player.id,
+        time.time() + 3,
+    )  # code expires after 5 minutes
 
     return f"Your GDPR data is available here: https://api.{app.settings.DOMAIN}/get_gdpr_data?code={code}\nThe link expires in 5 minutes."
 

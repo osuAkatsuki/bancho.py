@@ -3,31 +3,31 @@ from __future__ import annotations
 
 import hashlib
 import struct
+import time
+from functools import wraps
 from pathlib import Path as SystemPath
+from typing import Callable
 from typing import Literal
 from typing import Optional
-from typing import Callable
 
-from starlette.requests import Request
 from fastapi import APIRouter
-from fastapi import status
 from fastapi import Depends
+from fastapi import status
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
-from functools import wraps
+from starlette.requests import Request
 
-import time
 import app.packets
 import app.state
-from app.constants.privileges import Privileges
 import app.usecases.gdpr
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
@@ -125,7 +125,7 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
 async def api_get_gdpr_data(
     token: HTTPCredentials = Depends(oauth2_scheme),
     user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    code: Optional[str] = Query(None, alias="code", len=36)
+    code: Optional[str] = Query(None, alias="code", len=36),
 ):
     """Returns the GDPR data of a user as a zip archive."""
 
@@ -161,9 +161,8 @@ async def api_get_gdpr_data(
 
             if executor.priv & Privileges.DEVELOPER == 0:
                 return ORJSONResponse(
-                    {"status": "No permission to access the GDPR data of another user."}
+                    {"status": "No permission to access the GDPR data of another user."},
                 )
-
 
     zip = await app.usecases.gdpr.generate_zip_archive(user_id)
 
@@ -172,8 +171,8 @@ async def api_get_gdpr_data(
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
-            "Content-Disposition": f"attachment;filename=\"gdpr_{user_id}.zip\""
-        }
+            "Content-Disposition": f'attachment;filename="gdpr_{user_id}.zip"',
+        },
     )
 
 
