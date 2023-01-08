@@ -10,6 +10,9 @@ install:
 install-dev:
 	PIPENV_VENV_IN_PROJECT=1 pipenv install --dev
 
+uninstall:
+	pipenv --rm
+
 update:
 	pipenv update --dev
 	make test
