@@ -94,7 +94,8 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
                 break
 
             matches = re.findall(
-                regexes.CHAT_LOG_USER_ID, ":".join(line.split(":")[:3]),
+                regexes.CHAT_LOG_USER_ID,
+                ":".join(line.split(":")[:3]),
             )
             print(matches)
             if len(matches) >= 2:
