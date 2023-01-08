@@ -94,8 +94,8 @@ async def fetch_count(
         SELECT COUNT(*) AS count
           FROM channels
          WHERE read_priv = COALESCE(:read_priv, read_priv)
-            AND write_priv = COALESCE(:write_priv, write_priv)
-            AND auto_join = COALESCE(:auto_join, auto_join)
+           AND write_priv = COALESCE(:write_priv, write_priv)
+           AND auto_join = COALESCE(:auto_join, auto_join)
     """
     params = {
         "read_priv": read_priv,
