@@ -846,7 +846,7 @@ async def user(ctx: Context) -> Optional[str]:
         if player.priv & priv and bin(priv).count("1") == 1
     ][::-1]
     if player.last_np is not None and time.time() < player.last_np["timeout"]:
-        last_np = p.last_np["bmap"].embed
+        last_np = player.last_np["bmap"].embed
     else:
         last_np = None
 
