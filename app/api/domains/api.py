@@ -161,7 +161,9 @@ async def api_get_gdpr_data(
 
             if executor.priv & Privileges.DEVELOPER == 0:
                 return ORJSONResponse(
-                    {"status": "No permission to access the GDPR data of another user."},
+                    {
+                        "status": "No permission to access the GDPR data of another user.",
+                    },
                 )
 
     zip = await app.usecases.gdpr.generate_zip_archive(user_id)

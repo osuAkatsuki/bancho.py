@@ -40,7 +40,8 @@ async def generate_table_csv(table: str, user_id: int) -> str:
     writer.writerow(column["COLUMN_NAME"] for column in columns)
 
     rows = await app.state.services.database.fetch_all(
-        f"SELECT * FROM {table} WHERE {table_queries[table]}", {"id": user_id},
+        f"SELECT * FROM {table} WHERE {table_queries[table]}",
+        {"id": user_id},
     )
 
     for row in rows:
