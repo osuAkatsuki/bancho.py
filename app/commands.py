@@ -176,7 +176,7 @@ async def gdpr(ctx: Context) -> Optional[str]:
 
     app.state.sessions.gdpr_codes[code] = (
         ctx.player.id,
-        time.time() + 3,
+        time.time() + 300,
     )  # code expires after 5 minutes
 
     return f"Your GDPR data is available here: https://api.{app.settings.DOMAIN}/get_gdpr_data?code={code}\nThe link expires in 5 minutes."
