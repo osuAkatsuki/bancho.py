@@ -489,40 +489,35 @@ async def _with(ctx: Context) -> Optional[str]:
     if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
         return "Mapfile could not be found; this incident has been reported."
 
-    mode_vn = ctx.player.last_np["mode_vn"]
-
-    command_args = parse__with__command_args(mode_vn, ctx.args)
-    if isinstance(command_args, ParsingError):
-        return str(command_args)
-
-    msg_fields = []
-
-    score_args = ScoreParams(mode=mode_vn)
-
-    if (mods := command_args.get("mods")) is not None:
-        score_args.mods = mods
-        msg_fields.append(f"{mods!r}")
-
-    if (nmiss := command_args["nmiss"]) is not None:
-        score_args.nmiss = nmiss
-        msg_fields.append(f"{nmiss}m")
-
-    if (combo := command_args["combo"]) is not None:
-        score_args.combo = combo
-        msg_fields.append(f"{combo}x")
-
-    if (acc := command_args["acc"]) is not None:
-        score_args.acc = acc
-        msg_fields.append(f"{acc:.2f}%")
+    score_args = ScoreParams(mode=ctx.player.last_np["mode_vn"])
+    attributes_table = {
+        "xgeki": "ngeki",
+        "xkatu": "nkatu",
+        "x100": "n100",
+        "x50": "n50",
+        "x": "combo",
+        "m": "nmiss",
+        "%": "acc"
+    }
+    
+    for arg in (arg.lower() for arg in ctx.args):
+        try:
+            for (suffix, attribute) in attributes_table.items():
+                if arg.endswith(suffix):
+                    setattr(score_args, attribute, float(arg[:-len(suffix)]) if attribute == "acc" else int(arg[:-len(suffix)]))
+            
+            if arg.startswith("+"):
+                score_args.mods = Mods.from_modstr(arg[1:])
+                
+        except ValueError:
+            return f"Could not parse parameter '{arg}'."
 
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(osu_file_path),
         scores=[score_args],  # calculate one score
     )
 
-    return "{msg}: {performance:.2f}pp ({star_rating:.2f}*)".format(
-        msg=" ".join(msg_fields), **result[0]  # (first score result)
-    )
+    return "{performance:.2f}pp ({star_rating:.2f}*)".format(**result[0])  # (first score result)
 
 
 @command(Privileges.UNRESTRICTED, aliases=["req"])
