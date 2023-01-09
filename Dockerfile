@@ -27,4 +27,4 @@ COPY . .
 
 # start bancho.py
 ENTRYPOINT [ "/bin/bash", "-c" ]
-CMD ["./scripts/start_server.sh"]
+CMD ["make run-prod"]
