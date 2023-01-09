@@ -19,17 +19,17 @@ from fastapi.security import HTTPBearer
 import app.packets
 import app.state
 import app.usecases.performance
-from app.objects.beatmap import ensure_local_osu_file
-from app.usecases.performance import ScoreParams
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -114,8 +114,8 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
-    
-    
+
+
 @router.get("/calculate_pp")
 async def api_calculate_pp(
     token: HTTPCredentials = Depends(oauth2_scheme),
@@ -126,7 +126,7 @@ async def api_calculate_pp(
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
-    acclist: Optional[str] = Query(None, alias="acc")
+    acclist: Optional[str] = Query(None, alias="acc"),
 ):
     """Calculates the PP of a specified map with specified score parameters."""
 
@@ -156,24 +156,34 @@ async def api_calculate_pp(
 
     if acclist:
         try:
-            accs = [float(acc) for acc in acclist.split(',')]
-            scores = [ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses) for acc in accs]
+            accs = [float(acc) for acc in acclist.split(",")]
+            scores = [
+                ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
+                for acc in accs
+            ]
         except ValueError:
             return ORJSONResponse(
                 {"status": "Beatmap file could not be fetched."},
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
-        scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, n100=n100, n50=n50, nmiss=misses))
+        scores.append(
+            ScoreParams(
+                GameMode(mode).as_vanilla, mods, combo, n100=n100, n50=n50, nmiss=misses,
+            ),
+        )
 
     results = app.usecases.performance.calculate_performances(
-      str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
-      scores
+        str(BEATMAPS_PATH / f"{beatmap.id}.osu"), scores,
     )
 
     return ORJSONResponse(
-        results if acclist else results[0], # It's okay to change the output type as the user explicitly either requests
-        status_code=status.HTTP_200_OK      # a list via the acclist parameter or a single score via n100 and n50
+        results
+        if acclist
+        else results[
+            0
+        ],  # It's okay to change the output type as the user explicitly either requests
+        status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
     )
 
 
