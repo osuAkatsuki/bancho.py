@@ -520,8 +520,8 @@ async def _with(ctx: Context) -> Optional[str]:
         scores=[score_args],  # calculate one score
     )
 
-    return "{msg}: {performance:.2f}pp ({star_rating:.2f}*)".format(
-        msg=" ".join(msg_fields), **result[0]  # (first score result)
+    return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
+        msg=" ".join(msg_fields), pp=result[0]["performance"]["pp"], stars=result[0]["difficulty"]["stars"]  # (first score result)
     )
 
 
