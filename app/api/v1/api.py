@@ -128,7 +128,7 @@ async def api_calculate_pp(
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
-    acclist: list[float] = Query(None, alias="acc")
+    acclist: list[float] = Query(None, alias="acc"),
 ):
     """Calculates the PP of a specified map with specified score parameters."""
 
@@ -157,19 +157,27 @@ async def api_calculate_pp(
     scores = []
 
     if acclist:
-        try:
-            accs = [float(acc) for acc in acclist.split(',')]
-            scores = [ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses) for acc in accs]
-        except ValueError:
-            return ORJSONResponse(
-                {"status": "Beatmap file could not be fetched."},
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+        scores = [
+            ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
+            for acc in acclist
+        ]
     else:
-        scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, ngeki=ngeki, nkatu=nkatu, n100=n100, n50=n50, nmiss=misses))
+        scores.append(
+            ScoreParams(
+                GameMode(mode).as_vanilla,
+                mods,
+                combo,
+                ngeki=ngeki,
+                nkatu=nkatu,
+                n100=n100,
+                n50=n50,
+                nmiss=misses,
+            ),
+        )
 
     results = app.usecases.performance.calculate_performances(
-        str(BEATMAPS_PATH / f"{beatmap.id}.osu"), scores,
+        str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
+        scores,
     )
 
     return ORJSONResponse(
