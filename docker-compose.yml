@@ -35,8 +35,6 @@ services:
       redis:
         condition: service_started
     tty: true
-    env_file:
-      - .env
     volumes:
       - data:/.data
 
