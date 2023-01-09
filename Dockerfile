@@ -18,9 +18,9 @@ ENV PATH /root/.cargo/bin:$PATH
 
 # install python dependencies
 WORKDIR /prod
-COPY requirements.txt ./
-RUN python3.9 -m pip install -U pip setuptools
-RUN python3.9 -m pip install --verbose -r requirements.txt
+COPY Makefile Pipfile Pipfile.lock ./
+RUN python3.9 -m pip install -U pip setuptools pipenv
+RUN make install
 
 # copy the source code in last, so that it doesn't
 # repeat the previous steps for each change
