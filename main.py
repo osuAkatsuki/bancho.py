@@ -122,7 +122,7 @@ def main(argv: Sequence[str]) -> int:
         # TODO: uvicorn calls .lower() on the key & value,
         #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("bancho-version", app.settings.VERSION),),
+        headers=[("bancho-version", app.settings.VERSION)],
         **server_arguments,
     )
 
