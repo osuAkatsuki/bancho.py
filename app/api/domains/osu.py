@@ -1652,16 +1652,16 @@ async def osuMarkAsRead(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
 ):
-    if not (t_name := unquote(channel)):  # TODO: unquote needed?
+    if not (target_name := unquote(channel)):  # TODO: unquote needed?
         return  # no channel specified
 
-    if t := await app.state.sessions.players.from_cache_or_sql(name=t_name):
+    if target := await app.state.sessions.players.from_cache_or_sql(name=target_name):
         # mark any unread mail from this user as read.
         await app.state.services.database.execute(
             "UPDATE `mail` SET `read` = 1 "
             "WHERE `to_id` = :to AND `from_id` = :from "
             "AND `read` = 0",
-            {"to": player.id, "from": t.id},
+            {"to": player.id, "from": target.id},
         )
 
 
@@ -1800,7 +1800,7 @@ async def get_updated_beatmap(
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['path']}",
+            url=f"https://osu.ppy.sh{request['raw_path'].decode()}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 

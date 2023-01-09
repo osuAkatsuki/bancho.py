@@ -15,6 +15,10 @@ def read_list(value: str) -> list[str]:
     return value.split(",") if value else []
 
 
+# TODO: refactor this out of existence
+MAX_MATCHES = 64
+
+
 SERVER_ADDR = os.environ["SERVER_ADDR"]
 SERVER_PORT = int(v) if (v := os.getenv("SERVER_PORT", None)) else None
 

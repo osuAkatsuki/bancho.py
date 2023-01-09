@@ -60,8 +60,8 @@ class Channel:
     def __repr__(self) -> str:
         return f"<{self._name}>"
 
-    def __contains__(self, p: Player) -> bool:
-        return p in self.players
+    def __contains__(self, player: Player) -> bool:
+        return player in self.players
 
     # XXX: should this be cached differently?
 
@@ -86,9 +86,9 @@ class Channel:
             sender_id=sender.id,
         )
 
-        for p in self.players:
-            if sender.id not in p.blocks and (to_self or p.id != sender.id):
-                p.enqueue(data)
+        for player in self.players:
+            if sender.id not in player.blocks and (to_self or player.id != sender.id):
+                player.enqueue(data)
 
     def send_bot(self, msg: str) -> None:
         """Enqueue `msg` to all connected clients from bot."""
@@ -115,17 +115,17 @@ class Channel:
         recipients: set[Player],
     ) -> None:
         """Enqueue `sender`'s `msg` to `recipients`."""
-        for p in recipients:
-            if p in self:
-                p.send(msg, sender=sender, chan=self)
+        for player in recipients:
+            if player in self:
+                player.send(msg, sender=sender, chan=self)
 
-    def append(self, p: Player) -> None:
-        """Add `p` to the channel's players."""
-        self.players.append(p)
+    def append(self, player: Player) -> None:
+        """Add `player` to the channel's players."""
+        self.players.append(player)
 
-    def remove(self, p: Player) -> None:
-        """Remove `p` from the channel's players."""
-        self.players.remove(p)
+    def remove(self, player: Player) -> None:
+        """Remove `player` from the channel's players."""
+        self.players.remove(player)
 
         if not self.players and self.instance:
             # if it's an instance channel and this
@@ -135,6 +135,6 @@ class Channel:
 
     def enqueue(self, data: bytes, immune: Sequence[int] = []) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""
-        for p in self.players:
-            if p.id not in immune:
-                p.enqueue(data)
+        for player in self.players:
+            if player.id not in immune:
+                player.enqueue(data)
