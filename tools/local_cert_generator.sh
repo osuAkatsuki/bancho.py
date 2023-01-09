@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 read -p "What's the name of your server? " name
-name=${name=Gulag}
+name=${name=Bancho}
 read -p "What's the base domain of your server? " domain
 domain=*.${domain=ppy.sh}
 read -p "What country is this based in? (ISO country code) " location
