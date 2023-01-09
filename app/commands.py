@@ -183,7 +183,7 @@ async def gdpr(ctx: Context) -> Optional[str]:
         time.time() + 300,
     )  # code expires after 5 minutes
 
-    return f"Your GDPR data is available here: https://api.{app.settings.DOMAIN}/get_gdpr_data?code={code}\nThe link expires in 5 minutes."
+    return f"Your GDPR data is available here: https://api.{app.settings.DOMAIN}/get_gdpr_data?code={code}\nThe link expires in 5 minutes or after acessing the data.\nWARNING: Do not share this link with anyone, as it contains highly critical personal information."
 
 
 @command(Privileges.UNRESTRICTED, aliases=["", "h"], hidden=True)
