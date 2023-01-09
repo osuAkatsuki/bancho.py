@@ -126,11 +126,11 @@ async def api_calculate_pp(
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
-    acclist: Optional[str] = Query(None, alias="acc"),
+    acclist: list[float] = Query(None, alias="acc")
 ):
     """Calculates the PP of a specified map with specified score parameters."""
 
-    if app.state.sessions.api_keys.get(token.credentials) is None:
+    if token is None or app.state.sessions.api_keys.get(token.credentials) is None:
         return ORJSONResponse(
             {"status": "Invalid API key."},
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -156,11 +156,8 @@ async def api_calculate_pp(
 
     if acclist:
         try:
-            accs = [float(acc) for acc in acclist.split(",")]
-            scores = [
-                ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
-                for acc in accs
-            ]
+            accs = [float(acc) for acc in acclist.split(',')]
+            scores = [ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses) for acc in accs]
         except ValueError:
             return ORJSONResponse(
                 {"status": "Beatmap file could not be fetched."},
