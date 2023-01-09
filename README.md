@@ -83,17 +83,8 @@ nano ext/nginx.conf
 if everything went well, you should be able to start your server up:
 
 ```sh
-# start the server. note: you may have to start the services
-# one-by-one until some future update does it automatically:
-
-docker-compose up -d mysql
-# wait about a minute or two the first time to wait for mysql to init
-
-docker-compose up -d redis
-docker-compose up -d bancho
-# maybe wait a minute here too
-
-docker-compose up -d nginx
+# start all containers in detached mode (running in the background)
+docker-compose up -d
 # done!
 ```
 
@@ -105,8 +96,8 @@ docker container ls
 # fetch logs of a container
 # replace <container_name> with the name of the container
 # examples:
-# - docker container logs bpy_bancho
-# - docker container logs bpy_mysql
+# - docker container logs banchopy-bancho-1
+# - docker container logs banchopy-mysql-1
 docker container logs <container_name>
 ```
 for more information, see the [docker-cli documentation](https://docs.docker.com/engine/reference/commandline/cli/).

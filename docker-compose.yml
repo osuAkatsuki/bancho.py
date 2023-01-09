@@ -3,7 +3,6 @@ version: "3"
 services:
   mysql:
     image: mysql
-    container_name: bpy_mysql
     environment:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
@@ -17,19 +16,24 @@ services:
       - ${DB_PORT}:${DB_PORT}
     expose:
       - ${DB_PORT}
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 2s
+      timeout: 20s
+      retries: 10
 
   redis:
     image: redis
-    container_name: bpy_redis
     ports:
       - '${REDIS_PORT}:${REDIS_PORT}'
 
   bancho:
     build: .
-    container_name: bpy_bancho
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
     tty: true
     env_file:
       - .env
@@ -38,7 +42,8 @@ services:
 
   nginx:
     image: nginx
-    container_name: bpy_nginx
+    depends_on:
+      - bancho
     volumes:
       - ./ext/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
