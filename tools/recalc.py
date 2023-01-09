@@ -65,12 +65,12 @@ async def recalculate_score(
         mods=score["mods"],
         acc=score["acc"],
         combo=score["max_combo"],
-        n_geki=s["ngeki"],  # Mania 320s
-        n300=s["n300"],
-        n_katu=s["nkatu"],  # Mania 200s, Catch tiny droplets
-        n100=s["n100"],
-        n50=s["n50"],
-        n_misses=s["nmiss"],
+        n_geki=score["ngeki"],  # Mania 320s
+        n300=score["n300"],
+        n_katu=score["nkatu"],  # Mania 200s, Catch tiny droplets
+        n100=score["n100"],
+        n50=score["n50"],
+        n_misses=score["nmiss"],
     )
     attrs = calculator.performance(beatmap)
 
