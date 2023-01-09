@@ -128,7 +128,7 @@ async def api_calculate_pp(
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
-    acclist: list[float] = Query([100, 99, 98, 95], alias="acc")
+    acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
 ):
     """Calculates the PP of a specified map with specified score parameters."""
 
@@ -155,11 +155,25 @@ async def api_calculate_pp(
         )
 
     scores = []
-    
+
     if all(x is None for x in [ngeki, nkatu, n100, n50]):
-        scores = [ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses) for acc in acclist]
+        scores = [
+            ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
+            for acc in acclist
+        ]
     else:
-        scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, ngeki=ngeki or 0, nkatu=nkatu or 0, n100=n100 or 0, n50=n50 or 0, nmiss=misses))
+        scores.append(
+            ScoreParams(
+                GameMode(mode).as_vanilla,
+                mods,
+                combo,
+                ngeki=ngeki or 0,
+                nkatu=nkatu or 0,
+                n100=n100 or 0,
+                n50=n50 or 0,
+                nmiss=misses,
+            ),
+        )
 
     results = app.usecases.performance.calculate_performances(
         str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
@@ -170,7 +184,7 @@ async def api_calculate_pp(
     if len(results) > 1:
         for i in range(0, len(results)):
             results[i]["accuracy"] = scores[i].acc
-            
+
     return ORJSONResponse(
         results
         if all(x is None for x in [ngeki, nkatu, n100, n50])
