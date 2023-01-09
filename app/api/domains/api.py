@@ -3,21 +3,31 @@ from __future__ import annotations
 
 import hashlib
 import struct
+import time
+from functools import wraps
 from pathlib import Path as SystemPath
+from typing import Callable
 from typing import Literal
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
+from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
+from fastapi.security import HTTPBearer
+from starlette.requests import Request
 
 import app.packets
 import app.state
+import app.usecases.gdpr
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
@@ -32,6 +42,7 @@ SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
 router = APIRouter(tags=["bancho.py API"])
+oauth2_scheme = HTTPBearer(auto_error=False)
 
 # NOTE: the api is still under design and is subject to change.
 # to keep up with breaking changes, please either join our discord,
@@ -56,6 +67,7 @@ router = APIRouter(tags=["bancho.py API"])
 
 # [Normal]
 # GET /calculate_pp: calculate & return pp for a given beatmap.
+# GET /get_gdpr_data: return a zip archive containing all user data.
 # POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
 
 # TODO handlers
@@ -107,6 +119,63 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
+
+
+@router.get("/get_gdpr_data")
+async def api_get_gdpr_data(
+    token: HTTPCredentials = Depends(oauth2_scheme),
+    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
+    code: Optional[str] = Query(None, alias="code", len=36),
+):
+    """Returns the GDPR data of a user as a zip archive."""
+
+    if code is not None:
+        (user_id, expiration) = app.state.sessions.gdpr_codes.get(code) or (None, None)
+
+        if user_id is None:
+            return ORJSONResponse(
+                {"status": "Invalid GDPR access code."},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        app.state.sessions.gdpr_codes.pop(code)
+
+        if time.time() > expiration:
+            return ORJSONResponse(
+                {"status": "GDPR access code expired."},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+    else:
+        executor_id = app.state.sessions.api_keys.get(token.credentials)
+        if executor_id is None:
+            return ORJSONResponse(
+                {"status": "Invalid API key."},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if user_id is None:
+            user_id = executor_id
+
+        if user_id is not executor_id:
+            executor = await app.state.sessions.players.from_cache_or_sql(executor_id)
+
+            if executor.priv & Privileges.DEVELOPER == 0:
+                return ORJSONResponse(
+                    {
+                        "status": "No permission to access the GDPR data of another user.",
+                    },
+                )
+
+    zip = await app.usecases.gdpr.generate_zip_archive(user_id)
+
+    return StreamingResponse(
+        content=zip,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Description": "File Transfer",
+            "Content-Disposition": f'attachment;filename="gdpr_{user_id}.zip"',
+        },
+    )
 
 
 @router.get("/search_players")
@@ -922,27 +991,6 @@ async def api_get_pool(
             },
         },
     )
-
-
-# def requires_api_key(f: Callable) -> Callable:
-#     @wraps(f)
-#     async def wrapper(conn: Connection) -> HTTPResponse:
-#         conn.resp_headers["Content-Type"] = "application/json"
-#         if "Authorization" not in conn.headers:
-#             return (400, JSON({"status": "Must provide authorization token."}))
-
-#         api_key = conn.headers["Authorization"]
-
-#         if api_key not in app.state.sessions.api_keys:
-#             return (401, JSON({"status": "Unknown authorization token."}))
-
-#         # get player from api token
-#         player_id = app.state.sessions.api_keys[api_key]
-#         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-
-#         return await f(conn, player)
-
-#     return wrapper
 
 
 # NOTE: `Content-Type = application/json` is applied in the above decorator

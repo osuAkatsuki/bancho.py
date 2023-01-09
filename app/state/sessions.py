@@ -23,6 +23,7 @@ matches = Matches()
 achievements: list[Achievement] = []
 
 api_keys: dict[str, int] = {}
+gdpr_codes: dict[str, (int, float)] = {}  # (int, float) = (user id, expiration)
 
 housekeeping_tasks: set[asyncio.Task] = set()
 

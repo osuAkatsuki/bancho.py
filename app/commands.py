@@ -38,6 +38,7 @@ import app.logging
 import app.packets
 import app.settings
 import app.state
+import app.usecases.gdpr
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
@@ -163,6 +164,26 @@ def command(
 # The commands below are not considered dangerous,
 # and are granted to any unbanned players.
 """
+
+
+@command(Privileges.UNRESTRICTED)
+async def gdpr(ctx: Context) -> Optional[str]:
+
+    if ctx.recipient is not app.state.sessions.bot:
+        return "This command can only be used in DM with bot."
+
+    code = str(uuid.uuid4())
+
+    for _code, (user_id) in dict(app.state.sessions.gdpr_codes).items():
+        if user_id is ctx.player.id:
+            del app.state.sessions.gdpr_codes[_code]
+
+    app.state.sessions.gdpr_codes[code] = (
+        ctx.player.id,
+        time.time() + 300,
+    )  # code expires after 5 minutes
+
+    return f"Your GDPR data is available [here](https://api.{app.settings.DOMAIN}/get_gdpr_data?code={code})\nThe link expires in 5 minutes or after acessing the data.\nWARNING: Do not share this link with anyone, as it contains highly critical personal information."
 
 
 @command(Privileges.UNRESTRICTED, aliases=["", "h"], hidden=True)
