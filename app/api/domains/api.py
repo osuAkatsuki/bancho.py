@@ -24,6 +24,9 @@ from starlette.requests import Request
 import app.packets
 import app.state
 import app.usecases.gdpr
+import app.usecases.performance
+from app.objects.beatmap import ensure_local_osu_file
+from app.usecases.performance import ScoreParams
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -120,6 +123,67 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "diff": m.diff,
     }
 
+
+@router.get("/calculate_pp")
+async def api_calculate_pp(
+    token: HTTPCredentials = Depends(oauth2_scheme),
+    beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
+    n100: int = Query(0, max=2_147_483_647),
+    n50: int = Query(0, max=2_147_483_647),
+    misses: int = Query(0, max=2_147_483_647),
+    mods: int = Query(0, min=0, max=2_147_483_647),
+    mode: int = Query(0, min=0, max=11),
+    combo: Optional[str] = Query(None, max=2_147_483_647),
+    acclist: Optional[str] = Query(None, alias="acc")
+):
+    """Calculates the PP of a specified map with specified score parameters."""
+  
+    if app.state.sessions.api_keys.get(token.credentials) is None:
+        return ORJSONResponse(
+            {"status": "Invalid API key."},
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+  
+    beatmap = await Beatmap.from_bid(beatmap_id)
+    if not beatmap:
+        return ORJSONResponse(
+            {"status": "Beatmap not found."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if not await ensure_local_osu_file(
+        BEATMAPS_PATH / f"{beatmap.id}.osu",
+        beatmap.id,
+        beatmap.md5,
+    ):
+        return ORJSONResponse(
+            {"status": "Beatmap file could not be fetched."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    scores = []
+    
+    if acclist:
+        try:
+            accs = [float(acc) for acc in acclist.split(',')]
+            scores = [ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses) for acc in accs]
+        except ValueError:
+            return ORJSONResponse(
+                {"status": "Beatmap file could not be fetched."},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, n100=n100, n50=n50, nmiss=misses))
+        
+    results = app.usecases.performance.calculate_performances(
+      str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
+      scores
+    )
+
+    return ORJSONResponse(
+        results if acclist else results[0], # It's okay to change the output type as the user explicitly either requests
+        status_code=status.HTTP_200_OK      # a list via the acclist parameter or a single score via n100 and n50
+    )
+        
 
 @router.get("/get_gdpr_data")
 async def api_get_gdpr_data(

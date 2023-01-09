@@ -30,7 +30,7 @@ class ScoreParams:
 class DifficultyRating(TypedDict):
     performance: float
     star_rating: float
-
+    
 
 def calculate_performances(
     osu_file_path: str,
@@ -52,7 +52,7 @@ def calculate_performances(
         # ):
         #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
 
-        calculator = Calculator(
+        result = Calculator(
             mode=score.mode,
             mods=score.mods if score.mods is not None else 0,
             combo=score.combo,
@@ -63,19 +63,41 @@ def calculate_performances(
             n_geki=score.ngeki,
             n_katu=score.nkatu,
             n_misses=score.nmiss,
-        )
-        result = calculator.performance(calc_bmap)
+        ).performance(calc_bmap)
 
         pp = result.pp
-        sr = result.difficulty.stars
-
+        
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
-            sr = 0.0
         else:
             pp = round(pp, 5)
 
-        results.append({"performance": pp, "star_rating": sr})
+        results.append(
+            {
+                "performance":
+                {
+                    "pp": pp,
+                    "pp_acc": result.pp_acc,
+                    "pp_aim": result.pp_aim,
+                    "pp_speed": result.pp_speed,
+                    "pp_flashlight": result.pp_flashlight,
+                    "effective_miss_count": result.effective_miss_count,
+                    "pp_difficulty": result.pp_difficulty,
+                },
+                "difficulty":
+                {
+                    "stars": result.difficulty.stars,
+                    "aim": result.difficulty.aim,
+                    "speed": result.difficulty.speed,
+                    "flashlight": result.difficulty.flashlight,
+                    "slider_factor": result.difficulty.slider_factor,
+                    "speed_note_count": result.difficulty.speed_note_count,
+                    "stamina": result.difficulty.stamina,
+                    "color": result.difficulty.color,
+                    "rhythm": result.difficulty.rhythm,
+                    "peak": result.difficulty.peak
+                }
+            })
 
     return results
