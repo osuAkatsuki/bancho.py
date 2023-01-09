@@ -540,10 +540,11 @@ async def _with(ctx: Context) -> Optional[str]:
         osu_file_path=str(osu_file_path),
         scores=[score_args],  # calculate one score
     )
-                            
+
     return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
-        msg=" ".join(msg_fields), pp=result[0]["performance"]["pp"],  # (first score result)
-        stars=result[0]["difficulty"]["stars"]
+        msg=" ".join(msg_fields),
+        pp=result[0]["performance"]["pp"],  # (first score result)
+        stars=result[0]["difficulty"]["stars"],
     )
 
 

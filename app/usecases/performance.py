@@ -30,7 +30,7 @@ class ScoreParams:
 class DifficultyRating(TypedDict):
     performance: float
     star_rating: float
-    
+
 
 def calculate_performances(
     osu_file_path: str,
@@ -66,7 +66,7 @@ def calculate_performances(
         ).performance(calc_bmap)
 
         pp = result.pp
-        
+
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
@@ -75,8 +75,7 @@ def calculate_performances(
 
         results.append(
             {
-                "performance":
-                {
+                "performance": {
                     "pp": pp,
                     "pp_acc": result.pp_acc,
                     "pp_aim": result.pp_aim,
@@ -85,8 +84,7 @@ def calculate_performances(
                     "effective_miss_count": result.effective_miss_count,
                     "pp_difficulty": result.pp_difficulty,
                 },
-                "difficulty":
-                {
+                "difficulty": {
                     "stars": result.difficulty.stars,
                     "aim": result.difficulty.aim,
                     "speed": result.difficulty.speed,
@@ -96,8 +94,9 @@ def calculate_performances(
                     "stamina": result.difficulty.stamina,
                     "color": result.difficulty.color,
                     "rhythm": result.difficulty.rhythm,
-                    "peak": result.difficulty.peak
-                }
-            })
+                    "peak": result.difficulty.peak,
+                },
+            },
+        )
 
     return results
