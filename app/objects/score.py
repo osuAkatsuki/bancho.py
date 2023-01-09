@@ -117,7 +117,7 @@ class Score:
         value will always be accurate for any score.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # TODO: check whether the reamining Optional's should be
         self.id: Optional[int] = None
         self.bmap: Optional[Beatmap] = None

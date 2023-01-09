@@ -302,7 +302,7 @@ async def maplink(ctx: Context) -> Optional[str]:
         bmap = await Beatmap.from_md5(match.map_md5)
     elif spectating and spectating.status.map_id:
         bmap = await Beatmap.from_md5(spectating.status.map_md5)
-    elif time.time() < ctx.player.last_np["timeout"]:
+    elif ctx.player.last_np is not None and time.time() < ctx.player.last_np["timeout"]:
         bmap = ctx.player.last_np["bmap"]
 
     if bmap is None:
@@ -480,7 +480,7 @@ async def _with(ctx: Context) -> Optional[str]:
     if ctx.recipient is not app.state.sessions.bot:
         return "This command can only be used in DM with bot."
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     bmap: Beatmap = ctx.player.last_np["bmap"]
@@ -531,7 +531,7 @@ async def request(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !request"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     bmap = ctx.player.last_np["bmap"]
@@ -628,7 +628,7 @@ async def _map(ctx: Context) -> Optional[str]:
     ):
         return "Invalid syntax: !map <rank/unrank/love> <map/set>"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     bmap = ctx.player.last_np["bmap"]
@@ -845,8 +845,7 @@ async def user(ctx: Context) -> Optional[str]:
         for priv in Privileges
         if player.priv & priv and bin(priv).count("1") == 1
     ][::-1]
-
-    if time.time() < player.last_np["timeout"]:
+    if player.last_np is not None and time.time() < player.last_np["timeout"]:
         last_np = player.last_np["bmap"].embed
     else:
         last_np = None
@@ -1278,7 +1277,7 @@ async def wipemap(ctx: Context) -> Optional[str]:
     if ctx.args:
         return "Invalid syntax: !wipemap"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     map_md5 = ctx.player.last_np["bmap"].md5
@@ -1542,7 +1541,7 @@ async def mp_start(ctx: Context, match: Match) -> Optional[str]:
 
                 # make sure player didn't leave the
                 # match since queueing this start lol...
-                if ctx.player not in match:
+                if ctx.player not in {slot.player for slot in match.slots}:
                     match.chat.send_bot("Player left match? (cancelled)")
                     return
 
@@ -2248,7 +2247,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     if len(ctx.args) != 2:
         return "Invalid syntax: !pool add <name> <pick>"
 
-    if time.time() >= ctx.player.last_np["timeout"]:
+    if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"
 
     name, mods_slot = ctx.args

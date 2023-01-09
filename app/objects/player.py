@@ -312,11 +312,7 @@ class Player:
         }
 
         # store the last beatmap /np'ed by the user.
-        self.last_np: LastNp = {  # type: ignore
-            "bmap": None,
-            "mode_vn": None,
-            "timeout": 0.0,
-        }
+        self.last_np: Optional[LastNp] = None
 
         # TODO: document
         self.current_menu = MAIN_MENU
