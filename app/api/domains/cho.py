@@ -174,7 +174,7 @@ def register(
 
 @register(ClientPackets.PING, restricted=True)
 class Ping(BasePacket):
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         pass  # ping be like
 
 
