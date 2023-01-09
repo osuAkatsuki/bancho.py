@@ -64,8 +64,13 @@ async def recalculate_score(
         mode=GameMode(score["mode"]).as_vanilla,
         mods=score["mods"],
         acc=score["acc"],
-        n_misses=score["nmiss"],
         combo=score["max_combo"],
+        n_geki=s["ngeki"], # Mania 320s
+        n300=s["n300"],
+        n_katu=s["nkatu"], # Mania 200s, Catch tiny droplets
+        n100=s["n100"],
+        n50=s["n50"],
+        n_misses=s["nmiss"],
     )
     attrs = calculator.performance(beatmap)
 
@@ -187,9 +192,17 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
 
     scores = [
         dict(row)
-        for row in await ctx.database.fetch_all(
-            "SELECT scores.id, scores.mode, scores.mods, scores.acc, nmiss, scores.max_combo, scores.map_md5, scores.pp, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
-            "WHERE scores.status = 2 AND scores.mode = :mode ORDER BY scores.pp DESC",
+        for row in await ctx.database.fetch_all("""\
+            SELECT scores.id, scores.mode, scores.mods, scores.map_md5
+              scores.pp, scores.acc, scores.max_combo,
+              scores.ngeki, scores.n300, scores.nkatu, scores.n100, scores.n50, scores.nmiss,
+              maps.id as map_id
+            FROM scores
+            INNER JOIN maps ON scores.map_md5 = maps.md5
+            WHERE scores.status = 2 
+              AND scores.mode = :mode 
+            ORDER BY scores.pp DESC
+            """,
             {"mode": game_mode.value},
         )
     ]
