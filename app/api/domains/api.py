@@ -133,7 +133,7 @@ async def api_calculate_pp(
     misses: int = Query(0, max=2_147_483_647),
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
-    combo: Optional[str] = Query(None, max=2_147_483_647),
+    combo: int = Query(None, max=2_147_483_647),
     acclist: Optional[str] = Query(None, alias="acc")
 ):
     """Calculates the PP of a specified map with specified score parameters."""
