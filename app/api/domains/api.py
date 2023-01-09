@@ -162,7 +162,8 @@ async def api_calculate_pp(
         scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, ngeki=ngeki or 0, nkatu=nkatu or 0, n100=n100 or 0, n50=n50 or 0, nmiss=misses))
 
     results = app.usecases.performance.calculate_performances(
-        str(BEATMAPS_PATH / f"{beatmap.id}.osu"), scores,
+        str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
+        scores,
     )
 
     # "Inject" the accuracy into the list of results
