@@ -9,8 +9,7 @@ RUN apk add --no-cache \
     gnupg \
     build-base \
     libffi-dev \
-    linux-headers \
-    wait4x
+    linux-headers
 
 # install rust
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
