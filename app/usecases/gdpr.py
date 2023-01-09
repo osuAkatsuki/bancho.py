@@ -20,7 +20,7 @@ table_queries = {
     "comments": "userid = :id",
     "favourites": "userid = :id",
     "ingame_logins": "userid = :id",
-    #"logs": "`from` = :id OR `to` = :id",
+    "logs": "`from` = :id OR `to` = :id",
     "mail": "from_id = :id OR to_id = :id",
     "map_requests": "player_id = :id",
     "ratings": "userid = :id",
