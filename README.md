@@ -298,7 +298,7 @@ once you have finished the above you'll have to add some dns records (A records)
             <li>map.yourdomain.com</li>
             <li>osu.yourdomain.com</li>
             <li>s.yourdomain.com</li>
-            <li>web.yourdomain.com</li>   
+            <li>web.yourdomain.com</li>
         </ul>
         <th>
             <img src="https://i.imgur.com/2NUyEQJ.png" alt="Step 5">
