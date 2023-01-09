@@ -120,6 +120,8 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
 async def api_calculate_pp(
     token: HTTPCredentials = Depends(oauth2_scheme),
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
+    nkatu: int = Query(0, max=2_147_483_647),
+    ngeki: int = Query(0, max=2_147_483_647),
     n100: int = Query(0, max=2_147_483_647),
     n50: int = Query(0, max=2_147_483_647),
     misses: int = Query(0, max=2_147_483_647),
@@ -164,11 +166,7 @@ async def api_calculate_pp(
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
     else:
-        scores.append(
-            ScoreParams(
-                GameMode(mode).as_vanilla, mods, combo, n100=n100, n50=n50, nmiss=misses,
-            ),
-        )
+        scores.append(ScoreParams(GameMode(mode).as_vanilla, mods, combo, ngeki=ngeki, nkatu=nkatu, n100=n100, n50=n50, nmiss=misses))
 
     results = app.usecases.performance.calculate_performances(
         str(BEATMAPS_PATH / f"{beatmap.id}.osu"), scores,
