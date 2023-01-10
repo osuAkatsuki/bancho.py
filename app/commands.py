@@ -421,59 +421,6 @@ async def top(ctx: Context) -> Optional[str]:
 # TODO: !compare (compare to previous !last/!top post's map)
 
 
-class ParsingError(str):
-    ...
-
-
-def parse__with__command_args(
-    mode: int,
-    args: Sequence[str],
-) -> Union[Mapping[str, Any], ParsingError]:
-    """Parse arguments for the !with command."""
-
-    # tried to balance complexity vs correctness for this function
-    # TODO: it can surely be cleaned up further - need to rethink it?
-
-    if not args or len(args) > 4:
-        return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
-
-    # !with 95% 1m 429x hddt
-    acc = mods = combo = nmiss = None
-
-    # parse acc, misses, combo and mods from arguments.
-    # tried to balance complexity vs correctness here
-    for arg in (str.lower(arg) for arg in args):
-        # mandatory suffix, combo & nmiss
-        if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
-            combo = int(arg[:-1])
-            # if combo > bmap.max_combo:
-            #    return "Invalid combo."
-        elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
-            nmiss = int(arg[:-1])
-            # TODO: store nobjects?
-            # if nmiss > bmap.combo:
-            #    return "Invalid misscount."
-        else:
-            # optional prefix/suffix, mods & accuracy
-            arg_stripped = arg.removeprefix("+").removesuffix("%")
-            if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
-                mods = Mods.from_modstr(arg_stripped)
-                mods = mods.filter_invalid_combos(mode)
-            elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
-                acc = float(arg_stripped)
-                if not 0 <= acc <= 100:
-                    return ParsingError("Invalid accuracy.")
-            else:
-                return ParsingError(f"Unknown argument: {arg}")
-
-    return {
-        "acc": acc,
-        "mods": mods,
-        "combo": combo,
-        "nmiss": nmiss,
-    }
-
-
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
 async def _with(ctx: Context) -> Optional[str]:
     """Specify custom accuracy & mod combinations with `/np`."""
