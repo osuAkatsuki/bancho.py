@@ -38,7 +38,7 @@ def calculate_performances(
 ) -> list[DifficultyRating]:
     calc_bmap = Beatmap(path=osu_file_path)
 
-    results = []
+    results: list[DifficultyRating] = []
 
     for score in scores:
         # assert either acc OR 300/100/50/geki/katu/miss is present, but not both
