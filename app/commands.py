@@ -451,10 +451,18 @@ async def _with(ctx: Context) -> Optional[str]:
         try:
             for (suffix, attribute) in attributes_table.items():
                 if arg.endswith(suffix):
-                    setattr(score_args, attribute, float(arg[:-len(suffix)]) if attribute == "acc" else int(arg[:-len(suffix)]))
+                    value = None
+                    if attribute == "acc":
+                        value = float(arg[:-len(suffix)])
+                        if not 0 <= value <= 100:
+                            return "Invalid accuracy. (0-100%)"
+                    else:
+                        value = int(arg[:-len(suffix)])
+                        
+                    setattr(score_args, attribute,  value)
             
             if arg.startswith("+"):
-                score_args.mods = Mods.from_modstr(arg[1:])
+                score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(ctx.player.last_np["mode_vn"])
                 
         except ValueError:
             return f"Could not parse parameter '{arg}'."
