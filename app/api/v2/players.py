@@ -1,52 +1,70 @@
-""" api-v2: redefined bancho.py's developer api for interacting with players repository """
+""" bancho.py's v2 apis for interacting with players """
 from __future__ import annotations
 
-from typing import List
 from typing import Optional
-from typing import Union
 
 from fastapi import APIRouter
+from fastapi import status
 from fastapi.param_functions import Query
 
+from app.api.v2.common import responses
+from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
-from app.api.v2.models.players import Players
-from app.api.v2.responses.error import failure
-from app.api.v2.responses.success import Success
-from app.api.v2.responses.success import success
 from app.repositories import players as players_repo
 
 router = APIRouter()
 
 
-@router.get("/players", response_model=Success[Players])
+@router.get("/players")
 async def get_players(
-    page: Optional[int] = Query(1, ge=1),
-    page_size: Optional[int] = Query(50, ge=1, le=100),
-):
-    players = await players_repo.fetch_many(page=page, page_size=page_size)
-
-    if len(players) < 1:
-        return failure("Reached the pages limit.")
-
-    players_count = await players_repo.fetch_count()
-
-    response = Players(
-        players=[Player.from_mapping(x) for x in players],
-        max_pages=players_count / page_size + 1,
-        current_page=page,
+    priv: Optional[int] = None,
+    country: Optional[str] = None,
+    clan_id: Optional[int] = None,
+    clan_priv: Optional[int] = None,
+    preferred_mode: Optional[int] = None,
+    play_style: Optional[int] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> Success[list[Player]]:
+    players = await players_repo.fetch_many(
+        priv=priv,
+        country=country,
+        clan_id=clan_id,
+        clan_priv=clan_priv,
+        preferred_mode=preferred_mode,
+        play_style=play_style,
+        page=page,
+        page_size=page_size,
     )
-    return success(response)
+    total_players = await players_repo.fetch_count(
+        priv=priv,
+        country=country,
+        clan_id=clan_id,
+        clan_priv=clan_priv,
+        preferred_mode=preferred_mode,
+        play_style=play_style,
+    )
+
+    response = [Player.from_mapping(rec) for rec in players]
+
+    return responses.success(
+        content=response,
+        meta={
+            "total": total_players,
+            "page": page,
+            "page_size": page_size,
+        },
+    )
 
 
-@router.get("/players/{player}", response_model=Success[Player])
-async def get_player(player: Union[int, str]):
-    if isinstance(player, int):
-        player_info = await players_repo.fetch_one(id=player)
-    else:
-        player_info = await players_repo.fetch_one(name=player)
+@router.get("/players/{player_id}")
+async def get_player(player_id: int) -> Success[Player]:
+    data = await players_repo.fetch_one(id=player_id)
+    if data is None:
+        return responses.failure(
+            message="Player not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
-    if player_info is None:
-        return failure("Player not found.", 404)
-
-    response = Player.from_mapping(player_info)
-    return success(response)
+    response = Player.from_mapping(data)
+    return responses.success(response)
