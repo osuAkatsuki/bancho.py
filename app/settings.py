@@ -41,7 +41,7 @@ REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 OSU_API_KEY = os.environ["OSU_API_KEY"]
 
 DOMAIN = os.environ["DOMAIN"]
-MIRROR_URL = os.environ["MIRROR_URL"]
+MIRROR_URL = os.environ["MIRROR_URL"].removesuffix("/")
 
 COMMAND_PREFIX = os.environ["COMMAND_PREFIX"]
 
