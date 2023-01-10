@@ -26,6 +26,8 @@ def success(
     headers: Optional[dict[str, Any]] = None,
     meta: Optional[dict[str, Any]] = None,
 ) -> Any:
+    if meta is None:
+        meta = {}
     data = {"status": "success", "data": content, "meta": meta}
     return json.ORJSONResponse(data, status_code, headers)
 
