@@ -114,8 +114,8 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
-    
-    
+
+
 @router.get("/calculate_pp")
 async def api_calculate_pp(
     token: HTTPCredentials = Depends(oauth2_scheme),
