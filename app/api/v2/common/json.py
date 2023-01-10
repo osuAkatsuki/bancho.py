@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import orjson
@@ -14,12 +15,18 @@ def _default_processor(data: Any) -> Any:
         return {k: _default_processor(v) for k, v in data.items()}
     elif isinstance(data, list):
         return [_default_processor(v) for v in data]
+    elif isinstance(data, uuid.UUID):
+        return str(data)
     else:
         return data
 
 
 def dumps(data: Any) -> bytes:
     return orjson.dumps(data, default=_default_processor)
+
+
+def loads(data: str) -> Any:
+    return orjson.loads(data)
 
 
 class ORJSONResponse(JSONResponse):
