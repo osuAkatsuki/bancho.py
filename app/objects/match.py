@@ -352,7 +352,8 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
+        lchan = app.state.sessions.channels["#lobby"]
+        if lobby and lchan and lchan.players:
             lchan.enqueue(data)
 
     def enqueue_state(self, lobby: bool = True) -> None:
@@ -362,7 +363,8 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(app.packets.update_match(self, send_pw=True))
 
-        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
+        lchan = app.state.sessions.channels["#lobby"]
+        if lobby and lchan and lchan.players:
             lchan.enqueue(app.packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
@@ -430,7 +432,8 @@ class Match:
                     and rc_score.server_time > max_age
                 ):
                     # score found, add to our scores dict if != 0.
-                    if score := getattr(rc_score, win_cond):
+                    score = getattr(rc_score, win_cond)
+                    if score:
                         key = s.player if ffa else s.team
                         scores[key] += score
 
@@ -531,7 +534,8 @@ class Match:
                 del m
 
             else:  # teams
-                if r_match := regexes.TOURNEY_MATCHNAME.match(self.name):
+                r_match = regexes.TOURNEY_MATCHNAME.match(self.name)
+                if r_match:
                     match_name = r_match["name"]
                     team_names = {
                         MatchTeams.blue: r_match["T1"],

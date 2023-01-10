@@ -152,7 +152,8 @@ class Matches(list[Optional[Match]]):
 
     def append(self, match: Match) -> bool:
         """Append `match` to the list."""
-        if (free := self.get_free()) is not None:
+        free = self.get_free()
+        if free is not None:
             # set the id of the match to the lowest available free.
             match.id = free
             self[free] = match
@@ -286,9 +287,11 @@ class Players(list[Player]):
         name: Optional[str] = None,
     ) -> Optional[Player]:
         """Try to get player from cache, or sql as fallback."""
-        if player := self.get(id=id, name=name):
+        player = self.get(id=id, name=name)
+        if player is not None:
             return player
-        elif player := await self.get_sql(id=id, name=name):
+        player = await self.get_sql(id=id, name=name)
+        if player is not None:
             return player
 
         return None
@@ -300,12 +303,13 @@ class Players(list[Player]):
         sql: bool = False,
     ) -> Optional[Player]:
         """Return a player with a given name & pw_md5, from cache or sql."""
-        if not (player := self.get(name=name)):
-            if not sql:  # not to fetch from sql.
+        player = self.get(name=name)
+        if not player:
+            if not sql:
                 return None
 
-            if not (player := await self.get_sql(name=name)):
-                # no player found in sql either.
+            player = await self.get_sql(name=name)
+            if not player:
                 return None
 
         assert player.pw_bcrypt is not None

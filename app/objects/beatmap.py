@@ -628,7 +628,8 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch the newest data from the api, check for differences
         and propogate any update into our cache & database."""
-        if api_data := await api_get_beatmaps(s=self.id):
+        api_data = await api_get_beatmaps(s=self.id)
+        if api_data:
             old_maps = {bmap.id: bmap for bmap in self.maps}
             new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
 
@@ -850,7 +851,8 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the osu!api by set id."""
-        if api_data := await api_get_beatmaps(s=bsid):
+        api_data = await api_get_beatmaps(s=bsid)
+        if api_data:
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset bancho.py support
