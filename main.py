@@ -43,7 +43,8 @@ def main(argv: Sequence[str]) -> int:
         app.utils.ensure_supported_platform,  # linux only at the moment
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
     ):
-        if (exit_code := safety_check()) != 0:
+        exit_code = safety_check()
+        if exit_code != 0:
             return exit_code
 
     """ Parse and handle command-line arguments. """
