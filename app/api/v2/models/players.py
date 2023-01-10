@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import List
 from typing import Optional
 
 from . import BaseModel
@@ -28,3 +29,9 @@ class Player(BaseModel):
     custom_badge_icon: Optional[str]
 
     userpage_content: Optional[str]
+
+
+class Players(BaseModel):
+    players: List[Player]
+    max_pages: int
+    current_page: int
