@@ -48,7 +48,8 @@ async def cancel_housekeeping_tasks() -> None:
 
     for task in housekeeping_tasks:
         if not task.cancelled():
-            if exception := task.exception():
+            exception = task.exception()
+            if exception:
                 loop.call_exception_handler(
                     {
                         "message": "unhandled exception during loop shutdown",
