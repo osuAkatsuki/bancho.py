@@ -446,26 +446,28 @@ async def _with(ctx: Context) -> Optional[str]:
         "x50": "n50",
         "x": "combo",
         "m": "nmiss",
-        "%": "acc"
+        "%": "acc",
     }
-    
+
     for arg in (arg.lower() for arg in ctx.args):
         try:
             for (suffix, attribute) in attributes_table.items():
                 if arg.endswith(suffix):
                     value = None
                     if attribute == "acc":
-                        value = float(arg[:-len(suffix)])
+                        value = float(arg[: -len(suffix)])
                         if not 0 <= value <= 100:
                             return "Invalid accuracy. (0-100%)"
                     else:
-                        value = int(arg[:-len(suffix)])
-                        
-                    setattr(score_args, attribute,  value)
-            
+                        value = int(arg[: -len(suffix)])
+
+                    setattr(score_args, attribute, value)
+
             if arg.startswith("+"):
-                score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(ctx.player.last_np["mode_vn"])
-                
+                score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(
+                    ctx.player.last_np["mode_vn"],
+                )
+
         except ValueError:
             return f"Could not parse parameter '{arg}'."
 
@@ -474,7 +476,9 @@ async def _with(ctx: Context) -> Optional[str]:
         scores=[score_args],  # calculate one score
     )
 
-    return "{performance:.2f}pp ({star_rating:.2f}*)".format(**result[0])  # (first score result)
+    return "{performance:.2f}pp ({star_rating:.2f}*)".format(
+        **result[0]
+    )  # (first score result)
 
 
 @command(Privileges.UNRESTRICTED, aliases=["req"])
