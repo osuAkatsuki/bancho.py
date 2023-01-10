@@ -4,7 +4,8 @@ FROM python:3.9-slim
 RUN apt update && apt install -y \
     git \
     curl \
-    build-essential
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # install rust
 ENV RUSTUP_HOME=/usr/local/rustup \
