@@ -827,7 +827,7 @@ async def unsilence(ctx: Context) -> Optional[str]:
         return "Only developers can manage staff members."
 
     reason = " ".join(ctx.args[1:])
-    
+
     await target.unsilence(ctx.player, reason)
     return f"{target} was unsilenced."
 
