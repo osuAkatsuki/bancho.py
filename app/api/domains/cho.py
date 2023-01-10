@@ -1300,6 +1300,7 @@ class MatchCreate(BasePacket):
             chat_channel=chat_channel,
         )
 
+        app.state.sessions.matches[match_id] = match
         app.state.sessions.channels.append(chat_channel)
         match.chat = chat_channel
 
