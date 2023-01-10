@@ -826,7 +826,9 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    await target.unsilence(ctx.player, " ".join(ctx.args[1:]))
+    reason = " ".join(ctx.args[1:])
+    
+    await target.unsilence(ctx.player, reason)
     return f"{target} was unsilenced."
 
 
