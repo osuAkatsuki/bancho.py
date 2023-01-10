@@ -30,6 +30,8 @@ pytest = "*"
 pre-commit = "*"
 black = "*"
 reorder-python-imports = "*"
+mitmproxy = "*"
+mypy = "*"
 
 [requires]
 python_version = "3.9"
