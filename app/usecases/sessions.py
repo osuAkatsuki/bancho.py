@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from datetime import datetime
 from typing import Any
 from typing import Mapping
 from typing import Union
@@ -10,6 +11,7 @@ from uuid import uuid4
 
 import bcrypt
 
+from app.api.v2.models.sessions import SessionUpdate
 from app.repositories import players as players_repo
 from app.repositories import sessions as sessions_repo
 
@@ -47,6 +49,22 @@ async def authorize(username: str, password: str) -> Union[Mapping[str, Any], No
 
 async def deauthorize(session_id: UUID) -> Union[Mapping[str, Any], None]:
     session = await sessions_repo.delete(session_id)
+    if session is None:
+        return None
+
+    return session
+
+
+async def partial_update(
+    session_id: UUID,
+    **kwargs: Any | None,
+) -> Union[Mapping[str, Any], None]:
+
+    updates = {
+        field: kwargs[field] for field in SessionUpdate.__fields__ if field in kwargs
+    }
+
+    session = await sessions_repo.partial_update(session_id, **updates)
     if session is None:
         return None
 

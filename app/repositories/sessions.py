@@ -42,6 +42,34 @@ async def fetch_one(session_id: UUID) -> Union[Mapping[str, Any], None]:
     return json.loads(session)
 
 
+async def partial_update(session_id: UUID, **kwargs: Any) -> Mapping[str, Any] | None:
+    raw_session = await app.state.services.redis.get(create_session_key(session_id))
+    if raw_session is None:
+        return None
+
+    session = json.loads(raw_session)
+
+    if not kwargs:
+        return session
+
+    session = dict(session)
+    session.update(kwargs)
+    session["updated_at"] = datetime.now()
+
+    await app.state.services.redis.set(
+        create_session_key(session_id),
+        json.dumps(session),
+    )
+
+    if expires_at := kwargs.get("expires_at"):
+        await app.state.services.redis.expireat(
+            create_session_key(session_id),
+            expires_at,
+        )
+
+    return session
+
+
 async def delete(session_id: UUID) -> Union[Mapping[str, Any], None]:
     session_key = create_session_key(session_id)
 
