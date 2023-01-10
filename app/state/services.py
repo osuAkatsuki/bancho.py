@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
@@ -45,10 +44,6 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
-
-geoloc_db: Optional[geoip2.database.Reader] = None
-if GEOLOC_DB_FILE.exists():
-    geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 
 datadog: Optional[datadog_client.ThreadStats] = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
@@ -137,23 +132,18 @@ class IPResolver:
         return ip
 
 
-def fetch_geoloc_db(ip: IPAddress) -> Geolocation:
-    """Fetch geolocation data based on ip (using local db)."""
-    assert geoloc_db is not None
-
-    res = geoloc_db.city(ip)
-
-    if res.country.iso_code is not None:
-        acronym = res.country.iso_code.lower()
-    else:
-        acronym = "XX"
+def fetch_geoloc_nginx(ip: IPAddress, headers: Mapping[str, str]) -> Geolocation:
+    """Fetch geolocation data based on ip (using nginx headers)."""
+    country_code = headers["X-Country-Code"].lower()
+    latitude = headers["X-Latitude"]
+    longitude = headers["X-Longitude"]
 
     return {
-        "latitude": res.location.latitude or 0.0,
-        "longitude": res.location.longitude or 0.0,
+        "latitude": float(latitude),
+        "longitude": float(longitude),
         "country": {
-            "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
         },
     }
 

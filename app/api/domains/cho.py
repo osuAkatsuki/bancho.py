@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 from typing import Literal
+from typing import Mapping
 from typing import Optional
 from typing import TypedDict
 
@@ -111,7 +112,12 @@ async def bancho_handler(
     if osu_token is None:
         # the client is performing a login
         async with app.state.services.database.connection() as db_conn:
-            login_data = await login(await request.body(), ip, db_conn)
+            login_data = await login(
+                await request.body(),
+                request.headers,
+                ip,
+                db_conn,
+            )
 
         return Response(
             content=login_data["response_body"],
@@ -452,6 +458,7 @@ def parse_login_data(data: bytes) -> LoginData:
 
 async def login(
     body: bytes,
+    headers: Mapping[str, str],
     ip: IPAddress,
     db_conn: databases.core.Connection,
 ) -> LoginResponse:
@@ -712,11 +719,11 @@ async def login(
     db_country = user_info.pop("country")
 
     if not ip.is_private:
-        if app.state.services.geoloc_db is not None:
+        if app.settings.NGINX_GEOIP:
             # good, dev has downloaded a geoloc db from maxmind,
             # so we can do a local db lookup. (typically ~1-5ms)
             # https://www.maxmind.com/en/home
-            geoloc = app.state.services.fetch_geoloc_db(ip)
+            geoloc = app.state.services.fetch_geoloc_nginx(ip, headers)
         else:
             # bad, we must do an external db lookup using
             # a public api. (depends, `ping ip-api.com`)
