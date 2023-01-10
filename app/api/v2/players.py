@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("/players", response_model=Success[Players])
 async def get_players(
     page: Optional[int] = Query(1, ge=1),
-    page_size: Optional[int] = Query(50, ge=50, le=100),
+    page_size: Optional[int] = Query(50, ge=1, le=100),
 ):
     players = await players_repo.fetch_many(page=page, page_size=page_size)
 
