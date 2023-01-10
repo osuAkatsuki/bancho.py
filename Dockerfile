@@ -1,19 +1,22 @@
-FROM python:3.9-alpine
+FROM python:3.9-slim
 
 # install apps dependencies
-RUN apk add --no-cache \
+RUN apt update && apt install -y \
     git \
-    bash \
     curl \
-    gcompat \
-    gnupg \
-    build-base \
-    libffi-dev \
-    linux-headers
+    build-essential
 
 # install rust
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-ENV PATH /root/.cargo/bin:$PATH
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH \
+    RUST_VERSION=stable
+RUN set -eux; \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init; \
+    chmod +x rustup-init; \
+    ./rustup-init -y --no-modify-path --profile minimal --default-toolchain $RUST_VERSION; \
+    rm rustup-init; \
+    chmod -R a+w $RUSTUP_HOME $CARGO_HOME;
 
 # install python dependencies
 WORKDIR /prod
