@@ -174,7 +174,7 @@ def register(
 
 @register(ClientPackets.PING, restricted=True)
 class Ping(BasePacket):
-    async def handle(self, p: Player) -> None:
+    async def handle(self, player: Player) -> None:
         pass  # ping be like
 
 
@@ -310,7 +310,8 @@ class SendMessage(BasePacket):
             # check if the user is /np'ing a map.
             # even though this is a public channel,
             # we'll update the player's last np stored.
-            if r_match := NOW_PLAYING_RGX.match(msg):
+            r_match = NOW_PLAYING_RGX.match(msg)
+            if r_match:
                 # the player is /np'ing a map.
                 # save it to their player instance
                 # so we can use this elsewhere owo..
@@ -545,7 +546,8 @@ async def login(
     login_time = time.time()
 
     # TODO: improve tournament client support
-    if player := app.state.sessions.players.get(name=login_data["username"]):
+    player = app.state.sessions.players.get(name=login_data["username"])
+    if player:
         # player is already logged in - allow this only for tournament clients
 
         if not (osu_version.stream == "tourney" or player.tourney_client):
@@ -955,14 +957,16 @@ class StartSpectating(BasePacket):
         self.target_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (new_host := app.state.sessions.players.get(id=self.target_id)):
+        new_host = app.state.sessions.players.get(id=self.target_id)
+        if not new_host:
             log(
                 f"{player} tried to spectate nonexistant id {self.target_id}.",
                 Ansi.LYELLOW,
             )
             return
 
-        if current_host := player.spectating:
+        current_host = player.spectating
+        if current_host:
             if current_host == new_host:
                 # host hasn't changed, they didn't have
                 # the map but have downloaded it.
@@ -1058,11 +1062,8 @@ class SendPrivateMessage(BasePacket):
 
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
-        if not (
-            target := await app.state.sessions.players.from_cache_or_sql(
-                name=target_name,
-            )
-        ):
+        target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
+        if not target:
             if app.settings.DEBUG:
                 log(
                     f"{player} tried to write to non-existent user {target_name}.",
@@ -1140,7 +1141,8 @@ class SendPrivateMessage(BasePacket):
                     player.send(cmd["resp"], sender=target)
             else:
                 # no commands triggered.
-                if r_match := NOW_PLAYING_RGX.match(msg):
+                r_match = NOW_PLAYING_RGX.match(msg)
+                if r_match:
                     # user is /np'ing a map.
                     # save it to their player instance
                     # so we can use this elsewhere owo..
@@ -1355,7 +1357,8 @@ class MatchJoin(BasePacket):
             player.enqueue(app.packets.match_join_fail())
             return
 
-        if not (match := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if not match:
             log(f"{player} tried to join a non-existant mp lobby?")
             player.enqueue(app.packets.match_join_fail())
             return
@@ -1826,11 +1829,12 @@ class MatchTransferHost(BasePacket):
         if not 0 <= self.slot_id < 16:
             return
 
-        if not (t := player.match.slots[self.slot_id].player):
+        target = player.match.slots[self.slot_id].player
+        if not target:
             log(f"{player} tried to transfer host to an empty slot?")
             return
 
-        player.match.host_id = t.id
+        player.match.host_id = target.id
         player.match.host.enqueue(app.packets.match_transfer_host())
         player.match.enqueue_state()
 
@@ -1847,7 +1851,8 @@ class TourneyMatchInfoRequest(BasePacket):
         if not player.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (match := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if not match:
             return  # match not found
 
         player.enqueue(app.packets.update_match(match, send_pw=False))
@@ -1865,7 +1870,8 @@ class TourneyMatchJoinChannel(BasePacket):
         if not player.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (match := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if not match:
             return  # match not found
 
         for slot in match.slots:
@@ -1890,7 +1896,8 @@ class TourneyMatchLeaveChannel(BasePacket):
         if not player.priv & Privileges.DONATOR:
             return  # insufficient privs
 
-        if not (match := app.state.sessions.matches[self.match_id]):
+        match = app.state.sessions.matches[self.match_id]
+        if not match:
             return  # match not found
 
         # attempt to join match chan
@@ -1904,18 +1911,19 @@ class FriendAdd(BasePacket):
         self.user_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (t := app.state.sessions.players.get(id=self.user_id)):
+        target = app.state.sessions.players.get(id=self.user_id)
+        if not target:
             log(f"{player} tried to add a user who is not online! ({self.user_id})")
             return
 
-        if t is app.state.sessions.bot:
+        if target is app.state.sessions.bot:
             return
 
-        if t.id in player.blocks:
-            player.blocks.remove(t.id)
+        if target.id in player.blocks:
+            player.blocks.remove(target.id)
 
         player.update_latest_activity_soon()
-        await player.add_friend(t)
+        await player.add_friend(target)
 
 
 @register(ClientPackets.FRIEND_REMOVE)
@@ -1924,7 +1932,8 @@ class FriendRemove(BasePacket):
         self.user_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
-        if not (target := app.state.sessions.players.get(id=self.user_id)):
+        target = app.state.sessions.players.get(id=self.user_id)
+        if not target:
             log(f"{player} tried to remove a user who is not online! ({self.user_id})")
             return
 
@@ -2008,7 +2017,8 @@ class StatsRequest(BasePacket):
         is_online = lambda o: o in unrestrcted_ids and o != player.id
 
         for online in filter(is_online, self.user_ids):
-            if target := app.state.sessions.players.get(id=online):
+            target = app.state.sessions.players.get(id=online)
+            if target:
                 if target is app.state.sessions.bot:
                     # optimization for bot since it's
                     # the most frequently requested user
@@ -2028,7 +2038,8 @@ class MatchInvite(BasePacket):
         if not player.match:
             return
 
-        if not (target := app.state.sessions.players.get(id=self.user_id)):
+        target = app.state.sessions.players.get(id=self.user_id)
+        if not target:
             log(f"{player} tried to invite a user who is not online! ({self.user_id})")
             return
 
@@ -2066,7 +2077,8 @@ class UserPresenceRequest(BasePacket):
 
     async def handle(self, player: Player) -> None:
         for pid in self.user_ids:
-            if target := app.state.sessions.players.get(id=pid):
+            target = app.state.sessions.players.get(id=pid)
+            if target:
                 if target is app.state.sessions.bot:
                     # optimization for bot since it's
                     # the most frequently requested user

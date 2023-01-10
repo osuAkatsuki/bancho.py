@@ -20,7 +20,7 @@ MAX_MATCHES = 64
 
 
 SERVER_ADDR = os.environ["SERVER_ADDR"]
-SERVER_PORT = int(v) if (v := os.getenv("SERVER_PORT", None)) else None
+SERVER_PORT = int(os.getenv("SERVER_PORT", 0)) or None
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])
