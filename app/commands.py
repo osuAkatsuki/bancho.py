@@ -128,8 +128,6 @@ class CommandSet:
 # TODO: refactor help commands into some base ver
 #       since they're all the same anyway lol.
 
-# not sure if this should be in glob or not,
-# trying to think of some use cases lol...
 mp_commands = CommandSet("mp", "Multiplayer commands.")
 pool_commands = CommandSet("pool", "Mappool commands.")
 clan_commands = CommandSet("clan", "Clan commands.")
