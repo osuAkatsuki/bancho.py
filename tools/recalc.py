@@ -56,7 +56,8 @@ async def recalculate_score(
     beatmap_path: Path,
     ctx: Context,
 ) -> None:
-    if (beatmap := ctx.beatmaps.get(score["map_id"])) is None:
+    beatmap = ctx.beatmaps.get(score["map_id"])
+    if beatmap is None:
         beatmap = Beatmap(path=str(beatmap_path))
         ctx.beatmaps[score["map_id"]] = beatmap
 

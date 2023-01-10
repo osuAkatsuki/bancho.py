@@ -846,7 +846,8 @@ async def api_get_match(
     """Return information of a given multiplayer match."""
     # TODO: eventually, this should contain recent score info.
 
-    if not (match := app.state.sessions.matches[match_id]):
+    match = app.state.sessions.matches[match_id]
+    if not match:
         return ORJSONResponse(
             {"status": "Match not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -942,7 +943,8 @@ async def api_get_clan(
 
     # TODO: fetching by name & tag (requires safe_name, safe_tag)
 
-    if not (clan := app.state.sessions.clans.get(id=clan_id)):
+    clan = app.state.sessions.clans.get(id=clan_id)
+    if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -990,7 +992,8 @@ async def api_get_pool(
 
     # TODO: fetching by name (requires safe_name)
 
-    if not (pool := app.state.sessions.pools.get(id=pool_id)):
+    pool = app.state.sessions.pools.get(id=pool_id)
+    if not pool:
         return ORJSONResponse(
             {"status": "Pool not found."},
             status_code=status.HTTP_404_NOT_FOUND,

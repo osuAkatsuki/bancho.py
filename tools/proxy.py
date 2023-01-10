@@ -108,10 +108,12 @@ print(f"\x1b[0;92mListening (ppy.sh & {domain})\x1b[0m\n")
 
 
 def response(flow: http.HTTPFlow) -> None:
-    if not (r_match := DOMAIN_RGX.match(flow.request.host)):
+    r_match = DOMAIN_RGX.match(flow.request.host)
+    if not r_match:
         return  # unrelated request
 
-    if not (body := flow.response.content):
+    body = flow.response.content
+    if not body:
         return  # empty resp
 
     sys.stdout.write(f"\x1b[0;93m[{flow.request.method}] {flow.request.url}\x1b[0m\n")
