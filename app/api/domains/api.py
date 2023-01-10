@@ -8,16 +8,22 @@ from typing import Literal
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
+from fastapi.security import HTTPBearer
+from starlette.requests import Request
 
 import app.packets
 import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
+import app.usecases.gdpr
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
@@ -32,6 +38,7 @@ SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
 router = APIRouter(tags=["bancho.py API"])
+oauth2_scheme = HTTPBearer(auto_error=False)
 
 # NOTE: the api is still under design and is subject to change.
 # to keep up with breaking changes, please either join our discord,
@@ -107,6 +114,39 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
+    
+    
+@router.get("/get_gdpr_data")
+async def api_get_gdpr_data(
+    token: HTTPCredentials = Depends(oauth2_scheme),
+    user_id: int = Query(None, alias="id", ge=3, le=2_147_483_647)
+):
+    """Returns the GDPR data of a user as a zip archive."""
+
+    executor_id = app.state.sessions.api_keys.get(token.credentials)
+    if executor_id is None:
+        return ORJSONResponse(
+            {"status": "Invalid API key."},
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+        
+    executor = app.state.sessions.players.from_cache_or_sql(executor_id)
+    if executor.priv & Privileges.DEVELOPER == 0:
+        return ORJSONResponse(
+        {
+            "status": "No permission to access GDPR data.",
+        },
+    )
+
+    zip = await app.usecases.gdpr.generate_zip_archive(user_id)
+    return StreamingResponse(
+        content=zip,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Description": "File Transfer",
+            "Content-Disposition": f'attachment;filename="gdpr_{user_id}.zip"',
+        },
+    )
 
 
 @router.get("/search_players")

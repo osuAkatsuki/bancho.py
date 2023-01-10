@@ -24,3 +24,5 @@ TOURNEY_MATCHNAME = re.compile(
 MAPPOOL_PICK = re.compile(r"^([a-zA-Z]+)([0-9]+)$")
 
 BEST_OF = re.compile(r"^(?:bo)?(\d{1,2})$")
+
+CHATLOG_USER_ID = r"\((.*?)\)"

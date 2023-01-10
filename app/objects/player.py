@@ -247,6 +247,8 @@ class Player:
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
+        
+        self.email = extras.get("email")
 
         if "pw_bcrypt" in extras:
             self.pw_bcrypt: Optional[bytes] = extras["pw_bcrypt"]
