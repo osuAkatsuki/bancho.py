@@ -838,11 +838,10 @@ async def osuSubmitModularSelector(
         await app.state.services.log_strange_occurrence(stacktrace)
 
     if (  # run anticheat checks on ranked & approved maps for appropriate players.
-        score.bmap.awards_ranked_pp
-        and not score.player.restricted
+        score.bmap.awards_ranked_pp and not score.player.restricted
     ):
         app.state.services.anticheat.enqueue_score(score)
-        
+
     """ Score submission checks completed; submit the score. """
 
     if app.state.services.datadog:
