@@ -14,10 +14,8 @@ from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.objects.player import Player
 from app.objects.score import Score
-
 # DO NOT import non-anticheat check functions directly, it'll mess up inspect.getmembers
 # You can create separate .py files containing more checks for a better hierarchy.
-from app.anticheat.pp_caps import *
 
 
 class Anticheat:
