@@ -20,11 +20,11 @@ from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import ClientDisconnect
 
+import app.anticheat.anticheat
 import app.bg_loops
 import app.settings
 import app.state
 import app.utils
-import app.anticheat.anticheat
 from app.api import api_router
 from app.api import domains
 from app.api import middlewares
@@ -140,7 +140,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
             app.state.services.datadog.gauge("bancho.online_players", 0)
 
         app.state.services.ip_resolver = app.state.services.IPResolver()
-        
+
         app.state.services.anticheat = app.anticheat.anticheat.Anticheat()
         app.state.services.anticheat.run()
 
@@ -172,7 +172,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         if app.state.services.geoloc_db is not None:
             app.state.services.geoloc_db.close()
-            
+
         if app.state.services.anticheat is not None:
             app.state.services.anticheat.shutdown()
 

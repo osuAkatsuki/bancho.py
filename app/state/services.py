@@ -23,11 +23,11 @@ import pymysql
 import app.settings
 import app.state
 from app._typing import IPAddress
+from app.anticheat.anticheat import Anticheat
 from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
 from app.logging import Rainbow
-from app.anticheat.anticheat import Anticheat
 
 if TYPE_CHECKING:
     import aiohttp
