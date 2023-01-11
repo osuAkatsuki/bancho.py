@@ -47,8 +47,8 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import app.packets
 import app.settings
 import app.state
-import app.utils
 import app.usecases.anticheat
+import app.utils
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -839,7 +839,7 @@ async def osuSubmitModularSelector(
 
     if (  # run anticheat chekcs on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
-       #and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
+        # and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
     ):
         await app.usecases.anticheat.run_anticheat_checks(player, score)
 
