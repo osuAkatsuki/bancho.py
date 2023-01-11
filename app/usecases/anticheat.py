@@ -47,4 +47,4 @@ async def std_ppcap(player: Player, score: Score) -> Optional[str]:
         return
 
     if score.pp >= 1500:
-        return "Exceeded std!vn pp cap of 1500p"
+        return "Exceeded std!vn pp cap of 1500pp"
