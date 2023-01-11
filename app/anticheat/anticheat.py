@@ -51,6 +51,14 @@ class Anticheat:
         # shut down soon here since the semaphore was set
         self.running = False
         
+    def encode(self, obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                obj[k] = self.encode(v)
+            return obj
+        if not isinstance(obj, (int, str, float)):
+            return self.encode(obj.__dict__)
+        
 
     async def enqueue_score(self, score: Score):
         """Enqueues the specified score into this Anticheat instance."""
@@ -60,7 +68,8 @@ class Anticheat:
             return
 
         try:
-            self.score_queue.put(score)
+            score_dict = self.encode(score)
+            self.score_queue.put(json.dumps(score_dict))
         except Exception as e:
             app.logging.log(f"[anticheat] An error occured while trying to enqueue score {score}:", Ansi.RED)
             app.logging.log(f"[anticheat] {e}", Ansi.RED)
@@ -100,7 +109,7 @@ class Anticheat:
 
         return True
 
-    async def run_anticheat_checks(self, score: Score):
+    async def run_anticheat_checks(self, score: dict):
         """Runs the defined checks over the specified score and handles upon them"""
 
         # Get all imported functions TODO: Find a better solution for this as this
