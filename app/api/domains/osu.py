@@ -840,7 +840,7 @@ async def osuSubmitModularSelector(
     if (  # run anticheat checks on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp and not score.player.restricted
     ):
-        app.state.services.anticheat.enqueue_score(score)
+        await app.state.services.anticheat.enqueue_score(score)
 
     """ Score submission checks completed; submit the score. """
 
