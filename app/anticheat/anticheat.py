@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import sys
 import json
+import sys
 from multiprocessing import Event
 from multiprocessing import Manager
 from multiprocessing import Process
@@ -46,11 +46,10 @@ class Anticheat:
         """Releases the event semaphore to end the child process safely"""
 
         self.event.set()
-        
+
         # We can already assume the child process will
         # shut down soon here since the semaphore was set
         self.running = False
-        
 
     async def enqueue_score(self, score: Score):
         """Enqueues the specified score into this Anticheat instance."""
@@ -62,7 +61,10 @@ class Anticheat:
         try:
             self.score_queue.put(score)
         except Exception as e:
-            app.logging.log(f"[anticheat] An error occured while trying to enqueue score {score}:", Ansi.RED)
+            app.logging.log(
+                f"[anticheat] An error occured while trying to enqueue score {score}:",
+                Ansi.RED,
+            )
             app.logging.log(f"[anticheat] {e}", Ansi.RED)
 
     def run_internal(self, score_queue):
@@ -91,8 +93,8 @@ class Anticheat:
 
     async def anticheat_check_preprocessor(self, score: Score) -> bool:
         """Returns a bool whether the enqueued score is eligible for anticheat checks.
-        
-           This operation should not be expensive as it is being done before enqueuing the score.
+
+        This operation should not be expensive as it is being done before enqueuing the score.
         """
 
         if score.player.priv & Privileges.WHITELISTED:
