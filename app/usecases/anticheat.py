@@ -11,6 +11,7 @@ from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.objects.player import Player
 from app.objects.score import Score
+
 # DO NOT import functions directly, it'll mess up inspect.getmembers
 
 # Add checks here that you'd like to have disabled, but not removed from the code entirely
