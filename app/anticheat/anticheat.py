@@ -21,10 +21,9 @@ from app.anticheat.pp_caps import *
 class Anticheat:
     
     def __init__(self):
-        # The manager & multi processing queue are used as shared memory between
-        # bancho.py and it's anticheat subprocess to trasmit the scores
-        self.manager = Manager()
-        self.score_queue = self.manager.Queue()
+        # The multi processing queue is used as shared memory between
+        # bancho.py and it's anticheat process to communicate the scores
+        self.score_queue = Manager().Queue()
         
         # The event is used as a semaphore that is used to shutdown the child process
         self.event = Event()
@@ -33,7 +32,7 @@ class Anticheat:
     
     
     def run(self):
-        """Starts the child process of this Anticheat instance"""
+        """Starts the child process of this anticheat instance"""
         
         if self.running:
             raise Exception("This anticheat instance is already running.")
@@ -42,7 +41,7 @@ class Anticheat:
         p = Process(target=self.run_internal, args=(self.score_queue,))
         p.daemon = True
         p.start()
-        
+
 
     def shutdown(self):
         """Releases the event semaphore to end the child process safely"""
@@ -53,6 +52,7 @@ class Anticheat:
 
 
     def run_internal(self, score_queue):
+        """Runs the internal anticheat loop, processing all scores from the queue."""
 
         app.logging.log("Started anticheat service.", Ansi.MAGENTA)
 
