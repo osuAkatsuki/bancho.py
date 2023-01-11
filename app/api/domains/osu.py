@@ -469,7 +469,9 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    async with app.state.services.http_client.get(app.settings.MIRROR_SEARCH_ENDPOINT, params=params) as resp:
+    async with app.state.services.http_client.get(
+        app.settings.MIRROR_SEARCH_ENDPOINT, params=params,
+    ) as resp:
         if resp.status != status.HTTP_200_OK:
             return b"-1\nFailed to retrieve data from the beatmap mirror."
 
@@ -515,18 +517,18 @@ async def osuSearchHandler(
         )
 
         fmstr = DIRECT_SET_INFO_FMTSTR.format(
-                Artist=handle_invalid_characters(bmap["Artist"]),
-                Title=handle_invalid_characters(bmap["Title"]),
-                Creator=bmap["Creator"],
-                RankedStatus=bmap["RankedStatus"],
-                LastUpdate=bmap["LastUpdate"],
-                SetID=bmap["SetID"],
-                HasVideo=bmap["HasVideo"],
-                diffs=diffs_str
-            )
-        
+            Artist=handle_invalid_characters(bmap["Artist"]),
+            Title=handle_invalid_characters(bmap["Title"]),
+            Creator=bmap["Creator"],
+            RankedStatus=bmap["RankedStatus"],
+            LastUpdate=bmap["LastUpdate"],
+            SetID=bmap["SetID"],
+            HasVideo=bmap["HasVideo"],
+            diffs=diffs_str,
+        )
+
         ret.append(fmstr)
-        
+
     return "\n".join(ret).encode()
 
 
@@ -1751,7 +1753,7 @@ async def get_osz(
 
     return RedirectResponse(
         url=f"{app.settings.MIRROR_DOWNLOAD_ENDPOINT.strip('/')}/{query_str}",
-        status_code=status.HTTP_301_MOVED_PERMANENTLY
+        status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
 
