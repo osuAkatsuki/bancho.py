@@ -837,7 +837,7 @@ async def osuSubmitModularSelector(
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
 
-    if (  # run anticheat chekcs on ranked & approved maps for appropriate players.
+    if (  # run anticheat checks on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
         and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
     ):
