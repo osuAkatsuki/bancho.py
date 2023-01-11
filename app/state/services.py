@@ -27,6 +27,7 @@ from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
 from app.logging import Rainbow
+from app.anticheat.anticheat import Anticheat
 
 if TYPE_CHECKING:
     import aiohttp
@@ -59,6 +60,8 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
     datadog = datadog_client.ThreadStats()
 
 ip_resolver: IPResolver
+ip_resolver2: IPResolver
+anticheat: Anticheat
 
 housekeeping_tasks: list[asyncio.Task] = []
 

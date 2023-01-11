@@ -11,3 +11,7 @@ tools/migrate_v420/scoreMigrator
 .venv/
 .mypy_cache/
 .pytest_cache/
+
+app/anticheat/*
+!app/anticheat/anticheat.py
+!app/anticheat/pp_caps.py
