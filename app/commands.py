@@ -1256,20 +1256,21 @@ async def server(ctx: Context) -> Optional[str]:
     # maniera v1.0.0 | mysql-connector-python v8.0.23 | orjson v3.5.1
     # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
     requirements = []
-    
+
     for line in (Path.cwd() / "requirements.txt").read_text().splitlines():
         line = line.split(";")[0].strip()
-        
+
         if line.startswith("git+"):
             split = line.split("@")[0].split("/")[-2:]
             requirements.append(f"git:{'/'.join(split)}")
-            
+
         elif "==" in line:
             split = line.split("==")
             requirements.append(f"{split[0]} v{split[1]}")
-            
+
     requirements_info = "\n".join(
-        " | ".join(section) for section in (requirements[i:i+3] for i in range(0, len(requirements), 3))
+        " | ".join(section)
+        for section in (requirements[i : i + 3] for i in range(0, len(requirements), 3))
     )
 
     return "\n".join(
