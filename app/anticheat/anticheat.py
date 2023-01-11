@@ -50,7 +50,7 @@ class Anticheat:
         # We can already assume the child process will
         # shut down soon here since the semaphore was set
         self.running = False
-        
+
     def encode(self, obj):
         if isinstance(obj, dict):
             for k, v in obj.items():
@@ -58,7 +58,6 @@ class Anticheat:
             return obj
         if not isinstance(obj, (int, str, float)):
             return self.encode(obj.__dict__)
-        
 
     async def enqueue_score(self, score: Score):
         """Enqueues the specified score into this Anticheat instance."""
