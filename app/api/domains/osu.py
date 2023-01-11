@@ -47,7 +47,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import app.packets
 import app.settings
 import app.state
-import app.usecases.anticheat
+import app.anticheat.anticheat
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
@@ -841,7 +841,7 @@ async def osuSubmitModularSelector(
         score.bmap.awards_ranked_pp
         and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
     ):
-        await app.usecases.anticheat.run_anticheat_checks(player, score)
+        await app.anticheat.anticheat.run_anticheat_checks(player, score)
 
     """ Score submission checks completed; submit the score. """
 
