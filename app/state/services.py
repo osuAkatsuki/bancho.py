@@ -60,7 +60,6 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
     datadog = datadog_client.ThreadStats()
 
 ip_resolver: IPResolver
-ip_resolver2: IPResolver
 anticheat: Anticheat
 
 housekeeping_tasks: list[asyncio.Task] = []
