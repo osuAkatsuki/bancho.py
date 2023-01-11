@@ -13,6 +13,7 @@ from app.anticheat.pp_caps import *
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.objects.score import Score
+
 # You can create separate .py files containing more checks for a better hierarchy
 # and import the methods directly here, like shown in the example below.
 
@@ -22,7 +23,7 @@ class Anticheat:
         # The multi processing queue is used as shared memory between
         # bancho.py and it's anticheat process to communicate the scores
         self.score_queue = Manager().Queue()
-        
+
         # The event is used as a semaphore that is used to shutdown the child process
         self.event = Event()
 
@@ -30,7 +31,7 @@ class Anticheat:
 
     def run(self):
         """Starts the child process of this anticheat instance"""
-        
+
         if self.running:
             raise Exception("This anticheat instance is already running.")
         self.running = True
