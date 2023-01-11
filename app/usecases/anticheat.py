@@ -22,7 +22,6 @@ async def run_anticheat_checks(player: Player, score: Score):
     checks.pop("run_anticheat_checks")
 
     for (name, callable) in checks.items():
-        # Get the result from the check callable
         result = await callable(player, score)
         if result:
             player.restrict(app.state.sessions.bot, result)
