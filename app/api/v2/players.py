@@ -11,11 +11,8 @@ from fastapi.param_functions import Query
 import app.state.sessions
 from app.api.v2.common import responses
 from app.api.v2.common.responses import Success
-from app.api.v2.models.players import IngamePlayerStatus
-from app.api.v2.models.players import OfflinePlayerStatus
-from app.api.v2.models.players import OnlinePlayerStatus
 from app.api.v2.models.players import Player
-from app.repositories import maps as maps_repo
+from app.api.v2.models.players import PlayerStatus
 from app.repositories import players as players_repo
 
 router = APIRouter()
@@ -79,38 +76,21 @@ async def get_player(player_id: int) -> Success[Player]:
 @router.get("/players/{player_id}/status")
 async def get_player(
     player_id: int,
-) -> Success[Union[OnlinePlayerStatus, OfflinePlayerStatus]]:
+) -> Success[PlayerStatus]:
     player = app.state.sessions.players.get(id=player_id)
 
     if not player:
-        player_db = await players_repo.fetch_one(id=player_id)
-
-        if not player_db:
-            return responses.failure(
-                message="Player not found.",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        response = OfflinePlayerStatus(
-            online=False,
-            last_seen=player_db["latest_activity"],
+        return responses.failure(
+            message="Player status not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
         )
-        return responses.success(response)
 
-    if player.status.map_md5:
-        bmap = await maps_repo.fetch_one(md5=player.status.map_md5)
-    else:
-        bmap = None
-
-    response = OnlinePlayerStatus(
-        online=False,
+    response = PlayerStatus(
         login_time=player.login_time,
-        status=IngamePlayerStatus(
-            action=int(player.status.action),
-            info_text=player.status.info_text,
-            mode=int(player.status.mode),
-            mods=int(player.status.mods),
-            beatmap=bmap,
-        ),
+        action=int(player.status.action),
+        info_text=player.status.info_text,
+        mode=int(player.status.mode),
+        mods=int(player.status.mods),
+        beatmap_id=player.status.map_id,
     )
     return responses.success(response)
