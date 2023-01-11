@@ -44,10 +44,10 @@ from py3rijndael import Pkcs7Padding
 from py3rijndael import RijndaelCbc
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+import app.anticheat.anticheat
 import app.packets
 import app.settings
 import app.state
-import app.anticheat.anticheat
 import app.utils
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags

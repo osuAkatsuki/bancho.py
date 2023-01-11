@@ -1,7 +1,10 @@
+from __future__ import annotations
+
+from typing import Optional
+
+from app.constants.gamemodes import GameMode
 from app.objects.player import Player
 from app.objects.score import Score
-from app.constants.gamemodes import GameMode
-from typing import Optional
 
 #
 # Anticheat checks can be defined here.
