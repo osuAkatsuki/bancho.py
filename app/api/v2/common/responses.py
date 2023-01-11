@@ -18,6 +18,7 @@ T = TypeVar("T")
 class Success(GenericModel, Generic[T]):
     status: Literal["success"]
     data: T
+    meta: Optional[dict[str, Any]]
 
 
 def success(

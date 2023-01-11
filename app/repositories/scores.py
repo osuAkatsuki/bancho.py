@@ -145,7 +145,7 @@ async def fetch_count(
         "userid": user_id,
     }
     rec = await app.state.services.database.fetch_val(query, params)
-    return rec["count"]
+    return rec
 
 
 async def fetch_many(
