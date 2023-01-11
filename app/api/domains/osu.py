@@ -48,6 +48,7 @@ import app.packets
 import app.settings
 import app.state
 import app.utils
+import app.usecases.anticheat
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -836,24 +837,11 @@ async def osuSubmitModularSelector(
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
 
-    if (  # check for pp caps on ranked & approved maps for appropriate players.
+    if (  # run anticheat chekcs on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
-        and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
+       #and not (score.player.priv & Privileges.WHITELISTED or score.player.restricted)
     ):
-        # Get the PP cap for the current context.
-        """# TODO: find where to put autoban pp
-        pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
-
-        if score.pp > pp_cap:
-            await score.player.restrict(
-                admin=app.state.sessions.bot,
-                reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
-            )
-
-            # refresh their client state
-            if score.player.online:
-                score.player.logout()
-        """
+        await app.usecases.anticheat.run_anticheat_checks(player, score)
 
     """ Score submission checks completed; submit the score. """
 
