@@ -39,7 +39,6 @@ class Anticheat:
         p.daemon = True
         p.start()
 
-
     def shutdown(self):
         """Releases the event semaphore to end the child process safely"""
 
