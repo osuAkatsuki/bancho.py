@@ -40,6 +40,7 @@ we aim to minimize our dependencies, but still rely on ones such as
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
+- geoip2 (an nginx module)
 - certbot (ssl certificate tool)
 - build-essential (build tools for c/c++)
 
@@ -55,6 +56,9 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
+# optionally, install the nginx geoip2 module if you would like to use it in bancho.py
+cd tools && ./enable_geoip_module.sh && cd ..
 
 # install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
