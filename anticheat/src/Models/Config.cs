@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
 
+namespace anticheat.Models;
+
 internal class Config
 {
     [JsonProperty("rabbitmq_hostname")]

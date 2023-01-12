@@ -3,6 +3,8 @@ using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
+namespace anticheat;
+
 internal class ScoreQueue : Queue<ulong>
 {
     IModel? _channel = null;
@@ -37,26 +39,19 @@ internal class ScoreQueue : Queue<ulong>
         _channel = connection.CreateModel();
 
         // Create a durable, non-exclusive and non-autodelete queue
-        _channel.QueueDeclare(queue: "bpy.anticheat.score_queue",
-                               durable: true,
-                               exclusive: false,
-                               autoDelete: false,
-                               arguments: null);
+        _channel.QueueDeclare("bpy.anticheat.score_queue", true, false, false);
 
         EventingBasicConsumer consumer = new EventingBasicConsumer(_channel);
         consumer.Received += Received;
 
-        _channel.BasicConsume(queue: "bpy.anticheat.score_queue",
-                             autoAck: true,
-                             consumer: consumer);
+        _channel.BasicConsume("bpy.anticheat.score_queue", true, consumer: consumer);
 
         Program.Log("Consumer successfully created.", ConsoleColor.Cyan);
     }
 
     private void Received(object? sender, BasicDeliverEventArgs e)
     {
-        byte[] body = e.Body.ToArray();
-        ulong scoreId = BitConverter.ToUInt64(body);
+        ulong scoreId = BitConverter.ToUInt64(e.Body.ToArray());
         Enqueue(scoreId);
 
         Program.Log($"[RabbitMQ] A new score with ID {scoreId} has been enqueued.", ConsoleColor.Magenta);

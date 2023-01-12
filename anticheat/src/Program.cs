@@ -3,6 +3,11 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.Text;
+using anticheat.Models;
+using System.Reflection;
+using anticheat.Checks;
+
+namespace anticheat;
 
 class Program
 {
@@ -48,16 +53,16 @@ class Program
             return;
         }
 
-        while (true)
-        {
-            // Wait until the queue contains a new score
-            while (queue.Count == 0)
-                ;
+        // Get all checks via reflection
+        ICheck[] checks = Assembly.GetExecutingAssembly().GetTypes()
+                                .Where(x => x.Namespace == typeof(ICheck).Namespace
+                                        && !x.IsInterface
+                                        &&  typeof(ICheck).IsAssignableFrom(x))
+                                .Select(x => (ICheck)Activator.CreateInstance(x)!).ToArray();
 
-            // Dequeue the score id and process it
-            ulong id = queue.Dequeue();
-            Console.WriteLine($"Processing score with ID {id}", ConsoleColor.Green);
-        }
+        // Run the anticheat processor
+        AnticheatProcessor processor = new AnticheatProcessor(queue, checks);
+        processor.Run();
     }
 
     public static void Log(string message, ConsoleColor color = ConsoleColor.Gray)
