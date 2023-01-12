@@ -45,6 +45,9 @@ REDIS_DB = int(os.environ["REDIS_DB"])
 REDIS_AUTH_STRING = f"{REDIS_USER}:{REDIS_PASS}@" if REDIS_USER and REDIS_PASS else ""
 REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
+RABBITMQ_HOST = os.environ["RABBITMQ_HOST"]
+RABBITMQ_PORT = int(os.environ["RABBITMQ_PORT"])
+
 OSU_API_KEY = os.environ["OSU_API_KEY"]
 
 DOMAIN = os.environ["DOMAIN"]
