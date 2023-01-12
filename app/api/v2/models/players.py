@@ -33,3 +33,12 @@ class Player(BaseModel):
     custom_badge_icon: Optional[str]
 
     userpage_content: Optional[str]
+
+
+class PlayerStatus(BaseModel):
+    login_time: int
+    action: int
+    info_text: str
+    mode: int
+    mods: int
+    beatmap_id: int

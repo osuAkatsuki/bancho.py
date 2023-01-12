@@ -7,9 +7,11 @@ from fastapi import APIRouter
 from fastapi import status
 from fastapi.param_functions import Query
 
+import app.state.sessions
 from app.api.v2.common import responses
 from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
+from app.api.v2.models.players import PlayerStatus
 from app.repositories import players as players_repo
 
 router = APIRouter()
@@ -67,4 +69,25 @@ async def get_player(player_id: int) -> Success[Player]:
         )
 
     response = Player.from_mapping(data)
+    return responses.success(response)
+
+
+@router.get("/players/{player_id}/status")
+async def get_player(player_id: int) -> Success[PlayerStatus]:
+    player = app.state.sessions.players.get(id=player_id)
+
+    if not player:
+        return responses.failure(
+            message="Player status not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    response = PlayerStatus(
+        login_time=player.login_time,
+        action=int(player.status.action),
+        info_text=player.status.info_text,
+        mode=int(player.status.mode),
+        mods=int(player.status.mods),
+        beatmap_id=player.status.map_id,
+    )
     return responses.success(response)
