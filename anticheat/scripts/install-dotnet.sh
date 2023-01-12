@@ -1,19 +1,17 @@
 #!/bin/bash
 
-# Get the ubuntu version from the first argument
-if [ $# -eq 0 ]
-  then
-    echo "Please specify the Ubuntu version (18, 20, 22) as a parameter."
-    exit
-fi
+# Get the ubuntu version
 
-if ! [[ $1 = @("18"|"20"|"22") ]];
+if ! [[ "$(lsb_release -sr)" = @("18.04"|"20.04"|"22.04") ]];
   then
-    echo "Incorrect Ubuntu version. Supported versions are 18, 20 and 22."
+    echo "Incorrect Ubuntu version ("$(lsb_release -sr)"). Supported versions are 18.04, 20.04 and 22.04."
     echo "If you need dotnet for a different Ubuntu version or distribution,"
     echo "please check https://learn.microsoft.com/en-us/dotnet/core/install/linux"
     exit
 fi
+
+echo "install"
+exit
 
 # Add the microsoft package feed
 wget https://packages.microsoft.com/config/ubuntu/$1.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
