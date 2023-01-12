@@ -17,8 +17,8 @@ router = APIRouter()
 
 @router.get("/maps")
 async def get_maps(
-    server: str,
     set_id: Optional[int] = None,
+    server: Optional[str] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
     creator: Optional[str] = None,
