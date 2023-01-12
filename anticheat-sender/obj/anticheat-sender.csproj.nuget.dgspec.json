@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/mini/bancho.py/anticheat-sender/anticheat-sender.csproj": {}
+  },
+  "projects": {
+    "/home/mini/bancho.py/anticheat-sender/anticheat-sender.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/mini/bancho.py/anticheat-sender/anticheat-sender.csproj",
+        "projectName": "anticheat-sender",
+        "projectPath": "/home/mini/bancho.py/anticheat-sender/anticheat-sender.csproj",
+        "packagesPath": "/home/mini/.nuget/packages/",
+        "outputPath": "/home/mini/bancho.py/anticheat-sender/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/mini/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net7.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net7.0": {
+            "targetAlias": "net7.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net7.0": {
+          "targetAlias": "net7.0",
+          "dependencies": {
+            "RabbitMQ.Client": {
+              "target": "Package",
+              "version": "[6.4.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/7.0.102/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

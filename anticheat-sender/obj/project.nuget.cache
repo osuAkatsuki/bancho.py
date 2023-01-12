@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "cSwBdxv/eccA4TZnBP5VAoByRhXFZ1PyLZybrodYm4NP27IwWPYjuC135g2Zn8qopMTfIfs0Tvpt4wApqVTf4Q==",
+  "success": true,
+  "projectFilePath": "/home/mini/bancho.py/anticheat-sender/anticheat-sender.csproj",
+  "expectedPackageFiles": [
+    "/home/mini/.nuget/packages/rabbitmq.client/6.4.0/rabbitmq.client.6.4.0.nupkg.sha512",
+    "/home/mini/.nuget/packages/system.memory/4.5.4/system.memory.4.5.4.nupkg.sha512",
+    "/home/mini/.nuget/packages/system.threading.channels/4.7.1/system.threading.channels.4.7.1.nupkg.sha512"
+  ],
+  "logs": []
+}

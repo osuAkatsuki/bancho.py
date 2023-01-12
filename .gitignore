@@ -14,3 +14,4 @@ tools/migrate_v420/scoreMigrator
 
 anticheat/bin
 anticheat/obj
+anticheat/config.json
