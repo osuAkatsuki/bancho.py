@@ -780,7 +780,7 @@ async def osuSubmitModularSelector(
                 f"beatmap hash mismatch ({bmap_md5} != {updated_beatmap_hash})",
             )
 
-    except AssertionError:
+    except (ValueError, AssertionError):
         # NOTE: this is undergoing a temporary trial period,
         # after which, it will be enabled & perform restrictions.
         stacktrace = app.utils.get_appropriate_stacktrace()
