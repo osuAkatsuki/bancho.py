@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
 
 from . import BaseModel
 
@@ -13,8 +12,8 @@ from . import BaseModel
 
 
 class Map(BaseModel):
-    server: Literal["osu!", "private"]
     id: int
+    server: str
     set_id: int
     status: int
     md5: str
