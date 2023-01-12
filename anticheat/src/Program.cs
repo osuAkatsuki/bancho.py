@@ -56,7 +56,7 @@ class Program
 
             // Dequeue the score id and process it
             ulong id = queue.Dequeue();
-            Console.WriteLine($"Received score ID: {id}", ConsoleColor.Magenta);
+            Console.WriteLine($"Processing score with ID {id}", ConsoleColor.Green);
         }
     }
 

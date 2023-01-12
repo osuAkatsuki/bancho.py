@@ -59,6 +59,6 @@ internal class ScoreQueue : Queue<ulong>
         ulong scoreId = BitConverter.ToUInt64(body);
         Enqueue(scoreId);
 
-        Program.Log($"A new score with ID {scoreId} has been enqueued.");
+        Program.Log($"[RabbitMQ] A new score with ID {scoreId} has been enqueued.", ConsoleColor.Magenta);
     }
 }
