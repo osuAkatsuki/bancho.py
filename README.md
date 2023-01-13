@@ -235,20 +235,26 @@ Ideally, you run RabbitMQ inside docker as shown below.
 # Install docker
 sudo apt-get install docker.io
 
-# Run the RabbitMQ service
-docker run 5672:5672 rabbitmq
+# Create the docker container for RabbitMQ, this only needs to be done once
+sudo docker create --name bpy-rabbitmq -p 5672:5672 rabbitmq
+
+# Start the docker container
+sudo docker start bpy-rabbitmq
+
+# If you need to, you can stop the container with this
+sudo docker stop bpy-rabbitmq
 ```
 
 ## Setting up bancho.py and the anticheat
 
-After installing RabbitMQ, all that's left to do is telling bancho.py and the anticheat where to find it. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is enabling RabbitMQ in bancho.py.
+After installing and starting RabbitMQ, all that's left to do is telling bancho.py and the anticheat where to find it. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is enabling RabbitMQ in bancho.py.
 
 *bancho.py's .env*
 ```sh
 # Change this to true to enable RabbitMQ in bancho.py
 RABBITMQ_ENABLED=True
 
-# Change this if you run RabbitMQ on a separate machine or a different port
+# Change this if you run RabbitMQ on a different machine or port
 RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 ```
