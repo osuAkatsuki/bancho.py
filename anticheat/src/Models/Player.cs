@@ -21,6 +21,6 @@ internal class Player
 
     public override string ToString()
     {
-        return $"<{Name} ({Id}>";
+        return $"<{Name} ({Id})>";
     }
 }
