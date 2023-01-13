@@ -10,6 +10,9 @@ internal class Config
     [JsonProperty("rabbitmq_port")]
     public ushort RabbitMQPort { get; private set; } = 5672;
 
+    [JsonProperty("debug")]
+    public bool Debug {get; private set;} = false;
+
     public void Save(string filename)
     {
         File.WriteAllText(filename, JsonConvert.SerializeObject(this, Formatting.Indented));

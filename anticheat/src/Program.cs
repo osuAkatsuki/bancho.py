@@ -9,24 +9,24 @@ using anticheat.Checks;
 
 namespace anticheat;
 
-class Program
+internal class Program
 {
+    private static Config _config = new Config();
+
     public static void Main()
     {
-        Config config = new Config();
+        _config = new Config();
 
-        // Ensure the config file exists
         if (!File.Exists("config.json"))
         {
-            config.Save("config.json");
+            _config.Save("config.json");
             Log("Default config.json created. Set up the config file and re-run the service.", ConsoleColor.Magenta);
             return;
         }
 
-        // Try to deserialize the config file
         try
         {
-            config = Config.Load("config.json") ?? new Config();
+            _config = Config.Load("config.json") ?? new Config();
             Log("Config loaded.", ConsoleColor.Magenta);
         }
         catch (Exception ex)
@@ -36,12 +36,11 @@ class Program
         }
 
         // Save the config file again to get rid of all old config settings
-        config.Save("config.json");
+        _config.Save("config.json");
 
 
-        ScoreQueue queue = new ScoreQueue(config.RabbitMQHostname, config.RabbitMQPort);
+        ScoreQueue queue = new ScoreQueue(_config.RabbitMQHostname, _config.RabbitMQPort);
 
-        // Try to connect to the RabbitMQ broker and establish the consumer connection
         try
         {
             queue.Connect();
@@ -53,23 +52,36 @@ class Program
             return;
         }
 
+
         // Get all checks via reflection
         ICheck[] checks = Assembly.GetExecutingAssembly().GetTypes()
-                                .Where(x => x.Namespace == typeof(ICheck).Namespace
+                                .Where(x => x.Namespace != null
+                                        && x.Namespace.StartsWith(typeof(ICheck).Namespace!)
                                         && !x.IsInterface
-                                        &&  typeof(ICheck).IsAssignableFrom(x))
+                                        && typeof(ICheck).IsAssignableFrom(x))
                                 .Select(x => (ICheck)Activator.CreateInstance(x)!).ToArray();
+
+        Log($"Loaded {checks.Length} checks via reflection:", debug: true);
+        Log(string.Join(", ", checks.Select(x => x.GetType().Name)), debug: true);
 
         // Run the anticheat processor
         AnticheatProcessor processor = new AnticheatProcessor(queue, checks);
         processor.Run();
     }
 
-    public static void Log(string message, ConsoleColor color = ConsoleColor.Gray)
+    private static object _lock = new object();
+    public static void Log(string message, ConsoleColor color = ConsoleColor.Gray, bool debug = false)
     {
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.Write($"[{DateTime.UtcNow:HH:mm:sstt}] ");
-        Console.ForegroundColor = color;
-        Console.WriteLine(message);
+        // Use a lock to make the console output thread-safe
+        lock (_lock)
+        {
+            if (debug && !_config.Debug)
+                return;
+
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write($"[{DateTime.UtcNow:HH:mm:sstt}] ");
+            Console.ForegroundColor = color;
+            Console.WriteLine(message);
+        }
     }
 }
