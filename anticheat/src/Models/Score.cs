@@ -24,7 +24,7 @@ internal class Score
     public float PP { get; private set; }
 
     [JsonProperty("sr")]
-    public int StarRating { get; private set; }
+    public float StarRating { get; private set; }
 
     [JsonProperty("score")]
     public ulong TotalScore { get; private set; }

@@ -51,22 +51,22 @@ internal class Beatmap
     public GameMode Mode { get; set; }
 
     [JsonProperty("bpm")]
-    public double BPM { get; set; }
+    public float BPM { get; set; }
 
     [JsonProperty("cs")]
-    public double CS { get; set; }
+    public float CS { get; set; }
 
     [JsonProperty("od")]
-    public double OD { get; set; }
+    public float OD { get; set; }
 
     [JsonProperty("ar")]
-    public double AR { get; set; }
+    public float AR { get; set; }
 
     [JsonProperty("hp")]
-    public double HP { get; set; }
+    public float HP { get; set; }
 
     [JsonProperty("diff")]
-    public double StarRating { get; set; }
+    public float StarRating { get; set; }
 
     [JsonProperty("filename")]
     public string? Filename { get; set; }
