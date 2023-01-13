@@ -361,7 +361,7 @@ class Beatmap:
 
             if set_id <= 0:
                 # set id not provided - fetch it from the map md5
-                rec = await maps_repo.fetch_one(server="osu!", md5=md5)
+                rec = await maps_repo.fetch_one(md5=md5)
 
                 if rec is not None:
                     # set found in db
@@ -403,7 +403,7 @@ class Beatmap:
             # to be efficient, we want to cache the whole set
             # at once rather than caching the individual map
 
-            rec = await maps_repo.fetch_one(server="osu!", id=bid)
+            rec = await maps_repo.fetch_one(id=bid)
 
             if rec is not None:
                 # set found in db
@@ -628,7 +628,8 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch the newest data from the api, check for differences
         and propogate any update into our cache & database."""
-        if api_data := await api_get_beatmaps(s=self.id):
+        api_data = await api_get_beatmaps(s=self.id)
+        if api_data:
             old_maps = {bmap.id: bmap for bmap in self.maps}
             new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
 
@@ -702,9 +703,13 @@ class BeatmapSet:
             # update last_osuapi_check
             await app.state.services.database.execute(
                 "REPLACE INTO mapsets "
-                "(server, id, last_osuapi_check) "
-                'VALUES ("osu!", :id, :last_osuapi_check)',
-                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
+                "(id, server, last_osuapi_check) "
+                "VALUES (:id, :server, :last_osuapi_check)",
+                {
+                    "id": self.id,
+                    "server": "osu!",
+                    "last_osuapi_check": self.last_osuapi_check,
+                },
             )
 
             # update maps in sql
@@ -737,14 +742,14 @@ class BeatmapSet:
         """Save the object's attributes into the database."""
         await app.state.services.database.execute_many(
             "REPLACE INTO maps ("
-            "server, md5, id, set_id, "
+            "md5, id, server, set_id, "
             "artist, title, version, creator, "
             "filename, last_update, total_length, "
             "max_combo, status, frozen, "
             "plays, passes, mode, bpm, "
             "cs, od, ar, hp, diff"
             ") VALUES ("
-            '"osu!", :md5, :id, :set_id, '
+            ":md5, :id, :server, :set_id, "
             ":artist, :title, :version, :creator, "
             ":filename, :last_update, :total_length, "
             ":max_combo, :status, :frozen, "
@@ -755,6 +760,7 @@ class BeatmapSet:
                 {
                     "md5": bmap.md5,
                     "id": bmap.id,
+                    "server": "osu!",
                     "set_id": bmap.set_id,
                     "artist": bmap.artist,
                     "title": bmap.title,
@@ -800,7 +806,7 @@ class BeatmapSet:
 
             bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
 
-            for row in await maps_repo.fetch_many(server="osu!", set_id=bsid):
+            for row in await maps_repo.fetch_many(set_id=bsid):
                 bmap = Beatmap(
                     md5=row["md5"],
                     id=row["id"],
@@ -841,7 +847,7 @@ class BeatmapSet:
                         .translate(IGNORED_BEATMAP_CHARS)
                     )
 
-                    await maps_repo.update("osu!", bmap.id, filename=bmap.filename)
+                    await maps_repo.update(bmap.id, filename=bmap.filename)
 
                 bmap_set.maps.append(bmap)
 
@@ -850,7 +856,8 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
         """Fetch a mapset from the osu!api by set id."""
-        if api_data := await api_get_beatmaps(s=bsid):
+        api_data = await api_get_beatmaps(s=bsid)
+        if api_data:
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset bancho.py support
@@ -886,9 +893,13 @@ class BeatmapSet:
 
             await app.state.services.database.execute(
                 "REPLACE INTO mapsets "
-                "(server, id, last_osuapi_check) "
-                'VALUES ("osu!", :id, :last_osuapi_check)',
-                {"id": self.id, "last_osuapi_check": self.last_osuapi_check},
+                "(id, server, last_osuapi_check) "
+                "VALUES (:id, :server, :last_osuapi_check)",
+                {
+                    "id": self.id,
+                    "server": "osu!",
+                    "last_osuapi_check": self.last_osuapi_check,
+                },
             )
 
             await self._save_to_sql()

@@ -437,7 +437,8 @@ class Player:
             self.leave_match()
 
         # stop spectating.
-        if host := self.spectating:
+        host = self.spectating
+        if host:
             host.remove_spectator(self)
 
         # leave channels
@@ -527,7 +528,8 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
+        if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http_client)
 
@@ -564,7 +566,8 @@ class Player:
 
         log(log_msg, Ansi.LRED)
 
-        if webhook_url := app.settings.DISCORD_AUDIT_LOG_WEBHOOK:
+        webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
+        if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http_client)
 
@@ -601,7 +604,7 @@ class Player:
 
         log(f"Silenced {self}.", Ansi.LCYAN)
 
-    async def unsilence(self, admin: Player) -> None:
+    async def unsilence(self, admin: Player, reason: str) -> None:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
@@ -613,8 +616,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, NULL, NOW())",
-            {"from": admin.id, "to": self.id, "action": "unsilence"},
+            "VALUES (:from, :to, :action, :reason, NOW())",
+            {"from": admin.id, "to": self.id, "reason": reason, "action": "unsilence"},
         )
 
         # inform the user's client
@@ -622,55 +625,57 @@ class Player:
 
         log(f"Unsilenced {self}.", Ansi.LCYAN)
 
-    def join_match(self, m: Match, passwd: str) -> bool:
-        """Attempt to add `self` to `m`."""
+    def join_match(self, match: Match, passwd: str) -> bool:
+        """Attempt to add `self` to `match`."""
         if self.match:
             log(f"{self} tried to join multiple matches?")
             self.enqueue(app.packets.match_join_fail())
             return False
 
-        if self.id in m.tourney_clients:
+        if self.id in match.tourney_clients:
             # the user is already in the match with a tourney client.
             # users cannot spectate themselves so this is not possible.
             self.enqueue(app.packets.match_join_fail())
             return False
 
-        if self is not m.host:
+        if self is not match.host:
             # match already exists, we're simply joining.
             # NOTE: staff members have override to pw and can
             # simply use any to join a pw protected match.
-            if passwd != m.passwd and self not in app.state.sessions.players.staff:
-                log(f"{self} tried to join {m} w/ incorrect pw.", Ansi.LYELLOW)
+            if passwd != match.passwd and self not in app.state.sessions.players.staff:
+                log(f"{self} tried to join {match} w/ incorrect pw.", Ansi.LYELLOW)
                 self.enqueue(app.packets.match_join_fail())
                 return False
-            if (slotID := m.get_free()) is None:
+            slot_id = match.get_free()
+            if slot_id is None:
                 log(f"{self} tried to join a full match.", Ansi.LYELLOW)
                 self.enqueue(app.packets.match_join_fail())
                 return False
 
         else:
             # match is being created
-            slotID = 0
+            slot_id = 0
 
-        if not self.join_channel(m.chat):
-            log(f"{self} failed to join {m.chat}.", Ansi.LYELLOW)
+        if not self.join_channel(match.chat):
+            log(f"{self} failed to join {match.chat}.", Ansi.LYELLOW)
             return False
 
-        if (lobby := app.state.sessions.channels["#lobby"]) in self.channels:
+        lobby = app.state.sessions.channels["#lobby"]
+        if lobby in self.channels:
             self.leave_channel(lobby)
 
-        slot: Slot = m.slots[0 if slotID == -1 else slotID]
+        slot: Slot = match.slots[0 if slot_id == -1 else slot_id]
 
         # if in a teams-vs mode, switch team from neutral to red.
-        if m.team_type in (MatchTeamTypes.team_vs, MatchTeamTypes.tag_team_vs):
+        if match.team_type in (MatchTeamTypes.team_vs, MatchTeamTypes.tag_team_vs):
             slot.team = MatchTeams.red
 
         slot.status = SlotStatus.not_ready
         slot.player = self
-        self.match = m
+        self.match = match
 
-        self.enqueue(app.packets.match_join_success(m))
-        m.enqueue_state()
+        self.enqueue(app.packets.match_join_success(match))
+        match.enqueue_state()
 
         return True
 
@@ -710,7 +715,8 @@ class Player:
 
             app.state.sessions.matches.remove(self.match)
 
-            if lobby := app.state.sessions.channels["#lobby"]:
+            lobby = app.state.sessions.channels["#lobby"]
+            if lobby:
                 lobby.enqueue(app.packets.dispose_match(self.match.id))
 
         else:  # multi is not empty
@@ -731,15 +737,15 @@ class Player:
 
         self.match = None
 
-    async def join_clan(self, c: "Clan") -> bool:
-        """Attempt to add `self` to `c`."""
-        if self.id in c.member_ids:
+    async def join_clan(self, clan: "Clan") -> bool:
+        """Attempt to add `self` to `clan`."""
+        if self.id in clan.member_ids:
             return False
 
         if not "invited":  # TODO
             return False
 
-        await c.add_member(self)
+        await clan.add_member(self)
         return True
 
     async def leave_clan(self) -> None:
@@ -824,7 +830,8 @@ class Player:
         """Attempt to add `player` to `self`'s spectators."""
         chan_name = f"#spec_{self.id}"
 
-        if not (spec_chan := app.state.sessions.channels[chan_name]):
+        spec_chan = app.state.sessions.channels[chan_name]
+        if not spec_chan:
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
                 name=chan_name,
