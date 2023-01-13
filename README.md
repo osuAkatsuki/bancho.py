@@ -222,7 +222,7 @@ If you are running bancho.py on Ubuntu 18.04, 20.04 or 22.04, you can install do
 cd anticheat
 
 # Install the correct dotnet framework, depending on your OS.
-./install-dotnet.sh
+./scripts/install-dotnet.sh
 ```
 
 ## Installing RabbitMQ
