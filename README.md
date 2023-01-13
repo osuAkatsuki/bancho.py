@@ -210,7 +210,7 @@ and you should see something along the lines of:
 
 bancho.py's codebase features a modular anticheat written in C#. Upon submission, scores can optionally be sent to an AMQP broker, in our case RabbitMQ. This feature is fully optional so that you can run bancho.py without the anticheat, meaning you don't have to install dotnet and RabbitMQ.
 
-> :warning: The anticheat is not a run-and-done system. By default, it does not contain any checks besides the example code. It is made for you to implement your own cheating measurements. If you want to learn more about how working with the anticheat works, see the section further down.
+> :warning: The anticheat is not a run-and-done system. By default, it does not contain any checks besides the example code. It is made for you to implement your own anti-cheating measurements. If you want to learn more about how working with the anticheat works, see the section further down.
 
 If you opt-in to use the anticheat, follow the next steps.
 
