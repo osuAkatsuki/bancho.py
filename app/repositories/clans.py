@@ -66,7 +66,10 @@ async def fetch_one(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM clans
-         WHERE id = :id
+         WHERE id = COALESCE(:id, id)
+           AND name = COALESCE(:name, name)
+           AND tag = COALESCE(:tag, tag)
+           AND owner = COALESCE(:owner, owner)
     """
     params = {"id": id, "name": name, "tag": tag, "owner": owner}
     rec = await app.state.services.database.fetch_one(query, params)

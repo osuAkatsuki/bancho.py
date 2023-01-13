@@ -614,7 +614,6 @@ async def _map(ctx: Context) -> Optional[str]:
             map_ids = [
                 row["id"]
                 for row in await maps_repo.fetch_many(
-                    server="osu!",
                     set_id=bmap.set_id,
                 )
             ]
@@ -624,7 +623,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
+            await maps_repo.update(bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 
@@ -763,8 +762,8 @@ async def silence(ctx: Context) -> Optional[str]:
 @command(Privileges.MODERATOR, hidden=True)
 async def unsilence(ctx: Context) -> Optional[str]:
     """Unsilence a specified player."""
-    if len(ctx.args) != 1:
-        return "Invalid syntax: !unsilence <name>"
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !unsilence <name> <reason>"
 
     target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
     if not target:
@@ -776,7 +775,9 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    await target.unsilence(ctx.player)
+    reason = " ".join(ctx.args[1:])
+
+    await target.unsilence(ctx.player, reason)
     return f"{target} was unsilenced."
 
 
