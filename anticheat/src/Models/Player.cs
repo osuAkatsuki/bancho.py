@@ -16,6 +16,11 @@ internal class Player
 
     [JsonProperty("priv")]
     public Privileges Privileges { get; private set; }
-    
+
     // TODO: Implement stats
+
+    public override string ToString()
+    {
+        return $"<{Name} ({Id}>";
+    }
 }
