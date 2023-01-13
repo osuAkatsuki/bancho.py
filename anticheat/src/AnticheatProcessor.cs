@@ -11,10 +11,13 @@ internal class AnticheatProcessor
 
     private Check[] _checks;
 
-    public AnticheatProcessor(ScoreQueue queue, Check[] checks)
+    private Config _config;
+
+    public AnticheatProcessor(ScoreQueue queue, Check[] checks, Config config)
     {
         _queue = queue;
         _checks = checks;
+        _config = config;
     }
 
     private bool IsScoreEligible(Score score)
@@ -33,14 +36,20 @@ internal class AnticheatProcessor
 
     public void Run()
     {
+        // Run the anticheat's lifecycle
         while (true)
         {
+            // Dequeue the next score in the queue using the blocking Dequeue() method
             Score score = _queue.Dequeue();
 #if !DEBUG
+            // Check whether the score is eligible to run through the checks.
+            // This is done to filter out trustworthy scores so that the anticheat
+            // does not have to run possibly performance-intensive checks on them
             if (!IsScoreEligible(score))
                 continue;
 #endif
 
+            // Run each check on the score
             foreach (Check check in _checks)
             {
                 check.Score = score;
@@ -50,6 +59,7 @@ internal class AnticheatProcessor
                     CheckResult result = check.PerformCheck();
                     Program.Log($"Ran check {check.GetType().Name} on {score}, Result: {result}", debug: true);
 
+                    // Perform actions depending on the result of the check
                     if (HandleCheckResult(result))
                         break;
                 }
@@ -64,12 +74,19 @@ internal class AnticheatProcessor
 
     private bool HandleCheckResult(CheckResult result)
     {
+        // If the check did not request any actions to be taken,
+        // simply return a false signalizing that the anticheat
+        // should continue running the other checks on it
         if (result.Action == CheckResultAction.None)
             return false;
 
+        // If a restrict was requested, send the restriction to the server
         if (result.Action == CheckResultAction.Restrict)
         {
-            string reason = $"[anticheat:{result.Check.GetType().Name.ToLower()}:{result.Check.Score.Id}] {result.Statement}";
+            string reason = result.Statement;
+            if (_config.IncludeAnticheatIdentifier)
+                reason = $"[anticheat:{result.Check.GetType().Name.ToLower()}:{result.Check.Score.Id}] {reason}";
+
             Restrict(result.Check.Score.Player.Id, reason);
             Program.Log($"Issued restriction on player {result.Check.Score.Player} with reason '{reason}' through score {result.Check.Score}", ConsoleColor.Green);
         }
@@ -80,7 +97,7 @@ internal class AnticheatProcessor
     private void Restrict(ulong userId, string reason)
     {
 #if !DEBUG
-
+         // TODO: Implement restriction either via endpoint or pubsub in b.py
 #endif
     }
 }

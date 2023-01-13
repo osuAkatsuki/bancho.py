@@ -21,6 +21,7 @@ internal class Program
 
         _config = new Config();
 
+        // Ensure the config file exists
         if (!File.Exists("config.json"))
         {
             _config.Save("config.json");
@@ -28,9 +29,16 @@ internal class Program
             return;
         }
 
+        // Try to load the config file
         try
         {
-            _config = Config.Load("config.json") ?? new Config();
+            _config = Config.Load("config.json")!;
+            if(_config == null)
+            {
+                Log("The config could not be parsed and has been reset to default settings."
+                  + "Set up the config file and re-run the service.", ConsoleColor.Red);
+                return;
+            }
             Log("Config loaded.", ConsoleColor.Magenta);
         }
         catch (Exception ex)
@@ -71,7 +79,7 @@ internal class Program
         Log("Startup process complete.", ConsoleColor.Green);
 
         // Run the anticheat processor
-        AnticheatProcessor processor = new AnticheatProcessor(queue, checks);
+        AnticheatProcessor processor = new AnticheatProcessor(queue, checks, _config);
         processor.Run();
     }
 

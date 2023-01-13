@@ -11,7 +11,10 @@ internal class Config
     public ushort RabbitMQPort { get; private set; } = 5672;
 
     [JsonProperty("debug")]
-    public bool Debug {get; private set;} = false;
+    public bool Debug { get; private set; } = false;
+
+    [JsonProperty("include_anticheat_identifier_in_restriction_reason")]
+    public bool IncludeAnticheatIdentifier { get; private set; } = true;
 
     public void Save(string filename)
     {
