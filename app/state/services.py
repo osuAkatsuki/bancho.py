@@ -5,6 +5,7 @@ import ipaddress
 import pickle
 import re
 import secrets
+import aio_pika
 from pathlib import Path
 from typing import AsyncGenerator
 from typing import Mapping
@@ -45,6 +46,8 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
+amqp: aio_pika.RobustConnection
+amqp_channel: aio_pika.RobustChannel
 
 geoloc_db: Optional[geoip2.database.Reader] = None
 if GEOLOC_DB_FILE.exists():

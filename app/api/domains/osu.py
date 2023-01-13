@@ -48,6 +48,7 @@ import app.packets
 import app.settings
 import app.state
 import app.utils
+import app.usecases.rabbitmq
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -856,6 +857,8 @@ async def osuSubmitModularSelector(
         """
 
     """ Score submission checks completed; submit the score. """
+    
+    await app.usecases.rabbitmq.enqueue_submitted_score(score)
 
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.submitted_scores")

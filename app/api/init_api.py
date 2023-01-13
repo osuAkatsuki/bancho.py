@@ -8,6 +8,7 @@ from typing import Any
 
 import aiohttp
 import orjson
+import aio_pika
 import starlette.routing
 from fastapi import FastAPI
 from fastapi import status
@@ -130,6 +131,13 @@ def init_events(asgi_app: BanchoAPI) -> None:
         )
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
+        
+        app.state.services.amqp = await aio_pika.connect_robust(
+            host=app.settings.RABBITMQ_HOST,
+            port=app.settings.RABBITMQ_PORT
+        )
+        
+        app.state.services.amqp_channel = await app.state.services.amqp.channel()
 
         if app.state.services.datadog is not None:
             app.state.services.datadog.start(
@@ -161,6 +169,9 @@ def init_events(asgi_app: BanchoAPI) -> None:
         await app.state.services.http_client.close()
         await app.state.services.database.disconnect()
         await app.state.services.redis.close()
+        
+        await app.state.services.amqp_channel.close()
+        await app.state.services.amqp.close()
 
         if app.state.services.datadog is not None:
             app.state.services.datadog.stop()

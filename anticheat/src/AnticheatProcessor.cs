@@ -17,6 +17,11 @@ internal class AnticheatProcessor
 
     public void Run()
     {
+        while(true)
+        {
+            string s = _queue.Dequeue();
 
+            Program.Log(s);
+        }
     }
 }
