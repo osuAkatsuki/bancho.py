@@ -11,8 +11,10 @@ import app.state.sessions
 from app.api.v2.common import responses
 from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
+from app.api.v2.models.players import PlayerStats
 from app.api.v2.models.players import PlayerStatus
 from app.repositories import players as players_repo
+from app.repositories import stats as stats_repo
 
 router = APIRouter()
 
@@ -90,4 +92,17 @@ async def get_player_status(player_id: int) -> Success[PlayerStatus]:
         mods=int(player.status.mods),
         beatmap_id=player.status.map_id,
     )
+    return responses.success(response)
+
+
+@router.get("/players/{player_id}/stats/{mode}")
+async def get_player_stats(player_id: int, mode: int) -> Success[PlayerStats]:
+    data = await stats_repo.fetch_one(player_id, mode)
+    if data is None:
+        return responses.failure(
+            message="Player stats not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    response = PlayerStats.from_mapping(data)
     return responses.success(response)
