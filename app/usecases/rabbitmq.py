@@ -1,9 +1,9 @@
 import orjson
 import aio_pika
 
+import app.settings
 import app.state.services
 from app.objects.score import Score
-from app.constants.gamemodes import GameMode
 from typing import Optional
 
 def score_to_json(score: Score) -> Optional[str]:
@@ -98,6 +98,9 @@ def score_to_json(score: Score) -> Optional[str]:
 
 async def enqueue_submitted_score(score: Score):
     """Enqueues the score from the score submission in the rabbitmq queue."""
+    
+    if not app.settings.RABBITMQ_ENABLED:
+        return
     
     await app.state.services.amqp_channel.default_exchange.publish(
         aio_pika.Message(body=score_to_json(score)),
