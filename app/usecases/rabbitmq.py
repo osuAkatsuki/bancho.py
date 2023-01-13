@@ -94,9 +94,7 @@ def score_to_json(score: Score) -> Optional[str]:
     #    obj["player"]["stats"][mode]["total_hits"] = data.total_hits
     #    obj["player"]["stats"][mode]["rank"] = data.rank
     
-    json = orjson.dumps(score, default=lambda x: None)
-    print(json)
-    return json
+    return orjson.dumps(obj)
 
 async def enqueue_submitted_score(score: Score):
     """Enqueues the score from the score submission in the rabbitmq queue."""
