@@ -2,8 +2,7 @@
 
 # Get the ubuntu version
 
-if ! [[ "$(lsb_release -sr)" = @("18.04"|"20.04"|"22.04") ]];
-  then
+if ! [[ "$(lsb_release -sr)" = @("18.04"|"20.04"|"22.04") ]]; then
     echo "Incorrect Ubuntu version ("$(lsb_release -sr)"). Supported versions are 18.04, 20.04 and 22.04."
     echo "If you need dotnet for a different Ubuntu version or distribution,"
     echo "please check https://learn.microsoft.com/en-us/dotnet/core/install/linux"

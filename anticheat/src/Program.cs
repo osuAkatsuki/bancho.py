@@ -15,6 +15,10 @@ internal class Program
 
     public static void Main()
     {
+#if DEBUG
+        Program.Log("Running in debug mode.", ConsoleColor.Red);
+#endif
+
         _config = new Config();
 
         if (!File.Exists("config.json"))
@@ -64,13 +68,15 @@ internal class Program
         Log($"Loaded {checks.Length} checks via reflection:", debug: true);
         Log(string.Join(", ", checks.Select(x => x.GetType().Name)), debug: true);
 
+        Log("Startup process complete.", ConsoleColor.Green);
+
         // Run the anticheat processor
         AnticheatProcessor processor = new AnticheatProcessor(queue, checks);
         processor.Run();
     }
 
     private static object _lock = new object();
-    
+
     public static void Log(string message, ConsoleColor color = ConsoleColor.Gray, bool debug = false)
     {
         // Use a lock to make the console output thread-safe
