@@ -36,8 +36,10 @@ internal class AnticheatProcessor
         while (true)
         {
             Score score = _queue.Dequeue();
+#if !DEBUG
             if (!IsScoreEligible(score))
                 continue;
+#endif
 
             foreach (Check check in _checks)
             {
@@ -67,10 +69,18 @@ internal class AnticheatProcessor
 
         if (result.Action == CheckResultAction.Restrict)
         {
-            string reason = $"(anticheat:{result.Check.GetType().Name}) {result.Statement}";
+            string reason = $"[anticheat:{result.Check.GetType().Name.ToLower()}:{result.Check.Score.Id}] {result.Statement}";
+            Restrict(result.Check.Score.Player.Id, reason);
             Program.Log($"Issued restriction on player {result.Check.Score.Player} with reason '{reason}' through score {result.Check.Score}", ConsoleColor.Green);
         }
 
         return true;
+    }
+
+    private void Restrict(ulong userId, string reason)
+    {
+#if !DEBUG
+
+#endif
     }
 }
