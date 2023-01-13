@@ -12,11 +12,11 @@ import struct
 import time
 import traceback
 import uuid
-from multiprocessing import Process
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
+from multiprocessing import Process
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import Any
@@ -40,8 +40,8 @@ import app.logging
 import app.packets
 import app.settings
 import app.state
-import app.usecases.performance
 import app.usecases.gdpr
+import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -172,18 +172,18 @@ def command(
 
 @command(Privileges.UNRESTRICTED, aliases=["gdpr"])
 async def requestgdpr(ctx: Context) -> Optional[str]:
-    
+
     if ctx.recipient is not app.state.sessions.bot:
         return f"Command only available in DMs with {app.state.sessions.bot.name}."
-    
+
     last_request = time.time() - 2000000
     next_request = last_request + 60 * 60 * 24 * 14
-    
+
     if time.time() < next_request:
         return f"You may only request your GDPR once every two weeks. You can request the next data {timeago.format(next_request)}."
 
     asyncio.create_task(app.usecases.gdpr.send_gdpr_email(ctx.player))
-    
+
     return "Your GDPR data package is being generated and sent to your e-mail. This might take some time."
 
 
@@ -684,7 +684,6 @@ async def _map(ctx: Context) -> Optional[str]:
             map_ids = [
                 row["id"]
                 for row in await maps_repo.fetch_many(
-                    server="osu!",
                     set_id=bmap.set_id,
                 )
             ]
@@ -694,7 +693,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
+            await maps_repo.update(bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 
@@ -833,8 +832,8 @@ async def silence(ctx: Context) -> Optional[str]:
 @command(Privileges.MODERATOR, hidden=True)
 async def unsilence(ctx: Context) -> Optional[str]:
     """Unsilence a specified player."""
-    if len(ctx.args) != 1:
-        return "Invalid syntax: !unsilence <name>"
+    if len(ctx.args) < 2:
+        return "Invalid syntax: !unsilence <name> <reason>"
 
     target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
     if not target:
@@ -846,7 +845,9 @@ async def unsilence(ctx: Context) -> Optional[str]:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    await target.unsilence(ctx.player)
+    reason = " ".join(ctx.args[1:])
+
+    await target.unsilence(ctx.player, reason)
     return f"{target} was unsilenced."
 
 

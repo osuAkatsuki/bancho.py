@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import base64
 import csv
 import glob
 import os.path
 import re
-import base64
+import smtplib
+import ssl
 import zipfile
 from io import BytesIO
 from io import StringIO
 
-import smtplib, ssl
 import app.settings
 import app.state
-import app.utils
 import app.usecases.email
+import app.utils
 from app.constants import regexes
 from app.objects.player import Player
 
@@ -24,7 +25,7 @@ table_queries = {
     "comments": "userid = :id",
     "favourites": "userid = :id",
     "ingame_logins": "userid = :id",
-   #"logs": "`from` = :id OR `to` = :id", # critical data
+    # "logs": "`from` = :id OR `to` = :id", # critical data
     "mail": "from_id = :id OR to_id = :id",
     "map_requests": "player_id = :id",
     "ratings": "userid = :id",
@@ -124,14 +125,16 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
 
 async def send_gdpr_email(player: Player):
     """Sends an email containing the GDPR data to the specified user."""
-    
+
     zip = (await generate_zip_archive(player.id)).read()
     attachment = app.usecases.email.get_file_attachment(f"gdpr_{player.id}.zip", zip)
-    
+
     message_base64 = "PGxpbmsgaHJlZj0iaHR0cHM6Ly9mb250cy5nb29nbGVhcGlzLmNvbS9jc3M/ZmFtaWx5PVJvYm90bzo0MDAsNzAwIiByZWw9InN0eWxlc2hlZXQiIHR5cGU9InRleHQvY3NzIj48dGFibGUgcm9sZT0icHJlc2VudGF0aW9uIiB3aWR0aD0iMTAwJSIgY2VsbHNwYWNpbmc9IjAiIGNlbGxwYWRkaW5nPSIwIj4gPHRib2R5PiA8dHI+IDx0ZD4gPGgxIHN0eWxlPSJtYXJnaW4tYm90dG9tOiAxMHB4OyB0ZXh0LWFsaWduOiBjZW50ZXI7IGZvbnQtZmFtaWx5OiBSb2JvdG8sIFRhaG9tYSwgc2Fucy1zZXJpZjsgZm9udC1zaXplOiA2NXB4OyI+R0RQUiBSZXF1ZXN0PC9oMT4gPC90ZD48L3RyPjx0cj4gPHRkPiA8aDIgc3R5bGU9Im1hcmdpbi10b3A6IDBweDsgZm9udC1mYW1pbHk6IFJvYm90bywgVGFob21hLCBzYW5zLXNlcmlmOyBmb250LXNpemU6IDI0cHg7IHRleHQtYWxpZ246IGNlbnRlcjsiPkhlbGxvIFtOQU1FXSE8YnIvPllvdXIgR0RQUiBkYXRhIHBhY2thZ2UgaXMgcmVhZHkuPGJyLz5QbGVhc2UgdmlldyB0aGUgYXR0YWNobWVudHMgdG8gZG93bmxvYWQ8YnIvPnRoZSB1bmNvbXByZXNzZWQgWklQIGFyY2hpdmUuPC9oMj4gPC90ZD48L3RyPjx0cj4gPHRkPiA8aDMgc3R5bGU9ImZvbnQtZmFtaWx5OiBSb2JvdG8sIFRhaG9tYSwgc2Fucy1zZXJpZjsgZm9udC1zaXplOiAxOHB4OyBjb2xvcjogIzk1YTVhNjsgdGV4dC1hbGlnbjogY2VudGVyOyI+U2VudCBieSBiYW5jaG8ucHkgdmlhIFtET01BSU5dPC9oMz4gPC90ZD48L3RyPjwvdGJvZHk+PC90YWJsZT4="
     message = base64.b64decode(message_base64).decode("utf-8")
     message = message.replace("[NAME]", player.name)
     message = message.replace("[DOMAIN]", app.settings.DOMAIN)
-    
-    app.usecases.email.send_email([player.email], "Your GDPR data package is ready!", message, [attachment])
+
+    app.usecases.email.send_email(
+        [player.email], "Your GDPR data package is ready!", message, [attachment],
+    )
     player.send_bot("Your GDPR data packge has been sent.")
