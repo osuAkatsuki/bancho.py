@@ -96,7 +96,7 @@ def score_to_json(score: Score) -> Optional[str]:
     
     return orjson.dumps(obj)
 
-async def enqueue_submitted_score(score: Score):
+async def enqueue_submitted_score(score: Score) -> None:
     """Enqueues the score from the score submission in the rabbitmq queue."""
     
     if not app.settings.RABBITMQ_ENABLED:
