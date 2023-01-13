@@ -72,7 +72,7 @@ internal class Score
     public int TimeElapsed { get; private set; }
 
     [JsonProperty("rank")]
-    public int Rank { get; private set; }
+    public int? Rank { get; private set; }
 
     public override string ToString()
     {
