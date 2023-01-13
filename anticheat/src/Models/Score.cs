@@ -76,6 +76,6 @@ internal class Score
 
     public override string ToString()
     {
-        return $"<{Beatmap?.Artist} - {Beatmap?.Title} played by {Player?.Name} ({Id})>";
+        return $"<{Player} on {Beatmap!.Artist} - {Beatmap!.Title} ({Id})>";
     }
 }
