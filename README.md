@@ -262,7 +262,7 @@ RABBITMQ_PORT=5672
 To generate the config.json for the anticheat, run the anticheat once with `./run.sh`.
 
 *anticheat/config.json*
-```json
+```jsonc
 // Change this if you run RabbitMQ on a separate machine or a different port
 "rabbitmq_hostname": "localhost"
 "rabbitmq_port": 5672
