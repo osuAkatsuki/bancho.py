@@ -217,7 +217,7 @@ If you opt-in to use the anticheat, follow the next steps.
 ## Install dotnet
 
 If you are running bancho.py on Ubuntu 18.04, 20.04 or 22.04, you can install dotnet by running the install script.
-If you are running bancho.py on a different distribution, please check Microsoft's documentation [here](https://learn.microsoft.com/en-us/dotnet/core/install/linux?WT.mc_id=dotnet-35129-website).
+If you are running bancho.py on a different distribution, please check Microsoft's documentation [here](https://learn.microsoft.com/en-us/dotnet/core/install/linux).
 
 ```sh
 cd anticheat
