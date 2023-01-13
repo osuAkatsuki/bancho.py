@@ -9,8 +9,8 @@ import app.state.services
 # +--------------+------------------------+------+-----+---------+-------+
 # | Field        | Type                   | Null | Key | Default | Extra |
 # +--------------+------------------------+------+-----+---------+-------+
-# | server       | enum('osu!','private') | NO   | PRI | osu!    |       |
 # | id           | int                    | NO   | PRI | NULL    |       |
+# | server       | enum('osu!','private') | NO   |     | osu!    |       |
 # | set_id       | int                    | NO   |     | NULL    |       |
 # | status       | int                    | NO   |     | NULL    |       |
 # | md5          | char(32)               | NO   | UNI | NULL    |       |
@@ -36,7 +36,7 @@ import app.state.services
 
 READ_PARAMS = textwrap.dedent(
     """\
-        server, id, set_id, status, md5, artist, title, version, creator, filename,
+        id, server, set_id, status, md5, artist, title, version, creator, filename,
         last_update, total_length, max_combo, frozen, plays, passes, mode, bpm, cs,
         ar, od, hp, diff
     """,
@@ -44,8 +44,8 @@ READ_PARAMS = textwrap.dedent(
 
 
 async def create(
-    server: str,
     id: int,
+    server: str,
     set_id: int,
     status: int,
     md5: str,
@@ -70,18 +70,18 @@ async def create(
 ) -> dict[str, Any]:
     """Create a new beatmap entry in the database."""
     query = f"""\
-        INSERT INTO maps (server, id, set_id, status, md5, artist, title,
+        INSERT INTO maps (id, server, set_id, status, md5, artist, title,
                           version, creator, filename, last_update,
                           total_length, max_combo, frozen, plays, passes,
                           mode, bpm, cs, ar, od, hp, diff)
-             VALUES (:server, :id, :set_id, :status, :md5, :artist, :title,
+             VALUES (:id, :server, :set_id, :status, :md5, :artist, :title,
                      :version, :creator, :filename, :last_update, :total_length,
                      :max_combo, :frozen, :plays, :passes, :mode, :bpm, :cs, :ar,
                      :od, :hp, :diff)
     """
     params = {
-        "server": server,
         "id": id,
+        "server": server,
         "set_id": set_id,
         "status": status,
         "md5": md5,
@@ -109,11 +109,9 @@ async def create(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = :server,
-           AND id = :id
+         WHERE id = :id
     """
     params = {
-        "server": server,
         "id": rec_id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -122,7 +120,6 @@ async def create(
 
 
 async def fetch_one(
-    server: str,
     id: Optional[int] = None,
     md5: Optional[str] = None,
     filename: Optional[str] = None,
@@ -134,13 +131,11 @@ async def fetch_one(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = :server
-           AND id = COALESCE(:id, id)
+         WHERE id = COALESCE(:id, id)
            AND md5 = COALESCE(:md5, md5)
            AND filename = COALESCE(:filename, filename)
     """
     params = {
-        "server": server,
         "id": id,
         "md5": md5,
         "filename": filename,
@@ -150,6 +145,7 @@ async def fetch_one(
 
 
 async def fetch_count(
+    server: Optional[str] = None,
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
@@ -162,7 +158,8 @@ async def fetch_count(
     query = """\
         SELECT COUNT(*) AS count
           FROM maps
-        WHERE set_id = COALESCE(:set_id, set_id)
+        WHERE server = COALESCE(:server, server)
+          AND set_id = COALESCE(:set_id, set_id)
           AND status = COALESCE(:status, status)
           AND artist = COALESCE(:artist, artist)
           AND creator = COALESCE(:creator, creator)
@@ -172,6 +169,7 @@ async def fetch_count(
 
     """
     params = {
+        "server": server,
         "set_id": set_id,
         "status": status,
         "artist": artist,
@@ -186,7 +184,7 @@ async def fetch_count(
 
 
 async def fetch_many(
-    server: str,
+    server: Optional[str] = None,
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     artist: Optional[str] = None,
@@ -201,7 +199,7 @@ async def fetch_many(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = :server
+         WHERE server = COALESCE(:server, server)
            AND set_id = COALESCE(:set_id, set_id)
            AND status = COALESCE(:status, status)
            AND artist = COALESCE(:artist, artist)
@@ -234,8 +232,8 @@ async def fetch_many(
 
 
 async def update(
-    server: str,
     id: int,
+    server: Optional[str] = None,
     set_id: Optional[int] = None,
     status: Optional[int] = None,
     md5: Optional[str] = None,
@@ -261,7 +259,8 @@ async def update(
     """Update a beatmap entry in the database."""
     query = """\
         UPDATE maps
-           SET set_id = COALESCE(:set_id, set_id),
+           SET server = COALESCE(:server, server),
+               set_id = COALESCE(:set_id, set_id),
                status = COALESCE(:status, status),
                md5 = COALESCE(:md5, md5),
                artist = COALESCE(:artist, artist),
@@ -282,12 +281,11 @@ async def update(
                od = COALESCE(:od, od),
                hp = COALESCE(:hp, hp),
                diff = COALESCE(:diff, diff)
-         WHERE server = :server
-           AND id = :id
+         WHERE id = :id
     """
     params = {
-        "server": server,
         "id": id,
+        "server": server,
         "set_id": set_id,
         "status": status,
         "md5": md5,
@@ -315,27 +313,23 @@ async def update(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-        WHERE server = :server
-          AND id = :id
+        WHERE id = :id
     """
     params = {
-        "server": server,
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
 
 
-async def delete(server: str, id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> Optional[dict[str, Any]]:
     """Delete a beatmap entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-        WHERE server = :server
-          AND id = :id
+        WHERE id = :id
     """
     params = {
-        "server": server,
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -344,11 +338,9 @@ async def delete(server: str, id: int) -> Optional[dict[str, Any]]:
 
     query = """\
         DELETE FROM maps
-              WHERE server = :server
-                AND id = :id
+              WHERE id = :id
     """
     params = {
-        "server": server,
         "id": id,
     }
     await app.state.services.database.execute(query, params)
