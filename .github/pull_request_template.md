@@ -8,5 +8,5 @@
 ## Related Issues / Projects
 
 ## Checklist
-- [ ] The changes pass pre-commit checks
+- [ ] The changes pass pre-commit checks (`make lint`)
 - [ ] The changes follow coding style
