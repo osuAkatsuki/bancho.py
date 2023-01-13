@@ -37,6 +37,7 @@ bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
 - rust (programming language)
+- dotnet (software framework for c#)
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
@@ -204,6 +205,69 @@ make run
 and you should see something along the lines of:
 
 ![tada](https://cdn.discordapp.com/attachments/616400094408736779/993705619498467369/ld-iZXysVXqwhM8.png)
+
+# bancho.py's optional modular anticheat
+
+bancho.py's codebase features a modular anticheat written in C#. Upon submission, scores can optionally be sent to an AMQP broker, in our case RabbitMQ. This feature is fully optional so that you can run bancho.py without the anticheat, meaning you don't have to install dotnet and RabbitMQ.
+
+> :warning: The anticheat is not a run-and-done system. By default, it does not contain any checks besides the example code. It is made for you to implement your own cheating measurements. If you want to learn more about how working with the anticheat works, see the section further down.
+
+If you opt-in to use the anticheat, follow the next steps.
+
+## Install dotnet
+
+If you are running bancho.py on Ubuntu 18.04, 20.04 or 22.04, you can install dotnet by running the install script.
+
+```sh
+cd anticheat
+
+# Install the correct dotnet framework, depending on your OS.
+./install-dotnet.sh
+```
+
+## Installing RabbitMQ
+
+RabbitMQ is the server that transfers the score data between bancho.py and the anticheat, meaning any checks done by the anticheat are independent from the server.
+
+Ideally, you run RabbitMQ inside docker as shown below.
+
+```sh
+# Install docker
+sudo apt-get install docker.io
+
+# Run the RabbitMQ service
+docker run 5672:5672 rabbitmq
+```
+
+## Setting up bancho.py and the anticheat
+
+After installing RabbitMQ, all that's left to do is telling bancho.py and the anticheat where to find it. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is enabling RabbitMQ in bancho.py.
+
+*.env*
+```sh
+# Change this to true to enable RabbitMQ in bancho.py
+RABBITMQ_ENABLED=True
+
+# Change this if you run RabbitMQ on a separate machine or a different port
+RABBITMQ_HOST=localhost
+RABBITMQ_PORT=5672
+```
+
+To generate the config.json for the anticheat, run the anticheat once with `./run.sh`.
+
+*config.json*
+```json
+// Change this if you run RabbitMQ on a separate machine or a different port
+"rabbitmq_hostname": "localhost"
+"rabbitmq_port": 5672
+```
+
+After that's done, all that's left to do is running the anticheat.
+
+```sh
+# run the anticheat
+./run.sh
+```
 
 # Directory Structure
     .
