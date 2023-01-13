@@ -1,11 +1,13 @@
 
 using System.Text;
+using anticheat.Models;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace anticheat;
 
-internal class ScoreQueue : Queue<string>
+internal class ScoreQueue : Queue<Score>
 {
     IModel? _channel = null;
 
@@ -24,9 +26,9 @@ internal class ScoreQueue : Queue<string>
         _channel?.Close();
     }
 
-    public new string Dequeue()
+    public new Score Dequeue()
     {
-        while(Count == 0)
+        while (Count == 0)
             ;
 
         return base.Dequeue();
@@ -35,7 +37,7 @@ internal class ScoreQueue : Queue<string>
     public void Connect()
     {
         Program.Log($"Creating RabbitMQ connection on {_hostname}:{_port}...", ConsoleColor.Cyan);
-        
+
         IConnection connection = new ConnectionFactory()
         {
             HostName = _hostname,
@@ -59,8 +61,25 @@ internal class ScoreQueue : Queue<string>
 
     private void Received(object? sender, BasicDeliverEventArgs e)
     {
-        Enqueue(Encoding.UTF8.GetString(e.Body.ToArray()));
+        Program.Log($"[ScoreQueue] A new score has been received.", debug: true);
 
-        Program.Log($"[RabbitMQ] A new score with ID 1 has been enqueued.", ConsoleColor.Magenta);
+        try
+        {
+            string json = Encoding.UTF8.GetString(e.Body.ToArray());
+            Program.Log(json);
+            Score? score = JsonConvert.DeserializeObject<Score>(json);
+            if (score == null)
+                Program.Log($"[ScoreQueue] Null score has been received and ignored.", ConsoleColor.Magenta);
+            else
+            {
+                Enqueue(score);
+                Program.Log($"[ScoreQueue] Score with ID {score.Id} has been enqueued.", debug: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Program.Log("An error occured while trying to parse the received score:", ConsoleColor.Red);
+            Program.Log(ex.Message, ConsoleColor.Red);
+        }
     }
 }
