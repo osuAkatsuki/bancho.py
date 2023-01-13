@@ -243,7 +243,7 @@ docker run 5672:5672 rabbitmq
 
 After installing RabbitMQ, all that's left to do is telling bancho.py and the anticheat where to find it. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is enabling RabbitMQ in bancho.py.
 
-*.env*
+*bancho.py's .env*
 ```sh
 # Change this to true to enable RabbitMQ in bancho.py
 RABBITMQ_ENABLED=True
@@ -255,7 +255,7 @@ RABBITMQ_PORT=5672
 
 To generate the config.json for the anticheat, run the anticheat once with `./run.sh`.
 
-*config.json*
+*anticheat/config.json*
 ```json
 // Change this if you run RabbitMQ on a separate machine or a different port
 "rabbitmq_hostname": "localhost"
