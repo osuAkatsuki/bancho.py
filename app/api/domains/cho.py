@@ -113,8 +113,8 @@ async def bancho_handler(
         # the client is performing a login
         async with app.state.services.database.connection() as db_conn:
             login_data = await login(
-                await request.body(),
                 request.headers,
+                await request.body(),
                 ip,
                 db_conn,
             )
@@ -457,8 +457,8 @@ def parse_login_data(data: bytes) -> LoginData:
 
 
 async def login(
-    body: bytes,
     headers: Mapping[str, str],
+    body: bytes,
     ip: IPAddress,
     db_conn: databases.core.Connection,
 ) -> LoginResponse:
