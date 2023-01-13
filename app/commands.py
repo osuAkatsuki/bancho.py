@@ -12,11 +12,11 @@ import struct
 import time
 import traceback
 import uuid
-from multiprocessing import Process
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
+from multiprocessing import Process
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import Any
@@ -40,8 +40,8 @@ import app.logging
 import app.packets
 import app.settings
 import app.state
-import app.usecases.performance
 import app.usecases.gdpr
+import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -172,18 +172,18 @@ def command(
 
 @command(Privileges.UNRESTRICTED, aliases=["gdpr"])
 async def requestgdpr(ctx: Context) -> Optional[str]:
-    
+
     if ctx.recipient is not app.state.sessions.bot:
         return f"Command only available in DMs with {app.state.sessions.bot.name}."
-    
+
     last_request = time.time() - 2000000
     next_request = last_request + 60 * 60 * 24 * 14
-    
+
     if time.time() < next_request:
         return f"You may only request your GDPR once every two weeks. You can request the next data {timeago.format(next_request)}."
 
     asyncio.create_task(app.usecases.gdpr.send_gdpr_email(ctx.player))
-    
+
     return "Your GDPR data package is being generated and sent to your e-mail. This might take some time."
 
 

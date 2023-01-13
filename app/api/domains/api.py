@@ -19,11 +19,11 @@ from starlette.requests import Request
 
 import app.packets
 import app.state
+import app.usecases.gdpr
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
-import app.usecases.gdpr
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
@@ -114,12 +114,12 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
         "hp": m.hp,
         "diff": m.diff,
     }
-    
-    
+
+
 @router.get("/get_gdpr_data")
 async def api_get_gdpr_data(
     token: HTTPCredentials = Depends(oauth2_scheme),
-    user_id: int = Query(None, alias="id", ge=3, le=2_147_483_647)
+    user_id: int = Query(None, alias="id", ge=3, le=2_147_483_647),
 ):
     """Returns the GDPR data of a user as a zip archive."""
 
@@ -129,14 +129,14 @@ async def api_get_gdpr_data(
             {"status": "Invalid API key."},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
-        
+
     executor = app.state.sessions.players.from_cache_or_sql(executor_id)
     if executor.priv & Privileges.DEVELOPER == 0:
         return ORJSONResponse(
-        {
-            "status": "No permission to access GDPR data.",
-        },
-    )
+            {
+                "status": "No permission to access GDPR data.",
+            },
+        )
 
     zip = await app.usecases.gdpr.generate_zip_archive(user_id)
     return StreamingResponse(
