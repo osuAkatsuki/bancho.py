@@ -9,9 +9,9 @@ internal class AnticheatProcessor
 {
     private ScoreQueue _queue;
 
-    private ICheck[] _checks;
+    private Check[] _checks;
 
-    public AnticheatProcessor(ScoreQueue queue, ICheck[] checks)
+    public AnticheatProcessor(ScoreQueue queue, Check[] checks)
     {
         _queue = queue;
         _checks = checks;
@@ -39,17 +39,17 @@ internal class AnticheatProcessor
             if (!IsScoreEligible(score))
                 continue;
 
-            foreach (ICheck check in _checks)
+            foreach (Check check in _checks)
             {
+                check.Score = score;
+
                 try
                 {
-                    CheckResult result = check.PerformCheck(score);
-
+                    CheckResult result = check.PerformCheck();
                     Program.Log($"Ran check {check.GetType().Name} on {score}, Result: {result}", debug: true);
 
-                    // TODO: act on restriction etc. here
-                    if (result.Action == CheckResultAction.Restrict)
-                        Program.Log($"Issued restriction on player {score.Player} with reason '{result.Statement}' through score {score}", ConsoleColor.Green);
+                    if (HandleCheckResult(result))
+                        break;
                 }
                 catch (Exception ex)
                 {
@@ -58,5 +58,16 @@ internal class AnticheatProcessor
                 }
             }
         }
+    }
+
+    private bool HandleCheckResult(CheckResult result)
+    {
+        if (result.Action == CheckResultAction.None)
+            return false;
+
+        return true;
+
+        // (result.Action == CheckResultAction.Restrict)
+        //    Program.Log($"Issued restriction on player {result.Player} with reason '{result.Statement}' through score {(Score)result)}", ConsoleColor.Green);
     }
 }

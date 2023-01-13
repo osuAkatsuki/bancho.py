@@ -1,22 +1,22 @@
+using anticheat.Checks;
 using anticheat.Enums;
 
 namespace anticheat.Models;
 
 internal class CheckResult
 {
+    public Check Check { get; }
+
     public CheckResultAction Action { get; }
 
     public string Statement { get; }
 
-    private CheckResult(CheckResultAction action, string statement = "")
+    public CheckResult(Check check, CheckResultAction action, string statement = "")
     {
+        Check = check;
         Action = action;
         Statement = statement;
     }
-
-    public static CheckResult Clear => new CheckResult(CheckResultAction.None);
-
-    public static CheckResult Restrict(string reason) => new CheckResult(CheckResultAction.Restrict, reason);
 
     public override string ToString()
     {

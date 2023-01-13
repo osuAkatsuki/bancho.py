@@ -3,13 +3,13 @@ using anticheat.Models;
 
 namespace anticheat.Checks;
 
-internal class ExampleCheck : ICheck
+internal class ExampleCheck : Check
 {
-    public CheckResult PerformCheck(Score score)
+    public override CheckResult PerformCheck()
     {
-        if (score.Mode == GameMode.VanillaOsu && score.PP >= 1500)
-          return CheckResult.Restrict("Exceeded the PP limit of 1500pp");
+        if (Score.Mode == GameMode.VanillaOsu && Score.PP >= 1500)
+          return Restrict("Exceeded the PP limit of 1500pp");
 
-        return CheckResult.Clear;
+        return NoAction;
     }
 }

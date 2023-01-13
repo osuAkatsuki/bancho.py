@@ -54,12 +54,12 @@ internal class Program
 
 
         // Get all checks via reflection
-        ICheck[] checks = Assembly.GetExecutingAssembly().GetTypes()
+        Check[] checks = Assembly.GetExecutingAssembly().GetTypes()
                                 .Where(x => x.Namespace != null
-                                        && x.Namespace.StartsWith(typeof(ICheck).Namespace!)
+                                        && x.Namespace.StartsWith(typeof(Check).Namespace!)
                                         && !x.IsInterface
-                                        && typeof(ICheck).IsAssignableFrom(x))
-                                .Select(x => (ICheck)Activator.CreateInstance(x)!).ToArray();
+                                        && typeof(Check).IsAssignableFrom(x))
+                                .Select(x => (Check)Activator.CreateInstance(x)!).ToArray();
 
         Log($"Loaded {checks.Length} checks via reflection:", debug: true);
         Log(string.Join(", ", checks.Select(x => x.GetType().Name)), debug: true);
