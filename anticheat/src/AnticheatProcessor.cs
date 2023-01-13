@@ -19,11 +19,6 @@ internal class AnticheatProcessor
 
     private bool IsScoreEligible(Score score)
     {
-        Program.Log(score.Player.Privileges.ToString());
-        Program.Log(((int)Privileges.Whitelisted).ToString());
-
-        Program.Log($"{score.Player.Privileges} & {Privileges.Whitelisted} = {score.Player.Privileges & Privileges.Whitelisted} which is != {((int)Privileges.Whitelisted)}");
-
         // Check whether the score should run through the checks as this
         // might not be wanted if the user is already restricted or whitelisted
         if (!score.Player.HasPrivileges(Privileges.Unrestricted))
