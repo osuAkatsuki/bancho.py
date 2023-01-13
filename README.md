@@ -271,6 +271,13 @@ After that's done, all that's left to do is running the anticheat.
 
 # Directory Structure
     .
+    ├── anticheat             # bancho.py's optional modular anticheat
+    |   ├── src                 # the anticheat - logic, classes and objects
+    |   |   └── Checks            # the anticheat checks
+    |   |
+    |   ├── scripts             # scripts for setting up the anticheat
+    |   └── run.sh              # script for running the anticheat 
+    |        
     ├── app                   # the server - logic, classes and objects
     |   ├── api                 # code related to handling external requests
     |   |   ├── domains           # endpoints that can be reached from externally
