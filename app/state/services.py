@@ -7,7 +7,6 @@ import re
 import secrets
 from pathlib import Path
 from typing import AsyncGenerator
-from typing import AsyncIterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
@@ -121,7 +120,8 @@ class IPResolver:
 
     def get_ip(self, headers: Mapping[str, str]) -> IPAddress:
         """Resolve the IP address from the headers."""
-        if (ip_str := headers.get("CF-Connecting-IP")) is None:
+        ip_str = headers.get("CF-Connecting-IP")
+        if ip_str is None:
             forwards = headers["X-Forwarded-For"].split(",")
 
             if len(forwards) != 1:
@@ -129,7 +129,8 @@ class IPResolver:
             else:
                 ip_str = headers["X-Real-IP"]
 
-        if (ip := self.cache.get(ip_str)) is None:
+        ip = self.cache.get(ip_str)
+        if ip is None:
             ip = ipaddress.ip_address(ip_str)
             self.cache[ip_str] = ip
 
@@ -267,7 +268,8 @@ class Version:
 
     @classmethod
     def from_str(cls, s: str) -> Optional[Version]:
-        if len(split := s.split(".")) == 3:
+        split = s.split(".")
+        if len(split) == 3:
             return cls(
                 major=int(split[0]),
                 minor=int(split[1]),
@@ -299,7 +301,8 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency_name}/json"
         async with http_client.get(url) as resp:
-            if resp.status == 200 and (json := await resp.json()):
+            json = await resp.json()
+            if resp.status == 200 and json:
                 latest_ver = Version.from_str(json["info"]["version"])
 
                 if not latest_ver:
@@ -350,7 +353,8 @@ async def _get_current_sql_structure_version() -> Optional[Version]:
 
 async def run_sql_migrations() -> None:
     """Update the sql structure, if it has changed."""
-    if not (current_ver := await _get_current_sql_structure_version()):
+    current_ver = await _get_current_sql_structure_version()
+    if not current_ver:
         return  # already up to date (server has never run before)
 
     latest_ver = Version.from_str(app.settings.VERSION)
@@ -375,7 +379,8 @@ async def run_sql_migrations() -> None:
 
         if line.startswith("#"):
             # may be normal comment or new version
-            if r_match := VERSION_RGX.fullmatch(line):
+            r_match = VERSION_RGX.fullmatch(line)
+            if r_match:
                 update_ver = Version.from_str(r_match["ver"])
 
             continue

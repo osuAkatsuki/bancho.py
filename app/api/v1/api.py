@@ -7,10 +7,8 @@ from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
 
-import databases.core
 from fastapi import APIRouter
 from fastapi import status
-from fastapi.param_functions import Depends
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import StreamingResponse
@@ -23,6 +21,9 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.clan import Clan
 from app.objects.player import Player
+from app.repositories import players as players_repo
+from app.repositories import scores as scores_repo
+from app.repositories import stats as stats_repo
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -30,7 +31,7 @@ REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
-router = APIRouter(tags=["bancho.py API"])
+router = APIRouter()
 
 # NOTE: the api is still under design and is subject to change.
 # to keep up with breaking changes, please either join our discord,
@@ -73,13 +74,13 @@ def format_clan_basic(clan: Clan) -> dict[str, object]:
     }
 
 
-def format_player_basic(p: Player) -> dict[str, object]:
+def format_player_basic(player: Player) -> dict[str, object]:
     return {
-        "id": p.id,
-        "name": p.name,
-        "country": p.geoloc["country"]["acronym"],
-        "clan": format_clan_basic(p.clan) if p.clan else None,
-        "online": p.online,
+        "id": player.id,
+        "name": player.name,
+        "country": player.geoloc["country"]["acronym"],
+        "clan": format_clan_basic(player.clan) if player.clan else None,
+        "online": player.online,
     }
 
 
@@ -134,20 +135,13 @@ async def api_search_players(
 @router.get("/get_player_count")
 async def api_get_player_count():
     """Get the current amount of online players."""
-    # TODO: perhaps add peak(s)? (24h, 5d, 3w, etc.)
-    # NOTE: -1 is for the bot, and will have to change
-    # if we ever make some sort of bot creation system.
-    total_users = await app.state.services.database.fetch_val(
-        "SELECT COUNT(*) FROM users",
-        column=0,
-    )
-
     return ORJSONResponse(
         {
             "status": "success",
             "counts": {
+                # -1 for the bot, who is always online
                 "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": total_users,
+                "total": await players_repo.fetch_count(),
             },
         },
     )
@@ -168,19 +162,9 @@ async def api_get_player_info(
 
     # get user info from username or user id
     if username:
-        user_info = await app.state.services.database.fetch_one(
-            "SELECT id, name, safe_name, "
-            "priv, clan_id, country, silence_end, donor_end "
-            "FROM users WHERE safe_name = :username",
-            {"username": username.lower()},
-        )
+        user_info = await players_repo.fetch_one(name=username)
     else:  # if user_id
-        user_info = await app.state.services.database.fetch_one(
-            "SELECT id, name, safe_name, "
-            "priv, clan_id, country, silence_end, donor_end "
-            "FROM users WHERE id = :userid",
-            {"userid": user_id},
-        )
+        user_info = await players_repo.fetch_one(id=user_id)
 
     if user_info is None:
         return ORJSONResponse(
@@ -202,14 +186,9 @@ async def api_get_player_info(
         api_data["stats"] = {}
 
         # get all stats
-        rows = await app.state.services.database.fetch_all(
-            "SELECT mode, tscore, rscore, pp, plays, playtime, acc, max_combo, "
-            "xh_count, x_count, sh_count, s_count, a_count FROM stats "
-            "WHERE id = :userid",
-            {"userid": resolved_user_id},
-        )
+        all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
 
-        for idx, mode_stats in enumerate([dict(row) for row in rows]):
+        for idx, mode_stats in enumerate(all_stats):
             rank = await app.state.services.redis.zrevrank(
                 f"bancho:leaderboard:{idx}",
                 str(resolved_user_id),
@@ -256,15 +235,9 @@ async def api_get_player_status(
         # no such player online, return their last seen time if they exist in sql
 
         if username:
-            row = await app.state.services.database.fetch_one(
-                "SELECT latest_activity FROM users WHERE id = :id",
-                {"id": username},
-            )
-        else:  # if user_id
-            row = await app.state.services.database.fetch_one(
-                "SELECT latest_activity FROM users WHERE id = :id",
-                {"id": user_id},
-            )
+            row = await players_repo.fetch_one(name=username)
+        else:  # if userid
+            row = await players_repo.fetch_one(id=user_id)
 
         if not row:
             return ORJSONResponse(
@@ -464,16 +437,16 @@ async def api_get_player_most_played(
         )
 
     if user_id is not None:
-        p = await app.state.sessions.players.from_cache_or_sql(id=user_id)
+        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
     elif username is not None:
-        p = await app.state.sessions.players.from_cache_or_sql(name=username)
+        player = await app.state.sessions.players.from_cache_or_sql(name=username)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not p:
+    if not player:
         return ORJSONResponse(
             {"status": "Player not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -494,7 +467,7 @@ async def api_get_player_most_played(
         "GROUP BY s.map_md5 "
         "ORDER BY plays DESC "
         "LIMIT :limit",
-        {"user_id": p.id, "mode": mode, "limit": limit},
+        {"user_id": player.id, "mode": mode, "limit": limit},
     )
 
     return ORJSONResponse(
@@ -646,22 +619,15 @@ async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
 ):
     """Return information about a given score."""
-    row = await app.state.services.database.fetch_one(
-        "SELECT map_md5, score, pp, acc, max_combo, mods, "
-        "n300, n100, n50, nmiss, ngeki, nkatu, grade, status, "
-        "mode, play_time, time_elapsed, perfect "
-        "FROM scores "
-        "WHERE id = :score_id",
-        {"score_id": score_id},
-    )
+    score = await scores_repo.fetch_one(score_id)
 
-    if not row:
+    if score is None:
         return ORJSONResponse(
             {"status": "Score not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return ORJSONResponse({"status": "success", "score": dict(row)})
+    return ORJSONResponse({"status": "success", "score": score})
 
 
 # TODO: perhaps we can do something to make these count towards replay views,
@@ -794,7 +760,8 @@ async def api_get_match(
     """Return information of a given multiplayer match."""
     # TODO: eventually, this should contain recent score info.
 
-    if not (match := app.state.sessions.matches[match_id]):
+    match = app.state.sessions.matches[match_id]
+    if not match:
         return ORJSONResponse(
             {"status": "Match not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -809,7 +776,9 @@ async def api_get_match(
                 "mods": int(match.mods),
                 "seed": match.seed,
                 "host": {"id": match.host.id, "name": match.host.name},
-                "refs": [{"id": p.id, "name": p.name} for p in match.refs],
+                "refs": [
+                    {"id": player.id, "name": player.name} for player in match.refs
+                ],
                 "in_progress": match.in_progress,
                 "is_scrimming": match.is_scrimming,
                 "map": {
@@ -888,7 +857,8 @@ async def api_get_clan(
 
     # TODO: fetching by name & tag (requires safe_name, safe_tag)
 
-    if not (clan := app.state.sessions.clans.get(id=clan_id)):
+    clan = app.state.sessions.clans.get(id=clan_id)
+    if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -936,7 +906,8 @@ async def api_get_pool(
 
     # TODO: fetching by name (requires safe_name)
 
-    if not (pool := app.state.sessions.pools.get(id=pool_id)):
+    pool = app.state.sessions.pools.get(id=pool_id)
+    if not pool:
         return ORJSONResponse(
             {"status": "Pool not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -970,9 +941,9 @@ async def api_get_pool(
 
 #         # get player from api token
 #         player_id = app.state.sessions.api_keys[api_key]
-#         p = await app.state.sessions.players.from_cache_or_sql(id=player_id)
+#         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
 
-#         return await f(conn, p)
+#         return await f(conn, player)
 
 #     return wrapper
 
@@ -983,7 +954,7 @@ async def api_get_pool(
 
 # @domain.route("/set_avatar", methods=["POST", "PUT"])
 # @requires_api_key
-# async def api_set_avatar(conn: Connection, p: Player) -> HTTPResponse:
+# async def api_set_avatar(conn: Connection, player: Player) -> HTTPResponse:
 #     """Update the tokenholder's avatar to a given file."""
 #     if "avatar" not in conn.files:
 #         return (400, JSON({"status": "must provide avatar file."}))
@@ -1002,5 +973,5 @@ async def api_get_pool(
 #         return (400, JSON({"status": "invalid file type."}))
 
 #     # write to the avatar file
-#     (AVATARS_PATH / f"{p.id}.{ext}").write_bytes(ava_file)
+#     (AVATARS_PATH / f"{player.id}.{ext}").write_bytes(ava_file)
 #     return JSON({"status": "success."})

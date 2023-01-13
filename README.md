@@ -29,9 +29,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # enter bancho.py's new directory
 cd bancho.py
-
-# clone bancho.py's dependencies' repositories
-git submodule update --init
 ```
 
 ## installing bancho.py's requirements
@@ -68,10 +65,11 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # make sure pip and setuptools are up to date
-python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -U pip setuptools pipenv
 
 # install bancho.py's python-specific dependencies
-python3.9 -m pip install -r requirements.txt
+# (if you plan to work as a dev, you can use `make install-dev`)
+make install
 ```
 
 ## creating a database for bancho.py
@@ -81,13 +79,16 @@ the server uses this database to store metadata & logs, such as user accounts
 and stats, beatmaps and beatmapsets, chat channels, tourney mappools and more.
 
 ```sh
+# start your database server
+sudo service mysql start
+
 # login to mysql's shell with root - the default admin account
 
 # note that this shell can be rather dangerous - it allows users
 # to perform arbitrary sql commands to interact with the database.
 
 # it's also very useful, powerful, and quick when used correctly.
-mysql -u root -p
+sudo mysql
 ```
 
 from this mysql shell, we'll want to create a database, create a user account,
@@ -197,7 +198,7 @@ if everything went well, you should be able to start your server up:
 
 ```sh
 # start the server
-./main.py
+make run
 ```
 
 and you should see something along the lines of:

@@ -140,7 +140,8 @@ class Webhook:
         payload = {"embeds": []}
 
         for key in ("content", "username", "avatar_url", "tts", "file"):
-            if (val := getattr(self, key)) is not None:
+            val = getattr(self, key)
+            if val is not None:
                 payload[key] = val
 
         for embed in self.embeds:
@@ -148,12 +149,14 @@ class Webhook:
 
             # simple params
             for key in ("title", "type", "description", "url", "timestamp", "color"):
-                if val := getattr(embed, key):
+                val = getattr(embed, key)
+                if val is not None:
                     embed_payload[key] = val
 
             # class params, must turn into dict
             for key in ("footer", "image", "thumbnail", "video", "provider", "author"):
-                if val := getattr(embed, key):
+                val = getattr(embed, key)
+                if val is not None:
                     embed_payload[key] = val.__dict__
 
             if embed.fields:
