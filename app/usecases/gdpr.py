@@ -135,6 +135,9 @@ async def send_gdpr_email(player: Player):
     message = message.replace("[DOMAIN]", app.settings.DOMAIN)
 
     app.usecases.email.send_email(
-        [player.email], "Your GDPR data package is ready!", message, [attachment],
+        [player.email],
+        "Your GDPR data package is ready!",
+        message,
+        [attachment],
     )
     player.send_bot("Your GDPR data packge has been sent.")
