@@ -278,7 +278,7 @@ async def osuGetBeatmapInfo(
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
 
-        beatmap = await maps_repo.fetch_one(server="osu!", filename=map_filename)
+        beatmap = await maps_repo.fetch_one(filename=map_filename)
 
         if not beatmap:
             continue
