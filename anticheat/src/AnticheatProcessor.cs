@@ -29,15 +29,15 @@ internal class AnticheatProcessor
                 {
                     CheckResult result = check.PerformCheck(score);
 
-                    Program.Log($"Ran check {check.GetType().Name} on score with ID {score.Id}, Result: {result}", debug: true);
+                    Program.Log($"Ran check {check.GetType().Name} on {score}, Result: {result}", debug: true);
 
                     // TODO: act on restriction etc. here
                     if (result.Action == CheckResultAction.Restrict)
-                        Program.Log($"Issued restriction on player {score.Player} with reason '{result.Statement}'", ConsoleColor.Green);
+                        Program.Log($"Issued restriction on player {score.Player} with reason '{result.Statement}' through score {score}", ConsoleColor.Green);
                 }
                 catch (Exception ex)
                 {
-                    Program.Log($"An error occured while performing check {check.GetType().Name} on score with ID {score.Id}:", ConsoleColor.Red);
+                    Program.Log($"An error occured while performing check {check.GetType().Name} on score with ID {score}:", ConsoleColor.Red);
                     Program.Log(ex.Message, ConsoleColor.Red);
                 }
             }

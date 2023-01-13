@@ -73,4 +73,9 @@ internal class Score
 
     [JsonProperty("rank")]
     public int Rank { get; private set; }
+
+    public override string ToString()
+    {
+        return $"<{Beatmap?.Artist} - {Beatmap?.Title} played by {Player?.Name} ({Id})>";
+    }
 }

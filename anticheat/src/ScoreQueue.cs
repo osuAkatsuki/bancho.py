@@ -9,6 +9,8 @@ namespace anticheat;
 
 internal class ScoreQueue : Queue<Score>
 {
+    IConnection? _connection = null;
+    
     IModel? _channel = null;
 
     private string _hostname = "";
@@ -24,6 +26,7 @@ internal class ScoreQueue : Queue<Score>
     ~ScoreQueue()
     {
         _channel?.Close();
+        _connection?.Close();
     }
 
     public new Score Dequeue()
@@ -38,7 +41,7 @@ internal class ScoreQueue : Queue<Score>
     {
         Program.Log($"Creating RabbitMQ connection on {_hostname}:{_port}...", ConsoleColor.Cyan);
 
-        IConnection connection = new ConnectionFactory()
+        _connection = new ConnectionFactory()
         {
             HostName = _hostname,
             Port = _port
@@ -46,7 +49,7 @@ internal class ScoreQueue : Queue<Score>
 
         Program.Log("RabbitMQ connection successful, creating consumer...", ConsoleColor.Cyan);
 
-        _channel = connection.CreateModel();
+        _channel = _connection.CreateModel();
 
         // Create a durable, non-exclusive and non-autodelete queue
         _channel.QueueDeclare("bpy.score_submission_queue", true, false, false);
@@ -66,14 +69,13 @@ internal class ScoreQueue : Queue<Score>
         try
         {
             string json = Encoding.UTF8.GetString(e.Body.ToArray());
-            Program.Log(json);
             Score? score = JsonConvert.DeserializeObject<Score>(json);
             if (score == null)
                 Program.Log($"[ScoreQueue] Null score has been received and ignored.", ConsoleColor.Magenta);
             else
             {
                 Enqueue(score);
-                Program.Log($"[ScoreQueue] Score with ID {score.Id} has been enqueued.", debug: true);
+                Program.Log($"[ScoreQueue] {score} has been enqueued.", debug: true);
             }
         }
         catch (Exception ex)
