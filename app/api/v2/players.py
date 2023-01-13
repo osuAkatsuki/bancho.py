@@ -73,7 +73,7 @@ async def get_player(player_id: int) -> Success[Player]:
 
 
 @router.get("/players/{player_id}/status")
-async def get_player(player_id: int) -> Success[PlayerStatus]:
+async def get_player_status(player_id: int) -> Success[PlayerStatus]:
     player = app.state.sessions.players.get(id=player_id)
 
     if not player:
@@ -83,7 +83,7 @@ async def get_player(player_id: int) -> Success[PlayerStatus]:
         )
 
     response = PlayerStatus(
-        login_time=player.login_time,
+        login_time=int(player.login_time),
         action=int(player.status.action),
         info_text=player.status.info_text,
         mode=int(player.status.mode),
