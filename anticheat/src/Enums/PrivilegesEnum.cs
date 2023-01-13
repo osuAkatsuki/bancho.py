@@ -1,5 +1,6 @@
 namespace anticheat.Enums;
 
+[Flags]
 internal enum Privileges
 {
     Unrestricted = 1 << 0,
