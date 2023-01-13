@@ -94,10 +94,11 @@ def authenticate_player_session(
         username: str = param_function(..., alias=username_alias),
         pw_md5: str = param_function(..., alias=pw_md5_alias),
     ) -> Player:
-        if player := await app.state.sessions.players.from_login(
+        player = await app.state.sessions.players.from_login(
             name=unquote(username),
             pw_md5=pw_md5,
-        ):
+        )
+        if player:
             return player
 
         # player login incorrect
@@ -183,12 +184,11 @@ async def osuError(
         return
 
     if username and pw_md5:
-        if not (
-            player := await app.state.sessions.players.from_login(
-                name=unquote(username),
-                pw_md5=pw_md5,
-            )
-        ):
+        player = await app.state.sessions.players.from_login(
+            name=unquote(username),
+            pw_md5=pw_md5,
+        )
+        if not player:
             # player login incorrect
             await app.state.services.log_strange_occurrence("osu-error auth failed")
             player = None
@@ -277,7 +277,7 @@ async def osuGetBeatmapInfo(
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
 
-        beatmap = await maps_repo.fetch_one(server="osu!", filename=map_filename)
+        beatmap = await maps_repo.fetch_one(filename=map_filename)
 
         if not beatmap:
             continue
@@ -716,12 +716,14 @@ async def osuSubmitModularSelector(
     # fetch map & player
 
     bmap_md5 = score_data[0]
-    if not (bmap := await Beatmap.from_md5(bmap_md5)):
+    bmap = await Beatmap.from_md5(bmap_md5)
+    if not bmap:
         # Map does not exist, most likely unsubmitted.
         return b"error: beatmap"
 
     username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
-    if not (player := await app.state.sessions.players.from_login(username, pw_md5)):
+    player = await app.state.sessions.players.from_login(username, pw_md5)
+    if not player:
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return
@@ -1652,16 +1654,18 @@ async def osuMarkAsRead(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
 ):
-    if not (t_name := unquote(channel)):  # TODO: unquote needed?
+    target_name = unquote(channel)  # TODO: unquote needed?
+    if not target_name:
         return  # no channel specified
 
-    if t := await app.state.sessions.players.from_cache_or_sql(name=t_name):
+    target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
+    if target:
         # mark any unread mail from this user as read.
         await app.state.services.database.execute(
             "UPDATE `mail` SET `read` = 1 "
             "WHERE `to_id` = :to AND `from_id` = :from "
             "AND `read` = 0",
-            {"to": player.id, "from": t.id},
+            {"to": player.id, "from": target.id},
         )
 
 
@@ -1800,7 +1804,7 @@ async def get_updated_beatmap(
     """Send the latest .osu file the server has for a given map."""
     if host != "osu.ppy.sh":
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['path']}",
+            url=f"https://osu.ppy.sh{request['raw_path'].decode()}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 

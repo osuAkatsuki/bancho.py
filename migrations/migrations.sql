@@ -406,3 +406,10 @@ alter table favourites add created_at int default 0 not null;
 # v4.6.5
 alter table map_requests add requested_status varchar(6) null after map_id;
 alter table map_requests add comment varchar(512) null after requested_status;
+
+# v4.7.1
+lock tables maps write;
+alter table maps drop primary key;
+alter table maps add primary key (id);
+alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
+unlock tables;

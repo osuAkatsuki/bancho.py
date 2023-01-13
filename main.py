@@ -44,7 +44,8 @@ def main(argv: Sequence[str]) -> int:
         app.utils.ensure_connected_services,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
     ):
-        if (exit_code := safety_check()) != 0:
+        exit_code = safety_check()
+        if exit_code != 0:
             return exit_code
 
     """ Parse and handle command-line arguments. """
@@ -123,7 +124,7 @@ def main(argv: Sequence[str]) -> int:
         # TODO: uvicorn calls .lower() on the key & value,
         #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("bancho-version", app.settings.VERSION),),
+        headers=[("bancho-version", app.settings.VERSION)],
         **server_arguments,
     )
 
