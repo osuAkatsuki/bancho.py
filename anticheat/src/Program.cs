@@ -57,7 +57,7 @@ internal class Program
         Check[] checks = Assembly.GetExecutingAssembly().GetTypes()
                                 .Where(x => x.Namespace != null
                                         && x.Namespace.StartsWith(typeof(Check).Namespace!)
-                                        && !x.IsInterface
+                                        && !x.IsAbstract
                                         && typeof(Check).IsAssignableFrom(x))
                                 .Select(x => (Check)Activator.CreateInstance(x)!).ToArray();
 
