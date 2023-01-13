@@ -13,7 +13,10 @@ import app.settings
 
 
 def send_email(
-    receivers: list[str], subject: str, content, attachments: list[MIMEMessage],
+    receivers: list[str],
+    subject: str,
+    content,
+    attachments: list[MIMEMessage],
 ):
     """Sends an email using the specified SMTP settings in the config with the specified subject, content and attachments to the specified receivers"""
 
