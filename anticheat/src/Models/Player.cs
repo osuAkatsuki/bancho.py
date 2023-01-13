@@ -24,5 +24,5 @@ internal class Player
         return $"<{Name} ({Id})>";
     }
 
-    public bool HasPrivileges(Privileges privileges) => Privileges.HasFlag(privileges);
+    public bool HasPrivileges(Privileges privileges) => (Privileges & privileges) == privileges;
 }
