@@ -65,9 +65,12 @@ internal class AnticheatProcessor
         if (result.Action == CheckResultAction.None)
             return false;
 
-        return true;
+        if (result.Action == CheckResultAction.Restrict)
+        {
+            string reason = $"(anticheat:{result.Check.GetType().Name}) {result.Statement}";
+            Program.Log($"Issued restriction on player {result.Check.Score.Player} with reason '{reason}' through score {result.Check.Score}", ConsoleColor.Green);
+        }
 
-        // (result.Action == CheckResultAction.Restrict)
-        //    Program.Log($"Issued restriction on player {result.Player} with reason '{result.Statement}' through score {(Score)result)}", ConsoleColor.Green);
+        return true;
     }
 }
