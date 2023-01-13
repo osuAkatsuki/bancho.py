@@ -70,6 +70,7 @@ internal class Program
     }
 
     private static object _lock = new object();
+    
     public static void Log(string message, ConsoleColor color = ConsoleColor.Gray, bool debug = false)
     {
         // Use a lock to make the console output thread-safe
