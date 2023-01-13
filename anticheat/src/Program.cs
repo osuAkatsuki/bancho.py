@@ -33,23 +33,20 @@ internal class Program
         try
         {
             _config = Config.Load("config.json")!;
-            if(_config == null)
-            {
-                Log("The config could not be parsed and has been reset to default settings."
-                  + "Set up the config file and re-run the service.", ConsoleColor.Red);
-                return;
-            }
-            Log("Config loaded.", ConsoleColor.Magenta);
+            if (_config == null)
+                throw new NullReferenceException("Deserialized config object is null.");
         }
         catch (Exception ex)
         {
             Log("An error occured while parsing the config file:", ConsoleColor.Red);
             Log(ex.Message, ConsoleColor.Red);
+            Log("If you cannot fix this error, delete the config.json file to set it back to it's default state.", ConsoleColor.Red);
         }
 
         // Save the config file again to get rid of all old config settings
         _config.Save("config.json");
 
+        Log("Config loaded.", ConsoleColor.Magenta);
 
         ScoreQueue queue = new ScoreQueue(_config.RabbitMQHostname, _config.RabbitMQPort);
 
