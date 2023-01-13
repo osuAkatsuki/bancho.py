@@ -17,11 +17,32 @@ internal class AnticheatProcessor
         _checks = checks;
     }
 
+    private bool IsScoreEligible(Score score)
+    {
+        Program.Log(score.Player.Privileges.ToString());
+        Program.Log(((int)Privileges.Whitelisted).ToString());
+
+        Program.Log($"{score.Player.Privileges} & {Privileges.Whitelisted} = {score.Player.Privileges & Privileges.Whitelisted} which is != {((int)Privileges.Whitelisted)}");
+
+        // Check whether the score should run through the checks as this
+        // might not be wanted if the user is already restricted or whitelisted
+        if (!score.Player.HasPrivileges(Privileges.Unrestricted))
+            Program.Log($"Score {score} is not eligible for checking because the player is restricted.", debug: true);
+        else if (score.Player.HasPrivileges(Privileges.Whitelisted))
+            Program.Log($"Score {score} is not eligible for checking because the player is whitelisted.", debug: true);
+        else
+            return true;
+
+        return false;
+    }
+
     public void Run()
     {
         while (true)
         {
             Score score = _queue.Dequeue();
+            if (!IsScoreEligible(score))
+                continue;
 
             foreach (ICheck check in _checks)
             {
