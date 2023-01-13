@@ -857,8 +857,6 @@ async def osuSubmitModularSelector(
         """
 
     """ Score submission checks completed; submit the score. """
-    
-    await app.usecases.rabbitmq.enqueue_submitted_score(score)
 
     if app.state.services.datadog:
         app.state.services.datadog.increment("bancho.submitted_scores")
@@ -965,6 +963,8 @@ async def osuSubmitModularSelector(
             "checksum": score.client_checksum,
         },
     )
+    
+    await app.usecases.rabbitmq.enqueue_submitted_score(score)
 
     if score.passed:
         replay_data = await replay_file.read()
