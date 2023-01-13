@@ -9,10 +9,10 @@ internal class Score
     public ulong Id { get; private set; }
 
     [JsonProperty("bmap")]
-    public Beatmap? Beatmap { get; private set; }
+    public Beatmap Beatmap { get; private set; } = null!;
 
     [JsonProperty("player")]
-    public Player? Player { get; private set; }
+    public Player Player { get; private set; } = null!;
 
     [JsonProperty("mode")]
     public GameMode Mode { get; private set; }

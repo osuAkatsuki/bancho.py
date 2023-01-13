@@ -70,8 +70,13 @@ internal class ScoreQueue : Queue<Score>
         {
             string json = Encoding.UTF8.GetString(e.Body.ToArray());
             Score? score = JsonConvert.DeserializeObject<Score>(json);
+            
             if (score == null)
                 Program.Log($"[ScoreQueue] Null score has been received and ignored.", ConsoleColor.Magenta);
+            else if(score.Player == null)
+                Program.Log($"[ScoreQueue] Score with null player has been received and ignored.", ConsoleColor.Magenta);
+            else if(score.Beatmap == null)
+                Program.Log($"[ScoreQueue] Score with null beatmap has been received and ignored.", ConsoleColor.Magenta);
             else
             {
                 Enqueue(score);
