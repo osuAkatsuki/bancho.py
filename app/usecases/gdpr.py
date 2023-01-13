@@ -123,7 +123,7 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
     return output
 
 
-async def send_gdpr_email(player: Player):
+async def send_gdpr_email(player: Player) -> None:
     """Sends an email containing the GDPR data to the specified user."""
 
     zip = (await generate_zip_archive(player.id)).read()

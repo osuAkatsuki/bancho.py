@@ -17,7 +17,7 @@ def send_email(
     subject: str,
     content,
     attachments: list[MIMEMessage],
-):
+) -> None:
     """Sends an email using the specified SMTP settings in the config with the specified subject, content and attachments to the specified receivers"""
 
     with smtplib.SMTP_SSL(
