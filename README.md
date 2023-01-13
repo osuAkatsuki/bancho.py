@@ -275,6 +275,30 @@ After that's done, all that's left to do is running the anticheat.
 ./run.sh
 ```
 
+## Adding checks to the anticheat
+
+The checks for the anticheat can be found in anticheat/src/Checks. It is modular meaning every .cs file in that folder represents it's own check which can simply be added and removed by just inserting/deleting the file.
+
+The example check looks like this:
+```cs
+internal class ExampleCheck : Check
+{
+    public override CheckResult PerformCheck()
+    {
+        if (Score.Mode == GameMode.VanillaOsu && Score.PP >= 1500)
+          return Restrict("Exceeded the PP limit of 1500pp");
+
+        return NoAction;
+    }
+}
+```
+
+This check would restrict all users that submit a play >= 1500pp in the vanilla standard gamemode.
+
+You can access the score object via the `Score` property. From there, you can access further information like the player (`Score.Player`) and beatmap (`Score.Beatmap`). There are also various helper methods provided such as `Score.Player.HasPrivileges()`. These helper methods are meant to make making checks simpler and more accessible to people with little to no knowledge in C#.
+
+Every check returns a `CheckResult` object. To restrict a user, you can get the respective `CheckResult` object by using the `Restrict()` method, as shown in the example. If the check could not find anything that requires administrative actions, you can return the `NoAction` property, like shown in the example as well.
+
 # Directory Structure
     .
     ├── anticheat             # bancho.py's optional modular anticheat
