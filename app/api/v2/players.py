@@ -96,7 +96,7 @@ async def get_player_status(player_id: int) -> Success[PlayerStatus]:
 
 
 @router.get("/players/{player_id}/stats/{mode}")
-async def get_player_stats(player_id: int, mode: int) -> Success[PlayerStats]:
+async def get_player_mode_stats(player_id: int, mode: int) -> Success[PlayerStats]:
     data = await stats_repo.fetch_one(player_id, mode)
     if data is None:
         return responses.failure(
@@ -106,3 +106,29 @@ async def get_player_stats(player_id: int, mode: int) -> Success[PlayerStats]:
 
     response = PlayerStats.from_mapping(data)
     return responses.success(response)
+
+
+@router.get("/players/{player_id}/stats")
+async def get_player_stats(
+    player_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> Success[list[PlayerStats]]:
+    data = await stats_repo.fetch_many(
+        player_id=player_id,
+        page=page,
+        page_size=page_size,
+    )
+    total_stats = await stats_repo.fetch_count(
+        player_id=player_id,
+    )
+
+    response = [PlayerStats.from_mapping(rec) for rec in data]
+    return responses.success(
+        response,
+        meta={
+            "total": total_stats,
+            "page": page,
+            "page_size": page_size,
+        },
+    )
