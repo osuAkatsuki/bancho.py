@@ -1,5 +1,5 @@
 name: Bug report
-about: Report a clearly broken feature
+description: Report a clearly broken feature
 title: "bug: "
 labels: ["bug", "triage"]
 assignees:

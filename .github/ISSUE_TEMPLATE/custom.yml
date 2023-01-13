@@ -1,5 +1,5 @@
 name: Custom issue
-about: This is mostly meant for project maintaners
+description: This is mostly meant for project maintaners
 title: "misc: "
 labels: ["triage"]
 assignees:
@@ -11,3 +11,5 @@ body:
         Thanks for taking the time to report an issue!
   - type: textarea
     id: content
+    attributes:
+      label: Issue content
