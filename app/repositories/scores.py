@@ -144,7 +144,8 @@ async def fetch_count(
         "mode": mode,
         "userid": user_id,
     }
-    rec = await app.state.services.database.fetch_val(query, params)
+    rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
     return rec["count"]
 
 
