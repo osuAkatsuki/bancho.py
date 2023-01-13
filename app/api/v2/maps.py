@@ -41,6 +41,7 @@ async def get_maps(
         page_size=page_size,
     )
     total_maps = await maps_repo.fetch_count(
+        server=server,
         set_id=set_id,
         status=status,
         artist=artist,
