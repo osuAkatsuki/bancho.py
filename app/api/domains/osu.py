@@ -470,7 +470,8 @@ async def osuSearchHandler(
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
     async with app.state.services.http_client.get(
-        app.settings.MIRROR_SEARCH_ENDPOINT, params=params,
+        app.settings.MIRROR_SEARCH_ENDPOINT,
+        params=params,
     ) as resp:
         if resp.status != status.HTTP_200_OK:
             return b"-1\nFailed to retrieve data from the beatmap mirror."
