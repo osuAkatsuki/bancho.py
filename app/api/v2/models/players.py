@@ -42,3 +42,22 @@ class PlayerStatus(BaseModel):
     mode: int
     mods: int
     beatmap_id: int
+
+
+class PlayerStats(BaseModel):
+    id: int
+    mode: int
+    tscore: int
+    rscore: int
+    pp: float
+    plays: int
+    playtime: int
+    acc: float
+    max_combo: int
+    total_hits: int
+    replay_views: int
+    xh_count: int
+    x_count: int
+    sh_count: int
+    s_count: int
+    a_count: int
