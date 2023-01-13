@@ -79,8 +79,8 @@ internal class ScoreQueue : Queue<Score>
                 Program.Log($"[ScoreQueue] Score with null beatmap has been received and ignored.", ConsoleColor.Magenta);
             else
             {
-                Enqueue(score);
                 Program.Log($"[ScoreQueue] {score} has been enqueued.", debug: true);
+                Enqueue(score);
             }
         }
         catch (Exception ex)

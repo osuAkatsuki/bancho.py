@@ -16,5 +16,5 @@ anticheat/config.json
 anticheat/bin
 anticheat/obj
 anticheat/src/Checks/*
-!anticheat/src/Checks/ICheck.cs
+!anticheat/src/Checks/Check.cs
 !anticheat/src/Checks/ExampleCheck.cs
