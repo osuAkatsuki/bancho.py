@@ -666,7 +666,6 @@ async def _map(ctx: Context) -> Optional[str]:
             map_ids = [
                 row["id"]
                 for row in await maps_repo.fetch_many(
-                    server="osu!",
                     set_id=bmap.set_id,
                 )
             ]
@@ -676,7 +675,7 @@ async def _map(ctx: Context) -> Optional[str]:
 
         else:
             # update only map
-            await maps_repo.update("osu!", bmap.id, status=new_status, frozen=True)
+            await maps_repo.update(bmap.id, status=new_status, frozen=True)
 
             map_ids = [bmap.id]
 

@@ -17,6 +17,3 @@ class BaseModel(_pydantic_BaseModel):
     @classmethod
     def from_mapping(cls: T, mapping: Mapping[str, Any]) -> T:
         return cls(**{k: mapping[k] for k in cls.__fields__})
-
-
-from . import players
