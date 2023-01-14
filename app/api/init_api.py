@@ -134,7 +134,8 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         if app.settings.RABBITMQ_ENABLED:
             app.state.services.amqp = await aio_pika.connect_robust(
-                host=app.settings.RABBITMQ_HOST, port=app.settings.RABBITMQ_PORT,
+                host=app.settings.RABBITMQ_HOST,
+                port=app.settings.RABBITMQ_PORT,
             )
 
         app.state.services.amqp_channel = await app.state.services.amqp.channel()
