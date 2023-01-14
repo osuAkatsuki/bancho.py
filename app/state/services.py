@@ -17,7 +17,6 @@ import aioredis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
-import geoip2.database
 import pymysql
 
 import app.settings
