@@ -47,8 +47,8 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import app.packets
 import app.settings
 import app.state
-import app.utils
 import app.usecases.rabbitmq
+import app.utils
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -963,7 +963,7 @@ async def osuSubmitModularSelector(
             "checksum": score.client_checksum,
         },
     )
-    
+
     await app.usecases.rabbitmq.enqueue_submitted_score(score)
 
     if score.passed:

@@ -307,8 +307,8 @@ Every check returns a `CheckResult` object. To restrict a user, you can get the 
     |   |   └── Checks            # the anticheat checks
     |   |
     |   ├── scripts             # scripts for setting up the anticheat
-    |   └── run.sh              # script for running the anticheat 
-    |        
+    |   └── run.sh              # script for running the anticheat
+    |
     ├── app                   # the server - logic, classes and objects
     |   ├── api                 # code related to handling external requests
     |   |   ├── domains           # endpoints that can be reached from externally

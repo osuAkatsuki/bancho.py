@@ -5,7 +5,6 @@ import ipaddress
 import pickle
 import re
 import secrets
-import aio_pika
 from pathlib import Path
 from typing import AsyncGenerator
 from typing import Mapping
@@ -14,6 +13,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
+import aio_pika
 import aioredis
 import databases
 import datadog as datadog_module

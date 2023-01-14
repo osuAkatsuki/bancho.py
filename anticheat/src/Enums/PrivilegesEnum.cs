@@ -26,6 +26,6 @@ internal enum Privileges
     Developer = 1 << 14,
 
     Donator = Supporter | Premium,
-    
+
     Staff = Moderator | Administrator | Developer
 }
