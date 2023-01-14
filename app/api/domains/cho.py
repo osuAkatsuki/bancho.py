@@ -719,20 +719,18 @@ async def login(
     db_country = user_info.pop("country")
 
     if not ip.is_private:
-        geoloc = app.state.services.fetch_geoloc_nginx(ip, headers)
+        geoloc = app.state.services.fetch_geoloc(ip, headers)
 
         if geoloc is None:
-            geoloc = await app.state.services.fetch_geoloc_web(ip)
-            if geoloc is None:
-                return {
-                    "osu_token": "login-failed",
-                    "response_body": (
-                        app.packets.notification(
-                            f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
-                        )
-                        + app.packets.user_id(-1)
-                    ),
-                }
+            return {
+                "osu_token": "login-failed",
+                "response_body": (
+                    app.packets.notification(
+                        f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
+                    )
+                    + app.packets.user_id(-1)
+                ),
+            }
 
         user_info["geoloc"] = geoloc
 
