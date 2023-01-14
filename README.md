@@ -209,6 +209,12 @@ and you should see something along the lines of:
 
 ![tada](https://cdn.discordapp.com/attachments/616400094408736779/993705619498467369/ld-iZXysVXqwhM8.png)
 
+
+## enabling cloudflare geolocation data
+You have to go to the cloudflare dashboard and go to Rules > Transform rules, after that click on managed transforms and activate `add visitor location headers`.
+
+![Enabling CF geolocation data](.github/images/cf_geoloc.png)
+
 # Directory Structure
     .
     ├── app                   # the server - logic, classes and objects
