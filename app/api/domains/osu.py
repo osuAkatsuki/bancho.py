@@ -439,6 +439,7 @@ async def lastFM(
 # and has some extra features we'll eventually use more of.
 USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
 USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
+USING_CMYUI = "cmyui.xyz" in app.settings.MIRROR_URL
 
 DIRECT_SET_ID_SPELLING = "SetId" if USING_CHIMU else "SetID"
 
@@ -467,6 +468,8 @@ async def osuSearchHandler(
         search_url = f"{app.settings.MIRROR_URL}/search"
     elif USING_NASUYA:
         search_url = f"{app.settings.MIRROR_URL}/api/v1/search"
+    elif USING_CMYUI:
+        search_url = f"{app.settings.MIRROR_URL}/beatmapsets/search"
     else:
         search_url = f"{app.settings.MIRROR_URL}/api/search"
 
@@ -484,9 +487,9 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    if USING_NASUYA:
+    if USING_NASUYA or USING_CMYUI:
         # nasuya can serialize to direct for us
-        params["osu_direct"] = True
+        params["osu_direct"] = int(True)
 
     async with app.state.services.http_client.get(search_url, params=params) as resp:
         if resp.status != status.HTTP_200_OK:
@@ -497,7 +500,7 @@ async def osuSearchHandler(
 
             return b"-1\nFailed to retrieve data from the beatmap mirror."
 
-        if USING_NASUYA:
+        if USING_NASUYA or USING_CMYUI:
             # nasuya returns in osu!direct format
             return await resp.read()
 
