@@ -1007,12 +1007,7 @@ async def osuSubmitModularSelector(
         # mania uses geki & katu for rainbow 300 & 200
         stats.total_hits += score.ngeki + score.nkatu
 
-    stats_query_l = [
-        "UPDATE stats SET plays = :plays, playtime = :playtime, tscore = :tscore, "
-        "total_hits = :total_hits",
-    ]
-
-    stats_query_args: dict[str, object] = {
+    stats_updates: dict[str, Any] = {
         "plays": stats.plays,
         "playtime": stats.playtime,
         "tscore": stats.tscore,
@@ -1024,8 +1019,7 @@ async def osuSubmitModularSelector(
 
         if score.max_combo > stats.max_combo:
             stats.max_combo = score.max_combo
-            stats_query_l.append("max_combo = :max_combo")
-            stats_query_args["max_combo"] = stats.max_combo
+            stats_updates["max_combo"] = stats.max_combo
 
         if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
             # map is ranked or approved, and it's our (new)
@@ -1042,22 +1036,21 @@ async def osuSubmitModularSelector(
                     if score.grade >= Grade.A:
                         stats.grades[score.grade] += 1
                         grade_col = format(score.grade, "stats_column")
-                        stats_query_l.append(f"{grade_col} = {grade_col} + 1")
+                        stats_updates[grade_col] = stats.grades[score.grade]
 
                     if score.prev_best.grade >= Grade.A:
                         stats.grades[score.prev_best.grade] -= 1
                         grade_col = format(score.prev_best.grade, "stats_column")
-                        stats_query_l.append(f"{grade_col} = {grade_col} - 1")
+                        stats_updates[grade_col] = stats.grades[score.prev_best.grade]
             else:
                 # this is our first submitted score on the map
                 if score.grade >= Grade.A:
                     stats.grades[score.grade] += 1
                     grade_col = format(score.grade, "stats_column")
-                    stats_query_l.append(f"{grade_col} = {grade_col} + 1")
+                    stats_updates[grade_col] = stats.grades[score.grade]
 
             stats.rscore += additional_rscore
-            stats_query_l.append("rscore = :rscore")
-            stats_query_args["rscore"] = stats.rscore
+            stats_updates["rscore"] = stats.rscore
 
             # fetch scores sorted by pp for total acc/pp calc
             # NOTE: we select all plays (and not just top100)
@@ -1082,32 +1075,34 @@ async def osuSubmitModularSelector(
             )
             bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
             stats.acc = (weighted_acc * bonus_acc) / 100
-
-            # add acc to query
-            stats_query_l.append("acc = :acc")
-            stats_query_args["acc"] = stats.acc
+            stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
             weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
             bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
             stats.pp = round(weighted_pp + bonus_pp)
-
-            # add pp to query
-            stats_query_l.append("pp = :pp")
-            stats_query_args["pp"] = stats.pp
+            stats_updates["pp"] = stats.pp
 
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
 
-    # create a single querystring from the list of updates
-    stats_query = ", ".join(stats_query_l)
-
-    stats_query += " WHERE id = :user_id AND mode = :mode"
-    stats_query_args["user_id"] = score.player.id
-    stats_query_args["mode"] = score.mode.value
-
-    # send any stat changes to sql, and other players
-    await app.state.services.database.execute(stats_query, stats_query_args)
+    await stats_repo.update(
+        score.player.id,
+        score.mode.value,
+        plays=stats_updates.get("plays"),
+        playtime=stats_updates.get("playtime"),
+        tscore=stats_updates.get("tscore"),
+        total_hits=stats_updates.get("total_hits"),
+        max_combo=stats_updates.get("max_combo"),
+        xh_count=stats_updates.get("xh_count"),
+        x_count=stats_updates.get("x_count"),
+        sh_count=stats_updates.get("sh_count"),
+        s_count=stats_updates.get("s_count"),
+        a_count=stats_updates.get("a_count"),
+        rscore=stats_updates.get("rscore"),
+        acc=stats_updates.get("acc"),
+        pp=stats_updates.get("pp"),
+    )
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
