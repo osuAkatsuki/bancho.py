@@ -7,7 +7,7 @@ internal class ExampleCheck : Check
 {
     public override CheckResult PerformCheck()
     {
-        if (Score.Mode == GameMode.VanillaOsu && Score.PP >= 1500)
+        if (Score.Mode == GameMode.VN_STD && Score.PP >= 1500)
           return Restrict("Exceeded the PP limit of 1500pp");
 
         return NoAction;

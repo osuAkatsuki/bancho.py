@@ -1,4 +1,3 @@
-
 using System.Text;
 using anticheat.Models;
 using Newtonsoft.Json;

@@ -2,19 +2,19 @@ namespace anticheat.Enums;
 
 internal enum GameMode
 {
-    VanillaOsu = 0,
+    VN_STD = 0,
 
-    VanillaTaiko = 1,
+    VN_TAIKO = 1,
 
-    VanillaCatch = 2,
+    VN_CATCH = 2,
 
-    VanillaMania = 3,
+    VN_MANIA = 3,
 
-    RelaxOsu = 4,
+    RX_STD = 4,
 
-    RelaxTaiko = 5,
+    RX_TAIKO = 5,
 
-    RelaxCatch = 6,
+    RX_CATCH = 6,
 
-    AutopilotOsu = 8
+    AP_STD = 8
 }

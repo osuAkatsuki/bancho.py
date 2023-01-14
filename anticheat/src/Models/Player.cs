@@ -1,3 +1,4 @@
+using anticheat.Converters;
 using anticheat.Enums;
 using Newtonsoft.Json;
 
@@ -17,7 +18,9 @@ internal class Player
     [JsonProperty("priv")]
     public Privileges Privileges { get; private set; }
 
-    // TODO: Implement stats
+    [JsonProperty("stats")]
+    [JsonConverter(typeof(PlayerStatsConverter))]
+    public Dictionary<GameMode, ModeData> Stats { get; private set; } = null!;
 
     public override string ToString()
     {
