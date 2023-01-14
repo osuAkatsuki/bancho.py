@@ -9,9 +9,6 @@ if ! [[ "$(lsb_release -sr)" = @("18.04"|"20.04"|"22.04") ]]; then
     exit
 fi
 
-echo "install"
-exit
-
 # Add the microsoft package feed
 wget https://packages.microsoft.com/config/ubuntu/$1.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
 sudo dpkg -i packages-microsoft-prod.deb
