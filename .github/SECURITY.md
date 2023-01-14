@@ -2,11 +2,13 @@
 
 ## Supported Versions
 
-bancho.py is in a volatile state, therefore we only provide support for the latest version. It is the responsibility of the user to remain up-to-date.
+bancho.py is in a volatile state with regular updates. We will try to support versions within 6 months of the latest release.
+If you are using an older version, please update to the latest version.
+If you are using a modified version, feel free to contact us to see if we can support it.
 
 ## Reporting a Vulnerability
 
-If you notice any vulnerabilities, pleae contact us urgently on
-[Discord](https://discord.gg/ShEQgUx) or via security advisories in the repository.
+If you notice any vulnerabilities, pleae contact us urgently via email at
+cmyuiosu@gmail.com or via security advisories in the repository.
 
-Depending on the issue, a resolution will be attempted in up to a week.
+A resolution will be provided as soon as possible, depending on the severity of the vulnerability.
