@@ -39,9 +39,7 @@ def score_to_json(score: Score) -> Optional[str]:
             "ar": score.bmap.ar,
             "hp": score.bmap.hp,
             
-            "diff": score.bmap.diff,
-            
-            "filename": score.bmap.filename
+            "diff": score.bmap.diff
         },
         "player": {
             "id": score.player.id,
@@ -51,7 +49,7 @@ def score_to_json(score: Score) -> Optional[str]:
             "priv": score.player.priv,
             
             "stats": {
-                # Added manually later
+                # Will be added later manually
             }            
         },
         
@@ -83,16 +81,18 @@ def score_to_json(score: Score) -> Optional[str]:
         "rank": score.rank
     }
     
-    #for mode, data in score.player.stats.items():
-    #    obj["player"]["stats"][mode]["tscore"] = data.tscore
-    #    obj["player"]["stats"][mode]["rscore"] = data.rscore
-    #    obj["player"]["stats"][mode]["pp"] = data.pphe
-    #    obj["player"]["stats"][mode]["acc"] = data.acc
-    #    obj["player"]["stats"][mode]["plays"] = data.plays
-    #    obj["player"]["stats"][mode]["playtime"] = data.playtime
-    #    obj["player"]["stats"][mode]["max_combo"] = data.max_combo
-    #    obj["player"]["stats"][mode]["total_hits"] = data.total_hits
-    #    obj["player"]["stats"][mode]["rank"] = data.rank
+    for mode, data in score.player.stats.items():
+        modestr = mode.__repr__()
+        obj["player"]["stats"][modestr] = {}
+        obj["player"]["stats"][modestr]["tscore"] = data.tscore
+        obj["player"]["stats"][modestr]["rscore"] = data.rscore
+        obj["player"]["stats"][modestr]["pp"] = data.pp
+        obj["player"]["stats"][modestr]["acc"] = data.acc
+        obj["player"]["stats"][modestr]["plays"] = data.plays
+        obj["player"]["stats"][modestr]["playtime"] = data.playtime
+        obj["player"]["stats"][modestr]["max_combo"] = data.max_combo
+        obj["player"]["stats"][modestr]["total_hits"] = data.total_hits
+        obj["player"]["stats"][modestr]["rank"] = data.rank
     
     return orjson.dumps(obj)
 
