@@ -131,26 +131,68 @@ class IPResolver:
         return ip
 
 
+async def fetch_geoloc(
+    ip: IPAddress,
+    headers: Optional[Mapping[str, str]] = None,
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip."""
+    geoloc = fetch_geoloc_cloudflare(ip, headers)
+
+    if geoloc is None:
+        geoloc = fetch_geoloc_nginx(ip, headers)
+
+    if geoloc is None:
+        geoloc = await fetch_geoloc_web(ip)
+
+    return geoloc
+
+
+def fetch_geoloc_cloudflare(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip (using cloudflare headers)."""
+    country_code = headers.get("CF-IPCountry", "xx")
+
+    if country_code is None:
+        return
+
+    country_code = country_code.lower()
+    latitude = headers.get("CF-IPLatitude", 0.0)
+    longitude = headers.get("CF-IPLongitude", 0.0)
+
+    return {
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "country": {
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
+        },
+    }
+
+
 def fetch_geoloc_nginx(
     ip: IPAddress,
     headers: Mapping[str, str],
 ) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using nginx headers)."""
-    country_code = headers.get("X-Country-Code")
+    country_code = headers.get("X-Country-Code", "xx")
 
-    if country_code is not None:
-        country_code = country_code.lower()
-        latitude = headers.get("X-Latitude")
-        longitude = headers.get("X-Longitude")
+    if country_code is None:
+        return
 
-        return {
-            "latitude": float(latitude),
-            "longitude": float(longitude),
-            "country": {
-                "acronym": country_code,
-                "numeric": country_codes[country_code],
-            },
-        }
+    country_code = country_code.lower()
+    latitude = headers.get("X-Latitude", 0.0)
+    longitude = headers.get("X-Longitude", 0.0)
+
+    return {
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "country": {
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
+        },
+    }
 
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
