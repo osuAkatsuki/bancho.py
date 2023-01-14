@@ -52,15 +52,13 @@ internal class AnticheatProcessor
             // Run each check on the score
             foreach (Check check in _checks)
             {
-                check.Score = score;
-
                 try
                 {
-                    CheckResult result = check.PerformCheck();
+                    CheckResult result = check.PerformCheck(score);
                     Program.Log($"Ran check {check.GetType().Name} on {score}, Result: {result}", debug: true);
 
                     // Perform actions depending on the result of the check
-                    if (HandleCheckResult(result))
+                    if (HandleCheckResult(score, check, result))
                         break;
                 }
                 catch (Exception ex)
@@ -72,7 +70,7 @@ internal class AnticheatProcessor
         }
     }
 
-    private bool HandleCheckResult(CheckResult result)
+    private bool HandleCheckResult(Score score, Check check, CheckResult result)
     {
         // If the check did not request any actions to be taken,
         // simply return a false signalizing that the anticheat
@@ -85,10 +83,10 @@ internal class AnticheatProcessor
         {
             string reason = result.Statement;
             if (_config.IncludeAnticheatIdentifier)
-                reason = $"[anticheat:{result.Check.GetType().Name.ToLower()}:{result.Check.Score.Id}] {reason}";
+                reason = $"[anticheat:{check.GetType().Name.ToLower()}:{score.Id}] {reason}";
 
-            Restrict(result.Check.Score.Player.Id, reason);
-            Program.Log($"Issued restriction on player {result.Check.Score.Player} with reason '{reason}' through score {result.Check.Score}", ConsoleColor.Green);
+            Restrict(score.Player.Id, reason);
+            Program.Log($"Issued restriction on player {score.Player} with reason '{reason}' through score {score}", ConsoleColor.Green);
         }
 
         return true;

@@ -43,7 +43,7 @@ internal class Program
             Log("If you cannot fix this error, delete the config.json file to set it back to it's default state.", ConsoleColor.Red);
         }
 
-        // Save the config file again to get rid of all old config settings
+        // Save the config file again to keep the config file up to date with the model
         _config.Save("config.json");
 
         Log("Config loaded.", ConsoleColor.Magenta);

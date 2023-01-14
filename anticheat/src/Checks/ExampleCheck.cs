@@ -5,9 +5,9 @@ namespace anticheat.Checks;
 
 internal class ExampleCheck : Check
 {
-    public override CheckResult PerformCheck()
+    public override CheckResult PerformCheck(Score score)
     {
-        if (Score.Mode == GameMode.VN_STD && Score.PP >= 1500)
+        if (score.Mode == GameMode.VN_STD && score.PP >= 1500)
           return Restrict("Exceeded the PP limit of 1500pp");
 
         return NoAction;
