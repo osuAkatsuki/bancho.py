@@ -132,20 +132,26 @@ class IPResolver:
         return ip
 
 
-def fetch_geoloc_nginx(ip: IPAddress, headers: Mapping[str, str]) -> Geolocation:
+def fetch_geoloc_nginx(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using nginx headers)."""
-    country_code = headers["X-Country-Code"].lower()
-    latitude = headers["X-Latitude"]
-    longitude = headers["X-Longitude"]
+    country_code = headers.get("X-Country-Code")
 
-    return {
-        "latitude": float(latitude),
-        "longitude": float(longitude),
-        "country": {
-            "acronym": country_code,
-            "numeric": country_codes[country_code],
-        },
-    }
+    if country_code is not None:
+        country_code = country_code.lower()
+        latitude = headers.get("X-Latitude")
+        longitude = headers.get("X-Longitude")
+
+        return {
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+            "country": {
+                "acronym": country_code,
+                "numeric": country_codes[country_code],
+            },
+        }
 
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:

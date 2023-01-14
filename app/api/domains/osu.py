@@ -1951,14 +1951,14 @@ async def register_account(
             ip = app.state.services.ip_resolver.get_ip(request.headers)
 
             if not ip.is_private:
-                if app.settings.NGINX_GEOIP:
-                    # decent case, dev has downloaded a geoloc db from
-                    # maxmind, so we can do a local db lookup. (~1-5ms)
-                    # https://www.maxmind.com/en/home
-                    geoloc = app.state.services.fetch_geoloc_nginx(ip, request.headers)
-                else:
-                    # worst case, we must do an external db lookup
-                    # using a public api. (depends, `ping ip-api.com`)
+                # decent case, dev has downloaded a geoloc db from
+                # maxmind, so we can do a local db lookup. (~1-5ms)
+                # https://www.maxmind.com/en/home
+                geoloc = app.state.services.fetch_geoloc_nginx(ip, request.headers)
+
+                # worst case, we must do an external db lookup
+                # using a public api. (depends, `ping ip-api.com`)
+                if geoloc is None:
                     geoloc = await app.state.services.fetch_geoloc_web(ip)
 
                 if geoloc is not None:
