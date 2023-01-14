@@ -604,7 +604,7 @@ class Player:
 
         log(f"Silenced {self}.", Ansi.LCYAN)
 
-    async def unsilence(self, admin: Player) -> None:
+    async def unsilence(self, admin: Player, reason: str) -> None:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
@@ -616,8 +616,8 @@ class Player:
         await app.state.services.database.execute(
             "INSERT INTO logs "
             "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, NULL, NOW())",
-            {"from": admin.id, "to": self.id, "action": "unsilence"},
+            "VALUES (:from, :to, :action, :reason, NOW())",
+            {"from": admin.id, "to": self.id, "reason": reason, "action": "unsilence"},
         )
 
         # inform the user's client
