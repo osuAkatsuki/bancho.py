@@ -157,9 +157,9 @@ def fetch_geoloc_cloudflare(
     ):
         return
 
-    country_code = headers.get("CF-IPCountry", "xx").lower()
-    latitude = headers.get("CF-IPLatitude", 0.0)
-    longitude = headers.get("CF-IPLongitude", 0.0)
+    country_code = headers["CF-IPCountry"].lower()
+    latitude = headers["CF-IPLatitude"]
+    longitude = headers["CF-IPLongitude"]
 
     return {
         "latitude": float(latitude),
@@ -181,9 +181,9 @@ def fetch_geoloc_nginx(
     ):
         return
 
-    country_code = headers.get("X-Country-Code", "xx").lower()
-    latitude = headers.get("X-Latitude", 0.0)
-    longitude = headers.get("X-Longitude", 0.0)
+    country_code = headers["X-Country-Code"].lower()
+    latitude = headers["X-Latitude"]
+    longitude = headers["X-Longitude"]
 
     return {
         "latitude": float(latitude),
