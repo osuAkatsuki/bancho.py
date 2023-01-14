@@ -1038,7 +1038,7 @@ async def osuSubmitModularSelector(
                     if score.prev_best.grade >= Grade.A:
                         stats.grades[score.prev_best.grade] -= 1
                         grade_col = format(score.prev_best.grade, "stats_column")
-                        stats_updates[grade_col] = stats.grades[score.grade]
+                        stats_updates[grade_col] = stats.grades[score.prev_best.grade]
             else:
                 # this is our first submitted score on the map
                 if score.grade >= Grade.A:
