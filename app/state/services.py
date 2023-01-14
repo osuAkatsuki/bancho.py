@@ -152,12 +152,12 @@ def fetch_geoloc_cloudflare(
     headers: Mapping[str, str],
 ) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using cloudflare headers)."""
-    country_code = headers.get("CF-IPCountry", "xx")
-
-    if country_code is None:
+    if not all(
+        key in headers for key in ("CF-IPCountry", "CF-IPLatitude", "CF-IPLongitude")
+    ):
         return
 
-    country_code = country_code.lower()
+    country_code = headers.get("CF-IPCountry", "xx").lower()
     latitude = headers.get("CF-IPLatitude", 0.0)
     longitude = headers.get("CF-IPLongitude", 0.0)
 
@@ -176,12 +176,12 @@ def fetch_geoloc_nginx(
     headers: Mapping[str, str],
 ) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using nginx headers)."""
-    country_code = headers.get("X-Country-Code", "xx")
-
-    if country_code is None:
+    if not all(
+        key in headers for key in ("X-Country-Code", "X-Latitude", "X-Longitude")
+    ):
         return
 
-    country_code = country_code.lower()
+    country_code = headers.get("X-Country-Code", "xx").lower()
     latitude = headers.get("X-Latitude", 0.0)
     longitude = headers.get("X-Longitude", 0.0)
 
