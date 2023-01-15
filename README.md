@@ -248,7 +248,7 @@ sudo docker stop bpy-rabbitmq
 
 ## Setting up bancho.py and the anticheat
 
-After installing and starting RabbitMQ, all that's left to do is telling bancho.py and the anticheat where to find it. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is enabling RabbitMQ in bancho.py.
+After installing and starting RabbitMQ, all that's left to do is configuring bancho.py and the anticheat properly. If you are running RabbitMQ on your local machine with the default port `5672`, as guided here, all you have to do is putting your domain in the anticheat's config and enabling RabbitMQ in bancho.py.
 
 *bancho.py's .env*
 ```sh
@@ -264,6 +264,9 @@ To generate the config.json for the anticheat, run the anticheat once with `./ru
 
 *anticheat/config.json*
 ```jsonc
+// Change this to the domain your server is running on.
+"domain": "cmyui.xyz"
+
 // Change this if you run RabbitMQ on a separate machine or a different port
 "rabbitmq_hostname": "localhost"
 "rabbitmq_port": 5672

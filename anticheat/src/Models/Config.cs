@@ -4,6 +4,9 @@ namespace anticheat.Models;
 
 internal class Config
 {
+    [JsonProperty("domain")]
+    public string Domain { get; private set; } = "cmyui.xyz";
+
     [JsonProperty("rabbitmq_hostname")]
     public string RabbitMQHostname { get; private set; } = "localhost";
 
