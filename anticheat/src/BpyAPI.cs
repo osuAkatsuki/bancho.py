@@ -27,7 +27,7 @@ internal class BpyAPI
         _authorizationBody["client_secret"] = clientSecret;
     }
 
-    public async void EnsureValidAccessTokenAsync()
+    public async Task EnsureValidAccessTokenAsync()
     {
         // Check if the access token expired
         if (DateTime.Now.AddSeconds(10) < _expireDate /* buffer */)
@@ -35,7 +35,7 @@ internal class BpyAPI
 
         // Perform the authorization and deserialize the response
         HttpContent body = new FormUrlEncodedContent(_authorizationBody);
-        HttpResponseMessage response = await _httpClient.PostAsync($"{_apiUrl}/token", body);
+        HttpResponseMessage response = await _httpClient.PostAsync($"{_apiUrl}/oauth/authorize", body);
         TokenResponse? tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(await response.Content.ReadAsStringAsync());
         if (tokenResponse == null)
             throw new NullReferenceException("The deserialized authorization response is null.");
@@ -48,11 +48,15 @@ internal class BpyAPI
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResponse.AccessToken);
         _authorizationBody["refresh_token"] = tokenResponse.RefreshToken;
         _expireDate = tokenResponse.ExpireDate;
+
+        Program.Log($"New BpyAPI authorization successfully performed, Expire Date: {_expireDate:s}", debug: true);
     }
 
-    public async void RestrictAsync(ulong userId, string reason)
+    public async Task RestrictAsync(ulong userId, string reason)
     {
         HttpContent content = new FormUrlEncodedContent(new Dictionary<string, string>() { { "reason", reason } });
-        await _httpClient.PutAsync($"{_apiUrl}/players/{userId}/restrict", content);
+        HttpResponseMessage message = await _httpClient.PutAsync($"{_apiUrl}/players/{userId}/restrict", content);
+
+        // TODO: Implement response handling
     }
 }

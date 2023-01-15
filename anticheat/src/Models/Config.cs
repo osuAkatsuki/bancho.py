@@ -7,6 +7,12 @@ internal class Config
     [JsonProperty("domain")]
     public string Domain { get; private set; } = "cmyui.xyz";
 
+    [JsonProperty("client_id")]
+    public string ClientId {get; private set;} = "admin_client_id";
+
+    [JsonProperty("client_secret")]
+    public string ClientSecret {get; private set;} = "admin_client_secret";
+
     [JsonProperty("rabbitmq_hostname")]
     public string RabbitMQHostname { get; private set; } = "localhost";
 

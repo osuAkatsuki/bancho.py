@@ -13,7 +13,7 @@ internal class Program
 {
     private static Config _config = new Config();
 
-    public static void Main()
+    public static async Task Main()
     {
 #if DEBUG
         Program.Log("Running in debug mode.", ConsoleColor.Red);
@@ -48,12 +48,20 @@ internal class Program
 
         Log("Config loaded.", ConsoleColor.Magenta);
 
+        // Initialize the API and perform an initial authorization
+        BpyAPI api = new BpyAPI(_config.Domain, _config.ClientId, _config.ClientSecret);
+        try { await api.EnsureValidAccessTokenAsync(); }
+        catch (Exception ex)
+        {
+            Log("An error occured while performing the initial BpyAPI authentication:", ConsoleColor.Red);
+            Log(ex.Message, ConsoleColor.Red);
+            return;
+        }
+
         ScoreQueue queue = new ScoreQueue(_config.RabbitMQHostname, _config.RabbitMQPort);
 
-        try
-        {
-            queue.Connect();
-        }
+        // Try to register the RabbitMQ consumer
+        try { queue.Connect(); }
         catch (Exception ex)
         {
             Log("An error occured while setting up the RabbitMQ consumer:", ConsoleColor.Red);
@@ -76,8 +84,9 @@ internal class Program
         Log("Startup process complete.", ConsoleColor.Green);
 
         // Run the anticheat processor
-        AnticheatProcessor processor = new AnticheatProcessor(queue, checks, _config);
-        processor.Run();
+        new AnticheatProcessor(
+            new AnticheatProcessorConfiguration(queue, checks, _config.IncludeAnticheatIdentifier)
+        ).Run();
     }
 
     private static object _lock = new object();

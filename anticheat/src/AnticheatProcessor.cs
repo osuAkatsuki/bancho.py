@@ -7,17 +7,11 @@ namespace anticheat;
 
 internal class AnticheatProcessor
 {
-    private ScoreQueue _queue;
+    private AnticheatProcessorConfiguration _configuration;
 
-    private Check[] _checks;
-
-    private Config _config;
-
-    public AnticheatProcessor(ScoreQueue queue, Check[] checks, Config config)
+    public AnticheatProcessor(AnticheatProcessorConfiguration configuration)
     {
-        _queue = queue;
-        _checks = checks;
-        _config = config;
+        _configuration = configuration;
     }
 
     private bool IsScoreEligible(Score score)
@@ -40,7 +34,7 @@ internal class AnticheatProcessor
         while (true)
         {
             // Dequeue the next score in the queue using the blocking Dequeue() method
-            Score score = _queue.Dequeue();
+            Score score = _configuration.Queue.Dequeue();
 #if !DEBUG
             // Check whether the score is eligible to run through the checks.
             // This is done to filter out trustworthy scores so that the anticheat
@@ -50,7 +44,7 @@ internal class AnticheatProcessor
 #endif
 
             // Run each check on the score
-            foreach (Check check in _checks)
+            foreach (Check check in _configuration.Checks)
             {
                 try
                 {
@@ -82,7 +76,7 @@ internal class AnticheatProcessor
         if (result.Action == CheckResultAction.Restrict)
         {
             string reason = result.Statement;
-            if (_config.IncludeAnticheatIdentifier)
+            if (_configuration.IncludeAnticheatIdentifier)
                 reason = $"[anticheat:{check.GetType().Name.ToLower()}:{score.Id}] {reason}";
 
             Restrict(score.Player.Id, reason);
