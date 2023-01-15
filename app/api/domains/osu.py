@@ -659,13 +659,16 @@ async def osuSubmitModularSelector(
 ):
     """Handle a score submission from an osu! client with an active session."""
 
+    if fl_cheat_screenshot:
+        stacktrace = app.utils.get_appropriate_stacktrace()
+        await app.state.services.log_strange_occurrence(stacktrace)
+
     # NOTE: the bancho protocol uses the "score" parameter name for both
     # the base64'ed score data, and the replay file in the multipart
     # starlette/fastapi do not support this, so we've moved it out
     score_parameters = parse_form_data_score_params(await request.form())
     if score_parameters is None:
-        # failed to parse score data
-        return  # TODO: return something
+        return
 
     # extract the score data and replay file from the score data
     score_data_b64, replay_file = score_parameters
@@ -707,17 +710,23 @@ async def osuSubmitModularSelector(
     unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
 
     try:
-        assert osu_version == f"{player.client_details.osu_version.date:%Y%m%d}"
-        assert client_hash_decoded == player.client_details.client_hash
         assert player.client_details is not None
 
+        if osu_version != f"{player.client_details.osu_version.date:%Y%m%d}":
+            raise ValueError("osu! version mismatch")
+
+        if client_hash_decoded != player.client_details.client_hash:
+            raise ValueError("client hash mismatch")
         # assert unique ids (c1) are correct and match login params
-        assert (
-            unique_id1_md5 == player.client_details.uninstall_md5
-        ), f"unique_id1 mismatch ({unique_id1_md5} != {player.client_details.uninstall_md5})"
-        assert (
-            unique_id2_md5 == player.client_details.disk_signature_md5
-        ), f"unique_id2 mismatch ({unique_id2_md5} != {player.client_details.disk_signature_md5})"
+        if unique_id1_md5 != player.client_details.uninstall_md5:
+            raise ValueError(
+                f"unique_id1 mismatch ({unique_id1_md5} != {player.client_details.uninstall_md5})",
+            )
+
+        if unique_id2_md5 != player.client_details.disk_signature_md5:
+            raise ValueError(
+                f"unique_id2 mismatch ({unique_id2_md5} != {player.client_details.disk_signature_md5})",
+            )
 
         # assert online checksums match
         server_score_checksum = score.compute_online_checksum(
@@ -725,16 +734,18 @@ async def osuSubmitModularSelector(
             osu_client_hash=client_hash_decoded,
             storyboard_checksum=storyboard_md5 or "",
         )
-        assert (
-            score.client_checksum == server_score_checksum
-        ), f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})"
+        if score.client_checksum != server_score_checksum:
+            raise ValueError(
+                f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})",
+            )
 
         # assert beatmap hashes match
-        assert (
-            updated_beatmap_hash == bmap_md5
-        ), f"beatmap md5 checksum mismatch ({updated_beatmap_hash} != {bmap_md5}"
+        if bmap_md5 != updated_beatmap_hash:
+            raise ValueError(
+                f"beatmap hash mismatch ({bmap_md5} != {updated_beatmap_hash})",
+            )
 
-    except AssertionError as exc:
+    except (ValueError, AssertionError):
         # NOTE: this is undergoing a temporary trial period,
         # after which, it will be enabled & perform restrictions.
         stacktrace = app.utils.get_appropriate_stacktrace()
@@ -750,6 +761,26 @@ async def osuSubmitModularSelector(
         #     player.logout()
 
         # return b"error: ban"
+
+    # we should update their activity no matter
+    # what the result of the score submission is.
+    score.player.update_latest_activity_soon()
+
+    # make sure the player's client displays the correct mode's stats
+    if score.mode != score.player.status.mode:
+        score.player.status.mods = score.mods
+        score.player.status.mode = score.mode
+
+        if not score.player.restricted:
+            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+
+    # stop here if this is a duplicate score
+    if await app.state.services.database.fetch_one(
+        "SELECT 1 FROM scores WHERE online_checksum = :checksum",
+        {"checksum": score.client_checksum},
+    ):
+        log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
+        return b"error: no"
 
     # all data read from submission.
     # now we can calculate things based on our data.
@@ -774,32 +805,7 @@ async def osuSubmitModularSelector(
         else:
             score.status = SubmissionStatus.FAILED
 
-    # we should update their activity no matter
-    # what the result of the score submission is.
-    score.player.update_latest_activity_soon()
-
-    # attempt to update their stats if their
-    # gm/gm-affecting-mods change at all.
-    if score.mode != score.player.status.mode:
-        score.player.status.mods = score.mods
-        score.player.status.mode = score.mode
-
-        if not score.player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
-
-    # Check for score duplicates
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM scores WHERE online_checksum = :checksum",
-        {"checksum": score.client_checksum},
-    ):
-        log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
-        return b"error: no"
-
     score.time_elapsed = score_time if score.passed else fail_time
-
-    if fl_cheat_screenshot:
-        stacktrace = app.utils.get_appropriate_stacktrace()
-        await app.state.services.log_strange_occurrence(stacktrace)
 
     if (  # check for pp caps on ranked & approved maps for appropriate players.
         score.bmap.awards_ranked_pp
@@ -807,7 +813,7 @@ async def osuSubmitModularSelector(
     ):
         # Get the PP cap for the current context.
         """# TODO: find where to put autoban pp
-        pp_cap = app.app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
+        pp_cap = app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
 
         if score.pp > pp_cap:
             await score.player.restrict(
@@ -830,11 +836,12 @@ async def osuSubmitModularSelector(
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
-            if (
-                score.mode < GameMode.RELAX_OSU
-                and score.bmap.status == RankedStatus.Loved
+            if score.bmap.status == RankedStatus.Loved and score.mode in (
+                GameMode.VANILLA_OSU,
+                GameMode.VANILLA_TAIKO,
+                GameMode.VANILLA_CATCH,
+                GameMode.VANILLA_MANIA,
             ):
-                # use score for vanilla loved only
                 performance = f"{score.score:,} score"
             else:
                 performance = f"{score.pp:,.2f}pp"
@@ -846,11 +853,8 @@ async def osuSubmitModularSelector(
             )
 
             if score.rank == 1 and not score.player.restricted:
-                # this is the new #1, post the play to #announce.
                 announce_chan = app.state.sessions.channels["#announce"]
 
-                # Announce the user's #1 score.
-                # TODO: truncate artist/title/version to fit on screen
                 ann = [
                     f"\x01ACTION achieved #1 on {score.bmap.embed}",
                     f"with {score.acc:.2f}% for {performance}.",
@@ -875,7 +879,10 @@ async def osuSubmitModularSelector(
                     if score.player.id != prev_n1["id"]:
                         ann.append(
                             f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
-                            "{id} {name}])".format(**prev_n1),
+                            "{id} {name}])".format(
+                                id=prev_n1["id"],
+                                name=prev_n1["name"],
+                            ),
                         )
 
                 announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
@@ -931,25 +938,21 @@ async def osuSubmitModularSelector(
     if score.passed:
         replay_data = await replay_file.read()
 
-        # All submitted plays should have a replay.
-        # If not, they may be using a score submitter.
-        if len(replay_data) < 24 and not score.player.restricted:
-            log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
-            await score.player.restrict(
-                admin=app.state.sessions.bot,
-                reason="submitted score with no replay",
-            )
+        MIN_REPLAY_SIZE = 24
 
-            # refresh their client state
-            if score.player.online:
-                score.player.logout()
-        else:
-            # TODO: the replay is currently sent from the osu!
-            # client compressed with LZMA; this compression can
-            # be improved pretty decently by serializing it
-            # manually, so we'll probably do that in the future.
+        if len(replay_data) >= MIN_REPLAY_SIZE:
             replay_file = REPLAYS_PATH / f"{score.id}.osr"
             replay_file.write_bytes(replay_data)
+        else:
+            log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
+
+            if not score.player.restricted:
+                await score.player.restrict(
+                    admin=app.state.sessions.bot,
+                    reason="submitted score with no replay",
+                )
+                if score.player.online:
+                    score.player.logout()
 
     """ Update the user's & beatmap's stats """
 
@@ -1089,10 +1092,14 @@ async def osuSubmitModularSelector(
 
     """ score submission charts """
 
-    if not score.passed or score.mode >= GameMode.RELAX_OSU:
-        # charts & achievements won't be shown ingame.
-        ret = b"error: no"
-
+    # charts are only displayed for passes vanilla gamemodes.
+    if not score.passed or score.mode not in (
+        GameMode.VANILLA_OSU,
+        GameMode.VANILLA_TAIKO,
+        GameMode.VANILLA_CATCH,
+        GameMode.VANILLA_MANIA,
+    ):
+        response = b"error: no"
     else:
         # construct and send achievements & ranking charts to the client
         if score.bmap.awards_ranked_pp and not score.player.restricted:
@@ -1106,7 +1113,7 @@ async def osuSubmitModularSelector(
                     await score.player.unlock_achievement(ach)
                     achievements.append(ach)
 
-            achievements_str = "/".join(map(repr, achievements))
+            achievements_str = "/".join(repr(ach) for ach in achievements)
         else:
             achievements_str = ""
 
@@ -1168,7 +1175,7 @@ async def osuSubmitModularSelector(
             f"achievements-new:{achievements_str}",
         ]
 
-        ret = "|".join(submission_charts).encode()
+        response = "|".join(submission_charts).encode()
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
@@ -1176,7 +1183,7 @@ async def osuSubmitModularSelector(
         Ansi.LGREEN,
     )
 
-    return ret
+    return response
 
 
 @router.get("/web/osu-getreplay.php")
@@ -1431,7 +1438,6 @@ async def getScores(
             # look it up in sql from the filename.
             map_exists = (
                 await maps_repo.fetch_one(
-                    server="osu!",
                     filename=map_filename,
                 )
                 is not None
