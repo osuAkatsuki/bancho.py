@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-import importlib
+import importlib.metadata
 import os
 import pprint
 import random
@@ -1258,16 +1258,9 @@ async def server(ctx: Context) -> Optional[str]:
     # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
     requirements = []
 
-    for line in (Path.cwd() / "requirements.txt").read_text().splitlines():
-        line = line.split(";")[0].strip()
-
-        if line.startswith("git+"):
-            split = line.split("@")[0].split("/")[-2:]
-            requirements.append(f"git:{'/'.join(split)}")
-
-        elif "==" in line:
-            split = line.split("==")
-            requirements.append(f"{split[0]} v{split[1]}")
+    for dist in importlib.metadata.distributions():
+        requirements.append(f"{dist.name} v{dist.version}")
+    requirements.sort(key=lambda x: x.lower())
 
     requirements_info = "\n".join(
         " | ".join(section)
