@@ -451,6 +451,12 @@ async def _with(ctx: Context) -> Optional[str]:
 
     for arg in (arg.lower() for arg in ctx.args):
         try:
+            if arg.startswith("+"):
+                score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(
+                    ctx.player.last_np["mode_vn"],
+                )
+                continue
+
             for (suffix, attribute) in attributes_table.items():
                 if arg.endswith(suffix):
                     value = None
@@ -463,12 +469,8 @@ async def _with(ctx: Context) -> Optional[str]:
 
                     setattr(score_args, attribute, value)
 
-            if arg.startswith("+"):
-                score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(
-                    ctx.player.last_np["mode_vn"],
-                )
-
-        except ValueError:
+        except ValueError as ex:
+            print(ex)
             return f"Could not parse parameter '{arg}'."
 
     result = app.usecases.performance.calculate_performances(
