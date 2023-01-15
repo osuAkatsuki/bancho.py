@@ -10,7 +10,7 @@ internal class BpyAPI
     {
         { "client_id", "" },
         { "client_secret", "" },
-        { "grant_type", "credentials" },
+        { "grant_type", "client_credentials" },
         { "scope", "admin" }
     };
 
