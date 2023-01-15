@@ -1748,7 +1748,7 @@ async def get_osz(
     query_str = f"{map_set_id}?n={int(not no_video)}"
 
     return RedirectResponse(
-        url=f"{app.settings.MIRROR_DOWNLOAD_ENDPOINT.strip('/')}/{query_str}",
+        url=f"{app.settings.MIRROR_DOWNLOAD_ENDPOINT}/{query_str}",
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
