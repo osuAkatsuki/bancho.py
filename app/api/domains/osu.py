@@ -1466,7 +1466,6 @@ async def getScores(
             # look it up in sql from the filename.
             map_exists = (
                 await maps_repo.fetch_one(
-                    server="osu!",
                     filename=map_filename,
                 )
                 is not None
