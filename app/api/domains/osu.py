@@ -482,16 +482,15 @@ async def osuSearchHandler(
     # 100 matches, so the client
     # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
-
-    for bmap in result:
-        if bmap["ChildrenBeatmaps"] is None:
+    for bmapset in result:
+        if bmapset["ChildrenBeatmaps"] is None:
             continue
 
         # some mirrors use a true/false instead of 0 or 1
-        bmap["HasVideo"] = int(bmap["HasVideo"])
+        bmapset["HasVideo"] = int(bmapset["HasVideo"])
 
         diff_sorted_maps = sorted(
-            bmap["ChildrenBeatmaps"],
+            bmapset["ChildrenBeatmaps"],
             key=lambda m: m["DifficultyRating"],
         )
 
@@ -519,13 +518,13 @@ async def osuSearchHandler(
 
         ret.append(
             DIRECT_SET_INFO_FMTSTR.format(
-                Artist=handle_invalid_characters(bmap["Artist"]),
-                Title=handle_invalid_characters(bmap["Title"]),
-                Creator=bmap["Creator"],
-                RankedStatus=bmap["RankedStatus"],
-                LastUpdate=bmap["LastUpdate"],
-                SetID=bmap["SetID"],
-                HasVideo=bmap["HasVideo"],
+                Artist=handle_invalid_characters(bmapset["Artist"]),
+                Title=handle_invalid_characters(bmapset["Title"]),
+                Creator=bmapset["Creator"],
+                RankedStatus=bmapset["RankedStatus"],
+                LastUpdate=bmapset["LastUpdate"],
+                SetID=bmapset["SetID"],
+                HasVideo=bmapset["HasVideo"],
                 diffs=diffs_str,
             ),
         )
