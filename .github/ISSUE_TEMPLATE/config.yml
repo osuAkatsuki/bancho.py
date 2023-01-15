@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Help
+    url: https://github.com/osuAkatsuki/bancho.py/discussions/categories/q-a
+    about: Something not working as you'd expect? Not sure it's a bug? Check the Q&A section!
+  - name: Suggestions or feature requests
+    url: https://github.com/osuAkatsuki/bancho.py/discussions/categories/ideas
+    about: Is there something you think needs changing or to be added? Search for or start a new discussion!
+  - name: Discord
+    url: https://discord.gg/ShEQgUx
+    about: Join our Discord for more detailed help.
