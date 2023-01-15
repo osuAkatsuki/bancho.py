@@ -73,6 +73,7 @@ async def token(
     scope: Optional[str] = Form(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
 ) -> Token:
     """Get an access token for the API."""
+    # https://www.rfc-editor.org/rfc/rfc6749#section-5.1
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Pragma"] = "no-cache"
@@ -171,6 +172,7 @@ async def refresh(
     refresh_token: str = Form(),
 ) -> Token:
     """Refresh an access token."""
+    # https://www.rfc-editor.org/rfc/rfc6749#section-5.1
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Pragma"] = "no-cache"

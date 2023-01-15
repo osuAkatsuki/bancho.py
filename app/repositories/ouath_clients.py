@@ -10,6 +10,7 @@ import app.state.services
 # | Field        | Type        | Null | Key | Default | Extra          |
 # +--------------+-------------+------+-----+---------+----------------+
 # | id           | int         | NO   | PRI | NULL    | auto_increment |
+# | name         | varchar(16) | YES  |     | NULL    |                |
 # | secret       | varchar(32) | NO   |     | NULL    |                |
 # | owner        | int         | NO   |     | NULL    |                |
 # | redirect_uri | text        | YES  |     | NULL    |                |
@@ -17,7 +18,7 @@ import app.state.services
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, secret, owner, redirect_uri
+        id, name, secret, owner, redirect_uri
     """,
 )
 
@@ -25,16 +26,18 @@ READ_PARAMS = textwrap.dedent(
 async def create(
     secret: str,
     owner: int,
+    name: Optional[str] = None,
     redirect_uri: Optional[str] = None,
 ) -> dict[str, Any]:
     """Create a new client in the database."""
     query = """\
-        INSERT INTO oauth_clients (secret, owner, redirect_uri)
-             VALUES (:secret, :owner, :redirect_uri)
+        INSERT INTO oauth_clients (secret, owner, name, redirect_uri)
+             VALUES (:secret, :owner, :name, :redirect_uri)
     """
     params = {
         "secret": secret,
         "owner": owner,
+        "name": name,
         "redirect_uri": redirect_uri,
     }
     rec_id = await app.state.services.database.execute(query, params)
@@ -57,6 +60,7 @@ async def fetch_one(
     id: Optional[int] = None,
     owner: Optional[int] = None,
     secret: Optional[str] = None,
+    name: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Fetch a signle client from the database."""
     if id is None and owner is None and secret is None:
@@ -68,11 +72,13 @@ async def fetch_one(
          WHERE id = COALESCE(:id, id)
             AND owner = COALESCE(:owner, owner)
             AND secret = COALESCE(:secret, secret)
+            AND name = COALESCE(:name, name)
     """
     params = {
         "id": id,
         "owner": owner,
         "secret": secret,
+        "name": name,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     return dict(rec) if rec is not None else None
@@ -115,6 +121,7 @@ async def update(
     id: int,
     secret: Optional[str] = None,
     owner: Optional[int] = None,
+    name: Optional[str] = None,
     redirect_uri: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Update an existing client in the database."""
@@ -123,12 +130,14 @@ async def update(
            SET secret = COALESCE(:secret, secret),
                owner = COALESCE(:owner, owner),
                redirect_uri = COALESCE(:redirect_uri, redirect_uri)
+               name = COALESCE(:name, name)
          WHERE id = :id
     """
     params = {
         "id": id,
         "secret": secret,
         "owner": owner,
+        "name": name,
         "redirect_uri": redirect_uri,
     }
     await app.state.services.database.execute(query, params)
