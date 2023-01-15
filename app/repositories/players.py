@@ -33,7 +33,7 @@ from app.utils import make_safe_name
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, name, safe_name, email, priv, country, silence_end, donor_end, creation_time,
+        id, name, safe_name, priv, country, silence_end, donor_end, creation_time,
         latest_activity, clan_id, clan_priv, preferred_mode, play_style, custom_badge_name,
         custom_badge_icon, userpage_content
     """,
