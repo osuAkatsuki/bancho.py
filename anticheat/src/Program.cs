@@ -38,9 +38,9 @@ internal class Program
         }
         catch (Exception ex)
         {
-            Log("An error occured while parsing the config file:", ConsoleColor.Red);
-            Log(ex.Message, ConsoleColor.Red);
+            LogError("parsing the config file", ex);
             Log("If you cannot fix this error, delete the config.json file to set it back to it's default state.", ConsoleColor.Red);
+            return;
         }
 
         // Save the config file again to keep the config file up to date with the model
@@ -53,8 +53,7 @@ internal class Program
         try { await api.EnsureValidAccessTokenAsync(); }
         catch (Exception ex)
         {
-            Log("An error occured while performing the initial BpyAPI authentication:", ConsoleColor.Red);
-            Log(ex.Message, ConsoleColor.Red);
+            LogError("performing the initial BpyAPI authentication", ex);
             return;
         }
 
@@ -64,8 +63,7 @@ internal class Program
         try { queue.Connect(); }
         catch (Exception ex)
         {
-            Log("An error occured while setting up the RabbitMQ consumer:", ConsoleColor.Red);
-            Log(ex.Message, ConsoleColor.Red);
+            LogError("setting up the RabbitMQ consumer", ex);
             return;
         }
 
@@ -103,6 +101,20 @@ internal class Program
             Console.Write($"[{DateTime.UtcNow:HH:mm:sstt}] ");
             Console.ForegroundColor = color;
             Console.WriteLine(message);
+        }
+    }
+
+    public static void LogError(string action, Exception exception)
+    {
+        lock (_lock)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"An error occured while {action}:");
+            while (exception != null)
+            {
+                Console.WriteLine(exception.Message);
+                exception = exception.InnerException!;
+            }
         }
     }
 }

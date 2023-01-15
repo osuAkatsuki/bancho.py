@@ -34,8 +34,7 @@ internal class BpyAPI
             return;
 
         // Perform the authorization and deserialize the response
-        HttpContent body = new FormUrlEncodedContent(_authorizationBody);
-        HttpResponseMessage response = await _httpClient.PostAsync($"{_apiUrl}/oauth/authorize", body);
+        HttpResponseMessage response = await _httpClient.PostAsync($"{_apiUrl}/oauth/authorize", new FormUrlEncodedContent(_authorizationBody));
         TokenResponse? tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(await response.Content.ReadAsStringAsync());
         if (tokenResponse == null)
             throw new NullReferenceException("The deserialized authorization response is null.");

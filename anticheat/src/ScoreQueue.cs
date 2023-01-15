@@ -84,8 +84,8 @@ internal class ScoreQueue : Queue<Score>
         }
         catch (Exception ex)
         {
-            Program.Log("An error occured while trying to parse the received score:", ConsoleColor.Red);
-            Program.Log(ex.Message, ConsoleColor.Red);
+            Program.LogError("trying to parse the received score", ex);
+            return;
         }
     }
 }
