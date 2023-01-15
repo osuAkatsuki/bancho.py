@@ -517,18 +517,18 @@ async def osuSearchHandler(
             ],
         )
 
-        fmstr = DIRECT_SET_INFO_FMTSTR.format(
-            Artist=handle_invalid_characters(bmap["Artist"]),
-            Title=handle_invalid_characters(bmap["Title"]),
-            Creator=bmap["Creator"],
-            RankedStatus=bmap["RankedStatus"],
-            LastUpdate=bmap["LastUpdate"],
-            SetID=bmap["SetID"],
-            HasVideo=bmap["HasVideo"],
-            diffs=diffs_str,
+        ret.append(
+            DIRECT_SET_INFO_FMTSTR.format(
+                Artist=handle_invalid_characters(bmap["Artist"]),
+                Title=handle_invalid_characters(bmap["Title"]),
+                Creator=bmap["Creator"],
+                RankedStatus=bmap["RankedStatus"],
+                LastUpdate=bmap["LastUpdate"],
+                SetID=bmap["SetID"],
+                HasVideo=bmap["HasVideo"],
+                diffs=diffs_str,
+            ),
         )
-
-        ret.append(fmstr)
 
     return "\n".join(ret).encode()
 
