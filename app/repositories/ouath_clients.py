@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import textwrap
+from typing import Any
+from typing import Optional
+
+import app.state.services
+
+# +--------------+-------------+------+-----+---------+----------------+
+# | Field        | Type        | Null | Key | Default | Extra          |
+# +--------------+-------------+------+-----+---------+----------------+
+# | id           | int         | NO   | PRI | NULL    | auto_increment |
+# | secret       | varchar(32) | NO   |     | NULL    |                |
+# | owner        | int         | NO   |     | NULL    |                |
+# | redirect_uri | text        | YES  |     | NULL    |                |
+# +--------------+-------------+------+-----+---------+----------------+
+
+READ_PARAMS = textwrap.dedent(
+    """\
+        id, secret, owner, redirect_uri
+    """,
+)
+
+
+async def create(
+    secret: str,
+    owner: int,
+    redirect_uri: Optional[str] = None,
+) -> dict[str, Any]:
+    """Create a new client in the database."""
+    query = """\
+        INSERT INTO oauth_clients (secret, owner, redirect_uri)
+             VALUES (:secret, :owner, :redirect_uri)
+    """
+    params = {
+        "secret": secret,
+        "owner": owner,
+        "redirect_uri": redirect_uri,
+    }
+    rec_id = await app.state.services.database.execute(query, params)
+
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM oauth_clients
+         WHERE id = :id
+    """
+    params = {
+        "id": rec_id,
+    }
+
+    rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
+    return dict(rec)
+
+
+async def fetch_one(
+    id: Optional[int] = None,
+    owner: Optional[int] = None,
+    secret: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Fetch a signle client from the database."""
+    if id is None and owner is None and secret is None:
+        raise ValueError("Must provide at least one parameter.")
+
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM oauth_clients
+         WHERE id = COALESCE(:id, id)
+            AND owner = COALESCE(:owner, owner)
+            AND secret = COALESCE(:secret, secret)
+    """
+    params = {
+        "id": id,
+        "owner": owner,
+        "secret": secret,
+    }
+    rec = await app.state.services.database.fetch_one(query, params)
+    return dict(rec) if rec is not None else None
+
+
+async def fetch_many(
+    id: Optional[int] = None,
+    owner: Optional[int] = None,
+    secret: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+) -> Optional[list[dict[str, Any]]]:
+    """Fetch all clients from the database."""
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM oauth_clients
+         WHERE id = COALESCE(:id, id)
+            AND owner = COALESCE(:owner, owner)
+            AND secret = COALESCE(:secret, secret)
+    """
+    params = {
+        "id": id,
+        "owner": owner,
+        "secret": secret,
+    }
+
+    if page is not None and page_size is not None:
+        query += """\
+            LIMIT :limit
+           OFFSET :offset
+        """
+        params["limit"] = page_size
+        params["offset"] = (page - 1) * page_size
+
+    rec = await app.state.services.database.fetch_one(query, params)
+    return dict(rec) if rec is not None else None
+
+
+async def update(
+    id: int,
+    secret: Optional[str] = None,
+    owner: Optional[int] = None,
+    redirect_uri: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Update an existing client in the database."""
+    query = """\
+        UPDATE oauth_clients
+           SET secret = COALESCE(:secret, secret),
+               owner = COALESCE(:owner, owner),
+               redirect_uri = COALESCE(:redirect_uri, redirect_uri)
+         WHERE id = :id
+    """
+    params = {
+        "id": id,
+        "secret": secret,
+        "owner": owner,
+        "redirect_uri": redirect_uri,
+    }
+    await app.state.services.database.execute(query, params)
+
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM oauth_clients
+         WHERE id = :id
+    """
+    params = {
+        "id": id,
+    }
+    rec = await app.state.services.database.fetch_one(query, params)
+    return dict(rec) if rec is not None else None
