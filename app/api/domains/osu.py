@@ -993,8 +993,15 @@ async def osuSubmitModularSelector(
     stats = score.player.gm_stats
     prev_stats = copy.copy(stats)
 
+    if score.mods & Mods.DOUBLETIME:
+        playtime = int(score.time_elapsed // 1.50)
+    elif score.mods & Mods.HALFTIME:
+        playtime = int(score.time_elapsed // 0.75)
+    else:
+        playtime = score.time_elapsed
+
     # stuff update for all submitted scores
-    stats.playtime += score.time_elapsed // 1000
+    stats.playtime += playtime // 1000
     stats.plays += 1
     stats.tscore += score.score
     stats.total_hits += score.n300 + score.n100 + score.n50
