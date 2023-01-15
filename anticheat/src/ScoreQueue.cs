@@ -9,7 +9,7 @@ namespace anticheat;
 internal class ScoreQueue : Queue<Score>
 {
     IConnection? _connection = null;
-    
+
     IModel? _channel = null;
 
     private string _hostname = "";
@@ -69,7 +69,7 @@ internal class ScoreQueue : Queue<Score>
         {
             string json = Encoding.UTF8.GetString(e.Body.ToArray());
             Score? score = JsonConvert.DeserializeObject<Score>(json);
-            
+
             if (score == null)
                 Program.Log($"[ScoreQueue] Null score has been received and ignored.", ConsoleColor.Magenta);
             else if(score.Player == null)
