@@ -25,7 +25,6 @@ async def get_clans(
     total_clans = await clans_repo.fetch_count()
 
     response = [Clan.from_mapping(rec) for rec in clans]
-
     return responses.success(
         content=response,
         meta={
