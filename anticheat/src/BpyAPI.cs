@@ -27,7 +27,7 @@ internal class BpyAPI
         _authorizationBody["client_secret"] = clientSecret;
     }
 
-    private async void EnsureValidAccessToken()
+    public async void EnsureValidAccessTokenAsync()
     {
         // Check if the access token expired
         if (DateTime.Now.AddSeconds(10) < _expireDate /* buffer */)
@@ -48,5 +48,11 @@ internal class BpyAPI
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResponse.AccessToken);
         _authorizationBody["refresh_token"] = tokenResponse.RefreshToken;
         _expireDate = tokenResponse.ExpireDate;
+    }
+
+    public async void RestrictAsync(ulong userId, string reason)
+    {
+        HttpContent content = new FormUrlEncodedContent(new Dictionary<string, string>() { { "reason", reason } });
+        await _httpClient.PutAsync($"{_apiUrl}/players/{userId}/restrict", content);
     }
 }
