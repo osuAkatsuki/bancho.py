@@ -197,7 +197,10 @@ def fetch_geoloc_nginx(
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
-    url = f"http://ip-api.com/line/{ip}"
+    if not ip.is_private:
+        url = f"http://ip-api.com/line/{ip}"
+    else:
+        url = "http://ip-api.com/line/"
 
     async with http_client.get(url) as resp:
         if not resp or resp.status != 200:

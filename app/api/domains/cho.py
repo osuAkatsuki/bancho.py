@@ -718,34 +718,33 @@ async def login(
 
     db_country = user_info.pop("country")
 
-    if not ip.is_private:
-        geoloc = app.state.services.fetch_geoloc(ip, headers)
+    geoloc = await app.state.services.fetch_geoloc(ip, headers)
 
-        if geoloc is None:
-            return {
-                "osu_token": "login-failed",
-                "response_body": (
-                    app.packets.notification(
-                        f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
-                    )
-                    + app.packets.user_id(-1)
-                ),
-            }
+    if geoloc is None:
+        return {
+            "osu_token": "login-failed",
+            "response_body": (
+                app.packets.notification(
+                    f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
+                )
+                + app.packets.user_id(-1)
+            ),
+        }
 
-        user_info["geoloc"] = geoloc
+    user_info["geoloc"] = geoloc
 
-        if db_country == "xx":
-            # bugfix for old bancho.py versions when
-            # country wasn't stored on registration.
-            log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
+    if db_country == "xx":
+        # bugfix for old bancho.py versions when
+        # country wasn't stored on registration.
+        log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-            await db_conn.execute(
-                "UPDATE users SET country = :country WHERE id = :user_id",
-                {
-                    "country": user_info["geoloc"]["country"]["acronym"],
-                    "user_id": user_info["id"],
-                },
-            )
+        await db_conn.execute(
+            "UPDATE users SET country = :country WHERE id = :user_id",
+            {
+                "country": user_info["geoloc"]["country"]["acronym"],
+                "user_id": user_info["id"],
+            },
+        )
 
     client_details = ClientDetails(
         osu_version=osu_version,
