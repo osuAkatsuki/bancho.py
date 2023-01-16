@@ -1937,7 +1937,7 @@ async def register_account(
 
         ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-        geoloc = app.state.services.fetch_geoloc(ip, request.headers)
+        geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
 
         async with app.state.services.database.transaction():
             # add to `users` table.
