@@ -175,22 +175,16 @@ async def process_user_chunk(
     await asyncio.gather(*tasks)
 
 
-async def recalculate_mode_users(mode: int, rx: int, ctx: Context) -> None:
-    mods = {0: Mods(0), 1: Mods.RELAX, 2: Mods.AUTOPILOT}[rx]
-    game_mode = GameMode.from_params(mode, mods)
-
+async def recalculate_mode_users(mode: GameMode, ctx: Context) -> None:
     user_ids = [
         row["id"] for row in await ctx.database.fetch_all("SELECT id FROM users")
     ]
 
     for id_chunk in divide_chunks(user_ids, 100):
-        await process_user_chunk(id_chunk, game_mode, ctx)
+        await process_user_chunk(id_chunk, mode, ctx)
 
 
-async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
-    mods = {0: Mods(0), 1: Mods.RELAX, 2: Mods.AUTOPILOT}[rx]
-    game_mode = GameMode.from_params(mode, mods)
-
+async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
     scores = [
         dict(row)
         for row in await ctx.database.fetch_all(
@@ -203,8 +197,10 @@ async def recalculate_mode_scores(mode: int, rx: int, ctx: Context) -> None:
             INNER JOIN maps ON scores.map_md5 = maps.md5
             WHERE scores.status = 2
               AND scores.mode = :mode
+            ORDER BY scores.pp DESC
             """,
-            {"mode": game_mode.value},
+            {"mode": mode},
+
         )
     ]
 
@@ -244,27 +240,10 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     ctx = Context(db, redis)
 
     for mode in args.mode:
-        mode = GameMode(int(mode)).as_vanilla
-        if mode in [
-            GameMode.VANILLA_OSU,
-            GameMode.VANILLA_TAIKO,
-            GameMode.VANILLA_CATCH,
-            GameMode.VANILLA_MANIA,
-        ]:
-            rx = 0
-        elif mode in [
-            GameMode.RELAX_OSU,
-            GameMode.RELAX_TAIKO,
-            GameMode.RELAX_CATCH,
-        ]:
-            rx = 1
-        elif mode in [
-            GameMode.AUTOPILOT_OSU,
-        ]:
-            rx = 2
+        mode = GameMode(int(mode))
 
-        await recalculate_mode_scores(mode, rx, ctx)
-        await recalculate_mode_users(mode, rx, ctx)
+        await recalculate_mode_scores(mode, ctx)
+        await recalculate_mode_users(mode, ctx)
 
     await app.state.services.http_client.close()
     await db.disconnect()
