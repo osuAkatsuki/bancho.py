@@ -200,7 +200,6 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
             ORDER BY scores.pp DESC
             """,
             {"mode": mode},
-
         )
     ]
 
