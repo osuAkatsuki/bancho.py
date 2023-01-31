@@ -33,7 +33,6 @@ repos:
     rev: 1.13.0
     hooks:
     -   id: blacken-docs
-        additional_dependencies: [black==21.11b1]
 
 default_language_version:
     python: python3.9
