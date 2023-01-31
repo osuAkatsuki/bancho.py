@@ -220,10 +220,18 @@ You have to go to the cloudflare dashboard and go to Rules > Transform rules, af
     ├── app                   # the server - logic, classes and objects
     |   ├── api                 # code related to handling external requests
     |   |   ├── domains           # endpoints that can be reached from externally
-    |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
-    |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
-    |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
-    |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh
+    |   |   |   ├── cho.py        # endpoints available @ https://c.cmyui.xyz
+    |   |   |   ├── map.py        # endpoints available @ https://b.cmyui.xyz
+    |   |   |   └── osu.py        # endpoints available @ https://osu.cmyui.xyz
+    |   |   |
+    |   |   ├── v1
+    |   |   |   └── api.py          # endpoints available @ https://api.cmyui.xyz/v1
+    |   |   |
+    |   |   ├── v2
+    |   |   |   ├── clans.py        # endpoints available @ https://api.cmyui.xyz/v2/clans
+    |   |   |   ├── maps.py         # endpoints available @ https://api.cmyui.xyz/v2/maps
+    |   |   |   ├── players.py      # endpoints available @ https://api.cmyui.xyz/v2/players
+    |   |   |   └── scores.py       # endpoints available @ https://api.cmyui.xyz/v2/scores
     |   |   |
     |   |   ├── init_api.py       # logic for putting the server together
     |   |   └── middlewares.py    # logic that wraps around the endpoints
