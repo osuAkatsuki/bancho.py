@@ -233,47 +233,55 @@ make run
 
 # 文件目录
     .
-    ├── app                   # the server - logic, classes and objects
-    |   ├── api                 # code related to handling external requests
-    |   |   ├── domains           # endpoints that can be reached from externally
-    |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
-    |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
-    |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
-    |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh
+    ├── app                   # 服务 - 处理逻辑, 类 和 对象
+    |   ├── api                 # 处理外部请求的部分
+    |   |   ├── domains           # 外部访问可到达的endpoints (终点,指向web服务的api,此处为url,下译为"终点")
+    |   |   |   ├── cho.py        # 处理在这个终点的请求: https://c.cmyui.xyz
+    |   |   |   ├── map.py        # 处理在这个终点的请求: https://b.cmyui.xyz
+    |   |   |   └── osu.py        # 处理在这个终点的请求: https://osu.cmyui.xyz
     |   |   |
-    |   |   ├── init_api.py       # logic for putting the server together
-    |   |   └── middlewares.py    # logic that wraps around the endpoints
+    |   |   ├── v1
+    |   |   |   └── api.py          # 处理在这个终点的请求: https://api.cmyui.xyz/v1
+    |   |   |
+    |   |   ├── v2
+    |   |   |   ├── clans.py        # 处理在这个终点的请求: https://api.cmyui.xyz/v2/clans
+    |   |   |   ├── maps.py         # 处理在这个终点的请求: https://api.cmyui.xyz/v2/maps
+    |   |   |   ├── players.py      # 处理在这个终点的请求: https://api.cmyui.xyz/v2/players
+    |   |   |   └── scores.py       # 处理在这个终点的请求: https://api.cmyui.xyz/v2/scores
+    |   |   |
+    |   |   ├── init_api.py       # 初始化api服务
+    |   |   └── middlewares.py    # 围绕终点的逻辑部分(中间件)
     |   |
-    |   ├── constants           # logic & data for constant server-side classes & objects
-    |   |   ├── clientflags.py    # anticheat flags used by the osu! client
-    |   |   ├── gamemodes.py      # osu! gamemodes, with relax/autopilot support
-    |   |   ├── mods.py           # osu! gameplay modifiers
-    |   |   ├── privileges.py     # privileges for players, globally & in clans
-    |   |   └── regexes.py        # regexes used throughout the codebase
+    |   ├── constants           # 服务器端静态类/对象的数据和逻辑实现
+    |   |   ├── clientflags.py    # osu!客户端使用的反作弊flags
+    |   |   ├── gamemodes.py      # osu!游戏模式, 支持 relax/autopilot
+    |   |   ├── mods.py           # osu!游戏mods
+    |   |   ├── privileges.py     # 用户特权(玩家,服主,支持者,开发者等等)
+    |   |   └── regexes.py        # 整个代码库中的正则表达式
     |   |
-    |   ├── objects             # logic & data for dynamic server-side classes & objects
-    |   |   ├── achievement.py    # representation of individual achievements
-    |   |   ├── beatmap.py        # representation of individual map(set)s
-    |   |   ├── channel.py        # representation of individual chat channels
-    |   |   ├── clan.py           # representation of individual clans
-    |   |   ├── collection.py     # collections of dynamic objects (for in-memory storage)
-    |   |   ├── match.py          # individual multiplayer matches
-    |   |   ├── menu.py           # (WIP) concept for interactive menus in chat channels
-    |   |   ├── models.py         # structures of api request bodies
-    |   |   ├── player.py         # representation of individual players
-    |   |   └── score.py          # representation of individual scores
+    |   ├── objects             # 服务器端动态类/对象的数据和逻辑实现
+    |   |   ├── achievement.py    # 有关个人成就achievement
+    |   |   ├── beatmap.py        # 有关个人的谱面
+    |   |   ├── channel.py        # 有关个人的聊天频道(chat)
+    |   |   ├── clan.py           # 有关个人的地区(clans)
+    |   |   ├── collection.py     # 动态类的集合 (存储在内存中)
+    |   |   ├── match.py          # 多人比赛
+    |   |   ├── menu.py           # (-正在制作中-) 聊天频道中的交互菜单
+    |   |   ├── models.py         # api请求主体(bodies)的结构
+    |   |   ├── player.py         # 关于个人的players
+    |   |   └── score.py          # 有关个人的score
     |   |
-    |   ├── state               # objects representing live server-state
-    |   |   ├── cache.py          # data saved for optimization purposes
-    |   |   ├── services.py       # instances of 3rd-party services (e.g. databases)
-    |   |   └── sessions.py       # active sessions (players, channels, matches, etc.)
+    |   ├── state               # 和服务器实时状态有关的对象
+    |   |   ├── cache.py          # 为最优化而保存的数据
+    |   |   ├── services.py       # 外部依赖实例 (e.g. 数据库)
+    |   |   └── sessions.py       # 活动的sessions (players, channels, matches, etc.)
     |   |
-    |   ├── bg_loops.py           # loops running while the server is running
-    |   ├── commands.py           # commands available in osu!'s chat
-    |   ├── packets.py            # a module for (de)serialization of osu! packets
-    |   └── settings.py           # manages configuration values from the user
+    |   ├── bg_loops.py           # 服务运时运行的循环
+    |   ├── commands.py           # 在osu!的chat里可用的指令
+    |   ├── packets.py            # 用于序列化/反序列化的模块
+    |   └── settings.py           # 管理用户设置
     |
-    ├── ext                   # external entities used when running the server
-    ├── migrations            # database migrations - updates to schema
-    ├── tools                 # various tools made throughout bancho.py's history
-    └── main.py               # an entry point (script) to run the server
+    ├── ext                   # 运行服务时使用的外部依赖(内容: nginx的配置文件)
+    ├── migrations            # 迁移数据库 - updates to schema
+    ├── tools                 # 在bancho.py开发过程中曾经制作出来的工具
+    └── main.py               # 运行服务的入口
