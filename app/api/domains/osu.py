@@ -742,7 +742,11 @@ async def osuSubmitModularSelector(
             user_id=f"banchopy_{player.id}",
             device_id=player.client_details.disk_signature_md5,
             event_properties={
-                "osu_version": player.client_details.osu_version,
+                "osu_version": {
+                    "date": player.client_details.osu_version.date.isoformat(),
+                    "revision": player.client_details.osu_version.revision,
+                    "stream": player.client_details.osu_version.stream,
+                },
                 "beatmap_md5": bmap.md5,
                 "beatmap_id": bmap.id,
                 "beatmap_set_id": bmap.set.id,
@@ -751,7 +755,7 @@ async def osuSubmitModularSelector(
             # TODO: os_name?
             ip=str(player.client_details.ip),
             country=player.geoloc["country"]["acronym"],
-        )
+        ),
     )
 
     # attach bmap & player
@@ -1436,7 +1440,11 @@ async def getScores(
             user_id=f"banchopy_{player.id}",
             device_id=player.client_details.disk_signature_md5,
             event_properties={
-                "osu_version": player.client_details.osu_version,
+                "osu_version": {
+                    "date": player.client_details.osu_version.date.isoformat(),
+                    "revision": player.client_details.osu_version.revision,
+                    "stream": player.client_details.osu_version.stream,
+                },
                 "beatmap_md5": map_md5,
                 "beatmap_set_id": map_set_id,
                 "beatmap_filename": map_filename,
@@ -1448,7 +1456,7 @@ async def getScores(
             # TODO: os_name?
             ip=str(player.client_details.ip),
             country=player.geoloc["country"]["acronym"],
-        )
+        ),
     )
 
     if aqn_files_found:

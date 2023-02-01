@@ -13,9 +13,9 @@ from typing import Literal
 from typing import Optional
 from typing import TypedDict
 
-from amplitude import BaseEvent
 import bcrypt
 import databases.core
+from amplitude import BaseEvent
 from fastapi import APIRouter
 from fastapi import Response
 from fastapi.param_functions import Header
@@ -364,13 +364,17 @@ class Logout(BasePacket):
                 user_id=f"banchopy_{player.id}",
                 device_id=player.client_details.disk_signature_md5,
                 event_properties={
-                    "osu_version": player.client_details.osu_version,
+                    "osu_version": {
+                        "date": player.client_details.osu_version.date.isoformat(),
+                        "revision": player.client_details.osu_version.revision,
+                        "stream": player.client_details.osu_version.stream,
+                    },
                     "session_length": session_length,
                 },
                 # TODO: os_name?
                 ip=str(player.client_details.ip),
                 country=player.geoloc["country"]["acronym"],
-            )
+            ),
         )
 
         player.logout()
@@ -973,13 +977,17 @@ async def login(
             user_id=f"banchopy_{player.id}",
             device_id=player.client_details.disk_signature_md5,
             event_properties={
-                "osu_version": login_data["osu_version"],
+                "osu_version": {
+                    "date": player.client_details.osu_version.date.isoformat(),
+                    "revision": player.client_details.osu_version.revision,
+                    "stream": player.client_details.osu_version.stream,
+                },
                 "time_elapsed": time_taken,
             },
             os_name=user_operating_system,
             ip=str(player.client_details.ip),
             country=country_code,
-        )
+        ),
     )
     player.update_latest_activity_soon()
 
