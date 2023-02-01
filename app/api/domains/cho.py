@@ -349,11 +349,29 @@ class Logout(BasePacket):
         reader.read_i32()  # reserved
 
     async def handle(self, player: Player) -> None:
-        if (time.time() - player.login_time) < 1:
+        session_length = time.time() - player.login_time
+
+        if session_length < 1:
             # osu! has a weird tendency to log out immediately after login.
             # i've tested the times and they're generally 300-800ms, so
             # we'll block any logout request within 1 second from login.
             return
+
+        assert player.client_details is not None
+        app.state.services.amplitude.track(
+            BaseEvent(
+                event_type="User Logout",
+                user_id=f"banchopy_{player.id}",
+                device_id=player.client_details.disk_signature_md5,
+                event_properties={
+                    "osu_version": player.client_details.osu_version,
+                    "session_length": session_length,
+                },
+                # TODO: os_name?
+                ip=str(player.client_details.ip),
+                country=player.geoloc["country"]["acronym"],
+            )
+        )
 
         player.logout()
 
