@@ -24,6 +24,7 @@ from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
 import bcrypt
+from amplitude import BaseEvent
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
@@ -1428,6 +1429,28 @@ async def getScores(
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
 ):
+    assert player.client_details is not None
+    app.state.services.amplitude.track(
+        BaseEvent(
+            event_type="Get Scores",
+            user_id=f"banchopy_{player.id}",
+            device_id=player.client_details.disk_signature_md5,
+            event_properties={
+                "osu_version": player.client_details.osu_version,
+                "beatmap_md5": map_md5,
+                "beatmap_set_id": map_set_id,
+                "beatmap_filename": map_filename,
+                "mode": mode_arg,
+                "mods": mods_arg,
+                "leaderboard_type": leaderboard_type,
+                "leaderboard_version": leaderboard_version,
+            },
+            # TODO: os_name?
+            ip=str(player.client_details.ip),
+            country=player.geoloc["country"]["acronym"],
+        )
+    )
+
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
