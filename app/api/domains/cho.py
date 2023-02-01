@@ -13,6 +13,7 @@ from typing import Literal
 from typing import Optional
 from typing import TypedDict
 
+from amplitude import BaseEvent
 import bcrypt
 import databases.core
 from fastapi import APIRouter
@@ -931,21 +932,37 @@ async def login(
     # making them officially logged in.
     app.state.sessions.players.append(player)
 
+    time_taken = time.time() - login_time
+
     if app.state.services.datadog:
         if not player.restricted:
             app.state.services.datadog.increment("bancho.online_players")
 
-        time_taken = time.time() - login_time
         app.state.services.datadog.histogram("bancho.login_time", time_taken)
 
-    user_os = "unix (wine)" if running_under_wine else "win32"
+    user_operating_system = "unix (wine)" if running_under_wine else "win32"
     country_code = player.geoloc["country"]["acronym"].upper()
 
     log(
-        f"{player} logged in from {country_code} using {login_data['osu_version']} on {user_os}",
+        f"{player} logged in from {country_code} using {login_data['osu_version']} on {user_operating_system}",
         Ansi.LCYAN,
     )
 
+    assert player.client_details is not None
+    app.state.services.amplitude.track(
+        BaseEvent(
+            event_type="User Login",
+            user_id=f"banchopy_{player.id}",
+            device_id=player.client_details.disk_signature_md5,
+            event_properties={
+                "osu_version": login_data["osu_version"],
+                "time_elapsed": time_taken,
+            },
+            os_name=user_operating_system,
+            ip=str(player.client_details.ip),
+            country=country_code,
+        )
+    )
     player.update_latest_activity_soon()
 
     return {"osu_token": player.token, "response_body": bytes(data)}

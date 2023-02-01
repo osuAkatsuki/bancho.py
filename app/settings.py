@@ -60,6 +60,8 @@ MENU_ONCLICK_URL = os.environ["MENU_ONCLICK_URL"]
 DATADOG_API_KEY = os.environ["DATADOG_API_KEY"]
 DATADOG_APP_KEY = os.environ["DATADOG_APP_KEY"]
 
+AMPLITUDE_API_KEY = os.environ["AMPLITUDE_API_KEY"]
+
 DEBUG = read_bool(os.environ["DEBUG"])
 REDIRECT_OSU_URLS = read_bool(os.environ["REDIRECT_OSU_URLS"])
 

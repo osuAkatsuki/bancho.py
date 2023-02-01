@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import aioredis
+import amplitude as amplitude_module
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
@@ -57,6 +58,8 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
         app_key=str(app.settings.DATADOG_APP_KEY),
     )
     datadog = datadog_client.ThreadStats()
+
+amplitude = amplitude_module.Amplitude(app.settings.AMPLITUDE_API_KEY)
 
 ip_resolver: IPResolver
 

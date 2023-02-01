@@ -8,6 +8,7 @@ akatsuki-pp-py = {git = "https://github.com/osuAkatsuki/akatsuki-pp-py"}
 aiohttp = "*"
 aioredis = "*"
 bcrypt = "*"
+cryptography = "*"
 datadog = "*"
 fastapi = "*"
 geoip2 = "*"
@@ -24,6 +25,7 @@ py3rijndael = "*"
 pytimeparse = "*"
 sqlalchemy = "1.4.41"
 databases = {extras = ["mysql"], version = "0.5.5"}
+amplitude-analytics = "*"
 
 [dev-packages]
 pytest = "*"

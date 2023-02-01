@@ -166,6 +166,8 @@ def init_events(asgi_app: BanchoAPI) -> None:
             app.state.services.datadog.stop()
             app.state.services.datadog.flush()
 
+        app.state.services.amplitude.shutdown()
+
         if app.state.services.geoloc_db is not None:
             app.state.services.geoloc_db.close()
 
