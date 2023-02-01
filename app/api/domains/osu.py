@@ -734,6 +734,25 @@ async def osuSubmitModularSelector(
     # parse the score from the remaining data
     score = Score.from_submission(score_data[2:])
 
+    assert player.client_details is not None
+    app.state.services.amplitude.track(
+        BaseEvent(
+            event_type="Submit score",
+            user_id=f"banchopy_{player.id}",
+            device_id=player.client_details.disk_signature_md5,
+            event_properties={
+                "osu_version": player.client_details.osu_version,
+                "beatmap_md5": bmap.md5,
+                "beatmap_id": bmap.id,
+                "beatmap_set_id": bmap.set.id,
+                "passed": score.passed,
+            },
+            # TODO: os_name?
+            ip=str(player.client_details.ip),
+            country=player.geoloc["country"]["acronym"],
+        )
+    )
+
     # attach bmap & player
     score.bmap = bmap
     score.player = player
