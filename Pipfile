@@ -8,6 +8,7 @@ akatsuki-pp-py = {git = "https://github.com/osuAkatsuki/akatsuki-pp-py"}
 aiohttp = "*"
 aioredis = "*"
 bcrypt = "*"
+cryptography = "*"
 datadog = "*"
 fastapi = "*"
 geoip2 = "*"
