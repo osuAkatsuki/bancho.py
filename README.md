@@ -36,7 +36,6 @@ bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 
 we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
-- rust (programming language)
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
@@ -55,9 +54,6 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     build-essential \
                     mysql-server redis-server \
                     nginx certbot
-
-# install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # install python's package manager, pip
 # it's used to install python-specific dependencies
