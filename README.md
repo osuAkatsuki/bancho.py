@@ -126,7 +126,7 @@ for example, the number of 300s in a score, or the privileges of a user.
 the rows (horizontal) represent the individual items or events in a table.
 for example, an individual score in the scores table.
 
-this base state of the database is stored in `ext/base.sql`; it's a bunch of
+this base state of the database is stored in `migrations/base.sql`; it's a bunch of
 sql commands that can be run in sequence to create the base state we want.
 ```sh
 # you'll need to change:
