@@ -8,7 +8,7 @@ cffi==1.15.1
 cfgv==3.3.1 ; python_full_version >= '3.6.1'
 classify-imports==4.2.0 ; python_version >= '3.7'
 click==8.1.3 ; python_version >= '3.7'
-cryptography==38.0.4 ; python_version >= '3.6'
+cryptography==39.0.1
 distlib==0.3.6
 exceptiongroup==1.1.0 ; python_version < '3.11'
 filelock==3.9.0 ; python_version >= '3.7'
