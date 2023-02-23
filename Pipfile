@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-akatsuki-pp-py = {git = "https://github.com/osuAkatsuki/akatsuki-pp-py"}
 aiohttp = "*"
 aioredis = "*"
 bcrypt = "*"
@@ -22,6 +21,8 @@ py3rijndael = "*"
 pytimeparse = "*"
 sqlalchemy = "1.4.41"
 databases = {extras = ["mysql"], version = "0.5.5"}
+akatsuki-pp-py = "*"
+cryptography = "*"
 
 [dev-packages]
 pytest = "*"

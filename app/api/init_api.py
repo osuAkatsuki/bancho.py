@@ -170,7 +170,6 @@ def init_events(asgi_app: BanchoAPI) -> None:
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
     for domain in ("ppy.sh", app.settings.DOMAIN):
-
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)
 

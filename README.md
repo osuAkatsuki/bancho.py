@@ -36,7 +36,6 @@ bancho.py is a ~15,000 line codebase built on the shoulder of giants.
 
 we aim to minimize our dependencies, but still rely on ones such as
 - python (programming language)
-- rust (programming language)
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
@@ -59,9 +58,6 @@ sudo apt install -y python3.9-dev python3.9-distutils \
 
 # optionally, install the nginx geoip2 module if you would like to use it in bancho.py
 cd tools && ./enable_geoip_module.sh && cd ..
-
-# install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # install python's package manager, pip
 # it's used to install python-specific dependencies
@@ -134,7 +130,7 @@ for example, the number of 300s in a score, or the privileges of a user.
 the rows (horizontal) represent the individual items or events in a table.
 for example, an individual score in the scores table.
 
-this base state of the database is stored in `ext/base.sql`; it's a bunch of
+this base state of the database is stored in `migrations/base.sql`; it's a bunch of
 sql commands that can be run in sequence to create the base state we want.
 ```sh
 # you'll need to change:
