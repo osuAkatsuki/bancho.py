@@ -166,9 +166,6 @@ def init_events(asgi_app: BanchoAPI) -> None:
             app.state.services.datadog.stop()
             app.state.services.datadog.flush()
 
-        if app.state.services.geoloc_db is not None:
-            app.state.services.geoloc_db.close()
-
 
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
