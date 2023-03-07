@@ -735,6 +735,7 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 
 # TODO: fix consistency of parameter names
 
+
 # packet id: 5
 @cache
 def user_id(user_id: int) -> bytes:
@@ -1059,6 +1060,7 @@ def channel_auto_join(name: str, topic: str, p_count: int) -> bytes:
 #        (maps, osuTypes.mapInfoReply)
 #    )
 
+
 # packet id: 71
 @cache
 def bancho_privileges(priv: int) -> bytes:
@@ -1202,6 +1204,7 @@ def user_silenced(user_id: int) -> bytes:
 
 
 """ not sure why 95 & 96 exist? unused in bancho.py """
+
 
 # packet id: 95
 @cache
