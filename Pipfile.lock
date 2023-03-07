@@ -511,14 +511,6 @@
             "markers": "python_version >= '3.7'",
             "version": "==1.3.3"
         },
-        "geoip2": {
-            "hashes": [
-                "sha256:745e2d7a665072690056f9566774727da89216c7858793f89804f6945f969714",
-                "sha256:f0e80bce80b06bb38bd08bf4877d5a84e354e932095e6ccfb4d27bb598fa4f83"
-            ],
-            "index": "pypi",
-            "version": "==4.6.0"
-        },
         "greenlet": {
             "hashes": [
                 "sha256:03a8f4f3430c3b3ff8d10a2a86028c660355ab637cee9333d63d66b56f09d52a",
@@ -600,13 +592,6 @@
             ],
             "markers": "python_version >= '3.5'",
             "version": "==3.4"
-        },
-        "maxminddb": {
-            "hashes": [
-                "sha256:e37707ec4fab115804670e0fb7aedb4b57075a8b6f80052bdc648d3c005184e5"
-            ],
-            "index": "pypi",
-            "version": "==2.2.0"
         },
         "multidict": {
             "hashes": [

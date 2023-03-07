@@ -1869,7 +1869,6 @@ async def register_account(
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
-    cloudflare_country: Optional[str] = Header(None, alias="CF-IPCountry"),
     #
     # TODO: allow nginx to be optional
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
@@ -1942,33 +1941,9 @@ async def register_account(
         pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
         app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
 
-        if cloudflare_country:
-            # best case, dev has enabled ip geolocation in the
-            # network tab of cloudflare, so it sends the iso code.
-            country_acronym = cloudflare_country.lower()
-        else:
-            # backup method, get the user's ip and
-            # do a db lookup to get their country.
-            ip = app.state.services.ip_resolver.get_ip(request.headers)
+        ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-            if not ip.is_private:
-                if app.state.services.geoloc_db is not None:
-                    # decent case, dev has downloaded a geoloc db from
-                    # maxmind, so we can do a local db lookup. (~1-5ms)
-                    # https://www.maxmind.com/en/home
-                    geoloc = app.state.services.fetch_geoloc_db(ip)
-                else:
-                    # worst case, we must do an external db lookup
-                    # using a public api. (depends, `ping ip-api.com`)
-                    geoloc = await app.state.services.fetch_geoloc_web(ip)
-
-                if geoloc is not None:
-                    country_acronym = geoloc["country"]["acronym"]
-                else:
-                    country_acronym = "xx"
-            else:
-                # localhost, unknown country
-                country_acronym = "xx"
+        geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
 
         async with app.state.services.database.transaction():
             # add to `users` table.
@@ -1976,7 +1951,7 @@ async def register_account(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,
-                country=country_acronym,
+                country=geoloc["country"]["acronym"],
             )
 
             # add to `stats` table.

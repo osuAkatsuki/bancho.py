@@ -30,6 +30,7 @@ we aim to minimize our dependencies, but still rely on ones such as
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
+- geoip2 (an nginx module)
 - certbot (ssl certificate tool)
 - build-essential (build tools for c/c++)
 
@@ -114,6 +115,9 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
+# optionally, install the nginx geoip2 module if you would like to use it in bancho.py
+cd tools && ./enable_geoip_module.sh && cd ..
 
 # install python's package manager, pip
 # it's used to install python-specific dependencies
@@ -317,6 +321,12 @@ sudo certbot certonly \
     --agree-tos \
     -d *.YOUR_DOMAIN
 ```
+
+## enabling cloudflare geolocation data
+You have to go to the cloudflare dashboard and go to Rules > Transform rules, after that click on managed transforms and activate `add visitor location headers`.
+
+![Enabling CF geolocation data](.github/images/cf_geoloc.png)
+
 # Directory Structure
     .
     ├── app                   # the server - logic, classes and objects
