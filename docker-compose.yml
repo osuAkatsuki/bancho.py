@@ -39,7 +39,7 @@ services:
       - data:/.data
 
   nginx:
-    image: nginx
+    image: anroe/nginx-geoip2
     depends_on:
       - bancho
     volumes:
