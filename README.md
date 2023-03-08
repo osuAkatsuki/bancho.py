@@ -267,7 +267,19 @@ now you'll have to copy the nameservers required by Cloudflare to your domain re
 
 ![Step 4](.github/images/ssl_cf_4.png)
 
-once you have finished the above you'll have to add some dns records (A records) so that the necessary domains are being pointed to the ip where bancho.py is running
+once you have finished the above you'll have to add some dns records (A records) so that the necessary domains are being pointed to the ip where bancho.py is running.
+
+you can generate the records to import in cloudflare using the script inside the `tools` folder
+
+```sh
+cd tools && ./generate_cf_dns_records.sh && cd..
+```
+
+and on the cloudflare dashboard click Import and Export
+
+![Step 5](.github/images/ssl_cf_5.png)
+
+If you use free freenom domains like `.ml`, `.ga`, `.ml`, `.cf`, you probably can't import the dns, this is because they are restricted in the Cloudflare API due to significant abuses, in that case you'll have to add the following dns records manually
 
 <table>
     <tr>
@@ -293,18 +305,18 @@ once you have finished the above you'll have to add some dns records (A records)
             <li>web.yourdomain.com</li>
         </ul>
         <th>
-            <img src=".github/images/ssl_cf_5.png" alt="Step 5">
+            <img src=".github/images/ssl_cf_6.png" alt="Step 6">
         </th>
     </tr>
 </table>
 
 then go to SSL/TTL > overwiew and activate SSL flex
 
-![Step 6](.github/images/ssl_cf_6.png)
+![Step 7](.github/images/ssl_cf_7.png)
 
 it's also recommended to activate the option to always use HTTPS, you can enable it in SSL/TTL > edge certificates
 
-![Step 7](.github/images/ssl_cf_7.png)
+![Step 8](.github/images/ssl_cf_8.png)
 ## using an own ssl certificate
 
 ```sh
