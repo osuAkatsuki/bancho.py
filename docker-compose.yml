@@ -56,3 +56,7 @@ services:
 
 volumes:
   data:
+
+networks:
+  default:
+    name: bpy-network
