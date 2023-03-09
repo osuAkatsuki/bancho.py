@@ -12,6 +12,7 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db-data:/var/lib/mysql
     ports:
       - ${DB_PORT}:${DB_PORT}
     expose:
@@ -26,6 +27,8 @@ services:
     image: redis
     ports:
       - '${REDIS_PORT}:${REDIS_PORT}'
+    volumes:
+      - redis-data:/data
 
   bancho:
     build: .
@@ -56,6 +59,8 @@ services:
 
 volumes:
   data:
+  db-data:
+  redis-data:
 
 networks:
   default:
