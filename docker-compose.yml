@@ -15,8 +15,6 @@ services:
       - db-data:/var/lib/mysql
     ports:
       - ${DB_PORT}:${DB_PORT}
-    expose:
-      - ${DB_PORT}
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
