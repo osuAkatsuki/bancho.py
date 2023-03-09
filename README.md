@@ -332,9 +332,6 @@ nano example.com.key
 # paste the content of the private key
 ```
 
-it's also recommended to activate the option to always use HTTPS, you can enable it in SSL/TLS > edge certificates
-
-![Step 11](.github/images/ssl_cf_11.png)
 ## using an own ssl certificate
 
 ```sh
