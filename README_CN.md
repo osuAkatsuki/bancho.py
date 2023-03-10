@@ -59,7 +59,6 @@ bancho.py 的代码库有大约15,000行，我们致力于减少我们需要的�
 
 但是你还是需要安装这些哦：(别急！一步步来)
 - python (bancho.py就是拿这个写的~)
-- rust (编程语言)
 - mysql (数据库~)
 - redis (一种缓存数据库，与mysql不同的是，他把频繁的数据存储到缓存中，读取速度更快)
 - nginx (用于反向代理)
@@ -79,8 +78,6 @@ sudo apt install -y python3.9-dev python3.9-distutils \
                     mysql-server redis-server \
                     nginx certbot
 
-# 安装rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 安装python的包管理器, pip
 # pip是用来安装和python有关的包
