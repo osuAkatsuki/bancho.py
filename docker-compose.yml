@@ -2,7 +2,7 @@ version: "3"
 
 services:
   mysql:
-    image: mysql
+    image: mysql:latest
     environment:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
@@ -23,7 +23,7 @@ services:
     #  - ${DB_PORT}:${DB_PORT}
 
   redis:
-    image: redis
+    image: redis:latest
     volumes:
       - redis-data:/data
     # Uncomment to expose the port to the host machine
