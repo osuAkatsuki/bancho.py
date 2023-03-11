@@ -7,3 +7,4 @@ _testing/
 .mypy_cache/
 .pytest_cache/
 tools/cf_records.txt
+.env

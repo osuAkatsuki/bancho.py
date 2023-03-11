@@ -40,6 +40,7 @@ services:
     tty: true
     volumes:
       - data:/home/bpyuser/.data
+      - .env:/home/bpyuser/.env:ro
 
   nginx:
     image: anroe/nginx-geoip2
