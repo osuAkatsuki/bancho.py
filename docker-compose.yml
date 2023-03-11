@@ -24,8 +24,12 @@ services:
 
   redis:
     image: redis:latest
+    environment:
+      REDIS_PASS: ${REDIS_PASS}
     volumes:
       - redis-data:/data
+      - ./scripts/start_redis.sh:/usr/local/bin/start_redis.sh
+    command: start_redis.sh
     # Uncomment to expose the port to the host machine
     #ports:
     #  - ${REDIS_PORT}:${REDIS_PORT}
