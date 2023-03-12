@@ -23,13 +23,13 @@ services:
     #  - ${DB_PORT}:${DB_PORT}
 
   redis:
-    image: redis:latest
-    environment:
-      REDIS_PASS: ${REDIS_PASS}
+    image: bitnami/redis:latest
+    user: root
     volumes:
-      - redis-data:/data
-      - ./scripts/start_redis.sh:/usr/local/bin/start_redis.sh
-    command: start_redis.sh
+      - redis-data:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PASSWORD=${REDIS_PASS}
     # Uncomment to expose the port to the host machine
     #ports:
     #  - ${REDIS_PORT}:${REDIS_PORT}
