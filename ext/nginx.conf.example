@@ -1,0 +1,90 @@
+# NOTE: if you wish to only connect using fallback, you can
+# remove all ssl related content from the configuration.
+
+# c[e4]?.ppy.sh is used for bancho
+# osu.ppy.sh is used for /web, /api, etc.
+# a.ppy.sh is used for osu! avatars
+
+# XXX: Uncomment this whole block if you have downloaded the database from maxmind
+# and specify the path to the .mmdb file
+# You can download the database here: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+#geoip2 /home/user/misc/GeoLite2-City.mmdb {
+	#auto_reload 5m;
+	#$geoip2_metadata_country_build metadata build_epoch;
+	#$geoip2_data_country_code default=xx source=$remote_addr country iso_code;
+	#$geoip2_data_latitude default=0.0 source=$remote_addr location latitude;
+	#$geoip2_data_longitude default=0.0 source=$remote_addr location longitude;
+#}
+
+server {
+	listen 80 default_server;
+	server_name _;
+	return 301 https://$host$request_uri;
+}
+
+server {
+	listen 443 ssl;
+
+	# XXX: you'll need to edit this to match your domain
+	server_name ~^(?:c[e4]?|osu|b|api)\.example\.com$;
+
+	# Both paths are hardcoded in docker-compose.yml so now you
+	# don't need to change these unless you changed that.
+	ssl_certificate     /etc/ssl/certs/bancho.pem;
+	ssl_certificate_key /etc/ssl/private/bancho.key;
+
+	# TODO: further ssl configuration
+	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+
+	location / {
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Real-IP  $remote_addr;
+		#proxy_set_header X-Country-Code $geoip2_data_country_code;
+		#proxy_set_header X-Latitude $geoip2_data_latitude;
+		#proxy_set_header X-Longitude $geoip2_data_longitude;
+		proxy_set_header Host $http_host;
+		add_header Access-Control-Allow-Origin *;
+		proxy_redirect off;
+		proxy_pass http://bancho;
+	}
+}
+
+server {
+	listen 443 ssl;
+
+	# XXX: you'll need to edit this to match your domain
+	server_name assets.example.com;
+
+	# Both paths are hardcoded in docker-compose.yml so now you
+	# don't need to change these unless you changed that.
+	ssl_certificate     /etc/ssl/certs/bancho.pem;
+	ssl_certificate_key /etc/ssl/private/bancho.key;
+
+	# TODO: further ssl configuration
+	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+
+	location / {
+		default_type image/png;
+		root /.data/assets;
+	}
+}
+
+server {
+	listen 443 ssl;
+
+	# XXX: you'll need to edit this to match your domain
+	server_name a.example.com;
+
+	# Both paths are hardcoded in docker-compose.yml so now you
+	# don't need to change these unless you changed that.
+	ssl_certificate     /etc/ssl/certs/bancho.pem;
+	ssl_certificate_key /etc/ssl/private/bancho.key;
+
+	# TODO: further ssl configuration
+	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+
+	location / {
+		root /.data/avatars;
+		try_files $uri $uri.png $uri.jpg $uri.gif $uri.jpeg $uri.jfif /default.jpg = 404;
+	}
+}

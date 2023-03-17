@@ -43,7 +43,6 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_connected_services",
     "ensure_directory_structure",
     "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
@@ -357,26 +356,6 @@ def ensure_supported_platform() -> int:
             Ansi.LRED,
         )
         return 1
-
-    return 0
-
-
-def ensure_connected_services(timeout: float = 1.0) -> int:
-    """Ensure connected service connections are functional and running."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            sock.connect((app.settings.DB_HOST, app.settings.DB_PORT))
-        except OSError:
-            log("Unable to connect to mysql server.", Ansi.LRED)
-            return 1
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            sock.connect((app.settings.REDIS_HOST, app.settings.REDIS_PORT))
-        except OSError:
-            log("Unable to connect to redis server.", Ansi.LRED)
-            return 1
 
     return 0
 

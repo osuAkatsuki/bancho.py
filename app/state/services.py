@@ -17,7 +17,6 @@ import aioredis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
-import geoip2.database
 import pymysql
 
 import app.settings
@@ -34,7 +33,6 @@ if TYPE_CHECKING:
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
@@ -45,10 +43,6 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
-
-geoloc_db: Optional[geoip2.database.Reader] = None
-if GEOLOC_DB_FILE.exists():
-    geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 
 datadog: Optional[datadog_client.ThreadStats] = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
@@ -137,30 +131,76 @@ class IPResolver:
         return ip
 
 
-def fetch_geoloc_db(ip: IPAddress) -> Geolocation:
-    """Fetch geolocation data based on ip (using local db)."""
-    assert geoloc_db is not None
+async def fetch_geoloc(
+    ip: IPAddress,
+    headers: Optional[Mapping[str, str]] = None,
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip."""
+    geoloc = fetch_geoloc_cloudflare(ip, headers)
 
-    res = geoloc_db.city(ip)
+    if geoloc is None:
+        geoloc = fetch_geoloc_nginx(ip, headers)
 
-    if res.country.iso_code is not None:
-        acronym = res.country.iso_code.lower()
-    else:
-        acronym = "XX"
+    if geoloc is None:
+        geoloc = await fetch_geoloc_web(ip)
+
+    return geoloc
+
+
+def fetch_geoloc_cloudflare(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip (using cloudflare headers)."""
+    if not all(
+        key in headers for key in ("CF-IPCountry", "CF-IPLatitude", "CF-IPLongitude")
+    ):
+        return
+
+    country_code = headers["CF-IPCountry"].lower()
+    latitude = float(headers["CF-IPLatitude"])
+    longitude = float(headers["CF-IPLongitude"])
 
     return {
-        "latitude": res.location.latitude or 0.0,
-        "longitude": res.location.longitude or 0.0,
+        "latitude": latitude,
+        "longitude": longitude,
         "country": {
-            "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
+        },
+    }
+
+
+def fetch_geoloc_nginx(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip (using nginx headers)."""
+    if not all(
+        key in headers for key in ("X-Country-Code", "X-Latitude", "X-Longitude")
+    ):
+        return
+
+    country_code = headers["X-Country-Code"].lower()
+    latitude = float(headers["X-Latitude"])
+    longitude = float(headers["X-Longitude"])
+
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "country": {
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
         },
     }
 
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
-    url = f"http://ip-api.com/line/{ip}"
+    if not ip.is_private:
+        url = f"http://ip-api.com/line/{ip}"
+    else:
+        url = "http://ip-api.com/line/"
 
     async with http_client.get(url) as resp:
         if not resp or resp.status != 200:

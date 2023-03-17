@@ -601,7 +601,7 @@ async def requests(ctx: Context) -> Optional[str]:
 
     l = [f"Total requests: {len(rows)}"]
 
-    for (map_id, player_id, dt) in rows:
+    for map_id, player_id, dt in rows:
         # find player & map for each row, and add to output.
         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
         if not player:
