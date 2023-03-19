@@ -20,6 +20,7 @@ RUN make install
 
 # create data directory
 RUN mkdir /home/bpyuser/.data
+
 # copy the source code in last, so that it doesn't
 # repeat the previous steps for each change
 COPY . .
