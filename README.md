@@ -295,14 +295,9 @@ If you use free freenom domains like `.ml`, `.ga`, `.ml`, `.cf`, you probably ca
             <li>c5.yourdomain.com</li>
             <li>c6.yourdomain.com</li>
             <li>ce.yourdomain.com</li>
-            <li>cho.yourdomain.com</li>
             <li>c.yourdomain.com</li>
             <li>yourdomain.com</li>
-            <li>i.yourdomain.com</li>
-            <li>map.yourdomain.com</li>
             <li>osu.yourdomain.com</li>
-            <li>s.yourdomain.com</li>
-            <li>web.yourdomain.com</li>
         </ul>
         <th>
             <img src=".github/images/ssl_cf_6.png" alt="Step 6">
