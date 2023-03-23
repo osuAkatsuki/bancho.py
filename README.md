@@ -292,7 +292,7 @@ If you use free freenom domains like `.ml`, `.ga`, `.ml`, `.cf`, you probably ca
             <li>c6.yourdomain.com</li>
             <li>ce.yourdomain.com</li>
             <li>c.yourdomain.com</li>
-            <li>i.yourdomain.com</li>
+            <li>b.yourdomain.com</li>
             <li>s.yourdomain.com</li>
             <li>yourdomain.com</li>
             <li>osu.yourdomain.com</li>
