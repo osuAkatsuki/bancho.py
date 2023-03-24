@@ -1,0 +1,50 @@
+name: Sync wiki documentation
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch: {}
+
+env:
+  wiki_source_repo: ${{ github.repository }}
+  wiki_source_repo_dir: ${{ github.repository }}/.github/docs/wiki
+  wiki_target_repo: ${{ github.repository }}.wiki
+  github_user_name: 'github-actions[bot]'
+  github_email: 'github-actions@github.com'
+  github_commit_message: 'docs: GitHub action syncing wiki'
+
+jobs:
+  update-wiki:
+    if: github.repository == 'osuAkatsuki/bancho.py'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v2
+        with:
+          repository: ${{ env.wiki_source_repo }}
+          path: ${{ env.wiki_source_repo }}
+
+      - name: Checkout wiki repo
+        uses: actions/checkout@v2
+        with:
+          repository: ${{ env.wiki_target_repo }}
+          path: ${{ env.wiki_target_repo }}
+
+      - name: Configure git
+        run: |
+          git config --global user.name $github_user_name
+          git config --global user.email $github_email
+        working-directory: ${{ env.GITHUB_WORKSPACE }}
+
+      - name: Sync wiki repo
+        run: |
+          rsync -avzr --delete --exclude='.git/' "$wiki_source_repo_dir/" "$wiki_target_repo"
+        working-directory: ${{ env.GITHUB_WORKSPACE }}
+
+      - name: Stage & push files into wiki repo
+        run: |
+          git add .
+          git commit -m "$github_commit_message [$GITHUB_ACTOR/${GITHUB_SHA::8}]"
+          git push --set-upstream https://$GITHUB_TOKEN@github.com/$wiki_target_repo.git master
+        working-directory: ${{ env.wiki_target_repo }}
