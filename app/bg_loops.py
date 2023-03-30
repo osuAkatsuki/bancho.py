@@ -43,7 +43,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
             "SELECT id FROM users "
             "WHERE donor_end <= UNIX_TIMESTAMP() "
             "AND priv & :donor_priv",  # 48 = Supporter | Premium
-            {"donor_priv": Privileges.DONATOR.value}
+            {"donor_priv": Privileges.DONATOR.value},
         )
 
         for expired_donor in expired_donors:
