@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    paths:
+      - '.github/docs/wiki/**'
   workflow_dispatch: {}
 
 env:
@@ -41,6 +43,14 @@ jobs:
         run: |
           rsync -avzr --delete --exclude='.git/' "$wiki_source_repo_dir/" "$wiki_target_repo"
         working-directory: ${{ env.GITHUB_WORKSPACE }}
+
+      - name: Check if there are changes
+        id: git_status
+        run: |
+          mapfile -t CHECK_GIT_STATUS < <(git status -s)
+          printf "%s\n" "${CHECK_GIT_STATUS[@]}"
+          echo "changes=${#CHECK_GIT_STATUS[@]}" >> $GITHUB_OUTPUT
+        working-directory: ${{ env.wiki_target_repo }}
 
       - name: Stage & push files into wiki repo
         run: |
