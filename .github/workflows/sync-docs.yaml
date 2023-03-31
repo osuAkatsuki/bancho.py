@@ -6,42 +6,45 @@ on:
       - master
     paths:
       - '.github/docs/wiki/**'
-  workflow_dispatch: {}
+  repository_dispatch:
+    types: [docs]
+  gollum:
 
 env:
-  wiki_source_repo: ${{ github.repository }}
-  wiki_source_repo_dir: ${{ github.repository }}/.github/docs/wiki
-  wiki_target_repo: ${{ github.repository }}.wiki
-  github_user_name: 'github-actions[bot]'
-  github_email: 'github-actions@github.com'
-  github_commit_message: 'docs: GitHub action syncing wiki'
+  WIKI_DESTINATION: '.github/docs/wiki'
+  WIKI_SOURCE_REPO: ${{ github.repository }}
+  WIKI_SOURCE_REPO_DIR: ${{ github.repository }}/${{ env.WIKI_DESTINATION }}
+  WIKI_TARGET_REPO: ${{ github.repository }}.wiki
+  GIT_USERNAME: 'github-actions[bot]'
+  GIT_EMAIL: 'github-actions@github.com'
+  GIT_COMMIT_MESSAGE: 'docs: Bidirectional sync between docs and wiki'
 
 jobs:
-  update-wiki:
-    if: github.repository == 'osuAkatsuki/bancho.py'
+  sync-docs-to-wiki:
+    if: github.repository == 'osuAkatsuki/bancho.py' && github.event_name != 'gollum'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source repo
         uses: actions/checkout@v2
         with:
-          repository: ${{ env.wiki_source_repo }}
-          path: ${{ env.wiki_source_repo }}
+          repository: ${{ env.WIKI_SOURCE_REPO }}
+          path: ${{ env.WIKI_SOURCE_REPO }}
 
       - name: Checkout wiki repo
         uses: actions/checkout@v2
         with:
-          repository: ${{ env.wiki_target_repo }}
-          path: ${{ env.wiki_target_repo }}
+          repository: ${{ env.WIKI_TARGET_REPO }}
+          path: ${{ env.WIKI_TARGET_REPO }}
 
       - name: Configure git
         run: |
-          git config --global user.name $github_user_name
-          git config --global user.email $github_email
+          git config --global user.name $GIT_USERNAME
+          git config --global user.email $GIT_EMAIL
         working-directory: ${{ env.GITHUB_WORKSPACE }}
 
       - name: Sync wiki repo
         run: |
-          rsync -avzr --delete --exclude='.git/' "$wiki_source_repo_dir/" "$wiki_target_repo"
+          rsync -avzr --delete --exclude='.git/' "$WIKI_SOURCE_REPO_DIR/" "$WIKI_TARGET_REPO"
         working-directory: ${{ env.GITHUB_WORKSPACE }}
 
       - name: Check if there are changes
@@ -50,11 +53,32 @@ jobs:
           mapfile -t CHECK_GIT_STATUS < <(git status -s)
           printf "%s\n" "${CHECK_GIT_STATUS[@]}"
           echo "changes=${#CHECK_GIT_STATUS[@]}" >> $GITHUB_OUTPUT
-        working-directory: ${{ env.wiki_target_repo }}
+        working-directory: ${{ env.WIKI_TARGET_REPO }}
 
       - name: Stage & push files into wiki repo
         run: |
           git add .
-          git commit -m "$github_commit_message [$GITHUB_ACTOR/${GITHUB_SHA::8}]"
-          git push --set-upstream https://$GITHUB_TOKEN@github.com/$wiki_target_repo.git master
-        working-directory: ${{ env.wiki_target_repo }}
+          git commit -m "$GIT_COMMIT_MESSAGE [$GITHUB_ACTOR/${GITHUB_SHA::8}]"
+          git push --set-upstream https://$GITHUB_TOKEN@github.com/$WIKI_TARGET_REPO.git master
+        working-directory: ${{ env.WIKI_TARGET_REPO }}
+
+  sync-wiki-to-docs:
+    if: github.repository == 'osuAkatsuki/bancho.py' && github.event_name == 'gollum'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: master
+
+      - name: Push files into repo
+        uses: newrelic/wiki-sync-action@main
+        with:
+          source: wiki
+          destination: ${{ env.WIKI_DESTINATION }}
+          branch: master
+          token: ${{ secrets.GITHUB_TOKEN }}
+          gitAuthorName: ${{ env.GIT_USERNAME }}
+          gitAuthorEmail: ${{ env.GIT_EMAIL }}
+          commitMessage: ${{ env.GIT_COMMIT_MESSAGE }}
