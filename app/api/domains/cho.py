@@ -85,9 +85,7 @@ router = APIRouter(tags=["Bancho API"])
 async def bancho_http_handler():
     """Handle a request from a web browser."""
     new_line = "\n"
-    matches = list(
-        filter(lambda match: isinstance(match, Match), app.state.sessions.matches),
-    )
+    matches = [m for m in app.state.sessions.matches if m is not None]
     players = [p for p in app.state.sessions.players if not p.bot_client]
 
     packets = app.state.packets["all"]
@@ -132,7 +130,7 @@ users:
 bots:
 {new_line.join(
     map(
-        lambda p: f"({str(p.id).rjust(id_max_length)}): {p.safe_name}",
+        lambda p: f"({p.id:>{id_max_length}}): {p.safe_name}",
         bots,
     ),
 )}
