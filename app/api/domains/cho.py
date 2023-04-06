@@ -140,7 +140,7 @@ async def bancho_list_user():
 
     BEATMAP = "beatmap"
     HOST = "host"
-    max_properties_length = len(max(BEATMAP, HOST))
+    max_properties_length = max(len(BEATMAP), len(HOST))
 
     matches = [m for m in app.state.sessions.matches if m is not None]
 
