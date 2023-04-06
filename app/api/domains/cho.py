@@ -86,7 +86,7 @@ async def bancho_http_handler():
     """Handle a request from a web browser."""
     new_line = "\n"
     matches = list(
-        filter(lambda match: isinstance(match, Match), app.state.sessions.matches)
+        filter(lambda match: isinstance(match, Match), app.state.sessions.matches),
     )
     players = list(filter(lambda p: not p.bot_client, app.state.sessions.players))
 
@@ -104,7 +104,7 @@ async def bancho_http_handler():
 
 <a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>
 </body>
-</html>"""
+</html>""",
     )
 
 
@@ -135,7 +135,7 @@ bots:
     ),
 )}
 </body>
-</html>"""
+</html>""",
     )
 
 
@@ -153,7 +153,7 @@ async def bancho_list_user():
     max_properties_length = len(max(BEATMAP, HOST))
 
     matches = list(
-        filter(lambda match: isinstance(match, Match), app.state.sessions.matches)
+        filter(lambda match: isinstance(match, Match), app.state.sessions.matches),
     )
 
     match_id_max_length = (
@@ -166,7 +166,7 @@ async def bancho_list_user():
 <body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
 matches:
 {new_line.join(map(
-    lambda m: 
+    lambda m:
       f'''{(ON_GOING if m.in_progress else IDLE).ljust(max_status_length)} ({str(m.id).rjust(match_id_max_length)}): {m.name}
 -- '''
       + f"{new_line}-- ".join([
@@ -177,7 +177,7 @@ matches:
     matches,
 ))}
 </body>
-</html>"""
+</html>""",
     )
 
 
