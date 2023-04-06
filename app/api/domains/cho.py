@@ -125,7 +125,7 @@ async def bancho_list_user():
 users:
 {new_line.join(
     map(
-        lambda p: f"({str(p.id).rjust(id_max_length)}): {p.safe_name}",
+        lambda p: f"({p.id:>{id_max_length}}): {p.safe_name}",
         players,
     ),
 )}
