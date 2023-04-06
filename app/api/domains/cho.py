@@ -88,7 +88,7 @@ async def bancho_http_handler():
     matches = list(
         filter(lambda match: isinstance(match, Match), app.state.sessions.matches),
     )
-    players = list(filter(lambda p: not p.bot_client, app.state.sessions.players))
+    players = [p for p in app.state.sessions.players if not p.bot_client]
 
     packets = app.state.packets["all"]
     return HTMLResponse(
