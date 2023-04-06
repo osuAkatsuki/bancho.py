@@ -170,8 +170,8 @@ matches:
       f'''{(ON_GOING if m.in_progress else IDLE).ljust(max_status_length)} ({str(m.id).rjust(match_id_max_length)}): {m.name}
 -- '''
       + f"{new_line}-- ".join([
-            f'{BEATMAP.rjust(max_properties_length)}: {m.map_name}',
-            f'{HOST.rjust(max_properties_length)}: <{m.host.id}> {m.host.safe_name}'
+            f'{BEATMAP.ljust(max_properties_length)}: {m.map_name}',
+            f'{HOST.ljust(max_properties_length)}: <{m.host.id}> {m.host.safe_name}'
         ])
     ,
     matches,
