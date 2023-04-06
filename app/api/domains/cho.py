@@ -84,20 +84,100 @@ router = APIRouter(tags=["Bancho API"])
 @router.get("/")
 async def bancho_http_handler():
     """Handle a request from a web browser."""
+    new_line = "\n"
+    matches = list(
+        filter(lambda match: isinstance(match, Match), app.state.sessions.matches)
+    )
+    players = list(filter(lambda p: not p.bot_client, app.state.sessions.players))
+
     packets = app.state.packets["all"]
+    return HTMLResponse(
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace; white-space: pre-wrap;">Running bancho.py v{app.settings.VERSION}
+
+<a href="online">{len(players)} online players</a>
+<a href="matches">{len(matches)} matches</a>
+
+<b>packets handled ({len(packets)})</b>
+{new_line.join([f"{packet.name} ({packet.value})" for packet in packets])}
+
+<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>
+</body>
+</html>"""
+    )
+
+
+@router.get("/online")
+async def bancho_list_user():
+    """see who's online"""
+    new_line = "\n"
+    players = list(filter(lambda p: not p.bot_client, app.state.sessions.players))
+    bots = list(filter(lambda p: p.bot_client, app.state.sessions.players))
+    id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
     return HTMLResponse(
-        b"<!DOCTYPE html>"
-        + "<br>".join(
-            (
-                f"Running bancho.py v{app.settings.VERSION}",
-                f"Players online: {len(app.state.sessions.players) - 1}",
-                '<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>',
-                "",
-                f"<b>packets handled ({len(packets)})</b>",
-                "<br>".join([f"{packet.name} ({packet.value})" for packet in packets]),
-            ),
-        ).encode(),
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
+users:
+{new_line.join(
+    map(
+        lambda p: f"({str(p.id).rjust(id_max_length)}): {p.safe_name}",
+        players,
+    ),
+)}
+bots:
+{new_line.join(
+    map(
+        lambda p: f"({str(p.id).rjust(id_max_length)}): {p.safe_name}",
+        bots,
+    ),
+)}
+</body>
+</html>"""
+    )
+
+
+@router.get("/matches")
+async def bancho_list_user():
+    """ongoing matches"""
+    new_line = "\n"
+
+    ON_GOING = "ongoing"
+    IDLE = "idle"
+    max_status_length = len(max(ON_GOING, IDLE))
+
+    BEATMAP = "beatmap"
+    HOST = "host"
+    max_properties_length = len(max(BEATMAP, HOST))
+
+    matches = list(
+        filter(lambda match: isinstance(match, Match), app.state.sessions.matches)
+    )
+
+    match_id_max_length = (
+        len(str(max(match.id for match in matches))) if len(matches) else 0
+    )
+
+    return HTMLResponse(
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
+matches:
+{new_line.join(map(
+    lambda m: 
+      f'''{(ON_GOING if m.in_progress else IDLE).ljust(max_status_length)} ({str(m.id).rjust(match_id_max_length)}): {m.name}
+-- '''
+      + f"{new_line}-- ".join([
+            f'{BEATMAP.rjust(max_properties_length)}: {m.map_name}',
+            f'{HOST.rjust(max_properties_length)}: <{m.host.id}> {m.host.safe_name}'
+        ])
+    ,
+    matches,
+))}
+</body>
+</html>"""
     )
 
 
