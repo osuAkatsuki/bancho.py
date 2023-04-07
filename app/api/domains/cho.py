@@ -111,8 +111,8 @@ async def bancho_list_user():
     """see who's online"""
     new_line = "\n"
 
-    players = [player for player in players if not player.bot_client]
-    bots = [bots for bots in players if not bots.bot_client]
+    players = [p for p in app.state.sessions.players if not p.bot_client]
+    bots = [bots for bots in app.state.sessions.players if not bots.bot_client]
 
     id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
