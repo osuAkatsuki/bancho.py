@@ -89,6 +89,7 @@ async def bancho_http_handler():
     players = [p for p in app.state.sessions.players if not p.bot_client]
 
     packets = app.state.packets["all"]
+
     return HTMLResponse(
         f"""
 <!DOCTYPE html>
@@ -111,8 +112,8 @@ async def bancho_list_user():
     """see who's online"""
     new_line = "\n"
 
-    players = [p for p in app.state.sessions.players if not p.bot_client]
-    bots = [bots for bots in app.state.sessions.players if not bots.bot_client]
+    players = [player for player in app.state.sessions.players if not player.bot_client]
+    bots = [bots for bots in app.state.sessions.players if bots.bot_client]
 
     id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
