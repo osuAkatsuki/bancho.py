@@ -1,0 +1,65 @@
+version: "3"
+
+services:
+  mysql:
+    image: mysql
+    environment:
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      NYSQL_HOST: ${DB_HOST}
+      MYSQL_PORT: ${DB_PORT}
+      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+    volumes:
+      - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db-data:/var/lib/mysql
+    ports:
+      - ${DB_PORT}:${DB_PORT}
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
+  redis:
+    image: redis
+    ports:
+      - '${REDIS_PORT}:${REDIS_PORT}'
+    volumes:
+      - redis-data:/data
+
+  bancho:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    tty: true
+    volumes:
+      - data:/home/bpyuser/.data
+
+  nginx:
+    image: anroe/nginx-geoip2
+    depends_on:
+      - bancho
+    volumes:
+      - ./ext/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
+      - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
+      - data:/.data:ro
+    ports:
+      - ${SERVER_PORT}:${SERVER_PORT}
+      - ${HOST_PORT}:${HOST_PORT}
+    expose:
+      - ${SERVER_PORT}
+      - ${HOST_PORT}
+
+volumes:
+  data:
+  db-data:
+  redis-data:
+
+networks:
+  default:
+    name: bpy-network

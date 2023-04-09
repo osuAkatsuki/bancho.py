@@ -11,3 +11,5 @@ tools/migrate_v420/scoreMigrator
 .venv/
 .mypy_cache/
 .pytest_cache/
+ext/nginx.conf
+tools/cf_records.txt

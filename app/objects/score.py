@@ -423,6 +423,19 @@ class Score:
             if total == 0:
                 return 0.0
 
+            if self.mods & Mods.SCOREV2:
+                return (
+                    100.0
+                    * (
+                        (self.n50 * 50.0)
+                        + (self.n100 * 100.0)
+                        + (self.nkatu * 200.0)
+                        + (self.n300 * 300.0)
+                        + (self.ngeki * 305.0)
+                    )
+                    / (total * 305.0)
+                )
+
             return (
                 100.0
                 * (
