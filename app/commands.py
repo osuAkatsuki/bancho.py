@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import TypeVar
 from typing import Union
+from urllib.parse import urlparse
 
 import psutil
 import timeago
@@ -1240,7 +1241,8 @@ async def server(ctx: Context) -> Optional[str]:
     ram_info = " / ".join([f"{v // 1024 ** 2}MB" for v in ram_values])
 
     # current state of settings
-    mirror_url = app.settings.MIRROR_URL
+    mirror_search_url = urlparse(app.settings.MIRROR_SEARCH_ENDPOINT).netloc
+    mirror_download_url = urlparse(app.settings.MIRROR_DOWNLOAD_ENDPOINT).netloc
     using_osuapi = app.settings.OSU_API_KEY != ""
     advanced_mode = app.settings.DEVELOPER_MODE
     auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
@@ -1267,7 +1269,8 @@ async def server(ctx: Context) -> Optional[str]:
             f"{build_str} | uptime: {seconds_readable(uptime)}",
             f"cpu(s): {cpus_info}",
             f"ram: {ram_info}",
-            f"mirror: {mirror_url} | osu!api connection: {using_osuapi}",
+            f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
+            f"osu!api connection: {using_osuapi}",
             f"advanced mode: {advanced_mode} | auto logging: {auto_logging}",
             "",
             "requirements",
