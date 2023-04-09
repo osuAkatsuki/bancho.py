@@ -1270,7 +1270,7 @@ async def server(ctx: Context) -> Optional[str]:
             f"cpu(s): {cpus_info}",
             f"ram: {ram_info}",
             f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
-            "osu!api connection: {using_osuapi}",
+            f"osu!api connection: {using_osuapi}",
             f"advanced mode: {advanced_mode} | auto logging: {auto_logging}",
             "",
             "requirements",
