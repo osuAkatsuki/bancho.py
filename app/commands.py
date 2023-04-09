@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-import importlib
+import importlib.metadata
 import os
 import pprint
 import random
@@ -1256,10 +1256,15 @@ async def server(ctx: Context) -> Optional[str]:
     # cmyui v1.7.3 | datadog v0.40.1 | geoip2 v4.1.0
     # maniera v1.0.0 | mysql-connector-python v8.0.23 | orjson v3.5.1
     # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
-    reqs = (Path.cwd() / "requirements.txt").read_text().splitlines()
+    requirements = []
+
+    for dist in importlib.metadata.distributions():
+        requirements.append(f"{dist.name} v{dist.version}")  # type: ignore
+    requirements.sort(key=lambda x: x.casefold())
+
     requirements_info = "\n".join(
-        " | ".join("{} v{}".format(*pkg.split("==")) for pkg in section)
-        for section in (reqs[i : i + 3] for i in range(0, len(reqs), 3))
+        " | ".join(section)
+        for section in (requirements[i : i + 3] for i in range(0, len(requirements), 3))
     )
 
     return "\n".join(
