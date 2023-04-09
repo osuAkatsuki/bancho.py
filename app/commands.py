@@ -556,7 +556,7 @@ async def request(ctx: Context) -> Optional[str]:
 
 
 @command(Privileges.UNRESTRICTED)
-async def get_apikey(ctx: Context) -> Optional[str]:
+async def apikey(ctx: Context) -> Optional[str]:
     """Generate a new api key & assign it to the player."""
     if ctx.recipient is not app.state.sessions.bot:
         return f"Command only available in DMs with {app.state.sessions.bot.name}."
@@ -571,12 +571,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
-    ctx.player.enqueue(
-        app.packets.notification(
-            "Type /savelog and click the popup for an easy way to copy this.",
-        ),
-    )
-    return f"Your API key is now: {ctx.player.api_key}"
+    return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
 
 
 """ Nominator commands
