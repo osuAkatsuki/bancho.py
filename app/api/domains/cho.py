@@ -1267,7 +1267,7 @@ class SendPrivateMessage(BasePacket):
                             )
 
                             resp_msg = " | ".join(
-                                f"{acc}%: {result['performance']:,.2f}pp"
+                                f"{acc}%: {result['performance']['pp']:,.2f}pp"
                                 for acc, result in zip(
                                     app.settings.PP_CACHED_ACCURACIES,
                                     results,
