@@ -14,7 +14,7 @@ https://github.com/osuAkatsuki/bancho.py
 from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
-__email__ = "cmyuiosu@gmail.com"
+__email__ = "josh@akatsuki.gg"
 __discord__ = "cmyui#0425"
 
 import os
