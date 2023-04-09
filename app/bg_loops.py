@@ -42,7 +42,7 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
         expired_donors = await app.state.services.database.fetch_all(
             "SELECT id FROM users "
             "WHERE donor_end <= UNIX_TIMESTAMP() "
-            "AND priv & :donor_priv",  # 48 = Supporter | Premium
+            "AND priv & :donor_priv",
             {"donor_priv": Privileges.DONATOR.value},
         )
 
