@@ -42,7 +42,7 @@ async def authorize(
     if client is None:
         return responses.failure("invalid_client")
 
-    if client.redirect_uri != redirect_uri:
+    if client["redirect_uri"] != redirect_uri:
         return responses.failure("invalid_client")
 
     if response_type != "code":
@@ -66,11 +66,11 @@ async def token(
     grant_type: str = Form(),
     client_id: int = Form(default=None),
     client_secret: str = Form(default=None),
-    auth_credentials: Optional[dict[str, Union[str, int]]] = Depends(
+    auth_credentials: Optional[dict[str, Any]] = Depends(
         get_credentials_from_basic_auth,
     ),
     code: Optional[str] = Form(default=None),
-    scope: Optional[str] = Form(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
+    scope: str = Form(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
 ) -> Token:
     """Get an access token for the API."""
     # https://www.rfc-editor.org/rfc/rfc6749#section-5.1
@@ -155,6 +155,7 @@ async def token(
 
         return Token(
             access_token=str(raw_access_token),
+            refresh_token=None,
             token_type="Bearer",
             expires_in=86400,
             expires_at=access_token["expires_at"],
@@ -202,5 +203,5 @@ async def refresh(
         token_type="Bearer",
         expires_in=3600,
         expires_at=access_token["expires_at"],
-        scope=token["scope"],
+        scope=access_token["scope"],
     )
