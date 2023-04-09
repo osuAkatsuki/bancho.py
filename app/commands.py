@@ -1259,7 +1259,7 @@ async def server(ctx: Context) -> Optional[str]:
     requirements = []
 
     for dist in importlib.metadata.distributions():
-        requirements.append(f"{dist.name} v{dist.version}")
+        requirements.append(f"{dist.name} v{dist.version}")  # type: ignore
     requirements.sort(key=lambda x: x.casefold())
 
     requirements_info = "\n".join(
