@@ -571,7 +571,7 @@ async def apikey(ctx: Context) -> Optional[str]:
     await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
-    return f"API key generated. Click (here)[http://{ctx.player.api_key}] to view your new API key."
+    return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
 
 
 """ Nominator commands
