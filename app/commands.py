@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import TypeVar
 from typing import Union
+from urllib.parse import urlparse
 
 import psutil
 import timeago
@@ -526,8 +527,10 @@ async def _with(ctx: Context) -> Optional[str]:
         scores=[score_args],  # calculate one score
     )
 
-    return "{msg}: {performance:.2f}pp ({star_rating:.2f}*)".format(
-        msg=" ".join(msg_fields), **result[0]  # (first score result)
+    return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
+        msg=" ".join(msg_fields),
+        pp=result[0]["performance"]["pp"],
+        stars=result[0]["difficulty"]["stars"],  # (first score result)
     )
 
 
@@ -556,7 +559,7 @@ async def request(ctx: Context) -> Optional[str]:
 
 
 @command(Privileges.UNRESTRICTED)
-async def get_apikey(ctx: Context) -> Optional[str]:
+async def apikey(ctx: Context) -> Optional[str]:
     """Generate a new api key & assign it to the player."""
     if ctx.recipient is not app.state.sessions.bot:
         return f"Command only available in DMs with {app.state.sessions.bot.name}."
@@ -571,12 +574,7 @@ async def get_apikey(ctx: Context) -> Optional[str]:
     await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
-    ctx.player.enqueue(
-        app.packets.notification(
-            "Type /savelog and click the popup for an easy way to copy this.",
-        ),
-    )
-    return f"Your API key is now: {ctx.player.api_key}"
+    return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
 
 
 """ Nominator commands
@@ -1245,7 +1243,8 @@ async def server(ctx: Context) -> Optional[str]:
     ram_info = " / ".join([f"{v // 1024 ** 2}MB" for v in ram_values])
 
     # current state of settings
-    mirror_url = app.settings.MIRROR_URL
+    mirror_search_url = urlparse(app.settings.MIRROR_SEARCH_ENDPOINT).netloc
+    mirror_download_url = urlparse(app.settings.MIRROR_DOWNLOAD_ENDPOINT).netloc
     using_osuapi = app.settings.OSU_API_KEY != ""
     advanced_mode = app.settings.DEVELOPER_MODE
     auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
@@ -1272,7 +1271,8 @@ async def server(ctx: Context) -> Optional[str]:
             f"{build_str} | uptime: {seconds_readable(uptime)}",
             f"cpu(s): {cpus_info}",
             f"ram: {ram_info}",
-            f"mirror: {mirror_url} | osu!api connection: {using_osuapi}",
+            f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
+            f"osu!api connection: {using_osuapi}",
             f"advanced mode: {advanced_mode} | auto logging: {auto_logging}",
             "",
             "requirements",
