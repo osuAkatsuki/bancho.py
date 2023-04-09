@@ -37,7 +37,7 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
     """\
     Fetch data from the osu!api with a beatmap's md5.
 
-    Optionally use Kitsu's API if the user has not provided an osu! api key.
+    Optionally use osu.direct's API if the user has not provided an osu! api key.
     """
     if app.settings.DEBUG:
         log(f"Doing api (getbeatmaps) request {params}", Ansi.LMAGENTA)
@@ -47,8 +47,8 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
         url = "https://old.ppy.sh/api/get_beatmaps"
         params["k"] = str(app.settings.OSU_API_KEY)
     else:
-        # https://doc.kitsu.moe/
-        url = "https://kitsu.moe/api/get_beatmaps"
+        # https://osu.direct/doc
+        url = "https://osu.direct/api/get_beatmaps"
 
     async with app.state.services.http_client.get(url, params=params) as response:
         response_data = await response.json()
