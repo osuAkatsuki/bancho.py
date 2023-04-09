@@ -14,7 +14,7 @@ https://github.com/osuAkatsuki/bancho.py
 from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
-__email__ = "cmyuiosu@gmail.com"
+__email__ = "josh@akatsuki.gg"
 __discord__ = "cmyui#0425"
 
 import os
@@ -41,7 +41,6 @@ def main(argv: Sequence[str]) -> int:
 
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
-        app.utils.ensure_connected_services,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
     ):
         exit_code = safety_check()
