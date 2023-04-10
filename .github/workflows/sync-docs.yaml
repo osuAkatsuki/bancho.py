@@ -11,10 +11,8 @@ on:
   gollum:
 
 env:
-  WIKI_DESTINATION: '.github/docs/wiki'
-  WIKI_SOURCE_REPO: ${{ github.repository }}
-  WIKI_SOURCE_REPO_DIR: ${{ github.repository }}/${{ env.WIKI_DESTINATION }}
-  WIKI_TARGET_REPO: ${{ github.repository }}.wiki
+  REPO_PATH: '.github/docs/wiki'
+  WIKI_PATH: 'wiki'
   GIT_USERNAME: 'github-actions[bot]'
   GIT_EMAIL: 'github-actions@github.com'
   GIT_COMMIT_MESSAGE: 'docs: Bidirectional sync between docs and wiki'
@@ -24,43 +22,18 @@ jobs:
     if: github.repository == 'osuAkatsuki/bancho.py' && github.event_name != 'gollum'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source repo
+      - name: Checkout repository
         uses: actions/checkout@v2
+      - name: Push files into wiki repo
+        uses: newrelic/wiki-sync-action@main
         with:
-          repository: ${{ env.WIKI_SOURCE_REPO }}
-          path: ${{ env.WIKI_SOURCE_REPO }}
-
-      - name: Checkout wiki repo
-        uses: actions/checkout@v2
-        with:
-          repository: ${{ env.WIKI_TARGET_REPO }}
-          path: ${{ env.WIKI_TARGET_REPO }}
-
-      - name: Configure git
-        run: |
-          git config --global user.name $GIT_USERNAME
-          git config --global user.email $GIT_EMAIL
-        working-directory: ${{ env.GITHUB_WORKSPACE }}
-
-      - name: Sync wiki repo
-        run: |
-          rsync -avzr --delete --exclude='.git/' "$WIKI_SOURCE_REPO_DIR/" "$WIKI_TARGET_REPO"
-        working-directory: ${{ env.GITHUB_WORKSPACE }}
-
-      - name: Check if there are changes
-        id: git_status
-        run: |
-          mapfile -t CHECK_GIT_STATUS < <(git status -s)
-          printf "%s\n" "${CHECK_GIT_STATUS[@]}"
-          echo "changes=${#CHECK_GIT_STATUS[@]}" >> $GITHUB_OUTPUT
-        working-directory: ${{ env.WIKI_TARGET_REPO }}
-
-      - name: Stage & push files into wiki repo
-        run: |
-          git add .
-          git commit -m "$GIT_COMMIT_MESSAGE [$GITHUB_ACTOR/${GITHUB_SHA::8}]"
-          git push --set-upstream https://$GITHUB_TOKEN@github.com/$WIKI_TARGET_REPO.git master
-        working-directory: ${{ env.WIKI_TARGET_REPO }}
+          source: ${{ env.REPO_PATH }}
+          destination: ${{ env.WIKI_PATH }}
+          branch: master
+          token: ${{ secrets.BPY_REPO_TOKEN }}
+          gitAuthorName: ${{ env.GIT_USERNAME }}
+          gitAuthorEmail: ${{ env.GIT_EMAIL }}
+          commitMessage: ${{ env.GIT_COMMIT_MESSAGE }}
 
   sync-wiki-to-docs:
     if: github.repository == 'osuAkatsuki/bancho.py' && github.event_name == 'gollum'
@@ -75,8 +48,8 @@ jobs:
       - name: Push files into repo
         uses: newrelic/wiki-sync-action@main
         with:
-          source: wiki
-          destination: ${{ env.WIKI_DESTINATION }}
+          source: ${{ env.WIKI_PATH }}
+          destination: ${{ env.REPO_PATH }}
           branch: master
           token: ${{ secrets.GITHUB_TOKEN }}
           gitAuthorName: ${{ env.GIT_USERNAME }}
