@@ -26,8 +26,8 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /home/cnyui/certs/bancho.pem;
-	ssl_certificate_key /home/cmyui/certs/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
@@ -53,8 +53,8 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /home/cnyui/certs/bancho.pem;
-	ssl_certificate_key /home/cmyui/certs/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
@@ -73,8 +73,8 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /home/cmyui/certs/bancho.pem;
-	ssl_certificate_key /home/cmyui/certs/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
