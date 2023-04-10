@@ -59,7 +59,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 `.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp docker.env.example .env
 
 # you'll want to configure *at least* the three marked (XXX) variables,
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
@@ -71,7 +71,7 @@ nano .env
 ## configuring a reverse proxy (we'll use nginx)
 ```sh
 # copy the example nginx configuration file
-cp ext/nginx.conf.example ext/nginx.conf
+cp ext/docker-nginx.conf.example ext/nginx.conf
 
 # now, you can edit the config file.
 # the spots you'll need to change are marked.
@@ -210,7 +210,7 @@ be using for this guide, but feel free to check out others, like caddy and h2o.
 ```sh
 # copy the example nginx config to /etc/nginx/sites-available,
 # and make a symbolic link to /etc/nginx/sites-enabled
-sudo cp ext/nginx.conf.example /etc/nginx/sites-available/bancho.conf
+sudo cp ext/manual-nginx.conf.example /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 # now, you can edit the config file.
@@ -226,7 +226,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 `.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp manual.env.example .env
 
 # you'll want to configure *at least* all the database related fields (DB_*),
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
