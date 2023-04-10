@@ -1267,7 +1267,7 @@ class SendPrivateMessage(BasePacket):
                             )
 
                             resp_msg = " | ".join(
-                                f"{acc}%: {result['performance']:,.2f}pp"
+                                f"{acc}%: {result['performance']['pp']:,.2f}pp"
                                 for acc, result in zip(
                                     app.settings.PP_CACHED_ACCURACIES,
                                     results,
@@ -1356,7 +1356,7 @@ class MatchCreate(BasePacket):
             map_md5=self.match_data.map_md5,
             # TODO: validate no security hole exists
             host_id=self.match_data.host_id,
-            mode=GameMode(self.match_data.mode),
+            mode=self.match_data.mode,
             mods=Mods(self.match_data.mods),
             win_condition=MatchWinConditions(self.match_data.win_condition),
             team_type=MatchTeamTypes(self.match_data.team_type),
@@ -1600,12 +1600,12 @@ class MatchChangeSettings(BasePacket):
                 player.match.map_id = bmap.id
                 player.match.map_md5 = bmap.md5
                 player.match.map_name = bmap.full_name
-                player.match.mode = player.match.host.status.mode
+                player.match.mode = player.match.host.status.mode.as_vanilla
             else:
                 player.match.map_id = self.match_data.map_id
                 player.match.map_md5 = self.match_data.map_md5
                 player.match.map_name = self.match_data.map_name
-                player.match.mode = GameMode(self.match_data.mode)
+                player.match.mode = self.match_data.mode
 
         if player.match.team_type != self.match_data.team_type:
             # if theres currently a scrim going on, only allow
