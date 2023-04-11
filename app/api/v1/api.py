@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from io import BytesIO
 from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
@@ -12,8 +11,8 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
+from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
-from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
@@ -738,8 +737,8 @@ async def api_get_replay(
     raw_replay_data = replay_file.read_bytes()
 
     if include_headers:
-        return StreamingResponse(
-            raw_replay_data,
+        return FileResponse(
+            path=REPLAYS_PATH / f"{score_id}.osr",
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
@@ -826,8 +825,8 @@ async def api_get_replay(
     # can't submit scores so should not be a problem.
 
     # stream data back to the client
-    return StreamingResponse(
-        BytesIO(replay_data),
+    return FileResponse(
+        path=REPLAYS_PATH / f"{score_id}.osr",
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
