@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from io import BytesIO
 from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
@@ -826,7 +827,7 @@ async def api_get_replay(
 
     # stream data back to the client
     return StreamingResponse(
-        replay_data,
+        BytesIO(replay_data),
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
