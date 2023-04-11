@@ -749,7 +749,7 @@ async def api_get_replay(
 
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await app.state.services.database.fetch_one(
+    rec = await app.state.services.database.fetch_one(
         "SELECT u.name username, m.md5 map_md5, "
         "m.artist, m.title, m.version, "
         "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
@@ -761,6 +761,7 @@ async def api_get_replay(
         "WHERE s.id = :score_id",
         {"score_id": score_id},
     )
+    row = dict(rec._mapping) if rec is not None else None
 
     if not row:
         # score not found in sql
