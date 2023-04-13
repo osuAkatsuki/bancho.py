@@ -52,7 +52,7 @@ def calculate_performances(
         # ):
         #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
 
-        result = Calculator(
+        calculator = Calculator(
             mode=score.mode,
             mods=score.mods or 0,
             combo=score.combo,
@@ -63,7 +63,8 @@ def calculate_performances(
             n_geki=score.ngeki,
             n_katu=score.nkatu,
             n_misses=score.nmiss,
-        ).performance(calc_bmap)
+        )
+        result = calculator.performance(calc_bmap)
 
         pp = result.pp
 
