@@ -82,7 +82,7 @@ async def ensure_local_osu_file(
 
     url = f"https://old.ppy.sh/osu/{bmap_id}"
     async with app.state.services.http_client.get(url) as resp:
-        if resp.headers.get("Content-Disposition") is None:
+        if resp.headers.get("Content-Disposition", "").startswith("attachment"):
             # bmap_id is not exists.
             # consider removing following code as it occurs frequently.
             stacktrace = app.utils.get_appropriate_stacktrace()
