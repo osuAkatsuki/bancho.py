@@ -57,9 +57,9 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
     return None
 
 
-KNOWN_BAD_FILES_MD5 = [
-    "d41d8cd98f00b204e9800998ecf8427e" # empty file 
-]
+KNOWN_BAD_FILES_MD5 = ["d41d8cd98f00b204e9800998ecf8427e"]  # empty file
+
+
 async def ensure_local_osu_file(
     osu_file_path: Path,
     bmap_id: int,
@@ -71,8 +71,12 @@ async def ensure_local_osu_file(
     exists = osu_file_path.exists()
     # some callers have type Any | str on "bmap_md5" so I assume it's optional, thus May be None.
     # I use a magic string here to avoid letting optional md5 slip through.
-    file_md5 = hashlib.md5(osu_file_path.read_bytes()).hexdigest() if exists else "MAGIC_STRING__NOT_EXISTS"
-    if (file_md5 == bmap_md5):
+    file_md5 = (
+        hashlib.md5(osu_file_path.read_bytes()).hexdigest()
+        if exists
+        else "MAGIC_STRING__NOT_EXISTS"
+    )
+    if file_md5 == bmap_md5:
         return True
     # need to get the file from the osu!api
     if app.settings.DEBUG:
@@ -88,14 +92,15 @@ async def ensure_local_osu_file(
             return False
         b_beatmap = await resp.read()
         bytes_md5 = hashlib.md5(b_beatmap).hexdigest()
-        if (bytes_md5 in KNOWN_BAD_FILES_MD5): 
+        if bytes_md5 in KNOWN_BAD_FILES_MD5:
             return False
         # at least this' not a known bad file
         osu_file_path.write_bytes(b_beatmap)
         # some callers have type Any | str on "bmap_md5" so I assume it's optional
-        if (bmap_md5 and bytes_md5 != bmap_md5):
+        if bmap_md5 and bytes_md5 != bmap_md5:
             return False
         return True
+
 
 # for some ungodly reason, different values are used to
 # represent different ranked statuses all throughout osu!
