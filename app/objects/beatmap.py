@@ -96,7 +96,7 @@ async def ensure_local_osu_file(
         # at least this' not a known bad file
         osu_file_path.write_bytes(b_beatmap)
         # some callers have type Any | str on "bmap_md5" so I assume it's optional
-        if bmap_md5 and bytes_md5 != bmap_md5:
+        if bmap_md5 is not None and bytes_md5 is not bmap_md5:
             return False
         return True
 
