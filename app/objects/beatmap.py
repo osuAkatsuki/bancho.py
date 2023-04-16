@@ -84,12 +84,11 @@ async def ensure_local_osu_file(
 
     url = f"https://old.ppy.sh/osu/{bmap_id}"
     async with app.state.services.http_client.get(url) as resp:
-        if resp.status != 200:
-            if 400 <= resp.status < 500:
-                # client error, report this to cmyui
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.state.services.log_strange_occurrence(stacktrace)
-            return False
+        if False == resp.ok():
+            # client error, report this to cmyui
+            stacktrace = app.utils.get_appropriate_stacktrace()
+            await app.state.services.log_strange_occurrence(stacktrace)
+
         b_beatmap = await resp.read()
         bytes_md5 = hashlib.md5(b_beatmap).hexdigest()
         if bytes_md5 in KNOWN_BAD_FILES_MD5:
