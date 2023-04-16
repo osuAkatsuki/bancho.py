@@ -52,9 +52,6 @@ git clone https://github.com/osuAkatsuki/bancho.py
 
 # 进入到 bancho.py 的目录
 cd bancho.py
-
-# 克隆 bancho.py 的依赖(dependence)目录
-git submodule update --init
 ```
 
 ## 第二步：安装bancho.py所需的依赖
@@ -66,7 +63,7 @@ bancho.py 的代码库有大约15,000行，我们致力于减少我们需要的�
 - redis (一种缓存数据库，与mysql不同的是，他把频繁的数据存储到缓存中，读取速度更快)
 - nginx (用于反向代理)
 - certbot (用于搞SSL证书)
-- cmake and build-essential ( c/c++ 的 build tools )
+- build-essential ( c/c++ 的 build tools )
 
 当然还有些别的，跟着下面的步骤走就可以全都安装咯~
 ```sh
@@ -77,9 +74,10 @@ sudo add-apt-repository -y ppa:deadsnakes
 
 # 安装所有的依赖(dependence)
 sudo apt install -y python3.9-dev python3.9-distutils \
-                    cmake build-essential \
+                    build-essential \
                     mysql-server redis-server \
                     nginx certbot
+
 
 # 安装python的包管理器, pip
 # pip是用来安装和python有关的包
@@ -87,10 +85,11 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.9 get-pip.py && rm get-pip.py
 
 # 更新python3.9和pip到最新
-python3.9 -m pip install -U pip setuptools
+python3.9 -m pip install -U pip setuptools pipenv
 
-# 安装所有bancho.py使用的与python有关的包
-python3.9 -m pip install -r requirements.txt
+# 安装所有bancho.py使用的与python有关的包(外部依赖)
+# (如果你想要使用开发环境，那么下面请使用`make install-dev`)
+make install
 ```
 
 ## 第三步：给bancho.py开一个数据库！
@@ -100,12 +99,16 @@ python3.9 -m pip install -r requirements.txt
 and stats), 譜面(beatmaps and beatmapsets), 聊天(chat channels)等等
 
 ```sh
+# 开启数据库服务
+sudo service mysql start
+
 # 以 root 用户登录mysql（注意如果你已经是root用户的话直接输mysql
 # 然后回车就可以啦）
 
-# 现在请小心谨慎，因为当你进入SQL以后你就可以完全操作数据库了
+# 现在请小心谨慎，因为你给他的错误命令他会在很短的时间内执行完毕，
+# 不给你后悔的机会
 
-mysql -u root -p
+sudo mysql
 ```
 
 现在，我们会：
@@ -218,7 +221,7 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
 
 ```sh
 # 运行私服啦
-./main.py
+make run
 ```
 
 如果你看到了下面的提示，那么恭喜！你成功了
@@ -227,47 +230,55 @@ DB_DSN=mysql://数据库用户名:数据库密码@localhost:3306/数据库的名
 
 # 文件目录
     .
-    ├── app                   # the server - logic, classes and objects
-    |   ├── api                 # code related to handling external requests
-    |   |   ├── domains           # endpoints that can be reached from externally
-    |   |   |   ├── api.py        # endpoints available @ https://api.ppy.sh
-    |   |   |   ├── cho.py        # endpoints available @ https://c.ppy.sh
-    |   |   |   ├── map.py        # endpoints available @ https://b.ppy.sh
-    |   |   |   └── osu.py        # endpoints available @ https://osu.ppy.sh
+    ├── app                   # 服务 - 处理逻辑, 类 和 对象
+    |   ├── api                 # 处理外部请求的部分
+    |   |   ├── domains           # 外部访问可到达的endpoints (终点,指向web服务的api,此处为url,下译为"终点")
+    |   |   |   ├── cho.py        # 处理在这个终点的请求: https://c.cmyui.xyz
+    |   |   |   ├── map.py        # 处理在这个终点的请求: https://b.cmyui.xyz
+    |   |   |   └── osu.py        # 处理在这个终点的请求: https://osu.cmyui.xyz
     |   |   |
-    |   |   ├── init_api.py       # logic for putting the server together
-    |   |   └── middlewares.py    # logic that wraps around the endpoints
+    |   |   ├── v1
+    |   |   |   └── api.py          # 处理在这个终点的请求: https://api.cmyui.xyz/v1
+    |   |   |
+    |   |   ├── v2
+    |   |   |   ├── clans.py        # 处理在这个终点的请求: https://api.cmyui.xyz/v2/clans
+    |   |   |   ├── maps.py         # 处理在这个终点的请求: https://api.cmyui.xyz/v2/maps
+    |   |   |   ├── players.py      # 处理在这个终点的请求: https://api.cmyui.xyz/v2/players
+    |   |   |   └── scores.py       # 处理在这个终点的请求: https://api.cmyui.xyz/v2/scores
+    |   |   |
+    |   |   ├── init_api.py       # 初始化api服务
+    |   |   └── middlewares.py    # 围绕终点的逻辑部分(中间件)
     |   |
-    |   ├── constants           # logic & data for constant server-side classes & objects
-    |   |   ├── clientflags.py    # anticheat flags used by the osu! client
-    |   |   ├── gamemodes.py      # osu! gamemodes, with relax/autopilot support
-    |   |   ├── mods.py           # osu! gameplay modifiers
-    |   |   ├── privileges.py     # privileges for players, globally & in clans
-    |   |   └── regexes.py        # regexes used throughout the codebase
+    |   ├── constants           # 服务器端静态类/对象的数据和逻辑实现
+    |   |   ├── clientflags.py    # osu!客户端使用的反作弊flags
+    |   |   ├── gamemodes.py      # osu!游戏模式, 支持 relax/autopilot
+    |   |   ├── mods.py           # osu!游戏mods
+    |   |   ├── privileges.py     # 用户特权(玩家,服主,支持者,开发者等等)
+    |   |   └── regexes.py        # 整个代码库中的正则表达式
     |   |
-    |   ├── objects             # logic & data for dynamic server-side classes & objects
-    |   |   ├── achievement.py    # representation of individual achievements
-    |   |   ├── beatmap.py        # representation of individual map(set)s
-    |   |   ├── channel.py        # representation of individual chat channels
-    |   |   ├── clan.py           # representation of individual clans
-    |   |   ├── collection.py     # collections of dynamic objects (for in-memory storage)
-    |   |   ├── match.py          # individual multiplayer matches
-    |   |   ├── menu.py           # (WIP) concept for interactive menus in chat channels
-    |   |   ├── models.py         # structures of api request bodies
-    |   |   ├── player.py         # representation of individual players
-    |   |   └── score.py          # representation of individual scores
+    |   ├── objects             # 服务器端动态类/对象的数据和逻辑实现
+    |   |   ├── achievement.py    # 有关个人成就achievement
+    |   |   ├── beatmap.py        # 有关个人的谱面
+    |   |   ├── channel.py        # 有关个人的聊天频道(chat)
+    |   |   ├── clan.py           # 有关个人的地区(clans)
+    |   |   ├── collection.py     # 动态类的集合 (存储在内存中)
+    |   |   ├── match.py          # 多人比赛
+    |   |   ├── menu.py           # (-正在制作中-) 聊天频道中的交互菜单
+    |   |   ├── models.py         # api请求主体(bodies)的结构
+    |   |   ├── player.py         # 关于个人的players
+    |   |   └── score.py          # 有关个人的score
     |   |
-    |   ├── state               # objects representing live server-state
-    |   |   ├── cache.py          # data saved for optimization purposes
-    |   |   ├── services.py       # instances of 3rd-party services (e.g. databases)
-    |   |   └── sessions.py       # active sessions (players, channels, matches, etc.)
+    |   ├── state               # 和服务器实时状态有关的对象
+    |   |   ├── cache.py          # 为最优化而保存的数据
+    |   |   ├── services.py       # 外部依赖实例 (e.g. 数据库)
+    |   |   └── sessions.py       # 活动的sessions (players, channels, matches, etc.)
     |   |
-    |   ├── bg_loops.py           # loops running while the server is running
-    |   ├── commands.py           # commands available in osu!'s chat
-    |   ├── packets.py            # a module for (de)serialization of osu! packets
-    |   └── settings.py           # manages configuration values from the user
+    |   ├── bg_loops.py           # 服务运时运行的循环
+    |   ├── commands.py           # 在osu!的chat里可用的指令
+    |   ├── packets.py            # 用于序列化/反序列化的模块
+    |   └── settings.py           # 管理用户设置
     |
-    ├── ext                   # external entities used when running the server
-    ├── migrations            # database migrations - updates to schema
-    ├── tools                 # various tools made throughout bancho.py's history
-    └── main.py               # an entry point (script) to run the server
+    ├── ext                   # 运行服务时使用的外部依赖(内容: nginx的配置文件)
+    ├── migrations            # 迁移数据库 - updates to schema
+    ├── tools                 # 在bancho.py开发过程中曾经制作出来的工具
+    └── main.py               # 运行服务的入口

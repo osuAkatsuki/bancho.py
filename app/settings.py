@@ -15,8 +15,19 @@ def read_list(value: str) -> list[str]:
     return value.split(",") if value else []
 
 
+# TODO: refactor this out of existence
+MAX_MATCHES = 64
+
+
 SERVER_ADDR = os.environ["SERVER_ADDR"]
-SERVER_PORT = int(v) if (v := os.getenv("SERVER_PORT", None)) else None
+
+# this is a bit weird, to allow "" as a value for backwards compatibility.
+# perhaps can remove in future.
+_server_port = os.environ["SERVER_PORT"]
+if _server_port:
+    SERVER_PORT = int(_server_port)
+else:
+    SERVER_PORT = None
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])
@@ -30,12 +41,15 @@ REDIS_PORT = int(os.environ["REDIS_PORT"])
 REDIS_USER = os.environ["REDIS_USER"]
 REDIS_PASS = os.environ["REDIS_PASS"]
 REDIS_DB = int(os.environ["REDIS_DB"])
-REDIS_DSN = f"redis://{REDIS_USER}:{REDIS_PASS}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+
+REDIS_AUTH_STRING = f"{REDIS_USER}:{REDIS_PASS}@" if REDIS_USER and REDIS_PASS else ""
+REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 OSU_API_KEY = os.environ["OSU_API_KEY"]
 
 DOMAIN = os.environ["DOMAIN"]
-MIRROR_URL = os.environ["MIRROR_URL"]
+MIRROR_SEARCH_ENDPOINT = os.environ["MIRROR_SEARCH_ENDPOINT"]
+MIRROR_DOWNLOAD_ENDPOINT = os.environ["MIRROR_DOWNLOAD_ENDPOINT"]
 
 COMMAND_PREFIX = os.environ["COMMAND_PREFIX"]
 
@@ -51,7 +65,6 @@ DEBUG = read_bool(os.environ["DEBUG"])
 REDIRECT_OSU_URLS = read_bool(os.environ["REDIRECT_OSU_URLS"])
 
 PP_CACHED_ACCURACIES = [int(acc) for acc in read_list(os.environ["PP_CACHED_ACCS"])]
-PP_CACHED_SCORES = [int(pp) for pp in read_list(os.environ["PP_CACHED_SCORES"])]
 
 DISALLOWED_NAMES = read_list(os.environ["DISALLOWED_NAMES"])
 DISALLOWED_PASSWORDS = read_list(os.environ["DISALLOWED_PASSWORDS"])
@@ -71,4 +84,4 @@ DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 ## WARNING touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.6.4"
+VERSION = "4.8.1"

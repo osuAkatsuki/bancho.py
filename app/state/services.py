@@ -7,7 +7,6 @@ import re
 import secrets
 from pathlib import Path
 from typing import AsyncGenerator
-from typing import AsyncIterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
@@ -18,7 +17,6 @@ import aioredis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
-import geoip2.database
 import pymysql
 
 import app.settings
@@ -35,7 +33,6 @@ if TYPE_CHECKING:
 
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
-GEOLOC_DB_FILE = Path.cwd() / "ext/GeoLite2-City.mmdb"
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
@@ -46,10 +43,6 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
-
-geoloc_db: Optional[geoip2.database.Reader] = None
-if GEOLOC_DB_FILE.exists():
-    geoloc_db = geoip2.database.Reader(GEOLOC_DB_FILE)
 
 datadog: Optional[datadog_client.ThreadStats] = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
@@ -121,7 +114,8 @@ class IPResolver:
 
     def get_ip(self, headers: Mapping[str, str]) -> IPAddress:
         """Resolve the IP address from the headers."""
-        if (ip_str := headers.get("CF-Connecting-IP")) is None:
+        ip_str = headers.get("CF-Connecting-IP")
+        if ip_str is None:
             forwards = headers["X-Forwarded-For"].split(",")
 
             if len(forwards) != 1:
@@ -129,37 +123,84 @@ class IPResolver:
             else:
                 ip_str = headers["X-Real-IP"]
 
-        if (ip := self.cache.get(ip_str)) is None:
+        ip = self.cache.get(ip_str)
+        if ip is None:
             ip = ipaddress.ip_address(ip_str)
             self.cache[ip_str] = ip
 
         return ip
 
 
-def fetch_geoloc_db(ip: IPAddress) -> Geolocation:
-    """Fetch geolocation data based on ip (using local db)."""
-    assert geoloc_db is not None
+async def fetch_geoloc(
+    ip: IPAddress,
+    headers: Optional[Mapping[str, str]] = None,
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip."""
+    geoloc = fetch_geoloc_cloudflare(ip, headers)
 
-    res = geoloc_db.city(ip)
+    if geoloc is None:
+        geoloc = fetch_geoloc_nginx(ip, headers)
 
-    if res.country.iso_code is not None:
-        acronym = res.country.iso_code.lower()
-    else:
-        acronym = "XX"
+    if geoloc is None:
+        geoloc = await fetch_geoloc_web(ip)
+
+    return geoloc
+
+
+def fetch_geoloc_cloudflare(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip (using cloudflare headers)."""
+    if not all(
+        key in headers for key in ("CF-IPCountry", "CF-IPLatitude", "CF-IPLongitude")
+    ):
+        return
+
+    country_code = headers["CF-IPCountry"].lower()
+    latitude = float(headers["CF-IPLatitude"])
+    longitude = float(headers["CF-IPLongitude"])
 
     return {
-        "latitude": res.location.latitude or 0.0,
-        "longitude": res.location.longitude or 0.0,
+        "latitude": latitude,
+        "longitude": longitude,
         "country": {
-            "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
+        },
+    }
+
+
+def fetch_geoloc_nginx(
+    ip: IPAddress,
+    headers: Mapping[str, str],
+) -> Optional[Geolocation]:
+    """Fetch geolocation data based on ip (using nginx headers)."""
+    if not all(
+        key in headers for key in ("X-Country-Code", "X-Latitude", "X-Longitude")
+    ):
+        return
+
+    country_code = headers["X-Country-Code"].lower()
+    latitude = float(headers["X-Latitude"])
+    longitude = float(headers["X-Longitude"])
+
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "country": {
+            "acronym": country_code,
+            "numeric": country_codes[country_code],
         },
     }
 
 
 async def fetch_geoloc_web(ip: IPAddress) -> Optional[Geolocation]:
     """Fetch geolocation data based on ip (using ip-api)."""
-    url = f"http://ip-api.com/line/{ip}"
+    if not ip.is_private:
+        url = f"http://ip-api.com/line/{ip}"
+    else:
+        url = "http://ip-api.com/line/"
 
     async with http_client.get(url) as resp:
         if not resp or resp.status != 200:
@@ -267,7 +308,8 @@ class Version:
 
     @classmethod
     def from_str(cls, s: str) -> Optional[Version]:
-        if len(split := s.split(".")) == 3:
+        split = s.split(".")
+        if len(split) == 3:
             return cls(
                 major=int(split[0]),
                 minor=int(split[1]),
@@ -299,7 +341,8 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency_name}/json"
         async with http_client.get(url) as resp:
-            if resp.status == 200 and (json := await resp.json()):
+            json = await resp.json()
+            if resp.status == 200 and json:
                 latest_ver = Version.from_str(json["info"]["version"])
 
                 if not latest_ver:
@@ -350,7 +393,8 @@ async def _get_current_sql_structure_version() -> Optional[Version]:
 
 async def run_sql_migrations() -> None:
     """Update the sql structure, if it has changed."""
-    if not (current_ver := await _get_current_sql_structure_version()):
+    current_ver = await _get_current_sql_structure_version()
+    if not current_ver:
         return  # already up to date (server has never run before)
 
     latest_ver = Version.from_str(app.settings.VERSION)
@@ -375,7 +419,8 @@ async def run_sql_migrations() -> None:
 
         if line.startswith("#"):
             # may be normal comment or new version
-            if r_match := VERSION_RGX.fullmatch(line):
+            r_match = VERSION_RGX.fullmatch(line)
+            if r_match:
                 update_ver = Version.from_str(r_match["ver"])
 
             continue
@@ -429,9 +474,3 @@ async def run_sql_migrations() -> None:
                     "micro": latest_ver.micro,
                 },
             )
-
-
-async def acquire_db_conn() -> AsyncIterator["databases.core.Connection"]:
-    """Decorator to acquire a database connection for a handler."""
-    async with database.connection() as conn:
-        yield conn

@@ -8,6 +8,8 @@ import databases.core
 
 import app.state
 from app.constants.privileges import ClanPrivileges
+from app.repositories import clans as clans_repo
+from app.repositories import players as players_repo
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -40,64 +42,39 @@ class Clan:
 
         self.member_ids = member_ids  # userids
 
-    async def add_member(self, p: Player) -> None:
+    async def add_member(self, player: Player) -> None:
         """Add a given player to the clan's members."""
-        self.member_ids.add(p.id)
+        self.member_ids.add(player.id)
 
         await app.state.services.database.execute(
             "UPDATE users SET clan_id = :clan_id, clan_priv = 1 WHERE id = :user_id",
-            {"clan_id": self.id, "user_id": p.id},
+            {"clan_id": self.id, "user_id": player.id},
         )
 
-        p.clan = self
-        p.clan_priv = ClanPrivileges.Member
+        player.clan = self
+        player.clan_priv = ClanPrivileges.Member
 
-    async def remove_member(self, p: Player) -> None:
+    async def remove_member(self, player: Player) -> None:
         """Remove a given player from the clan's members."""
-        self.member_ids.remove(p.id)
+        self.member_ids.remove(player.id)
 
-        async with app.state.services.database.connection() as db_conn:
-            await db_conn.execute(
-                "UPDATE users SET clan_id = 0, clan_priv = 0 WHERE id = :user_id",
-                {"user_id": p.id},
-            )
+        await players_repo.update(player.id, clan_id=0, clan_priv=0)
 
-            if not self.member_ids:
-                # no members left, disband clan.
-                await db_conn.execute(
-                    "DELETE FROM clans WHERE id = :clan_id",
-                    {"clan_id": self.id},
-                )
-            elif p.id == self.owner_id:
-                # owner leaving and members left,
-                # transfer the ownership.
-                # TODO: prefer officers
-                self.owner_id = next(iter(self.member_ids))
+        if not self.member_ids:
+            # no members left, disband clan.
+            await clans_repo.delete(self.id)
+            app.state.sessions.clans.remove(self)
+        elif player.id == self.owner_id:
+            # owner leaving and members left,
+            # transfer the ownership.
+            # TODO: prefer officers
+            self.owner_id = next(iter(self.member_ids))
 
-                await db_conn.execute(
-                    "UPDATE clans SET owner = :user_id WHERE id = :clan_id",
-                    {"user_id": self.owner_id, "clan_id": self.id},
-                )
+            await clans_repo.update(self.id, owner=self.owner_id)
+            await players_repo.update(self.owner_id, clan_priv=ClanPrivileges.Owner)
 
-                await db_conn.execute(
-                    "UPDATE users SET clan_priv = 3 WHERE id = :user_id",
-                    {"user_id": self.owner_id},
-                )
-
-        p.clan = None
-        p.clan_priv = None
-
-    async def members_from_sql(self, db_conn: databases.core.Connection) -> None:
-        """Fetch all members from sql."""
-        # TODO: in the future, we'll want to add
-        # clan 'mods', so fetching rank here may
-        # be a good idea to sort people into
-        # different roles.
-        for row in await db_conn.fetch_all(
-            "SELECT id FROM users WHERE clan_id = :clan_id",
-            {"clan_id": self.id},
-        ):
-            self.member_ids.add(row["id"])
+        player.clan = None
+        player.clan_priv = None
 
     def __repr__(self) -> str:
         return f"[{self.tag}] {self.name}"

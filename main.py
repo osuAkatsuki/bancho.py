@@ -14,7 +14,7 @@ https://github.com/osuAkatsuki/bancho.py
 from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
-__email__ = "cmyuiosu@gmail.com"
+__email__ = "josh@akatsuki.gg"
 __discord__ = "cmyui#0425"
 
 import os
@@ -41,11 +41,10 @@ def main(argv: Sequence[str]) -> int:
 
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
-        app.utils.ensure_connected_services,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
-        app.utils.ensure_dependencies_and_requirements,  # submodules & oppai-ng built
     ):
-        if (exit_code := safety_check()) != 0:
+        exit_code = safety_check()
+        if exit_code != 0:
             return exit_code
 
     """ Parse and handle command-line arguments. """
@@ -124,7 +123,7 @@ def main(argv: Sequence[str]) -> int:
         # TODO: uvicorn calls .lower() on the key & value,
         #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("bancho-version", app.settings.VERSION),),
+        headers=[("bancho-version", app.settings.VERSION)],
         **server_arguments,
     )
 

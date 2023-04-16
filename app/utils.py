@@ -17,7 +17,6 @@ from typing import Optional
 from typing import TypedDict
 from typing import TypeVar
 
-import databases.core
 import orjson
 import pymysql
 import requests
@@ -31,7 +30,6 @@ from app.logging import printc
 __all__ = (
     # TODO: organize/sort these
     "make_safe_name",
-    "fetch_bot_name",
     "download_achievement_images",
     "download_default_avatar",
     "seconds_readable",
@@ -45,7 +43,6 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_connected_services",
     "ensure_directory_structure",
     "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
@@ -62,28 +59,11 @@ DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
-OPPAI_PATH = Path.cwd() / "oppai_ng"
-OLD_OPPAI_PATH = Path.cwd() / "oppai-ng"
 
 
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
-
-
-async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
-    """Fetch the bot's name from the database, if available."""
-    row = await db_conn.fetch_one("SELECT name FROM users WHERE id = 1")
-
-    if not row:
-        log(
-            "Couldn't find bot account in the database, "
-            "defaulting to BanchoBot for their name.",
-            Ansi.LYELLOW,
-        )
-        return "BanchoBot"
-
-    return row["name"]
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
@@ -380,26 +360,6 @@ def ensure_supported_platform() -> int:
     return 0
 
 
-def ensure_connected_services(timeout: float = 1.0) -> int:
-    """Ensure connected service connections are functional and running."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            sock.connect((app.settings.DB_HOST, app.settings.DB_PORT))
-        except OSError:
-            log("Unable to connect to mysql server.", Ansi.LRED)
-            return 1
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            sock.connect((app.settings.REDIS_HOST, app.settings.REDIS_PORT))
-        except OSError:
-            log("Unable to connect to redis server.", Ansi.LRED)
-            return 1
-
-    return 0
-
-
 def ensure_directory_structure() -> int:
     """Ensure the .data directory and git submodules are ready."""
     # create /.data and its subdirectories.
@@ -415,60 +375,6 @@ def ensure_directory_structure() -> int:
 
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
-
-    return 0
-
-
-def ensure_dependencies_and_requirements() -> int:
-    """Make sure all of bancho.py's dependencies are ready."""
-    if (
-        not OPPAI_PATH.exists()
-        or not (OPPAI_PATH / "pybind11").exists()
-        or not any((OPPAI_PATH / "pybind11").iterdir())
-    ):
-        log("No oppai-ng submodule found, attempting to clone.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["git", "submodule", "update", "--init", "--recursive"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if exit_code := p.wait():
-            log("Failed to get git submodules.", Ansi.LRED)
-            return exit_code
-
-    if not (OPPAI_PATH / "oppai.so").exists():
-        log("No oppai-ng library found, attempting to build.", Ansi.LMAGENTA)
-        p = subprocess.Popen(
-            args=["./build"],
-            cwd="oppai_ng",
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        if exit_code := p.wait():
-            _, stderr = p.communicate()
-            print(stderr.decode())
-            log("Failed to build oppai-ng automatically.", Ansi.LRED)
-            return exit_code
-
-        log(
-            "oppai-ng built, please start bancho.py again!",
-            Ansi.LMAGENTA,
-        )  # restart is required to fix imports
-
-        if OLD_OPPAI_PATH.exists():
-            # they have the old oppai-ng folder on disk
-            # they may have made changes to their pp system,
-            # let them know that they can delete it & fork if needed
-            log(
-                "Note that with the v4.2.1 migration, the oppai-ng folder was "
-                "moved to oppai_ng (note the underscore). Your old oppai-ng "
-                "folder still exists, and if you have made diverging changes "
-                "to your PP system, you'll need to update the new oppai_ng "
-                "submodule to apply those changes.",
-                Ansi.LMAGENTA,
-            )
-
-        return 1
 
     return 0
 

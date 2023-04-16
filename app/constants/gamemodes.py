@@ -8,10 +8,7 @@ from app.constants.mods import Mods
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = (
-    "GAMEMODE_REPR_LIST",
-    "GameMode",
-)
+__all__ = ("GAMEMODE_REPR_LIST", "GameMode")
 
 GAMEMODE_REPR_LIST = (
     "vn!std",
@@ -48,7 +45,6 @@ class GameMode(IntEnum):
     AUTOPILOT_MANIA = 11  # unused
 
     @classmethod
-    @functools.lru_cache(maxsize=32)
     def from_params(cls, mode_vn: int, mods: Mods) -> GameMode:
         mode = mode_vn
 
@@ -59,14 +55,23 @@ class GameMode(IntEnum):
 
         return cls(mode)
 
-    @functools.cached_property
+    @classmethod
+    @functools.cache
+    def valid_gamemodes(cls) -> list[GameMode]:
+        ret = []
+        for mode in cls:
+            if mode not in (
+                cls.RELAX_MANIA,
+                cls.AUTOPILOT_TAIKO,
+                cls.AUTOPILOT_CATCH,
+                cls.AUTOPILOT_MANIA,
+            ):
+                ret.append(mode)
+        return ret
+
+    @property
     def as_vanilla(self) -> int:
-        if self.value & self.AUTOPILOT_OSU:
-            return self.value - 8
-        elif self.value & self.RELAX_OSU:
-            return self.value - 4
-        else:
-            return self.value
+        return self.value % 4
 
     def __repr__(self) -> str:
         return GAMEMODE_REPR_LIST[self.value]

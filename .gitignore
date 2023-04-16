@@ -8,4 +8,8 @@ ext/GeoLite2-City.mmdb
 .env
 tools/migrate_v420/go.sum
 tools/migrate_v420/scoreMigrator
-venv/
+.venv/
+.mypy_cache/
+.pytest_cache/
+ext/nginx.conf
+tools/cf_records.txt
