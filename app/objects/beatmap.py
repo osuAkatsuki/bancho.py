@@ -89,12 +89,12 @@ async def ensure_local_osu_file(
             stacktrace = app.utils.get_appropriate_stacktrace()
             await app.state.services.log_strange_occurrence(stacktrace)
 
-        b_beatmap = await resp.read()
-        bytes_md5 = hashlib.md5(b_beatmap).hexdigest()
+        bmap_bytes = await resp.read()
+        bytes_md5 = hashlib.md5(bmap_bytes).hexdigest()
         if bytes_md5 in KNOWN_BAD_FILES_MD5:
             return False
         # at least this' not a known bad file
-        osu_file_path.write_bytes(b_beatmap)
+        osu_file_path.write_bytes(bmap_bytes)
         # some callers have type Any | str on "bmap_md5" so I assume it's optional
         if bmap_md5 is not None and bytes_md5 is not bmap_md5:
             return False
