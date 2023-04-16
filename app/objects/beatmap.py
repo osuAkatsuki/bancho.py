@@ -84,7 +84,7 @@ async def ensure_local_osu_file(
 
     url = f"https://old.ppy.sh/osu/{bmap_id}"
     async with app.state.services.http_client.get(url) as resp:
-        if False == resp.ok():
+        if not resp.ok:
             # client error, report this to cmyui
             stacktrace = app.utils.get_appropriate_stacktrace()
             await app.state.services.log_strange_occurrence(stacktrace)
