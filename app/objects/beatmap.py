@@ -84,14 +84,14 @@ async def ensure_local_osu_file(
     async with app.state.services.http_client.get(url) as resp:
         if resp.headers.get("Content-Disposition") is None:
             # bmap_id is not exists.
-            # considering remove following code as it occurs frequently.
+            # consider removing following code as it occurs frequently.
             stacktrace = app.utils.get_appropriate_stacktrace()
             await app.state.services.log_strange_occurrence(stacktrace)
             return False
 
+        bmap_bytes = await resp.read()
         if bmap_bytes.strip():
             return False
-        bmap_bytes = await resp.read()
         bytes_md5 = hashlib.md5(bmap_bytes).hexdigest()
         osu_file_path.write_bytes(bmap_bytes)
         if bmap_md5 is not None and bytes_md5 is not bmap_md5:
