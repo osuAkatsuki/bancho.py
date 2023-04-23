@@ -688,7 +688,7 @@ async def osuSubmitModularSelector(
     if not bmap:
         # Map does not exist, most likely unsubmitted.
         return b"error: beatmap"
-    
+
     # if the client has supporter, a space is appended
     # but usernames may also end with a space, which must be preserved
     username = score_data[1]
