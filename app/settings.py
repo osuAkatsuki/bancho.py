@@ -61,7 +61,7 @@ DATADOG_API_KEY = os.environ["DATADOG_API_KEY"]
 DATADOG_APP_KEY = os.environ["DATADOG_APP_KEY"]
 
 SMTP_SERVER = os.environ["SMTP_SERVER"]
-SMTP_PORT = os.environ["SMTP_PORT"]
+SMTP_PORT = int(os.environ["SMTP_PORT"])
 SMTP_USERNAME = os.environ["SMTP_USERNAME"]
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 SMTP_EMAIL = os.environ["SMTP_EMAIL"]
