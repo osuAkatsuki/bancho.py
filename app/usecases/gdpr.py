@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import base64
 import csv
 import glob
 import os.path
 import re
-import smtplib
-import ssl
 import zipfile
 from io import BytesIO
 from io import StringIO
@@ -19,30 +16,32 @@ from app.constants import regexes
 from app.objects.player import Player
 
 # All user-data related tables and their WHERE query to select the user-related rows
-table_queries = {
-    "clans": "owner = :id",
-    "client_hashes": "userid = :id",
-    "comments": "userid = :id",
-    "favourites": "userid = :id",
-    "ingame_logins": "userid = :id",
-    # "logs": "`from` = :id OR `to` = :id", # critical data
-    "mail": "from_id = :id OR to_id = :id",
-    "map_requests": "player_id = :id",
-    "ratings": "userid = :id",
-    "relationships": "user1 = :id",
-    "scores": "userid = :id",
-    "stats": "id = :id",
-    "users": "id = :id",
+
+TABLE_USER_ID_COLUMN_NAMES = {
+    "clans": "owner",
+    "client_hashes": "userid",
+    "comments": "userid",
+    "favourites": "userid",
+    "ingame_logins": "userid",
+    # "logs": "`from` OR `to`", # critical data
+    "mail": "from_id OR to_id",
+    "map_requests": "player_id",
+    "ratings": "userid",
+    "relationships": "user1",
+    "scores": "userid",
+    "stats": "id",
+    "users": "id",
 }
 
 
 async def generate_table_csv(table: str, user_id: int) -> str:
     """Generates the CSV as a string for the specified table from the table dictionary and user id."""
-    if not table in table_queries:
+    user_id_column_name = TABLE_USER_ID_COLUMN_NAMES.get(table)
+    if user_id_column_name is None:
         raise KeyError("Table not found.")
 
-    output = StringIO()
-    writer = csv.writer(output, strict=True)
+    buffer = StringIO()
+    writer = csv.writer(buffer, strict=True)
 
     # fetch the column names for the CSV column row
     columns = await app.state.services.database.fetch_all(
@@ -53,31 +52,29 @@ async def generate_table_csv(table: str, user_id: int) -> str:
     writer.writerow(column["COLUMN_NAME"] for column in columns)
 
     rows = await app.state.services.database.fetch_all(
-        f"SELECT * FROM {table} WHERE {table_queries[table]}",
+        f"SELECT * FROM {table} WHERE {user_id_column_name}",
         {"id": user_id},
     )
 
     for row in rows:
         writer.writerow(row)
 
-    return output.getvalue()
+    return buffer.getvalue()
 
 
 async def generate_csvs(user_id: int) -> dict[str, str]:
     """Generates all CSVs for all tables in the table dictionary for the specified user id."""
-    csvs = {}
-
-    for table in table_queries.keys():
-        csvs[table] = await generate_table_csv(table, user_id)
-
-    return csvs
+    return {
+        table: await generate_table_csv(table, user_id)
+        for table in TABLE_USER_ID_COLUMN_NAMES
+    }
 
 
 async def generate_zip_archive(user_id: int) -> BytesIO:
     """Generates the whole user-data package as a zip archive and returns the BytesIO object."""
-    output = BytesIO()
+    buffer = BytesIO()
 
-    with zipfile.ZipFile(output, "a", zipfile.ZIP_STORED, False) as zip:
+    with zipfile.ZipFile(buffer, "a", zipfile.ZIP_STORED, False) as zip:
 
         # Add the sql data CSV files to the zip archive
         for table, csv in (await generate_csvs(user_id)).items():
@@ -119,8 +116,32 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
         #    with open(app.utils.DATA_PATH / f"osr/{id}.osr", "rb") as file:
         #        zip.writestr(f"replays/{id}.osr", file.read())
 
-    output.seek(0)
-    return output
+    buffer.seek(0)
+    return buffer
+
+
+GDPR_HTML_PAGE = """\
+<link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet" type="text/css">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+   <tbody>
+      <tr>
+         <td>
+            <h1 style="margin-bottom: 10px; text-align: center; font-family: Roboto, Tahoma, sans-serif; font-size: 65px;">GDPR Request</h1>
+         </td>
+      </tr>
+      <tr>
+         <td>
+            <h2 style="margin-top: 0px; font-family: Roboto, Tahoma, sans-serif; font-size: 24px; text-align: center;">Hello [NAME]!<br/>Your GDPR data package is ready.<br/>Please view the attachments to download<br/>the uncompressed ZIP archive.</h2>
+         </td>
+      </tr>
+      <tr>
+         <td>
+            <h3 style="font-family: Roboto, Tahoma, sans-serif; font-size: 18px; color: #95a5a6; text-align: center;">Sent by bancho.py via [DOMAIN]</h3>
+         </td>
+      </tr>
+   </tbody>
+</table>
+"""
 
 
 async def send_gdpr_email(player: Player) -> None:
@@ -129,11 +150,11 @@ async def send_gdpr_email(player: Player) -> None:
     zip = (await generate_zip_archive(player.id)).read()
     attachment = app.usecases.email.get_file_attachment(f"gdpr_{player.id}.zip", zip)
 
-    message_base64 = "PGxpbmsgaHJlZj0iaHR0cHM6Ly9mb250cy5nb29nbGVhcGlzLmNvbS9jc3M/ZmFtaWx5PVJvYm90bzo0MDAsNzAwIiByZWw9InN0eWxlc2hlZXQiIHR5cGU9InRleHQvY3NzIj48dGFibGUgcm9sZT0icHJlc2VudGF0aW9uIiB3aWR0aD0iMTAwJSIgY2VsbHNwYWNpbmc9IjAiIGNlbGxwYWRkaW5nPSIwIj4gPHRib2R5PiA8dHI+IDx0ZD4gPGgxIHN0eWxlPSJtYXJnaW4tYm90dG9tOiAxMHB4OyB0ZXh0LWFsaWduOiBjZW50ZXI7IGZvbnQtZmFtaWx5OiBSb2JvdG8sIFRhaG9tYSwgc2Fucy1zZXJpZjsgZm9udC1zaXplOiA2NXB4OyI+R0RQUiBSZXF1ZXN0PC9oMT4gPC90ZD48L3RyPjx0cj4gPHRkPiA8aDIgc3R5bGU9Im1hcmdpbi10b3A6IDBweDsgZm9udC1mYW1pbHk6IFJvYm90bywgVGFob21hLCBzYW5zLXNlcmlmOyBmb250LXNpemU6IDI0cHg7IHRleHQtYWxpZ246IGNlbnRlcjsiPkhlbGxvIFtOQU1FXSE8YnIvPllvdXIgR0RQUiBkYXRhIHBhY2thZ2UgaXMgcmVhZHkuPGJyLz5QbGVhc2UgdmlldyB0aGUgYXR0YWNobWVudHMgdG8gZG93bmxvYWQ8YnIvPnRoZSB1bmNvbXByZXNzZWQgWklQIGFyY2hpdmUuPC9oMj4gPC90ZD48L3RyPjx0cj4gPHRkPiA8aDMgc3R5bGU9ImZvbnQtZmFtaWx5OiBSb2JvdG8sIFRhaG9tYSwgc2Fucy1zZXJpZjsgZm9udC1zaXplOiAxOHB4OyBjb2xvcjogIzk1YTVhNjsgdGV4dC1hbGlnbjogY2VudGVyOyI+U2VudCBieSBiYW5jaG8ucHkgdmlhIFtET01BSU5dPC9oMz4gPC90ZD48L3RyPjwvdGJvZHk+PC90YWJsZT4="
-    message = base64.b64decode(message_base64).decode("utf-8")
+    message = GDPR_HTML_PAGE
     message = message.replace("[NAME]", player.name)
     message = message.replace("[DOMAIN]", app.settings.DOMAIN)
 
+    assert player.email is not None
     app.usecases.email.send_email(
         [player.email],
         "Your GDPR data package is ready!",
