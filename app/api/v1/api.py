@@ -181,9 +181,10 @@ async def api_calculate_pp(
     )
 
     # "Inject" the accuracy into the list of results
-    if len(results) > 1:
-        for i in range(0, len(results)):
-            results[i]["accuracy"] = scores[i].acc
+    results = [
+        performance_result | {"accuracy": score.acc}
+        for performance_result, score in zip(results, scores)
+    ]
 
     return ORJSONResponse(
         results
