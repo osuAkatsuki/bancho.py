@@ -74,7 +74,12 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
     """Generates the whole user-data package as a zip archive and returns the BytesIO object."""
     buffer = BytesIO()
 
-    with zipfile.ZipFile(buffer, "a", zipfile.ZIP_STORED, False) as zip:
+    with zipfile.ZipFile(
+        file=buffer,
+        mode="a",
+        compression=zipfile.ZIP_STORED,
+        allowZip64=False,
+    ) as zip:
 
         # Add the sql data CSV files to the zip archive
         for table, csv in (await generate_csvs(user_id)).items():
@@ -88,21 +93,17 @@ async def generate_zip_archive(user_id: int) -> BytesIO:
 
         # Add the chat logs from .data/logs/chat.log
         chatlog = StringIO()
-        file = open(app.utils.DATA_PATH / "logs/chat.log")
-        while True:
-            line = file.readline()
-            if not line:
-                break
+        with open(app.utils.DATA_PATH / "logs/chat.log") as f:
+            for line in f:
+                matches = re.findall(
+                    regexes.CHATLOG_USER_ID,
+                    ":".join(line.split(":")[:3]),
+                )
 
-            matches = re.findall(
-                regexes.CHATLOG_USER_ID,
-                ":".join(line.split(":")[:3]),
-            )
-
-            if len(matches) > 0 and matches[0] == str(user_id):
-                chatlog.write(line)
-            if len(matches) > 1 and matches[1] == str(user_id):
-                chatlog.write(line)
+                if len(matches) > 0 and matches[0] == str(user_id):
+                    chatlog.write(line)
+                if len(matches) > 1 and matches[1] == str(user_id):
+                    chatlog.write(line)
 
         chatlog.seek(0)
         zip.writestr("chat.log", chatlog.getvalue())
