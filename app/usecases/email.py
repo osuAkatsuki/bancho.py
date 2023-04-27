@@ -3,7 +3,6 @@ from __future__ import annotations
 import smtplib
 import ssl
 from email.mime.application import MIMEApplication
-from email.mime.message import MIMEMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE
@@ -16,7 +15,7 @@ def send_email(
     receivers: list[str],
     subject: str,
     content,
-    attachments: list[MIMEMessage],
+    attachments: list[MIMEApplication],
 ) -> None:
     """Sends an email using the specified SMTP settings in the config with the specified subject, content and attachments to the specified receivers"""
 
