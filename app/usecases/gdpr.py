@@ -8,9 +8,9 @@ import zipfile
 from io import BytesIO
 from io import StringIO
 
+import app.adapters.email
 import app.settings
 import app.state
-import app.usecases.email
 import app.utils
 from app.constants import regexes
 from app.objects.player import Player
@@ -148,14 +148,14 @@ async def send_gdpr_email(player: Player) -> None:
     """Sends an email containing the GDPR data to the specified user."""
 
     zip = (await generate_zip_archive(player.id)).read()
-    attachment = app.usecases.email.get_file_attachment(f"gdpr_{player.id}.zip", zip)
+    attachment = app.adapters.email.get_file_attachment(f"gdpr_{player.id}.zip", zip)
 
     message = GDPR_HTML_PAGE
     message = message.replace("[NAME]", player.name)
     message = message.replace("[DOMAIN]", app.settings.DOMAIN)
 
     assert player.email is not None
-    app.usecases.email.send_email(
+    app.adapters.email.send_email(
         [player.email],
         "Your GDPR data package is ready!",
         message,

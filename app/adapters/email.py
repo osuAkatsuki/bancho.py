@@ -7,15 +7,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE
 from email.utils import formatdate
+from typing import Sequence
 
 import app.settings
 
 
 def send_email(
-    receivers: list[str],
+    receivers: Sequence[str],
     subject: str,
-    content,
-    attachments: list[MIMEApplication],
+    content: str,
+    attachments: Sequence[MIMEApplication],
 ) -> None:
     """Sends an email using the specified SMTP settings in the config with the specified subject, content and attachments to the specified receivers"""
 
