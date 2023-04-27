@@ -11,8 +11,8 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
+from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
-from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
@@ -181,9 +181,10 @@ async def api_calculate_pp(
     )
 
     # "Inject" the accuracy into the list of results
-    if len(results) > 1:
-        for i in range(0, len(results)):
-            results[i]["accuracy"] = scores[i].acc
+    results = [
+        performance_result | {"accuracy": score.acc}
+        for performance_result, score in zip(results, scores)
+    ]
 
     return ORJSONResponse(
         results
@@ -737,8 +738,8 @@ async def api_get_replay(
     raw_replay_data = replay_file.read_bytes()
 
     if include_headers:
-        return StreamingResponse(
-            raw_replay_data,
+        return FileResponse(
+            path=REPLAYS_PATH / f"{score_id}.osr",
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
@@ -749,7 +750,7 @@ async def api_get_replay(
 
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await app.state.services.database.fetch_one(
+    rec = await app.state.services.database.fetch_one(
         "SELECT u.name username, m.md5 map_md5, "
         "m.artist, m.title, m.version, "
         "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
@@ -761,6 +762,7 @@ async def api_get_replay(
         "WHERE s.id = :score_id",
         {"score_id": score_id},
     )
+    row = dict(rec._mapping) if rec is not None else None
 
     if not row:
         # score not found in sql
@@ -825,8 +827,8 @@ async def api_get_replay(
     # can't submit scores so should not be a problem.
 
     # stream data back to the client
-    return StreamingResponse(
-        replay_data,
+    return FileResponse(
+        path=REPLAYS_PATH / f"{score_id}.osr",
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
