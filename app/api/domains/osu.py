@@ -344,6 +344,8 @@ async def osuAddFavourite(
         "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
         {"user_id": player.id, "set_id": map_set_id},
     )
+    
+    return b"Added favourite!"
 
 
 @router.get("/web/lastfm.php")
