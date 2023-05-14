@@ -2270,7 +2270,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
     for (mods, slot), bmap in sorted(
         pool.maps.items(), key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
     ):
-        l.append(f"{Mods.to_string(mods)}{slot}: {bmap.fullest_embed}")
+        l.append(f"{mods!r}{slot}: {bmap.full_embed}")
 
     return "\n".join(l)
 
