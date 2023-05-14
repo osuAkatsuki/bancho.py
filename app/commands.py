@@ -2268,7 +2268,8 @@ async def pool_info(ctx: Context) -> Optional[str]:
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
     for (mods, slot), bmap in sorted(
-        pool.maps.items(), key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
+        pool.maps.items(),
+        key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
     ):
         l.append(f"{mods!r}{slot}: {bmap.full_embed}")
 
