@@ -2271,7 +2271,7 @@ async def pool_info(ctx: Context) -> Optional[str]:
         pool.maps.items(),
         key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
     ):
-        l.append(f"{mods!r}{slot}: {bmap.full_embed}")
+        l.append(f"{mods!r}{slot}: {bmap.embed}")
 
     return "\n".join(l)
 
