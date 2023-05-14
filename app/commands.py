@@ -2267,7 +2267,9 @@ async def pool_info(ctx: Context) -> Optional[str]:
     datetime_fmt = f"Created at {_time} on {_date}"
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
-    for (mods, slot), bmap in sorted(pool.maps.items(), key=lambda x: (Mods.to_string(x[0][0]), x[0][1])):
+    for (mods, slot), bmap in sorted(
+        pool.maps.items(), key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
+    ):
         l.append(f"{Mods.to_string(mods)}{slot}: {bmap.fullest_embed}")
 
     return "\n".join(l)
