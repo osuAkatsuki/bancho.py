@@ -1053,23 +1053,6 @@ async def debug(ctx: Context) -> Optional[str]:
     return f"Toggled {'on' if app.settings.DEBUG else 'off'}."
 
 
-# NOTE: these commands will likely be removed
-#       with the addition of a good frontend.
-str_priv_dict = {
-    "normal": Privileges.UNRESTRICTED,
-    "verified": Privileges.VERIFIED,
-    "whitelisted": Privileges.WHITELISTED,
-    "supporter": Privileges.SUPPORTER,
-    "premium": Privileges.PREMIUM,
-    "alumni": Privileges.ALUMNI,
-    "tournament": Privileges.TOURNEY_MANAGER,
-    "nominator": Privileges.NOMINATOR,
-    "mod": Privileges.MODERATOR,
-    "admin": Privileges.ADMINISTRATOR,
-    "developer": Privileges.DEVELOPER,
-}
-
-
 @command(Privileges.DEVELOPER, hidden=True)
 async def addpriv(ctx: Context) -> Optional[str]:
     """Set privileges for a specified player (by name)."""
@@ -1079,10 +1062,10 @@ async def addpriv(ctx: Context) -> Optional[str]:
     bits = Privileges(0)
 
     for m in [m.lower() for m in ctx.args[1:]]:
-        if m not in str_priv_dict:
-            return f"Not found: {m}."
+        if not hasattr(Privileges, m.upper()):
+            return f"{m} is not a valid privilege."
 
-        bits |= str_priv_dict[m]
+        bits |= getattr(Privileges, m.upper())
 
     target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
     if not target:
@@ -1092,7 +1075,7 @@ async def addpriv(ctx: Context) -> Optional[str]:
         return "Please use the !givedonator command to assign donator privileges to players."
 
     await target.add_privs(bits)
-    return f"Updated {target}'s privileges."
+    return f"Added {', '.join(ctx.args[1:])} to {target.name}'s privileges."
 
 
 @command(Privileges.DEVELOPER, hidden=True)
@@ -1104,10 +1087,10 @@ async def rmpriv(ctx: Context) -> Optional[str]:
     bits = Privileges(0)
 
     for m in [m.lower() for m in ctx.args[1:]]:
-        if m not in str_priv_dict:
-            return f"Not found: {m}."
+        if not hasattr(Privileges, m.upper()):
+            return f"{m} is not a valid privilege."
 
-        bits |= str_priv_dict[m]
+        bits |= getattr(Privileges, m.upper())
 
     target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
     if not target:
@@ -1122,7 +1105,7 @@ async def rmpriv(ctx: Context) -> Optional[str]:
             {"user_id": target.id},
         )
 
-    return f"Updated {target}'s privileges."
+    return f"Removed {', '.join(ctx.args[1:])} from {target.name}'s privileges."
 
 
 @command(Privileges.DEVELOPER, hidden=True)
