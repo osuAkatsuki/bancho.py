@@ -1292,16 +1292,16 @@ async def get_leaderboard_scores(
         "FROM scores s "
         "INNER JOIN users u ON u.id = s.userid "
         "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 " 
+        "WHERE s.map_md5 = :map_md5 "
         "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
     ]
 
     params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
- 
+
     if leaderboard_type == LeaderboardType.Mods:
         query.append("AND s.mods = :mods")
         params["mods"] = mods
-        query.append("AND s.status IN (1, 2)") # 1 = submitted, 2 = best
+        query.append("AND s.status IN (1, 2)")  # 1 = submitted, 2 = best
     elif leaderboard_type == LeaderboardType.Friends:
         query.append("AND s.userid IN :friends")
         params["friends"] = player.friends | {player.id}
