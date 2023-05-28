@@ -1305,12 +1305,11 @@ async def get_leaderboard_scores(
     elif leaderboard_type == LeaderboardType.Friends:
         query.append("AND s.userid IN :friends")
         params["friends"] = player.friends | {player.id}
-        query.append("AND s.status = 2")
     elif leaderboard_type == LeaderboardType.Country:
         query.append("AND u.country = :country")
         params["country"] = player.geoloc["country"]["acronym"]
-        query.append("AND s.status = 2")
-    else:
+        
+    if leaderboard_type != LeaderboardType.Mods:
         query.append("AND s.status = 2")
 
     # TODO: customizability of the number of scores
