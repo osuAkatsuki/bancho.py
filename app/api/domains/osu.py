@@ -1308,7 +1308,7 @@ async def get_leaderboard_scores(
     elif leaderboard_type == LeaderboardType.Country:
         query.append("AND u.country = :country")
         params["country"] = player.geoloc["country"]["acronym"]
-        
+
     if leaderboard_type != LeaderboardType.Mods:
         query.append("AND s.status = 2")
 
