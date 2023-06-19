@@ -26,8 +26,6 @@ from app.utils import pymysql_encode
 
 __all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
 
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
-
 DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)

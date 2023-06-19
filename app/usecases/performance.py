@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 from typing import Optional
 from typing import TypedDict
@@ -56,10 +57,10 @@ class PerformanceResult(TypedDict):
 
 
 def calculate_performances(
-    osu_file_path: str,
+    osu_file_path: Path,
     scores: Iterable[ScoreParams],
 ) -> list[PerformanceResult]:
-    calc_bmap = Beatmap(path=osu_file_path)
+    calc_bmap = Beatmap(bytes=osu_file_path.read_bytes())
 
     results: list[PerformanceResult] = []
 

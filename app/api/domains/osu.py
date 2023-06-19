@@ -11,7 +11,6 @@ from collections import defaultdict
 from enum import IntEnum
 from enum import unique
 from functools import cache
-from pathlib import Path as SystemPath
 from typing import Any
 from typing import Awaitable
 from typing import Callable
@@ -35,8 +34,8 @@ from fastapi.param_functions import Header
 from fastapi.param_functions import Path
 from fastapi.param_functions import Query
 from fastapi.requests import Request
-from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
@@ -64,18 +63,15 @@ from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.paths import BEATMAPS_PATH
+from app.paths import REPLAYS_PATH
+from app.paths import SCREENSHOTS_PATH
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
-
-BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
-REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
-SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
-
 
 router = APIRouter(
     tags=["osu! web API"],
@@ -1740,8 +1736,8 @@ async def get_screenshot(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    return FileResponse(
-        path=screenshot_path,
+    return PlainTextResponse(
+        content=screenshot_path.read_bytes(),
         media_type=app.utils.get_media_type(extension),  # type: ignore
     )
 

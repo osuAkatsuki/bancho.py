@@ -60,13 +60,12 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.paths import BEATMAPS_PATH
 from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
-
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 BASE_DOMAIN = app.settings.DOMAIN
 
@@ -1262,7 +1261,7 @@ class SendPrivateMessage(BasePacket):
                             ]
 
                             results = app.usecases.performance.calculate_performances(
-                                osu_file_path=str(osu_file_path),
+                                osu_file_path=osu_file_path,
                                 scores=scores,
                             )
 

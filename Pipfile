@@ -23,6 +23,9 @@ sqlalchemy = "1.4.41"
 databases = {extras = ["mysql"], version = "0.5.5"}
 akatsuki-pp-py = "*"
 cryptography = "*"
+smart-open = "*"
+universal-pathlib = "*"
+s3fs = "*"
 
 [dev-packages]
 pytest = "*"

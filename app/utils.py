@@ -6,7 +6,6 @@ import ipaddress
 import os
 import shutil
 import socket
-import subprocess
 import sys
 import types
 import zipfile
@@ -55,9 +54,17 @@ __all__ = (
     "has_png_headers_and_trailers",
 )
 
-DATA_PATH = Path.cwd() / ".data"
-ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
-DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
+from app.paths import (
+    DATA_PATH,
+    ACHIEVEMENTS_ASSETS_PATH,
+    DEFAULT_AVATAR_PATH,
+    AVATARS_PATH,
+    LOGS_PATH,
+    BEATMAPS_PATH,
+    REPLAYS_PATH,
+    SCREENSHOTS_PATH,
+)
+
 DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 
 
@@ -363,11 +370,9 @@ def ensure_supported_platform() -> int:
 def ensure_directory_structure() -> int:
     """Ensure the .data directory and git submodules are ready."""
     # create /.data and its subdirectories.
-    DATA_PATH.mkdir(exist_ok=True)
 
-    for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
-        subdir = DATA_PATH / sub_dir
-        subdir.mkdir(exist_ok=True)
+    for dir in (AVATARS_PATH, LOGS_PATH, BEATMAPS_PATH, REPLAYS_PATH, SCREENSHOTS_PATH):
+        dir.mkdir(exist_ok=True, parents=True)
 
     if not ACHIEVEMENTS_ASSETS_PATH.exists():
         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)

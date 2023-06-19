@@ -17,6 +17,10 @@ __author__ = "Joshua Smith (cmyui)"
 __email__ = "josh@akatsuki.gg"
 __discord__ = "cmyui#0425"
 
+from smart_open.smart_open_lib import patch_pathlib
+
+_ = patch_pathlib()
+
 import os
 
 # set working directory to the bancho/ directory.

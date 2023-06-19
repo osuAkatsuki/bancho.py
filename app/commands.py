@@ -7,7 +7,6 @@ import pprint
 import random
 import secrets
 import signal
-import struct
 import time
 import traceback
 import uuid
@@ -15,7 +14,6 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
-from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import Any
 from typing import Awaitable
@@ -60,6 +58,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
+from app.paths import BEATMAPS_PATH
 from app.repositories import clans as clans_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
@@ -68,9 +67,6 @@ from app.utils import seconds_readable
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
-
-
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
 @dataclass
@@ -523,7 +519,7 @@ async def _with(ctx: Context) -> Optional[str]:
         msg_fields.append(f"{acc:.2f}%")
 
     result = app.usecases.performance.calculate_performances(
-        osu_file_path=str(osu_file_path),
+        osu_file_path=osu_file_path,
         scores=[score_args],  # calculate one score
     )
 

@@ -21,12 +21,11 @@ from app.usecases.performance import ScoreParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
+
 if TYPE_CHECKING:
     from app.objects.player import Player
 
 __all__ = ("Grade", "SubmissionStatus", "Score")
-
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
 @unique
@@ -345,7 +344,7 @@ class Score:
         )
 
         result = app.usecases.performance.calculate_performances(
-            osu_file_path=str(osu_file_path),
+            osu_file_path=osu_file_path,
             scores=[score_args],
         )
 

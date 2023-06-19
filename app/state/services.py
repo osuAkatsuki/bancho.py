@@ -26,13 +26,12 @@ from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
 from app.logging import Rainbow
+from app.paths import LOGS_PATH as STRANGE_LOG_DIR
 
 if TYPE_CHECKING:
     import aiohttp
     import databases.core
 
-
-STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"

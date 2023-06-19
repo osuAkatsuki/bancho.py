@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from pathlib import Path as SystemPath
 from typing import Literal
 from typing import Optional
 
@@ -11,8 +10,8 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
-from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
@@ -26,16 +25,12 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.clan import Clan
 from app.objects.player import Player
+from app.paths import BEATMAPS_PATH
+from app.paths import REPLAYS_PATH
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.usecases.performance import ScoreParams
-
-AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
-BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
-REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
-SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
-
 
 router = APIRouter()
 oauth2_scheme = HTTPBearer(auto_error=False)
@@ -176,7 +171,7 @@ async def api_calculate_pp(
         )
 
     results = app.usecases.performance.calculate_performances(
-        str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
+        BEATMAPS_PATH / f"{beatmap.id}.osu",
         scores,
     )
 
@@ -738,8 +733,8 @@ async def api_get_replay(
     raw_replay_data = replay_file.read_bytes()
 
     if include_headers:
-        return FileResponse(
-            path=REPLAYS_PATH / f"{score_id}.osr",
+        return PlainTextResponse(
+            content=(REPLAYS_PATH / f"{score_id}.osr").read_bytes(),
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
@@ -827,8 +822,8 @@ async def api_get_replay(
     # can't submit scores so should not be a problem.
 
     # stream data back to the client
-    return FileResponse(
-        path=REPLAYS_PATH / f"{score_id}.osr",
+    return PlainTextResponse(
+        content=(REPLAYS_PATH / f"{score_id}.osr").read_bytes(),
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
