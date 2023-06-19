@@ -1,0 +1,186 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "banchopy.fullname" . }}
+  labels:
+    {{- include "banchopy.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "banchopy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "banchopy.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "banchopy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ required "Image repository is required!" .Values.image.repository }}:{{ required "Image tag is required!" (.Values.image.tag | default .Chart.AppVersion) }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /home/bpyuser # Workaround for https://github.com/osuAkatsuki/bancho.py/blob/f5ace93da9f61fe0229b14fc229276808c9f9da1/app/api/v1/api.py#L34-L37
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "banchopy.fullname" . }}
+            - secretRef:
+                name: {{ include "banchopy.fullname" . }}
+          volumeMounts:
+          - name: base
+            mountPath: /home/bpyuser/.data
+          {{- if .Values.data.assets.persistence.enabled }}
+          - name: assets
+            mountPath: /home/bpyuser/.data/assets
+          {{- end -}}
+          {{- if .Values.data.avatars.persistence.enabled }}
+          - name: avatars
+            mountPath: /home/bpyuser/.data/avatars
+          {{- end -}}
+          {{- if .Values.data.beatmaps.persistence.enabled }}
+          - name: beatmaps
+            mountPath: /home/bpyuser/.data/osu
+          {{- end -}}
+          {{- if .Values.data.replays.persistence.enabled }}
+          - name: replays
+            mountPath: /home/bpyuser/.data/osr
+          {{- end -}}
+          {{- if .Values.data.screenshots.persistence.enabled }}
+          - name: screenshots
+            mountPath: /home/bpyuser/.data/ss
+          {{- end }}
+        - name: assets-serve
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: joseluisq/static-web-server:2
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: SERVER_PORT
+              value: !!str 81
+            - name: SERVER_ROOT
+              value: "/home/bpyuser/.data/assets"
+          ports:
+            - name: assets-http
+              containerPort: 81
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          {{- if .Values.data.assets.persistence.enabled }}
+          - name: assets
+            mountPath: /home/bpyuser/.data/assets
+          {{ else }}
+          - name: base
+            mountPath: /home/bpyuser/.data
+            subPath: assets
+          {{- end }}
+        - name: avatars-serve
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: joseluisq/static-web-server:2
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: SERVER_PORT
+              value: !!str 82
+            - name: SERVER_ROOT
+              value: "/home/bpyuser/.data/avatars"
+          ports:
+            - name: avatars-http
+              containerPort: 82
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          {{- if .Values.data.avatars.persistence.enabled }}
+          - name: avatars
+            mountPath: /home/bpyuser/.data/avatars
+          {{ else }}
+          - name: base
+            mountPath: /home/bpyuser/.data
+            subPath: avatars
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+      - name: base
+        {{- if .Values.data.base.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-base
+        {{ else }}
+        emptyDir: {}
+        {{- end -}}
+      {{- if .Values.data.assets.persistence.enabled }}
+      - name: assets
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-assets
+      {{- end -}}
+      {{- if .Values.data.avatars.persistence.enabled }}
+      - name: avatars
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-avatars
+      {{- end -}}
+      {{- if .Values.data.beatmaps.persistence.enabled }}
+      - name: beatmaps
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-beatmaps
+      {{- end -}}
+      {{- if .Values.data.replays.persistence.enabled }}
+      - name: replays
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-replays
+      {{- end -}}
+      {{- if .Values.data.screenshots.persistence.enabled }}
+      - name: screenshots
+        persistentVolumeClaim:
+          claimName: {{ include "banchopy.fullname" . }}-screenshots
+      {{- end -}}

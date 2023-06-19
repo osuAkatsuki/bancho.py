@@ -1,0 +1,188 @@
+# Default values for banchopy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: "deez/nuts" # TODO
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "" # TODO
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+# capabilities:
+#   drop:
+#   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  hosts:
+  - api
+  - c1
+  - c2
+  - c3
+  - c4
+  - c5
+  - c6
+  - ce
+  - cho
+  - c
+  - i
+  - map
+  - osu
+  - s
+  - web
+
+  tls: []
+
+
+resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+# limits:
+#   cpu: 100m
+#   memory: 128Mi
+# requests:
+#   cpu: 100m
+#   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+global:
+  redis:
+    managed: true
+  database:
+    managed: true
+  domain: example.com
+
+redis:
+  architecture: standalone
+  auth:
+    host: ''
+    port: 6379
+    username: 'default'
+    password: ''
+    database: 0
+
+mariadb:
+  auth:
+    host: ''
+    port: 3306
+    username: 'banchopy'
+    password: '4cf3b0bf1a415ea41f45d3bf27a205538d67b058' # SHA1('banchopy')
+    database: 'banchopy'
+
+osu:
+  apiKey:
+datadog:
+  apiKey:
+  appKey:
+
+data:
+  # This is a fuck-all base/default persistence storage if you want it to just work™
+  base:
+    persistence:
+      enabled: false
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+
+  # You can also choose different storage endpoint for different kinds of data, for example avatars to a custom S3 backend with FUSE (cough cough rclone)
+
+  # maps to ".data/assets"
+  assets:
+    persistence:
+      enabled: true
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+  # maps to ".data/avatars"
+  avatars:
+    persistence:
+      enabled: true
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+  # maps to ".data/osu"
+  beatmaps:
+    persistence:
+      enabled: false
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+  # maps to ".data/osr"
+  replays:
+    persistence:
+      enabled: false
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+  # maps to ".data/ss"
+  screenshots:
+    persistence:
+      enabled: false
+      storageClass: ""
+      accessModes:
+      - ReadWriteOnce
+      size: 100Mi
+      annotations: {}
+      labels: {}
+
+config: {}
+
+# You are given a chance to override the config injected to the environment, example:
+# config:
+#   MIRROR_SEARCH_ENDPOINT: https://cat.nyan/
+#
+# N.B. This is not going to deep merge the key-value pairs/arrays, so if you override them, they are replaced with new values entirely, without the old ones
+# Make sure you copy the old values in if you want to preserve them

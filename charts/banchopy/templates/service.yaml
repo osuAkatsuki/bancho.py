@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "banchopy.fullname" . }}
+  labels:
+    {{- include "banchopy.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 81
+      targetPort: assets-http
+      protocol: TCP
+      name: assets-http
+    - port: 82
+      targetPort: avatars-http
+      protocol: TCP
+      name: avatars-http
+  selector:
+    {{- include "banchopy.selectorLabels" . | nindent 4 }}

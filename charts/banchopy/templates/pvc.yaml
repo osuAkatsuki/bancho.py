@@ -1,0 +1,13 @@
+{{ $pvcs := dict
+  "base" .Values.data.base.persistence
+  "assets" .Values.data.assets.persistence
+  "avatars" .Values.data.avatars.persistence
+  "beatmaps" .Values.data.beatmaps.persistence
+  "replays" .Values.data.replays.persistence
+  "screenshots" .Values.data.screenshots.persistence
+}}
+{{ $global := . }}
+
+{{- range $name, $values := $pvcs }}
+{{ include "banchopy.basePvcConfig" (dict "global" $global "suffix" $name "args" $values) }}
+{{- end }}

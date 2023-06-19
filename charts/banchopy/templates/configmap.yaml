@@ -1,0 +1,9 @@
+{{- $baseConfig := include "banchopy.baseConfig" . | fromYaml -}}
+{{- $mergedConfig := mustMergeOverwrite (dict) $baseConfig .Values.config -}}
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ include "banchopy.fullname" . }}
+data:
+{{- toYaml $mergedConfig | nindent 2 }}
