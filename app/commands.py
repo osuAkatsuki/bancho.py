@@ -2468,7 +2468,7 @@ class CommandResponse(TypedDict):
 
 async def process_commands(
     player: Player,
-    target: Union["Channel", Player],
+    target: Union[Channel, Player],
     msg: str,
 ) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
