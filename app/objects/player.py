@@ -737,7 +737,7 @@ class Player:
 
         self.match = None
 
-    async def join_clan(self, clan: "Clan") -> bool:
+    async def join_clan(self, clan: Clan) -> bool:
         """Attempt to add `self` to `clan`."""
         if self.id in clan.member_ids:
             return False
@@ -962,7 +962,7 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def unlock_achievement(self, achievement: "Achievement") -> None:
+    async def unlock_achievement(self, achievement: Achievement) -> None:
         """Unlock `achievement` for `self`, storing in both cache & sql."""
         await app.state.services.database.execute(
             "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
