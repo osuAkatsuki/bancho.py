@@ -10,20 +10,12 @@ printf '%s\n' \
     "api.$domain	1	IN	A	$ip"\
     "assets.$domain	1	IN	A	$ip"\
     "b.$domain	1	IN	A	$ip"\
-    "c1.$domain	1	IN	A	$ip"\
-    "c2.$domain	1	IN	A	$ip"\
-    "c3.$domain	1	IN	A	$ip"\
-    "c4.$domain	1	IN	A	$ip"\
-    "c5.$domain	1	IN	A	$ip"\
-    "c6.$domain	1	IN	A	$ip"\
-    "ce.$domain	1	IN	A	$ip"\
-    "cho.$domain	1	IN	A	$ip"\
     "c.$domain	1	IN	A	$ip"\
+    "c4.$domain	1	IN	A	$ip"\
+    "ce.$domain	1	IN	A	$ip"\
     "$domain	1	IN	A	$ip"\
     "i.$domain	1	IN	A	$ip"\
-    "map.$domain	1	IN	A	$ip"\
     "osu.$domain	1	IN	A	$ip"\
-    "s.$domain	1	IN	A	$ip"\
-    "web.$domain	1	IN	A	$ip" >> "cf_records.txt"
+    "s.$domain	1	IN	A	$ip" >> "cf_records.txt"
 
 printf "Your Cloudflare DNS records have been generated."

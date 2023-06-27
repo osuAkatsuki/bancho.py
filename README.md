@@ -7,7 +7,7 @@
 bancho.py is an in-progress osu! server implementation for developers of all levels
 of experience interested in hosting their own osu private server instance(s).
 
-the project is developed primarily by the [Akatsuki](https://akatsuki.pw/) team,
+the project is developed primarily by the [Akatsuki](https://akatsuki.gg/) team,
 and our aim is to create the most easily maintainable, reliable, and feature-rich
 osu! server implementation available.
 
@@ -288,21 +288,13 @@ If you use free freenom domains like `.ml`, `.ga`, `.ml`, `.cf`, you probably ca
             <li>a.yourdomain.com</li>
             <li>api.yourdomain.com</li>
             <li>assets.yourdomain.com</li>
-            <li>c1.yourdomain.com</li>
-            <li>c2.yourdomain.com</li>
-            <li>c3.yourdomain.com</li>
-            <li>c4.yourdomain.com</li>
-            <li>c5.yourdomain.com</li>
-            <li>c6.yourdomain.com</li>
-            <li>ce.yourdomain.com</li>
-            <li>cho.yourdomain.com</li>
             <li>c.yourdomain.com</li>
+            <li>c4.yourdomain.com</li>
+            <li>ce.yourdomain.com</li>
             <li>yourdomain.com</li>
             <li>i.yourdomain.com</li>
-            <li>map.yourdomain.com</li>
             <li>osu.yourdomain.com</li>
             <li>s.yourdomain.com</li>
-            <li>web.yourdomain.com</li>
         </ul>
         <th>
             <img src=".github/images/ssl_cf_6.png" alt="Step 6">
