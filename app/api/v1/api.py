@@ -860,7 +860,7 @@ async def api_get_match(
             "status": "success",
             "match": {
                 "name": match.name,
-                "mode": match.mode.as_vanilla,
+                "mode": match.mode,
                 "mods": int(match.mods),
                 "seed": match.seed,
                 "host": {"id": match.host.id, "name": match.host.name},
