@@ -84,20 +84,86 @@ router = APIRouter(tags=["Bancho API"])
 @router.get("/")
 async def bancho_http_handler():
     """Handle a request from a web browser."""
+    new_line = "\n"
+    matches = [m for m in app.state.sessions.matches if m is not None]
+    players = [p for p in app.state.sessions.players if not p.bot_client]
+
     packets = app.state.packets["all"]
 
     return HTMLResponse(
-        b"<!DOCTYPE html>"
-        + "<br>".join(
-            (
-                f"Running bancho.py v{app.settings.VERSION}",
-                f"Players online: {len(app.state.sessions.players) - 1}",
-                '<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>',
-                "",
-                f"<b>packets handled ({len(packets)})</b>",
-                "<br>".join([f"{packet.name} ({packet.value})" for packet in packets]),
-            ),
-        ).encode(),
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace; white-space: pre-wrap;">Running bancho.py v{app.settings.VERSION}
+
+<a href="online">{len(players)} online players</a>
+<a href="matches">{len(matches)} matches</a>
+
+<b>packets handled ({len(packets)})</b>
+{new_line.join([f"{packet.name} ({packet.value})" for packet in packets])}
+
+<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>
+</body>
+</html>""",
+    )
+
+
+@router.get("/online")
+async def bancho_list_user():
+    """see who's online"""
+    new_line = "\n"
+
+    players = [player for player in app.state.sessions.players if not player.bot_client]
+    bots = [bots for bots in app.state.sessions.players if bots.bot_client]
+
+    id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
+
+    return HTMLResponse(
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
+users:
+{new_line.join([f"({p.id:>{id_max_length}}): {p.safe_name}" for p in players])}
+bots:
+{new_line.join(f"({p.id:>{id_max_length}}): {p.safe_name}" for p in bots)}
+</body>
+</html>""",
+    )
+
+
+@router.get("/matches")
+async def bancho_list_user():
+    """ongoing matches"""
+    new_line = "\n"
+
+    ON_GOING = "ongoing"
+    IDLE = "idle"
+    max_status_length = len(max(ON_GOING, IDLE))
+
+    BEATMAP = "beatmap"
+    HOST = "host"
+    max_properties_length = max(len(BEATMAP), len(HOST))
+
+    matches = [m for m in app.state.sessions.matches if m is not None]
+
+    match_id_max_length = (
+        len(str(max(match.id for match in matches))) if len(matches) else 0
+    )
+
+    return HTMLResponse(
+        f"""
+<!DOCTYPE html>
+<body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
+matches:
+{new_line.join(
+    f'''{(ON_GOING if m.in_progress else IDLE):<{max_status_length}} ({m.id:>{match_id_max_length}}): {m.name}
+-- '''
+    + f"{new_line}-- ".join([
+        f'{BEATMAP:<{max_properties_length}}: {m.map_name}',
+        f'{HOST:<{max_properties_length}}: <{m.host.id}> {m.host.safe_name}'
+    ]) for m in matches
+)}
+</body>
+</html>""",
     )
 
 
@@ -1201,7 +1267,7 @@ class SendPrivateMessage(BasePacket):
                             )
 
                             resp_msg = " | ".join(
-                                f"{acc}%: {result['performance']:,.2f}pp"
+                                f"{acc}%: {result['performance']['pp']:,.2f}pp"
                                 for acc, result in zip(
                                     app.settings.PP_CACHED_ACCURACIES,
                                     results,
@@ -1290,7 +1356,7 @@ class MatchCreate(BasePacket):
             map_md5=self.match_data.map_md5,
             # TODO: validate no security hole exists
             host_id=self.match_data.host_id,
-            mode=GameMode(self.match_data.mode),
+            mode=self.match_data.mode,
             mods=Mods(self.match_data.mods),
             win_condition=MatchWinConditions(self.match_data.win_condition),
             team_type=MatchTeamTypes(self.match_data.team_type),
@@ -1534,12 +1600,12 @@ class MatchChangeSettings(BasePacket):
                 player.match.map_id = bmap.id
                 player.match.map_md5 = bmap.md5
                 player.match.map_name = bmap.full_name
-                player.match.mode = player.match.host.status.mode
+                player.match.mode = player.match.host.status.mode.as_vanilla
             else:
                 player.match.map_id = self.match_data.map_id
                 player.match.map_md5 = self.match_data.map_md5
                 player.match.map_name = self.match_data.map_name
-                player.match.mode = GameMode(self.match_data.mode)
+                player.match.mode = self.match_data.mode
 
         if player.match.team_type != self.match_data.team_type:
             # if theres currently a scrim going on, only allow
