@@ -213,7 +213,7 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
         argv = ["--help"]
 
     parser = argparse.ArgumentParser(
-        description="Recalculate performance for scores and/or stats"
+        description="Recalculate performance for scores and/or stats",
     )
 
     parser.add_argument("-d", "--debug", action="store_true")
