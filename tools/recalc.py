@@ -212,9 +212,23 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     if len(argv) == 0:
         argv = ["--help"]
 
-    parser = argparse.ArgumentParser(description="Recalculate performance for scores")
+    parser = argparse.ArgumentParser(
+        description="Recalculate performance for scores and/or stats"
+    )
 
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument(
+        "--scores",
+        description="Recalculate scores",
+        action="store_true",
+        default=True,
+    )
+    parser.add_argument(
+        "--stats",
+        description="Recalculate stats",
+        action="store_true",
+        default=True,
+    )
 
     parser.add_argument(
         "-m",
@@ -241,8 +255,11 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     for mode in args.mode:
         mode = GameMode(int(mode))
 
-        await recalculate_mode_scores(mode, ctx)
-        await recalculate_mode_users(mode, ctx)
+        if args.scores:
+            await recalculate_mode_scores(mode, ctx)
+
+        if args.stats:
+            await recalculate_mode_users(mode, ctx)
 
     await app.state.services.http_client.close()
     await db.disconnect()
