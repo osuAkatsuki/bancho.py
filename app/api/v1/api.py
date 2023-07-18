@@ -11,7 +11,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from fastapi.responses import ORJSONResponse
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
@@ -787,7 +787,7 @@ async def api_get_replay(
     # pack first section of headers.
     replay_data += struct.pack(
         "<Bi",
-        as_vanilla(row["mode"]),
+        GameMode(row["mode"]).as_vanilla,
         20200207,
     )  # TODO: osuver
     replay_data += app.packets.write_string(row["map_md5"])
