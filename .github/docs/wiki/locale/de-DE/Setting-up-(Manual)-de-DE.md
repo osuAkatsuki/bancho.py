@@ -1,4 +1,6 @@
-# Manual installation
+# Setting up (Manual)
+
+## Diese Seite ist noch nicht übersetzt
 
 ## installing bancho.py's requirements
 
@@ -78,6 +80,7 @@ quit
 ```
 
 ## setting up the database's structure for bancho.py
+
 we've now created an empty database - databases are full of 2-dimensional
 tables of data.
 
@@ -105,6 +108,7 @@ mysql -u YOUR_DB_USER -p YOUR_DB_NAME < migrations/base.sql
 ```
 
 ## configuring a reverse proxy (we'll use nginx)
+
 bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
 in terms of configuration. nginx is an open-source and efficient web server we'll
 be using for this guide, but feel free to check out others, like caddy and h2o.

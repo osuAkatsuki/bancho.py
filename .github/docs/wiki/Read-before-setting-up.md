@@ -1,4 +1,6 @@
-# Prerequisites
+# Read before setting up
+
+## Prerequisites
 
 knowledge of linux, python, and databases will certainly help, but are by no
 means required.
@@ -10,7 +12,7 @@ if you get stuck at any point in the process - we have a public discord above :)
 this guide will be targetted towards ubuntu - other distros may have slightly
 different setup processes.
 
-# Requirements
+## Requirements
 
 **bancho.py** is a ~15,000 line codebase built on the shoulder of giants.
 
@@ -26,6 +28,6 @@ we aim to minimize our dependencies, but still rely on ones such as
 
 as well as some others.
 
-# Setup Methods
+## Setup Methods
 
 **bancho.py** provides two documented methods to set up the codebase. You are free to use either one, but Docker will be the easier method.
