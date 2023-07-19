@@ -7,7 +7,7 @@ from typing import Optional
 from typing import TypeVar
 from typing import Union
 
-from pydantic.generics import GenericModel
+from pydantic import BaseModel
 
 from app.api.v2.common import json
 
@@ -15,7 +15,7 @@ from app.api.v2.common import json
 T = TypeVar("T")
 
 
-class Success(GenericModel, Generic[T]):
+class Success(BaseModel, Generic[T]):
     status: Literal["success"]
     data: T
     meta: dict[str, Any]
@@ -33,7 +33,7 @@ def success(
     return json.ORJSONResponse(data, status_code, headers)
 
 
-class ErrorResponse(GenericModel, Generic[T]):
+class ErrorResponse(BaseModel, Generic[T]):
     status: Literal["error"]
     error: T
     message: str
