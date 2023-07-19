@@ -41,17 +41,6 @@ cp .env.example .env
 nano .env
 ```
 
-## configuring a reverse proxy (we'll use nginx)
-
-```sh
-# copy the example nginx configuration file
-cp ext/nginx.conf.example ext/nginx.conf
-
-# now, you can edit the config file.
-# the spots you'll need to change are marked.
-nano ext/nginx.conf
-```
-
 ## congratulations! you just set up an osu! private server
 
 if everything went well, you should be able to start your server up:
