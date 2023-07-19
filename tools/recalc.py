@@ -16,8 +16,8 @@ from typing import Optional
 from typing import Sequence
 
 import aiohttp
-import redis
 import databases
+import redis
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 

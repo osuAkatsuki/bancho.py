@@ -13,11 +13,11 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import redis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import pymysql
+import redis
 
 import app.settings
 import app.state
