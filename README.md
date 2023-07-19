@@ -7,7 +7,7 @@
 bancho.py is an in-progress osu! server implementation for developers of all levels
 of experience interested in hosting their own osu private server instance(s).
 
-the project is developed primarily by the [Akatsuki](https://akatsuki.pw/) team,
+the project is developed primarily by the [Akatsuki](https://akatsuki.gg/) team,
 and our aim is to create the most easily maintainable, reliable, and feature-rich
 osu! server implementation available.
 
@@ -59,7 +59,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 `.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp docker.env.example .env
 
 # you'll want to configure *at least* the three marked (XXX) variables,
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
@@ -71,7 +71,7 @@ nano .env
 ## configuring a reverse proxy (we'll use nginx)
 ```sh
 # copy the example nginx configuration file
-cp ext/nginx.conf.example ext/nginx.conf
+cp ext/docker-nginx.conf.example ext/nginx.conf
 
 # now, you can edit the config file.
 # the spots you'll need to change are marked.
@@ -210,7 +210,7 @@ be using for this guide, but feel free to check out others, like caddy and h2o.
 ```sh
 # copy the example nginx config to /etc/nginx/sites-available,
 # and make a symbolic link to /etc/nginx/sites-enabled
-sudo cp ext/nginx.conf.example /etc/nginx/sites-available/bancho.conf
+sudo cp ext/manual-nginx.conf.example /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 # now, you can edit the config file.
@@ -226,7 +226,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 `.env` file. we provide an example `.env.example` file which you can use as a base.
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp manual.env.example .env
 
 # you'll want to configure *at least* all the database related fields (DB_*),
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
@@ -288,21 +288,13 @@ If you use free freenom domains like `.ml`, `.ga`, `.ml`, `.cf`, you probably ca
             <li>a.yourdomain.com</li>
             <li>api.yourdomain.com</li>
             <li>assets.yourdomain.com</li>
-            <li>c1.yourdomain.com</li>
-            <li>c2.yourdomain.com</li>
-            <li>c3.yourdomain.com</li>
-            <li>c4.yourdomain.com</li>
-            <li>c5.yourdomain.com</li>
-            <li>c6.yourdomain.com</li>
-            <li>ce.yourdomain.com</li>
-            <li>cho.yourdomain.com</li>
             <li>c.yourdomain.com</li>
+            <li>c4.yourdomain.com</li>
+            <li>ce.yourdomain.com</li>
             <li>yourdomain.com</li>
             <li>i.yourdomain.com</li>
-            <li>map.yourdomain.com</li>
             <li>osu.yourdomain.com</li>
             <li>s.yourdomain.com</li>
-            <li>web.yourdomain.com</li>
         </ul>
         <th>
             <img src=".github/images/ssl_cf_6.png" alt="Step 6">

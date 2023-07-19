@@ -12,7 +12,7 @@ cryptography==39.0.1
 distlib==0.3.6
 exceptiongroup==1.1.0 ; python_version < '3.11'
 filelock==3.9.0 ; python_version >= '3.7'
-flask==2.2.3 ; python_version >= '3.7'
+flask==2.3.2 ; python_version >= '3.7'
 h11==0.14.0 ; python_version >= '3.7'
 h2==4.1.0 ; python_full_version >= '3.6.1'
 hpack==4.0.0 ; python_full_version >= '3.6.1'
