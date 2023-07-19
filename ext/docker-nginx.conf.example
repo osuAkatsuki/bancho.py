@@ -6,9 +6,9 @@
 # a.ppy.sh is used for osu! avatars
 
 # XXX: Uncomment this whole block if you have downloaded the database from maxmind
-# and specify the path to the .mmdb file
-# You can download the database here: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
-#geoip2 /home/user/misc/GeoLite2-City.mmdb {
+# The path is hardcoded in docker-compose.yml so now you
+# don't need to change it unless you changed that.
+#geoip2 /etc/GeoLite2-City.mmdb {
 	#auto_reload 5m;
 	#$geoip2_metadata_country_build metadata build_epoch;
 	#$geoip2_data_country_code default=xx source=$remote_addr country iso_code;
