@@ -57,7 +57,7 @@ services:
     depends_on:
       - bancho
     volumes:
-      - ./ext/docker-nginx.conf.example:/etc/nginx/templates/nginx.conf.template:ro
+      - ./docker/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
       - ./docker/nginx-with-geoip2/main.conf:/etc/nginx/nginx.conf:ro
       - data:/.data:ro
       - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
