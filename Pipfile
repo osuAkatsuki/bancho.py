@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 aiohttp = "*"
-aioredis = "*"
 bcrypt = "*"
 datadog = "*"
 fastapi = "*"
@@ -19,17 +18,17 @@ uvicorn = "*"
 uvloop = "*"
 py3rijndael = "*"
 pytimeparse = "*"
-sqlalchemy = "1.4.41"
+sqlalchemy = "<2.0.0"
 databases = {extras = ["mysql"], version = "0.5.5"}
 akatsuki-pp-py = "*"
 cryptography = "*"
+redis = {version = "*", extras = ["hiredis"]}
 
 [dev-packages]
 pytest = "*"
 pre-commit = "*"
 black = "*"
 reorder-python-imports = "*"
-mitmproxy = "*"
 mypy = "*"
 
 [requires]

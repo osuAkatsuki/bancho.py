@@ -16,7 +16,7 @@ from typing import Optional
 from typing import Sequence
 
 import aiohttp
-import aioredis
+import redis
 import databases
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
@@ -42,7 +42,7 @@ BEATMAPS_PATH = Path.cwd() / ".data/osu"
 @dataclass
 class Context:
     database: databases.Database
-    redis: aioredis.Redis
+    redis: redis.asyncio.Redis
     beatmaps: dict[int, Beatmap] = field(default_factory=dict)
 
 
@@ -234,7 +234,7 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     db = databases.Database(app.settings.DB_DSN)
     await db.connect()
 
-    redis = await aioredis.from_url(app.settings.REDIS_DSN)
+    redis = await redis.from_url(app.settings.REDIS_DSN)
 
     ctx = Context(db, redis)
 

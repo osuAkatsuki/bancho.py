@@ -13,7 +13,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import aioredis
+import redis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
@@ -42,7 +42,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 http_client: aiohttp.ClientSession
 database = databases.Database(app.settings.DB_DSN)
-redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
+redis: redis.asyncio.Redis = redis.from_url(app.settings.REDIS_DSN)
 
 datadog: Optional[datadog_client.ThreadStats] = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
