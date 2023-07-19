@@ -31,7 +31,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp docker.env.example .env
 
 # you'll want to configure *at least* the three marked (XXX) variables,
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
@@ -39,17 +39,6 @@ cp .env.example .env
 
 # open the configuration file for editing
 nano .env
-```
-
-## configuring a reverse proxy (we'll use nginx)
-
-```sh
-# copy the example nginx configuration file
-cp ext/nginx.conf.example ext/nginx.conf
-
-# now, you can edit the config file.
-# the spots you'll need to change are marked.
-nano ext/nginx.conf
 ```
 
 ## congratulations! you just set up an osu! private server

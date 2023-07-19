@@ -134,7 +134,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp manual.env.example .env
 
 # you'll want to configure *at least* all the database related fields (DB_*),
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
