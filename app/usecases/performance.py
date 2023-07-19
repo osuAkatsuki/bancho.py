@@ -27,18 +27,41 @@ class ScoreParams:
     nmiss: Optional[int] = None
 
 
+class PerformanceRating(TypedDict):
+    pp: float
+    pp_acc: float
+    pp_aim: float
+    pp_speed: float
+    pp_flashlight: float
+    effective_miss_count: int
+    pp_difficulty: float
+
+
 class DifficultyRating(TypedDict):
-    performance: float
-    star_rating: float
+    stars: float
+    aim: float
+    speed: float
+    flashlight: float
+    slider_factor: float
+    speed_note_count: float
+    stamina: float
+    color: float
+    rhythm: float
+    peak: float
+
+
+class PerformanceResult(TypedDict):
+    performance: PerformanceRating
+    difficulty: DifficultyRating
 
 
 def calculate_performances(
     osu_file_path: str,
     scores: Iterable[ScoreParams],
-) -> list[DifficultyRating]:
+) -> list[PerformanceResult]:
     calc_bmap = Beatmap(path=osu_file_path)
 
-    results: list[DifficultyRating] = []
+    results: list[PerformanceResult] = []
 
     for score in scores:
         # assert either acc OR 300/100/50/geki/katu/miss is present, but not both
@@ -54,7 +77,7 @@ def calculate_performances(
 
         calculator = Calculator(
             mode=score.mode,
-            mods=score.mods if score.mods is not None else 0,
+            mods=score.mods or 0,
             combo=score.combo,
             acc=score.acc,
             n300=score.n300,
@@ -67,15 +90,37 @@ def calculate_performances(
         result = calculator.performance(calc_bmap)
 
         pp = result.pp
-        sr = result.difficulty.stars
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
             pp = 0.0
-            sr = 0.0
         else:
             pp = round(pp, 5)
 
-        results.append({"performance": pp, "star_rating": sr})
+        results.append(
+            {
+                "performance": {
+                    "pp": pp,
+                    "pp_acc": result.pp_acc,
+                    "pp_aim": result.pp_aim,
+                    "pp_speed": result.pp_speed,
+                    "pp_flashlight": result.pp_flashlight,
+                    "effective_miss_count": result.effective_miss_count,
+                    "pp_difficulty": result.pp_difficulty,
+                },
+                "difficulty": {
+                    "stars": result.difficulty.stars,
+                    "aim": result.difficulty.aim,
+                    "speed": result.difficulty.speed,
+                    "flashlight": result.difficulty.flashlight,
+                    "slider_factor": result.difficulty.slider_factor,
+                    "speed_note_count": result.difficulty.speed_note_count,
+                    "stamina": result.difficulty.stamina,
+                    "color": result.difficulty.color,
+                    "rhythm": result.difficulty.rhythm,
+                    "peak": result.difficulty.peak,
+                },
+            },
+        )
 
     return results

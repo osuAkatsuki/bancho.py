@@ -8,5 +8,6 @@
 ## Related Issues / Projects
 
 ## Checklist
+- [ ] I've manually tested my code
 - [ ] The changes pass pre-commit checks (`make lint`)
 - [ ] The changes follow coding style

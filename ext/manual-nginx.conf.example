@@ -15,13 +15,9 @@
 	#$geoip2_data_latitude default=0.0 source=$remote_addr location latitude;
 	#$geoip2_data_longitude default=0.0 source=$remote_addr location longitude;
 #}
-
-server {
-	listen 80 default_server;
-	server_name _;
-	return 301 https://$host$request_uri;
+upstream bancho {
+    server unix:/tmp/bancho.sock fail_timeout=0;
 }
-
 server {
 	listen 443 ssl;
 
@@ -30,8 +26,8 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /etc/ssl/certs/bancho.pem;
-	ssl_certificate_key /etc/ssl/private/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
@@ -57,15 +53,15 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /etc/ssl/certs/bancho.pem;
-	ssl_certificate_key /etc/ssl/private/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
 
 	location / {
 		default_type image/png;
-		root /.data/assets;
+		root /home/cmyui/bancho.py/.data/assets;
 	}
 }
 
@@ -77,14 +73,14 @@ server {
 
 	# Both paths are hardcoded in docker-compose.yml so now you
 	# don't need to change these unless you changed that.
-	ssl_certificate     /etc/ssl/certs/bancho.pem;
-	ssl_certificate_key /etc/ssl/private/bancho.key;
+	ssl_certificate     /home/cmyui/certs/fullchain.crt;
+	ssl_certificate_key /home/cmyui/certs/private.key;
 
 	# TODO: further ssl configuration
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
 
 	location / {
-		root /.data/avatars;
+		root /home/cmyui/bancho.py/.data/avatars;
 		try_files $uri $uri.png $uri.jpg $uri.gif $uri.jpeg $uri.jfif /default.jpg = 404;
 	}
 }
