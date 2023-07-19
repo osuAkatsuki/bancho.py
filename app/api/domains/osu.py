@@ -345,6 +345,8 @@ async def osuAddFavourite(
         {"user_id": player.id, "set_id": map_set_id},
     )
 
+    return b"Added favourite!"
+
 
 @router.get("/web/lastfm.php")
 async def lastFM(
