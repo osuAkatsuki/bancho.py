@@ -27,18 +27,41 @@ class ScoreParams:
     nmiss: Optional[int] = None
 
 
+class PerformanceRating(TypedDict):
+    pp: float
+    pp_acc: float
+    pp_aim: float
+    pp_speed: float
+    pp_flashlight: float
+    effective_miss_count: int
+    pp_difficulty: float
+
+
 class DifficultyRating(TypedDict):
-    performance: float
-    star_rating: float
+    stars: float
+    aim: float
+    speed: float
+    flashlight: float
+    slider_factor: float
+    speed_note_count: float
+    stamina: float
+    color: float
+    rhythm: float
+    peak: float
+
+
+class PerformanceResult(TypedDict):
+    performance: PerformanceRating
+    difficulty: DifficultyRating
 
 
 def calculate_performances(
     osu_file_path: str,
     scores: Iterable[ScoreParams],
-) -> list[DifficultyRating]:
+) -> list[PerformanceResult]:
     calc_bmap = Beatmap(path=osu_file_path)
 
-    results: list[DifficultyRating] = []
+    results: list[PerformanceResult] = []
 
     for score in scores:
         # assert either acc OR 300/100/50/geki/katu/miss is present, but not both

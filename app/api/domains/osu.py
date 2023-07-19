@@ -345,6 +345,8 @@ async def osuAddFavourite(
         {"user_id": player.id, "set_id": map_set_id},
     )
 
+    return b"Added favourite!"
+
 
 @router.get("/web/lastfm.php")
 async def lastFM(
@@ -689,7 +691,12 @@ async def osuSubmitModularSelector(
         # Map does not exist, most likely unsubmitted.
         return b"error: beatmap"
 
-    username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
+    # if the client has supporter, a space is appended
+    # but usernames may also end with a space, which must be preserved
+    username = score_data[1]
+    if username[-1] == " ":
+        username = username[:-1]
+
     player = await app.state.sessions.players.from_login(username, pw_md5)
     if not player:
         # Player is not online, return nothing so that their

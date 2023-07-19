@@ -2192,7 +2192,7 @@ async def pool_add(ctx: Context) -> Optional[str]:
     # add to cache
     pool.maps[(mods, slot)] = bmap
 
-    return f"{bmap.embed} added to {name}."
+    return f"{bmap.embed} added to {name} as {mods_slot}."
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["rm", "r"], hidden=True)
@@ -2267,7 +2267,10 @@ async def pool_info(ctx: Context) -> Optional[str]:
     datetime_fmt = f"Created at {_time} on {_date}"
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
-    for (mods, slot), bmap in pool.maps.items():
+    for (mods, slot), bmap in sorted(
+        pool.maps.items(),
+        key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
+    ):
         l.append(f"{mods!r}{slot}: {bmap.embed}")
 
     return "\n".join(l)
@@ -2465,7 +2468,7 @@ class CommandResponse(TypedDict):
 
 async def process_commands(
     player: Player,
-    target: Union["Channel", Player],
+    target: Union[Channel, Player],
     msg: str,
 ) -> Optional[CommandResponse]:
     # response is either a CommandResponse if we hit a command,
