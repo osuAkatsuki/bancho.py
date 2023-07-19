@@ -52,7 +52,7 @@ ruamel.yaml.clib==0.2.7 ; python_version < '3.11' and platform_python_implementa
 setuptools==67.4.0 ; python_version >= '3.7'
 sortedcontainers==2.4.0
 tomli==2.0.1 ; python_version < '3.11'
-tornado==6.2 ; python_version >= '3.7'
+tornado==6.3.2 ; python_version >= '3.7'
 typing-extensions==4.5.0 ; python_version >= '3.7'
 urwid==2.1.2
 virtualenv==20.19.0 ; python_version >= '3.7'
