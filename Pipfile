@@ -29,7 +29,6 @@ pytest = "*"
 pre-commit = "*"
 black = "*"
 reorder-python-imports = "*"
-mitmproxy = "*"
 mypy = "*"
 
 [requires]
