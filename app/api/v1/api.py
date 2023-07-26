@@ -11,8 +11,8 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
-from fastapi.responses import FileResponse
 from fastapi.responses import ORJSONResponse
+from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
@@ -722,10 +722,9 @@ async def api_get_score_info(
 @router.get("/get_replay")
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
-    include_headers: bool = False,
+    include_headers: bool = True,
 ):
     """Return a given replay (including headers)."""
-
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
     if not replay_file.exists():
@@ -733,13 +732,11 @@ async def api_get_replay(
             {"status": "Replay not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
-
     # read replay frames from file
     raw_replay_data = replay_file.read_bytes()
-
-    if include_headers:
-        return FileResponse(
-            path=REPLAYS_PATH / f"{score_id}.osr",
+    if not include_headers:
+        return Response(
+            bytes(raw_replay_data),
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
@@ -747,10 +744,9 @@ async def api_get_replay(
                 # info for content-disposition for this..?
             },
         )
-
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    rec = await app.state.services.database.fetch_one(
+    row = await app.state.services.database.fetch_one(
         "SELECT u.name username, m.md5 map_md5, "
         "m.artist, m.title, m.version, "
         "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
@@ -762,15 +758,12 @@ async def api_get_replay(
         "WHERE s.id = :score_id",
         {"score_id": score_id},
     )
-    row = dict(rec._mapping) if rec is not None else None
-
     if not row:
         # score not found in sql
         return ORJSONResponse(
             {"status": "Score not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )  # but replay was?
-
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         "{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}".format(
@@ -789,12 +782,14 @@ async def api_get_replay(
             "True",  # TODO: ??
         ).encode(),
     ).hexdigest()
-
     # create a buffer to construct the replay output
     replay_data = bytearray()
-
     # pack first section of headers.
-    replay_data += struct.pack("<Bi", row["mode"], 20200207)  # TODO: osuver
+    replay_data += struct.pack(
+        "<Bi",
+        GameMode(row["mode"]).as_vanilla,
+        20200207,
+    )  # TODO: osuver
     replay_data += app.packets.write_string(row["map_md5"])
     replay_data += app.packets.write_string(row["username"])
     replay_data += app.packets.write_string(replay_md5)
@@ -812,23 +807,18 @@ async def api_get_replay(
         row["mods"],
     )
     replay_data += b"\x00"  # TODO: hp graph
-
     timestamp = int(row["play_time"].timestamp() * 1e7)
     replay_data += struct.pack("<q", timestamp + DATETIME_OFFSET)
-
     # pack the raw replay data into the buffer
     replay_data += struct.pack("<i", len(raw_replay_data))
     replay_data += raw_replay_data
-
     # pack additional info buffer.
     replay_data += struct.pack("<q", score_id)
-
     # NOTE: target practice sends extra mods, but
     # can't submit scores so should not be a problem.
-
     # stream data back to the client
-    return FileResponse(
-        path=REPLAYS_PATH / f"{score_id}.osr",
+    return Response(
+        bytes(replay_data),
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
