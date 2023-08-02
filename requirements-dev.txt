@@ -36,7 +36,7 @@ bcrypt==4.0.1
 certifi==2023.5.7; python_version >= '3.6'
 cffi==1.15.1
 charset-normalizer==3.2.0; python_full_version >= '3.7.0'
-cryptography==41.0.2
+cryptography==41.0.3
 databases[mysql]==0.5.5
 datadog==0.46.0
 fastapi==0.100.0
