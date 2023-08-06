@@ -13,7 +13,7 @@ certifi==2023.5.7; python_version >= '3.6'
 cffi==1.15.1
 charset-normalizer==3.2.0; python_full_version >= '3.7.0'
 click==8.1.6; python_version >= '3.7'
-cryptography==41.0.2
+cryptography==41.0.3
 databases[mysql]==0.5.5
 datadog==0.46.0
 exceptiongroup==1.1.2; python_version < '3.11'
