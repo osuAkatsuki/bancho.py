@@ -210,7 +210,7 @@ be using for this guide, but feel free to check out others, like caddy and h2o.
 ```sh
 # copy the example nginx config to /etc/nginx/sites-available,
 # and make a symbolic link to /etc/nginx/sites-enabled
-sudo cp ext/manual-nginx.conf.example /etc/nginx/sites-available/bancho.conf
+sudo cp ext/nginx.conf.example /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 # now, you can edit the config file.
