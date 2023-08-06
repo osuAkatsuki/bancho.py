@@ -1,0 +1,27 @@
+name: General Requirements Lockfile
+on:
+  push:
+    paths:
+      - requirements.txt
+      - requirements-dev.txt
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install pipenv
+        run:  python -m pip install --upgrade pipenv wheel
+      # TODO: add caching of Pipfile.lock
+      - name: Install dependencies
+        run: pipenv install --deploy
+      - name: Generate lockfile
+        run: pipenv lock
+      - name: Commit new lockfile
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "username@users.noreply.github.com"
+          git add Pipfile.lock
+          git commit --message "[CI] Generated new Pipfile.lock" || exit 0
+          git push
