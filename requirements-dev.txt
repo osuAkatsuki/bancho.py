@@ -33,7 +33,7 @@ anyio==3.7.1; python_version >= '3.7'
 async-timeout==4.0.2; python_version >= '3.6'
 attrs==23.1.0; python_version >= '3.7'
 bcrypt==4.0.1
-certifi==2023.5.7; python_version >= '3.6'
+certifi==2023.7.22; python_version >= '3.6'
 cffi==1.15.1
 charset-normalizer==3.2.0; python_full_version >= '3.7.0'
 cryptography==41.0.3
