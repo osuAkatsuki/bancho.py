@@ -186,7 +186,7 @@ web服务器。当然，你也可以尝试一下其他的例如 caddy 以及 h2o
 ```sh
 # 把nginx配置文件样例复制到 /etc/nginx/sites-available,
 # 然后建立符号连接到 /etc/nginx/sites-enabled
-sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
+sudo cp ext/nginx.conf.example /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 # 现在你可以去编辑配置文件咯

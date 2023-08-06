@@ -166,7 +166,7 @@ Sie können sich auch andere effiziente Open-Source-Webserver ansehen, wie z.B. 
 ```sh
 # Kopieren Sie die Beispielkonfiguration von nginx nach /etc/nginx/sites-available,
 # und erstellen Sie einen symbolischen Link zu /etc/nginx/sites-enabled.
-sudo cp ext/nginx.conf /etc/nginx/sites-available/bancho.conf
+sudo cp ext/nginx.conf.example /etc/nginx/sites-available/bancho.conf
 sudo ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 # Jetzt können Sie die Konfigurationsdatei bearbeiten.
