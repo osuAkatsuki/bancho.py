@@ -1,8 +1,11 @@
-# Docker installation
+# Setting up (Docker)
+
+## Diese Seite ist noch nicht übersetzt
 
 for ease of use, we recommend you to use this method.
 
 all the dependencies are all retrieved by and contained within docker containers. all you need to install on your system is docker and docker-compose, and ensure that your user is a member of the docker group. if your package manager doesn't do that for you, you may need to log out and back in.
+
 ## installing bancho.py's requirements
 
 ```sh
@@ -28,7 +31,7 @@ all configuration for the osu! server (bancho.py) itself can be done from the
 
 ```sh
 # create a configuration file from the sample provided
-cp .env.example .env
+cp docker.env.example .env
 
 # you'll want to configure *at least* the three marked (XXX) variables,
 # as well as set the OSU_API_KEY if you need any info from osu!'s v1 api
@@ -36,17 +39,6 @@ cp .env.example .env
 
 # open the configuration file for editing
 nano .env
-```
-
-## configuring a reverse proxy (we'll use nginx)
-
-```sh
-# copy the example nginx configuration file
-cp ext/nginx.conf.example ext/nginx.conf
-
-# now, you can edit the config file.
-# the spots you'll need to change are marked.
-nano ext/nginx.conf
 ```
 
 ## congratulations! you just set up an osu! private server

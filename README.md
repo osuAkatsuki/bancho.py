@@ -12,7 +12,6 @@ the project is developed primarily by the [Akatsuki](https://akatsuki.gg/) team,
 and our aim is to create the most easily maintainable, reliable, and feature-rich
 osu! server implementation available.
 
-## Getting started
 
 If you are interested in running or contributing to **bancho.py**, you should head over to the **[bancho.py wiki](https://github.com/osuAkatsuki/bancho.py/wiki)**.
 

@@ -1,4 +1,4 @@
-# Directory Structure
+# Project Structure
 
     .
     ├── app                   # the server - logic, classes and objects

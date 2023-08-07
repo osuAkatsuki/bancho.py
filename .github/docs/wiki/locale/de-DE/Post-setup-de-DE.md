@@ -1,6 +1,10 @@
-# enabling https traffic
+# Post setup
 
-## using cloudflare full (strict)
+## Diese Seite ist noch nicht übersetzt
+
+## enabling https traffic
+
+### using cloudflare full (strict)
 
 first of all you need a cloudflare account, to create one go to <https://dash.cloudflare.com/sign-up>, enter your email and password and click on `create account`
 
@@ -75,7 +79,7 @@ nano example.com.key
 # paste the content of the private key
 ```
 
-## using an own ssl certificate
+### using an own ssl certificate
 
 ```sh
 # you'll need to change:
