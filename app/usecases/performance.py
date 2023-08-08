@@ -9,6 +9,8 @@ from typing import TypedDict
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 
+from app.constants.mods import Mods
+
 
 @dataclass
 class ScoreParams:
@@ -74,6 +76,11 @@ def calculate_performances(
         #     and score.nmiss is None
         # ):
         #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
+
+        # rosupp ignores NC and requires DT
+        if score.mods is not None:
+            if score.mods & Mods.NIGHTCORE:
+                score.mods |= Mods.DOUBLETIME
 
         calculator = Calculator(
             mode=score.mode,
