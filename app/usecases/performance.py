@@ -75,6 +75,13 @@ def calculate_performances(
         # ):
         #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
 
+        from app.constants.mods import Mods
+
+        # fix meme
+        if score.mods is not None:
+            if score.mods & Mods.NIGHTCORE:
+                score.mods |= Mods.DOUBLETIME
+
         calculator = Calculator(
             mode=score.mode,
             mods=score.mods or 0,
