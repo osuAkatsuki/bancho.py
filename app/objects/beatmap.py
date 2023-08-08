@@ -484,6 +484,7 @@ class Beatmap:
         if not getattr(self, "frozen", False):
             osuapi_status = int(osuapi_resp["approved"])
             self.status = RankedStatus.from_osuapi(osuapi_status)
+            self.frozen = True
 
         self.mode = GameMode(int(osuapi_resp["mode"]))
 
