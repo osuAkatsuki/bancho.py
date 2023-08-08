@@ -77,7 +77,7 @@ def calculate_performances(
 
         from app.constants.mods import Mods
 
-        # fix meme
+        # rosupp ignores NC and requires DT
         if score.mods is not None:
             if score.mods & Mods.NIGHTCORE:
                 score.mods |= Mods.DOUBLETIME
