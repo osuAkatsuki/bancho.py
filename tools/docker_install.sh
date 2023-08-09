@@ -137,7 +137,7 @@ setup_cloudflare() {
     --form "proxied=true"
 
   # TODO: Check result and exit if error
-  
+
   echo "Bancho.py has been configured successfully. After your domain is no longer in pending status, run generate_cf_certs.sh to generate your certificates from cloudflare."
 }
 
