@@ -2002,7 +2002,8 @@ class TourneyMatchLeaveChannel(BasePacket):
 
         # attempt to join match chan
         player.leave_channel(match.chat)
-        match.tourney_clients.remove(player.id)
+        if player.id in match.tourney_clients:
+            match.tourney_clients.remove(player.id)
 
 
 @register(ClientPackets.FRIEND_ADD)
