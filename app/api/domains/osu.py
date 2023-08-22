@@ -1038,20 +1038,19 @@ async def osuSubmitModularSelector(
                 {"user_id": score.player.id, "mode": score.mode},
             )
 
-            total_scores = len(best_scores)
-            top_100_pp = best_scores[:100]
-
             # calculate new total weighted accuracy
             weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
+                row["acc"] * 0.95**i for i, row in enumerate(best_scores)
             )
-            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
+            bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
             stats.acc = (weighted_acc * bonus_acc) / 100
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
-            bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
+            weighted_pp = sum(
+                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
+            )
+            bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
 
