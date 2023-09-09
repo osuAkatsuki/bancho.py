@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 """main.py - a user-friendly, safe wrapper around bancho.py's runtime
 
 bancho.py is an in-progress osu! server implementation for developers of all levels

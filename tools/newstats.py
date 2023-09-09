@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 """
 tool to merge from gulag 3.5.2 stats to 3.5.3 stats
 this tool is destructive, don't run it if you don't know why it exists :)

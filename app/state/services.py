@@ -13,11 +13,11 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import aioredis
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import pymysql
+from redis import asyncio as aioredis
 
 import app.settings
 import app.state
@@ -370,7 +370,7 @@ async def check_for_dependency_updates() -> None:
     if updates_available:
         log(
             "Python modules can be updated with "
-            "`python3.9 -m pip install -U <modules>`.",
+            "`python3.11 -m pip install -U <modules>`.",
             Ansi.LMAGENTA,
         )
 
