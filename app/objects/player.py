@@ -34,6 +34,8 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
+from app.objects.score import Score
+from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
@@ -470,11 +472,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.UNRESTRICTED)
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="restrict",
+            msg=reason,
         )
 
         for mode in (0, 1, 2, 3, 4, 5, 6, 8):
@@ -504,11 +506,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.UNRESTRICTED)
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="unrestrict",
+            msg=reason,
         )
 
         if not self.is_online:
@@ -548,12 +550,7 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "silence", "msg": reason},
-        )
+        await logs_repo.create(_from=admin.id, to=self.id, action="silence", msg=reason)
 
         # inform the user's client.
         self.enqueue(app.packets.silence_end(int(duration)))
@@ -576,11 +573,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :reason, NOW())",
-            {"from": admin.id, "to": self.id, "reason": reason, "action": "unsilence"},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            reason=reason,
+            action="unsilence",
         )
 
         # inform the user's client
