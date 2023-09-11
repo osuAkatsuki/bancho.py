@@ -61,6 +61,7 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import comments as comments_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
@@ -1596,22 +1597,11 @@ async def osuComment(
 ) -> Response:
     if action == "get":
         # client is requesting all comments
-        comments = [
-            dict(c._mapping)
-            for c in await app.state.services.database.fetch_all(
-                "SELECT c.time, c.target_type, c.colour, "
-                "c.comment, u.priv FROM comments c "
-                "INNER JOIN users u ON u.id = c.userid "
-                "WHERE (c.target_type = 'replay' AND c.target_id = :score_id) "
-                "OR (c.target_type = 'song' AND c.target_id = :set_id) "
-                "OR (c.target_type = 'map' AND c.target_id = :map_id) ",
-                {
-                    "score_id": score_id,
-                    "set_id": map_set_id,
-                    "map_id": map_id,
-                },
-            )
-        ]
+        comments = await comments_repo.fetch_all(
+            score_id=score_id,
+            map_set_id=map_set_id,
+            map_id=map_id,
+        )
 
         ret: list[str] = []
 
@@ -1653,18 +1643,13 @@ async def osuComment(
             colour = None
 
         # insert into sql
-        await app.state.services.database.execute(
-            "INSERT INTO comments "
-            "(target_id, target_type, userid, time, comment, colour) "
-            "VALUES (:target_id, :target_type, :userid, :time, :comment, :colour)",
-            {
-                "target_id": target_id,
-                "target_type": target,
-                "userid": player.id,
-                "time": start_time,
-                "comment": comment,
-                "colour": colour,
-            },
+        await comments_repo.create(
+            target_id=target_id,
+            target_type=target,
+            userid=player.id,
+            time=start_time,
+            comment=comment,
+            colour=colour,
         )
 
         player.update_latest_activity_soon()
