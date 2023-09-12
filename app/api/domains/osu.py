@@ -68,6 +68,7 @@ from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.repositories.comments import CommentsRepository
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -81,6 +82,8 @@ router = APIRouter(
     tags=["osu! web API"],
     default_response_class=Response,
 )
+
+comments_repo = CommentsRepository()
 
 
 @cache
@@ -1603,18 +1606,14 @@ async def osuComment(
             colour = None
 
         # insert into sql
-        await app.state.services.database.execute(
-            "INSERT INTO comments "
-            "(target_id, target_type, userid, time, comment, colour) "
-            "VALUES (:target_id, :target_type, :userid, :time, :comment, :colour)",
-            {
-                "target_id": target_id,
-                "target_type": target,
-                "userid": player.id,
-                "time": start_time,
-                "comment": comment,
-                "colour": colour,
-            },
+
+        await comments_repo.create(
+            target_id=target_id,
+            target_type=target,
+            userid=player.id,
+            time=start_time,
+            comment=comment,
+            colour=colour,
         )
 
         player.update_latest_activity_soon()
