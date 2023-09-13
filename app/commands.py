@@ -584,7 +584,7 @@ async def requests(ctx: Context) -> str | None:
     for row in rows:
         map_id = row["map_id"]
         player_id = row["player_id"]
-        datetime = row["datetime"]
+        dt = row["datetime"]
 
         # find player & map for each row, and add to output.
         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
@@ -597,7 +597,7 @@ async def requests(ctx: Context) -> str | None:
             l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        l.append(f"[{player.embed} @ {datetime:%b %d %I:%M%p}] {bmap.embed}.")
+        l.append(f"[{player.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
 
     return "\n".join(l)
 

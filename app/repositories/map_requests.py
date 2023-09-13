@@ -129,7 +129,7 @@ async def fetch_all(
 
 
 async def update(
-    map_ids: Optional[list[any]] = None,
+    map_ids: Optional[list[Any]] = None,
     player_id: Optional[int] = None,
     active: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
