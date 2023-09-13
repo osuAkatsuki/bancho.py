@@ -101,8 +101,8 @@ async def fetch_count(
 
 
 async def fetch_all(
-    to_id: Optional[int] = None,
-    read: Optional[bool] = None,
+    to_id: int,
+    read: bool,
 ) -> list[dict[str, Any]]:
     """Fetch a list of mails from the database."""
     query = f"""\
