@@ -108,8 +108,6 @@ async def fetch_all(
     map_id: Optional[int] = None,
     player_id: Optional[int] = None,
     active: Optional[int] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """Fetch a list of map requests from the database."""
     query = f"""\
