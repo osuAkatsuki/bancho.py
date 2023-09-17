@@ -110,7 +110,7 @@ async def create(
     return dict(rec)
 
 
-async def fetch_one(id: int) -> Optional[dict[str, Any]]:
+async def fetch_one(id: int) -> dict[str, Any] | None:
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
@@ -122,11 +122,11 @@ async def fetch_one(id: int) -> Optional[dict[str, Any]]:
 
 
 async def fetch_count(
-    map_md5: Optional[str] = None,
-    mods: Optional[int] = None,
-    status: Optional[int] = None,
-    mode: Optional[int] = None,
-    user_id: Optional[int] = None,
+    map_md5: str | None = None,
+    mods: int | None = None,
+    status: int | None = None,
+    mode: int | None = None,
+    user_id: int | None = None,
 ) -> int:
     query = """\
         SELECT COUNT(*) AS count
@@ -150,13 +150,13 @@ async def fetch_count(
 
 
 async def fetch_many(
-    map_md5: Optional[str] = None,
-    mods: Optional[int] = None,
-    status: Optional[int] = None,
-    mode: Optional[int] = None,
-    user_id: Optional[int] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    map_md5: str | None = None,
+    mods: int | None = None,
+    status: int | None = None,
+    mode: int | None = None,
+    user_id: int | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     query = f"""\
         SELECT {READ_PARAMS}
@@ -188,9 +188,9 @@ async def fetch_many(
 
 async def update(
     id: int,
-    pp: Optional[float] = None,
-    status: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    pp: float | None = None,
+    status: int | None = None,
+) -> dict[str, Any] | None:
     query = """\
         UPDATE scores
            SET pp = COALESCE(:pp, pp),

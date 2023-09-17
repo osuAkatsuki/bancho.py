@@ -119,9 +119,9 @@ class Score:
 
     def __init__(self) -> None:
         # TODO: check whether the reamining Optional's should be
-        self.id: Optional[int] = None
-        self.bmap: Optional[Beatmap] = None
-        self.player: Optional[Player] = None
+        self.id: int | None = None
+        self.bmap: Beatmap | None = None
+        self.player: Player | None = None
 
         self.mode: GameMode
         self.mods: Mods
@@ -154,8 +154,8 @@ class Score:
         self.client_flags: ClientFlags
         self.client_checksum: str
 
-        self.rank: Optional[int] = None
-        self.prev_best: Optional[Score] = None
+        self.rank: int | None = None
+        self.prev_best: Score | None = None
 
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
@@ -170,7 +170,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int) -> Optional[Score]:
+    async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
         rec = await scores_repo.fetch_one(score_id)
 

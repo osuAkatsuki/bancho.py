@@ -17,14 +17,14 @@ router = APIRouter()
 
 @router.get("/maps")
 async def get_maps(
-    set_id: Optional[int] = None,
-    server: Optional[str] = None,
-    status: Optional[int] = None,
-    artist: Optional[str] = None,
-    creator: Optional[str] = None,
-    filename: Optional[str] = None,
-    mode: Optional[int] = None,
-    frozen: Optional[bool] = None,
+    set_id: int | None = None,
+    server: str | None = None,
+    status: int | None = None,
+    artist: str | None = None,
+    creator: str | None = None,
+    filename: str | None = None,
+    mode: int | None = None,
+    frozen: bool | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> Success[list[Map]]:

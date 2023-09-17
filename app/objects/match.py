@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime as datetime
 from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
 from typing import Optional
 from typing import overload
-from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import Union
@@ -149,7 +149,7 @@ class Slot:
     """An individual player slot in an osu! multiplayer match."""
 
     def __init__(self) -> None:
-        self.player: Optional[Player] = None
+        self.player: Player | None = None
         self.status = SlotStatus.open
         self.team = MatchTeams.neutral
         self.mods = Mods.NOMOD
@@ -245,16 +245,16 @@ class Match:
         self.win_condition = win_condition
 
         self.in_progress = False
-        self.starting: Optional[StartingTimers] = None
+        self.starting: StartingTimers | None = None
         self.seed = seed  # used for mania random mod
 
-        self.pool: Optional[MapPool] = None
+        self.pool: MapPool | None = None
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        self.match_points: dict[MatchTeams | Player, int] = defaultdict(int)
         self.bans: set[tuple[Mods, int]] = set()
-        self.winners: list[Union[Player, MatchTeams, None]] = []  # none for tie
+        self.winners: list[Player | MatchTeams | None] = []  # none for tie
         self.winning_pts = 0
         self.use_pp_scoring = False  # only for scrims
 
@@ -299,7 +299,7 @@ class Match:
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
-    def get_slot(self, player: Player) -> Optional[Slot]:
+    def get_slot(self, player: Player) -> Slot | None:
         """Return the slot containing a given player."""
         for s in self.slots:
             if player is s.player:
@@ -307,7 +307,7 @@ class Match:
 
         return None
 
-    def get_slot_id(self, player: Player) -> Optional[int]:
+    def get_slot_id(self, player: Player) -> int | None:
         """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
             if player is s.player:
@@ -315,7 +315,7 @@ class Match:
 
         return None
 
-    def get_free(self) -> Optional[int]:
+    def get_free(self) -> int | None:
         """Return the first unoccupied slot in multi, if any."""
         for idx, s in enumerate(self.slots):
             if s.status == SlotStatus.open:
@@ -323,7 +323,7 @@ class Match:
 
         return None
 
-    def get_host_slot(self) -> Optional[Slot]:
+    def get_host_slot(self) -> Slot | None:
         """Return the slot containing the host."""
         for s in self.slots:
             if s.player is not None and s.player is self.host:
@@ -398,9 +398,9 @@ class Match:
     async def await_submissions(
         self,
         was_playing: Sequence[Slot],
-    ) -> tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]:
+    ) -> tuple[dict[MatchTeams | Player, int], Sequence[Player]]:
         """Await score submissions from all players in completed state."""
-        scores: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        scores: dict[MatchTeams | Player, int] = defaultdict(int)
         didnt_submit: list[Player] = []
         time_waited = 0  # allow up to 10s (total, not per player)
 
@@ -492,7 +492,7 @@ class Match:
                 return None
 
             # Find the winner & increment their matchpoints.
-            winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
+            winner: Player | MatchTeams = max(scores, key=lambda k: scores[k])
             self.winners.append(winner)
             self.match_points[winner] += 1
 

@@ -198,7 +198,7 @@ async def api_calculate_pp(
 
 @router.get("/search_players")
 async def api_search_players(
-    search: Optional[str] = Query(None, alias="q", min=2, max=32),
+    search: str | None = Query(None, alias="q", min=2, max=32),
 ):
     """Search for users on the server by name."""
     rows = await app.state.services.database.fetch_all(
@@ -237,8 +237,8 @@ async def api_get_player_count():
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -298,8 +298,8 @@ async def api_get_player_info(
 
 @router.get("/get_player_status")
 async def api_get_player_status(
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -368,9 +368,9 @@ async def api_get_player_status(
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-    mods_arg: Optional[str] = Query(None, alias="mods"),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
@@ -505,8 +505,8 @@ async def api_get_player_scores(
 
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
 ):
@@ -567,8 +567,8 @@ async def api_get_player_most_played(
 
 @router.get("/get_map_info")
 async def api_get_map_info(
-    map_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
+    map_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
 ):
     """Return information about a given beatmap."""
     if map_id is not None:
@@ -598,9 +598,9 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
-    map_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
-    map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
-    mods_arg: Optional[str] = Query(None, alias="mods"),
+    map_id: int | None = Query(None, alias="id", ge=0, le=2_147_483_647),
+    map_md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
+    mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
 ):
@@ -887,7 +887,7 @@ async def api_get_global_leaderboard(
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
-    country: Optional[str] = Query(None, min_length=2, max_length=2),
+    country: str | None = Query(None, min_length=2, max_length=2),
 ):
     if mode_arg in (
         GameMode.RELAX_MANIA,

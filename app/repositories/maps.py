@@ -120,10 +120,10 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    md5: Optional[str] = None,
-    filename: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    md5: str | None = None,
+    filename: str | None = None,
+) -> dict[str, Any] | None:
     """Fetch a beatmap entry from the database."""
     if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
@@ -145,14 +145,14 @@ async def fetch_one(
 
 
 async def fetch_count(
-    server: Optional[str] = None,
-    set_id: Optional[int] = None,
-    status: Optional[int] = None,
-    artist: Optional[str] = None,
-    creator: Optional[str] = None,
-    filename: Optional[str] = None,
-    mode: Optional[int] = None,
-    frozen: Optional[bool] = None,
+    server: str | None = None,
+    set_id: int | None = None,
+    status: int | None = None,
+    artist: str | None = None,
+    creator: str | None = None,
+    filename: str | None = None,
+    mode: int | None = None,
+    frozen: bool | None = None,
 ) -> int:
     """Fetch the number of maps in the database."""
     query = """\
@@ -184,16 +184,16 @@ async def fetch_count(
 
 
 async def fetch_many(
-    server: Optional[str] = None,
-    set_id: Optional[int] = None,
-    status: Optional[int] = None,
-    artist: Optional[str] = None,
-    creator: Optional[str] = None,
-    filename: Optional[str] = None,
-    mode: Optional[int] = None,
-    frozen: Optional[bool] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    server: str | None = None,
+    set_id: int | None = None,
+    status: int | None = None,
+    artist: str | None = None,
+    creator: str | None = None,
+    filename: str | None = None,
+    mode: int | None = None,
+    frozen: bool | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch a list of maps from the database."""
     query = f"""\
@@ -233,29 +233,29 @@ async def fetch_many(
 
 async def update(
     id: int,
-    server: Optional[str] = None,
-    set_id: Optional[int] = None,
-    status: Optional[int] = None,
-    md5: Optional[str] = None,
-    artist: Optional[str] = None,
-    title: Optional[str] = None,
-    version: Optional[str] = None,
-    creator: Optional[str] = None,
-    filename: Optional[str] = None,
-    last_update: Optional[str] = None,
-    total_length: Optional[int] = None,
-    max_combo: Optional[int] = None,
-    frozen: Optional[bool] = None,
-    plays: Optional[int] = None,
-    passes: Optional[int] = None,
-    mode: Optional[int] = None,
-    bpm: Optional[float] = None,
-    cs: Optional[float] = None,
-    ar: Optional[float] = None,
-    od: Optional[float] = None,
-    hp: Optional[float] = None,
-    diff: Optional[float] = None,
-) -> Optional[dict[str, Any]]:
+    server: str | None = None,
+    set_id: int | None = None,
+    status: int | None = None,
+    md5: str | None = None,
+    artist: str | None = None,
+    title: str | None = None,
+    version: str | None = None,
+    creator: str | None = None,
+    filename: str | None = None,
+    last_update: str | None = None,
+    total_length: int | None = None,
+    max_combo: int | None = None,
+    frozen: bool | None = None,
+    plays: int | None = None,
+    passes: int | None = None,
+    mode: int | None = None,
+    bpm: float | None = None,
+    cs: float | None = None,
+    ar: float | None = None,
+    od: float | None = None,
+    hp: float | None = None,
+    diff: float | None = None,
+) -> dict[str, Any] | None:
     """Update a beatmap entry in the database."""
     query = """\
         UPDATE maps
@@ -322,7 +322,7 @@ async def update(
     return dict(rec) if rec is not None else None
 
 
-async def delete(id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> dict[str, Any] | None:
     """Delete a beatmap entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}

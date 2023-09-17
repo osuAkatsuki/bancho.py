@@ -4,6 +4,9 @@ import random
 import struct
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Callable
+from collections.abc import Collection
+from collections.abc import Iterator
 from dataclasses import dataclass
 from dataclasses import field
 from enum import IntEnum
@@ -11,9 +14,6 @@ from enum import unique
 from functools import cache
 from functools import lru_cache
 from typing import Any
-from typing import Callable
-from typing import Collection
-from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -227,8 +227,8 @@ class ScoreFrame:
     score_v2: bool
 
     # if score_v2:
-    combo_portion: Optional[float] = None
-    bonus_portion: Optional[float] = None
+    combo_portion: float | None = None
+    bonus_portion: float | None = None
 
 
 class ReplayFrame(NamedTuple):
@@ -552,7 +552,7 @@ class BanchoPacketReader:
 # write functions
 
 
-def write_uleb128(num: int) -> Union[bytes, bytearray]:
+def write_uleb128(num: int) -> bytes | bytearray:
     """Write `num` into an unsigned LEB128."""
     if num == 0:
         return b"\x00"

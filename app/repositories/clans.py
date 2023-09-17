@@ -54,11 +54,11 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    name: Optional[str] = None,
-    tag: Optional[str] = None,
-    owner: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    name: str | None = None,
+    tag: str | None = None,
+    owner: int | None = None,
+) -> dict[str, Any] | None:
     """Fetch a single clan from the database."""
     if id is None and name is None and tag is None and owner is None:
         raise ValueError("Must provide at least one parameter.")
@@ -88,8 +88,8 @@ async def fetch_count() -> int:
 
 
 async def fetch_many(
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch many clans from the database."""
     query = f"""\
@@ -112,10 +112,10 @@ async def fetch_many(
 
 async def update(
     id: int,
-    name: Optional[str] = None,
-    tag: Optional[str] = None,
-    owner: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    name: str | None = None,
+    tag: str | None = None,
+    owner: int | None = None,
+) -> dict[str, Any] | None:
     """Update a clan in the database."""
     query = """\
         UPDATE clans
@@ -145,7 +145,7 @@ async def update(
     return dict(rec) if rec is not None else None
 
 
-async def delete(id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> dict[str, Any] | None:
     """Delete a clan from the database."""
     query = f"""\
         SELECT {READ_PARAMS}

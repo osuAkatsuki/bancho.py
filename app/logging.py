@@ -73,7 +73,7 @@ Rainbow = _Rainbow()
 Colour_Types = Union[Ansi, RGB, _Rainbow]
 
 
-def get_timestamp(full: bool = False, tz: Optional[datetime.tzinfo] = None) -> str:
+def get_timestamp(full: bool = False, tz: datetime.tzinfo | None = None) -> str:
     fmt = "%d/%m/%Y %I:%M:%S%p" if full else "%I:%M:%S%p"
     return f"{datetime.datetime.now(tz=tz):{fmt}}"
 
@@ -95,8 +95,8 @@ def printc(msg: str, col: Colour_Types, end: str = "\n") -> None:
 
 def log(
     msg: str,
-    col: Optional[Colour_Types] = None,
-    file: Optional[str] = None,
+    col: Colour_Types | None = None,
+    file: str | None = None,
     end: str = "\n",
 ) -> None:
     """\
@@ -153,7 +153,7 @@ def print_rainbow(msg: str, rainbow_end: float = 2 / 3, end: str = "\n") -> None
 TIME_ORDER_SUFFIXES = ["nsec", "μsec", "msec", "sec"]
 
 
-def magnitude_fmt_time(t: Union[int, float]) -> str:  # in nanosec
+def magnitude_fmt_time(t: int | float) -> str:  # in nanosec
     for suffix in TIME_ORDER_SUFFIXES:
         if t < 1000:
             break

@@ -6,14 +6,14 @@ import asyncio
 import math
 import os
 import sys
+from collections.abc import Awaitable
+from collections.abc import Iterator
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
 from typing import Any
-from typing import Awaitable
-from typing import Iterator
 from typing import Optional
-from typing import Sequence
 
 import aiohttp
 import databases
@@ -207,7 +207,7 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
         await process_score_chunk(score_chunk, ctx)
 
 
-async def main(argv: Optional[Sequence[str]] = None) -> int:
+async def main(argv: Sequence[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) == 0:
         argv = ["--help"]

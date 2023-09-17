@@ -25,7 +25,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 import argparse
 import logging
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 import uvicorn
 

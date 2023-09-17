@@ -8,15 +8,15 @@ import secrets
 import time
 from base64 import b64decode
 from collections import defaultdict
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Mapping
 from enum import IntEnum
 from enum import unique
 from functools import cache
 from pathlib import Path as SystemPath
 from typing import Any
-from typing import Awaitable
-from typing import Callable
 from typing import Literal
-from typing import Mapping
 from typing import Optional
 from typing import TypeVar
 from typing import Union
@@ -88,7 +88,7 @@ def authenticate_player_session(
     param_function: Callable[..., Any],
     username_alias: str = "u",
     pw_md5_alias: str = "p",
-    err: Optional[Any] = None,
+    err: Any | None = None,
 ) -> Callable[[str, str], Awaitable[Player]]:
     async def wrapper(
         username: str = param_function(..., alias=username_alias),
@@ -156,8 +156,8 @@ OsuClientGameModes = Literal[
 
 @router.post("/web/osu-error.php")
 async def osuError(
-    username: Optional[str] = Form(None, alias="u"),
-    pw_md5: Optional[str] = Form(None, alias="h"),
+    username: str | None = Form(None, alias="u"),
+    pw_md5: str | None = Form(None, alias="h"),
     user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
     osu_mode: OsuClientModes = Form(..., alias="osumode"),
     game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
@@ -167,7 +167,7 @@ async def osuError(
     map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
-    feedback: Optional[str] = Form(None),
+    feedback: str | None = Form(None),
     stacktrace: str = Form(...),
     soft: bool = Form(...),
     map_count: int = Form(..., alias="beatmap_count", ge=0),
@@ -176,7 +176,7 @@ async def osuError(
     osu_version: str = Form(..., alias="version"),
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
-    screenshot_file: Optional[UploadFile] = File(None, alias="ss"),
+    screenshot_file: UploadFile | None = File(None, alias="ss"),
 ):
     """Handle an error submitted from the osu! client."""
     if not app.settings.DEBUG:
@@ -538,8 +538,8 @@ async def osuSearchHandler(
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    map_set_id: Optional[int] = Query(None, alias="s"),
-    map_id: Optional[int] = Query(None, alias="b"),
+    map_set_id: int | None = Query(None, alias="s"),
+    map_id: int | None = Query(None, alias="b"),
 ):
     # TODO: refactor this to use the new internal bmap(set) api
 
@@ -581,13 +581,13 @@ async def osuSearchSetHandler(
 T = TypeVar("T", bound=Union[int, float])
 
 
-def chart_entry(name: str, before: Optional[T], after: T) -> str:
+def chart_entry(name: str, before: T | None, after: T) -> str:
     return f"{name}Before:{before or ''}|{name}After:{after}"
 
 
 def parse_form_data_score_params(
     score_data: FormData,
-) -> Optional[tuple[bytes, StarletteUploadFile]]:
+) -> tuple[bytes, StarletteUploadFile] | None:
     """Parse the score data, and replay file
     from the form data's 'score' parameters."""
     try:
@@ -648,7 +648,7 @@ async def osuSubmitModularSelector(
     fail_time: int = Form(..., alias="ft"),
     visual_settings_b64: bytes = Form(..., alias="fs"),
     updated_beatmap_hash: str = Form(..., alias="bmk"),
-    storyboard_md5: Optional[str] = Form(None, alias="sbk"),
+    storyboard_md5: str | None = Form(None, alias="sbk"),
     iv_b64: bytes = Form(..., alias="iv"),
     unique_ids: str = Form(..., alias="c1"),  # TODO: more validaton
     score_time: int = Form(..., alias="st"),  # TODO: is this real name?
@@ -657,7 +657,7 @@ async def osuSubmitModularSelector(
     client_hash_b64: bytes = Form(..., alias="s"),
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
-    fl_cheat_screenshot: Optional[bytes] = File(None, alias="i"),
+    fl_cheat_screenshot: bytes | None = File(None, alias="i"),
 ):
     """Handle a score submission from an osu! client with an active session."""
 
@@ -1219,7 +1219,7 @@ async def osuRate(
         authenticate_player_session(Query, "u", "p", err=b"auth fail"),
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
-    rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
+    rating: int | None = Query(None, alias="v", ge=1, le=10),
 ):
     if rating is None:
         # check if we have the map in our cache;
@@ -1277,13 +1277,13 @@ class LeaderboardType(IntEnum):
 
 
 async def get_leaderboard_scores(
-    leaderboard_type: Union[LeaderboardType, int],
+    leaderboard_type: LeaderboardType | int,
     map_md5: str,
     mode: int,
     mods: Mods,
     player: Player,
     scoring_metric: Literal["pp", "score"],
-) -> tuple[list[Mapping[str, Any]], Optional[Mapping[str, Any]]]:
+) -> tuple[list[Mapping[str, Any]], Mapping[str, Any] | None]:
     query = [
         f"SELECT s.id, s.{scoring_metric} AS _score, "
         "s.max_combo, s.n50, s.n100, s.n300, "
@@ -1542,10 +1542,10 @@ async def osuComment(
     mode_vn: int = Form(..., alias="m", ge=0, le=3),
     action: Literal["get", "post"] = Form(..., alias="a"),
     # only sent for post
-    target: Optional[Literal["song", "map", "replay"]] = Form(None),
-    colour: Optional[str] = Form(None, alias="f", min_length=6, max_length=6),
-    start_time: Optional[int] = Form(None, alias="starttime"),
-    comment: Optional[str] = Form(None, min_length=1, max_length=80),
+    target: Literal["song", "map", "replay"] | None = Form(None),
+    colour: str | None = Form(None, alias="f", min_length=6, max_length=6),
+    start_time: int | None = Form(None, alias="starttime"),
+    comment: str | None = Form(None, min_length=1, max_length=80),
 ):
     if action == "get":
         # client is requesting all comments
@@ -1652,10 +1652,10 @@ async def banchoConnect(
     #       before a player has been granted a session
     # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
-    active_endpoint: Optional[str] = Query(None, alias="fail"),
-    net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
-    client_hash: Optional[str] = Query(None, alias="ch"),
-    retrying: Optional[bool] = Query(None, alias="retry"),  # '0' or '1'
+    active_endpoint: str | None = Query(None, alias="fail"),
+    net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
+    client_hash: str | None = Query(None, alias="ch"),
+    retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ):
     return b""  # TODO
 

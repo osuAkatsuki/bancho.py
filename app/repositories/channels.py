@@ -61,9 +61,9 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    name: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    name: str | None = None,
+) -> dict[str, Any] | None:
     """Fetch a single channel."""
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
@@ -83,9 +83,9 @@ async def fetch_one(
 
 
 async def fetch_count(
-    read_priv: Optional[int] = None,
-    write_priv: Optional[int] = None,
-    auto_join: Optional[bool] = None,
+    read_priv: int | None = None,
+    write_priv: int | None = None,
+    auto_join: bool | None = None,
 ) -> int:
     if read_priv is None and write_priv is None and auto_join is None:
         raise ValueError("Must provide at least one parameter.")
@@ -109,11 +109,11 @@ async def fetch_count(
 
 
 async def fetch_many(
-    read_priv: Optional[int] = None,
-    write_priv: Optional[int] = None,
-    auto_join: Optional[bool] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    read_priv: int | None = None,
+    write_priv: int | None = None,
+    auto_join: bool | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch multiple channels from the database."""
     query = f"""\
@@ -143,11 +143,11 @@ async def fetch_many(
 
 async def update(
     name: str,
-    topic: Optional[str] = None,
-    read_priv: Optional[int] = None,
-    write_priv: Optional[int] = None,
-    auto_join: Optional[bool] = None,
-) -> Optional[dict[str, Any]]:
+    topic: str | None = None,
+    read_priv: int | None = None,
+    write_priv: int | None = None,
+    auto_join: bool | None = None,
+) -> dict[str, Any] | None:
     """Update a channel in the database."""
     query = """\
         UPDATE channels
@@ -180,7 +180,7 @@ async def update(
 
 async def delete(
     name: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Delete a channel from the database."""
     query = f"""\
         SELECT {READ_PARAMS}

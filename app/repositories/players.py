@@ -74,11 +74,11 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    name: Optional[str] = None,
-    email: Optional[str] = None,
+    id: int | None = None,
+    name: str | None = None,
+    email: str | None = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Fetch a single player from the database."""
     if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
@@ -100,12 +100,12 @@ async def fetch_one(
 
 
 async def fetch_count(
-    priv: Optional[int] = None,
-    country: Optional[str] = None,
-    clan_id: Optional[int] = None,
-    clan_priv: Optional[int] = None,
-    preferred_mode: Optional[int] = None,
-    play_style: Optional[int] = None,
+    priv: int | None = None,
+    country: str | None = None,
+    clan_id: int | None = None,
+    clan_priv: int | None = None,
+    preferred_mode: int | None = None,
+    play_style: int | None = None,
 ) -> int:
     """Fetch the number of players in the database."""
     query = """\
@@ -132,14 +132,14 @@ async def fetch_count(
 
 
 async def fetch_many(
-    priv: Optional[int] = None,
-    country: Optional[str] = None,
-    clan_id: Optional[int] = None,
-    clan_priv: Optional[int] = None,
-    preferred_mode: Optional[int] = None,
-    play_style: Optional[int] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    priv: int | None = None,
+    country: str | None = None,
+    clan_id: int | None = None,
+    clan_priv: int | None = None,
+    preferred_mode: int | None = None,
+    play_style: int | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch multiple players from the database."""
     query = f"""\
@@ -175,23 +175,23 @@ async def fetch_many(
 
 async def update(
     id: int,
-    name: Optional[str] = None,
-    email: Optional[str] = None,
-    priv: Optional[int] = None,
-    country: Optional[str] = None,
-    silence_end: Optional[int] = None,
-    donor_end: Optional[int] = None,
-    creation_time: Optional[int] = None,
-    latest_activity: Optional[int] = None,
-    clan_id: Optional[int] = None,
-    clan_priv: Optional[int] = None,
-    preferred_mode: Optional[int] = None,
-    play_style: Optional[int] = None,
-    custom_badge_name: Optional[str] = None,
-    custom_badge_icon: Optional[str] = None,
-    userpage_content: Optional[str] = None,
-    api_key: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    name: str | None = None,
+    email: str | None = None,
+    priv: int | None = None,
+    country: str | None = None,
+    silence_end: int | None = None,
+    donor_end: int | None = None,
+    creation_time: int | None = None,
+    latest_activity: int | None = None,
+    clan_id: int | None = None,
+    clan_priv: int | None = None,
+    preferred_mode: int | None = None,
+    play_style: int | None = None,
+    custom_badge_name: str | None = None,
+    custom_badge_icon: str | None = None,
+    userpage_content: str | None = None,
+    api_key: str | None = None,
+) -> dict[str, Any] | None:
     """Update a player in the database."""
     query = """\
         UPDATE users

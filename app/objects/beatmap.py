@@ -3,13 +3,13 @@ from __future__ import annotations
 import functools
 import hashlib
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import datetime
 from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
-from typing import Mapping
 from typing import Optional
 
 import app.settings
@@ -33,7 +33,7 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
+async def api_get_beatmaps(**params: Any) -> list[dict[str, Any]] | None:
     """\
     Fetch data from the osu!api with a beatmap's md5.
 
@@ -349,7 +349,7 @@ class Beatmap:
     # populating the higher levels of the cache with new maps.
 
     @classmethod
-    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional[Beatmap]:
+    async def from_md5(cls, md5: str, set_id: int = -1) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by md5."""
         bmap = await cls._from_md5_cache(md5)
 
@@ -393,7 +393,7 @@ class Beatmap:
         return bmap
 
     @classmethod
-    async def from_bid(cls, bid: int) -> Optional[Beatmap]:
+    async def from_bid(cls, bid: int) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by id."""
         bmap = await cls._from_bid_cache(bid)
 
@@ -500,16 +500,16 @@ class Beatmap:
         self.diff = float(osuapi_resp["difficultyrating"])
 
     @staticmethod
-    async def _from_md5_cache(md5: str) -> Optional[Beatmap]:
+    async def _from_md5_cache(md5: str) -> Beatmap | None:
         """Fetch a map from the cache by md5."""
         return app.state.cache.beatmap.get(md5, None)
 
     @staticmethod
-    async def _from_bid_cache(bid: int) -> Optional[Beatmap]:
+    async def _from_bid_cache(bid: int) -> Beatmap | None:
         """Fetch a map from the cache by id."""
         return app.state.cache.beatmap.get(bid, None)
 
-    async def fetch_rating(self) -> Optional[float]:
+    async def fetch_rating(self) -> float | None:
         """Fetch the beatmap's rating from sql."""
         row = await app.state.services.database.fetch_one(
             "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
@@ -555,7 +555,7 @@ class BeatmapSet:
         self,
         id: int,
         last_osuapi_check: datetime,
-        maps: Optional[list[Beatmap]] = None,
+        maps: list[Beatmap] | None = None,
     ) -> None:
         self.id = id
 
@@ -787,12 +787,12 @@ class BeatmapSet:
         )
 
     @staticmethod
-    async def _from_bsid_cache(bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_cache(bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the cache by set id."""
         return app.state.cache.beatmapset.get(bsid, None)
 
     @classmethod
-    async def _from_bsid_sql(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_sql(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the database by set id."""
         async with app.state.services.database.connection() as db_conn:
             last_osuapi_check = await db_conn.fetch_val(
@@ -854,7 +854,7 @@ class BeatmapSet:
         return bmap_set
 
     @classmethod
-    async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_osuapi(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the osu!api by set id."""
         api_data = await api_get_beatmaps(s=bsid)
         if api_data:
@@ -908,7 +908,7 @@ class BeatmapSet:
         return None
 
     @classmethod
-    async def from_bsid(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def from_bsid(cls, bsid: int) -> BeatmapSet | None:
         """Cache all maps in a set from the osuapi, optionally
         returning beatmaps by their md5 or id."""
         bmap_set = await cls._from_bsid_cache(bsid)
