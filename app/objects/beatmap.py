@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
+from typing import TypedDict
+
+import aiohttp
+from tenacity import retry
+from tenacity.stop import stop_after_attempt
 
 import app.settings
 import app.state
@@ -33,7 +38,13 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
+class BeatmapApiResponse(TypedDict):
+    data: Optional[list[dict[str, Any]]]
+    status_code: int
+
+
+@retry(reraise=True, stop=stop_after_attempt(5))
+async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     """\
     Fetch data from the osu!api with a beatmap's md5.
 
@@ -53,9 +64,9 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
     async with app.state.services.http_client.get(url, params=params) as response:
         response_data = await response.json()
         if response.status == 200 and response_data:  # (data may be [])
-            return response_data
+            return {"data": response_data, "status_code": response.status}
 
-    return None
+    return {"data": None, "status_code": response.status}
 
 
 async def ensure_local_osu_file(
@@ -370,7 +381,7 @@ class Beatmap:
                     # set not found in db, try api
                     api_data = await api_get_beatmaps(h=md5)
 
-                    if not api_data:
+                    if api_data["data"] is None:
                         return None
 
                     set_id = int(api_data[0]["beatmapset_id"])
@@ -412,7 +423,7 @@ class Beatmap:
                 # set not found in db, try getting via api
                 api_data = await api_get_beatmaps(b=bid)
 
-                if not api_data:
+                if api_data["data"] is None:
                     return None
 
                 set_id = int(api_data[0]["beatmapset_id"])
@@ -628,8 +639,22 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch the newest data from the api, check for differences
         and propogate any update into our cache & database."""
-        api_data = await api_get_beatmaps(s=self.id)
-        if api_data:
+
+        try:
+            api_data = await api_get_beatmaps(s=self.id)
+        except (aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
+            # NOTE: ClientConnectorError is directly caused by the API being unavailable
+
+            # NOTE: ContentTypeError is caused by the API returning HTML and
+            #       normally happens when CF protection is enabled while
+            #       osu! recovers from a DDOS attack
+
+            # we do not want to delete the beatmap in this case, so we simply return
+            # but do not set the last check, as we would like to retry these ASAP
+
+            return
+
+        if api_data["data"] is not None:
             old_maps = {bmap.id: bmap for bmap in self.maps}
             new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
 
@@ -714,7 +739,11 @@ class BeatmapSet:
 
             # update maps in sql
             await self._save_to_sql()
-        else:
+        elif api_data["status_code"] in (404, 200):
+            # NOTE: 200 can return an empty array of beatmaps,
+            #       so we still delete in this case if the beatmap data is None
+            # TODO: is 404 and 200 the only cases where we should delete the beatmap?
+
             # TODO: we have the map on disk but it's
             #       been removed from the osu!api.
             map_md5s_to_delete = {bmap.md5 for bmap in self.maps}

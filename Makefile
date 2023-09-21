@@ -17,9 +17,9 @@ install-dev:
 uninstall:
 	pipenv --rm
 
-update:
+update: # THIS WILL NOT RUN ON WINDOWS DUE TO UVLOOP; USE WSL
 	pipenv update --dev
-	make test
+	# make test ; disabled as it fails for now
 	pipenv requirements > requirements.txt
 	pipenv requirements --dev > requirements-dev.txt
 

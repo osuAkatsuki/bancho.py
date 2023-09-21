@@ -20,9 +20,10 @@ uvloop = "*"
 py3rijndael = "*"
 pytimeparse = "*"
 sqlalchemy = "1.4.41"
-databases = {extras = ["mysql"], version = "0.5.5"}
 akatsuki-pp-py = "*"
 cryptography = "*"
+tenacity = "*"
+databases = {extras = ["mysql"], version = "0.5.5"}
 
 [dev-packages]
 pytest = "*"
