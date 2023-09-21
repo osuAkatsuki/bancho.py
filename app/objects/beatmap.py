@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import hashlib
 from collections import defaultdict
@@ -643,12 +642,8 @@ class BeatmapSet:
 
         try:
             api_data = await api_get_beatmaps(s=self.id)
-        except (
-            asyncio.TimeoutError,
-            aiohttp.ClientConnectorError,
-            aiohttp.ContentTypeError,
-        ):
-            # NOTE: ClientConnectorError & TimeoutError are directly caused by the API being unavailable
+        except (aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
+            # NOTE: ClientConnectorError are directly caused by the API being unavailable
 
             # NOTE: ContentTypeError is caused by the API returning HTML and
             #       normally happens when CF protection is enabled while
