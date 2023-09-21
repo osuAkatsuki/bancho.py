@@ -643,7 +643,7 @@ class BeatmapSet:
         try:
             api_data = await api_get_beatmaps(s=self.id)
         except (aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
-            # NOTE: ClientConnectorError are directly caused by the API being unavailable
+            # NOTE: ClientConnectorError is directly caused by the API being unavailable
 
             # NOTE: ContentTypeError is caused by the API returning HTML and
             #       normally happens when CF protection is enabled while
