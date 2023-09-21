@@ -31,3 +31,6 @@ run:
 
 run-prod:
 	pipenv run ./scripts/start_server.sh
+
+run-caddy: # Use `make run-caddy domain=<domain>`
+	DOMAIN=${domain} caddy run
