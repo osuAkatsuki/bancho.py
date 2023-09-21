@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import functools
 import hashlib
-import asyncio
 from collections import defaultdict
 from datetime import datetime
 from datetime import timedelta
@@ -38,14 +38,13 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
+
 class BeatmapApiResponse(TypedDict):
     data: Optional[list[dict[str, Any]]]
     status_code: int
 
-@retry(
-    reraise=True,
-    stop=stop_after_attempt()
-)
+
+@retry(reraise=True, stop=stop_after_attempt())
 async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     """\
     Fetch data from the osu!api with a beatmap's md5.
@@ -644,11 +643,15 @@ class BeatmapSet:
 
         try:
             api_data = await api_get_beatmaps(s=self.id)
-        except (asyncio.TimeoutError, aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
+        except (
+            asyncio.TimeoutError,
+            aiohttp.ClientConnectorError,
+            aiohttp.ContentTypeError,
+        ):
             # NOTE: ClientConnectorError & TimeoutError are directly caused by the API being unavailable
 
             # NOTE: ContentTypeError is caused by the API returning HTML and
-            #       normally happens when CF protection is enabled while 
+            #       normally happens when CF protection is enabled while
             #       osu! recovers from a DDOS attack
 
             # we do not want to delete the beatmap in this case, so we simply return
