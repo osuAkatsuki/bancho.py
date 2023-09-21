@@ -39,7 +39,7 @@ IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
 class BeatmapApiResponse(TypedDict):
-    data: Optional[list[dict[str, Any]]]
+    data: list[dict[str, Any]] | None
     status_code: int
 
 
