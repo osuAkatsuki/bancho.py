@@ -23,6 +23,7 @@ sqlalchemy = "1.4.41"
 databases = {extras = ["mysql"], version = "*"}
 akatsuki-pp-py = "*"
 cryptography = "*"
+tenacity = "*"
 
 [dev-packages]
 pytest = "*"
