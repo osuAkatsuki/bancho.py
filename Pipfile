@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 aiohttp = "*"
+async-timeout = "*"
 bcrypt = "*"
 datadog = "*"
 fastapi = "*"
