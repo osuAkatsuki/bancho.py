@@ -44,7 +44,7 @@ class BeatmapApiResponse(TypedDict):
     status_code: int
 
 
-@retry(reraise=True, stop=stop_after_attempt())
+@retry(reraise=True, stop=stop_after_attempt(5))
 async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     """\
     Fetch data from the osu!api with a beatmap's md5.
