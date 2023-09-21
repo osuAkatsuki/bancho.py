@@ -1,11 +1,7 @@
 {
     "_meta": {
         "hash": {
-<<<<<<< upgrade-py-3.11
-            "sha256": "b644f5b398947ac3348413fd3b0a6fcf9026262faa649330a743e13c0fa0fe1e"
-=======
-            "sha256": "a2fdaebdbd6cad7dab091bb1db15ed75a5f69dd5a4dc3a921d658b7f44e20e00"
->>>>>>> master
+            "sha256": "da4c4fae9cf9bbb8504210ef0643fad79e0972030e2717f640562e37cee9ee06"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -188,7 +184,7 @@
                 "sha256:4640d96be84d82d02ed59ea2b7105a0f7b33abe8703703cd0ab0bf87c427522f",
                 "sha256:7405140ff1230c310e51dc27b3145b9092d659ce68ff733fb0cefe3ee42be028"
             ],
-            "markers": "python_version >= '3.7'",
+            "markers": "python_full_version <= '3.11.2'",
             "version": "==4.0.3"
         },
         "attrs": {
@@ -420,12 +416,8 @@
                 "sha256:efc8ad4e6fc4f1752ebfb58aefece8b4e3c4cae940b0994d43649bdfce8d0d4f"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.7'",
-            "version": "==41.0.3"
-=======
             "version": "==41.0.4"
->>>>>>> master
         },
         "databases": {
             "extras": [
@@ -444,10 +436,7 @@
                 "sha256:a45ec997ab554208837e8c44d81d0e1456539dc14da5743687250e028bc809b7"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6'",
-            "version": "==0.47.0"
-=======
             "version": "==0.47.0"
         },
         "exceptiongroup": {
@@ -457,7 +446,6 @@
             ],
             "markers": "python_version < '3.11'",
             "version": "==1.1.3"
->>>>>>> master
         },
         "fastapi": {
             "hashes": [
@@ -465,10 +453,7 @@
                 "sha256:5e5f17e826dbd9e9b5a5145976c5cd90bcaa61f2bf9a69aca423f2bcebe44d83"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.7'",
-=======
->>>>>>> master
             "version": "==0.103.1"
         },
         "frozenlist": {
@@ -768,10 +753,7 @@
                 "sha256:f9e01239abea2f52a429fe9d95c96df95f078f0172489d691b4a848ace54a476"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.7'",
-=======
->>>>>>> master
             "version": "==3.9.7"
         },
         "psutil": {
@@ -1052,6 +1034,7 @@
                 "sha256:ce510e327a630c9e1beaf17d42e6ffacc88185044ad85cf74c0a8887c6a0f88c"
             ],
             "index": "pypi",
+            "markers": "python_version >= '3.7'",
             "version": "==8.2.3"
         },
         "timeago": {
@@ -1207,14 +1190,6 @@
     "develop": {
         "black": {
             "hashes": [
-<<<<<<< upgrade-py-3.11
-                "sha256:3511c8a7e22ce653f89ae90dfddaf94f3bb7e2587a245246572d3b9c92adf066",
-                "sha256:9366c1f898981f09eb8da076716c02fd021f5a0e63581c66501d68a2e4eab844"
-            ],
-            "index": "pypi",
-            "markers": "python_version >= '3.8'",
-            "version": "==23.9.0"
-=======
                 "sha256:031e8c69f3d3b09e1aa471a926a1eeb0b9071f80b17689a655f7885ac9325a6f",
                 "sha256:13a2e4a93bb8ca74a749b6974925c27219bb3df4d42fc45e948a5d9feb5122b7",
                 "sha256:13ef033794029b85dfea8032c9d3b92b42b526f1ff4bf13b2182ce4e917f5100",
@@ -1239,8 +1214,8 @@
                 "sha256:d6bc09188020c9ac2555a498949401ab35bb6bf76d4e0f8ee251694664df6301"
             ],
             "index": "pypi",
+            "markers": "python_version >= '3.8'",
             "version": "==23.9.1"
->>>>>>> master
         },
         "cfgv": {
             "hashes": [
@@ -1273,23 +1248,6 @@
             ],
             "version": "==0.3.7"
         },
-<<<<<<< upgrade-py-3.11
-        "filelock": {
-            "hashes": [
-                "sha256:0ecc1dd2ec4672a10c8550a8182f1bd0c0a5088470ecd5a125e45f49472fac3d",
-                "sha256:f067e40ccc40f2b48395a80fcbd4728262fab54e232e090a4063ab804179efeb"
-            ],
-            "markers": "python_version >= '3.8'",
-            "version": "==3.12.3"
-        },
-        "identify": {
-            "hashes": [
-                "sha256:287b75b04a0e22d727bc9a41f0d4f3c1bcada97490fa6eabb5b28f0e9097e733",
-                "sha256:fdb527b2dfe24602809b2201e033c2a113d7bdf716db3ca8e3243f735dcecaba"
-            ],
-            "markers": "python_version >= '3.8'",
-            "version": "==2.5.27"
-=======
         "exceptiongroup": {
             "hashes": [
                 "sha256:097acd85d473d75af5bb98e41b61ff7fe35efe6675e4f9370ec6ec5126d160e9",
@@ -1313,7 +1271,6 @@
             ],
             "markers": "python_version >= '3.8'",
             "version": "==2.5.29"
->>>>>>> master
         },
         "iniconfig": {
             "hashes": [
@@ -1354,10 +1311,7 @@
                 "sha256:ff0cedc84184115202475bbb46dd99f8dcb87fe24d5d0ddfc0fe6b8575c88d2f"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.8'",
-=======
->>>>>>> master
             "version": "==1.5.1"
         },
         "mypy-extensions": {
@@ -1414,10 +1368,7 @@
                 "sha256:96d529a951f8b677f730a7212442027e8ba53f9b04d217c4c67dc56c393ad945"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.8'",
-=======
->>>>>>> master
             "version": "==3.4.0"
         },
         "pytest": {
@@ -1426,10 +1377,7 @@
                 "sha256:a766259cfab564a2ad52cb1aae1b881a75c3eb7e34ca3779697c23ed47c47069"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
             "markers": "python_version >= '3.7'",
-=======
->>>>>>> master
             "version": "==7.4.2"
         },
         "pyyaml": {
@@ -1494,18 +1442,7 @@
                 "sha256:b39776d1f43083f6f537d14642a9b70ea6d7aa91a013330543d2ae7d12e2e7e2"
             ],
             "index": "pypi",
-<<<<<<< upgrade-py-3.11
-            "markers": "python_version >= '3.7'",
-            "version": "==3.10.0"
-        },
-        "setuptools": {
-            "hashes": [
-                "sha256:00478ca80aeebeecb2f288d3206b0de568df5cd2b8fada1209843cc9a8d88a48",
-                "sha256:af3d5949030c3f493f550876b2fd1dd5ec66689c4ee5d5344f009746f71fd5a8"
-            ],
             "markers": "python_version >= '3.8'",
-            "version": "==68.2.0"
-=======
             "version": "==3.11.0"
         },
         "setuptools": {
@@ -1523,7 +1460,6 @@
             ],
             "markers": "python_version < '3.11'",
             "version": "==2.0.1"
->>>>>>> master
         },
         "typing-extensions": {
             "hashes": [
