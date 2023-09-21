@@ -384,7 +384,8 @@ class Beatmap:
                     if api_data["data"] is None:
                         return None
 
-                    set_id = int(api_data[0]["beatmapset_id"])
+                    api_response = api_data["data"]
+                    set_id = int(api_response[0]["beatmapset_id"])
 
             # fetch (and cache) beatmap set
             beatmap_set = await BeatmapSet.from_bsid(set_id)
@@ -426,7 +427,8 @@ class Beatmap:
                 if api_data["data"] is None:
                     return None
 
-                set_id = int(api_data[0]["beatmapset_id"])
+                api_response = api_data["data"]
+                set_id = int(api_response[0]["beatmapset_id"])
 
             # fetch (and cache) beatmap set
             beatmap_set = await BeatmapSet.from_bsid(set_id)
@@ -655,8 +657,10 @@ class BeatmapSet:
             return
 
         if api_data["data"] is not None:
+            api_response = api_data["data"]
+
             old_maps = {bmap.id: bmap for bmap in self.maps}
-            new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
+            new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_response}
 
             self.last_osuapi_check = datetime.now()
 
@@ -886,7 +890,9 @@ class BeatmapSet:
     async def _from_bsid_osuapi(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the osu!api by set id."""
         api_data = await api_get_beatmaps(s=bsid)
-        if api_data:
+        if api_data["data"] is not None:
+            api_response = api_data["data"]
+
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset bancho.py support
@@ -899,7 +905,7 @@ class BeatmapSet:
 
             current_maps = {row["id"]: row["status"] for row in res}
 
-            for api_bmap in api_data:
+            for api_bmap in api_response:
                 # newer version available for this map
                 bmap: Beatmap = Beatmap.__new__(Beatmap)
                 bmap.id = int(api_bmap["beatmap_id"])
