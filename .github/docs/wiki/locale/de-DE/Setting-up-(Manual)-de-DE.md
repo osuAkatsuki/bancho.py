@@ -5,13 +5,13 @@
 ## installing bancho.py's requirements
 
 ```sh
-# python3.9 is often not available natively,
+# python3.11 is often not available natively,
 # but we can rely on deadsnakes to provide it.
-# https://github.com/deadsnakes/python3.9
+# https://github.com/deadsnakes/python3.11
 sudo add-apt-repository -y ppa:deadsnakes
 
 # install required programs for running bancho.py
-sudo apt install -y python3.9-dev python3.9-distutils \
+sudo apt install -y python3.11-dev python3.11-distutils \
                     build-essential \
                     mysql-server redis-server \
                     nginx certbot
@@ -22,10 +22,10 @@ cd tools && ./enable_geoip_module.sh && cd ..
 # install python's package manager, pip
 # it's used to install python-specific dependencies
 wget https://bootstrap.pypa.io/get-pip.py
-python3.9 get-pip.py && rm get-pip.py
+python3.11 get-pip.py && rm get-pip.py
 
 # make sure pip and setuptools are up to date
-python3.9 -m pip install -U pip setuptools pipenv
+python3.11 -m pip install -U pip setuptools pipenv
 
 # install bancho.py's python-specific dependencies
 # (if you plan to work as a dev, you can use `make install-dev`)
