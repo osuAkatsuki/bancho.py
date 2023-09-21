@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 """main.py - a user-friendly, safe wrapper around bancho.py's runtime
 
 bancho.py is an in-progress osu! server implementation for developers of all levels
@@ -25,7 +25,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 import argparse
 import logging
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 import uvicorn
 

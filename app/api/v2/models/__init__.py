@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
-from typing import Mapping
 from typing import TypeVar
 
 from pydantic import BaseModel as _pydantic_BaseModel

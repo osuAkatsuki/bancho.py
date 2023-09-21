@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # install apps dependencies
 RUN apt update && apt install -y \
@@ -15,7 +15,7 @@ ENV PATH "${PATH}:/home/bpyuser/.local/bin/"
 
 # install python dependencies
 COPY Makefile Pipfile Pipfile.lock ./
-RUN python3.9 -m pip install -U pip==23.0.1 setuptools==67.6.0 pipenv==2023.2.18
+RUN python3.11 -m pip install -U pip==23.2.1 setuptools==68.2.0 pipenv==2023.9.8
 RUN make install
 
 # create data directory

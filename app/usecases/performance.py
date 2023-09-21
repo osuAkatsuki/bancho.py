@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 from typing import Optional
 from typing import TypedDict
 
@@ -15,18 +15,18 @@ from app.constants.mods import Mods
 @dataclass
 class ScoreParams:
     mode: int
-    mods: Optional[int] = None
-    combo: Optional[int] = None
+    mods: int | None = None
+    combo: int | None = None
 
     # caller may pass either acc OR 300/100/50/geki/katu/miss
-    acc: Optional[float] = None
+    acc: float | None = None
 
-    n300: Optional[int] = None
-    n100: Optional[int] = None
-    n50: Optional[int] = None
-    ngeki: Optional[int] = None
-    nkatu: Optional[int] = None
-    nmiss: Optional[int] = None
+    n300: int | None = None
+    n100: int | None = None
+    n50: int | None = None
+    ngeki: int | None = None
+    nkatu: int | None = None
+    nmiss: int | None = None
 
 
 class PerformanceRating(TypedDict):

@@ -5,12 +5,12 @@ import asyncio
 import re
 import struct
 import time
+from collections.abc import Callable
+from collections.abc import Mapping
 from datetime import date
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 from typing import Literal
-from typing import Mapping
 from typing import Optional
 from typing import TypedDict
 
@@ -170,7 +170,7 @@ matches:
 @router.post("/")
 async def bancho_handler(
     request: Request,
-    osu_token: Optional[str] = Header(None),
+    osu_token: str | None = Header(None),
     user_agent: Literal["osu!"] = Header(...),
 ):
     ip = app.state.services.ip_resolver.get_ip(request.headers)

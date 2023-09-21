@@ -97,7 +97,7 @@ async def create_all_modes(player_id: int) -> list[dict[str, Any]]:
     return [dict(rec) for rec in recs]
 
 
-async def fetch_one(player_id: int, mode: int) -> Optional[dict[str, Any]]:
+async def fetch_one(player_id: int, mode: int) -> dict[str, Any] | None:
     """Fetch a player stats entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -114,8 +114,8 @@ async def fetch_one(player_id: int, mode: int) -> Optional[dict[str, Any]]:
 
 
 async def fetch_count(
-    player_id: Optional[int] = None,
-    mode: Optional[int] = None,
+    player_id: int | None = None,
+    mode: int | None = None,
 ) -> int:
     query = """\
         SELECT COUNT(*) AS count
@@ -133,10 +133,10 @@ async def fetch_count(
 
 
 async def fetch_many(
-    player_id: Optional[int] = None,
-    mode: Optional[int] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    player_id: int | None = None,
+    mode: int | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     query = f"""\
         SELECT {READ_PARAMS}
@@ -164,20 +164,20 @@ async def fetch_many(
 async def update(
     player_id: int,
     mode: int,
-    tscore: Optional[int] = None,
-    rscore: Optional[int] = None,
-    pp: Optional[int] = None,
-    plays: Optional[int] = None,
-    playtime: Optional[int] = None,
-    acc: Optional[float] = None,
-    max_combo: Optional[int] = None,
-    total_hits: Optional[int] = None,
-    replay_views: Optional[int] = None,
-    xh_count: Optional[int] = None,
-    x_count: Optional[int] = None,
-    sh_count: Optional[int] = None,
-    s_count: Optional[int] = None,
-    a_count: Optional[int] = None,
+    tscore: int | None = None,
+    rscore: int | None = None,
+    pp: int | None = None,
+    plays: int | None = None,
+    playtime: int | None = None,
+    acc: float | None = None,
+    max_combo: int | None = None,
+    total_hits: int | None = None,
+    replay_views: int | None = None,
+    xh_count: int | None = None,
+    x_count: int | None = None,
+    sh_count: int | None = None,
+    s_count: int | None = None,
+    a_count: int | None = None,
 ):
     """Update a player stats entry in the database."""
     query = """\

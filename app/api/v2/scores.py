@@ -17,11 +17,11 @@ router = APIRouter()
 
 @router.get("/scores")
 async def get_all_scores(
-    map_md5: Optional[str] = None,
-    mods: Optional[int] = None,
-    status: Optional[int] = None,
-    mode: Optional[int] = None,
-    user_id: Optional[int] = None,
+    map_md5: str | None = None,
+    mods: int | None = None,
+    status: int | None = None,
+    mode: int | None = None,
+    user_id: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> Success[list[Score]]:
