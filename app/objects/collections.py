@@ -559,7 +559,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
             desc=row["desc"],
             # NOTE: achievement conditions are stored as stringified python
             # expressions in the database to allow for extensive customizability.
-            cond=eval(f'lambda score, mode_vn: {row.pop("cond")}'),
+            cond=eval(f'lambda score, mode_vn: {row["cond"]}'),
         )
 
         app.state.sessions.achievements.append(achievement)
