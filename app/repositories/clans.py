@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 
 # +------------+-------------+------+-----+---------+----------------+
 # | Field      | Type        | Null | Key | Default | Extra          |
@@ -127,22 +127,22 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     clan = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Clan], clan)
+    return cast(list[Clan], clan) if clan is not None else None
 
 
 async def update(
     id: int,
-    name: str | Unset = UNSET,
-    tag: str | Unset = UNSET,
-    owner: int | Unset = UNSET,
+    name: str | _UnsetSentinel = UNSET,
+    tag: str | _UnsetSentinel = UNSET,
+    owner: int | _UnsetSentinel = UNSET,
 ) -> Clan | None:
     """Update a clan in the database."""
     update_fields: ClanUpdateFields = {}
-    if not isinstance(name, Unset):
+    if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
-    if not isinstance(tag, Unset):
+    if not isinstance(tag, _UnsetSentinel):
         update_fields["tag"] = tag
-    if not isinstance(owner, Unset):
+    if not isinstance(owner, _UnsetSentinel):
         update_fields["owner"] = owner
 
     query = f"""\

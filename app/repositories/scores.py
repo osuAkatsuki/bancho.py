@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 
 # +-----------------+-----------------+------+-----+---------+----------------+
 # | Field           | Type            | Null | Key | Default | Extra          |
@@ -238,19 +238,19 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     scores = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Score], scores)
+    return cast(list[Score], scores) if scores is not None else None
 
 
 async def update(
     id: int,
-    pp: float | Unset = UNSET,
-    status: int | Unset = UNSET,
+    pp: float | _UnsetSentinel = UNSET,
+    status: int | _UnsetSentinel = UNSET,
 ) -> Score | None:
     """Update an existing score."""
     update_fields = ScoreUpdateFields = {}
-    if not isinstance(pp, Unset):
+    if not isinstance(pp, _UnsetSentinel):
         update_fields["pp"] = pp
-    if not isinstance(status, Unset):
+    if not isinstance(status, _UnsetSentinel):
         update_fields["status"] = status
 
     query = f"""\

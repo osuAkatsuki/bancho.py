@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 from app.utils import make_safe_name
 
 # +-------------------+---------------+------+-----+---------+----------------+
@@ -215,61 +215,61 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     players = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Player], players)
+    return cast(list[Player], players) if players is not None else None
 
 
 async def update(
     id: int,
-    name: str | Unset = UNSET,
-    email: str | Unset = UNSET,
-    priv: int | Unset = UNSET,
-    country: str | Unset = UNSET,
-    silence_end: int | Unset = UNSET,
-    donor_end: int | Unset = UNSET,
-    creation_time: int | Unset = UNSET,
-    latest_activity: int | Unset = UNSET,
-    clan_id: int | Unset = UNSET,
-    clan_priv: int | Unset = UNSET,
-    preferred_mode: int | Unset = UNSET,
-    play_style: int | Unset = UNSET,
-    custom_badge_name: str | Unset = UNSET,
-    custom_badge_icon: str | Unset = UNSET,
-    userpage_content: str | Unset = UNSET,
-    api_key: str | Unset = UNSET,
+    name: str | _UnsetSentinel = UNSET,
+    email: str | _UnsetSentinel = UNSET,
+    priv: int | _UnsetSentinel = UNSET,
+    country: str | _UnsetSentinel = UNSET,
+    silence_end: int | _UnsetSentinel = UNSET,
+    donor_end: int | _UnsetSentinel = UNSET,
+    creation_time: _UnsetSentinel | _UnsetSentinel = UNSET,
+    latest_activity: int | _UnsetSentinel = UNSET,
+    clan_id: int | _UnsetSentinel = UNSET,
+    clan_priv: int | _UnsetSentinel = UNSET,
+    preferred_mode: int | _UnsetSentinel = UNSET,
+    play_style: int | _UnsetSentinel = UNSET,
+    custom_badge_name: str | _UnsetSentinel = UNSET,
+    custom_badge_icon: str | _UnsetSentinel = UNSET,
+    userpage_content: str | _UnsetSentinel = UNSET,
+    api_key: str | _UnsetSentinel = UNSET,
 ) -> dict[str, Any] | None:
     """Update a player in the database."""
     update_fields = PlayerUpdateFields = {}
-    if not isinstance(name, Unset):
+    if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
-    if not isinstance(email, Unset):
+    if not isinstance(email, _UnsetSentinel):
         update_fields["email"] = email
-    if not isinstance(priv, Unset):
+    if not isinstance(priv, _UnsetSentinel):
         update_fields["priv"] = priv
-    if not isinstance(country, Unset):
+    if not isinstance(country, _UnsetSentinel):
         update_fields["country"] = country
-    if not isinstance(silence_end, Unset):
+    if not isinstance(silence_end, _UnsetSentinel):
         update_fields["silence_end"] = silence_end
-    if not isinstance(donor_end, Unset):
+    if not isinstance(donor_end, _UnsetSentinel):
         update_fields["donor_end"] = donor_end
-    if not isinstance(creation_time, Unset):
+    if not isinstance(creation_time, _UnsetSentinel):
         update_fields["creation_time"] = creation_time
-    if not isinstance(latest_activity, Unset):
+    if not isinstance(latest_activity, _UnsetSentinel):
         update_fields["latest_activity"] = latest_activity
-    if not isinstance(clan_id, Unset):
+    if not isinstance(clan_id, _UnsetSentinel):
         update_fields["clan_id"] = clan_id
-    if not isinstance(clan_priv, Unset):
+    if not isinstance(clan_priv, _UnsetSentinel):
         update_fields["clan_priv"] = clan_priv
-    if not isinstance(preferred_mode, Unset):
+    if not isinstance(preferred_mode, _UnsetSentinel):
         update_fields["preferred_mode"] = preferred_mode
-    if not isinstance(play_style, Unset):
+    if not isinstance(play_style, _UnsetSentinel):
         update_fields["play_style"] = play_style
-    if not isinstance(custom_badge_name, Unset):
+    if not isinstance(custom_badge_name, _UnsetSentinel):
         update_fields["custom_badge_name"] = custom_badge_name
-    if not isinstance(custom_badge_icon, Unset):
+    if not isinstance(custom_badge_icon, _UnsetSentinel):
         update_fields["custom_badge_icon"] = custom_badge_icon
-    if not isinstance(userpage_content, Unset):
+    if not isinstance(userpage_content, _UnsetSentinel):
         update_fields["userpage_content"] = userpage_content
-    if not isinstance(api_key, Unset):
+    if not isinstance(api_key, _UnsetSentinel):
         update_fields["api_key"] = api_key
 
     query = f"""\

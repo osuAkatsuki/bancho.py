@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 
 # +-------+--------------+------+-----+---------+----------------+
 # | Field | Type         | Null | Key | Default | Extra          |
@@ -131,25 +131,25 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     achievements = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in achievements]
+    return cast(Achievement, achievements) if achievements is not None else None
 
 
 async def update(
     id: int,
-    file: str | Unset = UNSET,
-    name: str | Unset = UNSET,
-    desc: str | Unset = UNSET,
-    cond: str | Unset = UNSET,
+    file: str | _UnsetSentinel = UNSET,
+    name: str | _UnsetSentinel = UNSET,
+    desc: str | _UnsetSentinel = UNSET,
+    cond: str | _UnsetSentinel = UNSET,
 ) -> Achievement | None:
     """Update an existing achievement."""
     update_fields = AchievementUpdateFields = {}
-    if not isinstance(file, Unset):
+    if not isinstance(file, _UnsetSentinel):
         update_fields["file"] = file
-    if not isinstance(name, Unset):
+    if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
-    if not isinstance(desc, Unset):
+    if not isinstance(desc, _UnsetSentinel):
         update_fields["desc"] = desc
-    if not isinstance(cond, Unset):
+    if not isinstance(cond, _UnsetSentinel):
         update_fields["cond"] = cond
 
     query = f"""\

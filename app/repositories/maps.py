@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 
 # +--------------+------------------------+------+-----+---------+-------+
 # | Field        | Type                   | Null | Key | Default | Extra |
@@ -285,79 +285,79 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     maps = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Map], maps)
+    return cast(list[Map], maps) if maps is not None else None
 
 
 async def update(
     id: int,
-    server: str | Unset = UNSET,
-    set_id: int | Unset = UNSET,
-    status: int | Unset = UNSET,
-    md5: str | Unset = UNSET,
-    artist: str | Unset = UNSET,
-    title: str | Unset = UNSET,
-    version: str | Unset = UNSET,
-    creator: str | Unset = UNSET,
-    filename: str | Unset = UNSET,
-    last_update: str | Unset = UNSET,
-    total_length: int | Unset = UNSET,
-    max_combo: int | Unset = UNSET,
-    frozen: bool | Unset = UNSET,
-    plays: int | Unset = UNSET,
-    passes: int | Unset = UNSET,
-    mode: int | Unset = UNSET,
-    bpm: float | Unset = UNSET,
-    cs: float | Unset = UNSET,
-    ar: float | Unset = UNSET,
-    od: float | Unset = UNSET,
-    hp: float | Unset = UNSET,
-    diff: float | Unset = UNSET,
+    server: str | _UnsetSentinel = UNSET,
+    set_id: int | _UnsetSentinel = UNSET,
+    status: int | _UnsetSentinel = UNSET,
+    md5: str | _UnsetSentinel = UNSET,
+    artist: str | _UnsetSentinel = UNSET,
+    title: str | _UnsetSentinel = UNSET,
+    version: str | _UnsetSentinel = UNSET,
+    creator: str | _UnsetSentinel = UNSET,
+    filename: str | _UnsetSentinel = UNSET,
+    last_update: str | _UnsetSentinel = UNSET,
+    total_length: int | _UnsetSentinel = UNSET,
+    max_combo: int | _UnsetSentinel = UNSET,
+    frozen: bool | _UnsetSentinel = UNSET,
+    plays: int | _UnsetSentinel = UNSET,
+    passes: int | _UnsetSentinel = UNSET,
+    mode: int | _UnsetSentinel = UNSET,
+    bpm: float | _UnsetSentinel = UNSET,
+    cs: float | _UnsetSentinel = UNSET,
+    ar: float | _UnsetSentinel = UNSET,
+    od: float | _UnsetSentinel = UNSET,
+    hp: float | _UnsetSentinel = UNSET,
+    diff: float | _UnsetSentinel = UNSET,
 ) -> Map | None:
     """Update a beatmap entry in the database."""
     update_fields: MapUpdateFields = {}
-    if not isinstance(server, Unset):
+    if not isinstance(server, _UnsetSentinel):
         update_fields["server"] = server
-    if not isinstance(set_id, Unset):
+    if not isinstance(set_id, _UnsetSentinel):
         update_fields["set_id"] = set_id
-    if not isinstance(status, Unset):
+    if not isinstance(status, _UnsetSentinel):
         update_fields["status"] = status
-    if not isinstance(md5, Unset):
+    if not isinstance(md5, _UnsetSentinel):
         update_fields["md5"] = md5
-    if not isinstance(artist, Unset):
+    if not isinstance(artist, _UnsetSentinel):
         update_fields["artist"] = artist
-    if not isinstance(title, Unset):
+    if not isinstance(title, _UnsetSentinel):
         update_fields["title"] = title
-    if not isinstance(version, Unset):
+    if not isinstance(version, _UnsetSentinel):
         update_fields["version"] = version
-    if not isinstance(creator, Unset):
+    if not isinstance(creator, _UnsetSentinel):
         update_fields["creator"] = creator
-    if not isinstance(filename, Unset):
+    if not isinstance(filename, _UnsetSentinel):
         update_fields["filename"] = filename
-    if not isinstance(last_update, Unset):
+    if not isinstance(last_update, _UnsetSentinel):
         update_fields["last_update"] = last_update
-    if not isinstance(total_length, Unset):
+    if not isinstance(total_length, _UnsetSentinel):
         update_fields["total_length"] = total_length
-    if not isinstance(max_combo, Unset):
+    if not isinstance(max_combo, _UnsetSentinel):
         update_fields["max_combo"] = max_combo
-    if not isinstance(frozen, Unset):
+    if not isinstance(frozen, _UnsetSentinel):
         update_fields["frozen"] = frozen
-    if not isinstance(plays, Unset):
+    if not isinstance(plays, _UnsetSentinel):
         update_fields["plays"] = plays
-    if not isinstance(passes, Unset):
+    if not isinstance(passes, _UnsetSentinel):
         update_fields["passes"] = passes
-    if not isinstance(mode, Unset):
+    if not isinstance(mode, _UnsetSentinel):
         update_fields["mode"] = mode
-    if not isinstance(bpm, Unset):
+    if not isinstance(bpm, _UnsetSentinel):
         update_fields["bpm"] = bpm
-    if not isinstance(cs, Unset):
+    if not isinstance(cs, _UnsetSentinel):
         update_fields["cs"] = cs
-    if not isinstance(ar, Unset):
+    if not isinstance(ar, _UnsetSentinel):
         update_fields["ar"] = ar
-    if not isinstance(od, Unset):
+    if not isinstance(od, _UnsetSentinel):
         update_fields["od"] = od
-    if not isinstance(hp, Unset):
+    if not isinstance(hp, _UnsetSentinel):
         update_fields["hp"] = hp
-    if not isinstance(diff, Unset):
+    if not isinstance(diff, _UnsetSentinel):
         update_fields["diff"] = diff
 
     query = f"""\

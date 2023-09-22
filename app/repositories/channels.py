@@ -7,8 +7,8 @@ from typing import Optional
 from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
 from app._typing import UNSET
-from app._typing import Unset
 
 # +------------+--------------+------+-----+---------+----------------+
 # | Field      | Type         | Null | Key | Default | Extra          |
@@ -160,25 +160,25 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     channels = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Channel], channels)
+    return cast(list[Channel], channels) if channels is not None else None
 
 
 async def update(
     name: str,
-    topic: str | Unset = UNSET,
-    read_priv: int | Unset = UNSET,
-    write_priv: int | Unset = UNSET,
-    auto_join: bool | Unset = UNSET,
+    topic: str | _UnsetSentinel = UNSET,
+    read_priv: int | _UnsetSentinel = UNSET,
+    write_priv: int | _UnsetSentinel = UNSET,
+    auto_join: bool | _UnsetSentinel = UNSET,
 ) -> Channel | None:
     """Update a channel in the database."""
     update_fields = ChannelUpdateFields = {}
-    if not isinstance(topic, Unset):
+    if not isinstance(topic, _UnsetSentinel):
         update_fields["topic"] = topic
-    if not isinstance(read_priv, Unset):
+    if not isinstance(read_priv, _UnsetSentinel):
         update_fields["read_priv"] = read_priv
-    if not isinstance(write_priv, Unset):
+    if not isinstance(write_priv, _UnsetSentinel):
         update_fields["write_priv"] = write_priv
-    if not isinstance(auto_join, Unset):
+    if not isinstance(auto_join, _UnsetSentinel):
         update_fields["auto_join"] = auto_join
 
     query = f"""\

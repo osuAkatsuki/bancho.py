@@ -10,7 +10,7 @@ IPAddress = Union[IPv4Address, IPv6Address]
 T = TypeVar("T")
 
 
-class Unset:
+class _UnsetSentinel:
     def __repr__(self) -> str:
         return "Unset"
 
@@ -24,4 +24,4 @@ class Unset:
         return self
 
 
-UNSET = Unset()
+UNSET = _UnsetSentinel()
