@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
+from typing import cast
 from typing import Optional
+from typing import TypedDict
 
 import app.state.services
+from app._typing import UNSET
+from app._typing import Unset
 
 # +------------+-------------+------+-----+---------+----------------+
 # | Field      | Type        | Null | Key | Default | Extra          |
@@ -23,11 +27,25 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Clan(TypedDict):
+    id: int
+    name: str
+    tag: str
+    owner: int
+    created_at: str
+
+
+class ClanUpdateFields(TypedDict, total=False):
+    name: str
+    tag: str
+    owner: int
+
+
 async def create(
     name: str,
     tag: str,
     owner: int,
-) -> dict[str, Any]:
+) -> Clan:
     """Create a new clan in the database."""
     query = f"""\
         INSERT INTO clans (name, tag, owner, created_at)
@@ -48,9 +66,10 @@ async def create(
     params = {
         "id": rec_id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return dict(rec)
+    clan = await app.state.services.database.fetch_one(query, params)
+
+    assert clan is not None
+    return cast(Clan, clan)
 
 
 async def fetch_one(
@@ -58,7 +77,7 @@ async def fetch_one(
     name: str | None = None,
     tag: str | None = None,
     owner: int | None = None,
-) -> dict[str, Any] | None:
+) -> Clan | None:
     """Fetch a single clan from the database."""
     if id is None and name is None and tag is None and owner is None:
         raise ValueError("Must provide at least one parameter.")
@@ -72,8 +91,9 @@ async def fetch_one(
            AND owner = COALESCE(:owner, owner)
     """
     params = {"id": id, "name": name, "tag": tag, "owner": owner}
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    clan = await app.state.services.database.fetch_one(query, params)
+
+    return cast(Clan, clan) if clan is not None else None
 
 
 async def fetch_count() -> int:
@@ -90,7 +110,7 @@ async def fetch_count() -> int:
 async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Clan]:
     """Fetch many clans from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -106,32 +126,32 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    clan = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Clan], clan)
 
 
 async def update(
     id: int,
-    name: str | None = None,
-    tag: str | None = None,
-    owner: int | None = None,
-) -> dict[str, Any] | None:
+    name: str | Unset = UNSET,
+    tag: str | Unset = UNSET,
+    owner: int | Unset = UNSET,
+) -> Clan | None:
     """Update a clan in the database."""
-    query = """\
+    update_fields: ClanUpdateFields = {}
+    if not isinstance(name, Unset):
+        update_fields["name"] = name
+    if not isinstance(tag, Unset):
+        update_fields["tag"] = tag
+    if not isinstance(owner, Unset):
+        update_fields["owner"] = owner
+
+    query = f"""\
         UPDATE clans
-           SET name = :name,
-               tag = :tag,
-               owner = :owner
+           SET {",".join(f"{k} = :{k}" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "name": name,
-        "tag": tag,
-        "owner": owner,
-    }
-
-    await app.state.services.database.execute(query, params)
+    values = {"id": id} | update_fields
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
@@ -141,11 +161,11 @@ async def update(
     params = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    clan = await app.state.services.database.fetch_one(query, params)
+    return cast(Clan, clan) if clan is not None else None
 
 
-async def delete(id: int) -> dict[str, Any] | None:
+async def delete(id: int) -> Clan | None:
     """Delete a clan from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -166,5 +186,5 @@ async def delete(id: int) -> dict[str, Any] | None:
     params = {
         "id": id,
     }
-    await app.state.services.database.execute(query, params)
-    return dict(rec)
+    clan = await app.state.services.database.execute(query, params)
+    return cast(Clan, clan) if clan is not None else None
