@@ -46,9 +46,9 @@ body:
       label: Python Version
       description: What version of python are you using?
       options:
-        - 3.9.X (Default)
+        - 3.11.X (Default)
         - 3.10.X
-        - 3.11.X
+        - 3.9.X
     validations:
       required: true
   - type: textarea

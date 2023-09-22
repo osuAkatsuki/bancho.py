@@ -349,10 +349,10 @@ def ensure_supported_platform() -> int:
             )
         return 1
 
-    if sys.version_info < (3, 9):
+    if sys.version_info < (3, 11):
         log(
             "bancho.py uses many modern python features, "
-            "and the minimum python version is 3.9.",
+            "and the minimum python version is 3.11.",
             Ansi.LRED,
         )
         return 1
