@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import cast
 from typing import TypedDict
 
@@ -217,8 +218,8 @@ async def delete(id: int) -> IngameLogin | None:
     params = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
+    ingame_login = await app.state.services.database.fetch_one(query, params)
+    if ingame_login is None:
         return None
 
     query = """\
@@ -229,4 +230,4 @@ async def delete(id: int) -> IngameLogin | None:
         "id": id,
     }
     await app.state.services.database.execute(query, params)
-    return dict(rec)
+    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
