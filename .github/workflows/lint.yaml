@@ -1,7 +1,9 @@
 name: Lint
 
 on:
-  push
+  push:
+    paths:
+      - '*.py'
 
 jobs:
   mypy:
@@ -20,4 +22,4 @@ jobs:
       - name: Install dependencies
         run: pipenv install --dev --deploy
       - name: Run mypy
-        run: mypy --strict --ignore-missing-imports .
+        run: pipenv run mypy --strict --ignore-missing-imports .
