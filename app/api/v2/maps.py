@@ -1,7 +1,6 @@
 """ bancho.py's v2 apis for interacting with maps """
 from __future__ import annotations
 
-
 from fastapi import APIRouter
 from fastapi import status
 from fastapi.param_functions import Query

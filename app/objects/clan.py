@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-
 import app.state
 from app.constants.privileges import ClanPrivileges
 from app.repositories import clans as clans_repo
