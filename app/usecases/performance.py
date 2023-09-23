@@ -34,7 +34,7 @@ class PerformanceRating(TypedDict):
     pp_aim: float | None
     pp_speed: float | None
     pp_flashlight: float | None
-    effective_miss_count: int | None
+    effective_miss_count: float | None
     pp_difficulty: float | None
 
 
