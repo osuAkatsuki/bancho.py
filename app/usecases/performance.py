@@ -30,25 +30,25 @@ class ScoreParams:
 
 class PerformanceRating(TypedDict):
     pp: float
-    pp_acc: float
-    pp_aim: float
-    pp_speed: float
-    pp_flashlight: float
-    effective_miss_count: int
-    pp_difficulty: float
+    pp_acc: float | None
+    pp_aim: float | None
+    pp_speed: float | None
+    pp_flashlight: float | None
+    effective_miss_count: int | None
+    pp_difficulty: float | None
 
 
 class DifficultyRating(TypedDict):
     stars: float
-    aim: float
-    speed: float
-    flashlight: float
-    slider_factor: float
-    speed_note_count: float
-    stamina: float
-    color: float
-    rhythm: float
-    peak: float
+    aim: float | None
+    speed: float | None
+    flashlight: float | None
+    slider_factor: float | None
+    speed_note_count: float | None
+    stamina: float | None
+    color: float | None
+    rhythm: float | None
+    peak: float | None
 
 
 class PerformanceResult(TypedDict):
@@ -93,8 +93,6 @@ def calculate_performances(
             n_katu=score.nkatu,
             n_misses=score.nmiss,
         )
-        # TODO: make a fix to akatsuki-pp-py to include python type
-        #       definitions for it's public api, so we can remove `type: ignore`
         result = calculator.performance(calc_bmap)
 
         pp = result.pp  # type: ignore
@@ -109,24 +107,24 @@ def calculate_performances(
             {
                 "performance": {
                     "pp": pp,
-                    "pp_acc": result.pp_acc,  # type: ignore
-                    "pp_aim": result.pp_aim,  # type: ignore
-                    "pp_speed": result.pp_speed,  # type: ignore
-                    "pp_flashlight": result.pp_flashlight,  # type: ignore
-                    "effective_miss_count": result.effective_miss_count,  # type: ignore
-                    "pp_difficulty": result.pp_difficulty,  # type: ignore
+                    "pp_acc": result.pp_acc,
+                    "pp_aim": result.pp_aim,
+                    "pp_speed": result.pp_speed,
+                    "pp_flashlight": result.pp_flashlight,
+                    "effective_miss_count": result.effective_miss_count,
+                    "pp_difficulty": result.pp_difficulty,
                 },
                 "difficulty": {
-                    "stars": result.difficulty.stars,  # type: ignore
-                    "aim": result.difficulty.aim,  # type: ignore
-                    "speed": result.difficulty.speed,  # type: ignore
-                    "flashlight": result.difficulty.flashlight,  # type: ignore
-                    "slider_factor": result.difficulty.slider_factor,  # type: ignore
-                    "speed_note_count": result.difficulty.speed_note_count,  # type: ignore
-                    "stamina": result.difficulty.stamina,  # type: ignore
-                    "color": result.difficulty.color,  # type: ignore
-                    "rhythm": result.difficulty.rhythm,  # type: ignore
-                    "peak": result.difficulty.peak,  # type: ignore
+                    "stars": result.difficulty.stars,
+                    "aim": result.difficulty.aim,
+                    "speed": result.difficulty.speed,
+                    "flashlight": result.difficulty.flashlight,
+                    "slider_factor": result.difficulty.slider_factor,
+                    "speed_note_count": result.difficulty.speed_note_count,
+                    "stamina": result.difficulty.stamina,
+                    "color": result.difficulty.color,
+                    "rhythm": result.difficulty.rhythm,
+                    "peak": result.difficulty.peak,
                 },
             },
         )
