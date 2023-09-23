@@ -212,7 +212,7 @@ async def fetch_many(
     user_id: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[list[Score]]:
+) -> list[Score]:
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
