@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from collections.abc import Sequence
 from typing import Optional
 from typing import overload
-from typing import Union
 
 import databases.core
 

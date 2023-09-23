@@ -10,7 +10,6 @@ from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
-from typing import Optional
 from typing import TypedDict
 
 import aiohttp

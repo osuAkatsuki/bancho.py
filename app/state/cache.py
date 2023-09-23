@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from typing import Union
 
 if TYPE_CHECKING:
     from app.objects.beatmap import Beatmap, BeatmapSet

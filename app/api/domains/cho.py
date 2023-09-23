@@ -11,7 +11,6 @@ from datetime import date
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
-from typing import Optional
 from typing import TypedDict
 
 import bcrypt

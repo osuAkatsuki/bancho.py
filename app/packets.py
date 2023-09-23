@@ -15,9 +15,7 @@ from functools import cache
 from functools import lru_cache
 from typing import Any
 from typing import NamedTuple
-from typing import Optional
 from typing import TYPE_CHECKING
-from typing import Union
 
 # from app.objects.beatmap import BeatmapInfo
 

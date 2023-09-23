@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Optional
 from typing import TypedDict
 
 from akatsuki_pp_py import Beatmap

@@ -8,9 +8,7 @@ from collections.abc import Callable
 from enum import IntEnum
 from enum import unique
 from typing import NamedTuple
-from typing import Optional
 from typing import TYPE_CHECKING
-from typing import Union
 
 
 if TYPE_CHECKING:

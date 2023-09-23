@@ -17,7 +17,6 @@ from functools import cache
 from pathlib import Path as SystemPath
 from typing import Any
 from typing import Literal
-from typing import Optional
 from typing import TypeVar
 from typing import Union
 from urllib.parse import unquote

@@ -3,7 +3,6 @@ from __future__ import annotations
 import colorsys
 import datetime
 from enum import IntEnum
-from typing import Optional
 from typing import overload
 from typing import Union
 from zoneinfo import ZoneInfo
