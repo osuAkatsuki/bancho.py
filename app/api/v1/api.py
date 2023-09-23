@@ -5,7 +5,6 @@ import hashlib
 import struct
 from pathlib import Path as SystemPath
 from typing import Literal
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Depends

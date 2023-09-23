@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import copy
 import importlib.metadata
 import os
 import pprint
 import random
 import secrets
 import signal
-import struct
 import time
 import traceback
 import uuid
@@ -28,7 +26,6 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import TypeVar
-from typing import Union
 from urllib.parse import urlparse
 
 import psutil
@@ -42,7 +39,6 @@ import app.state
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
-from app.constants.gamemodes import GameMode
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS

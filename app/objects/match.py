@@ -7,11 +7,8 @@ from datetime import datetime as datetime
 from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
-from typing import Optional
-from typing import overload
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import Union
 
 import databases.core
 

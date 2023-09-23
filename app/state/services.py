@@ -9,7 +9,6 @@ from collections.abc import AsyncGenerator
 from collections.abc import Mapping
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
 

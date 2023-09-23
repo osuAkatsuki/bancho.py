@@ -1,7 +1,6 @@
 """Functionality related to Discord interactivity."""
 from __future__ import annotations
 
-from typing import Optional
 
 import aiohttp
 import orjson

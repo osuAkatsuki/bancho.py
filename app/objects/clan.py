@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 from typing import TYPE_CHECKING
 
-import databases.core
 
 import app.state
 from app.constants.privileges import ClanPrivileges

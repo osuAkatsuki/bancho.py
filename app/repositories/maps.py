@@ -3,7 +3,6 @@ from __future__ import annotations
 import textwrap
 from typing import Any
 from typing import cast
-from typing import Optional
 from typing import TypedDict
 
 import app.state.services
