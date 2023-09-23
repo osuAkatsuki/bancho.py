@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
+from typing import cast
 from typing import Optional
+from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
+from app._typing import UNSET
 from app.utils import make_safe_name
 
 # +-------------------+---------------+------+-----+---------+----------------+
@@ -40,12 +44,51 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Player(TypedDict):
+    id: int
+    name: str
+    safe_name: str
+    priv: int
+    country: str
+    silence_end: int
+    donor_end: int
+    creation_time: int
+    latest_activity: int
+    clan_id: int
+    clan_priv: int
+    preferred_mode: int
+    play_style: int
+    custom_badge_name: str | None
+    custom_badge_icon: str | None
+    userpage_content: str | None
+    api_key: str | None
+
+
+class PlayerUpdateFields(TypedDict, total=False):
+    name: str
+    email: str
+    priv: int
+    country: str
+    silence_end: int
+    donor_end: int
+    creation_time: int
+    latest_activity: int
+    clan_id: int
+    clan_priv: int
+    preferred_mode: int
+    play_style: int
+    custom_badge_name: str | None
+    custom_badge_icon: str | None
+    userpage_content: str | None
+    api_key: str | None
+
+
 async def create(
     name: str,
     email: str,
     pw_bcrypt: bytes,
     country: str,
-) -> dict[str, Any]:
+) -> Player:
     """Create a new player in the database."""
     query = f"""\
         INSERT INTO users (name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity)
@@ -68,9 +111,10 @@ async def create(
     params = {
         "id": rec_id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return dict(rec)
+    player = await app.state.services.database.fetch_one(query, params)
+
+    assert player is not None
+    return cast(Player, player)
 
 
 async def fetch_one(
@@ -78,7 +122,7 @@ async def fetch_one(
     name: str | None = None,
     email: str | None = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> dict[str, Any] | None:
+) -> Player | None:
     """Fetch a single player from the database."""
     if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
@@ -95,8 +139,8 @@ async def fetch_one(
         "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    player = await app.state.services.database.fetch_one(query, params)
+    return cast(Player, player) if player is not None else None
 
 
 async def fetch_count(
@@ -140,7 +184,7 @@ async def fetch_many(
     play_style: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Player]:
     """Fetch multiple players from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -169,72 +213,71 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    players = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Player], players) if players is not None else None
 
 
 async def update(
     id: int,
-    name: str | None = None,
-    email: str | None = None,
-    priv: int | None = None,
-    country: str | None = None,
-    silence_end: int | None = None,
-    donor_end: int | None = None,
-    creation_time: int | None = None,
-    latest_activity: int | None = None,
-    clan_id: int | None = None,
-    clan_priv: int | None = None,
-    preferred_mode: int | None = None,
-    play_style: int | None = None,
-    custom_badge_name: str | None = None,
-    custom_badge_icon: str | None = None,
-    userpage_content: str | None = None,
-    api_key: str | None = None,
-) -> dict[str, Any] | None:
+    name: str | _UnsetSentinel = UNSET,
+    email: str | _UnsetSentinel = UNSET,
+    priv: int | _UnsetSentinel = UNSET,
+    country: str | _UnsetSentinel = UNSET,
+    silence_end: int | _UnsetSentinel = UNSET,
+    donor_end: int | _UnsetSentinel = UNSET,
+    creation_time: _UnsetSentinel | _UnsetSentinel = UNSET,
+    latest_activity: int | _UnsetSentinel = UNSET,
+    clan_id: int | _UnsetSentinel = UNSET,
+    clan_priv: int | _UnsetSentinel = UNSET,
+    preferred_mode: int | _UnsetSentinel = UNSET,
+    play_style: int | _UnsetSentinel = UNSET,
+    custom_badge_name: str | None | _UnsetSentinel = UNSET,
+    custom_badge_icon: str | None | _UnsetSentinel = UNSET,
+    userpage_content: str | None | _UnsetSentinel = UNSET,
+    api_key: str | None | _UnsetSentinel = UNSET,
+) -> Player | None:
     """Update a player in the database."""
-    query = """\
+    update_fields = PlayerUpdateFields = {}
+    if not isinstance(name, _UnsetSentinel):
+        update_fields["name"] = name
+    if not isinstance(email, _UnsetSentinel):
+        update_fields["email"] = email
+    if not isinstance(priv, _UnsetSentinel):
+        update_fields["priv"] = priv
+    if not isinstance(country, _UnsetSentinel):
+        update_fields["country"] = country
+    if not isinstance(silence_end, _UnsetSentinel):
+        update_fields["silence_end"] = silence_end
+    if not isinstance(donor_end, _UnsetSentinel):
+        update_fields["donor_end"] = donor_end
+    if not isinstance(creation_time, _UnsetSentinel):
+        update_fields["creation_time"] = creation_time
+    if not isinstance(latest_activity, _UnsetSentinel):
+        update_fields["latest_activity"] = latest_activity
+    if not isinstance(clan_id, _UnsetSentinel):
+        update_fields["clan_id"] = clan_id
+    if not isinstance(clan_priv, _UnsetSentinel):
+        update_fields["clan_priv"] = clan_priv
+    if not isinstance(preferred_mode, _UnsetSentinel):
+        update_fields["preferred_mode"] = preferred_mode
+    if not isinstance(play_style, _UnsetSentinel):
+        update_fields["play_style"] = play_style
+    if not isinstance(custom_badge_name, _UnsetSentinel):
+        update_fields["custom_badge_name"] = custom_badge_name
+    if not isinstance(custom_badge_icon, _UnsetSentinel):
+        update_fields["custom_badge_icon"] = custom_badge_icon
+    if not isinstance(userpage_content, _UnsetSentinel):
+        update_fields["userpage_content"] = userpage_content
+    if not isinstance(api_key, _UnsetSentinel):
+        update_fields["api_key"] = api_key
+
+    query = f"""\
         UPDATE users
-           SET name = COALESCE(:name, name),
-               safe_name = COALESCE(:safe_name, safe_name),
-               email = COALESCE(:email, email),
-               priv = COALESCE(:priv, priv),
-               country = COALESCE(:country, country),
-               silence_end = COALESCE(:silence_end, silence_end),
-               donor_end = COALESCE(:donor_end, donor_end),
-               creation_time = COALESCE(:creation_time, creation_time),
-               latest_activity = COALESCE(:latest_activity, latest_activity),
-               clan_id = COALESCE(:clan_id, clan_id),
-               clan_priv = COALESCE(:clan_priv, clan_priv),
-               preferred_mode = COALESCE(:preferred_mode, preferred_mode),
-               play_style = COALESCE(:play_style, play_style),
-               custom_badge_name = COALESCE(:custom_badge_name, custom_badge_name),
-               custom_badge_icon = COALESCE(:custom_badge_icon, custom_badge_icon),
-               userpage_content = COALESCE(:userpage_content, userpage_content),
-               api_key = COALESCE(:api_key, api_key)
+           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "name": name,
-        "safe_name": make_safe_name(name) if name is not None else None,
-        "email": email,
-        "priv": priv,
-        "country": country,
-        "silence_end": silence_end,
-        "donor_end": donor_end,
-        "creation_time": creation_time,
-        "latest_activity": latest_activity,
-        "clan_id": clan_id,
-        "clan_priv": clan_priv,
-        "preferred_mode": preferred_mode,
-        "play_style": play_style,
-        "custom_badge_name": custom_badge_name,
-        "custom_badge_icon": custom_badge_icon,
-        "userpage_content": userpage_content,
-        "api_key": api_key,
-    }
-    await app.state.services.database.execute(query, params)
+    values = {"id": id} | update_fields
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
@@ -244,8 +287,8 @@ async def update(
     params = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    player = await app.state.services.database.fetch_one(query, params)
+    return cast(Player, player) if player is not None else None
 
 
 # TODO: delete?

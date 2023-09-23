@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
+from typing import cast
 from typing import Optional
+from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
+from app._typing import UNSET
 
 # +-------+--------------+------+-----+---------+----------------+
 # | Field | Type         | Null | Key | Default | Extra          |
@@ -23,12 +27,27 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Achievement(TypedDict):
+    id: int
+    file: str
+    name: str
+    desc: str
+    cond: str
+
+
+class AchievementUpdateFields(TypedDict, total=False):
+    file: str
+    name: str
+    desc: str
+    cond: str
+
+
 async def create(
     file: str,
     name: str,
     desc: str,
     cond: str,
-) -> dict[str, Any]:
+) -> Achievement:
     """Create a new achievement."""
     query = """\
         INSERT INTO achievements (file, name, desc, cond)
@@ -50,16 +69,16 @@ async def create(
     params = {
         "id": rec_id,
     }
+    achievement = await app.state.services.database.fetch_one(query, params)
 
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return dict(rec)
+    assert achievement is not None
+    return cast(Achievement, achievement)
 
 
 async def fetch_one(
     id: int | None = None,
     name: str | None = None,
-) -> dict[str, Any] | None:
+) -> Achievement | None:
     """Fetch a single achievement."""
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
@@ -74,9 +93,9 @@ async def fetch_one(
         "id": id,
         "name": name,
     }
+    achievement = await app.state.services.database.fetch_one(query, params)
 
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    return cast(Achievement, achievement) if achievement is not None else None
 
 
 async def fetch_count() -> int:
@@ -95,7 +114,7 @@ async def fetch_count() -> int:
 async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Achievement]:
     """Fetch a list of achievements."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -111,34 +130,35 @@ async def fetch_many(
         params["page_size"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    achievements = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Achievement], achievements) if achievements is not None else None
 
 
 async def update(
     id: int,
-    file: str | None = None,
-    name: str | None = None,
-    desc: str | None = None,
-    cond: str | None = None,
-) -> dict[str, Any] | None:
+    file: str | _UnsetSentinel = UNSET,
+    name: str | _UnsetSentinel = UNSET,
+    desc: str | _UnsetSentinel = UNSET,
+    cond: str | _UnsetSentinel = UNSET,
+) -> Achievement | None:
     """Update an existing achievement."""
-    query = """\
+    update_fields = AchievementUpdateFields = {}
+    if not isinstance(file, _UnsetSentinel):
+        update_fields["file"] = file
+    if not isinstance(name, _UnsetSentinel):
+        update_fields["name"] = name
+    if not isinstance(desc, _UnsetSentinel):
+        update_fields["desc"] = desc
+    if not isinstance(cond, _UnsetSentinel):
+        update_fields["cond"] = cond
+
+    query = f"""\
         UPDATE achievements
-           SET file = COALESCE(:file, file),
-               name = COALESCE(:name, name),
-               desc = COALESCE(:desc, desc),
-               cond = COALESCE(:cond, cond)
+           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "file": file,
-        "name": name,
-        "desc": desc,
-        "cond": cond,
-    }
-    await app.state.services.database.execute(query, params)
+    values = {"id": id} | update_fields
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
@@ -148,13 +168,13 @@ async def update(
     params = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    achievement = await app.state.services.database.fetch_one(query, params)
+    return cast(Achievement, achievement) if achievement is not None else None
 
 
 async def delete(
     id: int,
-) -> dict[str, Any] | None:
+) -> Achievement | None:
     """Delete an existing achievement."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -175,5 +195,5 @@ async def delete(
     params = {
         "id": id,
     }
-    await app.state.services.database.execute(query, params)
-    return dict(rec)
+    achievement = await app.state.services.database.execute(query, params)
+    return cast(Achievement, achievement) if achievement is not None else None
