@@ -27,7 +27,4 @@ clean:
 	pipenv clean
 
 run:
-	pipenv run python main.py
-
-run-prod:
 	pipenv run ./scripts/start_server.sh

@@ -47,6 +47,7 @@ class Player(TypedDict):
     name: str
     safe_name: str
     priv: int
+    pw_bcrypt: str
     country: str
     silence_end: int
     donor_end: int
@@ -112,7 +113,7 @@ async def create(
     player = await app.state.services.database.fetch_one(query, params)
 
     assert player is not None
-    return cast(Player, player)
+    return cast(Player, dict(player._mapping))
 
 
 async def fetch_one(
@@ -138,7 +139,7 @@ async def fetch_one(
         "email": email,
     }
     player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, player) if player is not None else None
+    return cast(Player, dict(player._mapping)) if player is not None else None
 
 
 async def fetch_count(
@@ -170,7 +171,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return rec._mapping["count"]
 
 
 async def fetch_many(
@@ -212,7 +213,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     players = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Player], players) if players is not None else None
+    return cast(list[Player], [dict(p._mapping) for p in players])
 
 
 async def update(
@@ -286,7 +287,7 @@ async def update(
         "id": id,
     }
     player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, player) if player is not None else None
+    return cast(Player, dict(player._mapping)) if player is not None else None
 
 
 # TODO: delete?

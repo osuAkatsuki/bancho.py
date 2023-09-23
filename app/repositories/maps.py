@@ -121,7 +121,7 @@ async def create(
     od: float,
     hp: float,
     diff: float,
-) -> dict[str, Any]:
+) -> Map:
     """Create a new beatmap entry in the database."""
     query = f"""\
         INSERT INTO maps (id, server, set_id, status, md5, artist, title,
@@ -171,7 +171,7 @@ async def create(
     map = await app.state.services.database.fetch_one(query, params)
 
     assert map is not None
-    return cast(Map, map)
+    return cast(Map, dict(map._mapping))
 
 
 async def fetch_one(
@@ -197,7 +197,7 @@ async def fetch_one(
     }
     map = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Map, map) if map is not None else None
+    return cast(Map, dict(map._mapping)) if map is not None else None
 
 
 async def fetch_count(
@@ -236,7 +236,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return rec._mapping["count"]
 
 
 async def fetch_many(
@@ -284,7 +284,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     maps = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Map], maps) if maps is not None else None
+    return cast(list[Map], [dict(m._mapping) for m in maps])
 
 
 async def update(
@@ -376,7 +376,7 @@ async def update(
         "id": id,
     }
     map = await app.state.services.database.fetch_one(query, params)
-    return cast(Map, map) if map is not None else None
+    return cast(Map, dict(map._mapping)) if map is not None else None
 
 
 async def delete(id: int) -> Map | None:
@@ -401,4 +401,4 @@ async def delete(id: int) -> Map | None:
         "id": id,
     }
     map = await app.state.services.database.execute(query, params)
-    return cast(Map, map) if map is not None else None
+    return cast(Map, dict(map._mapping)) if map is not None else None

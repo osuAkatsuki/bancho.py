@@ -67,7 +67,7 @@ async def create(
     clan = await app.state.services.database.fetch_one(query, params)
 
     assert clan is not None
-    return cast(Clan, clan)
+    return cast(Clan, dict(clan._mapping))
 
 
 async def fetch_one(
@@ -91,7 +91,7 @@ async def fetch_one(
     params = {"id": id, "name": name, "tag": tag, "owner": owner}
     clan = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None
 
 
 async def fetch_count() -> int:
@@ -102,7 +102,7 @@ async def fetch_count() -> int:
     """
     rec = await app.state.services.database.fetch_one(query)
     assert rec is not None
-    return rec["count"]
+    return rec._mapping["count"]
 
 
 async def fetch_many(
@@ -125,7 +125,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     clans = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Clan], clans) if clans is not None else None
+    return cast(list[Clan], [dict(c._mapping) for c in clans])
 
 
 async def update(
@@ -160,7 +160,7 @@ async def update(
         "id": id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None
 
 
 async def delete(id: int) -> Clan | None:
@@ -185,4 +185,4 @@ async def delete(id: int) -> Clan | None:
         "id": id,
     }
     clan = await app.state.services.database.execute(query, params)
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None

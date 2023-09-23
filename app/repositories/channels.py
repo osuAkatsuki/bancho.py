@@ -77,7 +77,7 @@ async def create(
     channel = await app.state.services.database.fetch_one(query, params)
 
     assert channel is not None
-    return cast(Channel, channel)
+    return cast(Channel, dict(channel._mapping))
 
 
 async def fetch_one(
@@ -99,7 +99,7 @@ async def fetch_one(
     }
     channel = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None
 
 
 async def fetch_count(
@@ -125,7 +125,7 @@ async def fetch_count(
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return rec._mapping["count"]
 
 
 async def fetch_many(
@@ -158,7 +158,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     channels = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Channel], channels) if channels is not None else None
+    return cast(list[Channel], [dict(c._mapping) for c in channels])
 
 
 async def update(
@@ -196,7 +196,7 @@ async def update(
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None
 
 
 async def delete(
@@ -223,4 +223,4 @@ async def delete(
         "name": name,
     }
     channel = await app.state.services.database.execute(query, params)
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None

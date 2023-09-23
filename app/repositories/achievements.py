@@ -106,7 +106,7 @@ async def fetch_count() -> int:
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return rec._mapping["count"]
 
 
 async def fetch_many(

@@ -41,6 +41,7 @@ from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
+from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -654,8 +655,6 @@ async def login(
             ),
         }
 
-    user_info = dict(user_info)  # make a mutable copy
-
     if osu_version.stream == "tourney" and not (
         user_info["priv"] & Privileges.DONATOR
         and user_info["priv"] & Privileges.UNRESTRICTED
@@ -773,6 +772,8 @@ async def login(
     """ All checks passed, player is safe to login """
 
     # get clan & clan priv if we're in a clan
+    clan: Clan | None = None
+    clan_priv: ClanPrivileges | None = None
     if user_info["clan_id"] != 0:
         clan = app.state.sessions.clans.get(id=user_info.pop("clan_id"))
         clan_priv = ClanPrivileges(user_info.pop("clan_priv"))
@@ -1355,7 +1356,7 @@ class MatchCreate(BasePacket):
             map_md5=self.match_data.map_md5,
             # TODO: validate no security hole exists
             host_id=self.match_data.host_id,
-            mode=self.match_data.mode,
+            mode=GameMode(self.match_data.mode),
             mods=Mods(self.match_data.mods),
             win_condition=MatchWinConditions(self.match_data.win_condition),
             team_type=MatchTeamTypes(self.match_data.team_type),
@@ -1599,12 +1600,12 @@ class MatchChangeSettings(BasePacket):
                 player.match.map_id = bmap.id
                 player.match.map_md5 = bmap.md5
                 player.match.map_name = bmap.full_name
-                player.match.mode = player.match.host.status.mode.as_vanilla
+                player.match.mode = GameMode(player.match.host.status.mode.as_vanilla)
             else:
                 player.match.map_id = self.match_data.map_id
                 player.match.map_md5 = self.match_data.map_md5
                 player.match.map_name = self.match_data.map_name
-                player.match.mode = self.match_data.mode
+                player.match.mode = GameMode(self.match_data.mode)
 
         if player.match.team_type != self.match_data.team_type:
             # if theres currently a scrim going on, only allow

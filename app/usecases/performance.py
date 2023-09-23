@@ -93,9 +93,11 @@ def calculate_performances(
             n_katu=score.nkatu,
             n_misses=score.nmiss,
         )
+        # TODO: make a fix to akatsuki-pp-py to include python type
+        #       definitions for it's public api, so we can remove `type: ignore`
         result = calculator.performance(calc_bmap)
 
-        pp = result.pp
+        pp = result.pp  # type: ignore
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver
@@ -107,24 +109,24 @@ def calculate_performances(
             {
                 "performance": {
                     "pp": pp,
-                    "pp_acc": result.pp_acc,
-                    "pp_aim": result.pp_aim,
-                    "pp_speed": result.pp_speed,
-                    "pp_flashlight": result.pp_flashlight,
-                    "effective_miss_count": result.effective_miss_count,
-                    "pp_difficulty": result.pp_difficulty,
+                    "pp_acc": result.pp_acc,  # type: ignore
+                    "pp_aim": result.pp_aim,  # type: ignore
+                    "pp_speed": result.pp_speed,  # type: ignore
+                    "pp_flashlight": result.pp_flashlight,  # type: ignore
+                    "effective_miss_count": result.effective_miss_count,  # type: ignore
+                    "pp_difficulty": result.pp_difficulty,  # type: ignore
                 },
                 "difficulty": {
-                    "stars": result.difficulty.stars,
-                    "aim": result.difficulty.aim,
-                    "speed": result.difficulty.speed,
-                    "flashlight": result.difficulty.flashlight,
-                    "slider_factor": result.difficulty.slider_factor,
-                    "speed_note_count": result.difficulty.speed_note_count,
-                    "stamina": result.difficulty.stamina,
-                    "color": result.difficulty.color,
-                    "rhythm": result.difficulty.rhythm,
-                    "peak": result.difficulty.peak,
+                    "stars": result.difficulty.stars,  # type: ignore
+                    "aim": result.difficulty.aim,  # type: ignore
+                    "speed": result.difficulty.speed,  # type: ignore
+                    "flashlight": result.difficulty.flashlight,  # type: ignore
+                    "slider_factor": result.difficulty.slider_factor,  # type: ignore
+                    "speed_note_count": result.difficulty.speed_note_count,  # type: ignore
+                    "stamina": result.difficulty.stamina,  # type: ignore
+                    "color": result.difficulty.color,  # type: ignore
+                    "rhythm": result.difficulty.rhythm,  # type: ignore
+                    "peak": result.difficulty.peak,  # type: ignore
                 },
             },
         )

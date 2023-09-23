@@ -259,26 +259,31 @@ class Players(list[Player]):
         if player is None:
             return None
 
-        # encode pw_bcrypt from str -> bytes.
-        player["pw_bcrypt"] = player["pw_bcrypt"].encode()
-
+        clan: Clan | None = None
+        clan_priv: ClanPrivileges | None = None
         if player["clan_id"] != 0:
-            player["clan"] = app.state.sessions.clans.get(id=player["clan_id"])
-            player["clan_priv"] = ClanPrivileges(player["clan_priv"])
-        else:
-            player["clan"] = player["clan_priv"] = None
+            clan = app.state.sessions.clans.get(id=player["clan_id"])
+            clan_priv = ClanPrivileges(player["clan_priv"])
 
-        # country from acronym to {acronym, numeric}
-        player["geoloc"] = {
-            "latitude": 0.0,  # TODO
-            "longitude": 0.0,
-            "country": {
-                "acronym": player["country"],
-                "numeric": app.state.services.country_codes[player["country"]],
+        return Player(
+            id=player["id"],
+            name=player["name"],
+            pw_bcrypt=player["pw_bcrypt"].encode(),
+            priv=Privileges(player["priv"]),
+            clan=clan,
+            clan_priv=clan_priv,
+            geoloc={
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "country": {
+                    "acronym": player["country"],
+                    "numeric": app.state.services.country_codes[player["country"]],
+                },
             },
-        }
-
-        return Player(**player, token="")
+            silence_end=player["silence_end"],
+            donor_end=player["donor_end"],
+            api_key=player["api_key"],
+        )
 
     async def from_cache_or_sql(
         self,
