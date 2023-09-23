@@ -130,7 +130,6 @@ async def fetch_many(
     return cast(list[Clan], clans) if clans is not None else None
 
 
-
 async def update(
     id: int,
     name: str | _UnsetSentinel = UNSET,
