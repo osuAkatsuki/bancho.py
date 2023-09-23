@@ -108,7 +108,7 @@ async def bancho_http_handler():
 
 
 @router.get("/online")
-async def bancho_list_user():
+async def bancho_view_online_users():
     """see who's online"""
     new_line = "\n"
 
@@ -131,7 +131,7 @@ bots:
 
 
 @router.get("/matches")
-async def bancho_list_user():
+async def bancho_view_matches():
     """ongoing matches"""
     new_line = "\n"
 
@@ -668,7 +668,6 @@ async def login(
     # get our bcrypt cache
     bcrypt_cache = app.state.cache.bcrypt
     pw_bcrypt = user_info["pw_bcrypt"].encode()
-    user_info["pw_bcrypt"] = pw_bcrypt
 
     # check credentials against db. algorithms like these are intentionally
     # designed to be slow; we'll cache the results to speed up subsequent logins.
@@ -775,14 +774,10 @@ async def login(
     clan: Clan | None = None
     clan_priv: ClanPrivileges | None = None
     if user_info["clan_id"] != 0:
-        clan = app.state.sessions.clans.get(id=user_info.pop("clan_id"))
-        clan_priv = ClanPrivileges(user_info.pop("clan_priv"))
-    else:
-        del user_info["clan_id"]
-        del user_info["clan_priv"]
-        clan = clan_priv = None
+        clan = app.state.sessions.clans.get(id=user_info["clan_id"])
+        clan_priv = ClanPrivileges(user_info["clan_priv"])
 
-    db_country = user_info.pop("country")
+    db_country = user_info["country"]
 
     geoloc = await app.state.services.fetch_geoloc(ip, headers)
 
@@ -797,8 +792,6 @@ async def login(
             ),
         }
 
-    user_info["geoloc"] = geoloc
-
     if db_country == "xx":
         # bugfix for old bancho.py versions when
         # country wasn't stored on registration.
@@ -807,7 +800,7 @@ async def login(
         await db_conn.execute(
             "UPDATE users SET country = :country WHERE id = :user_id",
             {
-                "country": user_info["geoloc"]["country"]["acronym"],
+                "country": geoloc["country"]["acronym"],
                 "user_id": user_info["id"],
             },
         )
@@ -823,14 +816,21 @@ async def login(
     )
 
     player = Player(
-        **user_info,  # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}
-        utc_offset=login_data["utc_offset"],
-        pm_private=login_data["pm_private"],
-        login_time=login_time,
+        id=user_info["id"],
+        name=user_info["name"],
+        priv=user_info["priv"],
+        pw_bcrypt=pw_bcrypt,
         clan=clan,
         clan_priv=clan_priv,
-        tourney_client=osu_version.stream == "tourney",
+        geoloc=geoloc,
+        utc_offset=login_data["utc_offset"],
+        pm_private=login_data["pm_private"],
+        silence_end=user_info["silence_end"],
+        donor_end=user_info["donor_end"],
         client_details=client_details,
+        login_time=login_time,
+        tourney_client=osu_version.stream == "tourney",
+        api_key=user_info["api_key"],
     )
 
     data = bytearray(app.packets.protocol_version(19))

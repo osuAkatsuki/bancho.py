@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import cast
 from typing import TypedDict
 
@@ -60,7 +61,7 @@ class Score(TypedDict):
     grade: str
     status: int
     mode: int
-    play_time: str
+    play_time: datetime
     time_elapsed: int
     client_flags: int
     userid: int
@@ -84,7 +85,7 @@ class ScoreUpdateFields(TypedDict, total=False):
     grade: str
     status: int
     mode: int
-    play_time: str
+    play_time: datetime
     time_elapsed: int
     client_flags: int
     userid: int
@@ -108,7 +109,7 @@ async def create(
     grade: str,
     status: int,
     mode: int,
-    play_time: str,
+    play_time: datetime,
     time_elapsed: int,
     client_flags: int,
     user_id: int,

@@ -47,6 +47,7 @@ import app.packets
 import app.settings
 import app.state
 import app.utils
+from app._typing import UNSET
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
@@ -1059,19 +1060,19 @@ async def osuSubmitModularSelector(
     await stats_repo.update(
         score.player.id,
         score.mode.value,
-        plays=stats_updates.get("plays"),
-        playtime=stats_updates.get("playtime"),
-        tscore=stats_updates.get("tscore"),
-        total_hits=stats_updates.get("total_hits"),
-        max_combo=stats_updates.get("max_combo"),
-        xh_count=stats_updates.get("xh_count"),
-        x_count=stats_updates.get("x_count"),
-        sh_count=stats_updates.get("sh_count"),
-        s_count=stats_updates.get("s_count"),
-        a_count=stats_updates.get("a_count"),
-        rscore=stats_updates.get("rscore"),
-        acc=stats_updates.get("acc"),
-        pp=stats_updates.get("pp"),
+        plays=stats_updates.get("plays", UNSET),
+        playtime=stats_updates.get("playtime", UNSET),
+        tscore=stats_updates.get("tscore", UNSET),
+        total_hits=stats_updates.get("total_hits", UNSET),
+        max_combo=stats_updates.get("max_combo", UNSET),
+        xh_count=stats_updates.get("xh_count", UNSET),
+        x_count=stats_updates.get("x_count", UNSET),
+        sh_count=stats_updates.get("sh_count", UNSET),
+        s_count=stats_updates.get("s_count", UNSET),
+        a_count=stats_updates.get("a_count", UNSET),
+        rscore=stats_updates.get("rscore", UNSET),
+        acc=stats_updates.get("acc", UNSET),
+        pp=stats_updates.get("pp", UNSET),
     )
 
     if not score.player.restricted:
@@ -1282,7 +1283,7 @@ async def get_leaderboard_scores(
     mods: Mods,
     player: Player,
     scoring_metric: Literal["pp", "score"],
-) -> tuple[list[Mapping[str, Any]], Mapping[str, Any] | None]:
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     query = [
         f"SELECT s.id, s.{scoring_metric} AS _score, "
         "s.max_combo, s.n50, s.n100, s.n300, "
@@ -1311,10 +1312,13 @@ async def get_leaderboard_scores(
     # TODO: customizability of the number of scores
     query.append("ORDER BY _score DESC LIMIT 50")
 
-    score_rows = await app.state.services.database.fetch_all(
-        " ".join(query),
-        params,
-    )
+    score_rows = [
+        dict(r._mapping)
+        for r in await app.state.services.database.fetch_all(
+            " ".join(query),
+            params,
+        )
+    ]
 
     if score_rows:  # None or []
         # fetch player's personal best score
@@ -1347,7 +1351,7 @@ async def get_leaderboard_scores(
             )
 
             # attach rank to personal best row
-            personal_best_score_row = dict(personal_best_score_row)
+            personal_best_score_row = dict(personal_best_score_row._mapping)
             personal_best_score_row["rank"] = p_best_rank
         else:
             personal_best_score_row = None
@@ -1413,7 +1417,9 @@ async def getScores(
         if not player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
+    scoring_metric: Literal["pp", "score"] = (
+        "pp" if mode >= GameMode.RELAX_OSU else "score"
+    )
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
     has_set_id = map_set_id > 0
@@ -1911,6 +1917,7 @@ async def register_account(
         ip = app.state.services.ip_resolver.get_ip(request.headers)
 
         geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
+        country = geoloc["country"]["acronym"] if geoloc is not None else "XX"
 
         async with app.state.services.database.transaction():
             # add to `users` table.
@@ -1918,7 +1925,7 @@ async def register_account(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,
-                country=geoloc["country"]["acronym"],
+                country=country,
             )
 
             # add to `stats` table.

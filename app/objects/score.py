@@ -187,7 +187,7 @@ class Score:
         s.pp = rec["pp"]
         s.score = rec["score"]
         s.max_combo = rec["max_combo"]
-        s.mods = rec["mods"]
+        s.mods = Mods(rec["mods"])
         s.acc = rec["acc"]
         s.n300 = rec["n300"]
         s.n100 = rec["n100"]
@@ -195,22 +195,15 @@ class Score:
         s.nmiss = rec["nmiss"]
         s.ngeki = rec["ngeki"]
         s.nkatu = rec["nkatu"]
-        s.grade = rec["grade"]
-        s.perfect = rec["perfect"]
-        s.status = rec["status"]
-        s.mode = rec["mode"]
+        s.grade = Grade.from_str(rec["grade"])
+        s.perfect = rec["perfect"] == 1
+        s.status = SubmissionStatus(rec["status"])
+        s.passed = s.status != SubmissionStatus.FAILED
+        s.mode = GameMode(rec["mode"])
         s.server_time = rec["play_time"]
         s.time_elapsed = rec["time_elapsed"]
-        s.client_flags = rec["client_flags"]
+        s.client_flags = ClientFlags(rec["client_flags"])
         s.client_checksum = rec["online_checksum"]
-
-        # fix some types
-        s.passed = s.status != 0
-        s.status = SubmissionStatus(s.status)
-        s.grade = Grade.from_str(s.grade)
-        s.mods = Mods(s.mods)
-        s.mode = GameMode(s.mode)
-        s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
             s.rank = await s.calculate_placement()
