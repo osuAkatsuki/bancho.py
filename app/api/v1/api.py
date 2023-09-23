@@ -8,22 +8,28 @@ from typing import Literal
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
+from fastapi.security import HTTPBearer
 
 import app.packets
 import app.state
+import app.usecases.performance
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.objects.beatmap import ensure_local_osu_file
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -32,6 +38,7 @@ SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
 router = APIRouter()
+oauth2_scheme = HTTPBearer(auto_error=False)
 
 # NOTE: the api is still under design and is subject to change.
 # to keep up with breaking changes, please either join our discord,
@@ -109,9 +116,89 @@ def format_map_basic(m: Beatmap) -> dict[str, object]:
     }
 
 
+@router.get("/calculate_pp")
+async def api_calculate_pp(
+    token: HTTPCredentials = Depends(oauth2_scheme),
+    beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
+    nkatu: int = Query(None, max=2_147_483_647),
+    ngeki: int = Query(None, max=2_147_483_647),
+    n100: int = Query(None, max=2_147_483_647),
+    n50: int = Query(None, max=2_147_483_647),
+    misses: int = Query(0, max=2_147_483_647),
+    mods: int = Query(0, min=0, max=2_147_483_647),
+    mode: int = Query(0, min=0, max=11),
+    combo: int = Query(None, max=2_147_483_647),
+    acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
+):
+    """Calculates the PP of a specified map with specified score parameters."""
+
+    if token is None or app.state.sessions.api_keys.get(token.credentials) is None:
+        return ORJSONResponse(
+            {"status": "Invalid API key."},
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    beatmap = await Beatmap.from_bid(beatmap_id)
+    if not beatmap:
+        return ORJSONResponse(
+            {"status": "Beatmap not found."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if not await ensure_local_osu_file(
+        BEATMAPS_PATH / f"{beatmap.id}.osu",
+        beatmap.id,
+        beatmap.md5,
+    ):
+        return ORJSONResponse(
+            {"status": "Beatmap file could not be fetched."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    scores = []
+
+    if all(x is None for x in [ngeki, nkatu, n100, n50]):
+        scores = [
+            ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
+            for acc in acclist
+        ]
+    else:
+        scores.append(
+            ScoreParams(
+                GameMode(mode).as_vanilla,
+                mods,
+                combo,
+                ngeki=ngeki or 0,
+                nkatu=nkatu or 0,
+                n100=n100 or 0,
+                n50=n50 or 0,
+                nmiss=misses,
+            ),
+        )
+
+    results = app.usecases.performance.calculate_performances(
+        str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
+        scores,
+    )
+
+    # "Inject" the accuracy into the list of results
+    results = [
+        performance_result | {"accuracy": score.acc}
+        for performance_result, score in zip(results, scores)
+    ]
+
+    return ORJSONResponse(
+        results
+        if all(x is None for x in [ngeki, nkatu, n100, n50])
+        else results[
+            0
+        ],  # It's okay to change the output type as the user explicitly either requests
+        status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
+    )
+
+
 @router.get("/search_players")
 async def api_search_players(
-    search: Optional[str] = Query(None, alias="q", min=2, max=32),
+    search: str | None = Query(None, alias="q", min=2, max=32),
 ):
     """Search for users on the server by name."""
     rows = await app.state.services.database.fetch_all(
@@ -150,8 +237,8 @@ async def api_get_player_count():
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -211,8 +298,8 @@ async def api_get_player_info(
 
 @router.get("/get_player_status")
 async def api_get_player_status(
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
 ):
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -281,9 +368,9 @@ async def api_get_player_status(
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-    mods_arg: Optional[str] = Query(None, alias="mods"),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
@@ -418,8 +505,8 @@ async def api_get_player_scores(
 
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
-    user_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: Optional[str] = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
 ):
@@ -480,8 +567,8 @@ async def api_get_player_most_played(
 
 @router.get("/get_map_info")
 async def api_get_map_info(
-    map_id: Optional[int] = Query(None, alias="id", ge=3, le=2_147_483_647),
-    md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
+    map_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
 ):
     """Return information about a given beatmap."""
     if map_id is not None:
@@ -511,9 +598,9 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
-    map_id: Optional[int] = Query(None, alias="id", ge=0, le=2_147_483_647),
-    map_md5: Optional[str] = Query(None, alias="md5", min_length=32, max_length=32),
-    mods_arg: Optional[str] = Query(None, alias="mods"),
+    map_id: int | None = Query(None, alias="id", ge=0, le=2_147_483_647),
+    map_md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
+    mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
 ):
@@ -635,10 +722,9 @@ async def api_get_score_info(
 @router.get("/get_replay")
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
-    include_headers: bool = False,
+    include_headers: bool = True,
 ):
     """Return a given replay (including headers)."""
-
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
     if not replay_file.exists():
@@ -646,13 +732,11 @@ async def api_get_replay(
             {"status": "Replay not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
-
     # read replay frames from file
     raw_replay_data = replay_file.read_bytes()
-
-    if include_headers:
-        return StreamingResponse(
-            raw_replay_data,
+    if not include_headers:
+        return Response(
+            bytes(raw_replay_data),
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
@@ -660,7 +744,6 @@ async def api_get_replay(
                 # info for content-disposition for this..?
             },
         )
-
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
     row = await app.state.services.database.fetch_one(
@@ -675,14 +758,12 @@ async def api_get_replay(
         "WHERE s.id = :score_id",
         {"score_id": score_id},
     )
-
     if not row:
         # score not found in sql
         return ORJSONResponse(
             {"status": "Score not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )  # but replay was?
-
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         "{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}".format(
@@ -701,12 +782,14 @@ async def api_get_replay(
             "True",  # TODO: ??
         ).encode(),
     ).hexdigest()
-
     # create a buffer to construct the replay output
     replay_data = bytearray()
-
     # pack first section of headers.
-    replay_data += struct.pack("<Bi", row["mode"], 20200207)  # TODO: osuver
+    replay_data += struct.pack(
+        "<Bi",
+        GameMode(row["mode"]).as_vanilla,
+        20200207,
+    )  # TODO: osuver
     replay_data += app.packets.write_string(row["map_md5"])
     replay_data += app.packets.write_string(row["username"])
     replay_data += app.packets.write_string(replay_md5)
@@ -724,23 +807,18 @@ async def api_get_replay(
         row["mods"],
     )
     replay_data += b"\x00"  # TODO: hp graph
-
     timestamp = int(row["play_time"].timestamp() * 1e7)
     replay_data += struct.pack("<q", timestamp + DATETIME_OFFSET)
-
     # pack the raw replay data into the buffer
     replay_data += struct.pack("<i", len(raw_replay_data))
     replay_data += raw_replay_data
-
     # pack additional info buffer.
     replay_data += struct.pack("<q", score_id)
-
     # NOTE: target practice sends extra mods, but
     # can't submit scores so should not be a problem.
-
     # stream data back to the client
-    return StreamingResponse(
-        replay_data,
+    return Response(
+        bytes(replay_data),
         media_type="application/octet-stream",
         headers={
             "Content-Description": "File Transfer",
@@ -772,7 +850,7 @@ async def api_get_match(
             "status": "success",
             "match": {
                 "name": match.name,
-                "mode": match.mode.as_vanilla,
+                "mode": match.mode,
                 "mods": int(match.mods),
                 "seed": match.seed,
                 "host": {"id": match.host.id, "name": match.host.name},
@@ -809,7 +887,7 @@ async def api_get_global_leaderboard(
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
-    country: Optional[str] = Query(None, min_length=2, max_length=2),
+    country: str | None = Query(None, min_length=2, max_length=2),
 ):
     if mode_arg in (
         GameMode.RELAX_MANIA,

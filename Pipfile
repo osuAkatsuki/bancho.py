@@ -4,14 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-akatsuki-pp-py = {git = "https://github.com/osuAkatsuki/akatsuki-pp-py"}
 aiohttp = "*"
-aioredis = "*"
+async-timeout = "*"
 bcrypt = "*"
 datadog = "*"
 fastapi = "*"
-geoip2 = "*"
-maxminddb = "*"
 orjson = "*"
 psutil = "*"
 python-dotenv = "*"
@@ -22,16 +19,19 @@ uvicorn = "*"
 uvloop = "*"
 py3rijndael = "*"
 pytimeparse = "*"
+redis = "*"
 sqlalchemy = "1.4.41"
-databases = {extras = ["mysql"], version = "0.5.5"}
+databases = {extras = ["mysql"], version = "*"}
+akatsuki-pp-py = "*"
+cryptography = "*"
+tenacity = "*"
 
 [dev-packages]
 pytest = "*"
 pre-commit = "*"
 black = "*"
 reorder-python-imports = "*"
-mitmproxy = "*"
 mypy = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.11"

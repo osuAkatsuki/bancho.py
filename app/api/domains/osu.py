@@ -8,15 +8,15 @@ import secrets
 import time
 from base64 import b64decode
 from collections import defaultdict
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Mapping
 from enum import IntEnum
 from enum import unique
 from functools import cache
 from pathlib import Path as SystemPath
 from typing import Any
-from typing import Awaitable
-from typing import Callable
 from typing import Literal
-from typing import Mapping
 from typing import Optional
 from typing import TypeVar
 from typing import Union
@@ -88,7 +88,7 @@ def authenticate_player_session(
     param_function: Callable[..., Any],
     username_alias: str = "u",
     pw_md5_alias: str = "p",
-    err: Optional[Any] = None,
+    err: Any | None = None,
 ) -> Callable[[str, str], Awaitable[Player]]:
     async def wrapper(
         username: str = param_function(..., alias=username_alias),
@@ -156,8 +156,8 @@ OsuClientGameModes = Literal[
 
 @router.post("/web/osu-error.php")
 async def osuError(
-    username: Optional[str] = Form(None, alias="u"),
-    pw_md5: Optional[str] = Form(None, alias="h"),
+    username: str | None = Form(None, alias="u"),
+    pw_md5: str | None = Form(None, alias="h"),
     user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
     osu_mode: OsuClientModes = Form(..., alias="osumode"),
     game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
@@ -167,7 +167,7 @@ async def osuError(
     map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
     map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
     exception: str = Form(...),
-    feedback: Optional[str] = Form(None),
+    feedback: str | None = Form(None),
     stacktrace: str = Form(...),
     soft: bool = Form(...),
     map_count: int = Form(..., alias="beatmap_count", ge=0),
@@ -176,7 +176,7 @@ async def osuError(
     osu_version: str = Form(..., alias="version"),
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
-    screenshot_file: Optional[UploadFile] = File(None, alias="ss"),
+    screenshot_file: UploadFile | None = File(None, alias="ss"),
 ):
     """Handle an error submitted from the osu! client."""
     if not app.settings.DEBUG:
@@ -345,6 +345,8 @@ async def osuAddFavourite(
         {"user_id": player.id, "set_id": map_set_id},
     )
 
+    return b"Added favourite!"
+
 
 @router.get("/web/lastfm.php")
 async def lastFM(
@@ -434,20 +436,12 @@ async def lastFM(
     """
 
 
-# bancho.py supports cheesegull mirrors, chimu.moe and nasuya.xyz.
-# chimu.moe and nasuya.xyz handle things a bit differently than cheesegull,
-# and has some extra features we'll eventually use more of.
-USING_CHIMU = "chimu.moe" in app.settings.MIRROR_URL
-USING_NASUYA = "nasuya.xyz" in app.settings.MIRROR_URL
-
-DIRECT_SET_ID_SPELLING = "SetId" if USING_CHIMU else "SetID"
-
 DIRECT_SET_INFO_FMTSTR = (
-    "{{{setid_spelling}}}.osz|{{Artist}}|{{Title}}|{{Creator}}|"
-    "{{RankedStatus}}|10.0|{{LastUpdate}}|{{{setid_spelling}}}|"
-    "0|{{HasVideo}}|0|0|0|{{diffs}}"  # 0s are threadid, has_story,
+    "{SetID}.osz|{Artist}|{Title}|{Creator}|"
+    "{RankedStatus}|10.0|{LastUpdate}|{SetID}|"
+    "0|{HasVideo}|0|0|0|{diffs}"  # 0s are threadid, has_story,
     # filesize, filesize_novid.
-).format(setid_spelling=DIRECT_SET_ID_SPELLING)
+)
 
 DIRECT_MAP_INFO_FMTSTR = (
     "[{DifficultyRating:.2f}⭐] {DiffName} "
@@ -463,13 +457,6 @@ async def osuSearchHandler(
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
     page_num: int = Query(..., alias="p"),
 ):
-    if USING_CHIMU:
-        search_url = f"{app.settings.MIRROR_URL}/search"
-    elif USING_NASUYA:
-        search_url = f"{app.settings.MIRROR_URL}/api/v1/search"
-    else:
-        search_url = f"{app.settings.MIRROR_URL}/api/search"
-
     params: dict[str, Any] = {"amount": 100, "offset": page_num * 100}
 
     # eventually we could try supporting these,
@@ -484,48 +471,28 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    if USING_NASUYA:
-        # nasuya can serialize to direct for us
-        params["osu_direct"] = True
-
-    async with app.state.services.http_client.get(search_url, params=params) as resp:
+    async with app.state.services.http_client.get(
+        app.settings.MIRROR_SEARCH_ENDPOINT,
+        params=params,
+    ) as resp:
         if resp.status != status.HTTP_200_OK:
-            if USING_CHIMU:
-                # chimu uses 404 for no maps found
-                if resp.status == status.HTTP_404_NOT_FOUND:
-                    return b"0"
-
             return b"-1\nFailed to retrieve data from the beatmap mirror."
 
-        if USING_NASUYA:
-            # nasuya returns in osu!direct format
-            return await resp.read()
-
         result = await resp.json()
-
-        if USING_CHIMU:
-            if result["code"] != 0:
-                return b"-1\nFailed to retrieve data from the beatmap mirror."
-
-            result = result["data"]
 
     lresult = len(result)  # send over 100 if we receive
     # 100 matches, so the client
     # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
-
-    for bmap in result:
-        if bmap["ChildrenBeatmaps"] is None:
+    for bmapset in result:
+        if bmapset["ChildrenBeatmaps"] is None:
             continue
 
-        if USING_CHIMU:
-            bmap["HasVideo"] = int(bmap["HasVideo"])
-        else:
-            # cheesegull doesn't support vids
-            bmap["HasVideo"] = "0"
+        # some mirrors use a true/false instead of 0 or 1
+        bmapset["HasVideo"] = int(bmapset["HasVideo"])
 
         diff_sorted_maps = sorted(
-            bmap["ChildrenBeatmaps"],
+            bmapset["ChildrenBeatmaps"],
             key=lambda m: m["DifficultyRating"],
         )
 
@@ -553,14 +520,14 @@ async def osuSearchHandler(
 
         ret.append(
             DIRECT_SET_INFO_FMTSTR.format(
-                Artist=handle_invalid_characters(bmap["Artist"]),
-                Title=handle_invalid_characters(bmap["Title"]),
-                Creator=bmap["Creator"],
-                RankedStatus=bmap["RankedStatus"],
-                LastUpdate=bmap["LastUpdate"],
-                HasVideo=bmap["HasVideo"],
+                Artist=handle_invalid_characters(bmapset["Artist"]),
+                Title=handle_invalid_characters(bmapset["Title"]),
+                Creator=bmapset["Creator"],
+                RankedStatus=bmapset["RankedStatus"],
+                LastUpdate=bmapset["LastUpdate"],
+                SetID=bmapset["SetID"],
+                HasVideo=bmapset["HasVideo"],
                 diffs=diffs_str,
-                **{DIRECT_SET_ID_SPELLING: bmap[DIRECT_SET_ID_SPELLING]},
             ),
         )
 
@@ -571,8 +538,8 @@ async def osuSearchHandler(
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    map_set_id: Optional[int] = Query(None, alias="s"),
-    map_id: Optional[int] = Query(None, alias="b"),
+    map_set_id: int | None = Query(None, alias="s"),
+    map_id: int | None = Query(None, alias="b"),
 ):
     # TODO: refactor this to use the new internal bmap(set) api
 
@@ -614,13 +581,13 @@ async def osuSearchSetHandler(
 T = TypeVar("T", bound=Union[int, float])
 
 
-def chart_entry(name: str, before: Optional[T], after: T) -> str:
+def chart_entry(name: str, before: T | None, after: T) -> str:
     return f"{name}Before:{before or ''}|{name}After:{after}"
 
 
 def parse_form_data_score_params(
     score_data: FormData,
-) -> Optional[tuple[bytes, StarletteUploadFile]]:
+) -> tuple[bytes, StarletteUploadFile] | None:
     """Parse the score data, and replay file
     from the form data's 'score' parameters."""
     try:
@@ -681,7 +648,7 @@ async def osuSubmitModularSelector(
     fail_time: int = Form(..., alias="ft"),
     visual_settings_b64: bytes = Form(..., alias="fs"),
     updated_beatmap_hash: str = Form(..., alias="bmk"),
-    storyboard_md5: Optional[str] = Form(None, alias="sbk"),
+    storyboard_md5: str | None = Form(None, alias="sbk"),
     iv_b64: bytes = Form(..., alias="iv"),
     unique_ids: str = Form(..., alias="c1"),  # TODO: more validaton
     score_time: int = Form(..., alias="st"),  # TODO: is this real name?
@@ -690,7 +657,7 @@ async def osuSubmitModularSelector(
     client_hash_b64: bytes = Form(..., alias="s"),
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
-    fl_cheat_screenshot: Optional[bytes] = File(None, alias="i"),
+    fl_cheat_screenshot: bytes | None = File(None, alias="i"),
 ):
     """Handle a score submission from an osu! client with an active session."""
 
@@ -724,7 +691,12 @@ async def osuSubmitModularSelector(
         # Map does not exist, most likely unsubmitted.
         return b"error: beatmap"
 
-    username = score_data[1].rstrip()  # rstrip 1 space if client has supporter
+    # if the client has supporter, a space is appended
+    # but usernames may also end with a space, which must be preserved
+    username = score_data[1]
+    if username[-1] == " ":
+        username = username[:-1]
+
     player = await app.state.sessions.players.from_login(username, pw_md5)
     if not player:
         # Player is not online, return nothing so that their
@@ -1066,20 +1038,19 @@ async def osuSubmitModularSelector(
                 {"user_id": score.player.id, "mode": score.mode},
             )
 
-            total_scores = len(best_scores)
-            top_100_pp = best_scores[:100]
-
             # calculate new total weighted accuracy
             weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(top_100_pp)
+                row["acc"] * 0.95**i for i, row in enumerate(best_scores)
             )
-            bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
+            bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
             stats.acc = (weighted_acc * bonus_acc) / 100
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
-            bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
+            weighted_pp = sum(
+                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
+            )
+            bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
 
@@ -1248,7 +1219,7 @@ async def osuRate(
         authenticate_player_session(Query, "u", "p", err=b"auth fail"),
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
-    rating: Optional[int] = Query(None, alias="v", ge=1, le=10),
+    rating: int | None = Query(None, alias="v", ge=1, le=10),
 ):
     if rating is None:
         # check if we have the map in our cache;
@@ -1306,13 +1277,13 @@ class LeaderboardType(IntEnum):
 
 
 async def get_leaderboard_scores(
-    leaderboard_type: Union[LeaderboardType, int],
+    leaderboard_type: LeaderboardType | int,
     map_md5: str,
     mode: int,
     mods: Mods,
     player: Player,
     scoring_metric: Literal["pp", "score"],
-) -> tuple[list[Mapping[str, Any]], Optional[Mapping[str, Any]]]:
+) -> tuple[list[Mapping[str, Any]], Mapping[str, Any] | None]:
     query = [
         f"SELECT s.id, s.{scoring_metric} AS _score, "
         "s.max_combo, s.n50, s.n100, s.n300, "
@@ -1571,10 +1542,10 @@ async def osuComment(
     mode_vn: int = Form(..., alias="m", ge=0, le=3),
     action: Literal["get", "post"] = Form(..., alias="a"),
     # only sent for post
-    target: Optional[Literal["song", "map", "replay"]] = Form(None),
-    colour: Optional[str] = Form(None, alias="f", min_length=6, max_length=6),
-    start_time: Optional[int] = Form(None, alias="starttime"),
-    comment: Optional[str] = Form(None, min_length=1, max_length=80),
+    target: Literal["song", "map", "replay"] | None = Form(None),
+    colour: str | None = Form(None, alias="f", min_length=6, max_length=6),
+    start_time: int | None = Form(None, alias="starttime"),
+    comment: str | None = Form(None, min_length=1, max_length=80),
 ):
     if action == "get":
         # client is requesting all comments
@@ -1681,10 +1652,10 @@ async def banchoConnect(
     #       before a player has been granted a session
     # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     osu_ver: str = Query(..., alias="v"),
-    active_endpoint: Optional[str] = Query(None, alias="fail"),
-    net_framework_vers: Optional[str] = Query(None, alias="fx"),  # delimited by |
-    client_hash: Optional[str] = Query(None, alias="ch"),
-    retrying: Optional[bool] = Query(None, alias="retry"),  # '0' or '1'
+    active_endpoint: str | None = Query(None, alias="fail"),
+    net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
+    client_hash: str | None = Query(None, alias="ch"),
+    retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ):
     return b""  # TODO
 
@@ -1785,13 +1756,10 @@ async def get_osz(
     if no_video:
         map_set_id = map_set_id[:-1]
 
-    if USING_CHIMU:
-        query_str = f"download/{map_set_id}?n={int(not no_video)}"
-    else:
-        query_str = f"d/{map_set_id}"
+    query_str = f"{map_set_id}?n={int(not no_video)}"
 
     return RedirectResponse(
-        url=f"{app.settings.MIRROR_URL}/{query_str}",
+        url=f"{app.settings.MIRROR_DOWNLOAD_ENDPOINT}/{query_str}",
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
@@ -1869,7 +1837,6 @@ async def register_account(
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
-    cloudflare_country: Optional[str] = Header(None, alias="CF-IPCountry"),
     #
     # TODO: allow nginx to be optional
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
@@ -1942,33 +1909,9 @@ async def register_account(
         pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
         app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
 
-        if cloudflare_country:
-            # best case, dev has enabled ip geolocation in the
-            # network tab of cloudflare, so it sends the iso code.
-            country_acronym = cloudflare_country.lower()
-        else:
-            # backup method, get the user's ip and
-            # do a db lookup to get their country.
-            ip = app.state.services.ip_resolver.get_ip(request.headers)
+        ip = app.state.services.ip_resolver.get_ip(request.headers)
 
-            if not ip.is_private:
-                if app.state.services.geoloc_db is not None:
-                    # decent case, dev has downloaded a geoloc db from
-                    # maxmind, so we can do a local db lookup. (~1-5ms)
-                    # https://www.maxmind.com/en/home
-                    geoloc = app.state.services.fetch_geoloc_db(ip)
-                else:
-                    # worst case, we must do an external db lookup
-                    # using a public api. (depends, `ping ip-api.com`)
-                    geoloc = await app.state.services.fetch_geoloc_web(ip)
-
-                if geoloc is not None:
-                    country_acronym = geoloc["country"]["acronym"]
-                else:
-                    country_acronym = "xx"
-            else:
-                # localhost, unknown country
-                country_acronym = "xx"
+        geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
 
         async with app.state.services.database.transaction():
             # add to `users` table.
@@ -1976,7 +1919,7 @@ async def register_account(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,
-                country=country_acronym,
+                country=geoloc["country"]["acronym"],
             )
 
             # add to `stats` table.

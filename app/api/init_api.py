@@ -1,4 +1,4 @@
-# #!/usr/bin/env python3.9
+# #!/usr/bin/env python3.11
 from __future__ import annotations
 
 import asyncio
@@ -166,14 +166,10 @@ def init_events(asgi_app: BanchoAPI) -> None:
             app.state.services.datadog.stop()
             app.state.services.datadog.flush()
 
-        if app.state.services.geoloc_db is not None:
-            app.state.services.geoloc_db.close()
-
 
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
     for domain in ("ppy.sh", app.settings.DOMAIN):
-
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)
 

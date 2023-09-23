@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Awaitable
+from collections.abc import Callable
 from enum import IntEnum
 from enum import unique
-from typing import Awaitable
-from typing import Callable
 from typing import NamedTuple
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -27,7 +27,7 @@ class MenuCommands(IntEnum):
 
 class Menu(NamedTuple):
     name: str
-    options: dict[int, tuple[MenuCommands, Optional[Union[Menu, MenuFunction]]]]
+    options: dict[int, tuple[MenuCommands, Menu | MenuFunction | None]]
 
 
 class MenuFunction(NamedTuple):

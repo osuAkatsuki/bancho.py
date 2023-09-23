@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
-echo "waiting for mysql server"
-while ! nc -z localhost 3306; do
-    sleep 0.25
-done
+# Checking MySQL TCP connection
+scripts/wait-for-it.sh $DB_HOST:$DB_PORT
 
-echo "waiting for redis server"
-while ! nc -z localhost 6379; do
-    sleep 0.25
-done
+# Checking Redis connection
+scripts/wait-for-it.sh $REDIS_HOST:$REDIS_PORT
 
-exec uvicorn --host 0.0.0.0 --uds /tmp/bancho.sock --no-access-log --reload app.api.init_api:asgi_app
-
-#SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-#python3.9 $SCRIPT_DIR/../main.py
+python main.py

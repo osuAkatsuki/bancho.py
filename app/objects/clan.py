@@ -27,7 +27,7 @@ class Clan:
         tag: str,
         created_at: datetime,
         owner_id: int,
-        member_ids: Optional[set[int]] = None,
+        member_ids: set[int] | None = None,
     ) -> None:
         """A class representing one of bancho.py's clans."""
         self.id = id

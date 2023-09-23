@@ -119,9 +119,9 @@ class Score:
 
     def __init__(self) -> None:
         # TODO: check whether the reamining Optional's should be
-        self.id: Optional[int] = None
-        self.bmap: Optional[Beatmap] = None
-        self.player: Optional[Player] = None
+        self.id: int | None = None
+        self.bmap: Beatmap | None = None
+        self.player: Player | None = None
 
         self.mode: GameMode
         self.mods: Mods
@@ -154,8 +154,8 @@ class Score:
         self.client_flags: ClientFlags
         self.client_checksum: str
 
-        self.rank: Optional[int] = None
-        self.prev_best: Optional[Score] = None
+        self.rank: int | None = None
+        self.prev_best: Score | None = None
 
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
@@ -170,7 +170,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int) -> Optional[Score]:
+    async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
         rec = await scores_repo.fetch_one(score_id)
 
@@ -349,7 +349,7 @@ class Score:
             scores=[score_args],
         )
 
-        return result[0]["performance"], result[0]["star_rating"]
+        return result[0]["performance"]["pp"], result[0]["difficulty"]["stars"]
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
@@ -422,6 +422,19 @@ class Score:
 
             if total == 0:
                 return 0.0
+
+            if self.mods & Mods.SCOREV2:
+                return (
+                    100.0
+                    * (
+                        (self.n50 * 50.0)
+                        + (self.n100 * 100.0)
+                        + (self.nkatu * 200.0)
+                        + (self.n300 * 300.0)
+                        + (self.ngeki * 305.0)
+                    )
+                    / (total * 305.0)
+                )
 
             return (
                 100.0

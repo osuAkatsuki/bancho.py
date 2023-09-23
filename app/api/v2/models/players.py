@@ -29,10 +29,10 @@ class Player(BaseModel):
     preferred_mode: int
     play_style: int
 
-    custom_badge_name: Optional[str]
-    custom_badge_icon: Optional[str]
+    custom_badge_name: str | None
+    custom_badge_icon: str | None
 
-    userpage_content: Optional[str]
+    userpage_content: str | None
 
 
 class PlayerStatus(BaseModel):

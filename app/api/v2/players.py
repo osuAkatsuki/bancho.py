@@ -21,12 +21,12 @@ router = APIRouter()
 
 @router.get("/players")
 async def get_players(
-    priv: Optional[int] = None,
-    country: Optional[str] = None,
-    clan_id: Optional[int] = None,
-    clan_priv: Optional[int] = None,
-    preferred_mode: Optional[int] = None,
-    play_style: Optional[int] = None,
+    priv: int | None = None,
+    country: str | None = None,
+    clan_id: int | None = None,
+    clan_priv: int | None = None,
+    preferred_mode: int | None = None,
+    play_style: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> Success[list[Player]]:

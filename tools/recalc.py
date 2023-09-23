@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 from __future__ import annotations
 
 import argparse
@@ -6,20 +6,20 @@ import asyncio
 import math
 import os
 import sys
+from collections.abc import Awaitable
+from collections.abc import Iterator
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
 from typing import Any
-from typing import Awaitable
-from typing import Iterator
 from typing import Optional
-from typing import Sequence
 
 import aiohttp
-import aioredis
 import databases
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
+from redis import asyncio as aioredis
 
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
@@ -65,8 +65,13 @@ async def recalculate_score(
         mode=GameMode(score["mode"]).as_vanilla,
         mods=score["mods"],
         acc=score["acc"],
-        n_misses=score["nmiss"],
         combo=score["max_combo"],
+        n_geki=score["ngeki"],  # Mania 320s
+        n300=score["n300"],
+        n_katu=score["nkatu"],  # Mania 200s, Catch tiny droplets
+        n100=score["n100"],
+        n50=score["n50"],
+        n_misses=score["nmiss"],
     )
     attrs = calculator.performance(beatmap)
 
@@ -183,8 +188,17 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
     scores = [
         dict(row)
         for row in await ctx.database.fetch_all(
-            "SELECT scores.id, scores.mode, scores.mods, scores.acc, nmiss, scores.max_combo, scores.map_md5, scores.pp, maps.id as map_id FROM scores INNER JOIN maps ON scores.map_md5 = maps.md5 "
-            "WHERE scores.status = 2 AND scores.mode = :mode ORDER BY scores.pp DESC",
+            """\
+            SELECT scores.id, scores.mode, scores.mods, scores.map_md5,
+              scores.pp, scores.acc, scores.max_combo,
+              scores.ngeki, scores.n300, scores.nkatu, scores.n100, scores.n50, scores.nmiss,
+              maps.id as `map_id`
+            FROM scores
+            INNER JOIN maps ON scores.map_md5 = maps.md5
+            WHERE scores.status = 2
+              AND scores.mode = :mode
+            ORDER BY scores.pp DESC
+            """,
             {"mode": mode},
         )
     ]
@@ -193,14 +207,28 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
         await process_score_chunk(score_chunk, ctx)
 
 
-async def main(argv: Optional[Sequence[str]] = None) -> int:
+async def main(argv: Sequence[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) == 0:
         argv = ["--help"]
 
-    parser = argparse.ArgumentParser(description="Recalculate performance for scores")
+    parser = argparse.ArgumentParser(
+        description="Recalculate performance for scores and/or stats",
+    )
 
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument(
+        "--scores",
+        description="Recalculate scores",
+        action="store_true",
+        default=True,
+    )
+    parser.add_argument(
+        "--stats",
+        description="Recalculate stats",
+        action="store_true",
+        default=True,
+    )
 
     parser.add_argument(
         "-m",
@@ -227,8 +255,11 @@ async def main(argv: Optional[Sequence[str]] = None) -> int:
     for mode in args.mode:
         mode = GameMode(int(mode))
 
-        await recalculate_mode_scores(mode, ctx)
-        await recalculate_mode_users(mode, ctx)
+        if args.scores:
+            await recalculate_mode_scores(mode, ctx)
+
+        if args.stats:
+            await recalculate_mode_users(mode, ctx)
 
     await app.state.services.http_client.close()
     await db.disconnect()

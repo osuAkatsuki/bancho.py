@@ -2,11 +2,11 @@
 # in a lot of these classes; needs refactor.
 from __future__ import annotations
 
-from typing import Iterable
-from typing import Iterator
+from collections.abc import Iterable
+from collections.abc import Iterator
+from collections.abc import Sequence
 from typing import Optional
 from typing import overload
-from typing import Sequence
 from typing import Union
 
 import databases.core
@@ -49,7 +49,7 @@ class Channels(list[Channel]):
     def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
-    def __contains__(self, o: Union[Channel, str]) -> bool:
+    def __contains__(self, o: Channel | str) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -71,8 +71,8 @@ class Channels(list[Channel]):
 
     def __getitem__(
         self,
-        index: Union[int, slice, str],
-    ) -> Union[Channel, list[Channel]]:
+        index: int | slice | str,
+    ) -> Channel | list[Channel]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -86,7 +86,7 @@ class Channels(list[Channel]):
         # #spect_1 instead of #spectator.
         return f'[{", ".join(c._name for c in self)}]'
 
-    def get_by_name(self, name: str) -> Optional[Channel]:
+    def get_by_name(self, name: str) -> Channel | None:
         """Get a channel from the list by `name`."""
         for channel in self:
             if channel._name == name:
@@ -136,13 +136,13 @@ class Matches(list[Optional[Match]]):
     def __init__(self) -> None:
         super().__init__([None] * app.settings.MAX_MATCHES)
 
-    def __iter__(self) -> Iterator[Optional[Match]]:
+    def __iter__(self) -> Iterator[Match | None]:
         return super().__iter__()
 
     def __repr__(self) -> str:
         return f'[{", ".join(match.name for match in self if match)}]'
 
-    def get_free(self) -> Optional[int]:
+    def get_free(self) -> int | None:
         """Return the first free match id from `self`."""
         for idx, match in enumerate(self):
             if match is None:
@@ -188,7 +188,7 @@ class Players(list[Player]):
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
-    def __contains__(self, player: Union[Player, str]) -> bool:
+    def __contains__(self, player: Player | str) -> bool:
         # allow us to either pass in the player
         # obj, or the player name as a string.
         if isinstance(player, str):
@@ -227,10 +227,10 @@ class Players(list[Player]):
 
     def get(
         self,
-        token: Optional[str] = None,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Optional[Player]:
+        token: str | None = None,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Get a player by token, id, or name from cache."""
         for player in self:
             if token is not None:
@@ -247,9 +247,9 @@ class Players(list[Player]):
 
     async def get_sql(
         self,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Optional[Player]:
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Get a player by token, id, or name from sql."""
         # try to get from sql.
         player = await players_repo.fetch_one(
@@ -283,9 +283,9 @@ class Players(list[Player]):
 
     async def from_cache_or_sql(
         self,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Optional[Player]:
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Try to get player from cache, or sql as fallback."""
         player = self.get(id=id, name=name)
         if player is not None:
@@ -301,7 +301,7 @@ class Players(list[Player]):
         name: str,
         pw_md5: str,
         sql: bool = False,
-    ) -> Optional[Player]:
+    ) -> Player | None:
         """Return a player with a given name & pw_md5, from cache or sql."""
         player = self.get(name=name)
         if not player:
@@ -358,8 +358,8 @@ class MapPools(list[MapPool]):
 
     def __getitem__(
         self,
-        index: Union[int, slice, str],
-    ) -> Union[MapPool, list[MapPool]]:
+        index: int | slice | str,
+    ) -> MapPool | list[MapPool]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get_by_name(index)  # type: ignore
@@ -368,9 +368,9 @@ class MapPools(list[MapPool]):
 
     def get(
         self,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Optional[MapPool]:
+        id: int | None = None,
+        name: str | None = None,
+    ) -> MapPool | None:
         """Get a mappool by id, or name from cache."""
         for player in self:
             if id is not None:
@@ -382,7 +382,7 @@ class MapPools(list[MapPool]):
 
         return None
 
-    def __contains__(self, o: Union[MapPool, str]) -> bool:
+    def __contains__(self, o: MapPool | str) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -390,7 +390,7 @@ class MapPools(list[MapPool]):
         else:
             return o in self
 
-    def get_by_name(self, name: str) -> Optional[MapPool]:
+    def get_by_name(self, name: str) -> MapPool | None:
         """Get a pool from the list by `name`."""
         for player in self:
             if player.name == name:
@@ -457,14 +457,14 @@ class Clans(list[Clan]):
     def __getitem__(self, index: slice) -> list[Clan]:
         ...
 
-    def __getitem__(self, index: Union[int, str, slice]):
+    def __getitem__(self, index: int | str | slice):
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Union[Clan, str]) -> bool:
+    def __contains__(self, o: Clan | str) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -474,10 +474,10 @@ class Clans(list[Clan]):
 
     def get(
         self,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-        tag: Optional[str] = None,
-    ) -> Optional[Clan]:
+        id: int | None = None,
+        name: str | None = None,
+        tag: str | None = None,
+    ) -> Clan | None:
         """Get a clan by name, tag, or id."""
         for clan in self:
             if id is not None:

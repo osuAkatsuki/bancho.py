@@ -162,7 +162,7 @@ class OsuVersion:
     def __init__(
         self,
         date: date,
-        revision: Optional[int],  # TODO: should this be optional?
+        revision: int | None,  # TODO: should this be optional?
         stream: OsuStream,
     ) -> None:
         self.date = date
@@ -241,7 +241,7 @@ class Player:
         self,
         id: int,
         name: str,
-        priv: Union[int, Privileges],
+        priv: int | Privileges,
         **extras: Any,
     ) -> None:
         self.id = id
@@ -249,7 +249,7 @@ class Player:
         self.safe_name = self.make_safe(self.name)
 
         if "pw_bcrypt" in extras:
-            self.pw_bcrypt: Optional[bytes] = extras["pw_bcrypt"]
+            self.pw_bcrypt: bytes | None = extras["pw_bcrypt"]
         else:
             self.pw_bcrypt = None
 
@@ -272,12 +272,12 @@ class Player:
 
         self.channels: list[Channel] = []
         self.spectators: list[Player] = []
-        self.spectating: Optional[Player] = None
-        self.match: Optional[Match] = None
+        self.spectating: Player | None = None
+        self.match: Match | None = None
         self.stealth = False
 
-        self.clan: Optional[Clan] = extras.get("clan")
-        self.clan_priv: Optional[ClanPrivileges] = extras.get("clan_priv")
+        self.clan: Clan | None = extras.get("clan")
+        self.clan_priv: ClanPrivileges | None = extras.get("clan_priv")
 
         self.achievements: set[Achievement] = set()
 
@@ -292,12 +292,12 @@ class Player:
 
         self.utc_offset = extras.get("utc_offset", 0)
         self.pm_private = extras.get("pm_private", False)
-        self.away_msg: Optional[str] = None
+        self.away_msg: str | None = None
         self.silence_end = extras.get("silence_end", 0)
         self.donor_end = extras.get("donor_end", 0)
         self.in_lobby = False
 
-        self.client_details: Optional[ClientDetails] = extras.get("client_details")
+        self.client_details: ClientDetails | None = extras.get("client_details")
         self.pres_filter = PresenceFilter.Nil
 
         login_time = extras.get("login_time", 0.0)
@@ -307,12 +307,12 @@ class Player:
         # XXX: below is mostly implementation-specific & internal stuff
 
         # store most recent score for each gamemode.
-        self.recent_scores: dict[GameMode, Optional[Score]] = {
+        self.recent_scores: dict[GameMode, Score | None] = {
             mode: None for mode in GameMode
         }
 
         # store the last beatmap /np'ed by the user.
-        self.last_np: Optional[LastNp] = None
+        self.last_np: LastNp | None = None
 
         # TODO: document
         self.current_menu = MAIN_MENU
@@ -401,7 +401,7 @@ class Player:
         return self.stats[self.status.mode]
 
     @property
-    def recent_score(self) -> Optional[Score]:
+    def recent_score(self) -> Score | None:
         """The player's most recently submitted score."""
         score = None
         for s in self.recent_scores.values():
@@ -737,7 +737,7 @@ class Player:
 
         self.match = None
 
-    async def join_clan(self, clan: "Clan") -> bool:
+    async def join_clan(self, clan: Clan) -> bool:
         """Attempt to add `self` to `clan`."""
         if self.id in clan.member_ids:
             return False
@@ -962,7 +962,7 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def unlock_achievement(self, achievement: "Achievement") -> None:
+    async def unlock_achievement(self, achievement: Achievement) -> None:
         """Unlock `achievement` for `self`, storing in both cache & sql."""
         await app.state.services.database.execute(
             "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
@@ -1099,7 +1099,7 @@ class Player:
         """Add data to be sent to the client."""
         self._queue += data
 
-    def dequeue(self) -> Optional[bytes]:
+    def dequeue(self) -> bytes | None:
         """Get data from the queue to send to the client."""
         if self._queue:
             data = bytes(self._queue)
@@ -1108,7 +1108,7 @@ class Player:
 
         return None
 
-    def send(self, msg: str, sender: Player, chan: Optional[Channel] = None) -> None:
+    def send(self, msg: str, sender: Player, chan: Channel | None = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             app.packets.send_message(

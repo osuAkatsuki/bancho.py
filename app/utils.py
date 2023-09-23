@@ -10,9 +10,9 @@ import subprocess
 import sys
 import types
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from typing import Callable
 from typing import Optional
 from typing import TypedDict
 from typing import TypeVar
@@ -43,7 +43,6 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_connected_services",
     "ensure_directory_structure",
     "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
@@ -239,7 +238,7 @@ def _install_synchronous_excepthook() -> None:
     def _excepthook(
         type_: type[BaseException],
         value: BaseException,
-        traceback: Optional[types.TracebackType],
+        traceback: types.TracebackType | None,
     ):
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
@@ -320,7 +319,7 @@ T = TypeVar("T")
 
 
 def pymysql_encode(
-    conv: Callable[[Any, Optional[dict[object, object]]], str],
+    conv: Callable[[Any, dict[object, object] | None], str],
 ) -> Callable[[T], T]:
     """Decorator to allow for adding to pymysql's encoders."""
 
@@ -333,7 +332,7 @@ def pymysql_encode(
 
 def escape_enum(
     val: Any,
-    _: Optional[dict[object, object]] = None,
+    _: dict[object, object] | None = None,
 ) -> str:  # used for ^
     return str(int(val))
 
@@ -350,33 +349,13 @@ def ensure_supported_platform() -> int:
             )
         return 1
 
-    if sys.version_info < (3, 9):
+    if sys.version_info < (3, 11):
         log(
             "bancho.py uses many modern python features, "
-            "and the minimum python version is 3.9.",
+            "and the minimum python version is 3.11.",
             Ansi.LRED,
         )
         return 1
-
-    return 0
-
-
-def ensure_connected_services(timeout: float = 1.0) -> int:
-    """Ensure connected service connections are functional and running."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            sock.connect((app.settings.DB_HOST, app.settings.DB_PORT))
-        except OSError:
-            log("Unable to connect to mysql server.", Ansi.LRED)
-            return 1
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            sock.connect((app.settings.REDIS_HOST, app.settings.REDIS_PORT))
-        except OSError:
-            log("Unable to connect to redis server.", Ansi.LRED)
-            return 1
 
     return 0
 
@@ -454,7 +433,7 @@ def orjson_serialize_to_str(*args, **kwargs) -> str:
     return orjson.dumps(*args, **kwargs).decode()
 
 
-def get_media_type(extension: str) -> Optional[str]:
+def get_media_type(extension: str) -> str | None:
     if extension in ("jpg", "jpeg"):
         return "image/jpeg"
     elif extension == "png":

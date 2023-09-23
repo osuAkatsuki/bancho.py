@@ -3,14 +3,19 @@ from __future__ import annotations
 import functools
 import hashlib
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import datetime
 from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
-from typing import Mapping
 from typing import Optional
+from typing import TypedDict
+
+import aiohttp
+from tenacity import retry
+from tenacity.stop import stop_after_attempt
 
 import app.settings
 import app.state
@@ -33,11 +38,17 @@ DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
 IGNORED_BEATMAP_CHARS = dict.fromkeys(map(ord, r':\/*<>?"|'), None)
 
 
-async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
+class BeatmapApiResponse(TypedDict):
+    data: list[dict[str, Any]] | None
+    status_code: int
+
+
+@retry(reraise=True, stop=stop_after_attempt(5))
+async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     """\
     Fetch data from the osu!api with a beatmap's md5.
 
-    Optionally use Kitsu's API if the user has not provided an osu! api key.
+    Optionally use osu.direct's API if the user has not provided an osu! api key.
     """
     if app.settings.DEBUG:
         log(f"Doing api (getbeatmaps) request {params}", Ansi.LMAGENTA)
@@ -47,15 +58,15 @@ async def api_get_beatmaps(**params: Any) -> Optional[list[dict[str, Any]]]:
         url = "https://old.ppy.sh/api/get_beatmaps"
         params["k"] = str(app.settings.OSU_API_KEY)
     else:
-        # https://doc.kitsu.moe/
-        url = "https://kitsu.moe/api/get_beatmaps"
+        # https://osu.direct/doc
+        url = "https://osu.direct/api/get_beatmaps"
 
     async with app.state.services.http_client.get(url, params=params) as response:
         response_data = await response.json()
         if response.status == 200 and response_data:  # (data may be [])
-            return response_data
+            return {"data": response_data, "status_code": response.status}
 
-    return None
+    return {"data": None, "status_code": response.status}
 
 
 async def ensure_local_osu_file(
@@ -349,7 +360,7 @@ class Beatmap:
     # populating the higher levels of the cache with new maps.
 
     @classmethod
-    async def from_md5(cls, md5: str, set_id: int = -1) -> Optional[Beatmap]:
+    async def from_md5(cls, md5: str, set_id: int = -1) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by md5."""
         bmap = await cls._from_md5_cache(md5)
 
@@ -370,10 +381,11 @@ class Beatmap:
                     # set not found in db, try api
                     api_data = await api_get_beatmaps(h=md5)
 
-                    if not api_data:
+                    if api_data["data"] is None:
                         return None
 
-                    set_id = int(api_data[0]["beatmapset_id"])
+                    api_response = api_data["data"]
+                    set_id = int(api_response[0]["beatmapset_id"])
 
             # fetch (and cache) beatmap set
             beatmap_set = await BeatmapSet.from_bsid(set_id)
@@ -393,7 +405,7 @@ class Beatmap:
         return bmap
 
     @classmethod
-    async def from_bid(cls, bid: int) -> Optional[Beatmap]:
+    async def from_bid(cls, bid: int) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by id."""
         bmap = await cls._from_bid_cache(bid)
 
@@ -412,10 +424,11 @@ class Beatmap:
                 # set not found in db, try getting via api
                 api_data = await api_get_beatmaps(b=bid)
 
-                if not api_data:
+                if api_data["data"] is None:
                     return None
 
-                set_id = int(api_data[0]["beatmapset_id"])
+                api_response = api_data["data"]
+                set_id = int(api_response[0]["beatmapset_id"])
 
             # fetch (and cache) beatmap set
             beatmap_set = await BeatmapSet.from_bsid(set_id)
@@ -500,16 +513,16 @@ class Beatmap:
         self.diff = float(osuapi_resp["difficultyrating"])
 
     @staticmethod
-    async def _from_md5_cache(md5: str) -> Optional[Beatmap]:
+    async def _from_md5_cache(md5: str) -> Beatmap | None:
         """Fetch a map from the cache by md5."""
         return app.state.cache.beatmap.get(md5, None)
 
     @staticmethod
-    async def _from_bid_cache(bid: int) -> Optional[Beatmap]:
+    async def _from_bid_cache(bid: int) -> Beatmap | None:
         """Fetch a map from the cache by id."""
         return app.state.cache.beatmap.get(bid, None)
 
-    async def fetch_rating(self) -> Optional[float]:
+    async def fetch_rating(self) -> float | None:
         """Fetch the beatmap's rating from sql."""
         row = await app.state.services.database.fetch_one(
             "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
@@ -555,7 +568,7 @@ class BeatmapSet:
         self,
         id: int,
         last_osuapi_check: datetime,
-        maps: Optional[list[Beatmap]] = None,
+        maps: list[Beatmap] | None = None,
     ) -> None:
         self.id = id
 
@@ -628,10 +641,26 @@ class BeatmapSet:
     async def _update_if_available(self) -> None:
         """Fetch the newest data from the api, check for differences
         and propogate any update into our cache & database."""
-        api_data = await api_get_beatmaps(s=self.id)
-        if api_data:
+
+        try:
+            api_data = await api_get_beatmaps(s=self.id)
+        except (aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
+            # NOTE: ClientConnectorError is directly caused by the API being unavailable
+
+            # NOTE: ContentTypeError is caused by the API returning HTML and
+            #       normally happens when CF protection is enabled while
+            #       osu! recovers from a DDOS attack
+
+            # we do not want to delete the beatmap in this case, so we simply return
+            # but do not set the last check, as we would like to retry these ASAP
+
+            return
+
+        if api_data["data"] is not None:
+            api_response = api_data["data"]
+
             old_maps = {bmap.id: bmap for bmap in self.maps}
-            new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_data}
+            new_maps = {int(api_map["beatmap_id"]): api_map for api_map in api_response}
 
             self.last_osuapi_check = datetime.now()
 
@@ -714,7 +743,11 @@ class BeatmapSet:
 
             # update maps in sql
             await self._save_to_sql()
-        else:
+        elif api_data["status_code"] in (404, 200):
+            # NOTE: 200 can return an empty array of beatmaps,
+            #       so we still delete in this case if the beatmap data is None
+            # TODO: is 404 and 200 the only cases where we should delete the beatmap?
+
             # TODO: we have the map on disk but it's
             #       been removed from the osu!api.
             map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
@@ -787,12 +820,12 @@ class BeatmapSet:
         )
 
     @staticmethod
-    async def _from_bsid_cache(bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_cache(bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the cache by set id."""
         return app.state.cache.beatmapset.get(bsid, None)
 
     @classmethod
-    async def _from_bsid_sql(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_sql(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the database by set id."""
         async with app.state.services.database.connection() as db_conn:
             last_osuapi_check = await db_conn.fetch_val(
@@ -854,10 +887,12 @@ class BeatmapSet:
         return bmap_set
 
     @classmethod
-    async def _from_bsid_osuapi(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def _from_bsid_osuapi(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the osu!api by set id."""
         api_data = await api_get_beatmaps(s=bsid)
-        if api_data:
+        if api_data["data"] is not None:
+            api_response = api_data["data"]
+
             self = cls(id=bsid, last_osuapi_check=datetime.now())
 
             # XXX: pre-mapset bancho.py support
@@ -870,7 +905,7 @@ class BeatmapSet:
 
             current_maps = {row["id"]: row["status"] for row in res}
 
-            for api_bmap in api_data:
+            for api_bmap in api_response:
                 # newer version available for this map
                 bmap: Beatmap = Beatmap.__new__(Beatmap)
                 bmap.id = int(api_bmap["beatmap_id"])
@@ -908,7 +943,7 @@ class BeatmapSet:
         return None
 
     @classmethod
-    async def from_bsid(cls, bsid: int) -> Optional[BeatmapSet]:
+    async def from_bsid(cls, bsid: int) -> BeatmapSet | None:
         """Cache all maps in a set from the osuapi, optionally
         returning beatmaps by their md5 or id."""
         bmap_set = await cls._from_bsid_cache(bsid)

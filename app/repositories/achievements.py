@@ -57,9 +57,9 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    name: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    name: str | None = None,
+) -> dict[str, Any] | None:
     """Fetch a single achievement."""
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
@@ -93,8 +93,8 @@ async def fetch_count() -> int:
 
 
 async def fetch_many(
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch a list of achievements."""
     query = f"""\
@@ -117,11 +117,11 @@ async def fetch_many(
 
 async def update(
     id: int,
-    file: Optional[str] = None,
-    name: Optional[str] = None,
-    desc: Optional[str] = None,
-    cond: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    file: str | None = None,
+    name: str | None = None,
+    desc: str | None = None,
+    cond: str | None = None,
+) -> dict[str, Any] | None:
     """Update an existing achievement."""
     query = """\
         UPDATE achievements
@@ -154,7 +154,7 @@ async def update(
 
 async def delete(
     id: int,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Delete an existing achievement."""
     query = f"""\
         SELECT {READ_PARAMS}
