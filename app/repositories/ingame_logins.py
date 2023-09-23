@@ -26,7 +26,7 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
-class InGameLogin(TypedDict):
+class IngameLogin(TypedDict):
     id: int
     userid: str
     ip: str
@@ -47,7 +47,7 @@ async def create(
     ip: str,
     osu_ver: str,
     osu_stream: str,
-) -> InGameLogin:
+) -> IngameLogin:
     """Create a new login entry in the database."""
     query = f"""\
         INSERT INTO ingame_logins (userid, ip, osu_ver, osu_stream, datetime)
@@ -72,7 +72,7 @@ async def create(
     ingame_login = await app.state.services.database.fetch_one(query, params)
 
     assert ingame_login is not None
-    return cast(InGameLogin, ingame_login)
+    return cast(IngameLogin, ingame_login)
 
 
 async def fetch_one(
@@ -81,7 +81,7 @@ async def fetch_one(
     ip: str | None = None,
     osu_ver: str | None = None,
     osu_stream: str | None = None,
-) -> InGameLogin | None:
+) -> IngameLogin | None:
     """Fetch a login entry from the database."""
     if (
         id is None
@@ -110,7 +110,7 @@ async def fetch_one(
     }
     ingame_login = await app.state.services.database.fetch_one(query, params)
 
-    return cast(InGameLogin, ingame_login) if ingame_login is not None else None
+    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
 
 
 async def fetch_count(
@@ -140,7 +140,7 @@ async def fetch_many(
     osu_stream: str | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[InGameLogin]:
+) -> list[IngameLogin]:
     """Fetch a list of logins from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -166,7 +166,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     ingame_logins = await app.state.services.database.fetch_all(query, params)
-    return cast(list[InGameLogin], ingame_logins)
+    return cast(list[IngameLogin], ingame_logins)
 
 
 async def update(
@@ -175,7 +175,7 @@ async def update(
     ip: str | _UnsetSentinel = UNSET,
     osu_ver: str | _UnsetSentinel = UNSET,
     osu_stream: str | _UnsetSentinel = UNSET,
-) -> InGameLogin | None:
+) -> IngameLogin | None:
     """Update a login entry in the database."""
     update_fields = UserUpdateFields = {}
     if not isinstance(user_id, _UnsetSentinel):
@@ -204,10 +204,10 @@ async def update(
         "id": id,
     }
     ingame_login = await app.state.services.database.fetch_one(query, params)
-    return cast(InGameLogin, ingame_login) if ingame_login is not None else None
+    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
 
 
-async def delete(id: int) -> InGameLogin | None:
+async def delete(id: int) -> IngameLogin | None:
     """Delete a login entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
