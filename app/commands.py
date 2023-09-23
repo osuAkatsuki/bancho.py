@@ -423,6 +423,7 @@ async def top(ctx: Context) -> str | None:
 
 # TODO: !compare (compare to previous !last/!top post's map)
 
+
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
 async def _with(ctx: Context) -> str | None:
     """Specify custom accuracy & mod combinations with `/np`."""
@@ -457,7 +458,7 @@ async def _with(ctx: Context) -> str | None:
                 )
                 continue
 
-            for (suffix, attribute) in attributes_table.items():
+            for suffix, attribute in attributes_table.items():
                 if arg.endswith(suffix):
                     value = None
                     if attribute == "acc":
