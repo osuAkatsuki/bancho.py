@@ -126,8 +126,9 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    clan = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Clan], clan) if clan is not None else None
+    clans = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Clan], clans) if clans is not None else None
+
 
 
 async def update(

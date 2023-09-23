@@ -140,7 +140,6 @@ async def fetch_one(
         "email": email,
     }
     player = await app.state.services.database.fetch_one(query, params)
-
     return cast(Player, player) if player is not None else None
 
 
@@ -232,11 +231,11 @@ async def update(
     clan_priv: int | _UnsetSentinel = UNSET,
     preferred_mode: int | _UnsetSentinel = UNSET,
     play_style: int | _UnsetSentinel = UNSET,
-    custom_badge_name: str | _UnsetSentinel = UNSET,
-    custom_badge_icon: str | _UnsetSentinel = UNSET,
-    userpage_content: str | _UnsetSentinel = UNSET,
-    api_key: str | _UnsetSentinel = UNSET,
-) -> dict[str, Any] | None:
+    custom_badge_name: str | None | _UnsetSentinel = UNSET,
+    custom_badge_icon: str | None | _UnsetSentinel = UNSET,
+    userpage_content: str | None | _UnsetSentinel = UNSET,
+    api_key: str | None | _UnsetSentinel = UNSET,
+) -> Player | None:
     """Update a player in the database."""
     update_fields = PlayerUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):

@@ -131,7 +131,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     achievements = await app.state.services.database.fetch_all(query, params)
-    return cast(Achievement, achievements) if achievements is not None else None
+    return cast(list[Achievement], achievements) if achievements is not None else None
 
 
 async def update(
