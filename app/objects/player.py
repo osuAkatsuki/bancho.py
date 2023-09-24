@@ -659,7 +659,7 @@ class Player:
             log(f"{self} failed to join {match.chat}.", Ansi.LYELLOW)
             return False
 
-        lobby = app.state.sessions.channels["#lobby"]
+        lobby = app.state.sessions.channels.get_by_name("#lobby")
         if lobby in self.channels:
             self.leave_channel(lobby)
 
@@ -714,7 +714,7 @@ class Player:
 
             app.state.sessions.matches.remove(self.match)
 
-            lobby = app.state.sessions.channels["#lobby"]
+            lobby = app.state.sessions.channels.get_by_name("#lobby")
             if lobby:
                 lobby.enqueue(app.packets.dispose_match(self.match.id))
 
@@ -829,7 +829,7 @@ class Player:
         """Attempt to add `player` to `self`'s spectators."""
         chan_name = f"#spec_{self.id}"
 
-        spec_chan = app.state.sessions.channels[chan_name]
+        spec_chan = app.state.sessions.channels.get_by_name(chan_name)
         if not spec_chan:
             # spectator chan doesn't exist, create it.
             spec_chan = Channel(
@@ -870,7 +870,9 @@ class Player:
         self.spectators.remove(player)
         player.spectating = None
 
-        channel = app.state.sessions.channels[f"#spec_{self.id}"]
+        channel = app.state.sessions.channels.get_by_name(f"#spec_{self.id}")
+        assert channel is not None
+
         player.leave_channel(channel)
 
         if not self.spectators:

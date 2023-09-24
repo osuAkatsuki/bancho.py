@@ -2358,7 +2358,7 @@ async def clan_create(ctx: Context) -> str | None:
     )
 
     # announce clan creation
-    announce_chan = app.state.sessions.channels["#announce"]
+    announce_chan = app.state.sessions.channels.get_by_name("#announce")
     if announce_chan:
         msg = f"\x01ACTION founded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2398,7 +2398,7 @@ async def clan_disband(ctx: Context) -> str | None:
             member.clan_priv = None
 
     # announce clan disbanding
-    announce_chan = app.state.sessions.channels["#announce"]
+    announce_chan = app.state.sessions.channels.get_by_name("#announce")
     if announce_chan:
         msg = f"\x01ACTION disbanded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)

@@ -349,7 +349,7 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        lchan = app.state.sessions.channels["#lobby"]
+        lchan = app.state.sessions.channels.get_by_name("#lobby")
         if lobby and lchan and lchan.players:
             lchan.enqueue(data)
 
@@ -360,7 +360,7 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(app.packets.update_match(self, send_pw=True))
 
-        lchan = app.state.sessions.channels["#lobby"]
+        lchan = app.state.sessions.channels.get_by_name("#lobby")
         if lobby and lchan and lchan.players:
             lchan.enqueue(app.packets.update_match(self, send_pw=False))
 

@@ -6,8 +6,6 @@ from collections.abc import Iterable
 from collections.abc import Iterator
 from collections.abc import Sequence
 from typing import Any
-from typing import overload
-from typing import SupportsIndex
 
 import databases.core
 
@@ -56,29 +54,6 @@ class Channels(list[Channel]):
             return o in (chan.name for chan in self)
         else:
             return super().__contains__(o)
-
-    @overload
-    def __getitem__(self, index: str) -> Channel:
-        ...
-
-    @overload
-    def __getitem__(self, index: SupportsIndex) -> Channel:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Channel]:
-        ...
-
-    def __getitem__(
-        self,
-        index: str | SupportsIndex | slice,
-    ) -> Channel | None | list[Channel]:
-        # XXX: can be either a string (to get by name),
-        # or a slice, for indexing the internal array.
-        if isinstance(index, str):
-            return self.get_by_name(index)
-        else:
-            return super().__getitem__(index)
 
     def __repr__(self) -> str:
         # XXX: we use the "real" name, aka
@@ -331,24 +306,6 @@ class MapPools(list[MapPool]):
     def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    @overload
-    def __getitem__(self, index: SupportsIndex) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[MapPool]:
-        ...
-
-    def __getitem__(
-        self,
-        index: SupportsIndex | slice,
-    ) -> MapPool | list[MapPool]:
-        """Allow slicing by either a string (for name), or slice."""
-        if isinstance(index, str):
-            return self.get_by_name(index)  # type: ignore
-        else:
-            return super().__getitem__(index)
-
     def get(
         self,
         id: int | None = None,
@@ -427,21 +384,6 @@ class Clans(list[Clan]):
 
     def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
-
-    @overload
-    def __getitem__(self, index: SupportsIndex) -> Clan:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Clan]:
-        ...
-
-    def __getitem__(self, index: SupportsIndex | slice) -> Clan | None | list[Clan]:
-        """Allow slicing by either a string (for name), or slice."""
-        if isinstance(index, str):
-            return self.get(name=index)
-        else:
-            return super().__getitem__(index)
 
     def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""

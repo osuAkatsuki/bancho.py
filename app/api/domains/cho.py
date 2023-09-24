@@ -319,7 +319,7 @@ class SendMessage(BasePacket):
             else:
                 return
 
-            t_chan = app.state.sessions.channels[f"#spec_{spec_id}"]
+            t_chan = app.state.sessions.channels.get_by_name(f"#spec_{spec_id}")
         elif recipient == "#multiplayer":
             if not player.match:
                 # they're not in a match?
@@ -327,7 +327,7 @@ class SendMessage(BasePacket):
 
             t_chan = player.match.chat
         else:
-            t_chan = app.state.sessions.channels[recipient]
+            t_chan = app.state.sessions.channels.get_by_name(recipient)
 
         if not t_chan:
             log(f"{player} wrote to non-existent {recipient}.", Ansi.LYELLOW)
@@ -1871,7 +1871,7 @@ class ChannelJoin(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = app.state.sessions.channels[self.name]
+        channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel or not player.join_channel(channel):
             log(f"{player} failed to join {self.name}.", Ansi.LYELLOW)
@@ -2037,7 +2037,7 @@ class ChannelPart(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = app.state.sessions.channels[self.name]
+        channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel:
             log(f"{player} failed to leave {self.name}.", Ansi.LYELLOW)

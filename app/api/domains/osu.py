@@ -856,7 +856,7 @@ async def osuSubmitModularSelector(
             )
 
             if score.rank == 1 and not score.player.restricted:
-                announce_chan = app.state.sessions.channels["#announce"]
+                announce_chan = app.state.sessions.channels.get_by_name("#announce")
 
                 ann = [
                     f"\x01ACTION achieved #1 on {score.bmap.embed}",
