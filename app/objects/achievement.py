@@ -16,7 +16,7 @@ class Achievement:
         file: str,
         name: str,
         desc: str,
-        cond: Callable[[Score, int], bool],
+        cond: Callable[[Score, int], bool],  # (score, mode) -> unlocked
     ) -> None:
         self.id = id
         self.file = file
