@@ -47,11 +47,11 @@ async def create(from_id: int, to_id: int, msg: str) -> dict[str, Any]:
 
 
 async def fetch_one(
-    from_id: Optional[int] = None,
-    to_id: Optional[int] = None,
-    time: Optional[str] = None,
-    read: Optional[bool] = None,
-) -> Optional[dict[str, Any]]:
+    from_id: int | None = None,
+    to_id: int | None = None,
+    time: str | None = None,
+    read: bool | None = None,
+) -> dict[str, Any] | None:
     """Fetch a mail entry from the database."""
     if from_id is None and to_id is None and time is None and read is None:
         raise ValueError("Must provide at least one parameter.")
@@ -75,10 +75,10 @@ async def fetch_one(
 
 
 async def fetch_count(
-    from_id: Optional[int] = None,
-    to_id: Optional[int] = None,
-    time: Optional[str] = None,
-    read: Optional[bool] = None,
+    from_id: int | None = None,
+    to_id: int | None = None,
+    time: str | None = None,
+    read: bool | None = None,
 ) -> int:
     """Fetch the number of mails in the database."""
     query = """\
@@ -125,9 +125,9 @@ async def fetch_all(
 async def update(
     to_id: int,
     from_id: int,
-    read_from: Optional[bool] = None,
-    read_to: Optional[bool] = None,
-) -> Optional[dict[str, Any]]:
+    read_from: bool | None = None,
+    read_to: bool | None = None,
+) -> dict[str, Any] | None:
     """Update a mail entry in the database."""
     query = """\
         UPDATE mail
@@ -157,7 +157,7 @@ async def update(
     return dict(rec) if rec is not None else None
 
 
-async def delete(id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> dict[str, Any] | None:
     """Delete a mail entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
