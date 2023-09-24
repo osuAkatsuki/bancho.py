@@ -37,7 +37,6 @@ from app.objects.menu import menu_keygen
 from app.objects.menu import MenuCommands
 from app.objects.menu import MenuFunction
 from app.objects.score import Grade
-from app.objects.score import Score
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
@@ -47,6 +46,7 @@ if TYPE_CHECKING:
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
+    from app.objects.score import Score
     from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
