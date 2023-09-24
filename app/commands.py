@@ -1355,10 +1355,10 @@ if app.settings.DEVELOPER_MODE:
 
 
 def ensure_match(
-    f: Callable[[Context, Match], Awaitable[R | None]],
-) -> Callable[[Context], Awaitable[R | None]]:
+    f: Callable[[Context, Match], Awaitable[str | None]],
+) -> Callable[[Context], Awaitable[str | None]]:
     @wraps(f)
-    async def wrapper(ctx: Context) -> R | None:
+    async def wrapper(ctx: Context) -> str | None:
         match = ctx.player.match
 
         # multi set is a bit of a special case,
@@ -1374,7 +1374,7 @@ def ensure_match(
         if not (
             ctx.player in match.refs
             or ctx.player.priv & Privileges.TOURNEY_MANAGER
-            or f is mp_help  # type: ignore[comparison-overlap]
+            or f is mp_help.__wrapped__  # type: ignore[attr-defined]
         ):
             return None
 
