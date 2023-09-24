@@ -6,18 +6,15 @@ import ipaddress
 import os
 import shutil
 import socket
-import subprocess
 import sys
 import types
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from typing import Callable
-from typing import Optional
 from typing import TypedDict
 from typing import TypeVar
 
-import databases.core
 import orjson
 import pymysql
 import requests
@@ -31,7 +28,6 @@ from app.logging import printc
 __all__ = (
     # TODO: organize/sort these
     "make_safe_name",
-    "fetch_bot_name",
     "download_achievement_images",
     "download_default_avatar",
     "seconds_readable",
@@ -45,9 +41,7 @@ __all__ = (
     "pymysql_encode",
     "escape_enum",
     "ensure_supported_platform",
-    "ensure_connected_services",
     "ensure_directory_structure",
-    "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
     "_install_debugging_hooks",
     "display_startup_dialog",
@@ -58,6 +52,9 @@ __all__ = (
     "has_png_headers_and_trailers",
 )
 
+T = TypeVar("T")
+
+
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
@@ -67,21 +64,6 @@ DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
-
-
-async def fetch_bot_name(db_conn: databases.core.Connection) -> str:
-    """Fetch the bot's name from the database, if available."""
-    row = await db_conn.fetch_one("SELECT name FROM users WHERE id = 1")
-
-    if not row:
-        log(
-            "Couldn't find bot account in the database, "
-            "defaulting to BanchoBot for their name.",
-            Ansi.LYELLOW,
-        )
-        return "BanchoBot"
-
-    return row["name"]
 
 
 def _download_achievement_images_mirror(achievements_path: Path) -> bool:
@@ -256,8 +238,8 @@ def _install_synchronous_excepthook() -> None:
     def _excepthook(
         type_: type[BaseException],
         value: BaseException,
-        traceback: Optional[types.TracebackType],
-    ):
+        traceback: types.TracebackType | None,
+    ) -> None:
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
             return
@@ -281,7 +263,7 @@ def _install_synchronous_excepthook() -> None:
             f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
-        real_excepthook(type_, value, traceback)  # type: ignore
+        real_excepthook(type_, value, traceback)
 
     sys.excepthook = _excepthook
 
@@ -333,15 +315,12 @@ def is_valid_unix_address(address: str) -> bool:
     return address.endswith(".sock")  # TODO: improve
 
 
-T = TypeVar("T")
-
-
 def pymysql_encode(
-    conv: Callable[[Any, Optional[dict[object, object]]], str],
-) -> Callable[[T], T]:
+    conv: Callable[[Any, dict[object, object] | None], str],
+) -> Callable[[type[T]], type[T]]:
     """Decorator to allow for adding to pymysql's encoders."""
 
-    def wrapper(cls: T) -> T:
+    def wrapper(cls: type[T]) -> type[T]:
         pymysql.converters.encoders[cls] = conv
         return cls
 
@@ -350,7 +329,7 @@ def pymysql_encode(
 
 def escape_enum(
     val: Any,
-    _: Optional[dict[object, object]] = None,
+    _: dict[object, object] | None = None,
 ) -> str:  # used for ^
     return str(int(val))
 
@@ -367,33 +346,13 @@ def ensure_supported_platform() -> int:
             )
         return 1
 
-    if sys.version_info < (3, 9):
+    if sys.version_info < (3, 11):
         log(
             "bancho.py uses many modern python features, "
-            "and the minimum python version is 3.9.",
+            "and the minimum python version is 3.11.",
             Ansi.LRED,
         )
         return 1
-
-    return 0
-
-
-def ensure_connected_services(timeout: float = 1.0) -> int:
-    """Ensure connected service connections are functional and running."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            sock.connect((app.settings.DB_HOST, app.settings.DB_PORT))
-        except OSError:
-            log("Unable to connect to mysql server.", Ansi.LRED)
-            return 1
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            sock.connect((app.settings.REDIS_HOST, app.settings.REDIS_PORT))
-        except OSError:
-            log("Unable to connect to redis server.", Ansi.LRED)
-            return 1
 
     return 0
 
@@ -467,11 +426,11 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
 
-def orjson_serialize_to_str(*args, **kwargs) -> str:
+def orjson_serialize_to_str(*args: Any, **kwargs: Any) -> str:
     return orjson.dumps(*args, **kwargs).decode()
 
 
-def get_media_type(extension: str) -> Optional[str]:
+def get_media_type(extension: str) -> str | None:
     if extension in ("jpg", "jpeg"):
         return "image/jpeg"
     elif extension == "png":
@@ -488,5 +447,5 @@ def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
 def has_png_headers_and_trailers(data_view: memoryview) -> bool:
     return (
         data_view[:8] == b"\x89PNG\r\n\x1a\n"
-        and data_view[-8] == b"\x49END\xae\x42\x60\x82"
+        and data_view[-8:] == b"\x49END\xae\x42\x60\x82"
     )

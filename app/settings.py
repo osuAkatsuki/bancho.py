@@ -15,8 +15,18 @@ def read_list(value: str) -> list[str]:
     return value.split(",") if value else []
 
 
+# TODO: refactor this out of existence
+MAX_MATCHES = 64
+
+
 SERVER_ADDR = os.environ["SERVER_ADDR"]
-SERVER_PORT = int(v) if (v := os.getenv("SERVER_PORT", None)) else None
+
+# this is a bit weird, to allow "" as a value for backwards compatibility.
+# perhaps can remove in future.
+SERVER_PORT = None
+_server_port = os.environ["SERVER_PORT"]
+if _server_port:
+    SERVER_PORT = int(_server_port)
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])
@@ -37,7 +47,8 @@ REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 OSU_API_KEY = os.environ["OSU_API_KEY"]
 
 DOMAIN = os.environ["DOMAIN"]
-MIRROR_URL = os.environ["MIRROR_URL"]
+MIRROR_SEARCH_ENDPOINT = os.environ["MIRROR_SEARCH_ENDPOINT"]
+MIRROR_DOWNLOAD_ENDPOINT = os.environ["MIRROR_DOWNLOAD_ENDPOINT"]
 
 COMMAND_PREFIX = os.environ["COMMAND_PREFIX"]
 
@@ -72,4 +83,4 @@ DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 ## WARNING touch this if you know how
 ##          the migrations system works.
 ##          you'll regret it.
-VERSION = "4.6.5"
+VERSION = "4.8.2"

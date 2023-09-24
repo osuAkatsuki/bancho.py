@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 """main.py - a user-friendly, safe wrapper around bancho.py's runtime
 
 bancho.py is an in-progress osu! server implementation for developers of all levels
@@ -14,7 +14,7 @@ https://github.com/osuAkatsuki/bancho.py
 from __future__ import annotations
 
 __author__ = "Joshua Smith (cmyui)"
-__email__ = "cmyuiosu@gmail.com"
+__email__ = "josh@akatsuki.gg"
 __discord__ = "cmyui#0425"
 
 import os
@@ -25,8 +25,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 import argparse
 import logging
 import sys
-from typing import Sequence
-
+from collections.abc import Sequence
 import uvicorn
 
 import app.utils
@@ -41,10 +40,10 @@ def main(argv: Sequence[str]) -> int:
 
     for safety_check in (
         app.utils.ensure_supported_platform,  # linux only at the moment
-        app.utils.ensure_connected_services,  # mysql, redis
         app.utils.ensure_directory_structure,  # .data/ & achievements/ dir structure
     ):
-        if (exit_code := safety_check()) != 0:
+        exit_code = safety_check()
+        if exit_code != 0:
             return exit_code
 
     """ Parse and handle command-line arguments. """
@@ -76,21 +75,21 @@ def main(argv: Sequence[str]) -> int:
 
     # the server supports both inet and unix sockets.
 
+    uds = None
+    host = None
+    port = None
+
     if (
         app.utils.is_valid_inet_address(app.settings.SERVER_ADDR)
         and app.settings.SERVER_PORT is not None
     ):
-        server_arguments = {
-            "host": app.settings.SERVER_ADDR,
-            "port": app.settings.SERVER_PORT,
-        }
+        host = app.settings.SERVER_ADDR
+        port = app.settings.SERVER_PORT
     elif (
         app.utils.is_valid_unix_address(app.settings.SERVER_ADDR)
         and app.settings.SERVER_PORT is None
     ):
-        server_arguments = {
-            "uds": app.settings.SERVER_ADDR,
-        }
+        uds = app.settings.SERVER_ADDR
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
@@ -123,8 +122,10 @@ def main(argv: Sequence[str]) -> int:
         # TODO: uvicorn calls .lower() on the key & value,
         #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
-        headers=(("bancho-version", app.settings.VERSION),),
-        **server_arguments,
+        headers=[("bancho-version", app.settings.VERSION)],
+        uds=uds,
+        host=host or "127.0.0.1",  # uvicorn defaults
+        port=port or 8000,  # uvicorn defaults
     )
 
     return 0

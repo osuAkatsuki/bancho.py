@@ -1,4 +1,4 @@
-# #!/usr/bin/env python3.9
+# #!/usr/bin/env python3.11
 from __future__ import annotations
 
 import asyncio
@@ -6,8 +6,6 @@ import os
 import pprint
 from typing import Any
 
-import aiohttp
-import orjson
 import starlette.routing
 from fastapi import FastAPI
 from fastapi import status
@@ -24,6 +22,7 @@ import app.bg_loops
 import app.settings
 import app.state
 import app.utils
+from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
 from app.irc import IRCServer
@@ -125,9 +124,6 @@ def init_events(asgi_app: BanchoAPI) -> None:
                 Ansi.LRED,
             )
 
-        app.state.services.http_client = aiohttp.ClientSession(
-            json_serialize=lambda x: orjson.dumps(x).decode(),
-        )
         app.state.services.irc = IRCServer(6667, app.state.loop)
 
         await app.state.services.database.connect()
@@ -161,7 +157,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         # shutdown services
 
-        await app.state.services.http_client.close()
+        await app.state.services.http_client.aclose()
         await app.state.services.database.disconnect()
         await app.state.services.redis.close()
 
@@ -169,14 +165,10 @@ def init_events(asgi_app: BanchoAPI) -> None:
             app.state.services.datadog.stop()
             app.state.services.datadog.flush()
 
-        if app.state.services.geoloc_db is not None:
-            app.state.services.geoloc_db.close()
-
 
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
     for domain in ("ppy.sh", app.settings.DOMAIN):
-
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)
 
@@ -184,7 +176,7 @@ def init_routes(asgi_app: BanchoAPI) -> None:
         asgi_app.host(f"b.{domain}", domains.map.router)
 
         # bancho.py's developer-facing api
-        asgi_app.host(f"api.{domain}", domains.api.router)
+        asgi_app.host(f"api.{domain}", api_router)
 
 
 def init_api() -> BanchoAPI:

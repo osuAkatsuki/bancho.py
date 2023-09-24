@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime as datetime
 from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
-from typing import Optional
-from typing import overload
-from typing import Sequence
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import Union
 
 import databases.core
 
@@ -57,7 +54,7 @@ class SlotStatus(IntEnum):
     complete = 64
     quit = 128
 
-    has_player = not_ready | ready | no_map | playing | complete
+    # has_player = not_ready | ready | no_map | playing | complete
 
 
 @unique
@@ -113,7 +110,7 @@ class MapPool:
         self.maps: dict[
             tuple[Mods, int],
             Beatmap,
-        ] = {}  # {(mods: Mods, slot: int): Beatmap(), ...}
+        ] = {}
 
     def __repr__(self) -> str:
         return f"<{self.name}>"
@@ -149,7 +146,7 @@ class Slot:
     """An individual player slot in an osu! multiplayer match."""
 
     def __init__(self) -> None:
-        self.player: Optional[Player] = None
+        self.player: Player | None = None
         self.status = SlotStatus.open
         self.team = MatchTeams.neutral
         self.mods = Mods.NOMOD
@@ -175,9 +172,9 @@ class Slot:
 
 
 class StartingTimers(TypedDict):
-    start: Optional[TimerHandle]
-    alerts: Optional[list[TimerHandle]]
-    time: Optional[float]
+    start: TimerHandle
+    alerts: list[TimerHandle]
+    time: float
 
 
 class Match:
@@ -193,7 +190,7 @@ class Match:
     slots: list[`Slot`]
         A list of 16 `Slot` objects representing the match's slots.
 
-    starting: Optional[dict[str, `TimerHandle`]]
+    starting: dict[str, `TimerHandle`] | None
         Used when the match is started with !mp start <seconds>.
         It stores both the starting timer, and the chat alert timers.
 
@@ -204,85 +201,67 @@ class Match:
         Whether pp should be used as a win condition override during scrims.
     """
 
-    def __init__(self) -> None:
-        self.id = 0
-        self.name = ""
-        self.passwd = ""
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        password: str,
+        map_name: str,
+        map_id: int,
+        map_md5: str,
+        host_id: int,
+        mode: GameMode,
+        mods: Mods,
+        win_condition: MatchWinConditions,
+        team_type: MatchTeamTypes,
+        freemods: bool,
+        seed: int,
+        chat_channel: Channel,
+    ) -> None:
+        self.id = id
+        self.name = name
+        self.passwd = password
 
-        self.host_id = 0
+        self.host_id = host_id
         self._refs: set[Player] = set()
 
-        self.map_id = 0
-        self.map_md5 = ""
-        self.map_name = ""
+        self.map_id = map_id
+        self.map_md5 = map_md5
+        self.map_name = map_name
         self.prev_map_id = 0  # previously chosen map
 
-        self.mods = Mods.NOMOD
-        self.mode = GameMode.VANILLA_OSU
-        self.freemods = False
+        self.mods = mods
+        self.mode = mode
+        self.freemods = freemods
 
-        self.chat: Optional[Channel] = None  # multiplayer
+        self.chat = chat_channel
         self.slots = [Slot() for _ in range(16)]
 
         # self.type = MatchTypes.standard
-        self.team_type = MatchTeamTypes.head_to_head
-        self.win_condition = MatchWinConditions.score
+        self.team_type = team_type
+        self.win_condition = win_condition
 
         self.in_progress = False
-        self.starting: StartingTimers = {"start": None, "alerts": None, "time": None}
-        self.seed = 0  # used for mania random mod
+        self.starting: StartingTimers | None = None
+        self.seed = seed  # used for mania random mod
 
-        self.pool: Optional[MapPool] = None
+        self.pool: MapPool | None = None
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        self.match_points: dict[MatchTeams | Player, int] = defaultdict(int)
         self.bans: set[tuple[Mods, int]] = set()
-        self.winners: list[Union[Player, MatchTeams, None]] = []  # none for tie
+        self.winners: list[Player | MatchTeams | None] = []  # none for tie
         self.winning_pts = 0
         self.use_pp_scoring = False  # only for scrims
 
         self.tourney_clients: set[int] = set()  # player ids
 
-    @classmethod
-    def from_parsed_match(cls, parsed_match: app.packets.MultiplayerMatch) -> Match:
-        obj = cls()
-        obj.mods = Mods(parsed_match.mods)
-
-        obj.name = parsed_match.name
-        obj.passwd = parsed_match.passwd
-
-        obj.map_name = parsed_match.map_name
-        obj.map_id = parsed_match.map_id
-        obj.map_md5 = parsed_match.map_md5
-
-        for slot, status, team, mods in zip(
-            obj.slots,
-            parsed_match.slot_statuses,
-            parsed_match.slot_teams,
-            parsed_match.slot_mods or [0] * 16,
-        ):
-            slot.status = SlotStatus(status)
-            slot.team = MatchTeams(team)
-            slot.mods = Mods(mods)
-
-        # TODO: validate there is no hole here?
-        obj.host_id = parsed_match.host_id
-
-        obj.mode = GameMode(parsed_match.mode)
-        obj.win_condition = MatchWinConditions(parsed_match.win_condition)
-        obj.team_type = MatchTeamTypes(parsed_match.team_type)
-        obj.freemods = parsed_match.freemods
-
-        obj.seed = parsed_match.seed
-
-        return obj
-
     @property  # TODO: test cache speed
     def host(self) -> Player:
-        p = app.state.sessions.players.get(id=self.host_id)
-        assert p is not None
-        return p
+        player = app.state.sessions.players.get(id=self.host_id)
+        assert player is not None
+        return player
 
     @property
     def url(self) -> str:
@@ -290,7 +269,7 @@ class Match:
         return f"osump://{self.id}/{self.passwd}"
 
     @property
-    def map_url(self):
+    def map_url(self) -> str:
         """The osu! beatmap url for `self`'s map."""
         return f"https://osu.{app.settings.DOMAIN}/beatmapsets/#/{self.map_id}"
 
@@ -314,40 +293,26 @@ class Match:
 
         return refs
 
-    def __contains__(self, p: Player) -> bool:
-        return p in {s.player for s in self.slots}
-
-    @overload
-    def __getitem__(self, index: int) -> Slot:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Slot]:
-        ...
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Slot, list[Slot]]:
-        return self.slots[index]
-
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
-    def get_slot(self, p: Player) -> Optional[Slot]:
+    def get_slot(self, player: Player) -> Slot | None:
         """Return the slot containing a given player."""
         for s in self.slots:
-            if p is s.player:
+            if player is s.player:
                 return s
 
         return None
 
-    def get_slot_id(self, p: Player) -> Optional[int]:
+    def get_slot_id(self, player: Player) -> int | None:
         """Return the slot index containing a given player."""
         for idx, s in enumerate(self.slots):
-            if p is s.player:
+            if player is s.player:
                 return idx
 
         return None
 
-    def get_free(self) -> Optional[int]:
+    def get_free(self) -> int | None:
         """Return the first unoccupied slot in multi, if any."""
         for idx, s in enumerate(self.slots):
             if s.status == SlotStatus.open:
@@ -355,10 +320,10 @@ class Match:
 
         return None
 
-    def get_host_slot(self) -> Optional[Slot]:
+    def get_host_slot(self) -> Slot | None:
         """Return the slot containing the host."""
         for s in self.slots:
-            if s.status & SlotStatus.has_player and s.player is self.host:
+            if s.player is not None and s.player is self.host:
                 return s
 
         return None
@@ -384,7 +349,8 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
+        lchan = app.state.sessions.channels.get_by_name("#lobby")
+        if lobby and lchan and lchan.players:
             lchan.enqueue(data)
 
     def enqueue_state(self, lobby: bool = True) -> None:
@@ -394,7 +360,8 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(app.packets.update_match(self, send_pw=True))
 
-        if lobby and (lchan := app.state.sessions.channels["#lobby"]) and lchan.players:
+        lchan = app.state.sessions.channels.get_by_name("#lobby")
+        if lobby and lchan and lchan.players:
             lchan.enqueue(app.packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
@@ -409,7 +376,7 @@ class Match:
 
         for s in self.slots:
             # start each player who has the map.
-            if s.status & SlotStatus.has_player:
+            if s.player is not None:
                 if s.status != SlotStatus.no_map:
                     s.status = SlotStatus.playing
                 else:
@@ -428,11 +395,11 @@ class Match:
     async def await_submissions(
         self,
         was_playing: Sequence[Slot],
-    ) -> tuple[dict[Union[MatchTeams, Player], int], Sequence[Player]]:
+    ) -> tuple[dict[MatchTeams | Player, int], Sequence[Player]]:
         """Await score submissions from all players in completed state."""
-        scores: dict[Union[MatchTeams, Player], int] = defaultdict(int)
+        scores: dict[MatchTeams | Player, int] = defaultdict(int)
         didnt_submit: list[Player] = []
-        time_waited = 0  # allow up to 10s (total, not per player)
+        time_waited = 0.0  # allow up to 10s (total, not per player)
 
         ffa = self.team_type in (MatchTeamTypes.head_to_head, MatchTeamTypes.tag_coop)
 
@@ -451,19 +418,24 @@ class Match:
             # continue trying to fetch each player's
             # scores until they've all been submitted.
             while True:
+                assert s.player is not None
                 rc_score = s.player.recent_score
+                assert rc_score is not None
+
                 max_age = datetime.now() - timedelta(
                     seconds=bmap.total_length + time_waited + 0.5,
                 )
 
+                assert rc_score.bmap is not None
                 if (
                     rc_score
                     and rc_score.bmap.md5 == self.map_md5
                     and rc_score.server_time > max_age
                 ):
                     # score found, add to our scores dict if != 0.
-                    if score := getattr(rc_score, win_cond):
-                        key = s.player if ffa else s.team
+                    score: int = getattr(rc_score, win_cond)
+                    if score:
+                        key: MatchTeams | Player = s.player if ffa else s.team
                         scores[key] += score
 
                     break
@@ -505,8 +477,8 @@ class Match:
 
         scores, didnt_submit = await self.await_submissions(was_playing)
 
-        for p in didnt_submit:
-            self.chat.send_bot(f"{p} didn't submit a score (timeout: 10s).")
+        for player in didnt_submit:
+            self.chat.send_bot(f"{player} didn't submit a score (timeout: 10s).")
 
         if scores:
             ffa = self.team_type in (
@@ -521,7 +493,7 @@ class Match:
                 return None
 
             # Find the winner & increment their matchpoints.
-            winner: Union[Player, MatchTeams] = max(scores, key=lambda k: scores[k])
+            winner: Player | MatchTeams = max(scores, key=lambda k: scores[k])
             self.winners.append(winner)
             self.match_points[winner] += 1
 
@@ -538,6 +510,8 @@ class Match:
                     return str(score)
 
             if ffa:
+                assert isinstance(winner, Player)
+
                 msg.append(
                     f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
                     f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
@@ -563,7 +537,10 @@ class Match:
                 del m
 
             else:  # teams
-                if r_match := regexes.TOURNEY_MATCHNAME.match(self.name):
+                assert isinstance(winner, MatchTeams)
+
+                r_match = regexes.TOURNEY_MATCHNAME.match(self.name)
+                if r_match:
                     match_name = r_match["name"]
                     team_names = {
                         MatchTeams.blue: r_match["T1"],
@@ -574,7 +551,10 @@ class Match:
                     team_names = {MatchTeams.blue: "Blue", MatchTeams.red: "Red"}
 
                 # teams are binary, so we have a loser.
-                loser = MatchTeams({1: 2, 2: 1}[winner])
+                if winner is MatchTeams.blue:
+                    loser = MatchTeams.red
+                else:
+                    loser = MatchTeams.blue
 
                 # from match name if available, else blue/red.
                 wname = team_names[winner]

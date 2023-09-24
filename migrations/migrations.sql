@@ -403,6 +403,13 @@ insert into achievements (id, file, name, `desc`, cond) values (83, 'all-intro-s
 # v4.4.3
 alter table favourites add created_at int default 0 not null;
 
-# v4.6.5
+# v4.7.1
+lock tables maps write;
+alter table maps drop primary key;
+alter table maps add primary key (id);
+alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
+unlock tables;
+
+# v4.8.2
 alter table users add irc_key char(36) default NULL null;
 create unique index users_irc_key_uindex on users (irc_key);

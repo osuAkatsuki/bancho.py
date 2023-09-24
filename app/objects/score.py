@@ -6,7 +6,6 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
-from typing import Optional
 from typing import TYPE_CHECKING
 
 import app.state
@@ -16,6 +15,7 @@ from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.repositories import scores as scores_repo
 from app.usecases.performance import ScoreParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -88,10 +88,10 @@ class Score:
 
     Possibly confusing attributes
     -----------
-    bmap: Optional[`Beatmap`]
+    bmap: `Beatmap | None`
         A beatmap obj representing the osu map.
 
-    player: Optional[`Player`]
+    player: `Player | None`
         A player obj of the player who submitted the score.
 
     grade: `Grade`
@@ -109,18 +109,18 @@ class Score:
     client_flags: `int`
         osu!'s old anticheat flags.
 
-    prev_best: Optional[`Score`]
+    prev_best: `Score | None`
         The previous best score before this play was submitted.
         NOTE: just because a score has a `prev_best` attribute does
         mean the score is our best score on the map! the `status`
         value will always be accurate for any score.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # TODO: check whether the reamining Optional's should be
-        self.id: Optional[int] = None
-        self.bmap: Optional[Beatmap] = None
-        self.player: Optional[Player] = None
+        self.id: int | None = None
+        self.bmap: Beatmap | None = None
+        self.player: Player | None = None
 
         self.mode: GameMode
         self.mods: Mods
@@ -153,12 +153,13 @@ class Score:
         self.client_flags: ClientFlags
         self.client_checksum: str
 
-        self.rank: Optional[int] = None
-        self.prev_best: Optional[Score] = None
+        self.rank: int | None = None
+        self.prev_best: Score | None = None
 
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
         try:
+            assert self.bmap is not None
             return (
                 f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
                 f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
@@ -169,60 +170,41 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, score_id: int) -> Optional[Score]:
+    async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
-        # XXX: perhaps in the future this should take a gamemode rather
-        # than just the sql table? just faster on the current setup :P
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, map_md5, userid, pp, score, "
-            "max_combo, mods, acc, n300, n100, n50, "
-            "nmiss, ngeki, nkatu, grade, perfect, "
-            "status, mode, play_time, "
-            "time_elapsed, client_flags, online_checksum "
-            "FROM scores WHERE id = :score_id",
-            {"score_id": score_id},
-        )
+        rec = await scores_repo.fetch_one(score_id)
 
-        if not row:
+        if rec is None:
             return None
 
         s = cls()
 
-        s.id = row[0]
-        s.bmap = await Beatmap.from_md5(row[1])
-        s.player = await app.state.sessions.players.from_cache_or_sql(id=row[2])
+        s.id = rec["id"]
+        s.bmap = await Beatmap.from_md5(rec["map_md5"])
+        s.player = await app.state.sessions.players.from_cache_or_sql(id=rec["userid"])
 
         s.sr = 0.0  # TODO
 
-        (
-            s.pp,
-            s.score,
-            s.max_combo,
-            s.mods,
-            s.acc,
-            s.n300,
-            s.n100,
-            s.n50,
-            s.nmiss,
-            s.ngeki,
-            s.nkatu,
-            s.grade,
-            s.perfect,
-            s.status,
-            s.mode,
-            s.server_time,
-            s.time_elapsed,
-            s.client_flags,
-            s.client_checksum,
-        ) = row[3:]
-
-        # fix some types
-        s.passed = s.status != 0
-        s.status = SubmissionStatus(s.status)
-        s.grade = Grade.from_str(s.grade)
-        s.mods = Mods(s.mods)
-        s.mode = GameMode(s.mode)
-        s.client_flags = ClientFlags(s.client_flags)
+        s.pp = rec["pp"]
+        s.score = rec["score"]
+        s.max_combo = rec["max_combo"]
+        s.mods = Mods(rec["mods"])
+        s.acc = rec["acc"]
+        s.n300 = rec["n300"]
+        s.n100 = rec["n100"]
+        s.n50 = rec["n50"]
+        s.nmiss = rec["nmiss"]
+        s.ngeki = rec["ngeki"]
+        s.nkatu = rec["nkatu"]
+        s.grade = Grade.from_str(rec["grade"])
+        s.perfect = rec["perfect"] == 1
+        s.status = SubmissionStatus(rec["status"])
+        s.passed = s.status != SubmissionStatus.FAILED
+        s.mode = GameMode(rec["mode"])
+        s.server_time = rec["play_time"]
+        s.time_elapsed = rec["time_elapsed"]
+        s.client_flags = ClientFlags(rec["client_flags"])
+        s.client_checksum = rec["online_checksum"]
 
         if s.bmap:
             s.rank = await s.calculate_placement()
@@ -281,6 +263,9 @@ class Score:
         storyboard_checksum: str,
     ) -> str:
         """Validate the online checksum of the score."""
+        assert self.player is not None
+        assert self.bmap is not None
+
         return hashlib.md5(
             "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}".format(
                 self.n100 + self.n300,
@@ -308,6 +293,8 @@ class Score:
     """Methods to calculate internal data for a score."""
 
     async def calculate_placement(self) -> int:
+        assert self.bmap is not None
+
         if self.mode >= GameMode.RELAX_OSU:
             scoring_metric = "pp"
             score = self.pp
@@ -315,7 +302,7 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        better_scores = await app.state.services.database.fetch_val(
+        num_better_scores: int | None = await app.state.services.database.fetch_val(
             "SELECT COUNT(*) AS c FROM scores s "
             "INNER JOIN users u ON u.id = s.userid "
             "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
@@ -328,9 +315,8 @@ class Score:
             },
             column=0,  # COUNT(*)
         )
-
-        # TODO: idk if returns none
-        return better_scores + 1  # if better_scores is not None else 1
+        assert num_better_scores is not None
+        return num_better_scores + 1
 
     def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
@@ -355,32 +341,32 @@ class Score:
             scores=[score_args],
         )
 
-        return result[0]["performance"], result[0]["star_rating"]
+        return result[0]["performance"]["pp"], result[0]["difficulty"]["stars"]
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
-        # find any other `status = 2` scores we have
-        # on the map. If there are any, store
-        res = await app.state.services.database.fetch_one(
-            "SELECT id, pp FROM scores "
-            "WHERE userid = :user_id AND map_md5 = :map_md5 "
-            "AND mode = :mode AND status = 2",
-            {
-                "user_id": self.player.id,
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-            },
+        assert self.player is not None
+        assert self.bmap is not None
+
+        recs = await scores_repo.fetch_many(
+            user_id=self.player.id,
+            map_md5=self.bmap.md5,
+            mode=self.mode,
+            status=SubmissionStatus.BEST,
         )
 
-        if res:
+        if recs:
+            rec = recs[0]
+
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(res["id"])
+            self.prev_best = await Score.from_sql(rec["id"])
+            assert self.prev_best is not None
 
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > res["pp"]:
+            if self.pp > rec["pp"]:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
@@ -429,6 +415,19 @@ class Score:
             if total == 0:
                 return 0.0
 
+            if self.mods & Mods.SCOREV2:
+                return (
+                    100.0
+                    * (
+                        (self.n50 * 50.0)
+                        + (self.n100 * 100.0)
+                        + (self.nkatu * 200.0)
+                        + (self.n300 * 300.0)
+                        + (self.ngeki * 305.0)
+                    )
+                    / (total * 305.0)
+                )
+
             return (
                 100.0
                 * (
@@ -448,6 +447,8 @@ class Score:
         # TODO: move replay views to be per-score rather than per-user
         assert self.player is not None
 
+        # TODO: apparently cached stats don't store replay views?
+        #       need to refactor that to be able to use stats_repo here
         await app.state.services.database.execute(
             f"UPDATE stats "
             "SET replay_views = replay_views + 1 "

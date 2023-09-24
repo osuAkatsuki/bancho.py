@@ -2,14 +2,10 @@
 # in a lot of these classes; needs refactor.
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Iterable
+from collections.abc import Iterator
+from collections.abc import Sequence
 from typing import Any
-from typing import Iterable
-from typing import Iterator
-from typing import Optional
-from typing import overload
-from typing import Sequence
-from typing import Union
 
 import databases.core
 
@@ -26,6 +22,10 @@ from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
+from app.repositories import achievements as achievements_repo
+from app.repositories import channels as channels_repo
+from app.repositories import clans as clans_repo
+from app.repositories import players as players_repo
 from app.utils import make_safe_name
 
 __all__ = (
@@ -47,7 +47,7 @@ class Channels(list[Channel]):
     def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
-    def __contains__(self, o: Union[Channel, str]) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -55,68 +55,45 @@ class Channels(list[Channel]):
         else:
             return super().__contains__(o)
 
-    @overload
-    def __getitem__(self, index: int) -> Channel:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> Channel:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Channel]:
-        ...
-
-    def __getitem__(
-        self,
-        index: Union[int, slice, str],
-    ) -> Union[Channel, list[Channel]]:
-        # XXX: can be either a string (to get by name),
-        # or a slice, for indexing the internal array.
-        if isinstance(index, str):
-            return self.get_by_name(index)  # type: ignore
-        else:
-            return super().__getitem__(index)
-
     def __repr__(self) -> str:
         # XXX: we use the "real" name, aka
         # #multi_1 instead of #multiplayer
         # #spect_1 instead of #spectator.
         return f'[{", ".join(c._name for c in self)}]'
 
-    def get_by_name(self, name: str) -> Optional[Channel]:
+    def get_by_name(self, name: str) -> Channel | None:
         """Get a channel from the list by `name`."""
-        for c in self:
-            if c._name == name:
-                return c
+        for channel in self:
+            if channel._name == name:
+                return channel
 
         return None
 
-    def append(self, c: Channel) -> None:
-        """Append `c` to the list."""
-        super().append(c)
+    def append(self, channel: Channel) -> None:
+        """Append `channel` to the list."""
+        super().append(channel)
 
         if app.settings.DEBUG:
-            log(f"{c} added to channels list.")
+            log(f"{channel} added to channels list.")
 
-    def extend(self, cs: Iterable[Channel]) -> None:
-        """Extend the list with `cs`."""
-        super().extend(cs)
-
-        if app.settings.DEBUG:
-            log(f"{cs} added to channels list.")
-
-    def remove(self, c: Channel) -> None:
-        """Remove `c` from the list."""
-        super().remove(c)
+    def extend(self, channels: Iterable[Channel]) -> None:
+        """Extend the list with `channels`."""
+        super().extend(channels)
 
         if app.settings.DEBUG:
-            log(f"{c} removed from channels list.")
+            log(f"{channels} added to channels list.")
+
+    def remove(self, channel: Channel) -> None:
+        """Remove `channel` from the list."""
+        super().remove(channel)
+
+        if app.settings.DEBUG:
+            log(f"{channel} removed from channels list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM channels"):
+        for row in await channels_repo.fetch_many():
             self.append(
                 Channel(
                     name=row["name"],
@@ -128,70 +105,53 @@ class Channels(list[Channel]):
             )
 
 
-class Matches(list[Optional[Match]]):
+class Matches(list[Match | None]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
-        super().__init__([None] * 64)  # TODO: customizability?
+        super().__init__([None] * app.settings.MAX_MATCHES)
 
-    def __iter__(self) -> Iterator[Optional[Match]]:
+    def __iter__(self) -> Iterator[Match | None]:
         return super().__iter__()
 
     def __repr__(self) -> str:
         return f'[{", ".join(match.name for match in self if match)}]'
 
-    def get_free(self) -> Optional[int]:
+    def get_free(self) -> int | None:
         """Return the first free match id from `self`."""
-        for idx, m in enumerate(self):
-            if m is None:
+        for idx, match in enumerate(self):
+            if match is None:
                 return idx
 
         return None
 
-    def append(self, m: Match) -> bool:
-        """Append `m` to the list."""
-        if (free := self.get_free()) is not None:
-            # set the id of the match to the lowest available free.
-            m.id = free
-            self[free] = m
-
-            if app.settings.DEBUG:
-                log(f"{m} added to matches list.")
-
-            return True
-        else:
-            log(f"Match list is full! Could not add {m}.")
-            return False
-
-    # TODO: extend
-
-    def remove(self, m: Match) -> None:
-        """Remove `m` from the list."""
+    def remove(self, match: Match | None) -> None:
+        """Remove `match` from the list."""
         for i, _m in enumerate(self):
-            if m is _m:
+            if match is _m:
                 self[i] = None
                 break
 
         if app.settings.DEBUG:
-            log(f"{m} removed from matches list.")
+            log(f"{match} removed from matches list.")
 
 
 class Players(list[Player]):
     """The currently active players on the server."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
-    def __contains__(self, p: Union[Player, str]) -> bool:
+    def __contains__(self, player: object) -> bool:
         # allow us to either pass in the player
         # obj, or the player name as a string.
-        if isinstance(p, str):
-            return p in (player.name for player in self)
+        if isinstance(player, str):
+            return player in (player.name for player in self)
         else:
-            return super().__contains__(p)
+            return super().__contains__(player)
 
     def __repr__(self) -> str:
         return f'[{", ".join(map(repr, self))}]'
@@ -218,77 +178,85 @@ class Players(list[Player]):
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
-        for p in self:
-            if p not in immune:
-                p.enqueue(data)
+        for player in self:
+            if player not in immune:
+                player.enqueue(data)
 
-    @staticmethod
-    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
-        """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("token", "irc_key", "id", "name"):
-            if (val := kwargs.pop(attr, None)) is not None:
-                if attr == "name":
-                    attr = "safe_name"
-                    val = make_safe_name(val)
-
-                return attr, val
-        else:
-            raise ValueError("Incorrect call to Players.get()")
-
-    def get(self, **kwargs: object) -> Optional[Player]:
+    def get(
+        self,
+        token: str | None = None,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Get a player by token, irc_key, id, or name from cache."""
-        attr, val = self._parse_attr(kwargs)
-
-        for p in self:
-            if getattr(p, attr) == val:
-                return p
+        for player in self:
+            if token is not None:
+                if player.token == token:
+                    return player
+            elif id is not None:
+                if player.id == id:
+                    return player
+            # TODO: Add irc key
+            elif name is not None:
+                if player.safe_name == make_safe_name(name):
+                    return player
 
         return None
 
-    async def get_sql(self, **kwargs: object) -> Optional[Player]:
+    async def get_sql(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Get a player by token, irc_key, id, or name from sql."""
-        attr, val = self._parse_attr(kwargs)
-
+        # TODO: Add irc key
         # try to get from sql.
-        row = await app.state.services.database.fetch_one(
-            "SELECT id, name, priv, pw_bcrypt, country, "
-            "silence_end, donor_end, clan_id, clan_priv, api_key "
-            f"FROM users WHERE {attr} = :val",
-            {"val": val},
+        player = await players_repo.fetch_one(
+            id=id,
+            name=name,
+            fetch_all_fields=True,
         )
-
-        if not row:
+        if player is None:
             return None
 
-        row = dict(row)
+        clan: Clan | None = None
+        clan_priv: ClanPrivileges | None = None
+        if player["clan_id"] != 0:
+            clan = app.state.sessions.clans.get(id=player["clan_id"])
+            clan_priv = ClanPrivileges(player["clan_priv"])
 
-        # encode pw_bcrypt from str -> bytes.
-        row["pw_bcrypt"] = row["pw_bcrypt"].encode()
-
-        if row["clan_id"] != 0:
-            row["clan"] = app.state.sessions.clans.get(id=row["clan_id"])
-            row["clan_priv"] = ClanPrivileges(row["clan_priv"])
-        else:
-            row["clan"] = row["clan_priv"] = None
-
-        # country from acronym to {acronym, numeric}
-        row["geoloc"] = {
-            "latitude": 0.0,  # TODO
-            "longitude": 0.0,
-            "country": {
-                "acronym": row["country"],
-                "numeric": app.state.services.country_codes[row["country"]],
+        return Player(
+            id=player["id"],
+            name=player["name"],
+            pw_bcrypt=player["pw_bcrypt"].encode(),
+            priv=Privileges(player["priv"]),
+            clan=clan,
+            clan_priv=clan_priv,
+            geoloc={
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "country": {
+                    "acronym": player["country"],
+                    "numeric": app.state.services.country_codes[player["country"]],
+                },
             },
-        }
+            silence_end=player["silence_end"],
+            donor_end=player["donor_end"],
+            api_key=player["api_key"],
+        )
 
-        return Player(**row, token="")
-
-    async def from_cache_or_sql(self, **kwargs: object) -> Optional[Player]:
+    async def from_cache_or_sql(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None:
         """Try to get player from cache, or sql as fallback."""
-        if p := self.get(**kwargs):
-            return p
-        elif p := await self.get_sql(**kwargs):
-            return p
+        player = self.get(id=id, name=name)
+        if player is not None:
+            return player
+        player = await self.get_sql(id=id, name=name)
+        if player is not None:
+            return player
 
         return None
 
@@ -297,38 +265,41 @@ class Players(list[Player]):
         name: str,
         pw_md5: str,
         sql: bool = False,
-    ) -> Optional[Player]:
+    ) -> Player | None:
         """Return a player with a given name & pw_md5, from cache or sql."""
-        if not (p := self.get(name=name)):
-            if not sql:  # not to fetch from sql.
+        player = self.get(name=name)
+        if not player:
+            if not sql:
                 return None
 
-            if not (p := await self.get_sql(name=name)):
-                # no player found in sql either.
+            player = await self.get_sql(name=name)
+            if not player:
                 return None
 
-        if app.state.cache.bcrypt[p.pw_bcrypt] == pw_md5.encode():
-            return p
+        assert player.pw_bcrypt is not None
+
+        if app.state.cache.bcrypt[player.pw_bcrypt] == pw_md5.encode():
+            return player
 
         return None
 
-    def append(self, p: Player) -> None:
+    def append(self, player: Player) -> None:
         """Append `p` to the list."""
-        if p in self:
+        if player in self:
             if app.settings.DEBUG:
-                log(f"{p} double-added to global player list?")
+                log(f"{player} double-added to global player list?")
             return
 
-        super().append(p)
+        super().append(player)
 
-    def remove(self, p: Player) -> None:
+    def remove(self, player: Player) -> None:
         """Remove `p` from the list."""
-        if p not in self:
+        if player not in self:
             if app.settings.DEBUG:
-                log(f"{p} removed from player list when not online?")
+                log(f"{player} removed from player list when not online?")
             return
 
-        super().remove(p)
+        super().remove(player)
 
 
 class MapPools(list[MapPool]):
@@ -337,48 +308,23 @@ class MapPools(list[MapPool]):
     def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    @overload
-    def __getitem__(self, index: int) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[MapPool]:
-        ...
-
-    def __getitem__(
+    def get(
         self,
-        index: Union[int, slice, str],
-    ) -> Union[MapPool, list[MapPool]]:
-        """Allow slicing by either a string (for name), or slice."""
-        if isinstance(index, str):
-            return self.get_by_name(index)  # type: ignore
-        else:
-            return super().__getitem__(index)
-
-    @staticmethod
-    def _parse_attr(kwargs: dict[str, Any]) -> tuple[str, object]:
-        """Get first matched attr & val from input kwargs. Used in get() methods."""
-        for attr in ("id", "name"):
-            if (val := kwargs.pop(attr, None)) is not None:
-                return attr, val
-        else:
-            raise ValueError("Incorrect call to MapPools.get()")
-
-    def get(self, **kwargs: object) -> Optional[MapPool]:
+        id: int | None = None,
+        name: str | None = None,
+    ) -> MapPool | None:
         """Get a mappool by id, or name from cache."""
-        attr, val = self._parse_attr(kwargs)
-
-        for p in self:
-            if getattr(p, attr) == val:
-                return p
+        for player in self:
+            if id is not None:
+                if player.id == id:
+                    return player
+            elif name is not None:
+                if player.name == name:
+                    return player
 
         return None
 
-    def __contains__(self, o: Union[MapPool, str]) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -386,34 +332,34 @@ class MapPools(list[MapPool]):
         else:
             return o in self
 
-    def get_by_name(self, name: str) -> Optional[MapPool]:
+    def get_by_name(self, name: str) -> MapPool | None:
         """Get a pool from the list by `name`."""
-        for p in self:
-            if p.name == name:
-                return p
+        for player in self:
+            if player.name == name:
+                return player
 
         return None
 
-    def append(self, m: MapPool) -> None:
-        """Append `m` to the list."""
-        super().append(m)
+    def append(self, mappool: MapPool) -> None:
+        """Append `mappool` to the list."""
+        super().append(mappool)
 
         if app.settings.DEBUG:
-            log(f"{m} added to mappools list.")
+            log(f"{mappool} added to mappools list.")
 
-    def extend(self, ms: Iterable[MapPool]) -> None:
-        """Extend the list with `ms`."""
-        super().extend(ms)
-
-        if app.settings.DEBUG:
-            log(f"{ms} added to mappools list.")
-
-    def remove(self, m: MapPool) -> None:
-        """Remove `m` from the list."""
-        super().remove(m)
+    def extend(self, mappools: Iterable[MapPool]) -> None:
+        """Extend the list with `mappools`."""
+        super().extend(mappools)
 
         if app.settings.DEBUG:
-            log(f"{m} removed from mappools list.")
+            log(f"{mappools} added to mappools list.")
+
+    def remove(self, mappool: MapPool) -> None:
+        """Remove `mappool` from the list."""
+        super().remove(mappool)
+
+        if app.settings.DEBUG:
+            log(f"{mappool} removed from mappools list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
@@ -441,26 +387,7 @@ class Clans(list[Clan]):
     def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
-    @overload
-    def __getitem__(self, index: int) -> Clan:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> Clan:
-        ...
-
-    @overload
-    def __getitem__(self, index: slice) -> list[Clan]:
-        ...
-
-    def __getitem__(self, index: Union[int, str, slice]):
-        """Allow slicing by either a string (for name), or slice."""
-        if isinstance(index, str):
-            return self.get(name=index)
-        else:
-            return super().__getitem__(index)
-
-    def __contains__(self, o: Union[Clan, str]) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -468,49 +395,60 @@ class Clans(list[Clan]):
         else:
             return o in self
 
-    def get(self, **kwargs: object) -> Optional[Clan]:
+    def get(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+        tag: str | None = None,
+    ) -> Clan | None:
         """Get a clan by name, tag, or id."""
-        for attr in ("name", "tag", "id"):
-            if val := kwargs.pop(attr, None):
-                break
-        else:
-            raise ValueError("Incorrect call to Clans.get()")
-
-        for c in self:
-            if getattr(c, attr) == val:
-                return c
+        for clan in self:
+            if id is not None:
+                if clan.id == id:
+                    return clan
+            elif name is not None:
+                if clan.name == name:
+                    return clan
+            elif tag is not None:
+                if clan.tag == tag:
+                    return clan
 
         return None
 
-    def append(self, c: Clan) -> None:
-        """Append `c` to the list."""
-        super().append(c)
+    def append(self, clan: Clan) -> None:
+        """Append `clan` to the list."""
+        super().append(clan)
 
         if app.settings.DEBUG:
-            log(f"{c} added to clans list.")
+            log(f"{clan} added to clans list.")
 
-    def extend(self, cs: Iterable[Clan]) -> None:
-        """Extend the list with `cs`."""
-        super().extend(cs)
-
-        if app.settings.DEBUG:
-            log(f"{cs} added to clans list.")
-
-    def remove(self, c: Clan) -> None:
-        """Remove `m` from the list."""
-        super().remove(c)
+    def extend(self, clans: Iterable[Clan]) -> None:
+        """Extend the list with `clans`."""
+        super().extend(clans)
 
         if app.settings.DEBUG:
-            log(f"{c} removed from clans list.")
+            log(f"{clans} added to clans list.")
+
+    def remove(self, clan: Clan) -> None:
+        """Remove `clan` from the list."""
+        super().remove(clan)
+
+        if app.settings.DEBUG:
+            log(f"{clan} removed from clans list.")
 
     async def prepare(self, db_conn: databases.core.Connection) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM clans"):
-            row = dict(row)  # make a mutable copy
-            row["owner_id"] = row.pop("owner")
-            clan = Clan(**row)
-            await clan.members_from_sql(db_conn)
+        for row in await clans_repo.fetch_many():
+            clan_members = await players_repo.fetch_many(clan_id=row["id"])
+            clan = Clan(
+                id=row["id"],
+                name=row["name"],
+                tag=row["tag"],
+                created_at=row["created_at"],
+                owner_id=row["owner"],
+                member_ids={member["id"] for member in clan_members},
+            )
             self.append(clan)
 
 
@@ -521,12 +459,14 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     await app.state.sessions.clans.prepare(db_conn)
     await app.state.sessions.pools.prepare(db_conn)
 
-    bot_name = await app.utils.fetch_bot_name(db_conn)
+    bot = await players_repo.fetch_one(id=1)
+    if bot is None:
+        raise RuntimeError("Bot account not found in database.")
 
     # create bot & add it to online players
     app.state.sessions.bot = Player(
         id=1,
-        name=bot_name,
+        name=bot["name"],
         login_time=float(0x7FFFFFFF),  # (never auto-dc)
         priv=Privileges.UNRESTRICTED,
         bot_client=True,
@@ -534,12 +474,16 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.players.append(app.state.sessions.bot)
 
     # global achievements (sorted by vn gamemodes)
-    for row in await db_conn.fetch_all("SELECT * FROM achievements"):
-        # NOTE: achievement conditions are stored as stringified python
-        # expressions in the database to allow for extensive customizability.
-        row = dict(row)
-        condition = eval(f'lambda score, mode_vn: {row.pop("cond")}')
-        achievement = Achievement(**row, cond=condition)
+    for row in await achievements_repo.fetch_many():
+        achievement = Achievement(
+            id=row["id"],
+            file=row["file"],
+            name=row["name"],
+            desc=row["desc"],
+            # NOTE: achievement conditions are stored as stringified python
+            # expressions in the database to allow for extensive customizability.
+            cond=eval(f'lambda score, mode_vn: {row["cond"]}'),
+        )
 
         app.state.sessions.achievements.append(achievement)
 

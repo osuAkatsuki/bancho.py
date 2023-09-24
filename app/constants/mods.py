@@ -120,6 +120,8 @@ class Mods(IntFlag):
                     first_keymod = mod
                     break
 
+            assert first_keymod is not None
+
             # remove all but the first keymod.
             self &= ~(keymods_used & ~first_keymod)
 
@@ -136,11 +138,11 @@ class Mods(IntFlag):
         mod_strs = [s[idx : idx + 2].upper() for idx in range(0, len(s), 2)]
 
         # find matching mods
-        for m in mod_strs:
-            if m not in _dict:
+        for mod in mod_strs:
+            if mod not in _dict:
                 continue
 
-            mods |= _dict[m]
+            mods |= _dict[mod]
 
         return mods
 

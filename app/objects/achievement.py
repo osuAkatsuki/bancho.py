@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.objects.score import Score
 
 __all__ = ("Achievement",)
 
@@ -14,7 +18,7 @@ class Achievement:
         file: str,
         name: str,
         desc: str,
-        cond: Callable,
+        cond: Callable[[Score, int], bool],  # (score, mode) -> unlocked
     ) -> None:
         self.id = id
         self.file = file

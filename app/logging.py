@@ -3,9 +3,6 @@ from __future__ import annotations
 import colorsys
 import datetime
 from enum import IntEnum
-from typing import Optional
-from typing import overload
-from typing import Union
 from zoneinfo import ZoneInfo
 
 
@@ -37,15 +34,7 @@ class Ansi(IntEnum):
 
 
 class RGB:
-    @overload
-    def __init__(self, rgb: int) -> None:
-        ...
-
-    @overload
-    def __init__(self, r: int, g: int, b: int) -> None:
-        ...
-
-    def __init__(self, *args) -> None:
+    def __init__(self, *args: int) -> None:
         largs = len(args)
 
         if largs == 3:
@@ -70,10 +59,10 @@ class _Rainbow:
 
 Rainbow = _Rainbow()
 
-Colour_Types = Union[Ansi, RGB, _Rainbow]
+Colour_Types = Ansi | RGB | _Rainbow
 
 
-def get_timestamp(full: bool = False, tz: Optional[datetime.tzinfo] = None) -> str:
+def get_timestamp(full: bool = False, tz: ZoneInfo | None = None) -> str:
     fmt = "%d/%m/%Y %I:%M:%S%p" if full else "%I:%M:%S%p"
     return f"{datetime.datetime.now(tz=tz):{fmt}}"
 
@@ -83,7 +72,7 @@ def get_timestamp(full: bool = False, tz: Optional[datetime.tzinfo] = None) -> s
 _log_tz = ZoneInfo("GMT")  # default
 
 
-def set_timezone(tz: datetime.tzinfo) -> None:
+def set_timezone(tz: ZoneInfo) -> None:
     global _log_tz
     _log_tz = tz
 
@@ -95,8 +84,8 @@ def printc(msg: str, col: Colour_Types, end: str = "\n") -> None:
 
 def log(
     msg: str,
-    col: Optional[Colour_Types] = None,
-    file: Optional[str] = None,
+    col: Colour_Types | None = None,
+    file: str | None = None,
     end: str = "\n",
 ) -> None:
     """\
@@ -153,9 +142,10 @@ def print_rainbow(msg: str, rainbow_end: float = 2 / 3, end: str = "\n") -> None
 TIME_ORDER_SUFFIXES = ["nsec", "μsec", "msec", "sec"]
 
 
-def magnitude_fmt_time(t: Union[int, float]) -> str:  # in nanosec
+def magnitude_fmt_time(t: int | float) -> str:  # in nanosec
+    suffix = None
     for suffix in TIME_ORDER_SUFFIXES:
         if t < 1000:
             break
         t /= 1000
-    return f"{t:.2f} {suffix}"  # type: ignore
+    return f"{t:.2f} {suffix}"
