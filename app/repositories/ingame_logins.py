@@ -73,41 +73,23 @@ async def create(
     ingame_login = await app.state.services.database.fetch_one(query, params)
 
     assert ingame_login is not None
-    return cast(IngameLogin, ingame_login)
+    return cast(IngameLogin, dict(ingame_login._mapping))
 
 
 async def fetch_one(
     id: int | None = None,
-    user_id: int | None = None,
-    ip: str | None = None,
-    osu_ver: str | None = None,
-    osu_stream: str | None = None,
 ) -> IngameLogin | None:
     """Fetch a login entry from the database."""
-    if (
-        id is None
-        and user_id is None
-        and ip is None
-        and osu_ver is None
-        and osu_stream is None
-    ):
+    if id is None:
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ingame_logins
          WHERE id = COALESCE(:id, id)
-           AND userid = COALESCE(:userid, userid)
-           AND ip = COALESCE(:ip, ip)
-           AND osu_ver = COALESCE(:osu_ver, osu_ver)
-           AND osu_stream = COALESCE(:osu_stream, osu_stream)
     """
     params = {
         "id": id,
-        "userid": user_id,
-        "ip": ip,
-        "osu_ver": osu_ver,
-        "osu_stream": osu_stream,
     }
     ingame_login = await app.state.services.database.fetch_one(query, params)
 
@@ -131,7 +113,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -168,66 +150,3 @@ async def fetch_many(
 
     ingame_logins = await app.state.services.database.fetch_all(query, params)
     return cast(list[IngameLogin], ingame_logins)
-
-
-async def update(
-    id: int,
-    user_id: int | _UnsetSentinel = UNSET,
-    ip: str | _UnsetSentinel = UNSET,
-    osu_ver: str | _UnsetSentinel = UNSET,
-    osu_stream: str | _UnsetSentinel = UNSET,
-) -> IngameLogin | None:
-    """Update a login entry in the database."""
-    update_fields = UserUpdateFields = {}
-    if not isinstance(user_id, _UnsetSentinel):
-        update_fields["user_id"] = user_id
-    if not isinstance(ip, _UnsetSentinel):
-        update_fields["ip"] = ip
-    if not isinstance(osu_ver, _UnsetSentinel):
-        update_fields["osu_ver"] = osu_ver
-    if not isinstance(osu_stream, _UnsetSentinel):
-        update_fields["osu_stream"] = osu_stream
-
-    query = f"""\
-        UPDATE ingame_logins
-           SET {",".join(f"{k} = :{k}" for k in update_fields)}
-         WHERE id = :id
-    """
-    values = {"id": id} | update_fields
-    await app.state.services.database.execute(query, values)
-
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM ingame_logins
-        WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    ingame_login = await app.state.services.database.fetch_one(query, params)
-    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
-
-
-async def delete(id: int) -> IngameLogin | None:
-    """Delete a login entry from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM ingame_logins
-        WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    ingame_login = await app.state.services.database.fetch_one(query, params)
-    if ingame_login is None:
-        return None
-
-    query = """\
-        DELETE FROM ingame_logins
-              WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    await app.state.services.database.execute(query, params)
-    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
