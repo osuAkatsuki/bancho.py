@@ -25,7 +25,6 @@ from typing import NoReturn
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import TypeVar
 from urllib.parse import urlparse
 
 import psutil
@@ -64,9 +63,6 @@ from app.utils import seconds_readable
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
-
-
-R = TypeVar("R")
 
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
