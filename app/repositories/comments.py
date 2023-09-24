@@ -62,11 +62,11 @@ async def create(
 
 
 async def fetch_one(
-    target_id: Optional[int] = None,
-    target_type: Optional[str] = None,
-    userid: Optional[int] = None,
-    colour: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    target_id: int | None = None,
+    target_type: str | None = None,
+    userid: int | None = None,
+    colour: str | None = None,
+) -> dict[str, Any] | None:
     """Fetch a comment entry from the database."""
     if target_id is None and target_type is None and userid is None and colour is None:
         raise ValueError("Must provide at least one parameter.")
@@ -90,12 +90,12 @@ async def fetch_one(
 
 
 async def fetch_count(
-    target_id: Optional[int] = None,
-    target_type: Optional[str] = None,
-    userid: Optional[int] = None,
-    time: Optional[float] = None,
-    comment: Optional[str] = None,
-    colour: Optional[str] = None,
+    target_id: int | None = None,
+    target_type: str | None = None,
+    userid: int | None = None,
+    time: float | None = None,
+    comment: str | None = None,
+    colour: str | None = None,
 ) -> int:
     """Fetch the number of comments in the database."""
     query = """\
@@ -122,9 +122,9 @@ async def fetch_count(
 
 
 async def fetch_all(
-    score_id: Optional[int] = None,
-    map_set_id: Optional[int] = None,
-    map_id: Optional[int] = None,
+    score_id: int | None = None,
+    map_set_id: int | None = None,
+    map_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch a list of comments from the database."""
     query = f"""\
@@ -147,13 +147,13 @@ async def fetch_all(
 
 async def update(
     id: int,
-    target_id: Optional[int] = None,
-    target_type: Optional[str] = None,
-    userid: Optional[int] = None,
-    time: Optional[float] = None,
-    comment: Optional[str] = None,
-    colour: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    target_id: int | None = None,
+    target_type: str | None = None,
+    userid: int | None = None,
+    time: float | None = None,
+    comment: str | None = None,
+    colour: str | None = None,
+) -> dict[str, Any] | None:
     """Update a comment entry in the database."""
     query = """\
         UPDATE comments
@@ -188,7 +188,7 @@ async def update(
     return dict(rec) if rec is not None else None
 
 
-async def delete(id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> dict[str, Any] | None:
     """Delete a comment entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
