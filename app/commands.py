@@ -9,7 +9,6 @@ import signal
 import time
 import traceback
 import uuid
-from collections import Counter
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -27,6 +26,7 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from urllib.parse import urlparse
 
+import cpuinfo
 import psutil
 import timeago
 from pytimeparse.timeparse import timeparse
@@ -1227,18 +1227,13 @@ async def server(ctx: Context) -> str | None:
     uptime = int(time.time() - proc.create_time())
 
     # get info about our cpu
-    with open("/proc/cpuinfo") as f:
-        header = "model name\t: "
-        trailer = "\n"
-
-        model_names = Counter(
-            line[len(header) : -len(trailer)]
-            for line in f.readlines()
-            if line.startswith("model name")
-        )
+    cpu_info = cpuinfo.get_cpu_info()
 
     # list of all cpus installed with thread count
-    cpus_info = " | ".join(f"{v}x {k}" for k, v in model_names.most_common())
+    thread_count = cpu_info["count"]
+    cpu_name = cpu_info["brand_raw"]
+
+    cpu_info_str = f"{thread_count}x {cpu_name}"
 
     # get system-wide ram usage
     sys_ram = psutil.virtual_memory()
@@ -1275,7 +1270,7 @@ async def server(ctx: Context) -> str | None:
     return "\n".join(
         (
             f"{build_str} | uptime: {seconds_readable(uptime)}",
-            f"cpu(s): {cpus_info}",
+            f"cpu(s): {cpu_info_str}",
             f"ram: {ram_info}",
             f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
             f"osu!api connection: {using_osuapi}",

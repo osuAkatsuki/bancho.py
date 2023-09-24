@@ -117,7 +117,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
     async def on_startup() -> None:
         app.state.loop = asyncio.get_running_loop()
 
-        if os.geteuid() == 0:
+        if app.utils.is_running_as_admin():
             log(
                 "Running the server with root privileges is not recommended.",
                 Ansi.LRED,
