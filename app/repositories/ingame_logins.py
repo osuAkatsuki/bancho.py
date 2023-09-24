@@ -77,16 +77,13 @@ async def create(
 
 
 async def fetch_one(
-    id: int | None = None,
+    id: int,
 ) -> IngameLogin | None:
     """Fetch a login entry from the database."""
-    if id is None:
-        raise ValueError("Must provide at least one parameter.")
-
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ingame_logins
-         WHERE id = COALESCE(:id, id)
+         WHERE id = :id
     """
     params = {
         "id": id,
