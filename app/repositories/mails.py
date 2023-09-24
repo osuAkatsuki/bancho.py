@@ -70,7 +70,7 @@ async def fetch_one(
     from_id: int | None = None,
 ) -> Mail | None:
     """Fetch a mail entry from the database."""
-    if from_id is None and to_id is None and time is None and read is None:
+    if from_id is None:
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
