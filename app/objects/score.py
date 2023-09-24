@@ -6,7 +6,6 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
-from typing import cast
 from typing import TYPE_CHECKING
 
 import app.state
@@ -293,7 +292,7 @@ class Score:
 
     """Methods to calculate internal data for a score."""
 
-    async def calculate_placement(self) -> int:
+    async def calculate_placement(self) -> int | None:
         assert self.bmap is not None
 
         if self.mode >= GameMode.RELAX_OSU:
@@ -303,7 +302,7 @@ class Score:
             scoring_metric = "score"
             score = self.score
 
-        better_scores = await app.state.services.database.fetch_val(
+        num_better_scores: int | None = await app.state.services.database.fetch_val(
             "SELECT COUNT(*) AS c FROM scores s "
             "INNER JOIN users u ON u.id = s.userid "
             "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
@@ -316,9 +315,10 @@ class Score:
             },
             column=0,  # COUNT(*)
         )
+        if num_better_scores is None:
+            return None
 
-        # TODO: idk if returns none
-        return cast(int, better_scores) + 1  # if better_scores is not None else 1
+        return num_better_scores + 1
 
     def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""
