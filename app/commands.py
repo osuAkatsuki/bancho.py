@@ -2271,7 +2271,6 @@ async def pool_info(ctx: Context) -> str | None:
     datetime_fmt = f"Created at {_time} on {_date}"
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
-    # TODO: test that this functions
     for (mods, slot), bmap in sorted(
         pool.maps.items(),
         key=lambda x: (repr(x[0][0]), x[0][1]),
