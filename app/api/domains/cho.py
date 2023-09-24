@@ -83,7 +83,7 @@ router = APIRouter(tags=["Bancho API"])
 
 
 @router.get("/")
-async def bancho_http_handler():
+async def bancho_http_handler() -> Response:
     """Handle a request from a web browser."""
     new_line = "\n"
     matches = [m for m in app.state.sessions.matches if m is not None]
@@ -109,7 +109,7 @@ async def bancho_http_handler():
 
 
 @router.get("/online")
-async def bancho_view_online_users():
+async def bancho_view_online_users() -> Response:
     """see who's online"""
     new_line = "\n"
 
@@ -132,7 +132,7 @@ bots:
 
 
 @router.get("/matches")
-async def bancho_view_matches():
+async def bancho_view_matches() -> Response:
     """ongoing matches"""
     new_line = "\n"
 
@@ -173,7 +173,7 @@ async def bancho_handler(
     request: Request,
     osu_token: str | None = Header(None),
     user_agent: Literal["osu!"] = Header(...),
-):
+) -> Response:
     ip = app.state.services.ip_resolver.get_ip(request.headers)
 
     if osu_token is None:

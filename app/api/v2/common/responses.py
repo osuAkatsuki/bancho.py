@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import cast
 from typing import Generic
 from typing import Literal
 from typing import TypeVar
@@ -20,21 +21,21 @@ class Success(BaseModel, Generic[T]):
 
 
 def success(
-    content: Any,
+    content: T,
     status_code: int = 200,
     headers: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
-) -> Any:
+) -> Success[T]:
     if meta is None:
         meta = {}
     data = {"status": "success", "data": content, "meta": meta}
-    return json.ORJSONResponse(data, status_code, headers)
+    # XXX:HACK to make typing work
+    return cast(Success[T], json.ORJSONResponse(data, status_code, headers))
 
 
-class ErrorResponse(BaseModel, Generic[T]):
+class Failure(BaseModel):
     status: Literal["error"]
-    error: T
-    message: str
+    error: str
 
 
 def failure(
@@ -42,6 +43,7 @@ def failure(
     message: str,
     status_code: int = 400,
     headers: dict[str, Any] | None = None,
-) -> Any:
+) -> Failure:
     data = {"status": "error", "error": message}
-    return json.ORJSONResponse(data, status_code, headers)
+    # XXX:HACK to make typing work
+    return cast(Failure, json.ORJSONResponse(data, status_code, headers))

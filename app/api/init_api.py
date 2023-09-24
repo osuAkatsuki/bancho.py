@@ -22,7 +22,7 @@ import app.bg_loops
 import app.settings
 import app.state
 import app.utils
-from app.api import api_router
+from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
 from app.logging import Ansi

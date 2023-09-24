@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import date
 from datetime import datetime
 from typing import Any
 from typing import cast
@@ -30,7 +31,7 @@ class IngameLogin(TypedDict):
     id: int
     userid: str
     ip: str
-    osu_ver: str
+    osu_ver: date
     osu_stream: str
     datetime: datetime
 
@@ -38,14 +39,14 @@ class IngameLogin(TypedDict):
 class InGameLoginUpdateFields(TypedDict, total=False):
     userid: str
     ip: str
-    osu_ver: str
+    osu_ver: date
     osu_stream: str
 
 
 async def create(
     user_id: int,
     ip: str,
-    osu_ver: str,
+    osu_ver: date,
     osu_stream: str,
 ) -> IngameLogin:
     """Create a new login entry in the database."""
@@ -113,7 +114,7 @@ async def fetch_count(
 async def fetch_many(
     user_id: int | None = None,
     ip: str | None = None,
-    osu_ver: str | None = None,
+    osu_ver: date | None = None,
     osu_stream: str | None = None,
     page: int | None = None,
     page_size: int | None = None,
