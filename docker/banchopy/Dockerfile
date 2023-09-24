@@ -27,4 +27,4 @@ COPY . .
 
 # start bancho.py
 ENTRYPOINT [ "/bin/bash", "-c" ]
-CMD ["make run-prod"]
+CMD ["make run"]
