@@ -68,27 +68,6 @@ def make_safe_name(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
-def _download_achievement_images_mirror(achievements_path: Path) -> bool:
-    """Download all used achievement images (using mirror's zip)."""
-
-    # NOTE: this is currently disabled as there's
-    #       not much benefit to maintaining it
-    return False
-
-    log("Downloading achievement images from mirror.", Ansi.LCYAN)
-    resp = requests.get("https://cmyui.xyz/achievement_images.zip")
-
-    if resp.status_code != status.HTTP_200_OK:
-        log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
-        return False
-
-    with io.BytesIO(resp.content) as data:
-        with zipfile.ZipFile(data) as myfile:
-            myfile.extractall(achievements_path)
-
-    return True
-
-
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
     """Download all used achievement images (one by one, from osu!)."""
     achs: list[str] = []
@@ -133,12 +112,9 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
 
 def download_achievement_images(achievements_path: Path) -> None:
     """Download all used achievement images (using the best available source)."""
-    # try using my cmyui.xyz mirror (zip file)
-    downloaded = _download_achievement_images_mirror(achievements_path)
 
-    if not downloaded:
-        # as fallback, download individual files from osu!
-        downloaded = _download_achievement_images_osu(achievements_path)
+    # download individual files from the official osu! servers
+    downloaded = _download_achievement_images_osu(achievements_path)
 
     if downloaded:
         log("Downloaded all achievement images.", Ansi.LGREEN)
