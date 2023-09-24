@@ -20,7 +20,7 @@ py3rijndael = "*"
 pytimeparse = "*"
 redis = "*"
 sqlalchemy = "1.4.41"
-databases = {extras = ["mysql"], version = "*"}
+databases = {extras = ["mysql"] }
 akatsuki-pp-py = "*"
 cryptography = "*"
 tenacity = "*"
@@ -36,6 +36,8 @@ autoflake = "*"
 asgi-lifespan = "*"
 pytest-asyncio = "*"
 types-psutil = "*"
+types-pymysql = "*"
+types-requests = "*"
 
 [requires]
 python_version = "3.11"
