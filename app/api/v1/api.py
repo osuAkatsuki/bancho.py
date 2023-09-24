@@ -303,7 +303,7 @@ async def api_get_player_info(
                 "sh_count": mode_stats["sh_count"],
                 "s_count": mode_stats["s_count"],
                 "a_count": mode_stats["a_count"],
-                # extra stuff
+                # extra fields are added to the api response
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
             }
