@@ -7,6 +7,9 @@ test:
 lint:
 	pipenv run pre-commit run --all-files
 
+type-check:
+	pipenv run mypy .
+
 install:
 	PIPENV_VENV_IN_PROJECT=1 pipenv install
 
