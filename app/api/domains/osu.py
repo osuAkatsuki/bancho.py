@@ -36,14 +36,13 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
-from py3rijndael import Pkcs7Padding
-from py3rijndael import RijndaelCbc
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.packets
 import app.settings
 import app.state
 import app.utils
+from app import encryption
 from app._typing import UNSET
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
@@ -613,28 +612,6 @@ def parse_form_data_score_params(
         )
 
 
-def decrypt_score_aes_data(
-    # to decode
-    score_data_b64: bytes,
-    client_hash_b64: bytes,
-    # used for decoding
-    iv_b64: bytes,
-    osu_version: str,
-) -> tuple[list[str], str]:
-    """Decrypt the base64'ed score data."""
-    aes = RijndaelCbc(
-        key=f"osu!-scoreburgr---------{osu_version}".encode(),
-        iv=b64decode(iv_b64),
-        padding=Pkcs7Padding(32),
-        block_size=32,
-    )
-
-    score_data = aes.decrypt(b64decode(score_data_b64)).decode().split(":")
-    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
-
-    return score_data, client_hash_decoded
-
-
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
@@ -674,7 +651,7 @@ async def osuSubmitModularSelector(
     score_data_b64, replay_file = score_parameters
 
     # decrypt the score data (aes)
-    score_data, client_hash_decoded = decrypt_score_aes_data(
+    score_data, client_hash_decoded = encryption.decrypt_score_aes_data(
         score_data_b64,
         client_hash_b64,
         iv_b64,
@@ -1031,9 +1008,7 @@ async def osuSubmitModularSelector(
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
-            )
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
             bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
