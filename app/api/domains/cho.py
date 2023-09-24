@@ -622,27 +622,23 @@ async def login(
 
     login_time = time.time()
 
-    # TODO: improve tournament client support
+    # disallow multiple sessions from a single user
+    # with the exception of tourney spectator clients
     player = app.state.sessions.players.get(name=login_data["username"])
-    if player:
-        # player is already logged in - allow this only for tournament clients
-
-        if not (osu_version.stream == "tourney" or player.tourney_client):
-            # neither session is a tournament client, disallow
-
-            if (login_time - player.last_recv_time) > 10:
-                # let this session overrule the existing one
-                # (this is made to help prevent user ghosting)
-                player.logout()
-            else:
-                # current session is still active, disallow
-                return {
-                    "osu_token": "user-ghosted",
-                    "response_body": (
-                        app.packets.user_id(-1)
-                        + app.packets.notification("User already logged in.")
-                    ),
-                }
+    if player and osu_version.stream != "tourney":
+        # check if the existing session is still active
+        if (login_time - player.last_recv_time) < 10:
+            return {
+                "osu_token": "user-already-logged-in",
+                "response_body": (
+                    app.packets.user_id(-1)
+                    + app.packets.notification("User already logged in.")
+                ),
+            }
+        else:
+            # session is not active; replace it
+            player.logout()
+            del player
 
     user_info = await players_repo.fetch_one(
         name=login_data["username"],
