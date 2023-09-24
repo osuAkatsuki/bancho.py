@@ -6,6 +6,7 @@ from fastapi import status
 from fastapi.param_functions import Query
 
 from app.api.v2.common import responses
+from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.clans import Clan
 from app.repositories import clans as clans_repo
@@ -17,7 +18,7 @@ router = APIRouter()
 async def get_clans(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-) -> Success[list[Clan]]:
+) -> Success[list[Clan]] | Failure:
     clans = await clans_repo.fetch_many(
         page=page,
         page_size=page_size,
@@ -36,7 +37,7 @@ async def get_clans(
 
 
 @router.get("/clans/{clan_id}")
-async def get_clan(clan_id: int) -> Success[Clan]:
+async def get_clan(clan_id: int) -> Success[Clan] | Failure:
     data = await clans_repo.fetch_one(id=clan_id)
     if data is None:
         return responses.failure(
