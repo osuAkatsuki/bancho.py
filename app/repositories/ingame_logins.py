@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import textwrap
 from datetime import datetime
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -54,7 +55,7 @@ async def create(
         INSERT INTO ingame_logins (userid, ip, osu_ver, osu_stream, datetime)
              VALUES (:userid, :ip, :osu_ver, :osu_stream, NOW())
     """
-    params = {
+    params: dict[str, Any] = {
         "userid": user_id,
         "ip": ip,
         "osu_ver": osu_ver,
@@ -76,16 +77,14 @@ async def create(
     return cast(IngameLogin, dict(ingame_login._mapping))
 
 
-async def fetch_one(
-    id: int,
-) -> IngameLogin | None:
+async def fetch_one(id: int) -> IngameLogin | None:
     """Fetch a login entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ingame_logins
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     ingame_login = await app.state.services.database.fetch_one(query, params)
@@ -104,7 +103,7 @@ async def fetch_count(
         WHERE userid = COALESCE(:userid, userid)
           AND ip = COALESCE(:ip, ip)
     """
-    params = {
+    params: dict[str, Any] = {
         "userid": user_id,
         "ip": ip,
     }
@@ -130,7 +129,7 @@ async def fetch_many(
            AND osu_ver = COALESCE(:osu_ver, osu_ver)
            AND osu_stream = COALESCE(:osu_stream, osu_stream)
     """
-    params = {
+    params: dict[str, Any] = {
         "userid": user_id,
         "ip": ip,
         "osu_ver": osu_ver,
