@@ -443,7 +443,6 @@ class IRCServer:
             self.callback_handler,
             self.host,
             self.port,
-            loop=self.loop,
         )
 
         sockname = server.sockets[0].getsockname()
