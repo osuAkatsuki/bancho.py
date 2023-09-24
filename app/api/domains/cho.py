@@ -1174,7 +1174,7 @@ class SendPrivateMessage(BasePacket):
 
         if target is not app.state.sessions.bot:
             # target is not bot, send the message normally if online
-            if target.online:
+            if target.is_online:
                 target.send(msg, sender=player)
             else:
                 # inform user they're offline, but

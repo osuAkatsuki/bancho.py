@@ -14,6 +14,7 @@ from enum import unique
 from functools import cache
 from functools import lru_cache
 from typing import Any
+from typing import cast
 from typing import NamedTuple
 from typing import TYPE_CHECKING
 
@@ -404,23 +405,23 @@ class BanchoPacketReader:
     def read_f16(self) -> float:
         (val,) = struct.unpack_from("<e", self.body_view[:2])
         self.body_view = self.body_view[2:]
-        return val
+        return cast(float, val)
 
     def read_f32(self) -> float:
         (val,) = struct.unpack_from("<f", self.body_view[:4])
         self.body_view = self.body_view[4:]
-        return val
+        return cast(float, val)
 
     def read_f64(self) -> float:
         (val,) = struct.unpack_from("<d", self.body_view[:8])
         self.body_view = self.body_view[8:]
-        return val
+        return cast(float, val)
 
     # complex types
 
     # XXX: some osu! packets use i16 for
     # array length, while others use i32
-    def read_i32_list_i16l(self) -> tuple[int]:
+    def read_i32_list_i16l(self) -> tuple[int, ...]:
         length = int.from_bytes(self.body_view[:2], "little")
         self.body_view = self.body_view[2:]
 
@@ -428,7 +429,7 @@ class BanchoPacketReader:
         self.body_view = self.body_view[length * 4 :]
         return val
 
-    def read_i32_list_i32l(self) -> tuple[int]:
+    def read_i32_list_i32l(self) -> tuple[int, ...]:
         length = int.from_bytes(self.body_view[:4], "little")
         self.body_view = self.body_view[4:]
 
@@ -645,6 +646,7 @@ def write_match(m: Match, send_pw: bool = True) -> bytearray:
 
     for s in m.slots:
         if s.status & 0b01111100 != 0:  # SlotStatus.has_player
+            assert s.player is not None
             ret += s.player.id.to_bytes(4, "little")
 
     ret += m.host.id.to_bytes(4, "little")
@@ -1172,6 +1174,7 @@ def restart_server(ms: int) -> bytes:
 
 # packet id: 88
 def match_invite(player: Player, target_name: str) -> bytes:
+    assert player.match is not None
     msg = f"Come join my game: {player.match.embed}."
     return write(
         ServerPackets.MATCH_INVITE,

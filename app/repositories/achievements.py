@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -70,7 +71,7 @@ async def create(
     achievement = await app.state.services.database.fetch_one(query, params)
 
     assert achievement is not None
-    return cast(Achievement, achievement)
+    return cast(Achievement, dict(achievement._mapping))
 
 
 async def fetch_one(
@@ -93,7 +94,11 @@ async def fetch_one(
     }
     achievement = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Achievement, achievement) if achievement is not None else None
+    return (
+        cast(Achievement, dict(achievement._mapping))
+        if achievement is not None
+        else None
+    )
 
 
 async def fetch_count() -> int:
@@ -102,11 +107,11 @@ async def fetch_count() -> int:
         SELECT COUNT(*) AS count
           FROM achievements
     """
-    params = {}
+    params: dict[str, Any] = {}
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -118,7 +123,7 @@ async def fetch_many(
         SELECT {READ_PARAMS}
           FROM achievements
     """
-    params = {}
+    params: dict[str, Any] = {}
 
     if page is not None and page_size is not None:
         query += """\
@@ -129,7 +134,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     achievements = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Achievement], achievements) if achievements is not None else None
+    return cast(list[Achievement], [dict(a._mapping) for a in achievements])
 
 
 async def update(
@@ -140,7 +145,7 @@ async def update(
     cond: str | _UnsetSentinel = UNSET,
 ) -> Achievement | None:
     """Update an existing achievement."""
-    update_fields = AchievementUpdateFields = {}
+    update_fields: AchievementUpdateFields = {}
     if not isinstance(file, _UnsetSentinel):
         update_fields["file"] = file
     if not isinstance(name, _UnsetSentinel):
@@ -182,8 +187,8 @@ async def delete(
     params = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
+    achievement = await app.state.services.database.fetch_one(query, params)
+    if achievement is None:
         return None
 
     query = """\
@@ -193,5 +198,9 @@ async def delete(
     params = {
         "id": id,
     }
-    achievement = await app.state.services.database.execute(query, params)
-    return cast(Achievement, achievement) if achievement is not None else None
+    await app.state.services.database.execute(query, params)
+    return (
+        cast(Achievement, dict(achievement._mapping))
+        if achievement is not None
+        else None
+    )

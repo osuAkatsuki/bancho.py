@@ -66,6 +66,9 @@ if TYPE_CHECKING:
     from app.objects.channel import Channel
 
 
+R = TypeVar("R")
+
+
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
@@ -393,17 +396,20 @@ async def top(ctx: Context) -> str | None:
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
-    scores = await app.state.services.database.fetch_all(
-        "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
-        "FROM scores s "
-        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND b.status in (2, 3) "
-        "ORDER BY s.pp DESC LIMIT 10",
-        {"user_id": player.id, "mode": mode},
-    )
+    scores = [
+        dict(s._mapping)
+        for s in await app.state.services.database.fetch_all(
+            "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
+            "FROM scores s "
+            "LEFT JOIN maps b ON b.md5 = s.map_md5 "
+            "WHERE s.userid = :user_id "
+            "AND s.mode = :mode "
+            "AND s.status = 2 "
+            "AND b.status in (2, 3) "
+            "ORDER BY s.pp DESC LIMIT 10",
+            {"user_id": player.id, "mode": mode},
+        )
+    ]
 
     if not scores:
         return "No scores"
@@ -856,7 +862,11 @@ async def user(ctx: Context) -> str | None:
     else:
         last_np = None
 
-    osu_version = player.client_details.osu_version.date if player.online else "Unknown"
+    if player.is_online and player.client_details is not None:
+        osu_version = player.client_details.osu_version.date
+    else:
+        osu_version = "Unknown"
+
     donator_info = (
         f"True (ends {timeago.format(player.donor_end)})"
         if player.priv & Privileges.DONATOR != 0
@@ -906,7 +916,7 @@ async def restrict(ctx: Context) -> str | None:
     await target.restrict(admin=ctx.player, reason=reason)
 
     # refresh their client state
-    if target.online:
+    if target.is_online:
         target.logout()
 
     return f"{target} was restricted."
@@ -937,7 +947,7 @@ async def unrestrict(ctx: Context) -> str | None:
     await target.unrestrict(ctx.player, reason)
 
     # refresh their client state
-    if target.online:
+    if target.is_online:
         target.logout()
 
     return f"{target} was unrestricted."
@@ -1338,8 +1348,6 @@ if app.settings.DEVELOPER_MODE:
 # The commands below for multiplayer match management.
 # Most commands are open to player usage.
 """
-
-R = TypeVar("R", bound=Optional[str])
 
 
 def ensure_match(
@@ -2263,9 +2271,10 @@ async def pool_info(ctx: Context) -> str | None:
     datetime_fmt = f"Created at {_time} on {_date}"
     l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
 
+    # TODO: test that this functions
     for (mods, slot), bmap in sorted(
         pool.maps.items(),
-        key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
+        key=lambda x: (repr(x[0][0]), x[0][1]),
     ):
         l.append(f"{mods!r}{slot}: {bmap.embed}")
 

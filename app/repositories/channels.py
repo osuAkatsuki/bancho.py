@@ -125,7 +125,7 @@ async def fetch_count(
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -169,7 +169,7 @@ async def update(
     auto_join: bool | _UnsetSentinel = UNSET,
 ) -> Channel | None:
     """Update a channel in the database."""
-    update_fields = ChannelUpdateFields = {}
+    update_fields: ChannelUpdateFields = {}
     if not isinstance(topic, _UnsetSentinel):
         update_fields["topic"] = topic
     if not isinstance(read_priv, _UnsetSentinel):

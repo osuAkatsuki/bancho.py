@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -236,7 +235,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(

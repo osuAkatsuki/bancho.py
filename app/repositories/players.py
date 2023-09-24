@@ -171,7 +171,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -236,7 +236,7 @@ async def update(
     api_key: str | None | _UnsetSentinel = UNSET,
 ) -> Player | None:
     """Update a player in the database."""
-    update_fields = PlayerUpdateFields = {}
+    update_fields: PlayerUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
     if not isinstance(email, _UnsetSentinel):

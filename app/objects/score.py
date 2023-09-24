@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import cast
 from typing import TYPE_CHECKING
 
 import app.state
@@ -88,10 +89,10 @@ class Score:
 
     Possibly confusing attributes
     -----------
-    bmap: Optional[`Beatmap`]
+    bmap: `Beatmap | None`
         A beatmap obj representing the osu map.
 
-    player: Optional[`Player`]
+    player: `Player | None`
         A player obj of the player who submitted the score.
 
     grade: `Grade`
@@ -109,7 +110,7 @@ class Score:
     client_flags: `int`
         osu!'s old anticheat flags.
 
-    prev_best: Optional[`Score`]
+    prev_best: `Score | None`
         The previous best score before this play was submitted.
         NOTE: just because a score has a `prev_best` attribute does
         mean the score is our best score on the map! the `status`
@@ -159,6 +160,7 @@ class Score:
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
         try:
+            assert self.bmap is not None
             return (
                 f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
                 f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
@@ -316,7 +318,7 @@ class Score:
         )
 
         # TODO: idk if returns none
-        return better_scores + 1  # if better_scores is not None else 1
+        return cast(int, better_scores) + 1  # if better_scores is not None else 1
 
     def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""

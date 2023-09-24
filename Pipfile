@@ -32,6 +32,7 @@ pre-commit = "*"
 black = "*"
 reorder-python-imports = "*"
 mypy = "*"
+autoflake = "*"
 
 [requires]
 python_version = "3.11"

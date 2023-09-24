@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from collections.abc import Iterator
 from collections.abc import Sequence
-from typing import Optional
+from typing import Any
 from typing import overload
+from typing import SupportsIndex
 
 import databases.core
 
@@ -48,7 +49,7 @@ class Channels(list[Channel]):
     def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
-    def __contains__(self, o: Channel | str) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -57,11 +58,11 @@ class Channels(list[Channel]):
             return super().__contains__(o)
 
     @overload
-    def __getitem__(self, index: int) -> Channel:
+    def __getitem__(self, index: str) -> Channel:
         ...
 
     @overload
-    def __getitem__(self, index: str) -> Channel:
+    def __getitem__(self, index: SupportsIndex) -> Channel:
         ...
 
     @overload
@@ -70,12 +71,12 @@ class Channels(list[Channel]):
 
     def __getitem__(
         self,
-        index: int | slice | str,
-    ) -> Channel | list[Channel]:
+        index: str | SupportsIndex | slice,
+    ) -> Channel | None | list[Channel]:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
-            return self.get_by_name(index)  # type: ignore
+            return self.get_by_name(index)
         else:
             return super().__getitem__(index)
 
@@ -129,7 +130,7 @@ class Channels(list[Channel]):
             )
 
 
-class Matches(list[Optional[Match]]):
+class Matches(list[Match | None]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
@@ -149,25 +150,7 @@ class Matches(list[Optional[Match]]):
 
         return None
 
-    def append(self, match: Match) -> bool:
-        """Append `match` to the list."""
-        free = self.get_free()
-        if free is not None:
-            # set the id of the match to the lowest available free.
-            match.id = free
-            self[free] = match
-
-            if app.settings.DEBUG:
-                log(f"{match} added to matches list.")
-
-            return True
-        else:
-            log(f"Match list is full! Could not add {match}.")
-            return False
-
-    # TODO: extend
-
-    def remove(self, match: Match) -> None:
+    def remove(self, match: Match | None) -> None:
         """Remove `match` from the list."""
         for i, _m in enumerate(self):
             if match is _m:
@@ -181,13 +164,13 @@ class Matches(list[Optional[Match]]):
 class Players(list[Player]):
     """The currently active players on the server."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
-    def __contains__(self, player: Player | str) -> bool:
+    def __contains__(self, player: object) -> bool:
         # allow us to either pass in the player
         # obj, or the player name as a string.
         if isinstance(player, str):
@@ -349,11 +332,7 @@ class MapPools(list[MapPool]):
         return super().__iter__()
 
     @overload
-    def __getitem__(self, index: int) -> MapPool:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> MapPool:
+    def __getitem__(self, index: SupportsIndex) -> MapPool:
         ...
 
     @overload
@@ -362,7 +341,7 @@ class MapPools(list[MapPool]):
 
     def __getitem__(
         self,
-        index: int | slice | str,
+        index: SupportsIndex | slice,
     ) -> MapPool | list[MapPool]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
@@ -386,7 +365,7 @@ class MapPools(list[MapPool]):
 
         return None
 
-    def __contains__(self, o: MapPool | str) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -450,25 +429,21 @@ class Clans(list[Clan]):
         return super().__iter__()
 
     @overload
-    def __getitem__(self, index: int) -> Clan:
-        ...
-
-    @overload
-    def __getitem__(self, index: str) -> Clan:
+    def __getitem__(self, index: SupportsIndex) -> Clan:
         ...
 
     @overload
     def __getitem__(self, index: slice) -> list[Clan]:
         ...
 
-    def __getitem__(self, index: int | str | slice):
+    def __getitem__(self, index: SupportsIndex | slice) -> Clan | None | list[Clan]:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Clan | str) -> bool:
+    def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):

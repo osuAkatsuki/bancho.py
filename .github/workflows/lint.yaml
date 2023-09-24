@@ -21,4 +21,4 @@ jobs:
       - name: Install dependencies
         run: pipenv install --dev --deploy
       - name: Run mypy
-        run: pipenv run mypy --strict --ignore-missing-imports .
+        run: pipenv run mypy .

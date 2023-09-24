@@ -3,7 +3,6 @@ from __future__ import annotations
 import colorsys
 import datetime
 from enum import IntEnum
-from typing import Union
 from zoneinfo import ZoneInfo
 
 
@@ -35,7 +34,7 @@ class Ansi(IntEnum):
 
 
 class RGB:
-    def __init__(self, *args) -> None:
+    def __init__(self, *args: int) -> None:
         largs = len(args)
 
         if largs == 3:
@@ -60,7 +59,7 @@ class _Rainbow:
 
 Rainbow = _Rainbow()
 
-Colour_Types = Union[Ansi, RGB, _Rainbow]
+Colour_Types = Ansi | RGB | _Rainbow
 
 
 def get_timestamp(full: bool = False, tz: ZoneInfo | None = None) -> str:
@@ -144,8 +143,9 @@ TIME_ORDER_SUFFIXES = ["nsec", "μsec", "msec", "sec"]
 
 
 def magnitude_fmt_time(t: int | float) -> str:  # in nanosec
+    suffix = None
     for suffix in TIME_ORDER_SUFFIXES:
         if t < 1000:
             break
         t /= 1000
-    return f"{t:.2f} {suffix}"  # type: ignore
+    return f"{t:.2f} {suffix}"

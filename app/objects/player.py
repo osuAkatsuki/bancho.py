@@ -9,6 +9,7 @@ from enum import IntEnum
 from enum import unique
 from functools import cached_property
 from typing import Any
+from typing import cast
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
@@ -253,7 +254,7 @@ class Player:
 
         # generate a token if not given
         token = extras.get("token", None)
-        if token is not None:
+        if token is not None and isinstance(token, str):
             self.token = token
         else:
             self.token = self.generate_token()
@@ -334,7 +335,7 @@ class Player:
         return f"<{self.name} ({self.id})>"
 
     @property
-    def online(self) -> bool:
+    def is_online(self) -> bool:
         return self.token != ""
 
     @property
@@ -479,7 +480,7 @@ class Player:
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
 
-        if self.online:
+        if self.is_online:
             # if they're online, send a packet
             # to update their client-side privileges
             self.enqueue(app.packets.bancho_privileges(self.bancho_priv))
@@ -496,7 +497,7 @@ class Player:
         if "bancho_priv" in self.__dict__:
             del self.bancho_priv  # wipe cached_property
 
-        if self.online:
+        if self.is_online:
             # if they're online, send a packet
             # to update their client-side privileges
             self.enqueue(app.packets.bancho_privileges(self.bancho_priv))
@@ -532,7 +533,7 @@ class Player:
             await webhook.post(app.state.services.http_client)
 
         # refresh their client state
-        if self.online:
+        if self.is_online:
             self.logout()
 
     async def unrestrict(self, admin: Player, reason: str) -> None:
@@ -546,7 +547,7 @@ class Player:
             {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
         )
 
-        if not self.online:
+        if not self.is_online:
             async with app.state.services.database.connection() as db_conn:
                 await self.stats_from_sql_full(db_conn)
 
@@ -569,7 +570,7 @@ class Player:
             webhook = Webhook(webhook_url, content=log_msg)
             await webhook.post(app.state.services.http_client)
 
-        if self.online:
+        if self.is_online:
             # log the user out if they're offline, this
             # will simply relog them and refresh their app.state
             self.logout()
@@ -1003,7 +1004,7 @@ class Player:
             f"bancho:leaderboard:{mode.value}",
             str(self.id),
         )
-        return rank + 1 if rank is not None else 0
+        return cast(int, rank) + 1 if rank is not None else 0
 
     async def get_country_rank(self, mode: GameMode) -> int:
         if self.restricted:
@@ -1015,7 +1016,7 @@ class Player:
             str(self.id),
         )
 
-        return rank + 1 if rank is not None else 0
+        return cast(int, rank) + 1 if rank is not None else 0
 
     async def update_rank(self, mode: GameMode) -> int:
         country = self.geoloc["country"]["acronym"]

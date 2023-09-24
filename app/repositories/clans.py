@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import cast
 from typing import TypedDict
 
@@ -30,7 +31,7 @@ class Clan(TypedDict):
     name: str
     tag: str
     owner: int
-    created_at: str
+    created_at: datetime
 
 
 class ClanUpdateFields(TypedDict, total=False):
@@ -102,7 +103,7 @@ async def fetch_count() -> int:
     """
     rec = await app.state.services.database.fetch_one(query)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(

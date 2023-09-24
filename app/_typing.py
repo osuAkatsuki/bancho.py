@@ -4,10 +4,10 @@ from ipaddress import IPv4Address
 from ipaddress import IPv6Address
 from typing import Any
 from typing import TypeVar
-from typing import Union
 
-IPAddress = Union[IPv4Address, IPv6Address]
 T = TypeVar("T")
+
+IPAddress = IPv4Address | IPv6Address
 
 
 class _UnsetSentinel:

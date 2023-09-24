@@ -95,7 +95,7 @@ def calculate_performances(
         )
         result = calculator.performance(calc_bmap)
 
-        pp = result.pp  # type: ignore
+        pp = result.pp
 
         if math.isnan(pp) or math.isinf(pp):
             # TODO: report to logserver

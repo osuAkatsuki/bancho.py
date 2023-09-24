@@ -10,6 +10,7 @@ from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
+from typing import cast
 from typing import TypedDict
 
 import aiohttp
@@ -224,8 +225,8 @@ class Beatmap:
     maintaining a low overhead.
 
     The only methods you should need are:
-      await Beatmap.from_md5(md5: str, set_id: int = -1) -> Optional[Beatmap]
-      await Beatmap.from_bid(bid: int) -> Optional[Beatmap]
+      await Beatmap.from_md5(md5: str, set_id: int = -1) -> Beatmap | None
+      await Beatmap.from_bid(bid: int) -> Beatmap | None
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
@@ -237,11 +238,11 @@ class Beatmap:
       Beatmap.as_dict -> dict[str, object]
 
     Lower level API:
-      Beatmap._from_md5_cache(md5: str, check_updates: bool = True) -> Optional[Beatmap]
-      Beatmap._from_bid_cache(bid: int, check_updates: bool = True) -> Optional[Beatmap]
+      Beatmap._from_md5_cache(md5: str, check_updates: bool = True) -> Beatmap | None
+      Beatmap._from_bid_cache(bid: int, check_updates: bool = True) -> Beatmap | None
 
-      Beatmap._from_md5_sql(md5: str) -> Optional[Beatmap]
-      Beatmap._from_bid_sql(bid: int) -> Optional[Beatmap]
+      Beatmap._from_md5_sql(md5: str) -> Beatmap | None
+      Beatmap._from_bid_sql(bid: int) -> Beatmap | None
 
       Beatmap._parse_from_osuapi_resp(osuapi_resp: dict[str, object]) -> None
 
@@ -531,7 +532,7 @@ class Beatmap:
         if row is None:
             return None
 
-        return row["rating"]
+        return cast(float | None, row["rating"])
 
 
 class BeatmapSet:
@@ -545,7 +546,7 @@ class BeatmapSet:
     information, while maintaining a low overhead.
 
     The only methods you should need are:
-      await BeatmapSet.from_bsid(bsid: int) -> Optional[BeatmapSet]
+      await BeatmapSet.from_bsid(bsid: int) -> BeatmapSet | None
 
       BeatmapSet.all_officially_ranked_or_approved() -> bool
       BeatmapSet.all_officially_loved() -> bool
@@ -554,9 +555,9 @@ class BeatmapSet:
       BeatmapSet.url -> str # https://osu.cmyui.xyz/beatmapsets/123
 
     Lower level API:
-      await BeatmapSet._from_bsid_cache(bsid: int) -> Optional[BeatmapSet]
-      await BeatmapSet._from_bsid_sql(bsid: int) -> Optional[BeatmapSet]
-      await BeatmapSet._from_bsid_osuapi(bsid: int) -> Optional[BeatmapSet]
+      await BeatmapSet._from_bsid_cache(bsid: int) -> BeatmapSet | None
+      await BeatmapSet._from_bsid_sql(bsid: int) -> BeatmapSet | None
+      await BeatmapSet._from_bsid_osuapi(bsid: int) -> BeatmapSet | None
 
       BeatmapSet._cache_expired() -> bool
       await BeatmapSet._update_if_available() -> None
@@ -685,9 +686,9 @@ class BeatmapSet:
                         or old_map.status != new_ranked_status
                     ):
                         # update map from old_maps
-                        bmap = old_maps[old_id]
-                        bmap._parse_from_osuapi_resp(new_map)
-                        updated_maps.append(bmap)
+                        old_bmap = old_maps[old_id]
+                        old_bmap._parse_from_osuapi_resp(new_map)
+                        updated_maps.append(old_bmap)
                     else:
                         # map is the same, make no changes
                         updated_maps.append(old_map)  # TODO: is this needed?

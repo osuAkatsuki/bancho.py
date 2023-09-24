@@ -200,7 +200,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec._mapping["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -267,7 +267,7 @@ async def update(
     """
     params = {"id": id}
     rec = await app.state.services.database.fetch_one(query, params)
-    return cast(Score, rec) if rec is not None else None
+    return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
 # TODO: delete
