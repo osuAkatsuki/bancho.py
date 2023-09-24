@@ -52,7 +52,7 @@ async def create(
         INSERT INTO achievements (file, name, desc, cond)
              VALUES (:file, :name, :desc, :cond)
     """
-    params = {
+    params: dict[str, Any] = {
         "file": file,
         "name": name,
         "desc": desc,
@@ -88,7 +88,7 @@ async def fetch_one(
          WHERE id = COALESCE(:id, id)
             OR name = COALESCE(:name, name)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "name": name,
     }
@@ -168,7 +168,7 @@ async def update(
           FROM achievements
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     achievement = await app.state.services.database.fetch_one(query, params)
@@ -184,7 +184,7 @@ async def delete(
           FROM achievements
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     achievement = await app.state.services.database.fetch_one(query, params)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -132,7 +133,7 @@ async def create(
                      :max_combo, :frozen, :plays, :passes, :mode, :bpm, :cs, :ar,
                      :od, :hp, :diff)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "server": server,
         "set_id": set_id,
@@ -189,7 +190,7 @@ async def fetch_one(
            AND md5 = COALESCE(:md5, md5)
            AND filename = COALESCE(:filename, filename)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "md5": md5,
         "filename": filename,
@@ -223,7 +224,7 @@ async def fetch_count(
           AND frozen = COALESCE(:frozen, frozen)
 
     """
-    params = {
+    params: dict[str, Any] = {
         "server": server,
         "set_id": set_id,
         "status": status,
@@ -263,7 +264,7 @@ async def fetch_many(
            AND mode = COALESCE(:mode, mode)
            AND frozen = COALESCE(:frozen, frozen)
     """
-    params = {
+    params: dict[str, Any] = {
         "server": server,
         "set_id": set_id,
         "status": status,
@@ -371,7 +372,7 @@ async def update(
           FROM maps
         WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     map = await app.state.services.database.fetch_one(query, params)
@@ -385,7 +386,7 @@ async def delete(id: int) -> Map | None:
           FROM maps
         WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)

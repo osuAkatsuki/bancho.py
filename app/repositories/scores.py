@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import textwrap
 from datetime import datetime
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -126,7 +127,7 @@ async def create(
                      :mode, :play_time, :time_elapsed, :client_flags,
                      :userid, :perfect, :online_checksum)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "score": score,
         "pp": pp,
@@ -169,7 +170,7 @@ async def fetch_one(id: int) -> Score | None:
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
+    params: dict[str, Any] = {"id": id}
     rec = await app.state.services.database.fetch_one(query, params)
 
     return cast(Score, dict(rec._mapping)) if rec is not None else None
@@ -191,7 +192,7 @@ async def fetch_count(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -221,7 +222,7 @@ async def fetch_many(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -265,7 +266,7 @@ async def update(
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
+    params: dict[str, Any] = {"id": id}
     rec = await app.state.services.database.fetch_one(query, params)
     return cast(Score, dict(rec._mapping)) if rec is not None else None
 

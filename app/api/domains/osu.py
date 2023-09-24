@@ -1293,7 +1293,11 @@ async def get_leaderboard_scores(
         "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
     ]
 
-    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+    params: dict[str, Any] = {
+        "map_md5": map_md5,
+        "user_id": player.id,
+        "mode": mode,
+    }
 
     if leaderboard_type == LeaderboardType.Mods:
         query.append("AND s.mods = :mods")

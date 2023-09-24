@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -83,7 +84,7 @@ async def create(
         INSERT INTO stats (id, mode)
         VALUES (:id, :mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -129,7 +130,7 @@ async def create_all_modes(player_id: int) -> list[Stat]:
           FROM stats
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
     }
     stats = await app.state.services.database.fetch_all(query, params)
@@ -144,7 +145,7 @@ async def fetch_one(player_id: int, mode: int) -> Stat | None:
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -163,7 +164,7 @@ async def fetch_count(
          WHERE id = COALESCE(:id, id)
            AND mode = COALESCE(:mode, mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -184,7 +185,7 @@ async def fetch_many(
          WHERE id = COALESCE(:id, id)
            AND mode = COALESCE(:mode, mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -265,7 +266,7 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }

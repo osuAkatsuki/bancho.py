@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import textwrap
 from datetime import datetime
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -50,7 +51,7 @@ async def create(
         INSERT INTO clans (name, tag, owner, created_at)
              VALUES (:name, :tag, :owner, NOW())
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "tag": tag,
         "owner": owner,
@@ -89,7 +90,7 @@ async def fetch_one(
            AND tag = COALESCE(:tag, tag)
            AND owner = COALESCE(:owner, owner)
     """
-    params = {"id": id, "name": name, "tag": tag, "owner": owner}
+    params: dict[str, Any] = {"id": id, "name": name, "tag": tag, "owner": owner}
     clan = await app.state.services.database.fetch_one(query, params)
 
     return cast(Clan, dict(clan._mapping)) if clan is not None else None
@@ -115,7 +116,7 @@ async def fetch_many(
         SELECT {READ_PARAMS}
           FROM clans
     """
-    params = {}
+    params: dict[str, Any] = {}
 
     if page is not None and page_size is not None:
         query += """\
@@ -157,7 +158,7 @@ async def update(
           FROM clans
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
@@ -171,7 +172,7 @@ async def delete(id: int) -> Clan | None:
           FROM clans
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -182,8 +183,6 @@ async def delete(id: int) -> Clan | None:
         DELETE FROM clans
          WHERE id = :id
     """
-    params = {
-        "id": id,
-    }
+    params = {"id": id}
     clan = await app.state.services.database.execute(query, params)
     return cast(Clan, dict(clan._mapping)) if clan is not None else None

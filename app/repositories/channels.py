@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -56,7 +57,7 @@ async def create(
              VALUES (:name, :topic, :read_priv, :write_priv, :auto_join)
 
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "topic": topic,
         "read_priv": read_priv,
@@ -93,7 +94,7 @@ async def fetch_one(
          WHERE id = COALESCE(:id, id)
            AND name = COALESCE(:name, name)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "name": name,
     }
@@ -117,7 +118,7 @@ async def fetch_count(
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
     """
-    params = {
+    params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
@@ -143,7 +144,7 @@ async def fetch_many(
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
     """
-    params = {
+    params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
@@ -192,7 +193,7 @@ async def update(
           FROM channels
          WHERE name = :name
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)
@@ -208,7 +209,7 @@ async def delete(
           FROM channels
          WHERE name = :name
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
     }
     rec = await app.state.services.database.fetch_one(query, params)

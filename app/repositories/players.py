@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -93,7 +94,7 @@ async def create(
         INSERT INTO users (name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity)
              VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "safe_name": make_safe_name(name),
         "email": email,
@@ -133,7 +134,7 @@ async def fetch_one(
            AND safe_name = COALESCE(:safe_name, safe_name)
            AND email = COALESCE(:email, email)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
@@ -161,7 +162,7 @@ async def fetch_count(
            AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
            AND play_style = COALESCE(:play_style, play_style)
     """
-    params = {
+    params: dict[str, Any] = {
         "priv": priv,
         "country": country,
         "clan_id": clan_id,
@@ -195,7 +196,7 @@ async def fetch_many(
            AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
            AND play_style = COALESCE(:play_style, play_style)
     """
-    params = {
+    params: dict[str, Any] = {
         "priv": priv,
         "country": country,
         "clan_id": clan_id,
@@ -283,7 +284,7 @@ async def update(
           FROM users
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     player = await app.state.services.database.fetch_one(query, params)
