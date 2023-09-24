@@ -292,7 +292,7 @@ class Score:
 
     """Methods to calculate internal data for a score."""
 
-    async def calculate_placement(self) -> int | None:
+    async def calculate_placement(self) -> int:
         assert self.bmap is not None
 
         if self.mode >= GameMode.RELAX_OSU:
@@ -315,9 +315,7 @@ class Score:
             },
             column=0,  # COUNT(*)
         )
-        if num_better_scores is None:
-            return None
-
+        assert num_better_scores is not None
         return num_better_scores + 1
 
     def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
