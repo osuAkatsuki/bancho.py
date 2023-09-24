@@ -1667,11 +1667,9 @@ async def osuMarkAsRead(
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
         # mark any unread mail from this user as read.
-        await mails_repo.update(
+        await mails_repo.mark_as_read(
             to_id=player.id,
             from_id=target.id,
-            read_from=False,
-            read_to=True,
         )
 
     return Response(b"")
