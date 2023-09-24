@@ -1710,7 +1710,7 @@ if app.settings.REDIRECT_OSU_URLS:
 
 @router.get("/ss/{screenshot_id}.{extension}")
 async def get_screenshot(
-    screenshot_id: str = Path(..., regex=r"[a-zA-Z0-9-_]{8}"),
+    screenshot_id: str = Path(..., pattern=r"[a-zA-Z0-9-_]{8}"),
     extension: Literal["jpg", "jpeg", "png"] = Path(...),
 ) -> Response:
     """Serve a screenshot from the server, by filename."""

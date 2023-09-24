@@ -5,14 +5,14 @@ from typing import Any
 from typing import TypeVar
 
 from pydantic import BaseModel as _pydantic_BaseModel
+from pydantic import ConfigDict
 
 
 T = TypeVar("T", bound="BaseModel")
 
 
 class BaseModel(_pydantic_BaseModel):
-    class Config:
-        str_strip_whitespace = True
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     @classmethod
     def from_mapping(cls: type[T], mapping: Mapping[str, Any]) -> T:

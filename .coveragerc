@@ -1,0 +1,12 @@
+[run]
+omit =
+  main.py
+  app/logging.py
+  app/settings.py
+  tests/*
+  testing/*
+
+# TODO: customize report to ignore things like TYPE_CHECKING/NotImplementedError
+
+[html]
+directory = coverage/html_report
