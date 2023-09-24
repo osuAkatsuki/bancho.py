@@ -54,11 +54,11 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    map_id: Optional[int] = None,
-    player_id: Optional[int] = None,
-    active: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    map_id: int | None = None,
+    player_id: int | None = None,
+    active: int | None = None,
+) -> dict[str, Any] | None:
     """Fetch a map request entry from the database."""
     if id is None and map_id is None and player_id is None and active is None:
         raise ValueError("Must provide at least one parameter.")
@@ -82,9 +82,9 @@ async def fetch_one(
 
 
 async def fetch_count(
-    map_id: Optional[int] = None,
-    player_id: Optional[int] = None,
-    active: Optional[int] = None,
+    map_id: int | None = None,
+    player_id: int | None = None,
+    active: int | None = None,
 ) -> int:
     """Fetch the number of map requests in the database."""
     query = """\
@@ -105,9 +105,9 @@ async def fetch_count(
 
 
 async def fetch_all(
-    map_id: Optional[int] = None,
-    player_id: Optional[int] = None,
-    active: Optional[int] = None,
+    map_id: int | None = None,
+    player_id: int | None = None,
+    active: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch a list of map requests from the database."""
     query = f"""\
@@ -127,10 +127,10 @@ async def fetch_all(
 
 
 async def update(
-    map_ids: Optional[list[Any]] = None,
-    player_id: Optional[int] = None,
-    active: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    map_ids: list[Any] | None = None,
+    player_id: int | None = None,
+    active: int | None = None,
+) -> dict[str, Any] | None:
     """Update a map request entry in the database."""
     query = """\
         UPDATE map_requests
@@ -157,7 +157,7 @@ async def update(
     return dict(rec) if rec is not None else None
 
 
-async def delete(id: int) -> Optional[dict[str, Any]]:
+async def delete(id: int) -> dict[str, Any] | None:
     """Delete a map request entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
