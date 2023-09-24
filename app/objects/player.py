@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass
@@ -530,7 +531,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.state.services.http_client)
+            asyncio.create_task(webhook.post())
 
         # refresh their client state
         if self.is_online:
@@ -568,7 +569,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            await webhook.post(app.state.services.http_client)
+            asyncio.create_task(webhook.post())
 
         if self.is_online:
             # log the user out if they're offline, this
