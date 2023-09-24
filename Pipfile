@@ -33,6 +33,8 @@ black = "*"
 reorder-python-imports = "*"
 mypy = "*"
 autoflake = "*"
+asgi-lifespan = "*"
+pytest-asyncio = "*"
 
 [requires]
 python_version = "3.11"
