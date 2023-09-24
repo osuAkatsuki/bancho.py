@@ -60,6 +60,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.repositories import ingame_logins as logins_repo
 from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
@@ -697,16 +698,11 @@ async def login(
 
     """ login credentials verified """
 
-    await db_conn.execute(
-        "INSERT INTO ingame_logins "
-        "(userid, ip, osu_ver, osu_stream, datetime) "
-        "VALUES (:id, :ip, :osu_ver, :osu_stream, NOW())",
-        {
-            "id": user_info["id"],
-            "ip": str(ip),
-            "osu_ver": osu_version.date,
-            "osu_stream": osu_version.stream,
-        },
+    await logins_repo.create(
+        user_id=user_info["id"],
+        ip=str(ip),
+        osu_ver=osu_version.date,
+        osu_stream=osu_version.stream,
     )
 
     await db_conn.execute(
