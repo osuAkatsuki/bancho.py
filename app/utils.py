@@ -392,12 +392,12 @@ def _install_debugging_hooks() -> None:
 
 def is_running_as_admin() -> bool:
     try:
-        return os.geteuid() == 0  # type: ignore[attr-defined, unused-ignore]
+        return os.geteuid() == 0  # type: ignore[attr-defined, no-any-return, unused-ignore]
     except AttributeError:
         pass
 
     try:
-        return ctypes.windll.shell32.IsUserAdmin() == 1  # type: ignore[attr-defined, no-any-return]
+        return ctypes.windll.shell32.IsUserAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]
     except AttributeError:
         raise Exception(
             f"{sys.platform} is not currently supported on bancho.py, please create a github issue!",
