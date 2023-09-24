@@ -67,12 +67,9 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
 
 
 async def fetch_one(
-    from_id: int | None = None,
+    from_id: int,
 ) -> Mail | None:
     """Fetch a mail entry from the database."""
-    if from_id is None:
-        raise ValueError("Must provide at least one parameter.")
-
     query = f"""\
         SELECT {READ_PARAMS}
           FROM mail
@@ -96,10 +93,10 @@ async def fetch_count(
     query = """\
         SELECT COUNT(*) AS count
           FROM mail
-        WHERE from_id = COALESCE(:from_id, from_id)
-          AND to_id = COALESCE(:to_id, to_id)
-          AND time = COALESCE(:time, time)
-          AND `read` = COALESCE(:read, read)
+        WHERE from_id = :from_id
+          AND to_id = :to_id
+          AND time = :time
+          AND `read` = :read
     """
     params = {
         "from_id": from_id,
