@@ -2,7 +2,10 @@ shell:
 	pipenv shell
 
 test:
-	pipenv run pytest
+	pipenv run pytest -vv tests/
+
+test-dbg:
+	pipenv run pytest -vv --pdb tests/
 
 lint:
 	pipenv run pre-commit run --all-files
