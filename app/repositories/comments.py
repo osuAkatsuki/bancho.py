@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
-from typing import Optional
+from typing import cast
+from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
+from app._typing import UNSET
 
 # +-----------------+-----------------------------+------+-----+---------+----------------+
 # | Field           | Type                        | Null | Key | Default | Extra          |
@@ -25,6 +28,25 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Comment(TypedDict):
+    id: int
+    target_id: int
+    target_type: str
+    userid: int
+    time: float
+    comment: str
+    colour: str
+
+
+class CommentUpdateFields(TypedDict, total=False):
+    target_id: int
+    target_type: str
+    userid: int
+    time: float
+    comment: str
+    colour: str
+
+
 async def create(
     target_id: int,
     target_type: str,
@@ -32,7 +54,7 @@ async def create(
     time: float,
     comment: str,
     colour: str,
-) -> dict[str, Any]:
+) -> Comment:
     """Create a new comment entry in the database."""
     query = f"""\
         INSERT INTO comments (target_id, target_type, userid, time, comment, colour)
@@ -56,9 +78,10 @@ async def create(
     params = {
         "id": rec_id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return dict(rec)
+    _comment = await app.state.services.database.fetch_one(query, params)
+
+    assert _comment is not None
+    return cast(Comment, dict(_comment._mapping))
 
 
 async def fetch_one(
@@ -66,7 +89,7 @@ async def fetch_one(
     target_type: str | None = None,
     userid: int | None = None,
     colour: str | None = None,
-) -> dict[str, Any] | None:
+) -> Comment | None:
     """Fetch a comment entry from the database."""
     if target_id is None and target_type is None and userid is None and colour is None:
         raise ValueError("Must provide at least one parameter.")
@@ -79,14 +102,15 @@ async def fetch_one(
            AND userid = COALESCE(:userid, userid)
            AND colour = COALESCE(:colour, colour)
     """
-    params = {
+    params: dict[str, Any] = {
         "target_id": target_id,
         "target_type": target_type,
         "userid": userid,
         "colour": colour,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    comment = await app.state.services.database.fetch_one(query, params)
+
+    return cast(Comment, dict(comment._mapping)) if comment is not None else None
 
 
 async def fetch_count(
@@ -108,7 +132,7 @@ async def fetch_count(
           AND comment = COALESCE(:comment, comment)
           AND colour = COALESCE(:colour, colour)
     """
-    params = {
+    params: dict[str, Any] = {
         "server": target_id,
         "set_id": target_type,
         "status": userid,
@@ -118,14 +142,14 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_all(
     score_id: int | None = None,
     map_set_id: int | None = None,
     map_id: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Comment]:
     """Fetch a list of comments from the database."""
     query = f"""\
         SELECT c.time, c.target_type, c.colour, c.comment, u.priv
@@ -135,45 +159,46 @@ async def fetch_all(
          OR (c.target_type = 'song' AND c.target_id = :map_set_id)
          OR (c.target_type = 'map' AND c.target_id = :map_id)
     """
-    params = {
+    params: dict[str, Any] = {
         "score_id": score_id,
         "map_set_id": map_set_id,
         "map_id": map_id,
     }
 
-    recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    comments = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Comment], [dict(c._mapping) for c in comments])
 
 
 async def update(
     id: int,
-    target_id: int | None = None,
-    target_type: str | None = None,
-    userid: int | None = None,
-    time: float | None = None,
-    comment: str | None = None,
-    colour: str | None = None,
-) -> dict[str, Any] | None:
+    target_id: int | _UnsetSentinel = UNSET,
+    target_type: str | _UnsetSentinel = UNSET,
+    userid: int | _UnsetSentinel = UNSET,
+    time: float | _UnsetSentinel = UNSET,
+    comment: str | _UnsetSentinel = UNSET,
+    colour: str | _UnsetSentinel = UNSET,
+) -> Comment | None:
     """Update a comment entry in the database."""
-    query = """\
+    update_fields: CommentUpdateFields = {}
+    if not isinstance(target_id, _UnsetSentinel):
+        update_fields["target_id"] = target_id
+    if not isinstance(target_type, _UnsetSentinel):
+        update_fields["target_type"] = target_type
+    if not isinstance(userid, _UnsetSentinel):
+        update_fields["userid"] = userid
+    if not isinstance(time, _UnsetSentinel):
+        update_fields["time"] = time
+    if not isinstance(comment, _UnsetSentinel):
+        update_fields["comment"] = comment
+    if not isinstance(colour, _UnsetSentinel):
+        update_fields["colour"] = colour
+
+    query = f"""\
         UPDATE comments
-           SET target_id = COALESCE(:target_id, target_id)
-               target_type = COALESCE(:target_type, target_type)
-               userid = COALESCE(:user_id, userid)
-               time = COALESCE(:time, time)
-               comment = COALESCE(:comment, comment)
-               colour = COALESCE(:colour, colour)
+           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "target_id": target_id,
-        "target_type": target_type,
-        "userid": userid,
-        "time": time,
-        "comment": comment,
-        "colour": colour,
-    }
+    params = {"id": id} | update_fields
     await app.state.services.database.execute(query, params)
 
     query = f"""\
@@ -181,14 +206,14 @@ async def update(
           FROM comments
         WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    _comment = await app.state.services.database.fetch_one(query, params)
+    return cast(Comment, dict(_comment._mapping)) if _comment is not None else None
 
 
-async def delete(id: int) -> dict[str, Any] | None:
+async def delete(id: int) -> Comment | None:
     """Delete a comment entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -209,5 +234,5 @@ async def delete(id: int) -> dict[str, Any] | None:
     params = {
         "id": id,
     }
-    await app.state.services.database.execute(query, params)
-    return dict(rec)
+    comment = await app.state.services.database.execute(query, params)
+    return cast(Comment, dict(comment._mapping)) if comment is not None else None
