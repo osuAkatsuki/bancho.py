@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiohttp = "*"
 async-timeout = "*"
 bcrypt = "*"
 datadog = "*"
@@ -25,6 +24,7 @@ databases = {extras = ["mysql"], version = "*"}
 akatsuki-pp-py = "*"
 cryptography = "*"
 tenacity = "*"
+httpx = "*"
 
 [dev-packages]
 pytest = "*"

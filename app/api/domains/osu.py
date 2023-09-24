@@ -468,14 +468,14 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    async with app.state.services.http_client.get(
+    response = await app.state.services.http_client.get(
         app.settings.MIRROR_SEARCH_ENDPOINT,
         params=params,
-    ) as resp:
-        if resp.status != status.HTTP_200_OK:
-            return b"-1\nFailed to retrieve data from the beatmap mirror."
+    )
+    if response.status_code != status.HTTP_200_OK:
+        return b"-1\nFailed to retrieve data from the beatmap mirror."
 
-        result = await resp.json()
+    result = response.json()
 
     lresult = len(result)  # send over 100 if we receive
     # 100 matches, so the client
