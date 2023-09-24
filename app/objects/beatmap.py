@@ -62,7 +62,7 @@ async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
         url = "https://osu.direct/api/get_beatmaps"
 
     response = await app.state.services.http_client.get(url, params=params)
-    response_data = await response.json()
+    response_data = response.json()
     if response.status_code == 200 and response_data:  # (data may be [])
         return {"data": response_data, "status_code": response.status_code}
 
