@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
 from typing import Any
-from typing import Optional
+from typing import TypeVar
 
 import aiohttp
 import databases
@@ -35,6 +35,9 @@ except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
 
+T = TypeVar("T")
+
+
 DEBUG = False
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
@@ -46,7 +49,7 @@ class Context:
     beatmaps: dict[int, Beatmap] = field(default_factory=dict)
 
 
-def divide_chunks(values: list, n: int) -> Iterator[list]:
+def divide_chunks(values: list[T], n: int) -> Iterator[list[T]]:
     for i in range(0, len(values), n):
         yield values[i : i + n]
 
@@ -75,7 +78,7 @@ async def recalculate_score(
     )
     attrs = calculator.performance(beatmap)
 
-    new_pp: float = attrs.pp  # type: ignore
+    new_pp: float = attrs.pp
     if math.isnan(new_pp) or math.isinf(new_pp):
         new_pp = 0.0
 

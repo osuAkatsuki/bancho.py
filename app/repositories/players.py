@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -47,6 +48,7 @@ class Player(TypedDict):
     name: str
     safe_name: str
     priv: int
+    pw_bcrypt: str
     country: str
     silence_end: int
     donor_end: int
@@ -92,7 +94,7 @@ async def create(
         INSERT INTO users (name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity)
              VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "safe_name": make_safe_name(name),
         "email": email,
@@ -112,7 +114,7 @@ async def create(
     player = await app.state.services.database.fetch_one(query, params)
 
     assert player is not None
-    return cast(Player, player)
+    return cast(Player, dict(player._mapping))
 
 
 async def fetch_one(
@@ -132,13 +134,13 @@ async def fetch_one(
            AND safe_name = COALESCE(:safe_name, safe_name)
            AND email = COALESCE(:email, email)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
     }
     player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, player) if player is not None else None
+    return cast(Player, dict(player._mapping)) if player is not None else None
 
 
 async def fetch_count(
@@ -160,7 +162,7 @@ async def fetch_count(
            AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
            AND play_style = COALESCE(:play_style, play_style)
     """
-    params = {
+    params: dict[str, Any] = {
         "priv": priv,
         "country": country,
         "clan_id": clan_id,
@@ -170,7 +172,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -194,7 +196,7 @@ async def fetch_many(
            AND preferred_mode = COALESCE(:preferred_mode, preferred_mode)
            AND play_style = COALESCE(:play_style, play_style)
     """
-    params = {
+    params: dict[str, Any] = {
         "priv": priv,
         "country": country,
         "clan_id": clan_id,
@@ -212,7 +214,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     players = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Player], players) if players is not None else None
+    return cast(list[Player], [dict(p._mapping) for p in players])
 
 
 async def update(
@@ -235,7 +237,7 @@ async def update(
     api_key: str | None | _UnsetSentinel = UNSET,
 ) -> Player | None:
     """Update a player in the database."""
-    update_fields = PlayerUpdateFields = {}
+    update_fields: PlayerUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
     if not isinstance(email, _UnsetSentinel):
@@ -282,11 +284,11 @@ async def update(
           FROM users
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, player) if player is not None else None
+    return cast(Player, dict(player._mapping)) if player is not None else None
 
 
 # TODO: delete?

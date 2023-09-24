@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -56,7 +57,7 @@ async def create(
              VALUES (:name, :topic, :read_priv, :write_priv, :auto_join)
 
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "topic": topic,
         "read_priv": read_priv,
@@ -77,7 +78,7 @@ async def create(
     channel = await app.state.services.database.fetch_one(query, params)
 
     assert channel is not None
-    return cast(Channel, channel)
+    return cast(Channel, dict(channel._mapping))
 
 
 async def fetch_one(
@@ -93,13 +94,13 @@ async def fetch_one(
          WHERE id = COALESCE(:id, id)
            AND name = COALESCE(:name, name)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None
 
 
 async def fetch_count(
@@ -117,7 +118,7 @@ async def fetch_count(
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
     """
-    params = {
+    params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
@@ -125,7 +126,7 @@ async def fetch_count(
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -143,7 +144,7 @@ async def fetch_many(
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
     """
-    params = {
+    params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
@@ -158,7 +159,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     channels = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Channel], channels) if channels is not None else None
+    return cast(list[Channel], [dict(c._mapping) for c in channels])
 
 
 async def update(
@@ -169,7 +170,7 @@ async def update(
     auto_join: bool | _UnsetSentinel = UNSET,
 ) -> Channel | None:
     """Update a channel in the database."""
-    update_fields = ChannelUpdateFields = {}
+    update_fields: ChannelUpdateFields = {}
     if not isinstance(topic, _UnsetSentinel):
         update_fields["topic"] = topic
     if not isinstance(read_priv, _UnsetSentinel):
@@ -192,11 +193,11 @@ async def update(
           FROM channels
          WHERE name = :name
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None
 
 
 async def delete(
@@ -208,7 +209,7 @@ async def delete(
           FROM channels
          WHERE name = :name
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -223,4 +224,4 @@ async def delete(
         "name": name,
     }
     channel = await app.state.services.database.execute(query, params)
-    return cast(Channel, channel) if channel is not None else None
+    return cast(Channel, dict(channel._mapping)) if channel is not None else None

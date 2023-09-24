@@ -7,6 +7,9 @@ test:
 lint:
 	pipenv run pre-commit run --all-files
 
+type-check:
+	pipenv run mypy .
+
 install:
 	PIPENV_VENV_IN_PROJECT=1 pipenv install
 
@@ -27,7 +30,4 @@ clean:
 	pipenv clean
 
 run:
-	pipenv run python main.py
-
-run-prod:
 	pipenv run ./scripts/start_server.sh

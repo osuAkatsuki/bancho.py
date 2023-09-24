@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -60,7 +62,7 @@ class Score(TypedDict):
     grade: str
     status: int
     mode: int
-    play_time: str
+    play_time: datetime
     time_elapsed: int
     client_flags: int
     userid: int
@@ -84,7 +86,7 @@ class ScoreUpdateFields(TypedDict, total=False):
     grade: str
     status: int
     mode: int
-    play_time: str
+    play_time: datetime
     time_elapsed: int
     client_flags: int
     userid: int
@@ -108,7 +110,7 @@ async def create(
     grade: str,
     status: int,
     mode: int,
-    play_time: str,
+    play_time: datetime,
     time_elapsed: int,
     client_flags: int,
     user_id: int,
@@ -125,7 +127,7 @@ async def create(
                      :mode, :play_time, :time_elapsed, :client_flags,
                      :userid, :perfect, :online_checksum)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "score": score,
         "pp": pp,
@@ -156,10 +158,10 @@ async def create(
          WHERE id = :id
     """
     params = {"id": rec_id}
-    score = await app.state.services.database.fetch_one(query, params)
+    rec = await app.state.services.database.fetch_one(query, params)
 
-    assert score is not None
-    return cast(Score, score)
+    assert rec is not None
+    return cast(Score, dict(rec._mapping))
 
 
 async def fetch_one(id: int) -> Score | None:
@@ -168,10 +170,10 @@ async def fetch_one(id: int) -> Score | None:
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
-    score = await app.state.services.database.fetch_one(query, params)
+    params: dict[str, Any] = {"id": id}
+    rec = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Score, score) if score is not None else None
+    return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
 async def fetch_count(
@@ -190,7 +192,7 @@ async def fetch_count(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -199,7 +201,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -220,7 +222,7 @@ async def fetch_many(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -235,8 +237,8 @@ async def fetch_many(
         params["page_size"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    scores = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Score], scores) if scores is not None else None
+    recs = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Score], [dict(r._mapping) for r in recs])
 
 
 async def update(
@@ -245,7 +247,7 @@ async def update(
     status: int | _UnsetSentinel = UNSET,
 ) -> Score | None:
     """Update an existing score."""
-    update_fields = ScoreUpdateFields = {}
+    update_fields: ScoreUpdateFields = {}
     if not isinstance(pp, _UnsetSentinel):
         update_fields["pp"] = pp
     if not isinstance(status, _UnsetSentinel):
@@ -257,16 +259,16 @@ async def update(
          WHERE id = :id
     """
     values = {"id": id} | update_fields
-    await app.state.services.database.execute(query, params)
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
-    score = await app.state.services.database.fetch_one(query, params)
-    return cast(Score, score) if score is not None else None
+    params: dict[str, Any] = {"id": id}
+    rec = await app.state.services.database.fetch_one(query, params)
+    return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
 # TODO: delete

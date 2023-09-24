@@ -41,6 +41,7 @@ from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
+from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -107,7 +108,7 @@ async def bancho_http_handler():
 
 
 @router.get("/online")
-async def bancho_list_user():
+async def bancho_view_online_users():
     """see who's online"""
     new_line = "\n"
 
@@ -130,7 +131,7 @@ bots:
 
 
 @router.get("/matches")
-async def bancho_list_user():
+async def bancho_view_matches():
     """ongoing matches"""
     new_line = "\n"
 
@@ -318,7 +319,7 @@ class SendMessage(BasePacket):
             else:
                 return
 
-            t_chan = app.state.sessions.channels[f"#spec_{spec_id}"]
+            t_chan = app.state.sessions.channels.get_by_name(f"#spec_{spec_id}")
         elif recipient == "#multiplayer":
             if not player.match:
                 # they're not in a match?
@@ -326,7 +327,7 @@ class SendMessage(BasePacket):
 
             t_chan = player.match.chat
         else:
-            t_chan = app.state.sessions.channels[recipient]
+            t_chan = app.state.sessions.channels.get_by_name(recipient)
 
         if not t_chan:
             log(f"{player} wrote to non-existent {recipient}.", Ansi.LYELLOW)
@@ -654,8 +655,6 @@ async def login(
             ),
         }
 
-    user_info = dict(user_info)  # make a mutable copy
-
     if osu_version.stream == "tourney" and not (
         user_info["priv"] & Privileges.DONATOR
         and user_info["priv"] & Privileges.UNRESTRICTED
@@ -669,7 +668,6 @@ async def login(
     # get our bcrypt cache
     bcrypt_cache = app.state.cache.bcrypt
     pw_bcrypt = user_info["pw_bcrypt"].encode()
-    user_info["pw_bcrypt"] = pw_bcrypt
 
     # check credentials against db. algorithms like these are intentionally
     # designed to be slow; we'll cache the results to speed up subsequent logins.
@@ -773,15 +771,13 @@ async def login(
     """ All checks passed, player is safe to login """
 
     # get clan & clan priv if we're in a clan
+    clan: Clan | None = None
+    clan_priv: ClanPrivileges | None = None
     if user_info["clan_id"] != 0:
-        clan = app.state.sessions.clans.get(id=user_info.pop("clan_id"))
-        clan_priv = ClanPrivileges(user_info.pop("clan_priv"))
-    else:
-        del user_info["clan_id"]
-        del user_info["clan_priv"]
-        clan = clan_priv = None
+        clan = app.state.sessions.clans.get(id=user_info["clan_id"])
+        clan_priv = ClanPrivileges(user_info["clan_priv"])
 
-    db_country = user_info.pop("country")
+    db_country = user_info["country"]
 
     geoloc = await app.state.services.fetch_geoloc(ip, headers)
 
@@ -796,8 +792,6 @@ async def login(
             ),
         }
 
-    user_info["geoloc"] = geoloc
-
     if db_country == "xx":
         # bugfix for old bancho.py versions when
         # country wasn't stored on registration.
@@ -806,7 +800,7 @@ async def login(
         await db_conn.execute(
             "UPDATE users SET country = :country WHERE id = :user_id",
             {
-                "country": user_info["geoloc"]["country"]["acronym"],
+                "country": geoloc["country"]["acronym"],
                 "user_id": user_info["id"],
             },
         )
@@ -822,14 +816,21 @@ async def login(
     )
 
     player = Player(
-        **user_info,  # {id, name, priv, pw_bcrypt, silence_end, api_key, geoloc?}
-        utc_offset=login_data["utc_offset"],
-        pm_private=login_data["pm_private"],
-        login_time=login_time,
+        id=user_info["id"],
+        name=user_info["name"],
+        priv=user_info["priv"],
+        pw_bcrypt=pw_bcrypt,
         clan=clan,
         clan_priv=clan_priv,
-        tourney_client=osu_version.stream == "tourney",
+        geoloc=geoloc,
+        utc_offset=login_data["utc_offset"],
+        pm_private=login_data["pm_private"],
+        silence_end=user_info["silence_end"],
+        donor_end=user_info["donor_end"],
         client_details=client_details,
+        login_time=login_time,
+        tourney_client=osu_version.stream == "tourney",
+        api_key=user_info["api_key"],
     )
 
     data = bytearray(app.packets.protocol_version(19))
@@ -1173,7 +1174,7 @@ class SendPrivateMessage(BasePacket):
 
         if target is not app.state.sessions.bot:
             # target is not bot, send the message normally if online
-            if target.online:
+            if target.is_online:
                 target.send(msg, sender=player)
             else:
                 # inform user they're offline, but
@@ -1355,7 +1356,7 @@ class MatchCreate(BasePacket):
             map_md5=self.match_data.map_md5,
             # TODO: validate no security hole exists
             host_id=self.match_data.host_id,
-            mode=self.match_data.mode,
+            mode=GameMode(self.match_data.mode),
             mods=Mods(self.match_data.mods),
             win_condition=MatchWinConditions(self.match_data.win_condition),
             team_type=MatchTeamTypes(self.match_data.team_type),
@@ -1599,12 +1600,12 @@ class MatchChangeSettings(BasePacket):
                 player.match.map_id = bmap.id
                 player.match.map_md5 = bmap.md5
                 player.match.map_name = bmap.full_name
-                player.match.mode = player.match.host.status.mode.as_vanilla
+                player.match.mode = GameMode(player.match.host.status.mode.as_vanilla)
             else:
                 player.match.map_id = self.match_data.map_id
                 player.match.map_md5 = self.match_data.map_md5
                 player.match.map_name = self.match_data.map_name
-                player.match.mode = self.match_data.mode
+                player.match.mode = GameMode(self.match_data.mode)
 
         if player.match.team_type != self.match_data.team_type:
             # if theres currently a scrim going on, only allow
@@ -1870,7 +1871,7 @@ class ChannelJoin(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = app.state.sessions.channels[self.name]
+        channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel or not player.join_channel(channel):
             log(f"{player} failed to join {self.name}.", Ansi.LYELLOW)
@@ -2036,7 +2037,7 @@ class ChannelPart(BasePacket):
         if self.name in IGNORED_CHANNELS:
             return
 
-        channel = app.state.sessions.channels[self.name]
+        channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel:
             log(f"{player} failed to leave {self.name}.", Ansi.LYELLOW)

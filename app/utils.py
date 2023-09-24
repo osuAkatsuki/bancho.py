@@ -42,7 +42,6 @@ __all__ = (
     "escape_enum",
     "ensure_supported_platform",
     "ensure_directory_structure",
-    "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
     "_install_debugging_hooks",
     "display_startup_dialog",
@@ -52,6 +51,9 @@ __all__ = (
     "has_jpeg_headers_and_trailers",
     "has_png_headers_and_trailers",
 )
+
+T = TypeVar("T")
+
 
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
@@ -237,7 +239,7 @@ def _install_synchronous_excepthook() -> None:
         type_: type[BaseException],
         value: BaseException,
         traceback: types.TracebackType | None,
-    ):
+    ) -> None:
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
             return
@@ -261,7 +263,7 @@ def _install_synchronous_excepthook() -> None:
             f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
-        real_excepthook(type_, value, traceback)  # type: ignore
+        real_excepthook(type_, value, traceback)
 
     sys.excepthook = _excepthook
 
@@ -313,15 +315,12 @@ def is_valid_unix_address(address: str) -> bool:
     return address.endswith(".sock")  # TODO: improve
 
 
-T = TypeVar("T")
-
-
 def pymysql_encode(
     conv: Callable[[Any, dict[object, object] | None], str],
-) -> Callable[[T], T]:
+) -> Callable[[type[T]], type[T]]:
     """Decorator to allow for adding to pymysql's encoders."""
 
-    def wrapper(cls: T) -> T:
+    def wrapper(cls: type[T]) -> type[T]:
         pymysql.converters.encoders[cls] = conv
         return cls
 
@@ -427,7 +426,7 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
 
-def orjson_serialize_to_str(*args, **kwargs) -> str:
+def orjson_serialize_to_str(*args: Any, **kwargs: Any) -> str:
     return orjson.dumps(*args, **kwargs).decode()
 
 
@@ -448,5 +447,5 @@ def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
 def has_png_headers_and_trailers(data_view: memoryview) -> bool:
     return (
         data_view[:8] == b"\x89PNG\r\n\x1a\n"
-        and data_view[-8] == b"\x49END\xae\x42\x60\x82"
+        and data_view[-8:] == b"\x49END\xae\x42\x60\x82"
     )

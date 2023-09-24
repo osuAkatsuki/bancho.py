@@ -1,6 +1,8 @@
 """Functionality related to Discord interactivity."""
 from __future__ import annotations
 
+from typing import Any
+
 import aiohttp
 import orjson
 
@@ -20,14 +22,14 @@ __all__ = (
 
 
 class Footer:
-    def __init__(self, text: str, **kwargs) -> None:
+    def __init__(self, text: str, **kwargs: Any) -> None:
         self.text = text
         self.icon_url = kwargs.get("icon_url")
         self.proxy_icon_url = kwargs.get("proxy_icon_url")
 
 
 class Image:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.url = kwargs.get("url")
         self.proxy_url = kwargs.get("proxy_url")
         self.height = kwargs.get("height")
@@ -35,7 +37,7 @@ class Image:
 
 
 class Thumbnail:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.url = kwargs.get("url")
         self.proxy_url = kwargs.get("proxy_url")
         self.height = kwargs.get("height")
@@ -43,20 +45,20 @@ class Thumbnail:
 
 
 class Video:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.url = kwargs.get("url")
         self.height = kwargs.get("height")
         self.width = kwargs.get("width")
 
 
 class Provider:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: str) -> None:
         self.url = kwargs.get("url")
         self.name = kwargs.get("name")
 
 
 class Author:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: str) -> None:
         self.name = kwargs.get("name")
         self.url = kwargs.get("url")
         self.icon_url = kwargs.get("icon_url")
@@ -71,7 +73,7 @@ class Field:
 
 
 class Embed:
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         self.title = kwargs.get("title")
         self.type = kwargs.get("type")
         self.description = kwargs.get("description")
@@ -88,22 +90,22 @@ class Embed:
 
         self.fields: list[Field] = kwargs.get("fields", [])
 
-    def set_footer(self, **kwargs) -> None:
+    def set_footer(self, **kwargs: Any) -> None:
         self.footer = Footer(**kwargs)
 
-    def set_image(self, **kwargs) -> None:
+    def set_image(self, **kwargs: Any) -> None:
         self.image = Image(**kwargs)
 
-    def set_thumbnail(self, **kwargs) -> None:
+    def set_thumbnail(self, **kwargs: Any) -> None:
         self.thumbnail = Thumbnail(**kwargs)
 
-    def set_video(self, **kwargs) -> None:
+    def set_video(self, **kwargs: Any) -> None:
         self.video = Video(**kwargs)
 
-    def set_provider(self, **kwargs) -> None:
+    def set_provider(self, **kwargs: Any) -> None:
         self.provider = Provider(**kwargs)
 
-    def set_author(self, **kwargs) -> None:
+    def set_author(self, **kwargs: Any) -> None:
         self.author = Author(**kwargs)
 
     def add_field(self, name: str, value: str, inline: bool = False) -> None:
@@ -113,7 +115,7 @@ class Embed:
 class Webhook:
     """A class to represent a single-use Discord webhook."""
 
-    def __init__(self, url: str, **kwargs) -> None:
+    def __init__(self, url: str, **kwargs: Any) -> None:
         self.url = url
         self.content = kwargs.get("content")
         self.username = kwargs.get("username")
@@ -126,7 +128,7 @@ class Webhook:
         self.embeds.append(embed)
 
     @property
-    def json(self):
+    def json(self) -> str:
         if not any([self.content, self.file, self.embeds]):
             raise Exception(
                 "Webhook must contain at least one " "of (content, file, embeds).",
@@ -135,7 +137,7 @@ class Webhook:
         if self.content and len(self.content) > 2000:
             raise Exception("Webhook content must be under " "2000 characters.")
 
-        payload = {"embeds": []}
+        payload: dict[str, Any] = {"embeds": []}
 
         for key in ("content", "username", "avatar_url", "tts", "file"):
             val = getattr(self, key)
@@ -174,7 +176,7 @@ class Webhook:
         #       use multipart/form-data instead of json payload.
         headers = {"Content-Type": "application/json"}
         async with _http_client.post(self.url, data=self.json, headers=headers) as resp:
-            if not resp or resp.status != 204:
+            if resp.status != 204:
                 return  # failed
 
         if not http_client:

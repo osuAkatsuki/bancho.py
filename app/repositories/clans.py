@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -30,7 +32,7 @@ class Clan(TypedDict):
     name: str
     tag: str
     owner: int
-    created_at: str
+    created_at: datetime
 
 
 class ClanUpdateFields(TypedDict, total=False):
@@ -49,7 +51,7 @@ async def create(
         INSERT INTO clans (name, tag, owner, created_at)
              VALUES (:name, :tag, :owner, NOW())
     """
-    params = {
+    params: dict[str, Any] = {
         "name": name,
         "tag": tag,
         "owner": owner,
@@ -67,7 +69,7 @@ async def create(
     clan = await app.state.services.database.fetch_one(query, params)
 
     assert clan is not None
-    return cast(Clan, clan)
+    return cast(Clan, dict(clan._mapping))
 
 
 async def fetch_one(
@@ -88,10 +90,10 @@ async def fetch_one(
            AND tag = COALESCE(:tag, tag)
            AND owner = COALESCE(:owner, owner)
     """
-    params = {"id": id, "name": name, "tag": tag, "owner": owner}
+    params: dict[str, Any] = {"id": id, "name": name, "tag": tag, "owner": owner}
     clan = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None
 
 
 async def fetch_count() -> int:
@@ -102,7 +104,7 @@ async def fetch_count() -> int:
     """
     rec = await app.state.services.database.fetch_one(query)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -114,7 +116,7 @@ async def fetch_many(
         SELECT {READ_PARAMS}
           FROM clans
     """
-    params = {}
+    params: dict[str, Any] = {}
 
     if page is not None and page_size is not None:
         query += """\
@@ -125,7 +127,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     clans = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Clan], clans) if clans is not None else None
+    return cast(list[Clan], [dict(c._mapping) for c in clans])
 
 
 async def update(
@@ -156,11 +158,11 @@ async def update(
           FROM clans
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None
 
 
 async def delete(id: int) -> Clan | None:
@@ -170,7 +172,7 @@ async def delete(id: int) -> Clan | None:
           FROM clans
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -181,8 +183,6 @@ async def delete(id: int) -> Clan | None:
         DELETE FROM clans
          WHERE id = :id
     """
-    params = {
-        "id": id,
-    }
+    params = {"id": id}
     clan = await app.state.services.database.execute(query, params)
-    return cast(Clan, clan) if clan is not None else None
+    return cast(Clan, dict(clan._mapping)) if clan is not None else None

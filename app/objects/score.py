@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+from typing import cast
 from typing import TYPE_CHECKING
 
 import app.state
@@ -88,10 +89,10 @@ class Score:
 
     Possibly confusing attributes
     -----------
-    bmap: Optional[`Beatmap`]
+    bmap: `Beatmap | None`
         A beatmap obj representing the osu map.
 
-    player: Optional[`Player`]
+    player: `Player | None`
         A player obj of the player who submitted the score.
 
     grade: `Grade`
@@ -109,7 +110,7 @@ class Score:
     client_flags: `int`
         osu!'s old anticheat flags.
 
-    prev_best: Optional[`Score`]
+    prev_best: `Score | None`
         The previous best score before this play was submitted.
         NOTE: just because a score has a `prev_best` attribute does
         mean the score is our best score on the map! the `status`
@@ -159,6 +160,7 @@ class Score:
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
         try:
+            assert self.bmap is not None
             return (
                 f"<{self.acc:.2f}% {self.max_combo}x {self.nmiss}M "
                 f"#{self.rank} on {self.bmap.full_name} for {self.pp:,.2f}pp>"
@@ -187,7 +189,7 @@ class Score:
         s.pp = rec["pp"]
         s.score = rec["score"]
         s.max_combo = rec["max_combo"]
-        s.mods = rec["mods"]
+        s.mods = Mods(rec["mods"])
         s.acc = rec["acc"]
         s.n300 = rec["n300"]
         s.n100 = rec["n100"]
@@ -195,22 +197,15 @@ class Score:
         s.nmiss = rec["nmiss"]
         s.ngeki = rec["ngeki"]
         s.nkatu = rec["nkatu"]
-        s.grade = rec["grade"]
-        s.perfect = rec["perfect"]
-        s.status = rec["status"]
-        s.mode = rec["mode"]
+        s.grade = Grade.from_str(rec["grade"])
+        s.perfect = rec["perfect"] == 1
+        s.status = SubmissionStatus(rec["status"])
+        s.passed = s.status != SubmissionStatus.FAILED
+        s.mode = GameMode(rec["mode"])
         s.server_time = rec["play_time"]
         s.time_elapsed = rec["time_elapsed"]
-        s.client_flags = rec["client_flags"]
+        s.client_flags = ClientFlags(rec["client_flags"])
         s.client_checksum = rec["online_checksum"]
-
-        # fix some types
-        s.passed = s.status != 0
-        s.status = SubmissionStatus(s.status)
-        s.grade = Grade.from_str(s.grade)
-        s.mods = Mods(s.mods)
-        s.mode = GameMode(s.mode)
-        s.client_flags = ClientFlags(s.client_flags)
 
         if s.bmap:
             s.rank = await s.calculate_placement()
@@ -323,7 +318,7 @@ class Score:
         )
 
         # TODO: idk if returns none
-        return better_scores + 1  # if better_scores is not None else 1
+        return cast(int, better_scores) + 1  # if better_scores is not None else 1
 
     def calculate_performance(self, osu_file_path: Path) -> tuple[float, float]:
         """Calculate PP and star rating for our score."""

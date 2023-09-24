@@ -26,7 +26,6 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
-
 import uvicorn
 
 import app.utils
@@ -76,21 +75,21 @@ def main(argv: Sequence[str]) -> int:
 
     # the server supports both inet and unix sockets.
 
+    uds = None
+    host = None
+    port = None
+
     if (
         app.utils.is_valid_inet_address(app.settings.SERVER_ADDR)
         and app.settings.SERVER_PORT is not None
     ):
-        server_arguments = {
-            "host": app.settings.SERVER_ADDR,
-            "port": app.settings.SERVER_PORT,
-        }
+        host = app.settings.SERVER_ADDR
+        port = app.settings.SERVER_PORT
     elif (
         app.utils.is_valid_unix_address(app.settings.SERVER_ADDR)
         and app.settings.SERVER_PORT is None
     ):
-        server_arguments = {
-            "uds": app.settings.SERVER_ADDR,
-        }
+        uds = app.settings.SERVER_ADDR
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
@@ -124,7 +123,9 @@ def main(argv: Sequence[str]) -> int:
         #       but i would prefer Bancho-Version to keep
         #       with standards. perhaps look into this.
         headers=[("bancho-version", app.settings.VERSION)],
-        **server_arguments,
+        uds=uds,
+        host=host or "127.0.0.1",  # uvicorn defaults
+        port=port or 8000,  # uvicorn defaults
     )
 
     return 0

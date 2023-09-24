@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 from typing import cast
 from typing import TypedDict
 
@@ -83,7 +84,7 @@ async def create(
         INSERT INTO stats (id, mode)
         VALUES (:id, :mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -100,7 +101,7 @@ async def create(
     stat = await app.state.services.database.fetch_one(query, params)
 
     assert stat is not None
-    return cast(Stat, stat)
+    return cast(Stat, dict(stat._mapping))
 
 
 async def create_all_modes(player_id: int) -> list[Stat]:
@@ -129,11 +130,11 @@ async def create_all_modes(player_id: int) -> list[Stat]:
           FROM stats
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
     }
     stats = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Stat], stats) if stats is not None else None
+    return cast(list[Stat], [dict(s._mapping) for s in stats])
 
 
 async def fetch_one(player_id: int, mode: int) -> Stat | None:
@@ -144,13 +145,13 @@ async def fetch_one(player_id: int, mode: int) -> Stat | None:
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
     stat = await app.state.services.database.fetch_one(query, params)
 
-    return cast(Stat, stat) if stat is not None else None
+    return cast(Stat, dict(stat._mapping)) if stat is not None else None
 
 
 async def fetch_count(
@@ -163,13 +164,13 @@ async def fetch_count(
          WHERE id = COALESCE(:id, id)
            AND mode = COALESCE(:mode, mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -184,7 +185,7 @@ async def fetch_many(
          WHERE id = COALESCE(:id, id)
            AND mode = COALESCE(:mode, mode)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
@@ -198,7 +199,7 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     stats = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Stat], stats) if stats is not None else None
+    return cast(list[Stat], [dict(s._mapping) for s in stats])
 
 
 async def update(
@@ -220,7 +221,7 @@ async def update(
     a_count: int | _UnsetSentinel = UNSET,
 ) -> Stat | None:
     """Update a player stats entry in the database."""
-    update_fields = AchievementUpdateFields = {}
+    update_fields: StatUpdateFields = {}
     if not isinstance(tscore, _UnsetSentinel):
         update_fields["tscore"] = tscore
     if not isinstance(rscore, _UnsetSentinel):
@@ -265,12 +266,12 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params = {
+    params: dict[str, Any] = {
         "id": player_id,
         "mode": mode,
     }
-    stat = await app.state.services.database.fetch_one(query, params)
-    return cast(Stat, stat) if stat is not None else None
+    stats = await app.state.services.database.fetch_one(query, params)
+    return cast(Stat, dict(stats._mapping)) if stats is not None else None
 
 
 # TODO: delete?
