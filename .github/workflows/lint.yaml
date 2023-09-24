@@ -1,8 +1,8 @@
 name: Lint
-
-# TODO: only run on change to *.py files
 on:
-  push
+  push:
+    paths:
+      - '*.py'
 
 jobs:
   mypy:
