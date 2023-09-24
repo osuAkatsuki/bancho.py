@@ -13,7 +13,7 @@ from typing import Any
 from typing import cast
 from typing import TypedDict
 
-import aiohttp
+import httpx
 from tenacity import retry
 from tenacity.stop import stop_after_attempt
 
@@ -61,12 +61,12 @@ async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
         # https://osu.direct/doc
         url = "https://osu.direct/api/get_beatmaps"
 
-    async with app.state.services.http_client.get(url, params=params) as response:
-        response_data = await response.json()
-        if response.status == 200 and response_data:  # (data may be [])
-            return {"data": response_data, "status_code": response.status}
+    response = await app.state.services.http_client.get(url, params=params)
+    response_data = await response.json()
+    if response.status_code == 200 and response_data:  # (data may be [])
+        return {"data": response_data, "status_code": response.status_code}
 
-    return {"data": None, "status_code": response.status}
+    return {"data": None, "status_code": response.status_code}
 
 
 async def ensure_local_osu_file(
@@ -85,15 +85,15 @@ async def ensure_local_osu_file(
             log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
-        async with app.state.services.http_client.get(url) as resp:
-            if resp.status != 200:
-                if 400 <= resp.status < 500:
-                    # client error, report this to cmyui
-                    stacktrace = app.utils.get_appropriate_stacktrace()
-                    await app.state.services.log_strange_occurrence(stacktrace)
-                return False
+        response = await app.state.services.http_client.get(url)
+        if response.status_code != 200:
+            if 400 <= response.status_code < 500:
+                # client error, report this to cmyui
+                stacktrace = app.utils.get_appropriate_stacktrace()
+                await app.state.services.log_strange_occurrence(stacktrace)
+            return False
 
-            osu_file_path.write_bytes(await resp.read())
+        osu_file_path.write_bytes(response.read())
 
     return True
 
@@ -644,10 +644,10 @@ class BeatmapSet:
 
         try:
             api_data = await api_get_beatmaps(s=self.id)
-        except (aiohttp.ClientConnectorError, aiohttp.ContentTypeError):
-            # NOTE: ClientConnectorError is directly caused by the API being unavailable
+        except (httpx.TransportError, httpx.DecodingError):
+            # NOTE: TransportError is directly caused by the API being unavailable
 
-            # NOTE: ContentTypeError is caused by the API returning HTML and
+            # NOTE: DecodingError is caused by the API returning HTML and
             #       normally happens when CF protection is enabled while
             #       osu! recovers from a DDOS attack
 

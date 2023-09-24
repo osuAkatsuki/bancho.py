@@ -14,6 +14,7 @@ from typing import TypedDict
 import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
+import httpx
 import pymysql
 from redis import asyncio as aioredis
 
@@ -26,7 +27,6 @@ from app.logging import printc
 from app.logging import Rainbow
 
 if TYPE_CHECKING:
-    import aiohttp
     import databases.core
 
 
@@ -38,7 +38,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 """ session objects """
 
-http_client: aiohttp.ClientSession
+http_client = httpx.AsyncClient()
 database = databases.Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
@@ -201,21 +201,20 @@ async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
     else:
         url = "http://ip-api.com/line/"
 
-    assert http_client is not None
-    async with http_client.get(url) as resp:
-        if resp.status != 200:
-            log("Failed to get geoloc data: request failed.", Ansi.LRED)
-            return None
+    response = await http_client.get(url)
+    if response.status_code != 200:
+        log("Failed to get geoloc data: request failed.", Ansi.LRED)
+        return None
 
-        status, *lines = (await resp.text()).split("\n")
+    status, *lines = response.read().decode().split("\n")
 
-        if status != "success":
-            err_msg = lines[0]
-            if err_msg == "invalid query":
-                err_msg += f" ({url})"
+    if status != "success":
+        err_msg = lines[0]
+        if err_msg == "invalid query":
+            err_msg += f" ({url})"
 
-            log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
-            return None
+        log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
+        return None
 
     acronym = lines[1].lower()
 
@@ -235,24 +234,23 @@ async def log_strange_occurrence(obj: object) -> None:
 
     if app.settings.AUTOMATICALLY_REPORT_PROBLEMS:
         # automatically reporting problems to cmyui's server
-        assert http_client is not None
-        async with http_client.post(
+        response = await http_client.post(
             url="https://log.cmyui.xyz/",
             headers={
                 "Bancho-Version": app.settings.VERSION,
                 "Bancho-Domain": app.settings.DOMAIN,
             },
-            data=pickled_obj,
-        ) as resp:
-            if resp.status == 200 and (await resp.read()) == b"ok":
-                uploaded = True
-                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-                log("Thank you for your participation! <3", Rainbow)
-            else:
-                log(
-                    f"Autoupload to cmyui's server failed (HTTP {resp.status})",
-                    Ansi.LRED,
-                )
+            content=pickled_obj,
+        )
+        if response.status_code == 200 and response.read() == b"ok":
+            uploaded = True
+            log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
+            log("Thank you for your participation! <3", Rainbow)
+        else:
+            log(
+                f"Autoupload to cmyui's server failed (HTTP {response.status_code})",
+                Ansi.LRED,
+            )
 
     if not uploaded:
         # log to a file locally, and prompt the user
@@ -344,19 +342,19 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
 
         # TODO: split up and do the requests asynchronously
         url = f"https://pypi.org/pypi/{dependency_name}/json"
-        assert http_client is not None
-        async with http_client.get(url) as resp:
-            json = await resp.json()
-            if resp.status == 200 and json:
-                latest_ver = Version.from_str(json["info"]["version"])
+        response = await http_client.get(url)
+        json = response.json()
 
-                if not latest_ver:
-                    # they've started using a more advanced versioning system.
-                    continue
+        if response.status_code == 200 and json:
+            latest_ver = Version.from_str(json["info"]["version"])
 
-                yield (dependency_name, latest_ver, current_ver)
-            else:
-                yield (dependency_name, current_ver, current_ver)
+            if not latest_ver:
+                # they've started using a more advanced versioning system.
+                continue
+
+            yield (dependency_name, latest_ver, current_ver)
+        else:
+            yield (dependency_name, current_ver, current_ver)
 
 
 async def check_for_dependency_updates() -> None:

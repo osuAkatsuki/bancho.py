@@ -3,8 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import aiohttp
-import orjson
+from tenacity import retry
+from tenacity import stop_after_attempt
+from tenacity import wait_exponential
+
+from app.state import services
+
 
 # NOTE: this module currently only implements discord webhooks
 
@@ -128,7 +132,7 @@ class Webhook:
         self.embeds.append(embed)
 
     @property
-    def json(self) -> str:
+    def json(self) -> Any:
         if not any([self.content, self.file, self.embeds]):
             raise Exception(
                 "Webhook must contain at least one " "of (content, file, embeds).",
@@ -164,20 +168,20 @@ class Webhook:
 
             payload["embeds"].append(embed_payload)
 
-        return orjson.dumps(payload).decode()
+        return payload
 
-    async def post(self, http_client: aiohttp.ClientSession | None = None) -> None:
+    @retry(
+        stop=stop_after_attempt(10),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+    )
+    async def post(self) -> None:
         """Post the webhook in JSON format."""
-        _http_client = http_client or aiohttp.ClientSession(
-            json_serialize=lambda x: orjson.dumps(x).decode(),
-        )
-
         # TODO: if `self.file is not None`, then we should
         #       use multipart/form-data instead of json payload.
         headers = {"Content-Type": "application/json"}
-        async with _http_client.post(self.url, data=self.json, headers=headers) as resp:
-            if resp.status != 204:
-                return  # failed
-
-        if not http_client:
-            await _http_client.close()
+        response = await services.http_client.post(
+            self.url,
+            json=self.json,
+            headers=headers,
+        )
+        response.raise_for_status()
