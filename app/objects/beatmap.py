@@ -671,6 +671,9 @@ class BeatmapSet:
             updated_maps: list[Beatmap] = []  # TODO: optimize
             map_md5s_to_delete: set[str] = set()
 
+            # temp value for building the new beatmap
+            bmap: Beatmap
+
             # find maps in our current state that've been deleted, or need updates
             for old_id, old_map in old_maps.items():
                 if old_id not in new_maps:
@@ -686,9 +689,9 @@ class BeatmapSet:
                         or old_map.status != new_ranked_status
                     ):
                         # update map from old_maps
-                        old_bmap = old_maps[old_id]
-                        old_bmap._parse_from_osuapi_resp(new_map)
-                        updated_maps.append(old_bmap)
+                        bmap = old_maps[old_id]
+                        bmap._parse_from_osuapi_resp(new_map)
+                        updated_maps.append(bmap)
                     else:
                         # map is the same, make no changes
                         updated_maps.append(old_map)  # TODO: is this needed?
@@ -697,7 +700,7 @@ class BeatmapSet:
             for new_id, new_map in new_maps.items():
                 if new_id not in old_maps:
                     # new map we don't have locally, add it
-                    bmap: Beatmap = Beatmap.__new__(Beatmap)
+                    bmap = Beatmap.__new__(Beatmap)
                     bmap.id = new_id
 
                     bmap._parse_from_osuapi_resp(new_map)
