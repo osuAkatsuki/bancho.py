@@ -170,10 +170,6 @@ class Webhook:
 
         return payload
 
-    @retry(
-        stop=stop_after_attempt(10),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-    )
     async def post(self) -> None:
         """Post the webhook in JSON format."""
         # TODO: if `self.file is not None`, then we should
