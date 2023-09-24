@@ -12,13 +12,14 @@ import app.state
 from app import commands
 from app.logging import Ansi
 from app.logging import log
+from app.objects.channel import Channel
 from app.objects.player import Player
-from app.packets import Channel
 from app.utils import make_safe_name
 
 
 NAME = "banchopy-irc"
 WHITE_SPACE = re.compile(r"\r?\n")
+
 
 # Custom Bancho IRC exception.
 class BanchoIRCException(Exception):
@@ -28,7 +29,7 @@ class BanchoIRCException(Exception):
         self.code: int = code_error
         self.error: str = error
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self.error)
 
 
@@ -42,29 +43,29 @@ class IRCClient:
         self.queue = bytearray()
         self.socket = writer
         self.server = server
-        self.player: Optional[Player] = None
+        self.player: Player | None = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.player is not None:
             return f"{self.player.name}@{NAME}"
         else:
             return f"UNAUTHORIZED@{NAME}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.player is not None:
             return f"{self.player.name}@{NAME}"
         else:
             return f"UNAUTHORIZED@{NAME}"
 
-    def dequeue(self):
+    def dequeue(self) -> bytearray:
         buffer = self.queue
         self.queue = bytearray()
         return buffer
 
-    def add_queue(self, message: str):
+    def add_queue(self, message: str) -> None:
         self.socket.write((message + "\r\n").encode())
 
-    def send_welcome_msg(self):
+    def send_welcome_msg(self) -> None:
         if self.player is None:
             raise RuntimeError(
                 "Attempted to send welcome message to an unauthenticated IRC client.",
@@ -85,7 +86,7 @@ class IRCClient:
         )
         self.add_queue(f":{NAME} 376 :End of MOTD command")
 
-    async def login(self, irc_key: str = ""):
+    async def login(self, irc_key: str = "") -> Player | None:
         player = await app.state.sessions.players.from_cache_or_sql(
             irc_key=irc_key,
         )
@@ -94,7 +95,7 @@ class IRCClient:
             raise BanchoIRCException(464, f"PASS :Incorrect password")
 
         if player.restricted:
-            return
+            return None
 
         player.irc_client = True
 
@@ -113,7 +114,7 @@ class IRCClient:
 
         return player
 
-    async def data_received(self, data: bytes):
+    async def data_received(self, data: bytes) -> None:
         message = data.decode("utf-8")
         try:
             client_data = WHITE_SPACE.split(message)[:-1]
@@ -145,12 +146,12 @@ class IRCClient:
             self.socket.write(f":{NAME} {e.code} {e.error}\r\n".encode())
         except Exception as e:
             self.socket.write(f":{NAME} ERROR {repr(e)}".encode())
-            print(traceback.print_exc())
+            traceback.print_exc()
 
-    async def handler_nick(self, _):
-        ...
+    async def handler_nick(self, args: str) -> None:
+        pass
 
-    async def handler_ping(self, _):
+    async def handler_ping(self, args: str) -> None:
         if self.player is None:
             raise RuntimeError(
                 "Attempted to handle a ping from an unauthenticated IRC client.",
@@ -162,7 +163,7 @@ class IRCClient:
         if self.player.irc_client:
             self.player.last_recv_time = time.time()
 
-    async def handler_privmsg(self, args: str):
+    async def handler_privmsg(self, args: str) -> None:
         if self.player is None:
             raise RuntimeError(
                 "Attempted to handle a private message from an unauthenticated IRC client.",
@@ -202,7 +203,7 @@ class IRCClient:
                 if client.player.name == recipient:
                     client.add_queue(f":{self.player.name} PRIVMSG {recipient} :{msg}")
 
-    async def handler_part(self, channel: str):
+    async def handler_part(self, channel: str) -> None:
         if self.player is None:
             raise RuntimeError(
                 "Attempted to handle a channel part from an unauthenticated IRC client.",
@@ -231,7 +232,7 @@ class IRCClient:
                 f"{channel} :You're not on that channel",
             )
 
-    async def handler_join(self, channel: str):
+    async def handler_join(self, channel: str) -> None:
         if self.player is None:
             raise RuntimeError(
                 "Attempted to handle a channel join from an unauthenticated IRC client.",
@@ -367,7 +368,7 @@ class IRCServer:
         self.loop = loop
         self.host = "0.0.0.0"
         self.port = port
-        self.socket_server: Optional[asyncio.Server] = None
+        self.socket_server: asyncio.Server | None = None
         self.clients: set[IRCClient] = set()
 
     @property
@@ -437,7 +438,7 @@ class IRCServer:
             self.clients.remove(client)
             writer.close()
 
-    async def start(self) -> "IRCServer":
+    async def start(self) -> IRCServer:
         server = await asyncio.start_server(
             self.callback_handler,
             self.host,

@@ -185,6 +185,7 @@ class Players(list[Player]):
     def get(
         self,
         token: str | None = None,
+        irc_key: str | None = None,
         id: int | None = None,
         name: str | None = None,
     ) -> Player | None:
@@ -193,10 +194,12 @@ class Players(list[Player]):
             if token is not None:
                 if player.token == token:
                     return player
+            elif irc_key is not None:
+                if player.irc_key == irc_key:
+                    return player
             elif id is not None:
                 if player.id == id:
                     return player
-            # TODO: Add irc key
             elif name is not None:
                 if player.safe_name == make_safe_name(name):
                     return player
@@ -207,13 +210,14 @@ class Players(list[Player]):
         self,
         id: int | None = None,
         name: str | None = None,
+        irc_key: str | None = None,
     ) -> Player | None:
         """Get a player by token, irc_key, id, or name from sql."""
-        # TODO: Add irc key
         # try to get from sql.
         player = await players_repo.fetch_one(
             id=id,
             name=name,
+            irc_key=irc_key,
             fetch_all_fields=True,
         )
         if player is None:
@@ -243,18 +247,20 @@ class Players(list[Player]):
             silence_end=player["silence_end"],
             donor_end=player["donor_end"],
             api_key=player["api_key"],
+            irc_key=player["irc_key"],
         )
 
     async def from_cache_or_sql(
         self,
         id: int | None = None,
         name: str | None = None,
+        irc_key: str | None = None,
     ) -> Player | None:
         """Try to get player from cache, or sql as fallback."""
-        player = self.get(id=id, name=name)
+        player = self.get(id=id, name=name, irc_key=irc_key)
         if player is not None:
             return player
-        player = await self.get_sql(id=id, name=name)
+        player = await self.get_sql(id=id, name=name, irc_key=irc_key)
         if player is not None:
             return player
 

@@ -90,8 +90,9 @@ class Channel:
             msg_split_line = msg.split("\n")
 
             for line in msg_split_line:
-                if line == msg_split_line[:1] and line == "":
+                if line == msg_split_line[0] and line == "":
                     continue
+
                 app.state.services.irc.bancho_message(sender.name, self._name, line)
 
         for player in self.players:
@@ -110,7 +111,7 @@ class Channel:
         msg_split_line = msg.split("\n")
 
         for line in msg_split_line:
-            if line == msg_split_line[:1] and line == "":
+            if line == msg_split_line[0] and line == "":
                 continue
             app.state.services.irc.bancho_message(bot.name, self._name, line)
 
@@ -151,8 +152,8 @@ class Channel:
             # the channel from the global list.
             app.state.sessions.channels.remove(self)
 
-        if not p.irc_client:
-            app.state.services.irc.bancho_part(p, self)
+        if not player.irc_client:
+            app.state.services.irc.bancho_part(player, self)
 
     def enqueue(self, data: bytes, immune: Sequence[int] = []) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""

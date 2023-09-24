@@ -1355,12 +1355,14 @@ def ensure_match(
 ) -> Callable[[Context], Awaitable[str | None]]:
     @wraps(f)
     async def wrapper(ctx: Context) -> str | None:
+        match = None
         if ctx.player.irc_client:
-            chan = app.state.sessions.channels.get_by_name(ctx.recipient._name)
+            channel = app.state.sessions.channels.get_by_name(ctx.recipient.name)
+            assert channel is not None
 
-            for p in chan.players:
-                if not p.irc_client:
-                    match = p.match
+            for player in channel.players:
+                if not player.irc_client:
+                    match = player.match
                     break
         else:
             match = ctx.player.match
@@ -1658,7 +1660,7 @@ async def mp_addref(ctx: Context, match: Match) -> str | None:
     if not target:
         return "Could not find a user by that name."
 
-    if target not in {slot.player for slot in match.slots} and not t.irc_client:
+    if target not in {slot.player for slot in match.slots} and not target.irc_client:
         return "User must be in the current match!"
 
     if target in match.refs:

@@ -1121,7 +1121,7 @@ class Player:
             msg_split_line = msg.split("\n")
 
             for line in msg_split_line:
-                if line == msg_split_line[:1] and line == "":
+                if line == msg_split_line[0] and line == "":
                     continue
                 app.state.services.irc.bancho_message(sender.name, self.name, line)
 
@@ -1141,7 +1141,7 @@ class Player:
         msg_split_line = msg.split("\n")
 
         for line in msg_split_line:
-            if line == msg_split_line[:1] and line == "":
+            if line == msg_split_line[0] and line == "":
                 continue
             app.state.services.irc.bancho_message(bot.name, self.name, line)
 

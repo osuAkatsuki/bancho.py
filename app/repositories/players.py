@@ -62,6 +62,7 @@ class Player(TypedDict):
     custom_badge_icon: str | None
     userpage_content: str | None
     api_key: str | None
+    irc_key: str | None
 
 
 class PlayerUpdateFields(TypedDict, total=False):
@@ -81,6 +82,7 @@ class PlayerUpdateFields(TypedDict, total=False):
     custom_badge_icon: str | None
     userpage_content: str | None
     api_key: str | None
+    irc_key: str | None
 
 
 async def create(
@@ -120,11 +122,12 @@ async def create(
 async def fetch_one(
     id: int | None = None,
     name: str | None = None,
+    irc_key: str | None = None,
     email: str | None = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
 ) -> Player | None:
     """Fetch a single player from the database."""
-    if id is None and name is None and email is None:
+    if id is None and name is None and irc_key is None and email is None:
         raise ValueError("Must provide at least one parameter.")
 
     query = f"""\
@@ -132,11 +135,13 @@ async def fetch_one(
           FROM users
          WHERE id = COALESCE(:id, id)
            AND safe_name = COALESCE(:safe_name, safe_name)
+           AND irc_key = COALESCE(:irc_key, irc_key)
            AND email = COALESCE(:email, email)
     """
     params: dict[str, Any] = {
         "id": id,
         "safe_name": make_safe_name(name) if name is not None else None,
+        "irc_key": irc_key,
         "email": email,
     }
     player = await app.state.services.database.fetch_one(query, params)
@@ -235,6 +240,7 @@ async def update(
     custom_badge_icon: str | None | _UnsetSentinel = UNSET,
     userpage_content: str | None | _UnsetSentinel = UNSET,
     api_key: str | None | _UnsetSentinel = UNSET,
+    irc_key: str | None | _UnsetSentinel = UNSET,
 ) -> Player | None:
     """Update a player in the database."""
     update_fields: PlayerUpdateFields = {}
@@ -270,6 +276,8 @@ async def update(
         update_fields["userpage_content"] = userpage_content
     if not isinstance(api_key, _UnsetSentinel):
         update_fields["api_key"] = api_key
+    if not isinstance(irc_key, _UnsetSentinel):
+        update_fields["irc_key"] = irc_key
 
     query = f"""\
         UPDATE users
