@@ -1,4 +1,4 @@
-version: "3"
+version: "3.8"
 
 services:
   mysql:
@@ -19,8 +19,8 @@ services:
       timeout: 20s
       retries: 10
     # Uncomment to expose the port to the host machine
-    #ports:
-    #  - ${DB_PORT}:${DB_PORT}
+    # ports:
+    #   - ${DB_PORT}:${DB_PORT}
 
   redis:
     image: bitnami/redis:latest
@@ -31,22 +31,20 @@ services:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
     # Uncomment to expose the port to the host machine
-    #ports:
-    #  - ${REDIS_PORT}:${REDIS_PORT}
+    # ports:
+    #   - ${REDIS_PORT}:${REDIS_PORT}
 
   bancho:
-    build:
-      context: .
-      dockerfile: ./docker/banchopy/Dockerfile
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_started
     tty: true
+    env_file:
+      - .env
     volumes:
-      - data:/home/bpyuser/.data
-      - .env:/home/bpyuser/.env:ro
+      - .data:/home/bpyuser/.data
 
   nginx:
     build:
@@ -69,13 +67,3 @@ services:
     ports:
       - ${SERVER_PORT}:${SERVER_PORT}
       - ${HOST_PORT}:${HOST_PORT}
-
-volumes:
-  data:
-  db-data:
-  redis-data:
-
-
-networks:
-  default:
-    name: bpy-network

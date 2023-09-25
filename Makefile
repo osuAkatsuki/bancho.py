@@ -1,3 +1,9 @@
+build:
+	docker build -t bancho:latest .
+
+run:
+	docker-compose up bancho mysql redis
+
 shell:
 	pipenv shell
 
@@ -31,6 +37,3 @@ update: # THIS WILL NOT RUN ON WINDOWS DUE TO UVLOOP; USE WSL
 
 clean:
 	pipenv clean
-
-run:
-	pipenv run ./scripts/start_server.sh
