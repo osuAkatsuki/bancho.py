@@ -15,9 +15,6 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
-      - name: Start containers
-        run: docker-compose up bancho mysql redis
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -29,6 +26,9 @@ jobs:
           tags: osuakatsuki/bancho.py:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Start containers
+        run: docker-compose up bancho mysql redis
 
       - name: Run tests
         run: docker-compose run --rm bancho /scripts/run_tests.sh
