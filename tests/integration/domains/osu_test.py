@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from app import encryption
 
 
-async def test_score_submission(http_client: AsyncClient):
+async def test_score_submission(http_client: AsyncClient) -> None:
     # ARRANGE
 
     username = f"test-{secrets.token_hex(4)}"
