@@ -4,20 +4,15 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /srv/root
 
-# install app dependencies
 RUN apt update && apt install -y git curl build-essential=12.9
 
-# install python dependencies
 COPY Makefile Pipfile Pipfile.lock ./
 RUN pip install -U pip setuptools pipenv
 RUN PIPENV_VENV_IN_PROJECT=1 pipenv install
 
-# create data directory
 RUN mkdir /home/bpyuser/.data
 
-# copy the source code in last, so that it doesn't
-# repeat the previous steps for each change
+# NOTE: done last to avoid re-run of previous steps
 COPY . .
 
-# start bancho.py
 ENTRYPOINT [ "/scripts/start_server.sh" ]
