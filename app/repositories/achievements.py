@@ -143,14 +143,14 @@ async def fetch_many(
 
     records = await app.state.services.database.fetch_all(query, params)
 
-    achievements: list[Achievement] = []
+    achievements: list[dict[str, Any]] = []
 
     for rec in records:
         achievement = dict(rec._mapping)
         achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
-        achievements.append(cast(Achievement, achievement))
+        achievements.append(achievement)
 
-    return achievements
+    return cast(list[Achievement], achievements)
 
 
 async def update(
