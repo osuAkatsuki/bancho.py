@@ -1265,7 +1265,6 @@ class SendPrivateMessage(BasePacket):
                             "mods": mods,
                             "timeout": time.time() + 300,  # /np's last 5mins
                         }
-                        print(player.last_np)
 
                         # calculate generic pp values from their /np
 
