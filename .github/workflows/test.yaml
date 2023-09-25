@@ -52,7 +52,7 @@ jobs:
         run: docker-compose up -d bancho mysql redis
 
       - name: Run tests
-        run: docker-compose exec -T bancho /scripts/run_tests.sh
+        run: docker-compose exec -T bancho /scripts/run-tests.sh
 
       - name: Stop containers
         if: always()
