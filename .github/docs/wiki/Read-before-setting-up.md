@@ -14,7 +14,7 @@ different setup processes.
 
 ## Requirements
 
-**bancho.py** is a ~15,000 line codebase built on the shoulder of giants.
+**bancho.py** is a ~20,000 line codebase built on the shoulder of giants.
 
 we aim to minimize our dependencies, but still rely on ones such as
 

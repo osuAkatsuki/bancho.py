@@ -16,7 +16,7 @@ abweichende Installationsprozesse haben.
 
 ## Anforderungen
 
-**bancho.py** ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
+**bancho.py** ist eine ~20.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
 
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 
