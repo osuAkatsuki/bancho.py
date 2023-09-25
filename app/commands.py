@@ -1270,7 +1270,7 @@ async def server(ctx: Context) -> str | None:
     return "\n".join(
         (
             f"{build_str} | uptime: {seconds_readable(uptime)}",
-            f"cpu(s): {cpu_info_str}",
+            f"cpu: {cpu_info_str}",
             f"ram: {ram_info}",
             f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
             f"osu!api connection: {using_osuapi}",
