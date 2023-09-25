@@ -11,8 +11,7 @@
 
 ## 玩家
 
-* **[Setting up (Docker)](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-(Docker)-zh-CN)**
-* **[Setting up (Manual)](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-(Manual)-zh-CN)**
+* **[Setting up](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-zh-CN)**
 * **[Post setup](https://github.com/osuAkatsuki/bancho.py/wiki/Post-setup-zh-CN)**
 
 ## 开发者

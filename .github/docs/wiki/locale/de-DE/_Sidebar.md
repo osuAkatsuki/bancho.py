@@ -11,8 +11,7 @@
 
 ## Anleitungen
 
-* **[Einrichten (Docker)](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-(Docker)-de-DE)**
-* **[Einrichten (Manuell)](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-(Manual)-de-DE)**
+* **[Einrichten](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-de-DE)**
 * **[Nach der Einrichtung](https://github.com/osuAkatsuki/bancho.py/wiki/Post-setup-de-DE)**
 
 ## Entwickler
