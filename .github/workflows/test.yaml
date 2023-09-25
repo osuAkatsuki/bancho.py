@@ -4,7 +4,7 @@ on:
   push
 
 jobs:
-  generate-lockfile:
+  run-test-suite:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
