@@ -37,6 +37,7 @@ services:
   ## application services
 
   bancho:
+    # we also have a public image: osuakatsuki/bancho.py:latest
     image: bancho:latest
     ports:
       - ${APP_PORT}:${APP_PORT}
