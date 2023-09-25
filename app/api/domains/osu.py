@@ -1058,12 +1058,7 @@ async def osuSubmitModularSelector(
     """ score submission charts """
 
     # charts are only displayed for passes vanilla gamemodes.
-    if not score.passed or score.mode not in (
-        GameMode.VANILLA_OSU,
-        GameMode.VANILLA_TAIKO,
-        GameMode.VANILLA_CATCH,
-        GameMode.VANILLA_MANIA,
-    ):
+    if not score.passed:  # TODO: check if this is correct
         response = b"error: no"
     else:
         # construct and send achievements & ranking charts to the client
