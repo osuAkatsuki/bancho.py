@@ -22,12 +22,7 @@ we aim to minimize our dependencies, but still rely on ones such as
 - mysql (relational database)
 - redis (in memory database)
 - nginx (http(s) reverse proxy)
-- geoip2 (an nginx module)
 - certbot (ssl certificate tool)
 - build-essential (build tools for c/c++)
 
 as well as some others.
-
-## Setup Methods
-
-**bancho.py** provides two documented methods to set up the codebase. You are free to use either one, but Docker will be the easier method.

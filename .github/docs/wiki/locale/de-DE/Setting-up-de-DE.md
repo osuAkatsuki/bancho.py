@@ -78,5 +78,3 @@ make update
 # remove all unused dependencies
 make clean
 ```
-
-for more information, see the [docker-cli documentation](https://docs.docker.com/engine/reference/commandline/cli/).

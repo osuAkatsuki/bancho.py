@@ -29,7 +29,3 @@ Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Ab
 - build-essential (Build-Werkzeuge für C/C++)
 
 als auch einige andere angewiesen.
-
-## Einrichtungsmethoden
-
-**bancho.py** bietet zwei dokumentierte Methoden zur Einrichtung der Codebasis an. Sie können entweder die eine oder die andere Methode verwenden, aber Docker wird die einfachere Methode sein.
