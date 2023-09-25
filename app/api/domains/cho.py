@@ -400,8 +400,15 @@ class SendMessage(BasePacket):
                         # use player mode if not specified
                         mode_vn = player.status.mode.as_vanilla
 
+                    # parse the mods from regex
+                    if r_match["mods"] is not None:
+                        mods = Mods.from_np(r_match["mods"][1:], mode_vn)
+                    else:
+                        mods = None
+
                     player.last_np = {
                         "bmap": bmap,
+                        "mods": mods,
                         "mode_vn": mode_vn,
                         "timeout": time.time() + 300,  # /np's last 5mins
                     }
@@ -1217,11 +1224,19 @@ class SendPrivateMessage(BasePacket):
                             # use player mode if not specified
                             mode_vn = player.status.mode.as_vanilla
 
+                        # parse the mods from regex
+                        if r_match["mods"] is not None:
+                            mods = Mods.from_np(r_match["mods"][1:], mode_vn)
+                        else:
+                            mods = None
+
                         player.last_np = {
                             "bmap": bmap,
                             "mode_vn": mode_vn,
+                            "mods": mods,
                             "timeout": time.time() + 300,  # /np's last 5mins
                         }
+                        print(player.last_np)
 
                         # calculate generic pp values from their /np
 
