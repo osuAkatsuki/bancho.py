@@ -83,10 +83,7 @@ async def fetch_count(
     return cast(int, rec._mapping["count"])
 
 
-async def fetch_all(
-    to_id: int,
-    read: bool,
-) -> list[Mail]:
+async def fetch_all(to_id: int, read: bool) -> list[Mail]:
     """Fetch a list of mails from the database."""
     query = f"""\
         SELECT m.`msg`, m.`time`, m.`from_id`,
