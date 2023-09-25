@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import pprint
 from typing import Any
 
@@ -116,12 +115,6 @@ def init_events(asgi_app: BanchoAPI) -> None:
     @asgi_app.on_event("startup")
     async def on_startup() -> None:
         app.state.loop = asyncio.get_running_loop()
-
-        if app.utils.is_running_as_admin():
-            log(
-                "Running the server with root privileges is not recommended.",
-                Ansi.LRED,
-            )
 
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
