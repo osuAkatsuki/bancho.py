@@ -1,5 +1,9 @@
 # Breaking changes
 
+## 2023-09-25
+
+The `SERVER_HOST` and `SERVER_PORT` environment variables have been renamed to `APP_HOST` and `APP_PORT` respectively.
+
 ## 2023-09-21
 
 The minimum Python version has been changed to 3.11.
