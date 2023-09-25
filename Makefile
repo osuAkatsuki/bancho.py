@@ -5,6 +5,12 @@ build:
 run:
 	docker-compose up bancho mysql redis
 
+run-bg:
+	docker-compose up -d bancho mysql redis
+
+logs:
+	docker-compose logs -f banchopy mysql redis
+
 shell:
 	pipenv shell
 
