@@ -472,20 +472,6 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     )
     app.state.sessions.players.append(app.state.sessions.bot)
 
-    # global achievements (sorted by vn gamemodes)
-    for row in await achievements_repo.fetch_many():
-        achievement = Achievement(
-            id=row["id"],
-            file=row["file"],
-            name=row["name"],
-            desc=row["desc"],
-            # NOTE: achievement conditions are stored as stringified python
-            # expressions in the database to allow for extensive customizability.
-            cond=eval(f'lambda score, mode_vn: {row["cond"]}'),
-        )
-
-        app.state.sessions.achievements.append(achievement)
-
     # static api keys
     app.state.sessions.api_keys = {
         row["api_key"]: row["id"]

@@ -65,6 +65,7 @@ from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -584,6 +585,10 @@ async def osuSearchSetHandler(
 
 def chart_entry(name: str, before: float | None, after: float | None) -> str:
     return f"{name}Before:{before or ''}|{name}After:{after or ''}"
+
+
+def format_achievement_string(file: str, name: str, description: str) -> str:
+    return f"{file}+{name}+{description}"
 
 
 def parse_form_data_score_params(
@@ -1111,29 +1116,35 @@ async def osuSubmitModularSelector(
     else:
         # construct and send achievements & ranking charts to the client
         if score.bmap.awards_ranked_pp and not score.player.restricted:
-            achievements = []
+            unlocked_achievements = []
+
+            server_achievements = await achievements_usecases.fetch_many()
             player_achievements = await user_achievements_usecases.fetch_many(
                 score.player.id,
             )
 
-            for ach in app.state.sessions.achievements:
+            for server_achievement in server_achievements:
                 player_unlocked_achievement = any(
                     player_achievement
                     for player_achievement in player_achievements
-                    if player_achievement["achid"] == ach.id
+                    if player_achievement["achid"] == server_achievement["id"]
                 )
                 if player_unlocked_achievement:
                     # player already has this achievement.
                     continue
 
-                if ach.cond(score, score.mode.as_vanilla):
+                achievement_condition = server_achievement["cond"]
+                if achievement_condition(score, score.mode.as_vanilla):
                     await user_achievements_usecases.create(
                         score.player.id,
-                        ach.id,
+                        server_achievement["id"],
                     )
-                    achievements.append(ach)
+                    unlocked_achievements.append(server_achievement)
 
-            achievements_str = "/".join(repr(ach) for ach in achievements)
+            achievements_str = "/".join(
+                format_achievement_string(a["file"], a["name"], a["desc"])
+                for a in unlocked_achievements
+            )
         else:
             achievements_str = ""
 

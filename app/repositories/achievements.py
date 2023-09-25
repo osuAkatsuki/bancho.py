@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import textwrap
+from collections.abc import Callable
 from typing import Any
 from typing import cast
+from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import app.state.services
 from app._typing import _UnsetSentinel
 from app._typing import UNSET
+
+if TYPE_CHECKING:
+    from app.objects.score import Score
 
 # +-------+--------------+------+-----+---------+----------------+
 # | Field | Type         | Null | Key | Default | Extra          |
@@ -31,7 +36,7 @@ class Achievement(TypedDict):
     file: str
     name: str
     desc: str
-    cond: str
+    cond: Callable[[Score, int], bool]
 
 
 class AchievementUpdateFields(TypedDict, total=False):
@@ -68,10 +73,12 @@ async def create(
     params = {
         "id": rec_id,
     }
-    achievement = await app.state.services.database.fetch_one(query, params)
+    rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
 
-    assert achievement is not None
-    return cast(Achievement, dict(achievement._mapping))
+    achievement = dict(rec._mapping)
+    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    return cast(Achievement, achievement)
 
 
 async def fetch_one(
@@ -92,13 +99,14 @@ async def fetch_one(
         "id": id,
         "name": name,
     }
-    achievement = await app.state.services.database.fetch_one(query, params)
+    rec = await app.state.services.database.fetch_one(query, params)
 
-    return (
-        cast(Achievement, dict(achievement._mapping))
-        if achievement is not None
-        else None
-    )
+    if rec is None:
+        return None
+
+    achievement = dict(rec._mapping)
+    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    return cast(Achievement, achievement)
 
 
 async def fetch_count() -> int:
@@ -133,8 +141,16 @@ async def fetch_many(
         params["page_size"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    achievements = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Achievement], [dict(a._mapping) for a in achievements])
+    records = await app.state.services.database.fetch_all(query, params)
+
+    achievements: list[Achievement] = []
+
+    for rec in records:
+        achievement = dict(rec._mapping)
+        achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+        achievements.append(cast(Achievement, achievement))
+
+    return achievements
 
 
 async def update(
@@ -171,8 +187,12 @@ async def update(
     params: dict[str, Any] = {
         "id": id,
     }
-    achievement = await app.state.services.database.fetch_one(query, params)
-    return cast(Achievement, achievement) if achievement is not None else None
+    rec = await app.state.services.database.fetch_one(query, params)
+    assert rec is not None
+
+    achievement = dict(rec._mapping)
+    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    return cast(Achievement, achievement)
 
 
 async def delete(
@@ -187,8 +207,8 @@ async def delete(
     params: dict[str, Any] = {
         "id": id,
     }
-    achievement = await app.state.services.database.fetch_one(query, params)
-    if achievement is None:
+    rec = await app.state.services.database.fetch_one(query, params)
+    if rec is None:
         return None
 
     query = """\
@@ -199,8 +219,7 @@ async def delete(
         "id": id,
     }
     await app.state.services.database.execute(query, params)
-    return (
-        cast(Achievement, dict(achievement._mapping))
-        if achievement is not None
-        else None
-    )
+
+    achievement = dict(rec._mapping)
+    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    return cast(Achievement, achievement)
