@@ -14,11 +14,11 @@ def read_list(value: str) -> list[str]:
 
 
 def support_deprecated_vars(new_name: str, deprecated_name: str, *, until: date) -> str:
-    val = os.environ.get(new_name)
+    val = os.getenv(new_name)
     if val is not None:
         return val
 
-    val = os.environ.get(deprecated_name)
+    val = os.getenv(deprecated_name)
     if val is not None:
         warnings.warn(
             f"{deprecated_name} has been deprecated and will be supported until {until.isoformat()}. Use  {new_name} instead.",
