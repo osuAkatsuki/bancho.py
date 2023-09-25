@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import inspect
 import io
 import ipaddress
@@ -50,6 +51,7 @@ __all__ = (
     "get_media_type",
     "has_jpeg_headers_and_trailers",
     "has_png_headers_and_trailers",
+    "is_running_as_admin",
 )
 
 T = TypeVar("T")
@@ -336,16 +338,6 @@ def escape_enum(
 
 def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for bancho.py."""
-    if sys.platform != "linux":
-        log("bancho.py currently only supports linux", Ansi.LRED)
-        if sys.platform == "win32":
-            log(
-                "you could also try wsl(2), i'd recommend ubuntu 18.04 "
-                "(i use it to test bancho.py)",
-                Ansi.LBLUE,
-            )
-        return 1
-
     if sys.version_info < (3, 11):
         log(
             "bancho.py uses many modern python features, "
@@ -398,6 +390,20 @@ def _install_debugging_hooks() -> None:
         runtime.setup()
 
 
+def is_running_as_admin() -> bool:
+    try:
+        return os.geteuid() == 0  # type: ignore[attr-defined, no-any-return, unused-ignore]
+    except AttributeError:
+        pass
+
+    try:
+        return ctypes.windll.shell32.IsUserAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]
+    except AttributeError:
+        raise Exception(
+            f"{sys.platform} is not currently supported on bancho.py, please create a github issue!",
+        )
+
+
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if app.settings.DEVELOPER_MODE:
@@ -405,11 +411,11 @@ def display_startup_dialog() -> None:
     if app.settings.DEBUG:
         log("running in debug mode", Ansi.LMAGENTA)
 
-    # running on root grants the software potentally dangerous and
+    # running on root/admin grants the software potentally dangerous and
     # unnecessary power over the operating system and is not advised.
-    if os.geteuid() == 0:
+    if is_running_as_admin():
         log(
-            "It is not recommended to run bancho.py as root, especially in production..",
+            "It is not recommended to run bancho.py as root/admin, especially in production..",
             Ansi.LYELLOW,
         )
 

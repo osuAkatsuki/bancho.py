@@ -25,6 +25,7 @@ akatsuki-pp-py = "*"
 cryptography = "*"
 tenacity = "*"
 httpx = "*"
+py-cpuinfo = "*"
 
 [dev-packages]
 pytest = "*"
