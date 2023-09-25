@@ -279,8 +279,6 @@ class Player:
         self.clan: Clan | None = extras.get("clan")
         self.clan_priv: ClanPrivileges | None = extras.get("clan_priv")
 
-        self.achievements: set[Achievement] = set()
-
         self.geoloc: app.state.services.Geolocation = extras.get(
             "geoloc",
             {
@@ -964,15 +962,6 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def unlock_achievement(self, achievement: Achievement) -> None:
-        """Unlock `achievement` for `self`, storing in both cache & sql."""
-        await app.state.services.database.execute(
-            "INSERT INTO user_achievements (userid, achid) VALUES (:user_id, :ach_id)",
-            {"user_id": self.id, "ach_id": achievement.id},
-        )
-
-        self.achievements.add(achievement)
-
     async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
         """Retrieve `self`'s relationships from sql."""
         for row in await db_conn.fetch_all(
@@ -986,18 +975,6 @@ class Player:
 
         # always have bot added to friends.
         self.friends.add(1)
-
-    async def achievements_from_sql(self, db_conn: databases.core.Connection) -> None:
-        """Retrieve `self`'s achievements from sql."""
-        for row in await db_conn.fetch_all(
-            "SELECT ua.achid id FROM user_achievements ua "
-            "INNER JOIN achievements a ON a.id = ua.achid "
-            "WHERE ua.userid = :user_id",
-            {"user_id": self.id},
-        ):
-            for ach in app.state.sessions.achievements:
-                if row["id"] == ach.id:
-                    self.achievements.add(ach)
 
     async def get_global_rank(self, mode: GameMode) -> int:
         if self.restricted:

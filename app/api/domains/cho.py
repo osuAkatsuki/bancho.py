@@ -873,7 +873,6 @@ async def login(
 
     # fetch some of the player's
     # information from sql to be cached.
-    await player.achievements_from_sql(db_conn)
     await player.stats_from_sql_full(db_conn)
     await player.relationships_from_sql(db_conn)
 

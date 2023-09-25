@@ -65,6 +65,7 @@ from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -1111,13 +1112,25 @@ async def osuSubmitModularSelector(
         # construct and send achievements & ranking charts to the client
         if score.bmap.awards_ranked_pp and not score.player.restricted:
             achievements = []
+            player_achievements = await user_achievements_usecases.fetch_many(
+                score.player.id,
+            )
+
             for ach in app.state.sessions.achievements:
-                if ach in score.player.achievements:
+                player_unlocked_achievement = any(
+                    player_achievement
+                    for player_achievement in player_achievements
+                    if player_achievement["achid"] == ach.id
+                )
+                if player_unlocked_achievement:
                     # player already has this achievement.
                     continue
 
                 if ach.cond(score, score.mode.as_vanilla):
-                    await score.player.unlock_achievement(ach)
+                    await user_achievements_usecases.create(
+                        score.player.id,
+                        ach.id,
+                    )
                     achievements.append(ach)
 
             achievements_str = "/".join(repr(ach) for ach in achievements)
