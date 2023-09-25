@@ -9,7 +9,6 @@ import shutil
 import socket
 import sys
 import types
-import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
