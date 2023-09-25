@@ -8,7 +8,7 @@
 
 c.{$DOMAIN}, ce.{$DOMAIN}, c4.{$DOMAIN}, osu.{$DOMAIN}, b.{$DOMAIN}, api.{$DOMAIN} {
 	encode gzip
-    # NOTE: if you wish to use unix sockets,
+	# NOTE: if you wish to use unix sockets,
 	# reverse_proxy * unix//tmp/bancho.sock {
     reverse_proxy * 127.0.0.1:{$APP_PORT} {
 		header_up X-Real-IP {remote_host}
