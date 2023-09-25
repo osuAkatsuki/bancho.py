@@ -3,4 +3,4 @@ set -euo pipefail
 
 # Run tests
 echo "Running tests..."
-python -m pytest -vv tests/
+pytest -vv -s tests/
