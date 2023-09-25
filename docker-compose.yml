@@ -48,7 +48,7 @@ services:
     init: true
     volumes:
       - .:/srv/root
-      - data:/home/bpyuser/.data
+      - data:/srv/root/.data
     environment:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
