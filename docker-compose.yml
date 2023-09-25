@@ -39,7 +39,7 @@ services:
   bancho:
     image: bancho:latest
     ports:
-      - ${APP_PORT}:${APP_PORT}
+      - ${APP_PORT:-${SERVER_PORT}}:${APP_PORT:-${SERVER_PORT}}
     depends_on:
       mysql:
         condition: service_healthy
