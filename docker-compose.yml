@@ -1,8 +1,12 @@
-version: "3"
+version: "3.8"
 
 services:
+  ## shared services
+
   mysql:
     image: mysql:latest
+    # ports:
+    #   - ${DB_PORT}:${DB_PORT}
     environment:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
@@ -12,70 +16,74 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - db-data:/var/lib/mysql
+      - ./.db-data:/var/lib/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
       timeout: 20s
       retries: 10
-    # Uncomment to expose the port to the host machine
-    #ports:
-    #  - ${DB_PORT}:${DB_PORT}
 
   redis:
     image: bitnami/redis:latest
+    # ports:
+    #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - redis-data:/bitnami/redis/data
+      - ./.redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
-    # Uncomment to expose the port to the host machine
-    #ports:
-    #  - ${REDIS_PORT}:${REDIS_PORT}
+
+    ## application services
 
   bancho:
-    build:
-      context: .
-      dockerfile: ./docker/banchopy/Dockerfile
+    image: bancho:latest
+    ports:
+      - ${APP_PORT:-${SERVER_PORT}}:${APP_PORT:-${SERVER_PORT}}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_started
     tty: true
+    init: true
     volumes:
-      - data:/home/bpyuser/.data
-      - .env:/home/bpyuser/.env:ro
-
-  nginx:
-    build:
-      context: ./docker/nginx-with-geoip2
-      args:
-        - ENABLED_MODULES=geoip2
-    image: nginx-with-geoip2
-    depends_on:
-      - bancho
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
-      - ./docker/nginx-with-geoip2/main.conf:/etc/nginx/nginx.conf:ro
-      - data:/.data:ro
-      - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
-      - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
-      # Uncomment if you have downloaded the database from maxmind
-      #- ${MMD_DB_PATH}:/etc/GeoLite2-City.mmdb:ro
-    env_file:
-      - .env
-    ports:
-      - ${SERVER_PORT}:${SERVER_PORT}
-      - ${HOST_PORT}:${HOST_PORT}
-
-volumes:
-  data:
-  db-data:
-  redis-data:
-
-
-networks:
-  default:
-    name: bpy-network
+      - .:/srv/root
+      - .data:/home/bpyuser/.data
+    environment:
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASS=${REDIS_PASS}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - OSU_API_KEY=${OSU_API_KEY}
+      - MIRROR_SEARCH_ENDPOINT=${MIRROR_SEARCH_ENDPOINT}
+      - MIRROR_DOWNLOAD_ENDPOINT=${MIRROR_DOWNLOAD_ENDPOINT}
+      - DOMAIN=${DOMAIN}
+      - COMMAND_PREFIX=${COMMAND_PREFIX}
+      - SEASONAL_BGS=${SEASONAL_BGS}
+      - MENU_ICON_URL=${MENU_ICON_URL}
+      - MENU_ONCLICK_URL=${MENU_ONCLICK_URL}
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - DATADOG_APP_KEY=${DATADOG_APP_KEY}
+      - DEBUG=${DEBUG}
+      - REDIRECT_OSU_URLS=${REDIRECT_OSU_URLS}
+      - PP_CACHED_ACCS=${PP_CACHED_ACCS}
+      - DISALLOWED_NAMES=${DISALLOWED_NAMES}
+      - DISALLOWED_PASSWORDS=${DISALLOWED_PASSWORDS}
+      - DISALLOW_OLD_CLIENTS=${DISALLOW_OLD_CLIENTS}
+      - DISCORD_AUDIT_LOG_WEBHOOK=${DISCORD_AUDIT_LOG_WEBHOOK}
+      - AUTOMATICALLY_REPORT_PROBLEMS=${AUTOMATICALLY_REPORT_PROBLEMS}
+      - SSL_CERT_PATH=${SSL_CERT_PATH}
+      - SSL_KEY_PATH=${SSL_KEY_PATH}
+      - DEVELOPER_MODE=${DEVELOPER_MODE}
+      # On deprecation path
+      - SERVER_ADDR=${SERVER_ADDR}
+      - SERVER_PORT=${SERVER_PORT}
