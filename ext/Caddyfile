@@ -15,7 +15,7 @@ c.{$DOMAIN}, ce.{$DOMAIN}, c4.{$DOMAIN}, osu.{$DOMAIN}, b.{$DOMAIN}, api.{$DOMAI
 	}
 
 	request_body {
-		max_size 5MB
+		max_size 20MB
 	}
 }
 
