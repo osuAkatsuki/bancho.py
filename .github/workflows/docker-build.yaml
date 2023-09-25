@@ -3,10 +3,10 @@ name: Build and Publish Docker Image
 on:
   push:
     branches: ["master"]
-    paths-ignore: ["**.md", "ext/**", "tools/"]
+    paths-ignore: ["**.md", "ext/**"]
   pull_request:
     branches: ["master"]
-    paths-ignore: ["**.md", "ext/**", "tools/"]
+    paths-ignore: ["**.md", "ext/**"]
   workflow_dispatch:
 
 jobs:
