@@ -448,8 +448,13 @@ async def _with(ctx: Context) -> str | None:
         "%": "acc",
     }
 
+    # if the last np contains mod info, use it as the default
+    if ctx.player.last_np["mods"] is not None:
+        score_args.mods = ctx.player.last_np["mods"]
+
     for arg in (arg.lower() for arg in ctx.args):
         try:
+            # handle mods extra
             if arg.startswith("+"):
                 score_args.mods = Mods.from_modstr(arg[1:]).filter_invalid_combos(
                     ctx.player.last_np["mode_vn"],
@@ -458,18 +463,11 @@ async def _with(ctx: Context) -> str | None:
 
             for suffix, attribute in attributes_table.items():
                 if arg.endswith(suffix):
-                    value = None
-                    if attribute == "acc":
-                        value = float(arg[: -len(suffix)])
-                        if not 0 <= value <= 100:
-                            return "Invalid accuracy. (0-100%)"
-                    else:
-                        value = int(arg[: -len(suffix)])
-
+                    valueStr = arg[: -len(suffix)]
+                    value = min(max(float(valueStr), 0), 100) if attribute is "acc" else int(valueStr)
                     setattr(score_args, attribute, value)
 
         except ValueError as ex:
-            print(ex)
             return f"Could not parse parameter '{arg}'."
 
     result = app.usecases.performance.calculate_performances(
@@ -477,11 +475,10 @@ async def _with(ctx: Context) -> str | None:
         scores=[score_args],  # calculate one score
     )
 
-    return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
-        msg=" ".join(msg_fields),
+    return "{pp:.2f}pp ({stars:.2f}*)".format(
         pp=result[0]["performance"]["pp"],
-        stars=result[0]["difficulty"]["stars"],  # (first score result)
-    )
+        stars=result[0]["difficulty"]["stars"]
+    )  # (first score result)
 
 
 @command(Privileges.UNRESTRICTED, aliases=["req"])
