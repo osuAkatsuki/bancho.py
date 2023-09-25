@@ -2,6 +2,10 @@
 # osu.ppy.sh is used for /web, /api, etc.
 # a.ppy.sh is used for osu! avatars
 
+upstream bancho {
+    server 127.0.0.1:10000;
+}
+
 server {
 	listen 443 ssl;
 	server_name "~^(?:c[e4]?|osu|b|api)\.${DOMAIN}$";

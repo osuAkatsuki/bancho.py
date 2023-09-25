@@ -9,7 +9,7 @@ run-bg:
 	docker-compose up -d bancho mysql redis
 
 logs:
-	docker-compose logs -f banchopy mysql redis
+	docker-compose logs -f bancho mysql redis
 
 shell:
 	pipenv shell

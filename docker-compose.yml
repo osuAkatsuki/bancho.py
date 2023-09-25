@@ -5,6 +5,8 @@ services:
 
   mysql:
     image: mysql:latest
+    # ports:
+    #   - ${DB_PORT}:${DB_PORT}
     environment:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
@@ -20,26 +22,24 @@ services:
       interval: 2s
       timeout: 20s
       retries: 10
-    # Uncomment to expose the port to the host machine
-    # ports:
-    #   - ${DB_PORT}:${DB_PORT}
 
   redis:
     image: bitnami/redis:latest
+    # ports:
+    #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
       - ./.redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
-    # Uncomment to expose the port to the host machine
-    # ports:
-    #   - ${REDIS_PORT}:${REDIS_PORT}
 
     ## application services
 
   bancho:
     image: bancho:latest
+    ports:
+      - 10000:${APP_PORT}
     depends_on:
       mysql:
         condition: service_healthy
