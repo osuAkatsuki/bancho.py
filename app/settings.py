@@ -1,17 +1,28 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 
 from dotenv import load_dotenv
 
 from app.settings_utils import read_bool
 from app.settings_utils import read_list
+from app.settings_utils import support_deprecated_vars
 
 load_dotenv()
 
-
-APP_HOST = os.environ["APP_HOST"]
-APP_PORT = int(os.environ["APP_PORT"])
+APP_HOST = support_deprecated_vars(
+    new_name="APP_HOST",
+    deprecated_name="SERVER_ADDR",
+    until=date(2024, 1, 1),
+)
+APP_PORT = int(
+    support_deprecated_vars(
+        new_name="APP_PORT",
+        deprecated_name="SERVER_PORT",
+        until=date(2024, 1, 1),
+    ),
+)
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])
