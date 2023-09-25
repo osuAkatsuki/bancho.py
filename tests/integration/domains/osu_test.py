@@ -206,3 +206,7 @@ async def test_score_submission(http_client: AsyncClient) -> None:
 
     # ASSERT
     assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.read()
+        == b"beatmapId:315|beatmapSetId:141|beatmapPlaycount:1|beatmapPasscount:1|approvedDate:2014-05-18 15:41:48|\n|chartId:beatmap|chartUrl:https://osu.cmyui.xyz/beatmapsets/141|chartName:Beatmap Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:9.56523|onlineScoreId:1|\n|chartId:overall|chartUrl:https://cmyui.xyz/u/3|chartName:Overall Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:10|achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready./all-intro-hidden+Blindsight+I can see just perfectly"
+    )
