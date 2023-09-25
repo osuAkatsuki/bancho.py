@@ -1,4 +1,4 @@
-name: Sync wiki documentation
+name: Sync Wiki Documentation
 
 on:
   push:

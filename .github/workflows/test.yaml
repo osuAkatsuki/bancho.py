@@ -1,0 +1,19 @@
+name: Test Application Code
+on:
+  # TODO: perhaps can optimize this
+  push
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # TODO: build?
+      - name: Start containers
+        run: docker-compose up bancho mysql redis
+      - name: Run tests
+        run: docker-compose run --rm bancho /scripts/run_tests.sh
+      - name: Stop containers
+        if: always()
+        run: docker-compose down
