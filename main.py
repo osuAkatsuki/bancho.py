@@ -110,7 +110,6 @@ def main(argv: Sequence[str]) -> int:
         ) from None
 
     # run the server indefinitely
-    # TODO: gracefully handle SIGTERM or move to gunicorn
     uvicorn.run(
         "app.api.init_api:asgi_app",
         reload=app.settings.DEBUG,

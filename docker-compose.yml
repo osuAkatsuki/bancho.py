@@ -46,6 +46,7 @@ services:
       redis:
         condition: service_started
     tty: true
+    init: true
     volumes:
       - .:/srv/root
       - .data:/home/bpyuser/.data
