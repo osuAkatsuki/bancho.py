@@ -9,6 +9,9 @@ on:
     paths-ignore: ["**.md", "ext/**"]
   workflow_dispatch:
 
+env:
+  PLATFORMS: linux/amd64
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -47,7 +50,10 @@ jobs:
       - name: Push to Docker Hub
         uses: docker/build-push-action@v3
         if: ${{ github.ref == 'refs/heads/master' }}
-        run: |
-          docker image load -i /tmp/docker.tar
-          docker image tag bancho.py:latest ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
+        with:
+          context: .
+          platforms: $PLATFORMS
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
