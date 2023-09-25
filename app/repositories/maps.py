@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
-from typing import Optional
+from typing import cast
+from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
+from app._typing import UNSET
 
 # +--------------+------------------------+------+-----+---------+-------+
 # | Field        | Type                   | Null | Key | Default | Extra |
@@ -43,6 +46,57 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Map(TypedDict):
+    id: int
+    server: str
+    set_id: int
+    status: int
+    md5: str
+    artist: str
+    title: str
+    version: str
+    creator: str
+    filename: str
+    last_update: str
+    total_length: int
+    max_combo: int
+    frozen: bool
+    plays: int
+    passes: int
+    mode: int
+    bpm: float
+    cs: float
+    ar: float
+    od: float
+    hp: float
+    diff: float
+
+
+class MapUpdateFields(TypedDict, total=False):
+    server: str
+    set_id: int
+    status: int
+    md5: str
+    artist: str
+    title: str
+    version: str
+    creator: str
+    filename: str
+    last_update: str
+    total_length: int
+    max_combo: int
+    frozen: bool
+    plays: int
+    passes: int
+    mode: int
+    bpm: float
+    cs: float
+    ar: float
+    od: float
+    hp: float
+    diff: float
+
+
 async def create(
     id: int,
     server: str,
@@ -67,7 +121,7 @@ async def create(
     od: float,
     hp: float,
     diff: float,
-) -> dict[str, Any]:
+) -> Map:
     """Create a new beatmap entry in the database."""
     query = f"""\
         INSERT INTO maps (id, server, set_id, status, md5, artist, title,
@@ -79,7 +133,7 @@ async def create(
                      :max_combo, :frozen, :plays, :passes, :mode, :bpm, :cs, :ar,
                      :od, :hp, :diff)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "server": server,
         "set_id": set_id,
@@ -114,16 +168,17 @@ async def create(
     params = {
         "id": rec_id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return dict(rec)
+    map = await app.state.services.database.fetch_one(query, params)
+
+    assert map is not None
+    return cast(Map, dict(map._mapping))
 
 
 async def fetch_one(
     id: int | None = None,
     md5: str | None = None,
     filename: str | None = None,
-) -> dict[str, Any] | None:
+) -> Map | None:
     """Fetch a beatmap entry from the database."""
     if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
@@ -135,13 +190,14 @@ async def fetch_one(
            AND md5 = COALESCE(:md5, md5)
            AND filename = COALESCE(:filename, filename)
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
         "md5": md5,
         "filename": filename,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    map = await app.state.services.database.fetch_one(query, params)
+
+    return cast(Map, dict(map._mapping)) if map is not None else None
 
 
 async def fetch_count(
@@ -168,7 +224,7 @@ async def fetch_count(
           AND frozen = COALESCE(:frozen, frozen)
 
     """
-    params = {
+    params: dict[str, Any] = {
         "server": server,
         "set_id": set_id,
         "status": status,
@@ -180,7 +236,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -194,7 +250,7 @@ async def fetch_many(
     frozen: bool | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Map]:
     """Fetch a list of maps from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -208,7 +264,7 @@ async def fetch_many(
            AND mode = COALESCE(:mode, mode)
            AND frozen = COALESCE(:frozen, frozen)
     """
-    params = {
+    params: dict[str, Any] = {
         "server": server,
         "set_id": set_id,
         "status": status,
@@ -227,109 +283,110 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    maps = await app.state.services.database.fetch_all(query, params)
+    return cast(list[Map], [dict(m._mapping) for m in maps])
 
 
 async def update(
     id: int,
-    server: str | None = None,
-    set_id: int | None = None,
-    status: int | None = None,
-    md5: str | None = None,
-    artist: str | None = None,
-    title: str | None = None,
-    version: str | None = None,
-    creator: str | None = None,
-    filename: str | None = None,
-    last_update: str | None = None,
-    total_length: int | None = None,
-    max_combo: int | None = None,
-    frozen: bool | None = None,
-    plays: int | None = None,
-    passes: int | None = None,
-    mode: int | None = None,
-    bpm: float | None = None,
-    cs: float | None = None,
-    ar: float | None = None,
-    od: float | None = None,
-    hp: float | None = None,
-    diff: float | None = None,
-) -> dict[str, Any] | None:
+    server: str | _UnsetSentinel = UNSET,
+    set_id: int | _UnsetSentinel = UNSET,
+    status: int | _UnsetSentinel = UNSET,
+    md5: str | _UnsetSentinel = UNSET,
+    artist: str | _UnsetSentinel = UNSET,
+    title: str | _UnsetSentinel = UNSET,
+    version: str | _UnsetSentinel = UNSET,
+    creator: str | _UnsetSentinel = UNSET,
+    filename: str | _UnsetSentinel = UNSET,
+    last_update: str | _UnsetSentinel = UNSET,
+    total_length: int | _UnsetSentinel = UNSET,
+    max_combo: int | _UnsetSentinel = UNSET,
+    frozen: bool | _UnsetSentinel = UNSET,
+    plays: int | _UnsetSentinel = UNSET,
+    passes: int | _UnsetSentinel = UNSET,
+    mode: int | _UnsetSentinel = UNSET,
+    bpm: float | _UnsetSentinel = UNSET,
+    cs: float | _UnsetSentinel = UNSET,
+    ar: float | _UnsetSentinel = UNSET,
+    od: float | _UnsetSentinel = UNSET,
+    hp: float | _UnsetSentinel = UNSET,
+    diff: float | _UnsetSentinel = UNSET,
+) -> Map | None:
     """Update a beatmap entry in the database."""
-    query = """\
+    update_fields: MapUpdateFields = {}
+    if not isinstance(server, _UnsetSentinel):
+        update_fields["server"] = server
+    if not isinstance(set_id, _UnsetSentinel):
+        update_fields["set_id"] = set_id
+    if not isinstance(status, _UnsetSentinel):
+        update_fields["status"] = status
+    if not isinstance(md5, _UnsetSentinel):
+        update_fields["md5"] = md5
+    if not isinstance(artist, _UnsetSentinel):
+        update_fields["artist"] = artist
+    if not isinstance(title, _UnsetSentinel):
+        update_fields["title"] = title
+    if not isinstance(version, _UnsetSentinel):
+        update_fields["version"] = version
+    if not isinstance(creator, _UnsetSentinel):
+        update_fields["creator"] = creator
+    if not isinstance(filename, _UnsetSentinel):
+        update_fields["filename"] = filename
+    if not isinstance(last_update, _UnsetSentinel):
+        update_fields["last_update"] = last_update
+    if not isinstance(total_length, _UnsetSentinel):
+        update_fields["total_length"] = total_length
+    if not isinstance(max_combo, _UnsetSentinel):
+        update_fields["max_combo"] = max_combo
+    if not isinstance(frozen, _UnsetSentinel):
+        update_fields["frozen"] = frozen
+    if not isinstance(plays, _UnsetSentinel):
+        update_fields["plays"] = plays
+    if not isinstance(passes, _UnsetSentinel):
+        update_fields["passes"] = passes
+    if not isinstance(mode, _UnsetSentinel):
+        update_fields["mode"] = mode
+    if not isinstance(bpm, _UnsetSentinel):
+        update_fields["bpm"] = bpm
+    if not isinstance(cs, _UnsetSentinel):
+        update_fields["cs"] = cs
+    if not isinstance(ar, _UnsetSentinel):
+        update_fields["ar"] = ar
+    if not isinstance(od, _UnsetSentinel):
+        update_fields["od"] = od
+    if not isinstance(hp, _UnsetSentinel):
+        update_fields["hp"] = hp
+    if not isinstance(diff, _UnsetSentinel):
+        update_fields["diff"] = diff
+
+    query = f"""\
         UPDATE maps
-           SET server = COALESCE(:server, server),
-               set_id = COALESCE(:set_id, set_id),
-               status = COALESCE(:status, status),
-               md5 = COALESCE(:md5, md5),
-               artist = COALESCE(:artist, artist),
-               title = COALESCE(:title, title),
-               version = COALESCE(:version, version),
-               creator = COALESCE(:creator, creator),
-               filename = COALESCE(:filename, filename),
-               last_update = COALESCE(:last_update, last_update),
-               total_length = COALESCE(:total_length, total_length),
-               max_combo = COALESCE(:max_combo, max_combo),
-               frozen = COALESCE(:frozen, frozen),
-               plays = COALESCE(:plays, plays),
-               passes = COALESCE(:passes, passes),
-               mode = COALESCE(:mode, mode),
-               bpm = COALESCE(:bpm, bpm),
-               cs = COALESCE(:cs, cs),
-               ar = COALESCE(:ar, ar),
-               od = COALESCE(:od, od),
-               hp = COALESCE(:hp, hp),
-               diff = COALESCE(:diff, diff)
+           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "server": server,
-        "set_id": set_id,
-        "status": status,
-        "md5": md5,
-        "artist": artist,
-        "title": title,
-        "version": version,
-        "creator": creator,
-        "filename": filename,
-        "last_update": last_update,
-        "total_length": total_length,
-        "max_combo": max_combo,
-        "frozen": frozen,
-        "plays": plays,
-        "passes": passes,
-        "mode": mode,
-        "bpm": bpm,
-        "cs": cs,
-        "ar": ar,
-        "od": od,
-        "hp": hp,
-        "diff": diff,
-    }
-    await app.state.services.database.execute(query, params)
+    values = {"id": id} | update_fields
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
         WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    map = await app.state.services.database.fetch_one(query, params)
+    return cast(Map, dict(map._mapping)) if map is not None else None
 
 
-async def delete(id: int) -> dict[str, Any] | None:
+async def delete(id: int) -> Map | None:
     """Delete a beatmap entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
         WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -343,5 +400,5 @@ async def delete(id: int) -> dict[str, Any] | None:
     params = {
         "id": id,
     }
-    await app.state.services.database.execute(query, params)
-    return dict(rec)
+    map = await app.state.services.database.execute(query, params)
+    return cast(Map, dict(map._mapping)) if map is not None else None

@@ -6,8 +6,6 @@ import os
 import pprint
 from typing import Any
 
-import aiohttp
-import orjson
 import starlette.routing
 from fastapi import FastAPI
 from fastapi import status
@@ -24,7 +22,7 @@ import app.bg_loops
 import app.settings
 import app.state
 import app.utils
-from app.api import api_router
+from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
 from app.logging import Ansi
@@ -119,15 +117,12 @@ def init_events(asgi_app: BanchoAPI) -> None:
     async def on_startup() -> None:
         app.state.loop = asyncio.get_running_loop()
 
-        if os.geteuid() == 0:
+        if app.utils.is_running_as_admin():
             log(
                 "Running the server with root privileges is not recommended.",
                 Ansi.LRED,
             )
 
-        app.state.services.http_client = aiohttp.ClientSession(
-            json_serialize=lambda x: orjson.dumps(x).decode(),
-        )
         await app.state.services.database.connect()
         await app.state.services.redis.initialize()
 
@@ -148,7 +143,10 @@ def init_events(asgi_app: BanchoAPI) -> None:
         await app.bg_loops.initialize_housekeeping_tasks()
 
         log("Startup process complete.", Ansi.LGREEN)
-        log(f"Listening @ {app.settings.SERVER_ADDR}", Ansi.LMAGENTA)
+        log(
+            f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
+            Ansi.LMAGENTA,
+        )
 
     @asgi_app.on_event("shutdown")
     async def on_shutdown() -> None:
@@ -158,7 +156,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
 
         # shutdown services
 
-        await app.state.services.http_client.close()
+        await app.state.services.http_client.aclose()
         await app.state.services.database.disconnect()
         await app.state.services.redis.close()
 

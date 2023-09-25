@@ -1,14 +1,13 @@
 """ bancho.py's v2 apis for interacting with players """
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter
 from fastapi import status
 from fastapi.param_functions import Query
 
 import app.state.sessions
 from app.api.v2.common import responses
+from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
 from app.api.v2.models.players import PlayerStats
@@ -29,7 +28,7 @@ async def get_players(
     play_style: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-) -> Success[list[Player]]:
+) -> Success[list[Player]] | Failure:
     players = await players_repo.fetch_many(
         priv=priv,
         country=country,
@@ -62,7 +61,7 @@ async def get_players(
 
 
 @router.get("/players/{player_id}")
-async def get_player(player_id: int) -> Success[Player]:
+async def get_player(player_id: int) -> Success[Player] | Failure:
     data = await players_repo.fetch_one(id=player_id)
     if data is None:
         return responses.failure(
@@ -75,7 +74,7 @@ async def get_player(player_id: int) -> Success[Player]:
 
 
 @router.get("/players/{player_id}/status")
-async def get_player_status(player_id: int) -> Success[PlayerStatus]:
+async def get_player_status(player_id: int) -> Success[PlayerStatus] | Failure:
     player = app.state.sessions.players.get(id=player_id)
 
     if not player:
@@ -96,7 +95,10 @@ async def get_player_status(player_id: int) -> Success[PlayerStatus]:
 
 
 @router.get("/players/{player_id}/stats/{mode}")
-async def get_player_mode_stats(player_id: int, mode: int) -> Success[PlayerStats]:
+async def get_player_mode_stats(
+    player_id: int,
+    mode: int,
+) -> Success[PlayerStats] | Failure:
     data = await stats_repo.fetch_one(player_id, mode)
     if data is None:
         return responses.failure(
@@ -113,7 +115,7 @@ async def get_player_stats(
     player_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-) -> Success[list[PlayerStats]]:
+) -> Success[list[PlayerStats]] | Failure:
     data = await stats_repo.fetch_many(
         player_id=player_id,
         page=page,

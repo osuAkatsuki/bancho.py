@@ -5,7 +5,6 @@ import copy
 import hashlib
 import random
 import secrets
-import time
 from base64 import b64decode
 from collections import defaultdict
 from collections.abc import Awaitable
@@ -17,9 +16,6 @@ from functools import cache
 from pathlib import Path as SystemPath
 from typing import Any
 from typing import Literal
-from typing import Optional
-from typing import TypeVar
-from typing import Union
 from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
@@ -48,10 +44,12 @@ import app.packets
 import app.settings
 import app.state
 import app.utils
+from app._typing import UNSET
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
@@ -60,7 +58,6 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.beatmap import RankedStatus
 from app.objects.player import Player
-from app.objects.player import Privileges
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
@@ -68,6 +65,9 @@ from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.repositories.achievements import Achievement
+from app.usecases import achievements as achievements_usecases
+from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -177,11 +177,11 @@ async def osuError(
     exe_hash: str = Form(..., alias="exehash"),
     config: str = Form(...),
     screenshot_file: UploadFile | None = File(None, alias="ss"),
-):
+) -> Response:
     """Handle an error submitted from the osu! client."""
     if not app.settings.DEBUG:
         # only handle osu-error in debug mode
-        return
+        return Response(b"")
 
     if username and pw_md5:
         player = await app.state.sessions.players.from_login(
@@ -204,14 +204,16 @@ async def osuError(
 
     # TODO: save error in db?
 
+    return Response(b"")
+
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
     player: Player = Depends(authenticate_player_session(Form, "u", "p")),
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
-):
-    with memoryview(await screenshot_file.read()) as screenshot_view:  # type: ignore
+) -> Response:
+    with memoryview(await screenshot_file.read()) as screenshot_view:
         # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
         if len(screenshot_view) > (4 * 1024 * 1024):
             return Response(
@@ -250,8 +252,8 @@ async def osuScreenshot(
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-):
-    return "\n".join(map(str, player.friends)).encode()
+) -> Response:
+    return Response("\n".join(map(str, player.friends)).encode())
 
 
 def bancho_to_osuapi_status(bancho_status: int) -> int:
@@ -268,7 +270,7 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-):
+) -> Response:
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
@@ -312,32 +314,32 @@ async def osuGetBeatmapInfo(
             f"{player} requested map(s) info by id ({form_data.Ids})",
         )
 
-    return "\n".join(ret).encode()
+    return Response("\n".join(ret).encode())
 
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-):
+) -> Response:
     rows = await app.state.services.database.fetch_all(
         "SELECT setid FROM favourites WHERE userid = :user_id",
         {"user_id": player.id},
     )
 
-    return "\n".join([str(row["setid"]) for row in rows]).encode()
+    return Response("\n".join([str(row["setid"]) for row in rows]).encode())
 
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
-):
+) -> Response:
     # check if they already have this favourited.
     if await app.state.services.database.fetch_one(
         "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
         {"user_id": player.id, "set_id": map_set_id},
     ):
-        return b"You've already favourited this beatmap!"
+        return Response(b"You've already favourited this beatmap!")
 
     # add favourite
     await app.state.services.database.execute(
@@ -345,7 +347,7 @@ async def osuAddFavourite(
         {"user_id": player.id, "set_id": map_set_id},
     )
 
-    return b"Added favourite!"
+    return Response(b"Added favourite!")
 
 
 @router.get("/web/lastfm.php")
@@ -360,11 +362,11 @@ async def lastFM(
         alias="b",
     ),
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
-):
+) -> Response:
     if beatmap_id_or_hidden_flag[0] != "a":
         # not anticheat related, tell the
         # client not to send any more for now.
-        return b"-3"
+        return Response(b"-3")
 
     flags = LastFMFlags(int(beatmap_id_or_hidden_flag[1:]))
 
@@ -378,10 +380,10 @@ async def lastFM(
         )
 
         # refresh their client state
-        if player.online:
+        if player.is_online:
             player.logout()
 
-        return b"-3"
+        return Response(b"-3")
 
     if flags & LastFMFlags.REGISTRY_EDITS:
         # Player has registry edits left from
@@ -397,10 +399,10 @@ async def lastFM(
             )
 
             # refresh their client state
-            if player.online:
+            if player.is_online:
                 player.logout()
 
-            return b"-3"
+            return Response(b"-3")
 
         # TODO: make a tool to remove the flags & send this as a dm.
         #       also add to db so they never are restricted on first one.
@@ -419,7 +421,7 @@ async def lastFM(
 
         player.logout()
 
-        return b"-3"
+        return Response(b"-3")
 
     """ These checks only worked for ~5 hours from release. rumoi's quick!
     if flags & (
@@ -434,6 +436,8 @@ async def lastFM(
         # for the context of the sound effect.
         pass
     """
+
+    return Response(b"")
 
 
 DIRECT_SET_INFO_FMTSTR = (
@@ -456,7 +460,7 @@ async def osuSearchHandler(
     query: str = Query(..., alias="q"),
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
     page_num: int = Query(..., alias="p"),
-):
+) -> Response:
     params: dict[str, Any] = {"amount": 100, "offset": page_num * 100}
 
     # eventually we could try supporting these,
@@ -471,14 +475,14 @@ async def osuSearchHandler(
         # convert to osu!api status
         params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
 
-    async with app.state.services.http_client.get(
+    response = await app.state.services.http_client.get(
         app.settings.MIRROR_SEARCH_ENDPOINT,
         params=params,
-    ) as resp:
-        if resp.status != status.HTTP_200_OK:
-            return b"-1\nFailed to retrieve data from the beatmap mirror."
+    )
+    if response.status_code != status.HTTP_200_OK:
+        return Response(b"-1\nFailed to retrieve data from the beatmap mirror.")
 
-        result = await resp.json()
+    result = response.json()
 
     lresult = len(result)  # send over 100 if we receive
     # 100 matches, so the client
@@ -531,7 +535,7 @@ async def osuSearchHandler(
             ),
         )
 
-    return "\n".join(ret).encode()
+    return Response("\n".join(ret).encode())
 
 
 # TODO: video support (needs db change)
@@ -540,7 +544,7 @@ async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
-):
+) -> Response:
     # TODO: refactor this to use the new internal bmap(set) api
 
     # Since we only need set-specific data, we can basically
@@ -552,37 +556,40 @@ async def osuSearchSetHandler(
     elif map_id is not None:
         k, v = ("id", map_id)
     else:
-        return  # invalid args
+        return Response(b"")  # invalid args
 
     # Get all set data.
-    bmapset = await app.state.services.database.fetch_one(
+    rec = await app.state.services.database.fetch_one(
         "SELECT DISTINCT set_id, artist, "
         "title, status, creator, last_update "
         f"FROM maps WHERE {k} = :v",
         {"v": v},
     )
 
-    if not bmapset:
+    if rec is None:
         # TODO: get from osu!
-        return
+        return Response(b"")
 
-    return (
+    bmapset = dict(rec._mapping)
+
+    return Response(
         (
             "{set_id}.osz|{artist}|{title}|{creator}|"
             "{status}|10.0|{last_update}|{set_id}|"  # TODO: rating
             "0|0|0|0|0"
         )
         .format(**bmapset)
-        .encode()
+        .encode(),
     )
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 
-T = TypeVar("T", bound=Union[int, float])
+def chart_entry(name: str, before: float | None, after: float | None) -> str:
+    return f"{name}Before:{before or ''}|{name}After:{after or ''}"
 
 
-def chart_entry(name: str, before: T | None, after: T) -> str:
-    return f"{name}Before:{before or ''}|{name}After:{after}"
+def format_achievement_string(file: str, name: str, description: str) -> str:
+    return f"{file}+{name}+{description}"
 
 
 def parse_form_data_score_params(
@@ -658,7 +665,7 @@ async def osuSubmitModularSelector(
     # TODO: do these need to be Optional?
     # TODO: validate this is actually what it is
     fl_cheat_screenshot: bytes | None = File(None, alias="i"),
-):
+) -> Response:
     """Handle a score submission from an osu! client with an active session."""
 
     if fl_cheat_screenshot:
@@ -670,7 +677,7 @@ async def osuSubmitModularSelector(
     # starlette/fastapi do not support this, so we've moved it out
     score_parameters = parse_form_data_score_params(await request.form())
     if score_parameters is None:
-        return
+        return Response(b"")
 
     # extract the score data and replay file from the score data
     score_data_b64, replay_file = score_parameters
@@ -689,7 +696,7 @@ async def osuSubmitModularSelector(
     bmap = await Beatmap.from_md5(bmap_md5)
     if not bmap:
         # Map does not exist, most likely unsubmitted.
-        return b"error: beatmap"
+        return Response(b"error: beatmap")
 
     # if the client has supporter, a space is appended
     # but usernames may also end with a space, which must be preserved
@@ -701,7 +708,7 @@ async def osuSubmitModularSelector(
     if not player:
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
-        return
+        return Response(b"")
 
     # parse the score from the remaining data
     score = Score.from_submission(score_data[2:])
@@ -787,7 +794,7 @@ async def osuSubmitModularSelector(
         {"checksum": score.client_checksum},
     ):
         log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
-        return b"error: no"
+        return Response(b"error: no")
 
     # all data read from submission.
     # now we can calculate things based on our data.
@@ -860,7 +867,7 @@ async def osuSubmitModularSelector(
             )
 
             if score.rank == 1 and not score.player.restricted:
-                announce_chan = app.state.sessions.channels["#announce"]
+                announce_chan = app.state.sessions.channels.get_by_name("#announce")
 
                 ann = [
                     f"\x01ACTION achieved #1 on {score.bmap.embed}",
@@ -892,6 +899,7 @@ async def osuSubmitModularSelector(
                             ),
                         )
 
+                assert announce_chan is not None
                 announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
 
         # this score is our best score.
@@ -948,8 +956,8 @@ async def osuSubmitModularSelector(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_file = REPLAYS_PATH / f"{score.id}.osr"
-            replay_file.write_bytes(replay_data)
+            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
+            replay_disk_file.write_bytes(replay_data)
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
@@ -958,7 +966,7 @@ async def osuSubmitModularSelector(
                     admin=app.state.sessions.bot,
                     reason="submitted score with no replay",
                 )
-                if score.player.online:
+                if score.player.is_online:
                     score.player.logout()
 
     """ Update the user's & beatmap's stats """
@@ -1060,19 +1068,19 @@ async def osuSubmitModularSelector(
     await stats_repo.update(
         score.player.id,
         score.mode.value,
-        plays=stats_updates.get("plays"),
-        playtime=stats_updates.get("playtime"),
-        tscore=stats_updates.get("tscore"),
-        total_hits=stats_updates.get("total_hits"),
-        max_combo=stats_updates.get("max_combo"),
-        xh_count=stats_updates.get("xh_count"),
-        x_count=stats_updates.get("x_count"),
-        sh_count=stats_updates.get("sh_count"),
-        s_count=stats_updates.get("s_count"),
-        a_count=stats_updates.get("a_count"),
-        rscore=stats_updates.get("rscore"),
-        acc=stats_updates.get("acc"),
-        pp=stats_updates.get("pp"),
+        plays=stats_updates.get("plays", UNSET),
+        playtime=stats_updates.get("playtime", UNSET),
+        tscore=stats_updates.get("tscore", UNSET),
+        total_hits=stats_updates.get("total_hits", UNSET),
+        max_combo=stats_updates.get("max_combo", UNSET),
+        xh_count=stats_updates.get("xh_count", UNSET),
+        x_count=stats_updates.get("x_count", UNSET),
+        sh_count=stats_updates.get("sh_count", UNSET),
+        s_count=stats_updates.get("s_count", UNSET),
+        a_count=stats_updates.get("a_count", UNSET),
+        rscore=stats_updates.get("rscore", UNSET),
+        acc=stats_updates.get("acc", UNSET),
+        pp=stats_updates.get("pp", UNSET),
     )
 
     if not score.player.restricted:
@@ -1109,17 +1117,35 @@ async def osuSubmitModularSelector(
     else:
         # construct and send achievements & ranking charts to the client
         if score.bmap.awards_ranked_pp and not score.player.restricted:
-            achievements = []
-            for ach in app.state.sessions.achievements:
-                if ach in score.player.achievements:
+            unlocked_achievements: list[Achievement] = []
+
+            server_achievements = await achievements_usecases.fetch_many()
+            player_achievements = await user_achievements_usecases.fetch_many(
+                score.player.id,
+            )
+
+            for server_achievement in server_achievements:
+                player_unlocked_achievement = any(
+                    player_achievement
+                    for player_achievement in player_achievements
+                    if player_achievement["achid"] == server_achievement["id"]
+                )
+                if player_unlocked_achievement:
                     # player already has this achievement.
                     continue
 
-                if ach.cond(score, score.mode.as_vanilla):
-                    await score.player.unlock_achievement(ach)
-                    achievements.append(ach)
+                achievement_condition = server_achievement["cond"]
+                if achievement_condition(score, score.mode.as_vanilla):
+                    await user_achievements_usecases.create(
+                        score.player.id,
+                        server_achievement["id"],
+                    )
+                    unlocked_achievements.append(server_achievement)
 
-            achievements_str = "/".join(repr(ach) for ach in achievements)
+            achievements_str = "/".join(
+                format_achievement_string(a["file"], a["name"], a["desc"])
+                for a in unlocked_achievements
+            )
         else:
             achievements_str = ""
 
@@ -1189,7 +1215,7 @@ async def osuSubmitModularSelector(
         Ansi.LGREEN,
     )
 
-    return response
+    return Response(response)
 
 
 @router.get("/web/osu-getreplay.php")
@@ -1197,17 +1223,17 @@ async def getReplay(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
-):
+) -> Response:
     score = await Score.from_sql(score_id)
     if not score:
-        return
+        return Response(b"", status_code=404)
 
     file = REPLAYS_PATH / f"{score_id}.osr"
     if not file.exists():
-        return
+        return Response(b"", status_code=404)
 
     # increment replay views for this score
-    if player.id != score.player.id:
+    if score.player is not None and player.id != score.player.id:
         app.state.loop.create_task(score.increment_replay_views())
 
     return FileResponse(file)
@@ -1220,18 +1246,18 @@ async def osuRate(
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: int | None = Query(None, alias="v", ge=1, le=10),
-):
+) -> Response:
     if rating is None:
         # check if we have the map in our cache;
         # if not, the map probably doesn't exist.
         if map_md5 not in app.state.cache.beatmap:
-            return b"no exist"
+            return Response(b"no exist")
 
         cached = app.state.cache.beatmap[map_md5]
 
         # only allow rating on maps with a leaderboard.
         if cached.status < RankedStatus.Ranked:
-            return b"not ranked"
+            return Response(b"not ranked")
 
         # osu! client is checking whether we can rate the map or not.
         has_previous_rating = (
@@ -1245,7 +1271,7 @@ async def osuRate(
         # the client hasn't rated the map, so simply
         # tell them that they can submit a rating.
         if not has_previous_rating:
-            return b"ok"
+            return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
         await app.state.services.database.execute(
@@ -1263,7 +1289,7 @@ async def osuRate(
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
-    return f"alreadyvoted\n{avg}".encode()
+    return Response(f"alreadyvoted\n{avg}".encode())
 
 
 @unique
@@ -1283,7 +1309,7 @@ async def get_leaderboard_scores(
     mods: Mods,
     player: Player,
     scoring_metric: Literal["pp", "score"],
-) -> tuple[list[Mapping[str, Any]], Mapping[str, Any] | None]:
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     query = [
         f"SELECT s.id, s.{scoring_metric} AS _score, "
         "s.max_combo, s.n50, s.n100, s.n300, "
@@ -1297,7 +1323,11 @@ async def get_leaderboard_scores(
         "AND (u.priv & 1 OR u.id = :user_id) AND mode = :mode",
     ]
 
-    params = {"map_md5": map_md5, "user_id": player.id, "mode": mode}
+    params: dict[str, Any] = {
+        "map_md5": map_md5,
+        "user_id": player.id,
+        "mode": mode,
+    }
 
     if leaderboard_type == LeaderboardType.Mods:
         query.append("AND s.mods = :mods")
@@ -1312,14 +1342,17 @@ async def get_leaderboard_scores(
     # TODO: customizability of the number of scores
     query.append("ORDER BY _score DESC LIMIT 50")
 
-    score_rows = await app.state.services.database.fetch_all(
-        " ".join(query),
-        params,
-    )
+    score_rows = [
+        dict(r._mapping)
+        for r in await app.state.services.database.fetch_all(
+            " ".join(query),
+            params,
+        )
+    ]
 
     if score_rows:  # None or []
         # fetch player's personal best score
-        personal_best_score_row = await app.state.services.database.fetch_one(
+        personal_best_score_rec = await app.state.services.database.fetch_one(
             f"SELECT id, {scoring_metric} AS _score, "
             "max_combo, n50, n100, n300, "
             "nmiss, nkatu, ngeki, perfect, mods, "
@@ -1331,7 +1364,9 @@ async def get_leaderboard_scores(
             {"map_md5": map_md5, "mode": mode, "user_id": player.id},
         )
 
-        if personal_best_score_row:
+        if personal_best_score_rec is not None:
+            personal_best_score_row = dict(personal_best_score_rec._mapping)
+
             # calculate the rank of the score.
             p_best_rank = 1 + await app.state.services.database.fetch_val(
                 "SELECT COUNT(*) FROM scores s "
@@ -1348,7 +1383,6 @@ async def get_leaderboard_scores(
             )
 
             # attach rank to personal best row
-            personal_best_score_row = dict(personal_best_score_row)
             personal_best_score_row["rank"] = p_best_rank
         else:
             personal_best_score_row = None
@@ -1379,7 +1413,7 @@ async def getScores(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
-):
+) -> Response:
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
@@ -1387,9 +1421,9 @@ async def getScores(
     # check if this md5 has already been  cached as
     # unsubmitted/needs update to reduce osu!api spam
     if map_md5 in app.state.cache.unsubmitted:
-        return b"-1|false"
+        return Response(b"-1|false")
     if map_md5 in app.state.cache.needs_update:
-        return b"1|false"
+        return Response(b"1|false")
 
     if mods_arg & Mods.RELAX:
         if mode_arg == 3:  # rx!mania doesn't exist
@@ -1414,7 +1448,9 @@ async def getScores(
         if not player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    scoring_metric = "pp" if mode >= GameMode.RELAX_OSU else "score"
+    scoring_metric: Literal["pp", "score"] = (
+        "pp" if mode >= GameMode.RELAX_OSU else "score"
+    )
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
     has_set_id = map_set_id > 0
@@ -1426,7 +1462,7 @@ async def getScores(
         if has_set_id and map_set_id not in app.state.cache.beatmapset:
             # set not cached, it doesn't exist
             app.state.cache.unsubmitted.add(map_md5)
-            return b"-1|false"
+            return Response(b"-1|false")
 
         map_filename = unquote_plus(map_filename)  # TODO: is unquote needed?
 
@@ -1452,13 +1488,13 @@ async def getScores(
         if map_exists:
             # map can be updated.
             app.state.cache.needs_update.add(map_md5)
-            return b"1|false"
+            return Response(b"1|false")
         else:
             # map is unsubmitted.
             # add this map to the unsubmitted cache, so
             # that we don't have to make this request again.
             app.state.cache.unsubmitted.add(map_md5)
-            return b"-1|false"
+            return Response(b"-1|false")
 
     # we've found a beatmap for the request.
 
@@ -1468,7 +1504,7 @@ async def getScores(
     if bmap.status < RankedStatus.Ranked:
         # only show leaderboards for ranked,
         # approved, qualified, or loved maps.
-        return f"{int(bmap.status)}|false".encode()
+        return Response(f"{int(bmap.status)}|false".encode())
 
     # fetch scores & personal best
     # TODO: create a leaderboard cache
@@ -1503,7 +1539,7 @@ async def getScores(
 
     if not score_rows:
         response_lines.extend(("", ""))  # no scores, no personal best
-        return "\n".join(response_lines).encode()
+        return Response("\n".join(response_lines).encode())
 
     if personal_best_score_row is not None:
         response_lines.append(
@@ -1530,7 +1566,7 @@ async def getScores(
         ],
     )
 
-    return "\n".join(response_lines).encode()
+    return Response("\n".join(response_lines).encode())
 
 
 @router.post("/web/osu-comment.php")
@@ -1546,22 +1582,25 @@ async def osuComment(
     colour: str | None = Form(None, alias="f", min_length=6, max_length=6),
     start_time: int | None = Form(None, alias="starttime"),
     comment: str | None = Form(None, min_length=1, max_length=80),
-):
+) -> Response:
     if action == "get":
         # client is requesting all comments
-        comments = await app.state.services.database.fetch_all(
-            "SELECT c.time, c.target_type, c.colour, "
-            "c.comment, u.priv FROM comments c "
-            "INNER JOIN users u ON u.id = c.userid "
-            "WHERE (c.target_type = 'replay' AND c.target_id = :score_id) "
-            "OR (c.target_type = 'song' AND c.target_id = :set_id) "
-            "OR (c.target_type = 'map' AND c.target_id = :map_id) ",
-            {
-                "score_id": score_id,
-                "set_id": map_set_id,
-                "map_id": map_id,
-            },
-        )
+        comments = [
+            dict(c._mapping)
+            for c in await app.state.services.database.fetch_all(
+                "SELECT c.time, c.target_type, c.colour, "
+                "c.comment, u.priv FROM comments c "
+                "INNER JOIN users u ON u.id = c.userid "
+                "WHERE (c.target_type = 'replay' AND c.target_id = :score_id) "
+                "OR (c.target_type = 'song' AND c.target_id = :set_id) "
+                "OR (c.target_type = 'map' AND c.target_id = :map_id) ",
+                {
+                    "score_id": score_id,
+                    "set_id": map_set_id,
+                    "map_id": map_id,
+                },
+            )
+        ]
 
         ret: list[str] = []
 
@@ -1583,7 +1622,7 @@ async def osuComment(
             )
 
         player.update_latest_activity_soon()
-        return "\n".join(ret).encode()
+        return Response("\n".join(ret).encode())
 
     elif action == "post":
         # client is submitting a new comment
@@ -1618,17 +1657,18 @@ async def osuComment(
         )
 
         player.update_latest_activity_soon()
-        return  # empty resp is fine
+
+    return Response(b"")  # empty resp is fine
 
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
-):
+) -> Response:
     target_name = unquote(channel)  # TODO: unquote needed?
     if not target_name:
-        return  # no channel specified
+        return Response(b"")  # no channel specified
 
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
@@ -1640,9 +1680,11 @@ async def osuMarkAsRead(
             {"to": player.id, "from": target.id},
         )
 
+    return Response(b"")
+
 
 @router.get("/web/osu-getseasonal.php")
-async def osuSeasonal():
+async def osuSeasonal() -> Response:
     return ORJSONResponse(app.settings.SEASONAL_BGS)
 
 
@@ -1656,8 +1698,8 @@ async def banchoConnect(
     net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
     client_hash: str | None = Query(None, alias="ch"),
     retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
-):
-    return b""  # TODO
+) -> Response:
+    return Response(b"")  # TODO
 
 
 _checkupdates_cache = {  # default timeout is 1h, set on request.
@@ -1673,38 +1715,8 @@ async def checkUpdates(
     request: Request,
     action: Literal["check", "path", "error"],
     stream: Literal["cuttingedge", "stable40", "beta40", "stable"],
-):
-    return b""
-
-    # NOTE: this code is unused now.
-    # it was only used with server switchers,
-    # which bancho.py has deprecated support for.
-
-    if action == "error":
-        # client is just reporting an error updating
-        return
-
-    cache = _checkupdates_cache[stream]
-    current_time = int(time.time())
-
-    if cache[action] and cache["timeout"] > current_time:
-        return cache[action]
-
-    url = "https://old.ppy.sh/web/check-updates.php"
-    async with app.state.services.http_client.get(
-        url,
-        params=request.query_params,
-    ) as resp:
-        if not resp or resp.status != 200:
-            return (503, b"")  # failed to get data from osu
-
-        result = await resp.read()
-
-    # update the cached result.
-    cache[action] = result
-    cache["timeout"] = current_time + 3600
-
-    return result
+) -> Response:
+    return Response(b"")
 
 
 """ Misc handlers """
@@ -1712,7 +1724,7 @@ async def checkUpdates(
 
 if app.settings.REDIRECT_OSU_URLS:
     # NOTE: this will likely be removed with the addition of a frontend.
-    async def osu_redirect(request: Request, _: int = Path(...)):
+    async def osu_redirect(request: Request, _: int = Path(...)) -> Response:
         return RedirectResponse(
             url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
@@ -1729,9 +1741,9 @@ if app.settings.REDIRECT_OSU_URLS:
 
 @router.get("/ss/{screenshot_id}.{extension}")
 async def get_screenshot(
-    screenshot_id: str = Path(..., regex=r"[a-zA-Z0-9-_]{8}"),
+    screenshot_id: str = Path(..., pattern=r"[a-zA-Z0-9-_]{8}"),
     extension: Literal["jpg", "jpeg", "png"] = Path(...),
-):
+) -> Response:
     """Serve a screenshot from the server, by filename."""
     screenshot_path = SCREENSHOTS_PATH / f"{screenshot_id}.{extension}"
 
@@ -1743,14 +1755,14 @@ async def get_screenshot(
 
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),  # type: ignore
+        media_type=app.utils.get_media_type(extension),
     )
 
 
 @router.get("/d/{map_set_id}")
 async def get_osz(
     map_set_id: str = Path(...),
-):
+) -> Response:
     """Handle a map download request (osu.ppy.sh/d/*)."""
     no_video = map_set_id[-1] == "n"
     if no_video:
@@ -1769,61 +1781,24 @@ async def get_updated_beatmap(
     request: Request,
     map_filename: str,
     host: str = Header(...),
-):
+) -> Response:
     """Send the latest .osu file the server has for a given map."""
-    if host != "osu.ppy.sh":
-        return RedirectResponse(
-            url=f"https://osu.ppy.sh{request['raw_path'].decode()}",
-            status_code=status.HTTP_301_MOVED_PERMANENTLY,
-        )
+    if host == "osu.ppy.sh":
+        return Response("bancho.py only supports the -devserver connection method")
 
-    return
-
-    # NOTE: this code is unused now. ඞ
-    # it was only used with server switchers,
-    # which bancho.py has deprecated support for.
-
-    # server switcher, use old method
-    map_filename = unquote(map_filename)
-
-    if not (
-        res := await app.state.services.database.fetch_one(
-            "SELECT id, md5 FROM maps WHERE filename = :filename",
-            {"filename": map_filename},
-        )
-    ):
-        return Response(status_code=status.HTTP_400_BAD_REQUEST)
-
-    osu_file_path = BEATMAPS_PATH / f'{res["id"]}.osu'
-
-    if (
-        osu_file_path.exists()
-        and res["md5"] == hashlib.md5(osu_file_path.read_bytes()).hexdigest()
-    ):
-        # up-to-date map found on disk.
-        content = osu_file_path.read_bytes()
-    else:
-        # map not found, or out of date; get from osu!
-        url = f"https://old.ppy.sh/osu/{res['id']}"
-
-        async with app.state.services.http_client.get(url) as resp:
-            if not resp or resp.status != 200:
-                log(f"Could not find map {osu_file_path}!", Ansi.LRED)
-                return (404, b"")  # couldn't find on osu!'s server
-
-            content = await resp.read()
-
-        # save it to disk for future
-        osu_file_path.write_bytes(content)
-
-    return content
+    return RedirectResponse(
+        url=f"https://osu.ppy.sh{request['raw_path'].decode()}",
+        status_code=status.HTTP_301_MOVED_PERMANENTLY,
+    )
 
 
 @router.get("/p/doyoureallywanttoaskpeppy")
-async def peppyDMHandler():
-    return (
-        b"This user's ID is usually peppy's (when on bancho), "
-        b"and is blocked from being messaged by the osu! client."
+async def peppyDMHandler() -> Response:
+    return Response(
+        content=(
+            b"This user's ID is usually peppy's (when on bancho), "
+            b"and is blocked from being messaged by the osu! client."
+        ),
     )
 
 
@@ -1841,7 +1816,7 @@ async def register_account(
     # TODO: allow nginx to be optional
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
     real_ip: str = Header(..., alias="X-Real-IP"),
-):
+) -> Response:
     if not all((username, email, pw_plaintext)):
         return Response(
             content=b"Missing required params",
@@ -1912,6 +1887,7 @@ async def register_account(
         ip = app.state.services.ip_resolver.get_ip(request.headers)
 
         geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
+        country = geoloc["country"]["acronym"] if geoloc is not None else "XX"
 
         async with app.state.services.database.transaction():
             # add to `users` table.
@@ -1919,7 +1895,7 @@ async def register_account(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,
-                country=geoloc["country"]["acronym"],
+                country=country,
             )
 
             # add to `stats` table.
@@ -1930,11 +1906,11 @@ async def register_account(
 
         log(f"<{username} ({player['id']})> has registered!", Ansi.LGREEN)
 
-    return b"ok"  # success
+    return Response(content=b"ok")  # success
 
 
 @router.post("/difficulty-rating")
-async def difficultyRatingHandler(request: Request):
+async def difficultyRatingHandler(request: Request) -> Response:
     return RedirectResponse(
         url=f"https://osu.ppy.sh{request['path']}",
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,

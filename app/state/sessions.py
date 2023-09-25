@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from typing import TYPE_CHECKING
 
 from app.logging import Ansi
@@ -20,11 +21,10 @@ channels = Channels()
 pools = MapPools()
 clans = Clans()
 matches = Matches()
-achievements: list[Achievement] = []
 
 api_keys: dict[str, int] = {}
 
-housekeeping_tasks: set[asyncio.Task] = set()
+housekeeping_tasks: set[asyncio.Task[Any]] = set()
 
 bot: Player
 

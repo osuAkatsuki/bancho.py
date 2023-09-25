@@ -120,6 +120,8 @@ class Mods(IntFlag):
                     first_keymod = mod
                     break
 
+            assert first_keymod is not None
+
             # remove all but the first keymod.
             self &= ~(keymods_used & ~first_keymod)
 

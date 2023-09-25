@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import copy
 import importlib.metadata
 import os
 import pprint
 import random
 import secrets
 import signal
-import struct
 import time
 import traceback
 import uuid
-from collections import Counter
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -27,10 +24,9 @@ from typing import NoReturn
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import TypeVar
-from typing import Union
 from urllib.parse import urlparse
 
+import cpuinfo
 import psutil
 import timeago
 from pytimeparse.timeparse import timeparse
@@ -42,7 +38,6 @@ import app.state
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
-from app.constants.gamemodes import GameMode
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
@@ -397,17 +392,20 @@ async def top(ctx: Context) -> str | None:
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
-    scores = await app.state.services.database.fetch_all(
-        "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
-        "FROM scores s "
-        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND b.status in (2, 3) "
-        "ORDER BY s.pp DESC LIMIT 10",
-        {"user_id": player.id, "mode": mode},
-    )
+    scores = [
+        dict(s._mapping)
+        for s in await app.state.services.database.fetch_all(
+            "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
+            "FROM scores s "
+            "LEFT JOIN maps b ON b.md5 = s.map_md5 "
+            "WHERE s.userid = :user_id "
+            "AND s.mode = :mode "
+            "AND s.status = 2 "
+            "AND b.status in (2, 3) "
+            "ORDER BY s.pp DESC LIMIT 10",
+            {"user_id": player.id, "mode": mode},
+        )
+    ]
 
     if not scores:
         return "No scores"
@@ -795,12 +793,14 @@ async def user(ctx: Context) -> str | None:
         player = ctx.player
     else:
         # username given, fetch the player
-        player = await app.state.sessions.players.from_cache_or_sql(
+        maybe_player = await app.state.sessions.players.from_cache_or_sql(
             name=" ".join(ctx.args),
         )
 
-        if not player:
+        if maybe_player is None:
             return "Player not found."
+
+        player = maybe_player
 
     priv_list = [
         priv.name
@@ -812,7 +812,11 @@ async def user(ctx: Context) -> str | None:
     else:
         last_np = None
 
-    osu_version = player.client_details.osu_version.date if player.online else "Unknown"
+    if player.is_online and player.client_details is not None:
+        osu_version = player.client_details.osu_version.date.isoformat()
+    else:
+        osu_version = "Unknown"
+
     donator_info = (
         f"True (ends {timeago.format(player.donor_end)})"
         if player.priv & Privileges.DONATOR != 0
@@ -862,7 +866,7 @@ async def restrict(ctx: Context) -> str | None:
     await target.restrict(admin=ctx.player, reason=reason)
 
     # refresh their client state
-    if target.online:
+    if target.is_online:
         target.logout()
 
     return f"{target} was restricted."
@@ -893,7 +897,7 @@ async def unrestrict(ctx: Context) -> str | None:
     await target.unrestrict(ctx.player, reason)
 
     # refresh their client state
-    if target.online:
+    if target.is_online:
         target.logout()
 
     return f"{target} was unrestricted."
@@ -971,6 +975,7 @@ async def shutdown(ctx: Context) -> str | None | NoReturn:
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), _signal)
+        return "Process killed"
 
 
 """ Developer commands
@@ -1148,11 +1153,12 @@ async def reload(ctx: Context) -> str | None:
     except ModuleNotFoundError:
         return "Module not found."
 
+    child = None
     try:
         for child in children:
             mod = getattr(mod, child)
     except AttributeError:
-        return f"Failed at {child}."  # type: ignore
+        return f"Failed at {child}."
 
     try:
         mod = importlib.reload(mod)
@@ -1173,18 +1179,13 @@ async def server(ctx: Context) -> str | None:
     uptime = int(time.time() - proc.create_time())
 
     # get info about our cpu
-    with open("/proc/cpuinfo") as f:
-        header = "model name\t: "
-        trailer = "\n"
-
-        model_names = Counter(
-            line[len(header) : -len(trailer)]
-            for line in f.readlines()
-            if line.startswith("model name")
-        )
+    cpu_info = cpuinfo.get_cpu_info()
 
     # list of all cpus installed with thread count
-    cpus_info = " | ".join(f"{v}x {k}" for k, v in model_names.most_common())
+    thread_count = cpu_info["count"]
+    cpu_name = cpu_info["brand_raw"]
+
+    cpu_info_str = f"{thread_count}x {cpu_name}"
 
     # get system-wide ram usage
     sys_ram = psutil.virtual_memory()
@@ -1210,7 +1211,7 @@ async def server(ctx: Context) -> str | None:
     requirements = []
 
     for dist in importlib.metadata.distributions():
-        requirements.append(f"{dist.name} v{dist.version}")  # type: ignore
+        requirements.append(f"{dist.name} v{dist.version}")
     requirements.sort(key=lambda x: x.casefold())
 
     requirements_info = "\n".join(
@@ -1221,7 +1222,7 @@ async def server(ctx: Context) -> str | None:
     return "\n".join(
         (
             f"{build_str} | uptime: {seconds_readable(uptime)}",
-            f"cpu(s): {cpus_info}",
+            f"cpu: {cpu_info_str}",
             f"ram: {ram_info}",
             f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",
             f"osu!api connection: {using_osuapi}",
@@ -1287,7 +1288,7 @@ if app.settings.DEVELOPER_MODE:
         if not isinstance(ret, str):
             ret = pprint.pformat(ret, compact=True)
 
-        return ret
+        return str(ret)
 
 
 """ Multiplayer commands
@@ -1295,14 +1296,12 @@ if app.settings.DEVELOPER_MODE:
 # Most commands are open to player usage.
 """
 
-R = TypeVar("R", bound=Optional[str])
-
 
 def ensure_match(
-    f: Callable[[Context, Match], Awaitable[R | None]],
-) -> Callable[[Context], Awaitable[R | None]]:
+    f: Callable[[Context, Match], Awaitable[str | None]],
+) -> Callable[[Context], Awaitable[str | None]]:
     @wraps(f)
-    async def wrapper(ctx: Context) -> R | None:
+    async def wrapper(ctx: Context) -> str | None:
         match = ctx.player.match
 
         # multi set is a bit of a special case,
@@ -1315,11 +1314,11 @@ def ensure_match(
             # message not in match channel
             return None
 
-        if f is not mp_help and (
-            ctx.player not in match.refs
-            and not ctx.player.priv & Privileges.TOURNEY_MANAGER
+        if not (
+            ctx.player in match.refs
+            or ctx.player.priv & Privileges.TOURNEY_MANAGER
+            or f is mp_help.__wrapped__  # type: ignore[attr-defined]
         ):
-            # doesn't have privs to use !mp commands (allow help).
             return None
 
         return await f(ctx, match)
@@ -2044,13 +2043,12 @@ async def pool_create(ctx: Context) -> str | None:
     )
 
     # add to cache (get from sql for id & time)
-    row = await app.state.services.database.fetch_one(
+    rec = await app.state.services.database.fetch_one(
         "SELECT * FROM tourney_pools WHERE name = :name",
         {"name": name},
     )
-    assert row is not None
-
-    row = dict(row)  # make mutable copy
+    assert rec is not None
+    row = dict(rec._mapping)
 
     pool_creator = await app.state.sessions.players.from_cache_or_sql(
         id=row["created_by"],
@@ -2221,7 +2219,7 @@ async def pool_info(ctx: Context) -> str | None:
 
     for (mods, slot), bmap in sorted(
         pool.maps.items(),
-        key=lambda x: (Mods.to_string(x[0][0]), x[0][1]),
+        key=lambda x: (repr(x[0][0]), x[0][1]),
     ):
         l.append(f"{mods!r}{slot}: {bmap.embed}")
 
@@ -2276,7 +2274,7 @@ async def clan_create(ctx: Context) -> str | None:
     created_at = datetime.now()
 
     # add clan to sql
-    clan = await clans_repo.create(
+    persisted_clan = await clans_repo.create(
         name=name,
         tag=tag,
         owner=ctx.player.id,
@@ -2284,7 +2282,7 @@ async def clan_create(ctx: Context) -> str | None:
 
     # add clan to cache
     clan = Clan(
-        id=clan["id"],
+        id=persisted_clan["id"],
         name=name,
         tag=tag,
         created_at=created_at,
@@ -2306,7 +2304,7 @@ async def clan_create(ctx: Context) -> str | None:
     )
 
     # announce clan creation
-    announce_chan = app.state.sessions.channels["#announce"]
+    announce_chan = app.state.sessions.channels.get_by_name("#announce")
     if announce_chan:
         msg = f"\x01ACTION founded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2346,7 +2344,7 @@ async def clan_disband(ctx: Context) -> str | None:
             member.clan_priv = None
 
     # announce clan disbanding
-    announce_chan = app.state.sessions.channels["#announce"]
+    announce_chan = app.state.sessions.channels.get_by_name("#announce")
     if announce_chan:
         msg = f"\x01ACTION disbanded {clan!r}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2376,7 +2374,7 @@ async def clan_info(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED)
-async def clan_leave(ctx: Context):
+async def clan_leave(ctx: Context) -> str | None:
     """Leaves the clan you're in."""
     if not ctx.player.clan:
         return "You're not in a clan."

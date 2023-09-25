@@ -5,7 +5,6 @@ import hashlib
 import struct
 from pathlib import Path as SystemPath
 from typing import Literal
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -87,7 +86,7 @@ def format_player_basic(player: Player) -> dict[str, object]:
         "name": player.name,
         "country": player.geoloc["country"]["acronym"],
         "clan": format_clan_basic(player.clan) if player.clan else None,
-        "online": player.online,
+        "online": player.is_online,
     }
 
 
@@ -129,7 +128,7 @@ async def api_calculate_pp(
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
     acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
-):
+) -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
 
     if token is None or app.state.sessions.api_keys.get(token.credentials) is None:
@@ -181,17 +180,16 @@ async def api_calculate_pp(
     )
 
     # "Inject" the accuracy into the list of results
-    results = [
+    final_results = [
         performance_result | {"accuracy": score.acc}
         for performance_result, score in zip(results, scores)
     ]
 
     return ORJSONResponse(
-        results
+        # XXX: change the output type based on the inputs from user
+        final_results
         if all(x is None for x in [ngeki, nkatu, n100, n50])
-        else results[
-            0
-        ],  # It's okay to change the output type as the user explicitly either requests
+        else final_results[0],
         status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
     )
 
@@ -199,7 +197,7 @@ async def api_calculate_pp(
 @router.get("/search_players")
 async def api_search_players(
     search: str | None = Query(None, alias="q", min=2, max=32),
-):
+) -> Response:
     """Search for users on the server by name."""
     rows = await app.state.services.database.fetch_all(
         "SELECT id, name "
@@ -220,7 +218,7 @@ async def api_search_players(
 
 
 @router.get("/get_player_count")
-async def api_get_player_count():
+async def api_get_player_count() -> Response:
     """Get the current amount of online players."""
     return ORJSONResponse(
         {
@@ -238,8 +236,8 @@ async def api_get_player_count():
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-):
+    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
+) -> Response:
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
         return ORJSONResponse(
@@ -280,18 +278,35 @@ async def api_get_player_info(
                 f"bancho:leaderboard:{idx}",
                 str(resolved_user_id),
             )
-            mode_stats["rank"] = rank + 1 if rank is not None else 0
-
             country_rank = await app.state.services.redis.zrevrank(
                 f"bancho:leaderboard:{idx}:{resolved_country}",
                 str(resolved_user_id),
             )
-            mode_stats["country_rank"] = (
-                country_rank + 1 if country_rank is not None else 0
-            )
 
-            mode = str(mode_stats.pop("mode"))
-            api_data["stats"][mode] = mode_stats
+            # NOTE: this dict-like return is intentional.
+            #       but quite cursed.
+            stats_key = str(mode_stats["mode"])
+            api_data["stats"][stats_key] = {
+                "id": mode_stats["id"],
+                "mode": mode_stats["mode"],
+                "tscore": mode_stats["tscore"],
+                "rscore": mode_stats["rscore"],
+                "pp": mode_stats["pp"],
+                "plays": mode_stats["plays"],
+                "playtime": mode_stats["playtime"],
+                "acc": mode_stats["acc"],
+                "max_combo": mode_stats["max_combo"],
+                "total_hits": mode_stats["total_hits"],
+                "replay_views": mode_stats["replay_views"],
+                "xh_count": mode_stats["xh_count"],
+                "x_count": mode_stats["x_count"],
+                "sh_count": mode_stats["sh_count"],
+                "s_count": mode_stats["s_count"],
+                "a_count": mode_stats["a_count"],
+                # extra fields are added to the api response
+                "rank": rank + 1 if rank is not None else 0,
+                "country_rank": country_rank + 1 if country_rank is not None else 0,
+            }
 
     return ORJSONResponse({"status": "success", "player": api_data})
 
@@ -299,8 +314,8 @@ async def api_get_player_info(
 @router.get("/get_player_status")
 async def api_get_player_status(
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
-):
+    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
+) -> Response:
     """Return a players current status, if they are online."""
     if username and user_id:
         return ORJSONResponse(
@@ -369,13 +384,13 @@ async def api_get_player_status(
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
-):
+) -> Response:
     """Return a list of a given user's recent/best scores."""
     if mode_arg in (
         GameMode.RELAX_MANIA,
@@ -414,12 +429,11 @@ async def api_get_player_scores(
 
     mode = GameMode(mode_arg)
 
+    strong_equality = True
     if mods_arg is not None:
         if mods_arg[0] in ("~", "="):  # weak/strong equality
             strong_equality = mods_arg[0] == "="
             mods_arg = mods_arg[1:]
-        else:  # use strong as default
-            strong_equality = True
 
         if mods_arg.isdecimal():
             # parse from int form
@@ -447,7 +461,7 @@ async def api_get_player_scores(
     }
 
     if mods is not None:
-        if strong_equality:  # type: ignore
+        if strong_equality:
             query.append("AND t.mods & :mods = :mods")
         else:
             query.append("AND t.mods & :mods != 0")
@@ -506,10 +520,10 @@ async def api_get_player_scores(
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: str | None = Query(None, alias="name", regex=regexes.USERNAME.pattern),
+    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
-):
+) -> Response:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
     if mode_arg in (
@@ -569,7 +583,7 @@ async def api_get_player_most_played(
 async def api_get_map_info(
     map_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
-):
+) -> Response:
     """Return information about a given beatmap."""
     if map_id is not None:
         bmap = await Beatmap.from_bid(map_id)
@@ -603,7 +617,7 @@ async def api_get_map_scores(
     mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
-):
+) -> Response:
     """Return the top n scores on a given beatmap."""
     if mode_arg in (
         GameMode.RELAX_MANIA,
@@ -636,12 +650,11 @@ async def api_get_map_scores(
 
     mode = GameMode(mode_arg)
 
+    strong_equality = True
     if mods_arg is not None:
-        if mods_arg[0] in ("~", "="):  # weak/strong equality
+        if mods_arg[0] in ("~", "="):
             strong_equality = mods_arg[0] == "="
             mods_arg = mods_arg[1:]
-        else:  # use strong as default
-            strong_equality = True
 
         if mods_arg.isdecimal():
             # parse from int form
@@ -674,7 +687,7 @@ async def api_get_map_scores(
     }
 
     if mods is not None:
-        if strong_equality:  # type: ignore
+        if strong_equality:
             query.append("AND mods & :mods = :mods")
         else:
             query.append("AND mods & :mods != 0")
@@ -704,7 +717,7 @@ async def api_get_map_scores(
 @router.get("/get_score_info")
 async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
-):
+) -> Response:
     """Return information about a given score."""
     score = await scores_repo.fetch_one(score_id)
 
@@ -723,7 +736,7 @@ async def api_get_score_info(
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = True,
-):
+) -> Response:
     """Return a given replay (including headers)."""
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
@@ -826,7 +839,7 @@ async def api_get_replay(
                 'attachment; filename="{username} - '
                 "{artist} - {title} [{version}] "
                 '({play_time:%Y-%m-%d}).osr"'
-            ).format(**row),
+            ).format(**dict(row._mapping)),
         },
     )
 
@@ -834,7 +847,7 @@ async def api_get_replay(
 @router.get("/get_match")
 async def api_get_match(
     match_id: int = Query(..., alias="id", ge=1, le=64),
-):
+) -> Response:
     """Return information of a given multiplayer match."""
     # TODO: eventually, this should contain recent score info.
 
@@ -888,7 +901,7 @@ async def api_get_global_leaderboard(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: str | None = Query(None, min_length=2, max_length=2),
-):
+) -> Response:
     if mode_arg in (
         GameMode.RELAX_MANIA,
         GameMode.AUTOPILOT_CATCH,
@@ -930,7 +943,7 @@ async def api_get_global_leaderboard(
 @router.get("/get_clan")
 async def api_get_clan(
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
-):
+) -> Response:
     """Return information of a given clan."""
 
     # TODO: fetching by name & tag (requires safe_name, safe_tag)
@@ -979,7 +992,7 @@ async def api_get_clan(
 @router.get("/get_mappool")
 async def api_get_pool(
     pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
-):
+) -> Response:
     """Return information of a given mappool."""
 
     # TODO: fetching by name (requires safe_name)

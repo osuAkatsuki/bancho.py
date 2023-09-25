@@ -1,33 +1,30 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 
 from dotenv import load_dotenv
 
+from app.settings_utils import read_bool
+from app.settings_utils import read_list
+from app.settings_utils import support_deprecated_vars
+
 load_dotenv()
 
-
-def read_bool(value: str) -> bool:
-    return value.lower() in ("true", "1", "yes")
-
-
-def read_list(value: str) -> list[str]:
-    return value.split(",") if value else []
-
-
-# TODO: refactor this out of existence
-MAX_MATCHES = 64
-
-
-SERVER_ADDR = os.environ["SERVER_ADDR"]
-
-# this is a bit weird, to allow "" as a value for backwards compatibility.
-# perhaps can remove in future.
-_server_port = os.environ["SERVER_PORT"]
-if _server_port:
-    SERVER_PORT = int(_server_port)
-else:
-    SERVER_PORT = None
+APP_HOST = support_deprecated_vars(
+    new_name="APP_HOST",
+    deprecated_name="SERVER_ADDR",
+    until=date(2024, 1, 1),
+)
+APP_PORT = None
+_app_port = support_deprecated_vars(
+    new_name="APP_PORT",
+    deprecated_name="SERVER_PORT",
+    until=date(2024, 1, 1),
+    allow_empty_string=True,
+)
+if _app_port:
+    APP_PORT = int(_app_port)
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])

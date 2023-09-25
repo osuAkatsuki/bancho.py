@@ -1,19 +1,17 @@
 from __future__ import annotations
 
+import ctypes
 import inspect
 import io
 import ipaddress
 import os
 import shutil
 import socket
-import subprocess
 import sys
 import types
-import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from typing import Optional
 from typing import TypedDict
 from typing import TypeVar
 
@@ -44,7 +42,6 @@ __all__ = (
     "escape_enum",
     "ensure_supported_platform",
     "ensure_directory_structure",
-    "ensure_dependencies_and_requirements",
     "setup_runtime_environment",
     "_install_debugging_hooks",
     "display_startup_dialog",
@@ -53,7 +50,11 @@ __all__ = (
     "get_media_type",
     "has_jpeg_headers_and_trailers",
     "has_png_headers_and_trailers",
+    "is_running_as_admin",
 )
+
+T = TypeVar("T")
+
 
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
@@ -64,27 +65,6 @@ DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
-
-
-def _download_achievement_images_mirror(achievements_path: Path) -> bool:
-    """Download all used achievement images (using mirror's zip)."""
-
-    # NOTE: this is currently disabled as there's
-    #       not much benefit to maintaining it
-    return False
-
-    log("Downloading achievement images from mirror.", Ansi.LCYAN)
-    resp = requests.get("https://cmyui.xyz/achievement_images.zip")
-
-    if resp.status_code != status.HTTP_200_OK:
-        log("Failed to fetch from mirror, trying osu! servers.", Ansi.LRED)
-        return False
-
-    with io.BytesIO(resp.content) as data:
-        with zipfile.ZipFile(data) as myfile:
-            myfile.extractall(achievements_path)
-
-    return True
 
 
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
@@ -131,12 +111,9 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
 
 def download_achievement_images(achievements_path: Path) -> None:
     """Download all used achievement images (using the best available source)."""
-    # try using my cmyui.xyz mirror (zip file)
-    downloaded = _download_achievement_images_mirror(achievements_path)
 
-    if not downloaded:
-        # as fallback, download individual files from osu!
-        downloaded = _download_achievement_images_osu(achievements_path)
+    # download individual files from the official osu! servers
+    downloaded = _download_achievement_images_osu(achievements_path)
 
     if downloaded:
         log("Downloaded all achievement images.", Ansi.LGREEN)
@@ -239,7 +216,7 @@ def _install_synchronous_excepthook() -> None:
         type_: type[BaseException],
         value: BaseException,
         traceback: types.TracebackType | None,
-    ):
+    ) -> None:
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
             return
@@ -263,7 +240,7 @@ def _install_synchronous_excepthook() -> None:
             f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
             Ansi.RED,
         )
-        real_excepthook(type_, value, traceback)  # type: ignore
+        real_excepthook(type_, value, traceback)
 
     sys.excepthook = _excepthook
 
@@ -315,15 +292,12 @@ def is_valid_unix_address(address: str) -> bool:
     return address.endswith(".sock")  # TODO: improve
 
 
-T = TypeVar("T")
-
-
 def pymysql_encode(
     conv: Callable[[Any, dict[object, object] | None], str],
-) -> Callable[[T], T]:
+) -> Callable[[type[T]], type[T]]:
     """Decorator to allow for adding to pymysql's encoders."""
 
-    def wrapper(cls: T) -> T:
+    def wrapper(cls: type[T]) -> type[T]:
         pymysql.converters.encoders[cls] = conv
         return cls
 
@@ -339,16 +313,6 @@ def escape_enum(
 
 def ensure_supported_platform() -> int:
     """Ensure we're running on an appropriate platform for bancho.py."""
-    if sys.platform != "linux":
-        log("bancho.py currently only supports linux", Ansi.LRED)
-        if sys.platform == "win32":
-            log(
-                "you could also try wsl(2), i'd recommend ubuntu 18.04 "
-                "(i use it to test bancho.py)",
-                Ansi.LBLUE,
-            )
-        return 1
-
     if sys.version_info < (3, 11):
         log(
             "bancho.py uses many modern python features, "
@@ -401,6 +365,20 @@ def _install_debugging_hooks() -> None:
         runtime.setup()
 
 
+def is_running_as_admin() -> bool:
+    try:
+        return os.geteuid() == 0  # type: ignore[attr-defined, no-any-return, unused-ignore]
+    except AttributeError:
+        pass
+
+    try:
+        return ctypes.windll.shell32.IsUserAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]
+    except AttributeError:
+        raise Exception(
+            f"{sys.platform} is not currently supported on bancho.py, please create a github issue!",
+        )
+
+
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if app.settings.DEVELOPER_MODE:
@@ -408,11 +386,11 @@ def display_startup_dialog() -> None:
     if app.settings.DEBUG:
         log("running in debug mode", Ansi.LMAGENTA)
 
-    # running on root grants the software potentally dangerous and
+    # running on root/admin grants the software potentally dangerous and
     # unnecessary power over the operating system and is not advised.
-    if os.geteuid() == 0:
+    if is_running_as_admin():
         log(
-            "It is not recommended to run bancho.py as root, especially in production..",
+            "It is not recommended to run bancho.py as root/admin, especially in production..",
             Ansi.LYELLOW,
         )
 
@@ -429,7 +407,7 @@ def create_config_from_default() -> None:
     shutil.copy("ext/config.sample.py", "config.py")
 
 
-def orjson_serialize_to_str(*args, **kwargs) -> str:
+def orjson_serialize_to_str(*args: Any, **kwargs: Any) -> str:
     return orjson.dumps(*args, **kwargs).decode()
 
 
@@ -450,5 +428,5 @@ def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
 def has_png_headers_and_trailers(data_view: memoryview) -> bool:
     return (
         data_view[:8] == b"\x89PNG\r\n\x1a\n"
-        and data_view[-8] == b"\x49END\xae\x42\x60\x82"
+        and data_view[-8:] == b"\x49END\xae\x42\x60\x82"
     )

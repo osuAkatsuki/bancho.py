@@ -1,13 +1,12 @@
 """ bancho.py's v2 apis for interacting with maps """
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter
 from fastapi import status
 from fastapi.param_functions import Query
 
 from app.api.v2.common import responses
+from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import Map
 from app.repositories import maps as maps_repo
@@ -27,7 +26,7 @@ async def get_maps(
     frozen: bool | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-) -> Success[list[Map]]:
+) -> Success[list[Map]] | Failure:
     maps = await maps_repo.fetch_many(
         server=server,
         set_id=set_id,
@@ -64,7 +63,7 @@ async def get_maps(
 
 
 @router.get("/maps/{map_id}")
-async def get_map(map_id: int) -> Success[Map]:
+async def get_map(map_id: int) -> Success[Map] | Failure:
     data = await maps_repo.fetch_one(id=map_id)
     if data is None:
         return responses.failure(

@@ -16,7 +16,7 @@ abweichende Installationsprozesse haben.
 
 ## Anforderungen
 
-**bancho.py** ist eine ~15.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
+**bancho.py** ist eine ~20.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
 
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 
@@ -29,7 +29,3 @@ Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Ab
 - build-essential (Build-Werkzeuge für C/C++)
 
 als auch einige andere angewiesen.
-
-## Einrichtungsmethoden
-
-**bancho.py** bietet zwei dokumentierte Methoden zur Einrichtung der Codebasis an. Sie können entweder die eine oder die andere Methode verwenden, aber Docker wird die einfachere Methode sein.

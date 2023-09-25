@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import Any
-from typing import Optional
+from typing import cast
+from typing import TypedDict
 
 import app.state.services
+from app._typing import _UnsetSentinel
+from app._typing import UNSET
 
 # +-----------------+-----------------+------+-----+---------+----------------+
 # | Field           | Type            | Null | Key | Default | Extra          |
@@ -41,6 +45,55 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class Score(TypedDict):
+    id: int
+    map_md5: str
+    score: int
+    pp: float
+    acc: float
+    max_combo: int
+    mods: int
+    n300: int
+    n100: int
+    n50: int
+    nmiss: int
+    ngeki: int
+    nkatu: int
+    grade: str
+    status: int
+    mode: int
+    play_time: datetime
+    time_elapsed: int
+    client_flags: int
+    userid: int
+    perfect: int
+    online_checksum: str
+
+
+class ScoreUpdateFields(TypedDict, total=False):
+    map_md5: str
+    score: int
+    pp: float
+    acc: float
+    max_combo: int
+    mods: int
+    n300: int
+    n100: int
+    n50: int
+    nmiss: int
+    ngeki: int
+    nkatu: int
+    grade: str
+    status: int
+    mode: int
+    play_time: datetime
+    time_elapsed: int
+    client_flags: int
+    userid: int
+    perfect: int
+    online_checksum: str
+
+
 async def create(
     map_md5: str,
     score: int,
@@ -57,13 +110,13 @@ async def create(
     grade: str,
     status: int,
     mode: int,
-    play_time: str,
+    play_time: datetime,
     time_elapsed: int,
     client_flags: int,
     user_id: int,
     perfect: int,
     online_checksum: str,
-) -> dict[str, Any]:
+) -> Score:
     query = """\
         INSERT INTO scores (map_md5, score, pp, acc, max_combo, mods, n300,
                             n100, n50, nmiss, ngeki, nkatu, grade, status,
@@ -74,7 +127,7 @@ async def create(
                      :mode, :play_time, :time_elapsed, :client_flags,
                      :userid, :perfect, :online_checksum)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "score": score,
         "pp": pp,
@@ -106,19 +159,21 @@ async def create(
     """
     params = {"id": rec_id}
     rec = await app.state.services.database.fetch_one(query, params)
+
     assert rec is not None
-    return dict(rec)
+    return cast(Score, dict(rec._mapping))
 
 
-async def fetch_one(id: int) -> dict[str, Any] | None:
+async def fetch_one(id: int) -> Score | None:
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
+    params: dict[str, Any] = {"id": id}
     rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+
+    return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
 async def fetch_count(
@@ -137,7 +192,7 @@ async def fetch_count(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -146,7 +201,7 @@ async def fetch_count(
     }
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return rec["count"]
+    return cast(int, rec._mapping["count"])
 
 
 async def fetch_many(
@@ -157,7 +212,7 @@ async def fetch_many(
     user_id: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Score]:
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
@@ -167,7 +222,7 @@ async def fetch_many(
            AND mode = COALESCE(:mode, mode)
            AND userid = COALESCE(:userid, userid)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_md5": map_md5,
         "mods": mods,
         "status": status,
@@ -183,35 +238,37 @@ async def fetch_many(
         params["offset"] = (page - 1) * page_size
 
     recs = await app.state.services.database.fetch_all(query, params)
-    return [dict(rec) for rec in recs]
+    return cast(list[Score], [dict(r._mapping) for r in recs])
 
 
 async def update(
     id: int,
-    pp: float | None = None,
-    status: int | None = None,
-) -> dict[str, Any] | None:
-    query = """\
+    pp: float | _UnsetSentinel = UNSET,
+    status: int | _UnsetSentinel = UNSET,
+) -> Score | None:
+    """Update an existing score."""
+    update_fields: ScoreUpdateFields = {}
+    if not isinstance(pp, _UnsetSentinel):
+        update_fields["pp"] = pp
+    if not isinstance(status, _UnsetSentinel):
+        update_fields["status"] = status
+
+    query = f"""\
         UPDATE scores
-           SET pp = COALESCE(:pp, pp),
-               status = COALESCE(:status, status)
+           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    params = {
-        "id": id,
-        "pp": pp,
-        "status": status,
-    }
-    await app.state.services.database.execute(query, params)
+    values = {"id": id} | update_fields
+    await app.state.services.database.execute(query, values)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
          WHERE id = :id
     """
-    params = {"id": id}
+    params: dict[str, Any] = {"id": id}
     rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
 # TODO: delete
