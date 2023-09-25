@@ -57,9 +57,7 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
     return cast(Mail, dict(mail._mapping))
 
 
-async def fetch_one(
-    from_id: int,
-) -> Mail | None:
+async def fetch_one(from_id: int) -> Mail | None:
     """Fetch a mail entry from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
