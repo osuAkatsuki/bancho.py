@@ -1,5 +1,9 @@
 # Breaking changes
 
+## 2023-09-25
+
+Die Umgebungsvariable `SERVER_HOST` und `SERVER_PORT` wurden in `APP_HOST` und `APP_PORT` aufgeteilt.
+
 ## 2023-09-21
 
 Die minimale Python-Version wurde auf 3.11 geändert.
