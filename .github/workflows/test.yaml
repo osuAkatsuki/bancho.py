@@ -1,7 +1,6 @@
 name: Test Application Code
-on:
-  # TODO: perhaps can optimize this
-  push
+
+on: push
 
 env:
   DB_USER: ${{ vars.DB_USER }}
