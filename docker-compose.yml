@@ -16,7 +16,7 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./.db-data:/var/lib/mysql
+      - db-data:/var/lib/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
@@ -29,11 +29,10 @@ services:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - ./.redis-data:/bitnami/redis/data
+      - redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
-
     ## application services
 
   bancho:
@@ -49,7 +48,7 @@ services:
     init: true
     volumes:
       - .:/srv/root
-      - .data:/home/bpyuser/.data
+      - data:/home/bpyuser/.data
     environment:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
@@ -87,3 +86,8 @@ services:
       # On deprecation path
       - SERVER_ADDR=${SERVER_ADDR}
       - SERVER_PORT=${SERVER_PORT}
+
+volumes:
+  data:
+  db-data:
+  redis-data:
