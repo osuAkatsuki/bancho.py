@@ -21,7 +21,6 @@ channels = Channels()
 pools = MapPools()
 clans = Clans()
 matches = Matches()
-achievements: list[Achievement] = []
 
 api_keys: dict[str, int] = {}
 
