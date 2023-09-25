@@ -29,7 +29,7 @@ def support_deprecated_vars(
     val2 = os.getenv(deprecated_name)
     if val2:
         log(
-            f"{deprecated_name} has been deprecated and will be supported until {until.isoformat()}. Use {new_name} instead.",
+            f'The "{deprecated_name}" config option has been deprecated and will be supported until {until.isoformat()}. Use {new_name} instead.',
             Ansi.LYELLOW,
         )
         return val2
