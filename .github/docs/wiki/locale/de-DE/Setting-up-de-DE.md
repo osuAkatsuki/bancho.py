@@ -39,7 +39,7 @@ be using for this guide, but feel free to check out others, like caddy and h2o.
 sudo apt install nginx
 
 # install nginx configuration using values from your .env
-./scripts/install-nginx-config.sh
+./tools/dev/install-nginx-config.sh
 ```
 
 ## congratulations! you just set up an osu! private server

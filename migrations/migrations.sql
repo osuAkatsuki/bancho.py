@@ -380,7 +380,7 @@ alter table users add custom_badge_icon varchar(64) null after custom_badge_name
 alter table users add userpage_content varchar(2048) charset utf8 null after custom_badge_icon;
 
 # v4.2.0
-# please refer to tools/migrate_v420 for further v4.2.0 migrations
+# please refer to https://github.com/osuAkatsuki/bancho.py/tree/3a629386f1e8572b550becbd1f2558b1bbf23f4a/tools/migrate_v420 for further v4.2.0 migrations
 update stats set mode = 8 where mode = 7;
 
 # v4.3.1

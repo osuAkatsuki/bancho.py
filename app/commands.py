@@ -1046,7 +1046,7 @@ async def stealth(ctx: Context) -> str | None:
 async def recalc(ctx: Context) -> str | None:
     """Recalculate pp for a given map, or all maps."""
     return (
-        "Please use tools/recalc.py instead.\n"
+        "Please use tools/utils/recalc.py instead.\n"
         "If you need any support, join our Discord @ https://discord.gg/ShEQgUx."
     )
 

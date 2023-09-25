@@ -10,7 +10,7 @@ The minimum Python version has been changed to 3.11.
 
 ## 2023-07-19
 
-The behaviour of overall pp and accuracy has changed to encapsulate all of a user's scores rather than their top 100, in order to match Bancho's behaviour. This means a recalculation of user's stats is necessary. bancho.py has a recalculation tool which can be found in `tools/recalc.py` in order to facilitate this.
+The behaviour of overall pp and accuracy has changed to encapsulate all of a user's scores rather than their top 100, in order to match Bancho's behaviour. This means a recalculation of user's stats is necessary. bancho.py has a recalculation tool which can be found in `tools/utils/recalc.py` in order to facilitate this.
 
 ## 2023-04-09
 
