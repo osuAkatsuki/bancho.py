@@ -29,6 +29,7 @@ py-cpuinfo = "*"
 pytest = "*"
 pytest-asyncio = "*"
 asgi-lifespan = "*"
+respx = "*"
 
 [dev-packages]
 pre-commit = "*"
