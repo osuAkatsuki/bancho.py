@@ -8,6 +8,9 @@ run:
 run-bg:
 	docker-compose up -d bancho mysql redis
 
+run-caddy:
+	caddy run --envfile .env --config ext/Caddyfile
+
 logs:
 	docker-compose logs -f bancho mysql redis
 

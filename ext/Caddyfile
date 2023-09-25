@@ -1,0 +1,32 @@
+# Comment this out if you need to explicitly
+# use self-signed certs.
+# NOTE: Not necessary if using a '.local' domain
+#
+# {
+# 	local_certs
+# }
+
+c.{$DOMAIN}, ce.{$DOMAIN}, c4.{$DOMAIN}, osu.{$DOMAIN}, b.{$DOMAIN}, api.{$DOMAIN} {
+	encode gzip
+	# NOTE: if you wish to use unix sockets,
+	# reverse_proxy * unix//tmp/bancho.sock {
+	reverse_proxy * 127.0.0.1:{$APP_PORT} {
+		header_up X-Real-IP {remote_host}
+	}
+
+	request_body {
+		max_size 20MB
+	}
+}
+
+assets.{$DOMAIN} {
+	encode gzip
+	root * {$DATA_DIRECTORY}/assets
+	file_server
+}
+
+a.{$DOMAIN} {
+	encode gzip
+	root * {$DATA_DIRECTORY}/avatars
+	try_files {path} {file.base}.png {file.base}.jpg {file.base}.gif {file.base}.jpeg {file.base}.jfif default.jpg =404
+}
