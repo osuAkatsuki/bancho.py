@@ -464,7 +464,11 @@ async def _with(ctx: Context) -> str | None:
             for suffix, attribute in attributes_table.items():
                 if arg.endswith(suffix):
                     valueStr = arg[: -len(suffix)]
-                    value = min(max(float(valueStr), 0), 100) if attribute is "acc" else int(valueStr)
+                    value = (
+                        min(max(float(valueStr), 0), 100)
+                        if attribute == "acc"
+                        else int(valueStr)
+                    )
                     setattr(score_args, attribute, value)
 
         except ValueError as ex:
@@ -476,8 +480,7 @@ async def _with(ctx: Context) -> str | None:
     )
 
     return "{pp:.2f}pp ({stars:.2f}*)".format(
-        pp=result[0]["performance"]["pp"],
-        stars=result[0]["difficulty"]["stars"]
+        pp=result[0]["performance"]["pp"], stars=result[0]["difficulty"]["stars"],
     )  # (first score result)
 
 
