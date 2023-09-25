@@ -2,7 +2,7 @@ build:
 	docker build -t bancho:latest .
 
 run:
-	docker-compose up bancho mysql redis
+	docker-compose up bancho mysql redis nginx
 
 shell:
 	pipenv shell

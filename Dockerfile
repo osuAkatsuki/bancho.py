@@ -4,9 +4,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /srv/root
 
-COPY . /srv/root
-
-# install apps dependencies
+# install app dependencies
 RUN apt update && apt install -y git curl build-essential=12.9
 
 # install python dependencies
