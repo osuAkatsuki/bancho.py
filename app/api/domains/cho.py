@@ -408,7 +408,7 @@ class SendMessage(BasePacket):
 
                     player.last_np = {
                         "bmap": bmap,
-                        "mods":  mods, 
+                        "mods": mods,
                         "mode_vn": mode_vn,
                         "timeout": time.time() + 300,  # /np's last 5mins
                     }
