@@ -10,8 +10,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # TODO: how can we share a single docker build & push
-      # across all parts of our CI pipeline with GHA?
+      # TODO: make a build & deploy workflow
+      # https://stackoverflow.com/a/64733705
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
