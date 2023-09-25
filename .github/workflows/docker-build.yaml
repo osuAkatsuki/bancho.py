@@ -29,15 +29,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build
         uses: docker/build-push-action@v3
+        if: ${{ github.ref != 'refs/heads/master' }}
         with:
           context: .
-          push: ${{ github.ref == 'refs/heads/master' }}
+          outputs: type=docker,dest=/tmp/docker.tar
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/docker.tar
+
+      - name: Build and Push
+        uses: docker/build-push-action@v3
+        if: ${{ github.ref == 'refs/heads/master' }}
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
