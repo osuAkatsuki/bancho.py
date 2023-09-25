@@ -21,12 +21,12 @@ c.{$DOMAIN}, ce.{$DOMAIN}, c4.{$DOMAIN}, osu.{$DOMAIN}, b.{$DOMAIN}, api.{$DOMAI
 
 assets.{$DOMAIN} {
 	encode gzip
-	root * .data/assets # Change if needed
+	root * {$DATA_DIRECTORY}/assets # Change if needed
 	file_server
 }
 
 a.{$DOMAIN} {
 	encode gzip
-	root * .data/avatars # Change if needed
+	root * {$DATA_DIRECTORY}/avatars # Change if needed
 	try_files {path} {file.base}.png {file.base}.jpg {file.base}.gif {file.base}.jpeg {file.base}.jfif default.jpg =404
 }
