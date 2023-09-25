@@ -8,7 +8,7 @@ upstream bancho {
 
 server {
 	listen 443 ssl;
-	server_name "~^(?:c[e4]?|osu|b|api)\.${DOMAIN}$";
+	server_name c.${DOMAIN} ce.${DOMAIN} c4.${DOMAIN} osu.${DOMAIN} b.${DOMAIN} api.${DOMAIN};
 
 	ssl_certificate     ${SSL_CERT_PATH};
 	ssl_certificate_key ${SSL_KEY_PATH};
