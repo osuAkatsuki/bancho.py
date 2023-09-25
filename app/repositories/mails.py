@@ -57,32 +57,6 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
     return cast(Mail, dict(mail._mapping))
 
 
-async def fetch_count(
-    from_id: int | None = None,
-    to_id: int | None = None,
-    time: str | None = None,
-    read: bool | None = None,
-) -> int:
-    """Fetch the number of mails in the database."""
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM mail
-        WHERE from_id = :from_id
-          AND to_id = :to_id
-          AND time = :time
-          AND `read` = :read
-    """
-    params = {
-        "from_id": from_id,
-        "to_id": to_id,
-        "time": time,
-        "read": read,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return cast(int, rec._mapping["count"])
-
-
 async def fetch_all(to_id: int, read: bool) -> list[Mail]:
     """Fetch a list of mails from the database."""
     query = f"""\
