@@ -28,14 +28,6 @@ class Mail(TypedDict):
     read: bool
 
 
-class MailUpdateFields(TypedDict, total=False):
-    from_id: int
-    to_id: int
-    msg: str
-    time: int
-    read: bool
-
-
 READ_PARAMS = textwrap.dedent(
     """\
         id, from_id, to_id, msg, time, `read`
