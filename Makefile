@@ -1,8 +1,9 @@
 build:
+	sudo chmod 777 -R .db-data/
 	docker build -t bancho:latest .
 
 run:
-	docker-compose up bancho mysql redis nginx
+	docker-compose up bancho mysql redis
 
 shell:
 	pipenv shell

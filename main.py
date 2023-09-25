@@ -80,39 +80,37 @@ def main(argv: Sequence[str]) -> int:
     port = None
 
     if (
-        app.utils.is_valid_inet_address(app.settings.SERVER_ADDR)
-        and app.settings.SERVER_PORT is not None
+        app.utils.is_valid_inet_address(app.settings.APP_HOST)
+        and app.settings.APP_PORT is not None
     ):
-        host = app.settings.SERVER_ADDR
-        port = app.settings.SERVER_PORT
+        host = app.settings.APP_HOST
+        port = app.settings.APP_PORT
     elif (
-        app.utils.is_valid_unix_address(app.settings.SERVER_ADDR)
-        and app.settings.SERVER_PORT is None
+        app.utils.is_valid_unix_address(app.settings.APP_HOST)
+        and app.settings.APP_PORT is None
     ):
-        uds = app.settings.SERVER_ADDR
+        uds = app.settings.APP_HOST
 
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
-        if os.path.exists(app.settings.SERVER_ADDR):
-            if (
-                app.utils.processes_listening_on_unix_socket(app.settings.SERVER_ADDR)
-                != 0
-            ):
+        if os.path.exists(app.settings.APP_HOST):
+            if app.utils.processes_listening_on_unix_socket(app.settings.APP_HOST) != 0:
                 log(
-                    f"There are other processes listening on {app.settings.SERVER_ADDR}.\n"
+                    f"There are other processes listening on {app.settings.APP_HOST}.\n"
                     f"If you've lost it, bancho.py can be killed gracefully with SIGINT.",
                     Ansi.LRED,
                 )
                 return 1
             else:
-                os.remove(app.settings.SERVER_ADDR)
+                os.remove(app.settings.APP_HOST)
     else:
         raise ValueError(
             "%r does not appear to be an IPv4, IPv6 or Unix address"
-            % app.settings.SERVER_ADDR,
+            % app.settings.APP_HOST,
         ) from None
 
     # run the server indefinitely
+    # TODO: gracefully handle SIGTERM or move to gunicorn
     uvicorn.run(
         "app.api.init_api:asgi_app",
         reload=app.settings.DEBUG,

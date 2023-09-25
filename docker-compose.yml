@@ -1,6 +1,8 @@
 version: "3.8"
 
 services:
+  ## shared services
+
   mysql:
     image: mysql:latest
     environment:
@@ -12,7 +14,7 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - db-data:/var/lib/mysql
+      - ./.db-data:/var/lib/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
@@ -26,7 +28,7 @@ services:
     image: bitnami/redis:latest
     user: root
     volumes:
-      - redis-data:/bitnami/redis/data
+      - ./.redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
@@ -34,7 +36,10 @@ services:
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
 
+    ## application services
+
   bancho:
+    image: bancho:latest
     depends_on:
       mysql:
         condition: service_healthy
@@ -44,26 +49,5 @@ services:
     env_file:
       - .env
     volumes:
+      - .:/srv/root
       - .data:/home/bpyuser/.data
-
-  nginx:
-    build:
-      context: ./docker/nginx-with-geoip2
-      args:
-        - ENABLED_MODULES=geoip2
-    image: nginx-with-geoip2
-    depends_on:
-      - bancho
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
-      - ./docker/nginx-with-geoip2/main.conf:/etc/nginx/nginx.conf:ro
-      - data:/.data:ro
-      - ${SSL_CERT_PATH}:/etc/ssl/certs/bancho.pem:ro
-      - ${SSL_KEY_PATH}:/etc/ssl/private/bancho.key:ro
-      # Uncomment if you have downloaded the database from maxmind
-      #- ${MMD_DB_PATH}:/etc/GeoLite2-City.mmdb:ro
-    env_file:
-      - .env
-    ports:
-      - ${SERVER_PORT}:${SERVER_PORT}
-      - ${HOST_PORT}:${HOST_PORT}

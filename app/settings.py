@@ -4,29 +4,14 @@ import os
 
 from dotenv import load_dotenv
 
+from app.settings_utils import read_bool
+from app.settings_utils import read_list
+
 load_dotenv()
 
 
-def read_bool(value: str) -> bool:
-    return value.lower() in ("true", "1", "yes")
-
-
-def read_list(value: str) -> list[str]:
-    return value.split(",") if value else []
-
-
-# TODO: refactor this out of existence
-MAX_MATCHES = 64
-
-
-SERVER_ADDR = os.environ["SERVER_ADDR"]
-
-# this is a bit weird, to allow "" as a value for backwards compatibility.
-# perhaps can remove in future.
-SERVER_PORT = None
-_server_port = os.environ["SERVER_PORT"]
-if _server_port:
-    SERVER_PORT = int(_server_port)
+APP_HOST = os.environ["APP_HOST"]
+APP_PORT = int(os.environ["APP_PORT"])
 
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])

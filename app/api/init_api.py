@@ -143,7 +143,7 @@ def init_events(asgi_app: BanchoAPI) -> None:
         await app.bg_loops.initialize_housekeeping_tasks()
 
         log("Startup process complete.", Ansi.LGREEN)
-        log(f"Listening @ {app.settings.SERVER_ADDR}", Ansi.LMAGENTA)
+        log(f"Listening @ {app.settings.APP_HOST}", Ansi.LMAGENTA)
 
     @asgi_app.on_event("shutdown")
     async def on_shutdown() -> None:
