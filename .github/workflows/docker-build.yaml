@@ -52,7 +52,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/master' }}
         with:
           context: .
-          platforms: $PLATFORMS
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
           cache-from: type=gha
