@@ -57,21 +57,6 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
     return cast(Mail, dict(mail._mapping))
 
 
-async def fetch_one(from_id: int) -> Mail | None:
-    """Fetch a mail entry from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM mail
-         WHERE from_id = COALESCE(:from_id, from_id)
-    """
-    params = {
-        "from_id": from_id,
-    }
-    mail = await app.state.services.database.fetch_one(query, params)
-
-    return cast(Mail, dict(mail._mapping)) if mail is not None else None
-
-
 async def fetch_count(
     from_id: int | None = None,
     to_id: int | None = None,
