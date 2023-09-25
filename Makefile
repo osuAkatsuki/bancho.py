@@ -1,5 +1,5 @@
 build:
-	sudo chmod 777 -R .db-data/
+	if [ -d ".dbdata" ]; then sudo chmod -R 755 .dbdata; fi
 	docker build -t bancho:latest .
 
 run:
