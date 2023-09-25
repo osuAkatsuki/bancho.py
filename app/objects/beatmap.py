@@ -588,35 +588,18 @@ class BeatmapSet:
         """The online url for this beatmap set."""
         return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
 
-    def all_officially_ranked_or_approved_or_frozen(self) -> bool:
-        """Whether all the maps in the set are
-        ranked or approved on official servers."""
-        return all(
-            # ranked status has been edited on bancho.py
-            bmap.frozen or
-            # ranked status is ranked or approved on bancho
-            bmap.status in (RankedStatus.Ranked, RankedStatus.Approved)
-            for bmap in self.maps
+    def any_beatmaps_have_official_leaderboards(self) -> bool:
+        """Whether all the maps in the set have leaderboards on official servers."""
+        leaderboard_having_statuses = (
+            RankedStatus.Loved,
+            RankedStatus.Ranked,
+            RankedStatus.Approved,
         )
-
-    def all_officially_loved_or_frozen(self) -> bool:
-        """Whether all the maps in the set are
-        loved on official servers."""
-        return all(
-            # ranked status has been edited on bancho.py
-            bmap.frozen or
-            # ranked status is loved on bancho
-            bmap.status == RankedStatus.Loved
-            for bmap in self.maps
-        )
+        return any(bmap.status in leaderboard_having_statuses for bmap in self.maps)
 
     def _cache_expired(self) -> bool:
         """Whether the cached version of the set is
         expired and needs an update from the osu!api."""
-        # ranked & approved maps are update-locked.
-        if self.all_officially_ranked_or_approved_or_frozen():
-            return False
-
         current_datetime = datetime.now()
 
         # the delta between cache invalidations will increase depending
@@ -628,13 +611,13 @@ class BeatmapSet:
         # the formula for this is subject to adjustment in the future.
         check_delta = timedelta(hours=2 + ((5 / 365) * update_delta.days))
 
-        # we'll consider it much less likely for a loved map to be updated;
-        # it's possible but the mapper will remove their leaderboard doing so.
-        if self.all_officially_loved_or_frozen():
-            # TODO: it's still possible for this to happen and the delta can span
-            # over multiple days quite easily here, there should be a command to
-            # force a cache invalidation on the set. (normal privs if spam protected)
+        # it's much less likely that a beatmapset who has beatmaps with
+        # leaderboards on official servers will be updated.
+        if self.any_beatmaps_have_official_leaderboards():
             check_delta *= 4
+
+        # we'll cache for an absolute maximum of 1 day.
+        check_delta = min(check_delta, timedelta(days=1))
 
         return current_datetime > (self.last_osuapi_check + check_delta)
 
