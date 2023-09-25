@@ -18,6 +18,9 @@ shell:
 	pipenv shell
 
 test:
+	docker-compose exec -T bancho /srv/root/scripts/run-tests.sh
+
+test-local:
 	pipenv run pytest -vv tests/
 
 test-dbg:
