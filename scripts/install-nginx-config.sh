@@ -13,4 +13,4 @@ ln -f -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.
 echo "Restarting nginx"
 nginx -s reload
 
-echo "Nginx configuration installed with current"
+echo "Nginx configuration installed"
