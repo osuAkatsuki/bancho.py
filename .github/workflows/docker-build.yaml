@@ -31,20 +31,9 @@ jobs:
 
       - name: Build
         uses: docker/build-push-action@v3
-        if: ${{ github.ref != 'refs/heads/master' }}
         with:
           context: .
           outputs: type=docker,dest=/tmp/docker.tar
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and Push
-        uses: docker/build-push-action@v3
-        if: ${{ github.ref == 'refs/heads/master' }}
-        with:
-          context: .
-          push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -54,3 +43,11 @@ jobs:
         with:
           name: docker
           path: /tmp/docker.tar
+
+      - name: Push to Docker Hub
+        uses: docker/build-push-action@v3
+        if: ${{ github.ref == 'refs/heads/master' }}
+        run: |
+          docker image load -i /tmp/docker.tar
+          docker image tag bancho.py:latest ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
