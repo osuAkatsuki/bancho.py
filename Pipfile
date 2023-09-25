@@ -15,7 +15,8 @@ python-multipart = "*"
 requests = "*"
 timeago = "*"
 uvicorn = "*"
-uvloop = "*"
+uvloop = {markers = "platform_system != 'Windows'", version = "*"} # TODO: This is wrong i think
+winloop = {markers = "platform_system == 'Windows'", version = "*"}
 py3rijndael = "*"
 pytimeparse = "*"
 redis = "*"
@@ -26,6 +27,7 @@ cryptography = "*"
 tenacity = "*"
 httpx = "*"
 py-cpuinfo = "*"
+tzdata = "*"
 
 [dev-packages]
 pytest = "*"
