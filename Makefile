@@ -3,7 +3,7 @@ build:
 	docker build -t bancho:latest .
 
 run:
-	docker-compose up bancho mysql redis nginx
+	docker-compose up bancho mysql redis
 
 run-bg:
 	docker-compose up -d bancho mysql redis
