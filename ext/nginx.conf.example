@@ -4,6 +4,8 @@
 
 upstream bancho {
     server 127.0.0.1:${APP_PORT};
+    # NOTE: if you wish to use unix sockets,
+    # server unix:/tmp/bancho.sock fail_timeout=0;
 }
 
 server {
