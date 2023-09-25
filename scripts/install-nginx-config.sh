@@ -7,8 +7,8 @@ source .env
 set +a
 
 echo "Installing nginx configuration"
-envsubst < ext/nginx.conf.example > /etc/nginx/sites-available/bancho.conf
-ln -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
+envsubst '${DOMAIN},${SSL_CERT_PATH},${SSL_KEY_PATH},${DATA_DIRECTORY}' < ext/nginx.conf.example > /etc/nginx/sites-available/bancho.conf
+ln -f -s /etc/nginx/sites-available/bancho.conf /etc/nginx/sites-enabled/bancho.conf
 
 echo "Restarting nginx"
 nginx -s reload
