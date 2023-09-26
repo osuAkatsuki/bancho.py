@@ -678,11 +678,15 @@ class BeatmapSet:
                         old_map.md5 != new_map["file_md5"]
                         or old_map.status != new_ranked_status
                     ):
-                        print(f"update because {old_map.md5} != {new_map['file_md5']} or {old_map.status} != {new_ranked_status}")
+                        print(
+                            f"update because {old_map.md5} != {new_map['file_md5']} or {old_map.status} != {new_ranked_status}",
+                        )
                         # update map from old_maps
                         bmap = old_maps[old_id]
                         bmap._parse_from_osuapi_resp(new_map)
-                        print(f"beatmap status after _parse_from_osuapi_resp with new_ranked_status being {new_ranked_status}: {bmap.status}")
+                        print(
+                            f"beatmap status after _parse_from_osuapi_resp with new_ranked_status being {new_ranked_status}: {bmap.status}",
+                        )
                         updated_maps.append(bmap)
                     else:
                         # map is the same, make no changes
