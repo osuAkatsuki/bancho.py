@@ -604,23 +604,6 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
     ret += count.to_bytes(2, "little")
     return ret
 
-
-# XXX: deprecated
-# def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
-#    """ Write `maps` into bytes (osu! map info). """
-#    ret = bytearray(len(maps).to_bytes(4, 'little'))
-#
-#    # Write files
-#    for map in maps:
-#        ret += struct.pack('<hiiiBbbbb',
-#            map.id, map.map_id, map.set_id, map.thread_id, map.status,
-#            map.osu_rank, map.fruits_rank, map.taiko_rank, map.mania_rank
-#        )
-#        ret += write_string(map.map_md5)
-#
-#    return ret
-
-
 def write_match(m: Match, send_pw: bool = True) -> bytearray:
     """Write `m` into bytes (osu! match)."""
     # 0 is for match type
