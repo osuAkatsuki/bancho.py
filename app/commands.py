@@ -339,15 +339,8 @@ async def recent(ctx: Context) -> str | None:
         rank = score.rank if score.status == SubmissionStatus.BEST else "NA"
         l.append(f"PASS {{{score.pp:.2f}pp #{rank}}}")
     else:
-        # XXX: prior to v3.2.0, bancho.py didn't parse total_length from
-        # the osu!api, and thus this can do some zerodivision moments.
-        # this can probably be removed in the future, or better yet
-        # replaced with a better system to fix the maps.
-        if score.bmap.total_length != 0:
-            completion = score.time_elapsed / (score.bmap.total_length * 1000)
-            l.append(f"FAIL {{{completion * 100:.2f}% complete}})")
-        else:
-            l.append("FAIL")
+        completion = score.time_elapsed / (score.bmap.total_length * 1000)
+        l.append(f"FAIL {{{completion * 100:.2f}% complete}})")
 
     return " | ".join(l)
 
@@ -666,6 +659,7 @@ async def _map(ctx: Context) -> str | None:
 
             for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
                 bmap.status = new_status
+                bmap.frozen = True
 
         else:
             # update only map
