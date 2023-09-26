@@ -787,19 +787,6 @@ async def login(
             ),
         }
 
-    if db_country == "xx":
-        # bugfix for old bancho.py versions when
-        # country wasn't stored on registration.
-        log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
-
-        await db_conn.execute(
-            "UPDATE users SET country = :country WHERE id = :user_id",
-            {
-                "country": geoloc["country"]["acronym"],
-                "user_id": user_info["id"],
-            },
-        )
-
     client_details = ClientDetails(
         osu_version=osu_version,
         osu_path_md5=login_data["osu_path_md5"],
