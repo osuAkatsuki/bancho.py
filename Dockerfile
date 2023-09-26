@@ -15,4 +15,4 @@ RUN pip install -r requirements.txt
 # NOTE: done last to avoid re-run of previous steps
 COPY . .
 
-ENTRYPOINT [ "tools/dev/start_server.sh" ]
+ENTRYPOINT [ "tools/start_server.sh" ]
