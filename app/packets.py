@@ -604,6 +604,7 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
     ret += count.to_bytes(2, "little")
     return ret
 
+
 def write_match(m: Match, send_pw: bool = True) -> bytearray:
     """Write `m` into bytes (osu! match)."""
     # 0 is for match type
