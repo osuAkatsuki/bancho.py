@@ -601,7 +601,6 @@ class BeatmapSet:
         """Whether the cached version of the set is
         expired and needs an update from the osu!api."""
         current_datetime = datetime.now()
-        return True
 
         # the delta between cache invalidations will increase depending
         # on how long it's been since the map was last updated on osu!
