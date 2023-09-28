@@ -34,7 +34,6 @@
     |   |   ├── clan.py           # representation of individual clans
     |   |   ├── collection.py     # collections of dynamic objects (for in-memory storage)
     |   |   ├── match.py          # individual multiplayer matches
-    |   |   ├── menu.py           # (WIP) concept for interactive menus in chat channels
     |   |   ├── models.py         # structures of api request bodies
     |   |   ├── player.py         # representation of individual players
     |   |   └── score.py          # representation of individual scores
