@@ -34,7 +34,6 @@
     |   |   ├── clan.py           # 有关个人的地区(clans)
     |   |   ├── collection.py     # 动态类的集合 (存储在内存中)
     |   |   ├── match.py          # 多人比赛
-    |   |   ├── menu.py           # (-正在制作中-) 聊天频道中的交互菜单
     |   |   ├── models.py         # api请求主体(bodies)的结构
     |   |   ├── player.py         # 关于个人的players
     |   |   └── score.py          # 有关个人的score
