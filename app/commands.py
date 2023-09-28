@@ -659,7 +659,6 @@ async def _map(ctx: Context) -> str | None:
 
             for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
                 bmap.status = new_status
-                bmap.frozen = True
 
         else:
             # update only map

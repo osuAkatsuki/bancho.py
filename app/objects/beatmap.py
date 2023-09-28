@@ -362,7 +362,6 @@ class Beatmap:
     @classmethod
     async def from_md5(cls, md5: str, set_id: int = -1) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by md5."""
-        print(f"from_md5({md5})")
         bmap = await cls._from_md5_cache(md5)
 
         if not bmap:
@@ -408,7 +407,6 @@ class Beatmap:
     @classmethod
     async def from_bid(cls, bid: int) -> Beatmap | None:
         """Fetch a map from the cache, database, or osuapi by id."""
-        print(f"from_bid({bid})")
         bmap = await cls._from_bid_cache(bid)
 
         if not bmap:
@@ -497,11 +495,8 @@ class Beatmap:
         # if a map is 'frozen', we keep its status
         # even after an update from the osu!api.
         if not getattr(self, "frozen", False):
-            print("FROZEN IS NOT TRUE ON " + self.__repr__())
             osuapi_status = int(osuapi_resp["approved"])
             self.status = RankedStatus.from_osuapi(osuapi_status)
-        else:
-            print("FROZEN ON " + self.__repr__())
 
         self.mode = GameMode(int(osuapi_resp["mode"]))
 
@@ -673,16 +668,13 @@ class BeatmapSet:
                     new_ranked_status = RankedStatus.from_osuapi(
                         int(new_map["approved"]),
                     )
-                    print(f"checking map that is frozen={old_map.frozen}")
                     if (
                         old_map.md5 != new_map["file_md5"]
                         or old_map.status != new_ranked_status
                     ):
-                        print(f"update because {old_map.md5} != {new_map['file_md5']} or {old_map.status} != {new_ranked_status}")
                         # update map from old_maps
                         bmap = old_maps[old_id]
                         bmap._parse_from_osuapi_resp(new_map)
-                        print(f"beatmap status after _parse_from_osuapi_resp with new_ranked_status being {new_ranked_status}: {bmap.status}")
                         updated_maps.append(bmap)
                     else:
                         # map is the same, make no changes
@@ -699,9 +691,6 @@ class BeatmapSet:
 
                     # (some implementation-specific stuff not given by api)
                     bmap.frozen = False
-                    print("FROZEN WAS SET TO FALSE BECAUSE NEW MAP " + bmap.__repr__())
-                    print(new_map)
-                    print(old_maps)
                     bmap.passes = 0
                     bmap.plays = 0
 
@@ -709,9 +698,7 @@ class BeatmapSet:
                     updated_maps.append(bmap)
 
             # save changes to cache
-            print(f"length of self.maps before: {len(self.maps)}")
             self.maps = updated_maps
-            print(f"length of self.maps after: {len(self.maps)}")
 
             # save changes to sql
 
@@ -901,8 +888,6 @@ class BeatmapSet:
                 else:
                     bmap.frozen = False
 
-                print("FROZEN ON THE NEW MAP WAS SET TO " + bmap.frozen.__repr__())
-
                 bmap._parse_from_osuapi_resp(api_bmap)
 
                 # (some implementation-specific stuff not given by api)
@@ -932,7 +917,6 @@ class BeatmapSet:
     async def from_bsid(cls, bsid: int) -> BeatmapSet | None:
         """Cache all maps in a set from the osuapi, optionally
         returning beatmaps by their md5 or id."""
-        print(f"from_bsid({bsid})")
         bmap_set = await cls._from_bsid_cache(bsid)
         did_api_request = False
 
