@@ -647,11 +647,6 @@ async def _map(ctx: Context) -> str | None:
 
     async with app.state.services.database.connection() as db_conn:
         if ctx.args[1] == "set":
-            # update whole set
-            await db_conn.execute(
-                "UPDATE maps SET status = :status, frozen = 1 WHERE set_id = :set_id",
-                {"status": new_status, "set_id": bmap.set_id},
-            )
 
             # select all map ids for clearing map requests.
             map_ids = [
@@ -661,8 +656,14 @@ async def _map(ctx: Context) -> str | None:
                 )
             ]
 
+            # update all maps in the set
+            for bmap in bmap.set.maps:
+                await maps_repo.update(bmap.id, status=new_status, frozen=True)
+
+            # make sure cache and db are synced about the newest change
             for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
                 bmap.status = new_status
+                bmap.frozen = True
 
         else:
             # update only map
@@ -670,8 +671,10 @@ async def _map(ctx: Context) -> str | None:
 
             map_ids = [bmap.id]
 
+            # make sure cache and db are synced about the newest change
             if bmap.md5 in app.state.cache.beatmap:
                 app.state.cache.beatmap[bmap.md5].status = new_status
+                app.state.cache.beatmap[bmap.md5].frozen = True
 
         # deactivate rank requests for all ids
         await db_conn.execute(
