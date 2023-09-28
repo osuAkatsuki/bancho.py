@@ -647,7 +647,6 @@ async def _map(ctx: Context) -> str | None:
 
     async with app.state.services.database.connection() as db_conn:
         if ctx.args[1] == "set":
-
             # select all map ids for clearing map requests.
             map_ids = [
                 row["id"]
