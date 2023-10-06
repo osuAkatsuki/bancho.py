@@ -66,6 +66,7 @@ class Player(TypedDict):
 
 class PlayerUpdateFields(TypedDict, total=False):
     name: str
+    safe_name: str
     email: str
     priv: int
     country: str
