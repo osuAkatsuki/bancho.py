@@ -66,6 +66,7 @@ class Player(TypedDict):
 
 class PlayerUpdateFields(TypedDict, total=False):
     name: str
+    safe_name: str
     email: str
     priv: int
     country: str
@@ -240,6 +241,7 @@ async def update(
     update_fields: PlayerUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
+        update_fields["safe_name"] = make_safe_name(name)
     if not isinstance(email, _UnsetSentinel):
         update_fields["email"] = email
     if not isinstance(priv, _UnsetSentinel):
