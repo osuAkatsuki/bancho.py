@@ -369,6 +369,8 @@ class Match:
         for s in self.slots:
             if s.status == expected:
                 s.status = SlotStatus.not_ready
+                s.loaded = False
+                s.skipped = False
 
     def start(self) -> None:
         """Start the match for all ready players with the map."""
