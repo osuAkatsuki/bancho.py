@@ -668,12 +668,12 @@ async def _map(ctx: Context) -> str | None:
             # update only map
             await maps_repo.update(bmap.id, status=new_status, frozen=True)
 
-            map_ids = [bmap.id]
-
             # make sure cache and db are synced about the newest change
             if bmap.md5 in app.state.cache.beatmap:
                 app.state.cache.beatmap[bmap.md5].status = new_status
                 app.state.cache.beatmap[bmap.md5].frozen = True
+
+            map_ids = [bmap.id]
 
         # deactivate rank requests for all ids
         await db_conn.execute(
