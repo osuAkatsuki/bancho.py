@@ -1133,14 +1133,6 @@ async def wipemap(ctx: Context) -> str | None:
     return "Scores wiped."
 
 
-@command(Privileges.DEVELOPER, hidden=True)
-async def menu(ctx: Context) -> str | None:
-    """Temporary command to illustrate the menu option idea."""
-    ctx.player.send_current_menu()
-
-    return None
-
-
 @command(Privileges.DEVELOPER, aliases=["re"])
 async def reload(ctx: Context) -> str | None:
     """Reload a python module."""

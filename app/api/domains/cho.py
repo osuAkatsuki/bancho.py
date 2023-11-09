@@ -48,9 +48,6 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
-from app.objects.menu import Menu
-from app.objects.menu import MenuCommands
-from app.objects.menu import MenuFunction
 from app.objects.player import Action
 from app.objects.player import ClientDetails
 from app.objects.player import OsuStream
@@ -1384,36 +1381,6 @@ class MatchCreate(BasePacket):
         log(f"{player} created a new multiplayer match.")
 
 
-async def execute_menu_option(player: Player, key: int) -> None:
-    if key not in player.current_menu.options:
-        return
-
-    # this is one of their menu options, execute it.
-    cmd, data = player.current_menu.options[key]
-
-    if app.settings.DEBUG:
-        print(f"\x1b[0;95m{cmd!r}\x1b[0m {data}")
-
-    if cmd == MenuCommands.Reset:
-        # go back to the main menu
-        player.current_menu = player.previous_menus[0]
-        player.previous_menus.clear()
-    elif cmd == MenuCommands.Back:
-        # return one menu back
-        player.current_menu = player.previous_menus.pop()
-        player.send_current_menu()
-    elif cmd == MenuCommands.Advance:
-        # advance to a new menu
-        assert isinstance(data, Menu)
-        player.previous_menus.append(player.current_menu)
-        player.current_menu = data
-        player.send_current_menu()
-    elif cmd == MenuCommands.Execute:
-        # execute a function on the current menu
-        assert isinstance(data, MenuFunction)
-        await data.callback(player)
-
-
 @register(ClientPackets.JOIN_MATCH)
 class MatchJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
@@ -1421,16 +1388,6 @@ class MatchJoin(BasePacket):
         self.match_passwd = reader.read_string()
 
     async def handle(self, player: Player) -> None:
-        is_menu_request = self.match_id >= 64  # max multi matches
-
-        if is_menu_request or self.match_id < 0:
-            if is_menu_request:
-                # NOTE: this function is unrelated to mp.
-                await execute_menu_option(player, self.match_id)
-
-            player.enqueue(app.packets.match_join_fail())
-            return
-
         match = app.state.sessions.matches[self.match_id]
         if not match:
             log(f"{player} tried to join a non-existant mp lobby?")
