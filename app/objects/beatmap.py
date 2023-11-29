@@ -230,7 +230,7 @@ class Beatmap:
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
-      Beatmap.url -> str # https://osu.cmyui.xyz/b/321
+      Beatmap.url -> str # https://osu.cmyui.xyz/beatmapsets/123/321
       Beatmap.embed -> str # [{url} {full}]
 
       Beatmap.has_leaderboard -> bool
