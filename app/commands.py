@@ -352,10 +352,7 @@ async def recent(ctx: Context) -> str | None:
     return " | ".join(l)
 
 
-TOP_SCORE_FMTSTR = (
-    "{idx}. ({pp:.2f}pp) [https://osu.{domain}/beatmapsets/{map_set_id}/{map_id} "
-    "{artist} - {title} [{version}]]"
-)
+TOP_SCORE_FMTSTR = "{idx}. ({pp:.2f}pp) [https://osu.{domain}/b/{map_id} {artist} - {title} [{version}]]"
 
 
 @command(Privileges.UNRESTRICTED, hidden=True)

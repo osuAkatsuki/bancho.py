@@ -230,7 +230,7 @@ class Beatmap:
 
     Properties:
       Beatmap.full -> str # Artist - Title [Version]
-      Beatmap.url -> str # https://osu.cmyui.xyz/beatmapsets/123/321
+      Beatmap.url -> str # https://osu.cmyui.xyz/b/321
       Beatmap.embed -> str # [{url} {full}]
 
       Beatmap.has_leaderboard -> bool
@@ -300,7 +300,7 @@ class Beatmap:
     @property
     def url(self) -> str:
         """The osu! beatmap url for `self`."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.set.id}/{self.id}"
+        return f"https://osu.{app.settings.DOMAIN}/b/{self.id}"
 
     @property
     def embed(self) -> str:
@@ -552,7 +552,7 @@ class BeatmapSet:
       BeatmapSet.all_officially_loved() -> bool
 
     Properties:
-      BeatmapSet.url -> str # https://osu.cmyui.xyz/beatmapsets/123
+      BeatmapSet.url -> str # https://osu.cmyui.xyz/s/123
 
     Lower level API:
       await BeatmapSet._from_bsid_cache(bsid: int) -> BeatmapSet | None
@@ -584,9 +584,9 @@ class BeatmapSet:
         return ", ".join(map_names)
 
     @property
-    def url(self) -> str:  # same as above, just no beatmap id
+    def url(self) -> str:
         """The online url for this beatmap set."""
-        return f"https://osu.{app.settings.DOMAIN}/beatmapsets/{self.id}"
+        return f"https://osu.{app.settings.DOMAIN}/s/{self.id}"
 
     def any_beatmaps_have_official_leaderboards(self) -> bool:
         """Whether all the maps in the set have leaderboards on official servers."""
