@@ -68,7 +68,6 @@ BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 BASE_DOMAIN = app.settings.DOMAIN
 
-# TODO: dear god
 NOW_PLAYING_RGX = re.compile(
     r"^\x01ACTION is (?:playing|editing|watching|listening to) "
     rf"\[https://osu\.(?:{re.escape(BASE_DOMAIN)}|ppy\.sh)/beatmapsets/(?P<sid>\d{{1,10}})#/?(?:osu|taiko|fruits|mania)?/(?P<bid>\d{{1,10}})/? .+\]"
@@ -1539,7 +1538,9 @@ class MatchChangeSettings(BasePacket):
         elif player.match.map_id == -1:
             if player.match.prev_map_id != self.match_data.map_id:
                 # new map has been chosen, send to match chat.
-                map_url = f"https://osu.{app.settings.DOMAIN}/beatmapsets/#/{self.match_data.map_id}"
+                map_url = (
+                    f"https://osu.{app.settings.DOMAIN}/b/{self.match_data.map_id}"
+                )
                 map_embed = f"[{map_url} {self.match_data.map_name}]"
                 player.match.chat.send_bot(f"Selected: {map_embed}.")
 
