@@ -1475,6 +1475,7 @@ async def mp_abort(ctx: Context, match: Match) -> str | None:
         return "Abort what?"
 
     match.unready_players(expected=SlotStatus.playing)
+    match.reset_players_loaded_status()
 
     match.in_progress = False
     match.enqueue(app.packets.match_abort())

@@ -370,6 +370,12 @@ class Match:
             if s.status == expected:
                 s.status = SlotStatus.not_ready
 
+    def reset_players_loaded_status(self) -> None:
+        """Reset all players' loaded status."""
+        for s in self.slots:
+            s.loaded = False
+            s.skipped = False
+
     def start(self) -> None:
         """Start the match for all ready players with the map."""
         no_map: list[int] = []
