@@ -648,13 +648,13 @@ async def _map(ctx: Context) -> str | None:
     async with app.state.services.database.connection() as db_conn:
         if ctx.args[1] == "set":
             # update all maps in the set
-            for bmap in bmap.set.maps:
-                await maps_repo.update(bmap.id, status=new_status, frozen=True)
+            for _bmap in bmap.set.maps:
+                await maps_repo.update(_bmap.id, status=new_status, frozen=True)
 
             # make sure cache and db are synced about the newest change
-            for bmap in app.state.cache.beatmapset[bmap.set_id].maps:
-                bmap.status = new_status
-                bmap.frozen = True
+            for _bmap in app.state.cache.beatmapset[bmap.set_id].maps:
+                _bmap.status = new_status
+                _bmap.frozen = True
 
             # select all map ids for clearing map requests.
             map_ids = [
