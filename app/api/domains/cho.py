@@ -1674,6 +1674,7 @@ class MatchComplete(BasePacket):
         ]
 
         player.match.unready_players(expected=SlotStatus.complete)
+        player.match.reset_players_loaded_status()
 
         player.match.in_progress = False
         player.match.enqueue(
