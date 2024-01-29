@@ -187,9 +187,11 @@ async def api_calculate_pp(
 
     return ORJSONResponse(
         # XXX: change the output type based on the inputs from user
-        final_results
-        if all(x is None for x in [ngeki, nkatu, n100, n50])
-        else final_results[0],
+        (
+            final_results
+            if all(x is None for x in [ngeki, nkatu, n100, n50])
+            else final_results[0]
+        ),
         status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
     )
 
@@ -499,13 +501,15 @@ async def api_get_player_scores(
     player_info = {
         "id": player.id,
         "name": player.name,
-        "clan": {
-            "id": player.clan.id,
-            "name": player.clan.name,
-            "tag": player.clan.tag,
-        }
-        if player.clan
-        else None,
+        "clan": (
+            {
+                "id": player.clan.id,
+                "name": player.clan.name,
+                "tag": player.clan.tag,
+            }
+            if player.clan
+            else None
+        ),
     }
 
     return ORJSONResponse(

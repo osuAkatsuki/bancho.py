@@ -419,8 +419,7 @@ async def top(ctx: Context) -> str | None:
 # TODO: !compare (compare to previous !last/!top post's map)
 
 
-class ParsingError(str):
-    ...
+class ParsingError(str): ...
 
 
 def parse__with__command_args(
