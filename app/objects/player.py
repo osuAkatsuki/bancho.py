@@ -518,11 +518,11 @@ class Player:
         for mode, stats in self.stats.items():
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}",
-                {str(self.id): stats.pp},
+                {str(self.id): stats.score},
             )
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}:{self.geoloc['country']['acronym']}",
-                {str(self.id): stats.pp},
+                {str(self.id): stats.score},
             )
 
         log_msg = f"{admin} unrestricted {self} for: {reason}."
@@ -971,13 +971,13 @@ class Player:
             # global rank
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}",
-                {str(self.id): stats.pp},
+                {str(self.id): stats.score},
             )
 
             # country rank
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}:{country}",
-                {str(self.id): stats.pp},
+                {str(self.id): stats.score},
             )
 
         return await self.get_global_rank(mode)
