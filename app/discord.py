@@ -1,6 +1,8 @@
 """Functionality related to Discord interactivity."""
 from __future__ import annotations
 
+import orjson
+
 from typing import Any
 
 from tenacity import retry
@@ -168,7 +170,7 @@ class Webhook:
 
             payload["embeds"].append(embed_payload)
 
-        return payload
+        return orjson.dumps(payload, default=str).decode()
 
     @retry(
         stop=stop_after_attempt(10),
@@ -181,7 +183,7 @@ class Webhook:
         headers = {"Content-Type": "application/json"}
         response = await services.http_client.post(
             self.url,
-            json=self.json,
+            content=self.json,
             headers=headers,
         )
         response.raise_for_status()
