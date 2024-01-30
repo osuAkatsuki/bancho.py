@@ -6,16 +6,16 @@ read -p "What's your server IP? " ip
 ip=${ip:-0.0.0.0}
 
 printf '%s\n' \
-    "a.$domain	1	IN	A	$ip"\
-    "api.$domain	1	IN	A	$ip"\
-    "assets.$domain	1	IN	A	$ip"\
-    "b.$domain	1	IN	A	$ip"\
-    "c.$domain	1	IN	A	$ip"\
-    "c4.$domain	1	IN	A	$ip"\
-    "ce.$domain	1	IN	A	$ip"\
+    "a	1	IN	A	$ip"\
+    "api	1	IN	A	$ip"\
+    "assets	1	IN	A	$ip"\
+    "b	1	IN	A	$ip"\
+    "c	1	IN	A	$ip"\
+    "c4	1	IN	A	$ip"\
+    "ce	1	IN	A	$ip"\
     "$domain	1	IN	A	$ip"\
-    "i.$domain	1	IN	A	$ip"\
-    "osu.$domain	1	IN	A	$ip"\
-    "s.$domain	1	IN	A	$ip" >> "cf_records.txt"
+    "i	1	IN	A	$ip"\
+    "osu	1	IN	A	$ip"\
+    "s	1	IN	A	$ip" >> "cf_records.txt"
 
 printf "Your Cloudflare DNS records have been generated."
