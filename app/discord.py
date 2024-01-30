@@ -1,10 +1,9 @@
 """Functionality related to Discord interactivity."""
 from __future__ import annotations
 
-import orjson
-
 from typing import Any
 
+import orjson
 from tenacity import retry
 from tenacity import stop_after_attempt
 from tenacity import wait_exponential
