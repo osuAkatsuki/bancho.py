@@ -1,56 +1,60 @@
 # c[e4]?.ppy.sh is used for bancho
 # osu.ppy.sh is used for /web, /api, etc.
 # a.ppy.sh is used for osu! avatars
+events {}
+http {
+	access_log /dev/stdout;
+	error_log /dev/stdout info;
+        upstream bancho {
+                server scosu:10000;
+                # NOTE: if you wish to use unix sockets,
+                # server unix:/tmp/bancho.sock fail_timeout=0;
+        }
 
-upstream bancho {
-    server 127.0.0.1:${APP_PORT};
-    # NOTE: if you wish to use unix sockets,
-    # server unix:/tmp/bancho.sock fail_timeout=0;
-}
+        server {
+                listen 443 ssl;
+                server_name c.scosu.oritsu.net ce.scosu.oritsu.net c4.scosu.oritsu.net osu.scosu.oritsu.net b.scosu.oritsu.net api.scosu.oritsu.net;
+                client_max_body_size 20M;
 
-server {
-	listen 443 ssl;
-	server_name c.${DOMAIN} ce.${DOMAIN} c4.${DOMAIN} osu.${DOMAIN} b.${DOMAIN} api.${DOMAIN};
-	client_max_body_size 20M;
+                ssl_certificate     /etc/letsencrypt/live/scosu.oritsu.net-0001/fullchain.pem;
+                ssl_certificate_key /etc/letsencrypt/live/scosu.oritsu.net-0001/privkey.pem;
+                ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
 
-	ssl_certificate     ${SSL_CERT_PATH};
-	ssl_certificate_key ${SSL_KEY_PATH};
-	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+                location / {
+                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                        proxy_set_header X-Real-IP  $remote_addr;
+                        proxy_set_header Host $http_host;
+                        add_header Access-Control-Allow-Origin *;
+                        proxy_redirect off;
+                        proxy_pass http://bancho;
+                }
+        }
 
-	location / {
-		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-		proxy_set_header X-Real-IP  $remote_addr;
-		proxy_set_header Host $http_host;
-		add_header Access-Control-Allow-Origin *;
-		proxy_redirect off;
-		proxy_pass http://bancho;
-	}
-}
+        server {
+                listen 443 ssl;
+                server_name assets.scosu.oritsu.net;
 
-server {
-	listen 443 ssl;
-	server_name assets.${DOMAIN};
+                ssl_certificate     /etc/letsencrypt/live/scosu.oritsu.net-0001/fullchain.pem;
+                ssl_certificate_key /etc/letsencrypt/live/scosu.oritsu.net-0001/privkey.pem;
+                ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
 
-	ssl_certificate     ${SSL_CERT_PATH};
-	ssl_certificate_key ${SSL_KEY_PATH};
-	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+                location / {
+                        default_type image/png;
+                        root /srv/root/.data/assets;
+                }
+        }
 
-	location / {
-		default_type image/png;
-		root ${DATA_DIRECTORY}/assets;
-	}
-}
+        server {
+                listen 443 ssl;
+                server_name a.scosu.oritsu.net;
 
-server {
-	listen 443 ssl;
-	server_name a.${DOMAIN};
+                ssl_certificate     /etc/letsencrypt/live/scosu.oritsu.net-0001/fullchain.pem;
+                ssl_certificate_key /etc/letsencrypt/live/scosu.oritsu.net-0001/privkey.pem;
+                ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
 
-	ssl_certificate     ${SSL_CERT_PATH};
-	ssl_certificate_key ${SSL_KEY_PATH};
-	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
-
-	location / {
-		root ${DATA_DIRECTORY}/avatars;
-		try_files $uri $uri.png $uri.jpg $uri.gif $uri.jpeg $uri.jfif /default.jpg = 404;
-	}
+                location / {
+                        root /srv/root/.data/avatars;
+                        try_files $uri $uri.png $uri.jpg $uri.gif $uri.jpeg $uri.jfif /default.jpg = 404;
+                }
+        }
 }
