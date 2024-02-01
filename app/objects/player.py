@@ -971,13 +971,14 @@ class Player:
             # global rank
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}",
-                {str(self.id): stats.score},
+                # Get score from stats
+                {str(self.id): stats.rscore},
             )
 
             # country rank
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}:{country}",
-                {str(self.id): stats.score},
+                {str(self.id): stats.rscore},
             )
 
         return await self.get_global_rank(mode)

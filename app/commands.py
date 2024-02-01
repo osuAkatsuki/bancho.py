@@ -610,7 +610,7 @@ async def requests(ctx: Context) -> str | None:
     return "\n".join(l)
 
 
-_status_str_to_int_map = {"unrank": 0, "rank": 2, "love": 5}
+_status_str_to_int_map = {"unrank": 0, "rank": 2, "love": 5, "qualified": 4, "approved": 3}
 
 
 def status_to_id(s: str) -> int:
@@ -622,10 +622,10 @@ async def _map(ctx: Context) -> str | None:
     """Changes the ranked status of the most recently /np'ed map."""
     if (
         len(ctx.args) != 2
-        or ctx.args[0] not in ("rank", "unrank", "love")
+        or ctx.args[0] not in ("rank", "unrank", "love", "qualified", "approved")
         or ctx.args[1] not in ("set", "map")
     ):
-        return "Invalid syntax: !map <rank/unrank/love> <map/set>"
+        return "Invalid syntax: !map <rank/unrank/love/approved/qualified> <map/set>"
 
     if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
         return "Please /np a map first!"

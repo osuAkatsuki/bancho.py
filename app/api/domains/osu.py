@@ -808,8 +808,9 @@ async def osuSubmitModularSelector(
             if score.passed:
                 await score.calculate_status()
 
-                if score.bmap.status != RankedStatus.Pending:
+                if score.bmap.status != RankedStatus.Pending and score.bmap.status != RankedStatus.Qualified and score.bmap.status != RankedStatus.Approved:
                     score.rank = await score.calculate_placement()
+
             else:
                 score.status = SubmissionStatus.FAILED
     else:
@@ -850,19 +851,11 @@ async def osuSubmitModularSelector(
             app.state.services.datadog.increment("bancho.submitted_scores_best")
 
         if score.bmap.has_leaderboard:
-            if score.bmap.status == RankedStatus.Loved and score.mode in (
-                GameMode.VANILLA_OSU,
-                GameMode.VANILLA_TAIKO,
-                GameMode.VANILLA_CATCH,
-                GameMode.VANILLA_MANIA,
-            ):
-                performance = f"{score.score:,} score"
-            else:
-                performance = f"{score.pp:,.2f}pp"
+            performance = f"{score.score:,} score"
 
             score.player.enqueue(
                 app.packets.notification(
-                    f"You achieved #{score.rank}! ({performance})",
+                    f"Result: Rank #{score.rank}! ({performance})",
                 ),
             )
 
@@ -877,7 +870,7 @@ async def osuSubmitModularSelector(
                 if score.mods:
                     ann.insert(1, f"+{score.mods!r}")
 
-                scoring_metric = "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+                scoring_metric = "score"
 
                 # If there was previously a score on the map, add old #1.
                 prev_n1 = await app.state.services.database.fetch_one(
@@ -916,39 +909,41 @@ async def osuSubmitModularSelector(
             },
         )
 
-    score.id = await app.state.services.database.execute(
-        "INSERT INTO scores "
-        "VALUES (NULL, "
-        ":map_md5, :score, :pp, :acc, "
-        ":max_combo, :mods, :n300, :n100, "
-        ":n50, :nmiss, :ngeki, :nkatu, "
-        ":grade, :status, :mode, :play_time, "
-        ":time_elapsed, :client_flags, :user_id, :perfect, "
-        ":checksum)",
-        {
-            "map_md5": score.bmap.md5,
-            "score": score.score,
-            "pp": score.pp,
-            "acc": score.acc,
-            "max_combo": score.max_combo,
-            "mods": score.mods,
-            "n300": score.n300,
-            "n100": score.n100,
-            "n50": score.n50,
-            "nmiss": score.nmiss,
-            "ngeki": score.ngeki,
-            "nkatu": score.nkatu,
-            "grade": score.grade.name,
-            "status": score.status,
-            "mode": score.mode,
-            "play_time": score.server_time,
-            "time_elapsed": score.time_elapsed,
-            "client_flags": score.client_flags,
-            "user_id": score.player.id,
-            "perfect": score.perfect,
-            "checksum": score.client_checksum,
-        },
-    )
+    if score.bmap.status != RankedStatus.Pending:
+
+        score.id = await app.state.services.database.execute(
+            "INSERT INTO scores "
+            "VALUES (NULL, "
+            ":map_md5, :score, :pp, :acc, "
+            ":max_combo, :mods, :n300, :n100, "
+            ":n50, :nmiss, :ngeki, :nkatu, "
+            ":grade, :status, :mode, :play_time, "
+            ":time_elapsed, :client_flags, :user_id, :perfect, "
+            ":checksum)",
+            {
+                "map_md5": score.bmap.md5,
+                "score": score.score,
+                "pp": 0,
+                "acc": score.acc,
+                "max_combo": score.max_combo,
+                "mods": score.mods,
+                "n300": score.n300,
+                "n100": score.n100,
+                "n50": score.n50,
+                "nmiss": score.nmiss,
+                "ngeki": score.ngeki,
+                "nkatu": score.nkatu,
+                "grade": score.grade.name,
+                "status": score.status,
+                "mode": score.mode,
+                "play_time": score.server_time,
+                "time_elapsed": score.time_elapsed,
+                "client_flags": score.client_flags,
+                "user_id": score.player.id,
+                "perfect": score.perfect,
+                "checksum": score.client_checksum,
+            },
+        )
 
     if score.passed:
         replay_data = await replay_file.read()
@@ -979,7 +974,8 @@ async def osuSubmitModularSelector(
     # stuff update for all submitted scores
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
-    stats.tscore += score.score
+    if score.bmap.status != RankedStatus.Pending:
+        stats.tscore += score.score
     stats.total_hits += score.n300 + score.n100 + score.n50
 
     if score.mode.as_vanilla in (1, 3):
@@ -1055,12 +1051,11 @@ async def osuSubmitModularSelector(
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
-            )
-            bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
-            stats.pp = round(weighted_pp + bonus_pp)
-            stats_updates["pp"] = stats.pp
+            # weighted_pp = sum(
+            #     row["pp"] * 0.95**i for i, row in enumerate(best_scores)
+            # )
+            stats.pp = 0
+            stats_updates["pp"] = 0
 
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
@@ -1080,7 +1075,7 @@ async def osuSubmitModularSelector(
         a_count=stats_updates.get("a_count", UNSET),
         rscore=stats_updates.get("rscore", UNSET),
         acc=stats_updates.get("acc", UNSET),
-        pp=stats_updates.get("pp", UNSET),
+        pp=0
     )
 
     if not score.player.restricted:
@@ -1162,7 +1157,7 @@ async def osuSubmitModularSelector(
                     round(score.prev_best.acc, 2),
                     round(score.acc, 2),
                 ),
-                chart_entry("pp", score.prev_best.pp, score.pp),
+                chart_entry("pp", 0, 0),
             )
         else:
             # no previous best score
@@ -1172,7 +1167,7 @@ async def osuSubmitModularSelector(
                 chart_entry("totalScore", None, score.score),
                 chart_entry("maxCombo", None, score.max_combo),
                 chart_entry("accuracy", None, round(score.acc, 2)),
-                chart_entry("pp", None, score.pp),
+                chart_entry("pp", 0, 0),
             )
 
         overall_ranking_chart_entries = (
@@ -1181,7 +1176,7 @@ async def osuSubmitModularSelector(
             chart_entry("totalScore", prev_stats.tscore, stats.tscore),
             chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
             chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
-            chart_entry("pp", prev_stats.pp, stats.pp),
+            chart_entry("pp", 0, 0),
         )
 
         submission_charts = [
@@ -1211,7 +1206,7 @@ async def osuSubmitModularSelector(
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {stats.pp:,}pp)",
+        f"({score.status!r}, {score.score:,.2f} score)",
         Ansi.LGREEN,
     )
 
@@ -1449,7 +1444,7 @@ async def getScores(
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
     scoring_metric: Literal["pp", "score"] = (
-        "pp" if mode >= GameMode.RELAX_OSU else "score"
+        "score"
     )
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)

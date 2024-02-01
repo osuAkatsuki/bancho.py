@@ -295,12 +295,9 @@ class Score:
     async def calculate_placement(self) -> int:
         assert self.bmap is not None
 
-        if self.mode >= GameMode.RELAX_OSU:
-            scoring_metric = "pp"
-            score = self.pp
-        else:
-            scoring_metric = "score"
-            score = self.score
+            
+        scoring_metric = "score"
+        score = self.score
 
         num_better_scores: int | None = await app.state.services.database.fetch_val(
             "SELECT COUNT(*) AS c FROM scores s "
@@ -366,7 +363,7 @@ class Score:
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > rec["pp"]:
+            if self.score > rec["score"]:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
