@@ -295,7 +295,6 @@ class Score:
     async def calculate_placement(self) -> int:
         assert self.bmap is not None
 
-            
         scoring_metric = "score"
         score = self.score
 

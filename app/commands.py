@@ -610,7 +610,13 @@ async def requests(ctx: Context) -> str | None:
     return "\n".join(l)
 
 
-_status_str_to_int_map = {"unrank": 0, "rank": 2, "love": 5, "qualified": 4, "approved": 3}
+_status_str_to_int_map = {
+    "unrank": 0,
+    "rank": 2,
+    "love": 5,
+    "qualified": 4,
+    "approved": 3,
+}
 
 
 def status_to_id(s: str) -> int:

@@ -808,7 +808,11 @@ async def osuSubmitModularSelector(
             if score.passed:
                 await score.calculate_status()
 
-                if score.bmap.status != RankedStatus.Pending and score.bmap.status != RankedStatus.Qualified and score.bmap.status != RankedStatus.Approved:
+                if (
+                    score.bmap.status != RankedStatus.Pending
+                    and score.bmap.status != RankedStatus.Qualified
+                    and score.bmap.status != RankedStatus.Approved
+                ):
                     score.rank = await score.calculate_placement()
 
             else:
@@ -910,7 +914,6 @@ async def osuSubmitModularSelector(
         )
 
     if score.bmap.status != RankedStatus.Pending:
-
         score.id = await app.state.services.database.execute(
             "INSERT INTO scores "
             "VALUES (NULL, "
@@ -1075,7 +1078,7 @@ async def osuSubmitModularSelector(
         a_count=stats_updates.get("a_count", UNSET),
         rscore=stats_updates.get("rscore", UNSET),
         acc=stats_updates.get("acc", UNSET),
-        pp=0
+        pp=0,
     )
 
     if not score.player.restricted:
@@ -1443,9 +1446,7 @@ async def getScores(
         if not player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    scoring_metric: Literal["pp", "score"] = (
-        "score"
-    )
+    scoring_metric: Literal["pp", "score"] = "score"
 
     bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
     has_set_id = map_set_id > 0
