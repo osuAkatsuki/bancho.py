@@ -22,7 +22,7 @@ import app.state.services
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, target_id, target_type, userid, time, comment, colour
+        c.id, c.target_id, c.target_type, c.userid, c.time, c.comment, c.colour
     """,
 )
 
@@ -68,7 +68,7 @@ async def create(
 
     query = f"""\
         SELECT {READ_PARAMS}
-          FROM comments
+          FROM comments c
          WHERE id = :id
     """
     params = {
