@@ -84,11 +84,8 @@ async def fetch_all_for_user(
     return cast(list[MailWithUsernames], [dict(m._mapping) for m in mail])
 
 
-async def mark_conversation_as_read(
-    to_id: int,
-    from_id: int,
-) -> list[Mail]:
-    """Mark any unread mail for a given player from a given player as read."""
+async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
+    """Mark any mail in a user's conversation with another user as read."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM mail
