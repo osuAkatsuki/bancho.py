@@ -5,8 +5,6 @@ import secrets
 from datetime import datetime
 from uuid import UUID
 
-import httpx
-import respx
 from fastapi import status
 from httpx import AsyncClient
 
