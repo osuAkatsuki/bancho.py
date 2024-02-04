@@ -56,6 +56,7 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
+from app.repositories import logs as logs_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
@@ -751,16 +752,11 @@ async def addnote(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, :msg, NOW())",
-        {
-            "from": ctx.player.id,
-            "to": target.id,
-            "action": "note",
-            "msg": " ".join(ctx.args[1:]),
-        },
+    await logs_repo.create(
+        _from=ctx.player.id,
+        to=target.id,
+        action="note",
+        msg=" ".join(ctx.args[1:]),
     )
 
     return f"Added note to {target}."
