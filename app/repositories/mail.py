@@ -84,11 +84,26 @@ async def fetch_all_for_user(
     return cast(list[MailWithUsernames], [dict(m._mapping) for m in mail])
 
 
-async def mark_as_read(
+async def mark_conversation_as_read(
     to_id: int,
     from_id: int,
-) -> Mail | None:
-    """Mark a mail entry as read in the database."""
+) -> list[Mail]:
+    """Mark any unread mail for a given player from a given player as read."""
+    query = f"""\
+        SELECT {READ_PARAMS}
+          FROM mail
+        WHERE to_id = :to_id
+          AND from_id = :from_id
+          AND `read` = False
+    """
+    params = {
+        "to_id": to_id,
+        "from_id": from_id,
+    }
+    all_mail = await app.state.services.database.fetch_all(query, params)
+    if not all_mail:
+        return []
+
     query = """\
         UPDATE mail
            SET `read` = True
@@ -101,15 +116,4 @@ async def mark_as_read(
         "from_id": from_id,
     }
 
-    rec_id = await app.state.services.database.execute(query, params)
-
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM mail
-        WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    mail = await app.state.services.database.fetch_one(query, params)
-    return cast(Mail, dict(mail._mapping)) if mail is not None else None
+    return cast(list[Mail], [dict(mail._mapping) for mail in all_mail])
