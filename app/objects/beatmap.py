@@ -82,7 +82,7 @@ async def ensure_local_osu_file(
     ):
         # need to get the file from the osu!api
         if app.settings.DEBUG:
-            log(f"Doing osu!api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
+            log(f"Doing api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
 
         url = f"https://old.ppy.sh/osu/{bmap_id}"
         response = await app.state.services.http_client.get(url)
