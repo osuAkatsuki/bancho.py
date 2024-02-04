@@ -88,7 +88,7 @@ async def mark_as_read(
     to_id: int,
     from_id: int,
 ) -> Mail | None:
-    """Update a mail entry in the database."""
+    """Mark a mail entry as read in the database."""
     query = """\
         UPDATE mail
            SET `read` = True
