@@ -27,6 +27,11 @@ class Mail(TypedDict):
     read: bool
 
 
+class MailWithUsernames(Mail):
+    from_name: str
+    to_name: str
+
+
 READ_PARAMS = textwrap.dedent(
     """\
         id, from_id, to_id, msg, time, `read`
@@ -57,23 +62,26 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
     return cast(Mail, dict(mail._mapping))
 
 
-async def fetch_all(to_id: int, read: bool) -> list[Mail]:
-    """Fetch a list of mails from the database."""
+async def fetch_all_for_user(
+    user_id: int,
+    read: bool | None = None,
+) -> list[MailWithUsernames]:
+    """Fetch all of mail to a given target from the database."""
     query = f"""\
-        SELECT m.`msg`, m.`time`, m.`from_id`,
-         (SELECT name FROM users WHERE id = m.`from_id`) AS `from`,
-         (SELECT name FROM users WHERE id = m.`to_id`) AS `to`
+        SELECT {READ_PARAMS},
+         (SELECT name FROM users WHERE id = m.`from_id`) AS `from_name`,
+         (SELECT name FROM users WHERE id = m.`to_id`) AS `to_name`
           FROM `mail` m
          WHERE m.`to_id` = :to_id
-           AND m.`read` = :read
+           AND m.`read` = COALESCE(:read, `read`)
     """
     params = {
-        "to_id": to_id,
+        "to_id": user_id,
         "read": read,
     }
 
-    mails = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Mail], [dict(m._mapping) for m in mails])
+    mail = await app.state.services.database.fetch_all(query, params)
+    return cast(list[MailWithUsernames], [dict(m._mapping) for m in mail])
 
 
 async def mark_as_read(

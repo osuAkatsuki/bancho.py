@@ -62,7 +62,7 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import comments as comments_repo
-from app.repositories import mails as mails_repo
+from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
@@ -1667,7 +1667,7 @@ async def osuMarkAsRead(
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
         # mark any unread mail from this user as read.
-        await mails_repo.mark_as_read(
+        await mail_repo.mark_as_read(
             to_id=player.id,
             from_id=target.id,
         )
