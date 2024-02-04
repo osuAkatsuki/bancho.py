@@ -1597,7 +1597,7 @@ async def osuComment(
 ) -> Response:
     if action == "get":
         # client is requesting all comments
-        comments = await comments_repo.fetch_all(
+        comments = await comments_repo.fetch_all_relevant_to_replay(
             score_id=score_id,
             map_set_id=map_set_id,
             map_id=map_id,
@@ -1627,7 +1627,11 @@ async def osuComment(
 
     elif action == "post":
         # client is submitting a new comment
-        # TODO: maybe validate all params are sent?
+
+        # validate all required params are provided
+        assert target is not None
+        assert start_time is not None
+        assert comment is not None
 
         # get the corresponding id from the request
         if target == "song":
@@ -1645,7 +1649,7 @@ async def osuComment(
         # insert into sql
         await comments_repo.create(
             target_id=target_id,
-            target_type=target,
+            target_type=comments_repo.TargetType(target),
             userid=player.id,
             time=start_time,
             comment=comment,

@@ -40,16 +40,7 @@ class Comment(TypedDict):
     userid: int
     time: float
     comment: str
-    colour: str
-
-
-class CommentUpdateFields(TypedDict, total=False):
-    target_id: int
-    target_type: TargetType
-    userid: int
-    time: float
-    comment: str
-    colour: str
+    colour: str | None
 
 
 async def create(
@@ -58,7 +49,7 @@ async def create(
     userid: int,
     time: float,
     comment: str,
-    colour: str,
+    colour: str | None,
 ) -> Comment:
     """Create a new comment entry in the database."""
     query = f"""\
@@ -89,46 +80,23 @@ async def create(
     return cast(Comment, dict(_comment._mapping))
 
 
-async def fetch_count(
-    target_id: int | None = None,
-    target_type: TargetType | None = None,
-    userid: int | None = None,
-    time: float | None = None,
-    comment: str | None = None,
-    colour: str | None = None,
-) -> int:
-    """Fetch the number of comments in the database."""
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM comments
-        WHERE target_id = COALESCE(:target_id, target_id)
-          AND target_type = COALESCE(:target_type, target_type)
-          AND userid = COALESCE(:userid, userid)
-          AND time = COALESCE(:time, time)
-          AND comment = COALESCE(:comment, comment)
-          AND colour = COALESCE(:colour, colour)
-    """
-    params: dict[str, Any] = {
-        "server": target_id,
-        "set_id": target_type,
-        "status": userid,
-        "artist": time,
-        "creator": comment,
-        "filename": colour,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return cast(int, rec._mapping["count"])
+class CommentWithUserPrivileges(Comment):
+    priv: int
 
 
-async def fetch_all(
+async def fetch_all_relevant_to_replay(
     score_id: int | None = None,
     map_set_id: int | None = None,
     map_id: int | None = None,
-) -> list[Comment]:
-    """Fetch a list of comments from the database."""
+) -> list[CommentWithUserPrivileges]:
+    """\
+    Fetch all comments from the database where any of the following match:
+        - `score_id`
+        - `map_set_id`
+        - `map_id`
+    """
     query = f"""\
-        SELECT c.time, c.target_type, c.colour, c.comment, u.priv
+        SELECT {READ_PARAMS}, u.priv
           FROM comments c
          INNER JOIN users u ON u.id = c.userid
          WHERE (c.target_type = 'replay' AND c.target_id = :score_id)
@@ -142,4 +110,4 @@ async def fetch_all(
     }
 
     comments = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Comment], [dict(c._mapping) for c in comments])
+    return cast(list[CommentWithUserPrivileges], [dict(c._mapping) for c in comments])
