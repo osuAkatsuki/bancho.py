@@ -29,8 +29,6 @@ from app.utils import pymysql_encode
 
 # from dataclasses import dataclass
 
-__all__ = ("ensure_local_osu_file", "RankedStatus", "Beatmap", "BeatmapSet")
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 DEFAULT_LAST_UPDATE = datetime(1970, 1, 1)
@@ -43,7 +41,7 @@ class BeatmapApiResponse(TypedDict):
     status_code: int
 
 
-@retry(reraise=True, stop=stop_after_attempt(5))
+@retry(reraise=True, stop=stop_after_attempt(3))
 async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     """\
     Fetch data from the osu!api with a beatmap's md5.
@@ -69,31 +67,54 @@ async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
     return {"data": None, "status_code": response.status_code}
 
 
-async def ensure_local_osu_file(
-    osu_file_path: Path,
-    bmap_id: int,
-    bmap_md5: str,
+@retry(reraise=True, stop=stop_after_attempt(3))
+async def api_get_osu_file(beatmap_id: int) -> bytes:
+    url = f"https://old.ppy.sh/osu/{beatmap_id}"
+    response = await app.state.services.http_client.get(url)
+    response.raise_for_status()
+    return response.read()
+
+
+def disk_has_expected_osu_file(
+    beatmap_id: int,
+    expected_md5: str | None = None,
 ) -> bool:
-    """Ensure we have the latest .osu file locally,
-    downloading it from the osu!api if required."""
-    if (
-        not osu_file_path.exists()
-        or hashlib.md5(osu_file_path.read_bytes()).hexdigest() != bmap_md5
-    ):
-        # need to get the file from the osu!api
-        if app.settings.DEBUG:
-            log(f"Doing api (.osu file) request {bmap_id}", Ansi.LMAGENTA)
+    osu_file_path = BEATMAPS_PATH / f"{beatmap_id}.osu"
+    file_exists = osu_file_path.exists()
+    if file_exists and expected_md5 is not None:
+        osu_file_md5 = hashlib.md5(osu_file_path.read_bytes()).hexdigest()
+        return osu_file_md5 == expected_md5
+    return file_exists
 
-        url = f"https://old.ppy.sh/osu/{bmap_id}"
-        response = await app.state.services.http_client.get(url)
-        if response.status_code != 200:
-            if 400 <= response.status_code < 500:
-                # client error, report this to cmyui
-                stacktrace = app.utils.get_appropriate_stacktrace()
-                await app.state.services.log_strange_occurrence(stacktrace)
+
+def write_osu_file_to_disk(beatmap_id: int, data: bytes) -> None:
+    osu_file_path = BEATMAPS_PATH / f"{beatmap_id}.osu"
+    osu_file_path.write_bytes(data)
+
+
+async def ensure_osu_file_is_available(
+    beatmap_id: int,
+    expected_md5: str | None = None,
+) -> bool:
+    """\
+    Download the .osu file for a beatmap if it's not already present.
+
+    If `expected_md5` is provided, the file will be downloaded if it
+    does not match the expected md5 hash -- this is typically used for
+    ensuring a file is the latest expected version.
+
+    Returns whether the file is available for use.
+    """
+    if not disk_has_expected_osu_file(beatmap_id, expected_md5):
+        try:
+            latest_osu_file = await api_get_osu_file(beatmap_id)
+        except httpx.HTTPStatusError:
             return False
-
-        osu_file_path.write_bytes(response.read())
+        except Exception:
+            log(f"Failed to fetch osu file for {beatmap_id}", Ansi.LRED)
+            return False
+        else:
+            write_osu_file_to_disk(beatmap_id, latest_osu_file)
 
     return True
 

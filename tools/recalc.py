@@ -20,6 +20,8 @@ from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 from redis import asyncio as aioredis
 
+from app.objects.beatmap import ensure_osu_file_is_available
+
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
@@ -27,7 +29,6 @@ try:
     from app.constants.privileges import Privileges
     from app.constants.mods import Mods
     from app.constants.gamemodes import GameMode
-    from app.objects.beatmap import ensure_local_osu_file
     import app.settings
     import app.state.services
 except ModuleNotFoundError:
@@ -100,10 +101,18 @@ async def process_score_chunk(
 ) -> None:
     tasks: list[Awaitable[None]] = []
     for score in chunk:
-        beatmap_path = BEATMAPS_PATH / f"{score['map_id']}.osu"
-        await ensure_local_osu_file(beatmap_path, score["map_id"], score["map_md5"])
-
-        tasks.append(recalculate_score(score, beatmap_path, ctx))
+        osu_file_available = await ensure_osu_file_is_available(
+            score["map_id"],
+            expected_md5=score["map_md5"],
+        )
+        if osu_file_available:
+            tasks.append(
+                recalculate_score(
+                    score,
+                    BEATMAPS_PATH / f"{score['map_id']}.osu",
+                    ctx,
+                ),
+            )
 
     await asyncio.gather(*tasks)
 

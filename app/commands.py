@@ -44,7 +44,7 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.beatmap import RankedStatus
 from app.objects.clan import Clan
 from app.objects.match import MapPool
@@ -475,8 +475,11 @@ async def _with(ctx: Context) -> str | None:
 
     bmap: Beatmap = ctx.player.last_np["bmap"]
 
-    osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-    if not await ensure_local_osu_file(osu_file_path, bmap.id, bmap.md5):
+    osu_file_available = await ensure_osu_file_is_available(
+        bmap.id,
+        expected_md5=bmap.md5,
+    )
+    if not osu_file_available:
         return "Mapfile could not be found; this incident has been reported."
 
     mode_vn = ctx.player.last_np["mode_vn"]
