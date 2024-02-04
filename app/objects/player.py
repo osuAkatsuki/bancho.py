@@ -550,7 +550,12 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        await logs_repo.create(_from=admin.id, to=self.id, action="silence", msg=reason)
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="silence",
+            msg=reason,
+        )
 
         # inform the user's client.
         self.enqueue(app.packets.silence_end(int(duration)))
