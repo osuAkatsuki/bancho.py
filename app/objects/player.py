@@ -576,8 +576,8 @@ class Player:
         await logs_repo.create(
             _from=admin.id,
             to=self.id,
-            reason=reason,
             action="unsilence",
+            msg=reason,
         )
 
         # inform the user's client

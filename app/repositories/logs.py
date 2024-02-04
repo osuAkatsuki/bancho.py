@@ -21,7 +21,7 @@ import app.state.services
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, from, to, action, msg, time
+        `id`, `from`, `to`, `action`, `msg`, `time`
     """,
 )
 
@@ -36,7 +36,6 @@ class Log(TypedDict):
 
 
 async def create(
-    id: int,
     _from: int,
     to: int,
     action: str,
@@ -44,11 +43,10 @@ async def create(
 ) -> Log:
     """Create a new log entry in the database."""
     query = f"""\
-        INSERT INTO logs (id, from, to, action, msg, time)
-            VALUES (:id, :from, :to, :action, :msg, NOW())
+        INSERT INTO logs (`from`, `to`, `action`, `msg`, `time`)
+            VALUES (:from, :to, :action, :msg, NOW())
     """
     params: dict[str, Any] = {
-        "id": id,
         "from": _from,
         "to": to,
         "action": action,
