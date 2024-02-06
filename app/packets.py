@@ -278,10 +278,12 @@ class MultiplayerMatch:
 
 
 class BasePacket(ABC):
-    def __init__(self, reader: BanchoPacketReader) -> None: ...
+    def __init__(self, reader: BanchoPacketReader) -> None:
+        ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None: ...
+    async def handle(self, player: Player) -> None:
+        ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]

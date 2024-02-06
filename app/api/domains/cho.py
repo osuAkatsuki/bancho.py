@@ -1,5 +1,4 @@
 """ cho: handle cho packets from the osu! client """
-
 from __future__ import annotations
 
 import asyncio
@@ -46,8 +45,9 @@ from app.objects.channel import Channel
 from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.match import MatchTeams
-from app.objects.match import MatchTeamTypes, MAX_MATCH_NAME_LENGTH
+from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
+from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.player import Action
@@ -1307,7 +1307,7 @@ def validate_match_data(
             all(c in string.printable for c in untrusted_match_data.passwd),
             len(untrusted_match_data.name) <= MAX_MATCH_NAME_LENGTH,
             len(untrusted_match_data.map_md5) == 32,
-        )
+        ),
     )
 
 

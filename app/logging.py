@@ -53,7 +53,8 @@ class RGB:
         return f"\x1b[38;2;{self.r};{self.g};{self.b}m"
 
 
-class _Rainbow: ...
+class _Rainbow:
+    ...
 
 
 Rainbow = _Rainbow()
