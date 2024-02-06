@@ -580,30 +580,27 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
     return adapters, running_under_wine
 
 
-async def authenticate(username: str, password: bytes) -> players_repo.Player | None:
+async def authenticate(
+    username: str, untrusted_password: bytes
+) -> players_repo.Player | None:
     user_info = await players_repo.fetch_one(
         name=username,
         fetch_all_fields=True,
     )
-
     if user_info is None:
-        # no account by this name exists.
         return None
 
-    # get our bcrypt cache
-    bcrypt_cache = app.state.cache.bcrypt
-    pw_bcrypt = user_info["pw_bcrypt"].encode()
+    trusted_hashword = user_info["pw_bcrypt"].encode()
 
-    # check credentials against db. algorithms like these are intentionally
-    # designed to be slow; we'll cache the results to speed up subsequent logins.
-    if pw_bcrypt in bcrypt_cache:  # ~0.01 ms
-        if password != bcrypt_cache[pw_bcrypt]:
+    # in-memory bcrypt lookup cache for performance
+    if trusted_hashword in app.state.cache.bcrypt:  # ~0.01 ms
+        if untrusted_password != app.state.cache.bcrypt[trusted_hashword]:
             return None
     else:  # ~200ms
-        if not bcrypt.checkpw(password, pw_bcrypt):
+        if not bcrypt.checkpw(untrusted_password, trusted_hashword):
             return None
 
-        bcrypt_cache[pw_bcrypt] = password
+        app.state.cache.bcrypt[trusted_hashword] = untrusted_password
 
     return user_info
 
