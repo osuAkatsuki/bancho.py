@@ -53,8 +53,7 @@ class RGB:
         return f"\x1b[38;2;{self.r};{self.g};{self.b}m"
 
 
-class _Rainbow:
-    ...
+class _Rainbow: ...
 
 
 Rainbow = _Rainbow()
@@ -135,17 +134,13 @@ def print_rainbow(msg: str, rainbow_end: float = 2 / 3, end: str = "\n") -> None
     print(_fmt_rainbow(msg, rainbow_end), end=end)
 
 
-# TODO: genericize this to all SI measurements?
-
-# TODO: support all named orders of magnitude?
-# https://en.wikipedia.org/wiki/Metric_prefix
 TIME_ORDER_SUFFIXES = ["nsec", "μsec", "msec", "sec"]
 
 
-def magnitude_fmt_time(t: int | float) -> str:  # in nanosec
+def magnitude_fmt_time(nanosec: int | float) -> str:
     suffix = None
     for suffix in TIME_ORDER_SUFFIXES:
-        if t < 1000:
+        if nanosec < 1000:
             break
-        t /= 1000
-    return f"{t:.2f} {suffix}"
+        nanosec /= 1000
+    return f"{nanosec:.2f} {suffix}"

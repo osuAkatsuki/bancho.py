@@ -25,14 +25,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
         time_elapsed = end_time - start_time
 
-        # TODO: add metric to datadog
-
         col = (
             Ansi.LGREEN
             if 200 <= response.status_code < 300
-            else Ansi.LYELLOW
-            if 300 <= response.status_code < 400
-            else Ansi.LRED
+            else Ansi.LYELLOW if 300 <= response.status_code < 400 else Ansi.LRED
         )
 
         url = f"{request.headers['host']}{request['path']}"

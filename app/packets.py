@@ -150,7 +150,6 @@ class ServerPackets(IntEnum):
         return f"<{self.name} ({self.value})>"
 
 
-# TODO: clean this up
 @unique
 class osuTypes(IntEnum):
     # integral
@@ -279,12 +278,10 @@ class MultiplayerMatch:
 
 
 class BasePacket(ABC):
-    def __init__(self, reader: BanchoPacketReader) -> None:
-        ...
+    def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None:
-        ...
+    async def handle(self, player: Player) -> None: ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]
@@ -701,7 +698,7 @@ _noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
     osuTypes.string: write_string,
     osuTypes.i32_list: write_i32_list,
     osuTypes.scoreframe: write_scoreframe,
-    # TODO: write replayframe & bundle
+    # not (yet?) implemented: write replayframe & bundle
 }
 
 _expand_types: dict[osuTypes, Callable[..., bytearray]] = {
@@ -732,8 +729,6 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 #
 # packets
 #
-
-# TODO: fix consistency of parameter names
 
 
 # packet id: 5
@@ -851,11 +846,10 @@ def _user_stats(
         (plays, osuTypes.i32),
         (total_score, osuTypes.i64),
         (global_rank, osuTypes.i32),
-        (pp, osuTypes.i16),  # why not u16 peppy :(
+        (pp, osuTypes.i16),
     )
 
 
-# TODO: this is implementation-specific, move it out
 def user_stats(player: Player) -> bytes:
     gm_stats = player.gm_stats
     if gm_stats.pp > 0x7FFF:
@@ -1151,7 +1145,6 @@ def _user_presence(
     )
 
 
-# TODO: this is implementation-specific, move it out
 def user_presence(player: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,
