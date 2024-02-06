@@ -540,9 +540,12 @@ def parse_osu_version_string(osu_version_string: str) -> OsuVersion | None:
     return osu_version
 
 
-async def get_client_versions_since_last_major_iteration(
-    osu_stream: OsuStream,
-) -> set[date]:
+async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date]:
+    """
+    Return a list of acceptable client versions for the given stream.
+
+    This is used to determine whether a client is too old to connect to the server.
+    """
     if osu_stream in ("stable", "beta"):
         osu_stream += "40"  # TODO: why?
 
@@ -643,7 +646,7 @@ async def login(
         }
 
     if app.settings.DISALLOW_OLD_CLIENTS:
-        allowed_client_versions = await get_client_versions_since_last_major_iteration(
+        allowed_client_versions = await get_allowed_client_versions(
             osu_version.stream,
         )
         if osu_version.date not in allowed_client_versions:
