@@ -1,5 +1,4 @@
 """ cho: handle cho packets from the osu! client """
-
 from __future__ import annotations
 
 import asyncio
@@ -643,7 +642,7 @@ async def login(
 
     if app.settings.DISALLOW_OLD_CLIENTS:
         allowed_client_versions = await get_client_versions_since_last_major_iteration(
-            osu_version.stream
+            osu_version.stream,
         )
         if osu_version.date not in allowed_client_versions:
             return {
