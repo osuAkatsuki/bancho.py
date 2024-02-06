@@ -1,4 +1,5 @@
 """ osu: handle connections from web, api, and beyond? """
+
 from __future__ import annotations
 
 import copy
@@ -1031,9 +1032,7 @@ async def osuSubmitModularSelector(
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
-            )
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
             bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
@@ -1570,8 +1569,8 @@ async def osuComment(
         ret: list[str] = []
 
         for cmt in comments:
-            # TODO: maybe support player/creator colours?
-            # pretty expensive for very low gain, but completion :D
+            # note: this implementation does not support
+            #       "player" or "creator" comment colours
             if cmt["priv"] & Privileges.NOMINATOR:
                 fmt = "bat"
             elif cmt["priv"] & Privileges.DONATOR:
@@ -1607,8 +1606,12 @@ async def osuComment(
 
         if colour and not player.priv & Privileges.DONATOR:
             # only supporters can use colours.
-            # TODO: should we be restricting them?
             colour = None
+
+            log(
+                f"User {player} attempted to use a coloured comment without "
+                "supporter status. Submitting comment without a colour.",
+            )
 
         # insert into sql
         await comments_repo.create(
@@ -1663,7 +1666,7 @@ async def banchoConnect(
     client_hash: str | None = Query(None, alias="ch"),
     retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ) -> Response:
-    return Response(b"")  # TODO
+    return Response(b"")
 
 
 _checkupdates_cache = {  # default timeout is 1h, set on request.
@@ -1775,8 +1778,8 @@ async def register_account(
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
-    #
-    # TODO: allow nginx to be optional
+    # XXX: require/validate these headers; they are used later
+    # on in the registration process for resolving geolocation
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
     real_ip: str = Header(..., alias="X-Real-IP"),
 ) -> Response:

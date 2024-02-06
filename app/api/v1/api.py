@@ -1,4 +1,5 @@
 """ api: bancho.py's developer api for interacting with server state """
+
 from __future__ import annotations
 
 import hashlib
@@ -63,10 +64,6 @@ oauth2_scheme = HTTPBearer(auto_error=False)
 # [Normal]
 # GET /calculate_pp: calculate & return pp for a given beatmap.
 # POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
-
-# TODO handlers
-# GET /get_friends: return a list of the player's friends.
-# POST/PUT /set_player_info: update user information (updates whatever received).
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
@@ -187,9 +184,11 @@ async def api_calculate_pp(
 
     return ORJSONResponse(
         # XXX: change the output type based on the inputs from user
-        final_results
-        if all(x is None for x in [ngeki, nkatu, n100, n50])
-        else final_results[0],
+        (
+            final_results
+            if all(x is None for x in [ngeki, nkatu, n100, n50])
+            else final_results[0]
+        ),
         status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
     )
 
@@ -499,13 +498,15 @@ async def api_get_player_scores(
     player_info = {
         "id": player.id,
         "name": player.name,
-        "clan": {
-            "id": player.clan.id,
-            "name": player.clan.name,
-            "tag": player.clan.tag,
-        }
-        if player.clan
-        else None,
+        "clan": (
+            {
+                "id": player.clan.id,
+                "name": player.clan.name,
+                "tag": player.clan.tag,
+            }
+            if player.clan
+            else None
+        ),
     }
 
     return ORJSONResponse(
@@ -730,14 +731,17 @@ async def api_get_score_info(
     return ORJSONResponse({"status": "success", "score": score})
 
 
-# TODO: perhaps we can do something to make these count towards replay views,
-#       but we'll want to make it difficult to spam.
 @router.get("/get_replay")
 async def api_get_replay(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = True,
 ) -> Response:
-    """Return a given replay (including headers)."""
+    """\
+    Return a given replay (including headers).
+
+    Note that this endpoint does not increment
+    the player's total replay views.
+    """
     # fetch replay file & make sure it exists
     replay_file = REPLAYS_PATH / f"{score_id}.osr"
     if not replay_file.exists():
@@ -753,8 +757,7 @@ async def api_get_replay(
             media_type="application/octet-stream",
             headers={
                 "Content-Description": "File Transfer",
-                # TODO: should we do the query to fetch
-                # info for content-disposition for this..?
+                # TODO: should we include a Content-Disposition?
             },
         )
     # add replay headers from sql
@@ -849,8 +852,6 @@ async def api_get_match(
     match_id: int = Query(..., alias="id", ge=1, le=64),
 ) -> Response:
     """Return information of a given multiplayer match."""
-    # TODO: eventually, this should contain recent score info.
-
     match = app.state.sessions.matches[match_id]
     if not match:
         return ORJSONResponse(
@@ -945,9 +946,6 @@ async def api_get_clan(
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
 ) -> Response:
     """Return information of a given clan."""
-
-    # TODO: fetching by name & tag (requires safe_name, safe_tag)
-
     clan = app.state.sessions.clans.get(id=clan_id)
     if not clan:
         return ORJSONResponse(
@@ -994,8 +992,6 @@ async def api_get_pool(
     pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
 ) -> Response:
     """Return information of a given mappool."""
-
-    # TODO: fetching by name (requires safe_name)
 
     pool = app.state.sessions.pools.get(id=pool_id)
     if not pool:

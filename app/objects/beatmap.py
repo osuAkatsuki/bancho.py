@@ -307,8 +307,6 @@ class Beatmap:
         """An osu! chat embed to `self`'s osu! beatmap page."""
         return f"[{self.url} {self.full_name}]"
 
-    # TODO: cache these & standardize method for changing status
-
     @property
     def has_leaderboard(self) -> bool:
         """Return whether the map has a ranked leaderboard."""
@@ -347,8 +345,6 @@ class Beatmap:
             "hp": self.hp,
             "diff": self.diff,
         }
-
-    # TODO: implement some locking for the map fetch methods
 
     """ High level API """
     # There are three levels of storage used for beatmaps,
@@ -651,7 +647,7 @@ class BeatmapSet:
             # update maps from old_maps where old.md5 != new.md5
             # add maps to old_maps where new.id not in old_maps
 
-            updated_maps: list[Beatmap] = []  # TODO: optimize
+            updated_maps: list[Beatmap] = []
             map_md5s_to_delete: set[str] = set()
 
             # temp value for building the new beatmap
@@ -677,7 +673,7 @@ class BeatmapSet:
                         updated_maps.append(bmap)
                     else:
                         # map is the same, make no changes
-                        updated_maps.append(old_map)  # TODO: is this needed?
+                        updated_maps.append(old_map)  # (this line is _maybe_ needed?)
 
             # find maps that aren't in our current state, and add them
             for new_id, new_map in new_maps.items():
@@ -709,7 +705,6 @@ class BeatmapSet:
                 )
 
                 # delete scores on the maps
-                # TODO: if we add FKs to db, won't need this?
                 await app.state.services.database.execute(
                     "DELETE FROM scores WHERE map_md5 IN :map_md5s",
                     {"map_md5s": map_md5s_to_delete},
@@ -732,10 +727,10 @@ class BeatmapSet:
         elif api_data["status_code"] in (404, 200):
             # NOTE: 200 can return an empty array of beatmaps,
             #       so we still delete in this case if the beatmap data is None
-            # TODO: is 404 and 200 the only cases where we should delete the beatmap?
 
-            # TODO: we have the map on disk but it's
-            #       been removed from the osu!api.
+            # TODO: a couple of open questions here:
+            # - should we delete the beatmap from the database if it's not in the osu!api?
+            # - are 404 and 200 the only cases where we should delete the beatmap?
             map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
 
             # delete maps
@@ -745,7 +740,6 @@ class BeatmapSet:
             )
 
             # delete scores on the maps
-            # TODO: if we add FKs to db, won't need this?
             await app.state.services.database.execute(
                 "DELETE FROM scores WHERE map_md5 IN :map_md5s",
                 {"map_md5s": map_md5s_to_delete},

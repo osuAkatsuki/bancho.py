@@ -39,7 +39,6 @@ class Failure(BaseModel):
 
 
 def failure(
-    # TODO: error code
     message: str,
     status_code: int = 400,
     headers: dict[str, Any] | None = None,
