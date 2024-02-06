@@ -699,7 +699,7 @@ async def login(
             ),
         }
 
-    if osu_version.stream == "tourney" and not (
+    if osu_version.stream == OsuStream.TOURNEY and not (
         user_info["priv"] & Privileges.DONATOR
         and user_info["priv"] & Privileges.UNRESTRICTED
     ):
