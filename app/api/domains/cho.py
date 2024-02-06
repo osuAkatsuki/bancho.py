@@ -77,6 +77,8 @@ NOW_PLAYING_RGX = re.compile(
     r"(?P<mods>(?: (?:-|\+|~|\|)\w+(?:~|\|)?)+)?\x01$",
 )
 
+FIRST_USER_ID = 3
+
 router = APIRouter(tags=["Bancho API"])
 
 
@@ -806,12 +808,9 @@ async def login(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await db_conn.execute(
-            "UPDATE users SET country = :country WHERE id = :user_id",
-            {
-                "country": geoloc["country"]["acronym"],
-                "user_id": user_info["id"],
-            },
+        await players_repo.update(
+            id=user_info["id"],
+            country=geoloc["country"]["acronym"],
         )
 
     client_details = ClientDetails(
@@ -828,7 +827,7 @@ async def login(
         id=user_info["id"],
         name=user_info["name"],
         priv=user_info["priv"],
-        pw_bcrypt=pw_bcrypt,
+        pw_bcrypt=user_info["pw_bcrypt"].encode(),
         clan=clan,
         clan_priv=clan_priv,
         geoloc=geoloc,
@@ -935,6 +934,9 @@ async def login(
             sent_to = set()  # ids
 
             for msg in mail_rows:
+                # Add "Unread messages" header as the first message
+                # for any given sender, to make it clear that the
+                # messages are coming from the mail system.
                 if msg["from"] not in sent_to:
                     data += app.packets.send_message(
                         sender=msg["from"],
@@ -945,7 +947,6 @@ async def login(
                     sent_to.add(msg["from"])
 
                 msg_time = datetime.fromtimestamp(msg["time"])
-
                 data += app.packets.send_message(
                     sender=msg["from"],
                     msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
@@ -958,7 +959,7 @@ async def login(
             # account & send info about the server/its usage.
             await player.add_privs(Privileges.VERIFIED)
 
-            if player.id == 3:
+            if player.id == FIRST_USER_ID:
                 # this is the first player registering on
                 # the server, grant them full privileges.
                 await player.add_privs(
