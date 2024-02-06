@@ -1,4 +1,5 @@
 """ cho: handle cho packets from the osu! client """
+
 from __future__ import annotations
 
 import asyncio
@@ -521,6 +522,87 @@ def parse_login_data(data: bytes) -> LoginData:
     }
 
 
+def parse_osu_version_string(osu_version_string: str) -> OsuVersion | None:
+    match = regexes.OSU_VERSION.match(osu_version_string)
+    if match is None:
+        return None
+
+    osu_version = OsuVersion(
+        date=date(
+            year=int(match["date"][0:4]),
+            month=int(match["date"][4:6]),
+            day=int(match["date"][6:8]),
+        ),
+        revision=int(match["revision"]) if match["revision"] else None,
+        stream=OsuStream(match["stream"] or "stable"),
+    )
+    return osu_version
+
+
+async def get_client_versions_since_last_major_iteration(
+    osu_stream: OsuStream,
+) -> set[date]:
+    if osu_stream in ("stable", "beta"):
+        osu_stream += "40"  # TODO: why?
+
+    allowed_client_versions: set[date] = set()
+
+    # TODO: put this behind a layer of abstraction
+    #       for better handling of the error cases
+    response = await services.http_client.get(
+        OSU_API_V2_CHANGELOG_URL,
+        params={"stream": osu_stream},
+    )
+    response.raise_for_status()
+    for build in response.json()["builds"]:
+        version = date(
+            int(build["version"][0:4]),
+            int(build["version"][4:6]),
+            int(build["version"][6:8]),
+        )
+        allowed_client_versions.add(version)
+
+        if any(entry["major"] for entry in build["changelog_entries"]):
+            # this build is a major iteration to the client
+            # don't allow anything older than this
+            break
+    return allowed_client_versions
+
+
+def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
+    running_under_wine = adapters_string == "runningunderwine"
+    adapters = [a for a in adapters_string[:-1].split(".")]
+    return adapters, running_under_wine
+
+
+async def authenticate(username: str, password: bytes) -> players_repo.Player | None:
+    user_info = await players_repo.fetch_one(
+        name=username,
+        fetch_all_fields=True,
+    )
+
+    if user_info is None:
+        # no account by this name exists.
+        return None
+
+    # get our bcrypt cache
+    bcrypt_cache = app.state.cache.bcrypt
+    pw_bcrypt = user_info["pw_bcrypt"].encode()
+
+    # check credentials against db. algorithms like these are intentionally
+    # designed to be slow; we'll cache the results to speed up subsequent logins.
+    if pw_bcrypt in bcrypt_cache:  # ~0.01 ms
+        if password != bcrypt_cache[pw_bcrypt]:
+            return None
+    else:  # ~200ms
+        if not bcrypt.checkpw(password, pw_bcrypt):
+            return None
+
+        bcrypt_cache[pw_bcrypt] = password
+
+    return user_info
+
+
 async def login(
     headers: Mapping[str, str],
     body: bytes,
@@ -552,50 +634,17 @@ async def login(
 
     # perform some validation & further parsing on the data
 
-    match = regexes.OSU_VERSION.match(login_data["osu_version"])
-    if match is None:
+    osu_version = parse_osu_version_string(login_data["osu_version"])
+    if osu_version is None:
         return {
             "osu_token": "invalid-request",
             "response_body": b"",
         }
 
-    osu_version = OsuVersion(
-        date=date(
-            year=int(match["date"][0:4]),
-            month=int(match["date"][4:6]),
-            day=int(match["date"][6:8]),
-        ),
-        revision=int(match["revision"]) if match["revision"] else None,
-        stream=OsuStream(match["stream"] or "stable"),
-    )
-
     if app.settings.DISALLOW_OLD_CLIENTS:
-        osu_client_stream = osu_version.stream.value
-        if osu_client_stream in ("stable", "beta"):
-            osu_client_stream += "40"  # TODO: why?
-
-        allowed_client_versions = set()
-
-        # TODO: put this behind a layer of abstraction
-        #       for better handling of the error cases
-        response = await services.http_client.get(
-            OSU_API_V2_CHANGELOG_URL,
-            params={"stream": osu_client_stream},
+        allowed_client_versions = await get_client_versions_since_last_major_iteration(
+            osu_version.stream
         )
-        response.raise_for_status()
-        for build in response.json()["builds"]:
-            version = date(
-                int(build["version"][0:4]),
-                int(build["version"][4:6]),
-                int(build["version"][6:8]),
-            )
-            allowed_client_versions.add(version)
-
-            if any(entry["major"] for entry in build["changelog_entries"]):
-                # this build is a major iteration to the client
-                # don't allow anything older than this
-                break
-
         if osu_version.date not in allowed_client_versions:
             return {
                 "osu_token": "client-too-old",
@@ -604,9 +653,7 @@ async def login(
                 ),
             }
 
-    running_under_wine = login_data["adapters_str"] == "runningunderwine"
-    adapters = [a for a in login_data["adapters_str"][:-1].split(".")]
-
+    adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
     if not (running_under_wine or any(adapters)):
         return {
             "osu_token": "empty-adapters",
@@ -638,17 +685,12 @@ async def login(
             player.logout()
             del player
 
-    user_info = await players_repo.fetch_one(
-        name=login_data["username"],
-        fetch_all_fields=True,
-    )
-
+    user_info = await authenticate(login_data["username"], login_data["password_md5"])
     if user_info is None:
-        # no account by this name exists.
         return {
-            "osu_token": "unknown-username",
+            "osu_token": "incorrect-credentials",
             "response_body": (
-                app.packets.notification(f"{BASE_DOMAIN}: Unknown username")
+                app.packets.notification(f"{BASE_DOMAIN}: Incorrect credentials")
                 + app.packets.user_id(-1)
             ),
         }
@@ -662,33 +704,6 @@ async def login(
             "osu_token": "no",
             "response_body": app.packets.user_id(-1),
         }
-
-    # get our bcrypt cache
-    bcrypt_cache = app.state.cache.bcrypt
-    pw_bcrypt = user_info["pw_bcrypt"].encode()
-
-    # check credentials against db. algorithms like these are intentionally
-    # designed to be slow; we'll cache the results to speed up subsequent logins.
-    if pw_bcrypt in bcrypt_cache:  # ~0.01 ms
-        if login_data["password_md5"] != bcrypt_cache[pw_bcrypt]:
-            return {
-                "osu_token": "incorrect-password",
-                "response_body": (
-                    app.packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                    + app.packets.user_id(-1)
-                ),
-            }
-    else:  # ~200ms
-        if not bcrypt.checkpw(login_data["password_md5"], pw_bcrypt):
-            return {
-                "osu_token": "incorrect-password",
-                "response_body": (
-                    app.packets.notification(f"{BASE_DOMAIN}: Incorrect password")
-                    + app.packets.user_id(-1)
-                ),
-            }
-
-        bcrypt_cache[pw_bcrypt] = login_data["password_md5"]
 
     """ login credentials verified """
 
