@@ -1,4 +1,5 @@
 """ cho: handle cho packets from the osu! client """
+
 from __future__ import annotations
 
 import asyncio
@@ -581,7 +582,8 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
 
 
 async def authenticate(
-    username: str, untrusted_password: bytes,
+    username: str,
+    untrusted_password: bytes,
 ) -> players_repo.Player | None:
     user_info = await players_repo.fetch_one(
         name=username,
