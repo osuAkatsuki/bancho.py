@@ -1,4 +1,5 @@
 """ cho: handle cho packets from the osu! client """
+
 from __future__ import annotations
 
 import asyncio
@@ -179,7 +180,7 @@ async def bancho_handler(
     if osu_token is None:
         # the client is performing a login
         async with app.state.services.database.connection() as db_conn:
-            login_data = await login(
+            login_data = await handle_osu_login_request(
                 request.headers,
                 await request.body(),
                 ip,
@@ -608,7 +609,7 @@ async def authenticate(username: str, password: bytes) -> players_repo.Player | 
     return user_info
 
 
-async def login(
+async def handle_osu_login_request(
     headers: Mapping[str, str],
     body: bytes,
     ip: IPAddress,
