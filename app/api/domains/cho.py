@@ -1,4 +1,5 @@
 """ cho: handle cho packets from the osu! client """
+
 from __future__ import annotations
 
 import asyncio
@@ -546,8 +547,9 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date]:
 
     This is used to determine whether a client is too old to connect to the server.
     """
-    if osu_stream in ("stable", "beta"):
-        osu_stream += "40"  # TODO: why?
+    osu_stream_str = osu_stream.value
+    if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
+        osu_stream_str += "40"  # i wonder why this exists
 
     allowed_client_versions: set[date] = set()
 
@@ -555,7 +557,7 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date]:
     #       for better handling of the error cases
     response = await services.http_client.get(
         OSU_API_V2_CHANGELOG_URL,
-        params={"stream": osu_stream},
+        params={"stream": osu_stream_str},
     )
     response.raise_for_status()
     for build in response.json()["builds"]:
