@@ -700,7 +700,7 @@ async def handle_osu_login_request(
             ),
         }
 
-    if osu_version.stream == OsuStream.TOURNEY and not (
+    if osu_version.stream is OsuStream.TOURNEY and not (
         user_info["priv"] & Privileges.DONATOR
         and user_info["priv"] & Privileges.UNRESTRICTED
     ):
