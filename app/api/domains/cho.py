@@ -1304,7 +1304,6 @@ def validate_match_data(
         (
             untrusted_match_data.host_id == expected_host_id,
             len(untrusted_match_data.name) <= MAX_MATCH_NAME_LENGTH,
-            len(untrusted_match_data.map_md5) == 32,
         ),
     )
 
