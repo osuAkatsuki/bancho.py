@@ -1303,8 +1303,6 @@ def validate_match_data(
     return all(
         (
             untrusted_match_data.host_id == expected_host_id,
-            all(c in string.printable for c in untrusted_match_data.name),
-            all(c in string.printable for c in untrusted_match_data.passwd),
             len(untrusted_match_data.name) <= MAX_MATCH_NAME_LENGTH,
             len(untrusted_match_data.map_md5) == 32,
         ),
