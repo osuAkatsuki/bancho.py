@@ -1315,6 +1315,7 @@ class MatchCreate(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(f"{player} tried to create a match with invalid data.", Ansi.LYELLOW)
             return
 
         if player.restricted:
@@ -1508,6 +1509,10 @@ class MatchChangeSettings(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(
+                f"{player} tried to change match settings with invalid data.",
+                Ansi.LYELLOW,
+            )
             return
 
         if player.match is None:
@@ -2097,6 +2102,10 @@ class MatchChangePassword(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(
+                f"{player} tried to change match password with invalid data.",
+                Ansi.LYELLOW,
+            )
             return
 
         if player.match is None:
