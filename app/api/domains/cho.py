@@ -540,11 +540,13 @@ def parse_osu_version_string(osu_version_string: str) -> OsuVersion | None:
     return osu_version
 
 
-async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date]:
+async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None:
     """
     Return a list of acceptable client versions for the given stream.
 
     This is used to determine whether a client is too old to connect to the server.
+
+    Returns None if the connection to the osu! api fails.
     """
     osu_stream_str = osu_stream.value
     if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
@@ -552,13 +554,12 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date]:
 
     allowed_client_versions: set[date] = set()
 
-    # TODO: put this behind a layer of abstraction
-    #       for better handling of the error cases
     response = await services.http_client.get(
         OSU_API_V2_CHANGELOG_URL,
         params={"stream": osu_stream_str},
     )
-    response.raise_for_status()
+    if not response.is_success:
+        return None
     for build in response.json()["builds"]:
         version = date(
             int(build["version"][0:4]),
@@ -648,7 +649,11 @@ async def handle_osu_login_request(
         allowed_client_versions = await get_allowed_client_versions(
             osu_version.stream,
         )
-        if osu_version.date not in allowed_client_versions:
+        # in the case where the osu! api fails, we'll allow the client to connect
+        if (
+            allowed_client_versions is not None
+            and osu_version.date not in allowed_client_versions
+        ):
             return {
                 "osu_token": "client-too-old",
                 "response_body": (
