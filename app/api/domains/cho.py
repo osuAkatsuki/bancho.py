@@ -59,6 +59,7 @@ from app.objects.player import PresenceFilter
 from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
+from app.packets import LoginFailureReason
 from app.repositories import ingame_logins as logins_repo
 from app.repositories import players as players_repo
 from app.state import services
@@ -642,7 +643,10 @@ async def handle_osu_login_request(
     if osu_version is None:
         return {
             "osu_token": "invalid-request",
-            "response_body": b"",
+            "response_body": (
+                app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
+                + app.packets.notification("Please restart your osu! and try again.")
+            ),
         }
 
     if app.settings.DISALLOW_OLD_CLIENTS:
@@ -657,7 +661,8 @@ async def handle_osu_login_request(
             return {
                 "osu_token": "client-too-old",
                 "response_body": (
-                    app.packets.version_update() + app.packets.user_id(-2)
+                    app.packets.version_update()
+                    + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
                 ),
             }
 
@@ -666,7 +671,7 @@ async def handle_osu_login_request(
         return {
             "osu_token": "empty-adapters",
             "response_body": (
-                app.packets.user_id(-1)
+                app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
                 + app.packets.notification("Please restart your osu! and try again.")
             ),
         }
@@ -684,7 +689,7 @@ async def handle_osu_login_request(
             return {
                 "osu_token": "user-already-logged-in",
                 "response_body": (
-                    app.packets.user_id(-1)
+                    app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
                     + app.packets.notification("User already logged in.")
                 ),
             }
@@ -699,7 +704,7 @@ async def handle_osu_login_request(
             "osu_token": "incorrect-credentials",
             "response_body": (
                 app.packets.notification(f"{BASE_DOMAIN}: Incorrect credentials")
-                + app.packets.user_id(-1)
+                + app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
             ),
         }
 
@@ -710,7 +715,9 @@ async def handle_osu_login_request(
         # trying to use tourney client with insufficient privileges.
         return {
             "osu_token": "no",
-            "response_body": app.packets.user_id(-1),
+            "response_body": app.packets.login_reply(
+                LoginFailureReason.AUTHENTICATION_FAILED,
+            ),
         }
 
     """ login credentials verified """
@@ -782,7 +789,9 @@ async def handle_osu_login_request(
                         app.packets.notification(
                             "Please contact staff directly to create an account.",
                         )
-                        + app.packets.user_id(-1)
+                        + app.packets.login_reply(
+                            LoginFailureReason.AUTHENTICATION_FAILED,
+                        )
                     ),
                 }
 
@@ -806,7 +815,7 @@ async def handle_osu_login_request(
                 app.packets.notification(
                     f"{BASE_DOMAIN}: Login failed. Please contact an admin.",
                 )
-                + app.packets.user_id(-1)
+                + app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
             ),
         }
 
@@ -849,7 +858,7 @@ async def handle_osu_login_request(
     )
 
     data = bytearray(app.packets.protocol_version(19))
-    data += app.packets.user_id(player.id)
+    data += app.packets.login_reply(player.id)
 
     # *real* client privileges are sent with this packet,
     # then the user's apparent privileges are sent in the
