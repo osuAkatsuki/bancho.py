@@ -1331,8 +1331,8 @@ class MatchCreate(BasePacket):
         # to the global channel list as
         # an instanced channel.
         chat_channel = Channel(
-            name=f"#multi_{self.match_data.id}",
-            topic=f"MID {self.match_data.id}'s multiplayer channel.",
+            name=f"#multi_{match_id}",
+            topic=f"MID {match_id}'s multiplayer channel.",
             auto_join=False,
             instance=True,
         )
