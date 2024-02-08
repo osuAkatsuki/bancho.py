@@ -122,9 +122,6 @@ class CommandSet:
         return wrapper
 
 
-# TODO: refactor help commands into some base ver
-#       since they're all the same anyway lol.
-
 mp_commands = CommandSet("mp", "Multiplayer commands.")
 pool_commands = CommandSet("pool", "Mappool commands.")
 clan_commands = CommandSet("clan", "Clan commands.")
@@ -417,9 +414,6 @@ async def top(ctx: Context) -> str | None:
     )
 
 
-# TODO: !compare (compare to previous !last/!top post's map)
-
-
 class ParsingError(str):
     ...
 
@@ -429,9 +423,6 @@ def parse__with__command_args(
     args: Sequence[str],
 ) -> Mapping[str, Any] | ParsingError:
     """Parse arguments for the !with command."""
-
-    # tried to balance complexity vs correctness for this function
-    # TODO: it can surely be cleaned up further - need to rethink it?
 
     if not args or len(args) > 4:
         return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
@@ -1317,8 +1308,6 @@ if app.settings.DEVELOPER_MODE:
 
         if "__py" in __py_namespace:
             del __py_namespace["__py"]
-
-        # TODO: perhaps size checks?
 
         if not isinstance(ret, str):
             ret = pprint.pformat(ret, compact=True)

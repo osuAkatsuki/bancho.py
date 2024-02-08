@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import string
 import struct
 import time
 from collections.abc import Callable
@@ -46,6 +47,7 @@ from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
+from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.player import Action
@@ -739,7 +741,9 @@ async def login(
     if hw_matches:
         # we have other accounts with matching hashes
         if user_info["priv"] & Privileges.VERIFIED:
-            # TODO: this is a normal, registered & verified player.
+            # this is a normal, registered & verified player.
+            # TODO: this user may be multi-accounting; there may be
+            # some desirable behavior to implement here in the future.
             ...
         else:
             # this player is not verified yet, this is their first
@@ -979,8 +983,6 @@ async def login(
             recipient=player.name,
             sender_id=app.state.sessions.bot.id,
         )
-
-    # TODO: some sort of admin panel for staff members?
 
     # add `p` to the global player list,
     # making them officially logged in.
@@ -1294,13 +1296,28 @@ class LobbyJoin(BasePacket):
                 player.enqueue(app.packets.new_match(match))
 
 
+def validate_match_data(
+    untrusted_match_data: app.packets.MultiplayerMatch,
+    expected_host_id: int,
+) -> bool:
+    return all(
+        (
+            untrusted_match_data.host_id == expected_host_id,
+            len(untrusted_match_data.name) <= MAX_MATCH_NAME_LENGTH,
+        ),
+    )
+
+
 @register(ClientPackets.CREATE_MATCH)
 class MatchCreate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_data = reader.read_match()
 
     async def handle(self, player: Player) -> None:
-        # TODO: match validation..?
+        if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(f"{player} tried to create a match with invalid data.", Ansi.LYELLOW)
+            return
+
         if player.restricted:
             player.enqueue(
                 app.packets.match_join_fail()
@@ -1344,7 +1361,6 @@ class MatchCreate(BasePacket):
             map_name=self.match_data.map_name,
             map_id=self.match_data.map_id,
             map_md5=self.match_data.map_md5,
-            # TODO: validate no security hole exists
             host_id=self.match_data.host_id,
             mode=GameMode(self.match_data.mode),
             mods=Mods(self.match_data.mods),
@@ -1492,6 +1508,13 @@ class MatchChangeSettings(BasePacket):
         self.match_data = reader.read_match()
 
     async def handle(self, player: Player) -> None:
+        if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(
+                f"{player} tried to change match settings with invalid data.",
+                Ansi.LYELLOW,
+            )
+            return
+
         if player.match is None:
             return
 
@@ -1624,7 +1647,7 @@ class MatchStart(BasePacket):
 @register(ClientPackets.MATCH_SCORE_UPDATE)
 class MatchScoreUpdate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.play_data = reader.read_raw()  # TODO: probably not necessary
+        self.play_data = reader.read_raw()
 
     async def handle(self, player: Player) -> None:
         # this runs very frequently in matches,
@@ -2075,9 +2098,16 @@ class MatchInvite(BasePacket):
 @register(ClientPackets.MATCH_CHANGE_PASSWORD)
 class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        self.match = reader.read_match()
+        self.match_data = reader.read_match()
 
     async def handle(self, player: Player) -> None:
+        if not validate_match_data(self.match_data, expected_host_id=player.id):
+            log(
+                f"{player} tried to change match password with invalid data.",
+                Ansi.LYELLOW,
+            )
+            return
+
         if player.match is None:
             return
 
@@ -2085,7 +2115,7 @@ class MatchChangePassword(BasePacket):
             log(f"{player} attempted to change pw as non-host.", Ansi.LYELLOW)
             return
 
-        player.match.passwd = self.match.passwd
+        player.match.passwd = self.match_data.passwd
         player.match.enqueue_state()
 
 
@@ -2111,7 +2141,6 @@ class UserPresenceRequest(BasePacket):
 @register(ClientPackets.USER_PRESENCE_REQUEST_ALL)
 class UserPresenceRequestAll(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
-        # TODO: should probably ratelimit with this (300k s)
         self.ingame_time = reader.read_i32()
 
     async def handle(self, player: Player) -> None:

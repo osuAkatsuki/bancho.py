@@ -94,13 +94,19 @@ def main(argv: Sequence[str]) -> int:
         # make sure the socket file does not exist on disk and can be bound
         # (uvicorn currently does not do this for us, and will raise an exc)
         if os.path.exists(app.settings.APP_HOST):
-            if app.utils.processes_listening_on_unix_socket(app.settings.APP_HOST) != 0:
-                log(
-                    f"There are other processes listening on {app.settings.APP_HOST}.\n"
-                    f"If you've lost it, bancho.py can be killed gracefully with SIGINT.",
-                    Ansi.LRED,
-                )
-                return 1
+            try:
+                if (
+                    app.utils.processes_listening_on_unix_socket(app.settings.APP_HOST)
+                    != 0
+                ):
+                    log(
+                        f"There are other processes listening on {app.settings.APP_HOST}.\n"
+                        f"If you've lost it, bancho.py can be killed gracefully with SIGINT.",
+                        Ansi.LRED,
+                    )
+                    return 1
+            except Exception:
+                pass
             else:
                 os.remove(app.settings.APP_HOST)
     else:
@@ -116,9 +122,6 @@ def main(argv: Sequence[str]) -> int:
         log_level=logging.WARNING,
         server_header=False,
         date_header=False,
-        # TODO: uvicorn calls .lower() on the key & value,
-        #       but i would prefer Bancho-Version to keep
-        #       with standards. perhaps look into this.
         headers=[("bancho-version", app.settings.VERSION)],
         uds=uds,
         host=host or "127.0.0.1",  # uvicorn defaults

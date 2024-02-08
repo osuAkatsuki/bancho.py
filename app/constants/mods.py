@@ -109,7 +109,6 @@ class Mods(IntFlag):
                 self &= ~Mods.FADEIN  # HDFI
 
         # 4 remove multiple keymods
-        # TODO: do this better
         keymods_used = self & KEY_MODS
 
         if bin(keymods_used).count("1") > 1:
@@ -152,7 +151,6 @@ class Mods(IntFlag):
         mods = cls.NOMOD
         _dict = npstr2mod_dict  # global
 
-        # TODO: dis
         for mod in s.split(" "):
             if mod not in _dict:
                 continue
