@@ -18,10 +18,13 @@ shell:
 	pipenv shell
 
 test:
+	docker-compose exec -T bancho /srv/root/scripts/run-tests.sh
+
+test-local:
 	pipenv run pytest -vv tests/
 
 test-dbg:
-	pipenv run pytest -vv --pdb tests/
+	pipenv run pytest -vv --pdb -s tests/
 
 lint:
 	pipenv run pre-commit run --all-files

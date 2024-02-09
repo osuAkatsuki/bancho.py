@@ -1224,7 +1224,7 @@ async def server(ctx: Context) -> str | None:
     # current state of settings
     mirror_search_url = urlparse(app.settings.MIRROR_SEARCH_ENDPOINT).netloc
     mirror_download_url = urlparse(app.settings.MIRROR_DOWNLOAD_ENDPOINT).netloc
-    using_osuapi = app.settings.OSU_API_KEY != ""
+    using_osuapi = bool(app.settings.OSU_API_KEY)
     advanced_mode = app.settings.DEVELOPER_MODE
     auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
