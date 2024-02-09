@@ -34,7 +34,7 @@ respx = "*"
 
 [dev-packages]
 pre-commit = "*"
-black = "*"
+black = "23.12.1"
 reorder-python-imports = "*"
 mypy = "*"
 autoflake = "*"

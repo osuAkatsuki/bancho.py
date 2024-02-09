@@ -1,6 +1,6 @@
 -i https://pypi.org/simple
 autoflake==2.2.1
-black==24.1.1
+black==23.12.1
 cfgv==3.4.0; python_version >= '3.8'
 classify-imports==4.2.0; python_version >= '3.7'
 click==8.1.7; python_version >= '3.7'
