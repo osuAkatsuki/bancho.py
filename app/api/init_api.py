@@ -181,7 +181,6 @@ def init_api() -> BanchoAPI:
 
     init_middlewares(asgi_app)
     init_exception_handlers(asgi_app)
-    init_events(asgi_app)
     init_routes(asgi_app)
 
     return asgi_app
