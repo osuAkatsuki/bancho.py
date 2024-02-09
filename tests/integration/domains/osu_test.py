@@ -6,9 +6,9 @@ from datetime import datetime
 from uuid import UUID
 
 import httpx
+import respx
 from fastapi import status
 from httpx import AsyncClient
-from respx import MockRouter
 
 from app import encryption
 from testing.sample_data import sample_beatmap_data
@@ -16,7 +16,7 @@ from testing.sample_data import sample_beatmap_data
 
 async def test_score_submission(
     http_client: AsyncClient,
-    router: MockRouter,
+    respx_mock: respx.MockRouter,
 ) -> None:
     # ARRANGE
 
@@ -189,14 +189,14 @@ async def test_score_submission(
         "https://osu.direct/api/get_beatmaps?h=1cf5b2c2edfafd055536d2cefcb89c0e",
         "https://osu.direct/api/get_beatmaps?s=141",
     ):
-        router.get(url).mock(
+        respx_mock.get(url).mock(
             return_value=httpx.Response(
                 status_code=status.HTTP_200_OK,
                 json=sample_beatmap_data.vivid_getbeatmaps_sample_response(),
             ),
         )
 
-    router.get("https://old.ppy.sh/osu/315").mock(
+    respx_mock.get("https://old.ppy.sh/osu/315").mock(
         return_value=httpx.Response(
             status_code=status.HTTP_200_OK,
             content=sample_beatmap_data.vivid_osu_file_sample_response(),
