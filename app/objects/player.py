@@ -199,7 +199,7 @@ class Player:
     is_bot_client: `bool`
         Whether this is a bot account.
 
-    tourney_client: `bool`
+    is_tourney_client: `bool`
         Whether this is a management/spectator tourney client.
 
     _packet_queue: `bytearray`
@@ -291,7 +291,7 @@ class Player:
         if self.is_bot_client:
             self.enqueue = lambda data: None  # type: ignore
 
-        self.tourney_client = extras.get("tourney_client", False)
+        self.is_tourney_client = extras.get("is_tourney_client", False)
 
         self.api_key = extras.get("api_key", None)
 

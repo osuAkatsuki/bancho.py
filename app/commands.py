@@ -864,7 +864,7 @@ async def user(ctx: Context) -> str | None:
             f"Channels: {[c._name for c in player.channels]}",
             f"Logged in: {timeago.format(player.login_time)}",
             f"Last server interaction: {timeago.format(player.last_recv_time)}",
-            f"osu! build: {osu_version} | Tourney: {player.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {player.is_tourney_client}",
             f"Silenced: {player.silenced} | Spectating: {player.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {player.recent_score}",
