@@ -4,8 +4,10 @@ from __future__ import annotations
 import asyncio
 import os
 import pprint
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Never
+from typing import Any
+from typing import Never
 
 import starlette.routing
 from fastapi import FastAPI
@@ -99,7 +101,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
         Ansi.LMAGENTA,
     )
 
-    yield # type: ignore
+    yield  # type: ignore
 
     # we want to attempt to gracefully finish any ongoing connections
     # and shut down any of the housekeeping tasks running in the background.
