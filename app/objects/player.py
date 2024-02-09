@@ -302,7 +302,7 @@ class Player:
 
     @property
     def is_online(self) -> bool:
-        return self.token != ""
+        return bool(self.token != "")
 
     @property
     def url(self) -> str:
