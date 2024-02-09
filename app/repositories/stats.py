@@ -95,7 +95,7 @@ async def create(
           FROM stats
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": rec_id,
     }
     stat = await app.state.services.database.fetch_one(query, params)
@@ -257,8 +257,11 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    values = {"id": player_id, "mode": mode} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": player_id,
+        "mode": mode,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}

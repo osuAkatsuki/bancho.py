@@ -56,7 +56,7 @@ async def create(
         INSERT INTO comments (target_id, target_type, userid, time, comment, colour)
              VALUES (:target_id, :target_type, :userid, :time, :comment, :colour)
     """
-    params = {
+    params: dict[str, Any] = {
         "target_id": target_id,
         "target_type": target_type,
         "userid": userid,
@@ -71,7 +71,7 @@ async def create(
           FROM comments c
          WHERE id = :id
     """
-    params = {
+    params: dict[str, Any] = {
         "id": rec_id,
     }
     _comment = await app.state.services.database.fetch_one(query, params)
