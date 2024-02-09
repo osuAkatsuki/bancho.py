@@ -196,7 +196,7 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    bot_client: `bool`
+    is_bot_client: `bool`
         Whether this is a bot account.
 
     tourney_client: `bool`
@@ -287,8 +287,8 @@ class Player:
         # subject to possible change in the future,
         # although if anything, bot accounts will
         # probably just use the /api/ routes?
-        self.bot_client = extras.get("bot_client", False)
-        if self.bot_client:
+        self.is_bot_client = extras.get("is_bot_client", False)
+        if self.is_bot_client:
             self.enqueue = lambda data: None  # type: ignore
 
         self.tourney_client = extras.get("tourney_client", False)
