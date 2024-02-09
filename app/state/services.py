@@ -196,7 +196,7 @@ def __fetch_geoloc_nginx(headers: Mapping[str, str]) -> Geolocation | None:
 
 async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
     """Fetch geolocation data based on ip (using ip-api)."""
-    if not ip.is_private:
+    if not ip.is_loopback:
         url = f"http://ip-api.com/line/{ip}"
     else:
         url = "http://ip-api.com/line/"
