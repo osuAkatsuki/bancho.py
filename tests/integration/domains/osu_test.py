@@ -25,6 +25,12 @@ async def test_score_submission(
     passwd_plaintext = "myPassword321$"
     passwd_md5 = hashlib.md5(passwd_plaintext.encode()).hexdigest()
 
+    respx_mock.get("http://ip-api.com/line/").mock(
+        return_value=httpx.Response(
+            status_code=status.HTTP_200_OK,
+            content=b"\n".join((b"success", b"CA", b"43.6485", b"-79.4054")),
+        ),
+    )
     response = await http_client.post(
         url="/users",
         headers={
