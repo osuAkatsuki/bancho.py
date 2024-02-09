@@ -20,15 +20,14 @@ from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 from redis import asyncio as aioredis
 
-from app.objects.beatmap import ensure_osu_file_is_available
 
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
 try:
     from app.constants.privileges import Privileges
-    from app.constants.mods import Mods
     from app.constants.gamemodes import GameMode
+    from app.objects.beatmap import ensure_osu_file_is_available
     import app.settings
     import app.state.services
 except ModuleNotFoundError:
