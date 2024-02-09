@@ -95,7 +95,7 @@ async def create(
           FROM stats
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     stat = await app.state.services.database.fetch_one(query, params)
