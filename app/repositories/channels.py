@@ -71,7 +71,7 @@ async def create(
           FROM channels
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
 
@@ -195,7 +195,7 @@ async def update(
           FROM channels
          WHERE name = :name
     """
-    params: dict[str, Any] = {
+    params = {
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)
@@ -222,7 +222,7 @@ async def delete(
         DELETE FROM channels
               WHERE name = :name
     """
-    params: dict[str, Any] = {
+    params = {
         "name": name,
     }
     channel = await app.state.services.database.execute(query, params)

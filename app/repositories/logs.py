@@ -59,7 +59,7 @@ async def create(
           FROM logs
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     rec = await app.state.services.database.fetch_one(query, params)

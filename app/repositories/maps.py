@@ -165,7 +165,7 @@ async def create(
           FROM maps
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     map = await app.state.services.database.fetch_one(query, params)
@@ -374,7 +374,7 @@ async def update(
           FROM maps
         WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     map = await app.state.services.database.fetch_one(query, params)
@@ -399,7 +399,7 @@ async def delete(id: int) -> Map | None:
         DELETE FROM maps
               WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     map = await app.state.services.database.execute(query, params)

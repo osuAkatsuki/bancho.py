@@ -70,7 +70,7 @@ async def create(
           FROM achievements
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -186,7 +186,7 @@ async def update(
           FROM achievements
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
@@ -217,7 +217,7 @@ async def delete(
         DELETE FROM achievements
               WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     await app.state.services.database.execute(query, params)

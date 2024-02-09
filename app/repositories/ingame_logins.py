@@ -67,7 +67,7 @@ async def create(
           FROM ingame_logins
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     ingame_login = await app.state.services.database.fetch_one(query, params)

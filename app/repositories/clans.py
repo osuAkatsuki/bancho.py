@@ -63,7 +63,7 @@ async def create(
           FROM clans
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
@@ -165,7 +165,7 @@ async def update(
           FROM clans
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
@@ -190,6 +190,8 @@ async def delete(id: int) -> Clan | None:
         DELETE FROM clans
          WHERE id = :id
     """
-    params: dict[str, Any] = {"id": id}
+    params = {
+        "id": id,
+    }
     clan = await app.state.services.database.execute(query, params)
     return cast(Clan, dict(clan._mapping)) if clan is not None else None

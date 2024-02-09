@@ -109,7 +109,7 @@ async def create(
           FROM users
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     player = await app.state.services.database.fetch_one(query, params)
@@ -288,7 +288,7 @@ async def update(
           FROM users
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     player = await app.state.services.database.fetch_one(query, params)

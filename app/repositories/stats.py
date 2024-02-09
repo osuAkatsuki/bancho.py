@@ -269,7 +269,7 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params: dict[str, Any] = {
+    params = {
         "id": player_id,
         "mode": mode,
     }

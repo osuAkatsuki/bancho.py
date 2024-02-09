@@ -71,7 +71,7 @@ async def create(
           FROM comments c
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": rec_id,
     }
     _comment = await app.state.services.database.fetch_one(query, params)
