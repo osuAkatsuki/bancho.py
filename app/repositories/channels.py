@@ -37,7 +37,6 @@ class Channel(TypedDict):
 
 
 class ChannelUpdateFields(TypedDict, total=False):
-    name: str
     topic: str
     read_priv: int
     write_priv: int
