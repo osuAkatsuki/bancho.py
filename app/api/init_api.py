@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import pprint
+from contextlib import asynccontextmanager
 from typing import Any
 
 import starlette.routing
@@ -17,7 +18,6 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import ClientDisconnect
-from contextlib import asynccontextmanager
 
 import app.bg_loops
 import app.settings
@@ -64,6 +64,7 @@ class BanchoAPI(FastAPI):
 
         return self.openapi_schema
 
+
 @asynccontextmanager
 async def lifespan(asgi_app: BanchoAPI) -> None:
     app.state.loop = asyncio.get_running_loop()
@@ -94,9 +95,9 @@ async def lifespan(asgi_app: BanchoAPI) -> None:
 
     log("Startup process complete.", Ansi.LGREEN)
     log(
-            f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
-            Ansi.LMAGENTA,
-        )
+        f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
+        Ansi.LMAGENTA,
+    )
 
     yield
 
@@ -113,6 +114,7 @@ async def lifespan(asgi_app: BanchoAPI) -> None:
     if app.state.services.datadog is not None:
         app.state.services.datadog.stop()
         app.state.services.datadog.flush()
+
 
 def init_exception_handlers(asgi_app: BanchoAPI) -> None:
     @asgi_app.exception_handler(RequestValidationError)
