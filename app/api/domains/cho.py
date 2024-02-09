@@ -553,14 +553,14 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
     if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
         osu_stream_str += "40"  # i wonder why this exists
 
-    allowed_client_versions: set[date] = set()
-
     response = await services.http_client.get(
         OSU_API_V2_CHANGELOG_URL,
         params={"stream": osu_stream_str},
     )
     if not response.is_success:
         return None
+
+    allowed_client_versions: set[date] = set()
     for build in response.json()["builds"]:
         version = date(
             int(build["version"][0:4]),
@@ -568,11 +568,11 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
             int(build["version"][6:8]),
         )
         allowed_client_versions.add(version)
-
         if any(entry["major"] for entry in build["changelog_entries"]):
             # this build is a major iteration to the client
             # don't allow anything older than this
             break
+
     return allowed_client_versions
 
 
