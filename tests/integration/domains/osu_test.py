@@ -5,13 +5,19 @@ import secrets
 from datetime import datetime
 from uuid import UUID
 
+import httpx
 from fastapi import status
 from httpx import AsyncClient
+from respx import MockRouter
 
 from app import encryption
+from testing.sample_data import sample_beatmap_data
 
 
-async def test_score_submission(http_client: AsyncClient) -> None:
+async def test_score_submission(
+    http_client: AsyncClient,
+    router: MockRouter,
+) -> None:
     # ARRANGE
 
     username = f"test-{secrets.token_hex(4)}"
@@ -177,6 +183,25 @@ async def test_score_submission(http_client: AsyncClient) -> None:
     score_time = 13358
     fail_time = 0
     exited_out = False
+
+    # mock out 3rd party calls to get beatmap data
+    for url in (
+        "https://osu.direct/api/get_beatmaps?h=1cf5b2c2edfafd055536d2cefcb89c0e",
+        "https://osu.direct/api/get_beatmaps?s=141",
+    ):
+        router.get(url).mock(
+            return_value=httpx.Response(
+                status_code=status.HTTP_200_OK,
+                json=sample_beatmap_data.vivid_getbeatmaps_sample_response(),
+            ),
+        )
+
+    router.get("https://old.ppy.sh/osu/315").mock(
+        return_value=httpx.Response(
+            status_code=status.HTTP_200_OK,
+            content=sample_beatmap_data.vivid_osu_file_sample_response(),
+        ),
+    )
 
     # ACT
     response = await http_client.post(
