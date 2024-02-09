@@ -201,7 +201,12 @@ async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
     else:
         url = "http://ip-api.com/line/"
 
-    response = await http_client.get(url)
+    response = await http_client.get(
+        url,
+        params={
+            "fields": ",".join(("status", "message", "countryCode", "lat", "lon")),
+        },
+    )
     if response.status_code != 200:
         log("Failed to get geoloc data: request failed.", Ansi.LRED)
         return None
@@ -216,14 +221,14 @@ async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
         log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
         return None
 
-    acronym = lines[1].lower()
+    country_acronym = lines[0].lower()
 
     return {
-        "latitude": float(lines[6]),
-        "longitude": float(lines[7]),
+        "latitude": float(lines[1]),
+        "longitude": float(lines[2]),
         "country": {
-            "acronym": acronym,
-            "numeric": country_codes[acronym],
+            "acronym": country_acronym,
+            "numeric": country_codes[country_acronym],
         },
     }
 
