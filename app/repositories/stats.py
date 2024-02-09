@@ -257,8 +257,11 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    values = {"id": player_id, "mode": mode} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": player_id,
+        "mode": mode,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
@@ -266,7 +269,7 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params: dict[str, Any] = {
+    params = {
         "id": player_id,
         "mode": mode,
     }
