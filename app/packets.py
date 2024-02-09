@@ -733,19 +733,27 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 #
 
 
+class LoginFailureReason(IntEnum):
+    AUTHENTICATION_FAILED = -1
+    OLD_CLIENT = -2
+    BANNED = -3
+    # BANNED = -4
+    ERROR_OCCURRED = -5
+    NEEDS_SUPPORTER = -6
+    PASSWORD_RESET = -7
+    REQUIRES_VERIFICATION = -8
+
+
 # packet id: 5
 @cache
-def user_id(user_id: int) -> bytes:
-    # id responses:
-    # -1: authentication failed
-    # -2: old client
-    # -3: banned
-    # -4: banned
-    # -5: error occurred
-    # -6: needs supporter
-    # -7: password reset
-    # -8: requires verification
-    # ??: valid id
+def login_reply(user_id: int) -> bytes:
+    """\
+    Construct a login reply packet.
+
+    In successful cases, we'll send the user's ID.
+
+    In failure cases, we'll send a negative integer of type `LoginFailureReason`.
+    """
     return write(ServerPackets.USER_ID, (user_id, osuTypes.i32))
 
 

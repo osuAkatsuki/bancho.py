@@ -5,8 +5,8 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
 from enum import IntEnum
+from enum import StrEnum
 from enum import unique
 from functools import cached_property
 from typing import Any
@@ -117,7 +117,7 @@ class LastNp(TypedDict):
     timeout: float
 
 
-class OsuStream(str, Enum):
+class OsuStream(StrEnum):
     STABLE = "stable"
     BETA = "beta"
     CUTTINGEDGE = "cuttingedge"
