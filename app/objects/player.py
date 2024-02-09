@@ -227,7 +227,7 @@ class Player:
 
         # generate a token if not given
         token = extras.get("token", None)
-        if token is not None and isinstance(token, str):
+        if isinstance(token, str):
             self.token = token
         else:
             self.token = self.generate_token()
