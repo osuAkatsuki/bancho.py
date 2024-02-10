@@ -1,4 +1,5 @@
 """ api: bancho.py's developer api for interacting with server state """
+
 from __future__ import annotations
 
 import hashlib

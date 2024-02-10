@@ -24,7 +24,6 @@ from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
 
-
 T = TypeVar("T")
 
 
