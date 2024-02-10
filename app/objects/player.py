@@ -9,10 +9,10 @@ from enum import IntEnum
 from enum import StrEnum
 from enum import unique
 from functools import cached_property
-from typing import Any
-from typing import cast
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import TypedDict
+from typing import cast
 
 import databases.core
 
@@ -42,11 +42,11 @@ from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
+    from app.constants.privileges import ClanPrivileges
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
     from app.objects.score import Score
-    from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
