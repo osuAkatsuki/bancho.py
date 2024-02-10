@@ -1,4 +1,4 @@
-from __future__ import annotations
+# isort: dont-add-imports
 
 import asyncio
 from collections import defaultdict
