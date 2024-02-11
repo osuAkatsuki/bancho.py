@@ -366,7 +366,8 @@ class Score:
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > rec["pp"]:
+            # NOTE: Sync the decimal rounding with the amount of decimals in the scores.pp SQL column
+            if round(self.pp, 3) > rec["pp"]:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
