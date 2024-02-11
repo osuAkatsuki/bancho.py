@@ -209,27 +209,64 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
         await process_score_chunk(score_chunk, ctx)
 
 
+async def recalculate_score_status(mode: GameMode, ctx: Context) -> None:
+    pairs = await ctx.database.fetch_all(
+        "SELECT DISTINCT map_md5, userid, mode FROM scores WHERE status > 0 AND mode = :mode",
+        {"mode": mode}
+    )
+
+    for pair in pairs:
+        scores = await ctx.database.fetch_all(
+            "SELECT id, status, pp, play_time FROM scores "
+            "WHERE map_md5 = :map_md5 AND userid = :userid AND mode = :mode AND status > 0 "
+            "ORDER BY pp DESC",
+            pair
+        )
+
+        best = sorted(scores, key=lambda x: (-x['pp'], x['play_time']))[0]
+
+        if best['status'] != 2:
+            if DEBUG:
+                print(f"Status mismatch on score {best['id']}")
+
+            await ctx.database.execute(
+                "UPDATE scores SET status = 1 "
+                "WHERE map_md5 = :map_md5 AND userid = :userid AND mode = :mode AND status > 0",
+                pair
+            )
+
+            await ctx.database.execute(
+                "UPDATE scores SET status = 2 WHERE id = :id",
+                {"id": best['id']}
+            )
+
+    return
+
+
 async def main(argv: Sequence[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) == 0:
         argv = ["--help"]
 
     parser = argparse.ArgumentParser(
-        description="Recalculate performance for scores and/or stats",
+        description="Provides tools for recalculating the PP and status of scores, and stats of users."
     )
 
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument(
         "--scores",
-        description="Recalculate scores",
-        action="store_true",
-        default=True,
+        help="Recalculates the PP of all scores",
+        action="store_true"
     )
     parser.add_argument(
         "--stats",
-        description="Recalculate stats",
-        action="store_true",
-        default=True,
+        help="Recalculates the total PP and accuracy of all users",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--statuses",
+        help="Re-evaluates the submission status (BEST, SUBMITTED) of scores",
+        action="store_true"
     )
 
     parser.add_argument(
@@ -260,6 +297,9 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
         if args.stats:
             await recalculate_mode_users(mode, ctx)
+
+        if args.statuses:
+            await recalculate_score_status(mode, ctx)
 
     await app.state.services.http_client.aclose()
     await db.disconnect()
