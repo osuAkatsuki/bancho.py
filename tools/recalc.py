@@ -212,7 +212,7 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
 async def recalculate_score_status(mode: GameMode, ctx: Context) -> None:
     pairs = await ctx.database.fetch_all(
         "SELECT DISTINCT map_md5, userid, mode FROM scores WHERE status > 0 AND mode = :mode",
-        {"mode": mode}
+        {"mode": mode},
     )
 
     for pair in pairs:
@@ -220,24 +220,23 @@ async def recalculate_score_status(mode: GameMode, ctx: Context) -> None:
             "SELECT id, status, pp, play_time FROM scores "
             "WHERE map_md5 = :map_md5 AND userid = :userid AND mode = :mode AND status > 0 "
             "ORDER BY pp DESC",
-            pair
+            pair,
         )
 
-        best = sorted(scores, key=lambda x: (-x['pp'], x['play_time']))[0]
+        best = sorted(scores, key=lambda x: (-x["pp"], x["play_time"]))[0]
 
-        if best['status'] != 2:
+        if best["status"] != 2:
             if DEBUG:
                 print(f"Status mismatch on score {best['id']}")
 
             await ctx.database.execute(
                 "UPDATE scores SET status = 1 "
                 "WHERE map_md5 = :map_md5 AND userid = :userid AND mode = :mode AND status > 0",
-                pair
+                pair,
             )
 
             await ctx.database.execute(
-                "UPDATE scores SET status = 2 WHERE id = :id",
-                {"id": best['id']}
+                "UPDATE scores SET status = 2 WHERE id = :id", {"id": best["id"]},
             )
 
     return
@@ -249,24 +248,22 @@ async def main(argv: Sequence[str] | None = None) -> int:
         argv = ["--help"]
 
     parser = argparse.ArgumentParser(
-        description="Provides tools for recalculating the PP and status of scores, and stats of users."
+        description="Provides tools for recalculating the PP and status of scores, and stats of users.",
     )
 
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument(
-        "--scores",
-        help="Recalculates the PP of all scores",
-        action="store_true"
+        "--scores", help="Recalculates the PP of all scores", action="store_true",
     )
     parser.add_argument(
         "--stats",
         help="Recalculates the total PP and accuracy of all users",
-        action="store_true"
+        action="store_true",
     )
     parser.add_argument(
         "--statuses",
         help="Re-evaluates the submission status (BEST, SUBMITTED) of scores",
-        action="store_true"
+        action="store_true",
     )
 
     parser.add_argument(
