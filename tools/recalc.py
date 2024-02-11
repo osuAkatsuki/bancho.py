@@ -236,7 +236,8 @@ async def recalculate_score_status(mode: GameMode, ctx: Context) -> None:
             )
 
             await ctx.database.execute(
-                "UPDATE scores SET status = 2 WHERE id = :id", {"id": best["id"]},
+                "UPDATE scores SET status = 2 WHERE id = :id",
+                {"id": best["id"]},
             )
 
     return
@@ -253,7 +254,9 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument(
-        "--scores", help="Recalculates the PP of all scores", action="store_true",
+        "--scores",
+        help="Recalculates the PP of all scores",
+        action="store_true",
     )
     parser.add_argument(
         "--stats",
