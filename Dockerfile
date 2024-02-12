@@ -9,8 +9,9 @@ RUN apt update && apt install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install -U pip setuptools
-RUN pip install -r requirements.txt
+RUN pip install -U pip setuptools poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-root
 
 # NOTE: done last to avoid re-run of previous steps
 COPY . .

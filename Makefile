@@ -15,38 +15,29 @@ logs:
 	docker-compose logs -f bancho mysql redis
 
 shell:
-	pipenv shell
+	poetry shell
 
 test:
 	docker-compose exec -T bancho /srv/root/scripts/run-tests.sh
 
 test-local:
-	pipenv run pytest -vv tests/
+	poetry run pytest -vv tests/
 
 test-dbg:
-	pipenv run pytest -vv --pdb -s tests/
+	poetry run pytest -vv --pdb -s tests/
 
 lint:
-	pipenv run pre-commit run --all-files
+	poetry run pre-commit run --all-files
 
 type-check:
-	pipenv run mypy .
+	poetry run mypy .
 
 install:
-	PIPENV_VENV_IN_PROJECT=1 pipenv install
+	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --no-root
 
 install-dev:
-	PIPENV_VENV_IN_PROJECT=1 pipenv install --dev
-	pipenv run pre-commit install
+	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --no-root --with dev
+	poetry run pre-commit install
 
 uninstall:
-	pipenv --rm
-
-update: # THIS WILL NOT RUN ON WINDOWS DUE TO UVLOOP; USE WSL
-	pipenv update --dev
-	make test
-	pipenv requirements > requirements.txt
-	pipenv requirements --dev > requirements-dev.txt
-
-clean:
-	pipenv clean
+	poetry env remove python
