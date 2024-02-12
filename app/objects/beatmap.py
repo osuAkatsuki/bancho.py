@@ -117,6 +117,7 @@ async def ensure_osu_file_is_available(
         return False
 
     write_osu_file_to_disk(beatmap_id, latest_osu_file)
+    return True
 
 
 # for some ungodly reason, different values are used to
