@@ -22,9 +22,9 @@ import app.settings
 import app.state
 from app._typing import IPAddress
 from app.logging import Ansi
+from app.logging import Rainbow
 from app.logging import log
 from app.logging import printc
-from app.logging import Rainbow
 
 if TYPE_CHECKING:
     import databases.core

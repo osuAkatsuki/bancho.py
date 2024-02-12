@@ -3,8 +3,8 @@ from __future__ import annotations
 import textwrap
 from datetime import datetime
 from typing import Any
-from typing import cast
 from typing import TypedDict
+from typing import cast
 
 import app.state.services
 

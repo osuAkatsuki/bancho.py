@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import textwrap
 from collections.abc import Callable
-from typing import Any
-from typing import cast
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import TypedDict
+from typing import cast
 
 import app.state.services
-from app._typing import _UnsetSentinel
 from app._typing import UNSET
+from app._typing import _UnsetSentinel
 
 if TYPE_CHECKING:
     from app.objects.score import Score

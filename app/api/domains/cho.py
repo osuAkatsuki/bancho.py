@@ -1,4 +1,5 @@
 """ cho: handle cho packets from the osu! client """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,8 +32,8 @@ from app import commands
 from app._typing import IPAddress
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
-from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
@@ -43,11 +44,11 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_local_osu_file
 from app.objects.channel import Channel
 from app.objects.clan import Clan
+from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
-from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.player import Action
