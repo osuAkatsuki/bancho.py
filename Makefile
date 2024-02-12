@@ -41,3 +41,8 @@ install-dev:
 
 uninstall:
 	poetry env remove python
+
+# To bump the version number run `make bump ver=<args>` (DO NOT USE IF YOU DON'T KNOW WHAT YOU'RE DOING)
+# https://python-poetry.org/docs/cli/#version
+bump:
+	poetry version $(version)
