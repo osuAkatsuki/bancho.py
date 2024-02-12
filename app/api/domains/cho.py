@@ -62,6 +62,7 @@ from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
 from app.repositories import ingame_logins as logins_repo
+from app.repositories import mail as mail_repo
 from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
@@ -946,35 +947,32 @@ async def handle_osu_login_request(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await db_conn.fetch_all(
-            "SELECT m.`msg`, m.`time`, m.`from_id`, "
-            "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
-            "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = :to AND m.`read` = 0",
-            {"to": player.id},
+        mail_rows = await mail_repo.fetch_all_mail_to_user(
+            user_id=player.id,
+            read=False,
         )
 
         if mail_rows:
-            sent_to = set()  # ids
+            sent_to: set[int] = set()
 
             for msg in mail_rows:
                 # Add "Unread messages" header as the first message
                 # for any given sender, to make it clear that the
                 # messages are coming from the mail system.
-                if msg["from"] not in sent_to:
+                if msg["from_id"] not in sent_to:
                     data += app.packets.send_message(
-                        sender=msg["from"],
+                        sender=msg["from_name"],
                         msg="Unread messages",
-                        recipient=msg["to"],
+                        recipient=msg["to_name"],
                         sender_id=msg["from_id"],
                     )
-                    sent_to.add(msg["from"])
+                    sent_to.add(msg["from_id"])
 
                 msg_time = datetime.fromtimestamp(msg["time"])
                 data += app.packets.send_message(
-                    sender=msg["from"],
+                    sender=msg["from_name"],
                     msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
-                    recipient=msg["to"],
+                    recipient=msg["to_name"],
                     sender_id=msg["from_id"],
                 )
 
@@ -1218,11 +1216,10 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await app.state.services.database.execute(
-                "INSERT INTO `mail` "
-                "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
-                {"from": player.id, "to": target.id, "msg": msg},
+            await mail_repo.create(
+                from_id=player.id,
+                to_id=target.id,
+                msg=msg,
             )
         else:
             # messaging the bot, check for commands & /np.
