@@ -91,7 +91,7 @@ async def bancho_http_handler() -> Response:
     """Handle a request from a web browser."""
     new_line = "\n"
     matches = [m for m in app.state.sessions.matches if m is not None]
-    players = [p for p in app.state.sessions.players if not p.bot_client]
+    players = [p for p in app.state.sessions.players if not p.is_bot_client]
 
     packets = app.state.packets["all"]
 
@@ -117,8 +117,13 @@ async def bancho_view_online_users() -> Response:
     """see who's online"""
     new_line = "\n"
 
-    players = [player for player in app.state.sessions.players if not player.bot_client]
-    bots = [bots for bots in app.state.sessions.players if bots.bot_client]
+    players: list[Player] = []
+    bots: list[Player] = []
+    for p in app.state.sessions.players:
+        if p.is_bot_client:
+            bots.append(p)
+        else:
+            players.append(p)
 
     id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
@@ -862,7 +867,7 @@ async def handle_osu_login_request(
         donor_end=user_info["donor_end"],
         client_details=client_details,
         login_time=login_time,
-        tourney_client=osu_version.stream == "tourney",
+        is_tourney_client=osu_version.stream == "tourney",
         api_key=user_info["api_key"],
     )
 
