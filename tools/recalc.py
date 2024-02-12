@@ -29,7 +29,7 @@ try:
     from app.constants.gamemodes import GameMode
     from app.constants.mods import Mods
     from app.constants.privileges import Privileges
-    from app.objects.beatmap import ensure_local_osu_file
+    from app.objects.beatmap import ensure_osu_file_is_available
 except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
@@ -100,10 +100,18 @@ async def process_score_chunk(
 ) -> None:
     tasks: list[Awaitable[None]] = []
     for score in chunk:
-        beatmap_path = BEATMAPS_PATH / f"{score['map_id']}.osu"
-        await ensure_local_osu_file(beatmap_path, score["map_id"], score["map_md5"])
-
-        tasks.append(recalculate_score(score, beatmap_path, ctx))
+        osu_file_available = await ensure_osu_file_is_available(
+            score["map_id"],
+            expected_md5=score["map_md5"],
+        )
+        if osu_file_available:
+            tasks.append(
+                recalculate_score(
+                    score,
+                    BEATMAPS_PATH / f"{score['map_id']}.osu",
+                    ctx,
+                ),
+            )
 
     await asyncio.gather(*tasks)
 
