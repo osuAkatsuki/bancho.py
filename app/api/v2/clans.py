@@ -1,4 +1,5 @@
 """ bancho.py's v2 apis for interacting with clans """
+
 from __future__ import annotations
 
 from fastapi import APIRouter

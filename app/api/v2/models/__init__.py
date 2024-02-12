@@ -1,4 +1,4 @@
-from __future__ import annotations
+# isort: dont-add-imports
 
 from collections.abc import Mapping
 from typing import Any
@@ -6,7 +6,6 @@ from typing import TypeVar
 
 from pydantic import BaseModel as _pydantic_BaseModel
 from pydantic import ConfigDict
-
 
 T = TypeVar("T", bound="BaseModel")
 

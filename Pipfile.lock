@@ -700,21 +700,21 @@
         },
         "pytest": {
             "hashes": [
-                "sha256:2cf0005922c6ace4a3e2ec8b4080eb0d9753fdc93107415332f50ce9e7994280",
-                "sha256:b090cdf5ed60bf4c45261be03239c2c1c22df034fbffe691abe93cd80cea01d8"
-            ],
-            "index": "pypi",
-            "markers": "python_version >= '3.7'",
-            "version": "==7.4.4"
-        },
-        "pytest-asyncio": {
-            "hashes": [
-                "sha256:2143d9d9375bf372a73260e4114541485e84fca350b0b6b92674ca56ff5f7ea2",
-                "sha256:b0079dfac14b60cd1ce4691fbfb1748fe939db7d0234b5aba97197d10fbe0fef"
+                "sha256:249b1b0864530ba251b7438274c4d251c58d868edaaec8762893ad4a0d71c36c",
+                "sha256:50fb9cbe836c3f20f0dfa99c565201fb75dc54c8d76373cd1bde06b06657bdb6"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==0.23.4"
+            "version": "==8.0.0"
+        },
+        "pytest-asyncio": {
+            "hashes": [
+                "sha256:3a048872a9c4ba14c3e90cc1aa20cbc2def7d01c7c8db3777ec281ba9c057675",
+                "sha256:4e7093259ba018d58ede7d5315131d21923a60f8a6e9ee266ce1589685c89eac"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==0.23.5"
         },
         "python-dotenv": {
             "hashes": [
@@ -727,12 +727,12 @@
         },
         "python-multipart": {
             "hashes": [
-                "sha256:288a6c39b06596c1b988bb6794c6fbc80e6c369e35e5062637df256bee0c9af9",
-                "sha256:b1fef9a53b74c795e2347daac8c54b252d9e0df9c619712691c1cc8021bd3c49"
+                "sha256:613015c642c2f6dc6d22e2d3a4d993683bb4752509ccd87f831dced121ed2f1d",
+                "sha256:999725bf08cf7a071073d157a27cc34f8669af98da0d2435bde1cc1493a50ec3"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.7'",
-            "version": "==0.0.7"
+            "version": "==0.0.8"
         },
         "pytimeparse": {
             "hashes": [

@@ -28,9 +28,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         col = (
             Ansi.LGREEN
             if 200 <= response.status_code < 300
-            else Ansi.LYELLOW
-            if 300 <= response.status_code < 400
-            else Ansi.LRED
+            else Ansi.LYELLOW if 300 <= response.status_code < 400 else Ansi.LRED
         )
 
         url = f"{request.headers['host']}{request['path']}"

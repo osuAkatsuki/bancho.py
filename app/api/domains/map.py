@@ -1,4 +1,5 @@
 """ bmap: static beatmap info (thumbnails, previews, etc.) """
+
 from __future__ import annotations
 
 from fastapi import APIRouter
