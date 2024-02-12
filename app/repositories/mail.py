@@ -112,5 +112,6 @@ async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
         "to_id": to_id,
         "from_id": from_id,
     }
+    await app.state.services.database.execute(query, params)
 
     return cast(list[Mail], [dict(mail._mapping) for mail in all_mail])

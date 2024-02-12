@@ -1523,6 +1523,10 @@ async def osuMarkAsRead(
 ) -> Response:
     target_name = unquote(channel)  # TODO: unquote needed?
     if not target_name:
+        log(
+            f"User {player} attempted to mark a channel as read without a target.",
+            Ansi.LYELLOW,
+        )
         return Response(b"")  # no channel specified
 
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
