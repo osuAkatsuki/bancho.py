@@ -120,7 +120,7 @@ async def bancho_view_online_users() -> Response:
     players = [
         player for player in app.state.sessions.players if not player.is_bot_client
     ]
-    bots = [bots for bots in app.state.sessions.players if bots.is_bot_client]
+    bots = [bot for bot in app.state.sessions.players if bots.is_bot_client]
 
     id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
