@@ -1,0 +1,52 @@
+[tool.poetry]
+name = "bancho-py"
+version = "5.0.0"
+description = "An osu! server implementation optimized for maintainability in modern python"
+authors = ["Akatsuki Team"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "bancho" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+async-timeout = "4.0.3"
+bcrypt = "4.1.2"
+datadog = "0.48.0"
+fastapi = "0.109.2"
+orjson = "3.9.13"
+psutil = "5.9.8"
+python-dotenv = "1.0.1"
+python-multipart = "0.0.9"
+requests = "2.31.0"
+timeago = "1.0.16"
+uvicorn = "0.27.1"
+uvloop = "0.19.0"
+py3rijndael = "0.3.3"
+pytimeparse = "1.1.8"
+pydantic = "2.6.1"
+redis = { extras = ["hiredis"], version = "5.0.1" }
+sqlalchemy = "1.4.41"
+databases = { extras = ["mysql"], version = "0.6.2" }
+akatsuki-pp-py = "1.0.0"
+cryptography = "42.0.2"
+tenacity = "8.2.3"
+httpx = "0.26.0"
+py-cpuinfo = "9.0.0"
+pytest = "8.0.0"
+pytest-asyncio = "0.23.5"
+asgi-lifespan = "2.1.0"
+respx = "0.20.2"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "3.6.1"
+black = "24.1.1"
+isort = "5.13.2"
+autoflake = "2.2.1"
+types-psutil = "5.9.5.20240205"
+types-pymysql = "1.1.0.1"
+types-requests = "2.31.0.20240125"
+mypy = "1.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

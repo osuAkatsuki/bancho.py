@@ -1,4 +1,5 @@
 """Functionality related to Discord interactivity."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,7 +10,6 @@ from tenacity import stop_after_attempt
 from tenacity import wait_exponential
 
 from app.state import services
-
 
 # NOTE: this module currently only implements discord webhooks
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
-from typing import cast
 from typing import TypedDict
+from typing import cast
 
 import app.state.services
-from app._typing import _UnsetSentinel
 from app._typing import UNSET
+from app._typing import _UnsetSentinel
 
 # +------------+--------------+------+-----+---------+----------------+
 # | Field      | Type         | Null | Key | Default | Extra          |
@@ -37,7 +37,6 @@ class Channel(TypedDict):
 
 
 class ChannelUpdateFields(TypedDict, total=False):
-    name: str
     topic: str
     read_priv: int
     write_priv: int
@@ -185,15 +184,17 @@ async def update(
            SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE name = :name
     """
-    values = {"name": name} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "name": name,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM channels
          WHERE name = :name
     """
-    params: dict[str, Any] = {
+    params = {
         "name": name,
     }
     channel = await app.state.services.database.fetch_one(query, params)

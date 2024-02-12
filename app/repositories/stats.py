@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
-from typing import cast
 from typing import TypedDict
+from typing import cast
 
 import app.state.services
-from app._typing import _UnsetSentinel
 from app._typing import UNSET
+from app._typing import _UnsetSentinel
 
 # +--------------+-----------------+------+-----+---------+----------------+
 # | Field        | Type            | Null | Key | Default | Extra          |
@@ -257,8 +257,11 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    values = {"id": player_id, "mode": mode} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": player_id,
+        "mode": mode,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
@@ -266,7 +269,7 @@ async def update(
          WHERE id = :id
            AND mode = :mode
     """
-    params: dict[str, Any] = {
+    params = {
         "id": player_id,
         "mode": mode,
     }

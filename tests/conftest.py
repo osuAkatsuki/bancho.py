@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+import httpx
 import pytest
 from asgi_lifespan import LifespanManager
 from asgi_lifespan._types import ASGIApp
@@ -19,6 +20,12 @@ from app.api.init_api import asgi_app
 async def app() -> AsyncIterator[ASGIApp]:
     async with LifespanManager(asgi_app) as manager:
         yield manager.app
+
+
+@pytest.fixture
+async def http_client(app: ASGIApp) -> AsyncIterator[httpx.AsyncClient]:
+    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+        yield client
 
 
 pytest_plugins = []

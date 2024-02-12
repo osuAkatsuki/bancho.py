@@ -18,11 +18,11 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import NamedTuple
 from typing import NoReturn
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing import TypedDict
 from urllib.parse import urlparse
 
@@ -39,13 +39,13 @@ import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
-from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
 from app.objects.beatmap import RankedStatus
+from app.objects.beatmap import ensure_local_osu_file
 from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
@@ -56,6 +56,7 @@ from app.objects.match import SlotStatus
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
+from app.repositories import logs as logs_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.usecases.performance import ScoreParams
@@ -120,9 +121,6 @@ class CommandSet:
 
         return wrapper
 
-
-# TODO: refactor help commands into some base ver
-#       since they're all the same anyway lol.
 
 mp_commands = CommandSet("mp", "Multiplayer commands.")
 pool_commands = CommandSet("pool", "Mappool commands.")
@@ -416,11 +414,7 @@ async def top(ctx: Context) -> str | None:
     )
 
 
-# TODO: !compare (compare to previous !last/!top post's map)
-
-
-class ParsingError(str):
-    ...
+class ParsingError(str): ...
 
 
 def parse__with__command_args(
@@ -428,9 +422,6 @@ def parse__with__command_args(
     args: Sequence[str],
 ) -> Mapping[str, Any] | ParsingError:
     """Parse arguments for the !with command."""
-
-    # tried to balance complexity vs correctness for this function
-    # TODO: it can surely be cleaned up further - need to rethink it?
 
     if not args or len(args) > 4:
         return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
@@ -751,16 +742,11 @@ async def addnote(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await app.state.services.database.execute(
-        "INSERT INTO logs "
-        "(`from`, `to`, `action`, `msg`, `time`) "
-        "VALUES (:from, :to, :action, :msg, NOW())",
-        {
-            "from": ctx.player.id,
-            "to": target.id,
-            "action": "note",
-            "msg": " ".join(ctx.args[1:]),
-        },
+    await logs_repo.create(
+        _from=ctx.player.id,
+        to=target.id,
+        action="note",
+        msg=" ".join(ctx.args[1:]),
     )
 
     return f"Added note to {target}."
@@ -872,13 +858,13 @@ async def user(ctx: Context) -> str | None:
 
     return "\n".join(
         (
-            f'[{"Bot" if player.bot_client else "Player"}] {player.full_name} ({player.id})',
+            f'[{"Bot" if player.is_bot_client else "Player"}] {player.full_name} ({player.id})',
             f"Privileges: {priv_list}",
             f"Donator: {donator_info}",
             f"Channels: {[c._name for c in player.channels]}",
             f"Logged in: {timeago.format(player.login_time)}",
             f"Last server interaction: {timeago.format(player.last_recv_time)}",
-            f"osu! build: {osu_version} | Tourney: {player.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {player.is_tourney_client}",
             f"Silenced: {player.silenced} | Spectating: {player.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {player.recent_score}",
@@ -1237,7 +1223,7 @@ async def server(ctx: Context) -> str | None:
     # current state of settings
     mirror_search_url = urlparse(app.settings.MIRROR_SEARCH_ENDPOINT).netloc
     mirror_download_url = urlparse(app.settings.MIRROR_DOWNLOAD_ENDPOINT).netloc
-    using_osuapi = app.settings.OSU_API_KEY != ""
+    using_osuapi = bool(app.settings.OSU_API_KEY)
     advanced_mode = app.settings.DEVELOPER_MODE
     auto_logging = app.settings.AUTOMATICALLY_REPORT_PROBLEMS
 
@@ -1321,8 +1307,6 @@ if app.settings.DEVELOPER_MODE:
 
         if "__py" in __py_namespace:
             del __py_namespace["__py"]
-
-        # TODO: perhaps size checks?
 
         if not isinstance(ret, str):
             ret = pprint.pformat(ret, compact=True)

@@ -13,7 +13,7 @@ import app.packets
     ],
 )
 def test_write_user_id(test_input, expected):
-    assert app.packets.user_id(test_input) == expected
+    assert app.packets.login_reply(test_input) == expected
 
 
 @pytest.mark.parametrize(

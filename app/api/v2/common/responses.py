@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
-from typing import cast
 from typing import Generic
 from typing import Literal
 from typing import TypeVar
+from typing import cast
 
 from pydantic import BaseModel
 
 from app.api.v2.common import json
-
 
 T = TypeVar("T")
 
@@ -39,7 +38,6 @@ class Failure(BaseModel):
 
 
 def failure(
-    # TODO: error code
     message: str,
     status_code: int = 400,
     headers: dict[str, Any] | None = None,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tomllib
 from datetime import date
 
 from dotenv import load_dotenv
@@ -42,7 +43,7 @@ REDIS_DB = int(os.environ["REDIS_DB"])
 REDIS_AUTH_STRING = f"{REDIS_USER}:{REDIS_PASS}@" if REDIS_USER and REDIS_PASS else ""
 REDIS_DSN = f"redis://{REDIS_AUTH_STRING}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
-OSU_API_KEY = os.environ["OSU_API_KEY"]
+OSU_API_KEY = os.environ.get("OSU_API_KEY") or None
 
 DOMAIN = os.environ["DOMAIN"]
 MIRROR_SEARCH_ENDPOINT = os.environ["MIRROR_SEARCH_ENDPOINT"]
@@ -78,7 +79,5 @@ AUTOMATICALLY_REPORT_PROBLEMS = read_bool(os.environ["AUTOMATICALLY_REPORT_PROBL
 ##          you could put your server at risk.
 DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 
-## WARNING touch this if you know how
-##          the migrations system works.
-##          you'll regret it.
-VERSION = "4.8.1"
+with open("pyproject.toml", "rb") as f:
+    VERSION = tomllib.load(f)["tool"]["poetry"]["version"]

@@ -13,10 +13,10 @@ from enum import IntEnum
 from enum import unique
 from functools import cache
 from functools import lru_cache
-from typing import Any
-from typing import cast
-from typing import NamedTuple
 from typing import TYPE_CHECKING
+from typing import Any
+from typing import NamedTuple
+from typing import cast
 
 # from app.objects.beatmap import BeatmapInfo
 
@@ -150,7 +150,6 @@ class ServerPackets(IntEnum):
         return f"<{self.name} ({self.value})>"
 
 
-# TODO: clean this up
 @unique
 class osuTypes(IntEnum):
     # integral
@@ -279,12 +278,10 @@ class MultiplayerMatch:
 
 
 class BasePacket(ABC):
-    def __init__(self, reader: BanchoPacketReader) -> None:
-        ...
+    def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None:
-        ...
+    async def handle(self, player: Player) -> None: ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]
@@ -701,7 +698,7 @@ _noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
     osuTypes.string: write_string,
     osuTypes.i32_list: write_i32_list,
     osuTypes.scoreframe: write_scoreframe,
-    # TODO: write replayframe & bundle
+    # not (yet?) implemented: write replayframe & bundle
 }
 
 _expand_types: dict[osuTypes, Callable[..., bytearray]] = {
@@ -733,22 +730,28 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 # packets
 #
 
-# TODO: fix consistency of parameter names
+
+class LoginFailureReason(IntEnum):
+    AUTHENTICATION_FAILED = -1
+    OLD_CLIENT = -2
+    BANNED = -3
+    # BANNED = -4
+    ERROR_OCCURRED = -5
+    NEEDS_SUPPORTER = -6
+    PASSWORD_RESET = -7
+    REQUIRES_VERIFICATION = -8
 
 
 # packet id: 5
 @cache
-def user_id(user_id: int) -> bytes:
-    # id responses:
-    # -1: authentication failed
-    # -2: old client
-    # -3: banned
-    # -4: banned
-    # -5: error occurred
-    # -6: needs supporter
-    # -7: password reset
-    # -8: requires verification
-    # ??: valid id
+def login_reply(user_id: int) -> bytes:
+    """\
+    Construct a login reply packet.
+
+    In successful cases, we'll send the user's ID.
+
+    In failure cases, we'll send a negative integer of type `LoginFailureReason`.
+    """
     return write(ServerPackets.USER_ID, (user_id, osuTypes.i32))
 
 
@@ -851,11 +854,10 @@ def _user_stats(
         (plays, osuTypes.i32),
         (total_score, osuTypes.i64),
         (global_rank, osuTypes.i32),
-        (pp, osuTypes.i16),  # why not u16 peppy :(
+        (pp, osuTypes.i16),
     )
 
 
-# TODO: this is implementation-specific, move it out
 def user_stats(player: Player) -> bytes:
     gm_stats = player.gm_stats
     if gm_stats.pp > 0x7FFF:
@@ -1151,7 +1153,6 @@ def _user_presence(
     )
 
 
-# TODO: this is implementation-specific, move it out
 def user_presence(player: Player) -> bytes:
     return write(
         ServerPackets.USER_PRESENCE,

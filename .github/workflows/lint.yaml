@@ -1,11 +1,11 @@
 name: Lint
 on:
   push:
+    branches:
+      - master
     paths:
       - "**.py"
   pull_request:
-    paths:
-      - "**.py"
 
 jobs:
   mypy:
@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install pipenv
-        run: python -m pip install --upgrade pipenv wheel
-      # TODO: add caching of Pipfile.lock
+      - name: Install poetry
+        run: python -m pip install --upgrade poetry wheel
+      # TODO: add caching of Poetry.lock
       - name: Install dependencies
-        run: pipenv install --dev --deploy
+        run: poetry install --no-root --with dev
       - name: Run mypy
-        run: pipenv run mypy .
+        run: poetry run mypy .

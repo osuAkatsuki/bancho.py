@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import textwrap
 from typing import Any
-from typing import cast
 from typing import TypedDict
+from typing import cast
 
 import app.state.services
-from app._typing import _UnsetSentinel
 from app._typing import UNSET
+from app._typing import _UnsetSentinel
 from app.utils import make_safe_name
 
 # +-------------------+---------------+------+-----+---------+----------------+
@@ -278,15 +278,17 @@ async def update(
            SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    values = {"id": id} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": id,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM users
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     player = await app.state.services.database.fetch_one(query, params)

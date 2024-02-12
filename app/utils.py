@@ -15,43 +15,14 @@ from typing import Any
 from typing import TypedDict
 from typing import TypeVar
 
+import httpx
 import orjson
 import pymysql
-import requests
-from fastapi import status
 
 import app.settings
 from app.logging import Ansi
 from app.logging import log
 from app.logging import printc
-
-__all__ = (
-    # TODO: organize/sort these
-    "make_safe_name",
-    "download_achievement_images",
-    "download_default_avatar",
-    "seconds_readable",
-    "check_connection",
-    "processes_listening_on_unix_socket",
-    "running_via_asgi_webserver",
-    "_install_synchronous_excepthook",
-    "get_appropriate_stacktrace",
-    "is_valid_inet_address",
-    "is_valid_unix_address",
-    "pymysql_encode",
-    "escape_enum",
-    "ensure_supported_platform",
-    "ensure_directory_structure",
-    "setup_runtime_environment",
-    "_install_debugging_hooks",
-    "display_startup_dialog",
-    "create_config_from_default",
-    "orjson_serialize_to_str",
-    "get_media_type",
-    "has_jpeg_headers_and_trailers",
-    "has_png_headers_and_trailers",
-    "is_running_as_admin",
-)
 
 T = TypeVar("T")
 
@@ -99,7 +70,7 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
     for ach in achs:
-        resp = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
+        resp = httpx.get(f"https://assets.ppy.sh/medals/client/{ach}")
         if resp.status_code != 200:
             return False
 
@@ -122,10 +93,13 @@ def download_achievement_images(achievements_path: Path) -> None:
         log("Failed to download achievement images.", Ansi.LRED)
         achievements_path.rmdir()
 
+        # allow passthrough (don't hard crash) as the server will
+        # _mostly_ work in this state.
+
 
 def download_default_avatar(default_avatar_path: Path) -> None:
     """Download an avatar to use as the server's default."""
-    resp = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
+    resp = httpx.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
 
     if resp.status_code != 200:
         log("Failed to fetch default avatar.", Ansi.LRED)
@@ -289,7 +263,7 @@ def is_valid_inet_address(address: str) -> bool:
 
 def is_valid_unix_address(address: str) -> bool:
     """Check whether address is a valid unix address."""
-    return address.endswith(".sock")  # TODO: improve
+    return address.endswith(".sock")
 
 
 def pymysql_encode(

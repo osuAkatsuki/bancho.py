@@ -8,9 +8,10 @@ RUN apt update && apt install --no-install-recommends -y \
     git curl build-essential=12.9 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
-RUN pip install -U pip setuptools
-RUN pip install -r requirements.txt
+COPY pyproject.toml poetry.lock ./
+RUN pip install -U pip poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-root
 
 # NOTE: done last to avoid re-run of previous steps
 COPY . .

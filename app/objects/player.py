@@ -5,14 +5,14 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
 from enum import IntEnum
+from enum import StrEnum
 from enum import unique
 from functools import cached_property
-from typing import Any
-from typing import cast
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import TypedDict
+from typing import cast
 
 import databases.core
 
@@ -34,17 +34,19 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
+from app.objects.score import Score
+from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
+    from app.constants.privileges import ClanPrivileges
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
     from app.objects.score import Score
-    from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
@@ -112,10 +114,11 @@ class Status:
 class LastNp(TypedDict):
     bmap: Beatmap
     mode_vn: int
+    mods: Mods | None
     timeout: float
 
 
-class OsuStream(str, Enum):
+class OsuStream(StrEnum):
     STABLE = "stable"
     BETA = "beta"
     CUTTINGEDGE = "cuttingedge"
@@ -193,13 +196,13 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    bot_client: `bool`
+    is_bot_client: `bool`
         Whether this is a bot account.
 
-    tourney_client: `bool`
+    is_tourney_client: `bool`
         Whether this is a management/spectator tourney client.
 
-    _queue: `bytearray`
+    _packet_queue: `bytearray`
         Bytes enqueued to the player which will be transmitted
         at the tail end of their next connection to the server.
         XXX: cls.enqueue() will add data to this queue, and
@@ -284,23 +287,22 @@ class Player:
         # subject to possible change in the future,
         # although if anything, bot accounts will
         # probably just use the /api/ routes?
-        self.bot_client = extras.get("bot_client", False)
-        if self.bot_client:
+        self.is_bot_client = extras.get("is_bot_client", False)
+        if self.is_bot_client:
             self.enqueue = lambda data: None  # type: ignore
 
-        self.tourney_client = extras.get("tourney_client", False)
+        self.is_tourney_client = extras.get("is_tourney_client", False)
 
         self.api_key = extras.get("api_key", None)
 
-        # packet queue
-        self._queue = bytearray()
+        self._packet_queue = bytearray()
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
     @property
     def is_online(self) -> bool:
-        return self.token != ""
+        return bool(self.token != "")
 
     @property
     def url(self) -> str:
@@ -470,11 +472,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.UNRESTRICTED)
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "restrict", "msg": reason},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="restrict",
+            msg=reason,
         )
 
         for mode in (0, 1, 2, 3, 4, 5, 6, 8):
@@ -504,11 +506,11 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.UNRESTRICTED)
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "unrestrict", "msg": reason},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="unrestrict",
+            msg=reason,
         )
 
         if not self.is_online:
@@ -548,11 +550,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :msg, NOW())",
-            {"from": admin.id, "to": self.id, "action": "silence", "msg": reason},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="silence",
+            msg=reason,
         )
 
         # inform the user's client.
@@ -576,11 +578,11 @@ class Player:
             {"silence_end": self.silence_end, "user_id": self.id},
         )
 
-        await app.state.services.database.execute(
-            "INSERT INTO logs "
-            "(`from`, `to`, `action`, `msg`, `time`) "
-            "VALUES (:from, :to, :action, :reason, NOW())",
-            {"from": admin.id, "to": self.id, "reason": reason, "action": "unsilence"},
+        await logs_repo.create(
+            _from=admin.id,
+            to=self.id,
+            action="unsilence",
+            msg=reason,
         )
 
         # inform the user's client
@@ -1015,13 +1017,13 @@ class Player:
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
-        self._queue += data
+        self._packet_queue += data
 
     def dequeue(self) -> bytes | None:
         """Get data from the queue to send to the client."""
-        if self._queue:
-            data = bytes(self._queue)
-            self._queue.clear()
+        if self._packet_queue:
+            data = bytes(self._packet_queue)
+            self._packet_queue.clear()
             return data
 
         return None
