@@ -1,8 +1,5 @@
 [tool.poetry]
 name = "bancho-py"
-## WARNING touch this if you know how
-##          the migrations system works.
-##          you'll regret it.
 version = "5.0.0"
 description = "An osu! server implementation optimized for maintainability in modern python"
 authors = ["Akatsuki Team"]
