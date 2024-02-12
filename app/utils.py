@@ -15,9 +15,9 @@ from typing import Any
 from typing import TypedDict
 from typing import TypeVar
 
+import httpx
 import orjson
 import pymysql
-import requests
 
 import app.settings
 from app.logging import Ansi
@@ -70,7 +70,7 @@ def _download_achievement_images_osu(achievements_path: Path) -> bool:
     log("Downloading achievement images from osu!.", Ansi.LCYAN)
 
     for ach in achs:
-        resp = requests.get(f"https://assets.ppy.sh/medals/client/{ach}")
+        resp = httpx.get(f"https://assets.ppy.sh/medals/client/{ach}")
         if resp.status_code != 200:
             return False
 
@@ -99,7 +99,7 @@ def download_achievement_images(achievements_path: Path) -> None:
 
 def download_default_avatar(default_avatar_path: Path) -> None:
     """Download an avatar to use as the server's default."""
-    resp = requests.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
+    resp = httpx.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
 
     if resp.status_code != 200:
         log("Failed to fetch default avatar.", Ansi.LRED)
