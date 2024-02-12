@@ -1577,17 +1577,18 @@ async def checkUpdates(
 
 
 if app.settings.REDIRECT_OSU_URLS:
-
-    async def osu_redirect(file_path: str) -> Response:
+    # NOTE: this will likely be removed with the addition of a frontend.
+    async def osu_redirect(request: Request, _: int = Path(...)) -> Response:
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{file_path}",
+            url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
     for pattern in (
-        "/beatmapsets/{file_path:path}",
-        "/beatmaps/{file_path:path}",
-        "/community/forums/topics/{file_path:path}",
+        "/beatmapsets/{_}",
+        "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
+        "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
 
