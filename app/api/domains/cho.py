@@ -62,6 +62,7 @@ from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
 from app.repositories import ingame_logins as logins_repo
+from app.repositories import mail as mail_repo
 from app.repositories import players as players_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
@@ -90,7 +91,7 @@ async def bancho_http_handler() -> Response:
     """Handle a request from a web browser."""
     new_line = "\n"
     matches = [m for m in app.state.sessions.matches if m is not None]
-    players = [p for p in app.state.sessions.players if not p.bot_client]
+    players = [p for p in app.state.sessions.players if not p.is_bot_client]
 
     packets = app.state.packets["all"]
 
@@ -116,8 +117,13 @@ async def bancho_view_online_users() -> Response:
     """see who's online"""
     new_line = "\n"
 
-    players = [player for player in app.state.sessions.players if not player.bot_client]
-    bots = [bots for bots in app.state.sessions.players if bots.bot_client]
+    players: list[Player] = []
+    bots: list[Player] = []
+    for p in app.state.sessions.players:
+        if p.is_bot_client:
+            bots.append(p)
+        else:
+            players.append(p)
 
     id_max_length = len(str(max(p.id for p in app.state.sessions.players)))
 
@@ -861,7 +867,7 @@ async def handle_osu_login_request(
         donor_end=user_info["donor_end"],
         client_details=client_details,
         login_time=login_time,
-        tourney_client=osu_version.stream == "tourney",
+        is_tourney_client=osu_version.stream == "tourney",
         api_key=user_info["api_key"],
     )
 
@@ -946,35 +952,32 @@ async def handle_osu_login_request(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await db_conn.fetch_all(
-            "SELECT m.`msg`, m.`time`, m.`from_id`, "
-            "(SELECT name FROM users WHERE id = m.`from_id`) AS `from`, "
-            "(SELECT name FROM users WHERE id = m.`to_id`) AS `to` "
-            "FROM `mail` m WHERE m.`to_id` = :to AND m.`read` = 0",
-            {"to": player.id},
+        mail_rows = await mail_repo.fetch_all_mail_to_user(
+            user_id=player.id,
+            read=False,
         )
 
         if mail_rows:
-            sent_to = set()  # ids
+            sent_to: set[int] = set()
 
             for msg in mail_rows:
                 # Add "Unread messages" header as the first message
                 # for any given sender, to make it clear that the
                 # messages are coming from the mail system.
-                if msg["from"] not in sent_to:
+                if msg["from_id"] not in sent_to:
                     data += app.packets.send_message(
-                        sender=msg["from"],
+                        sender=msg["from_name"],
                         msg="Unread messages",
-                        recipient=msg["to"],
+                        recipient=msg["to_name"],
                         sender_id=msg["from_id"],
                     )
-                    sent_to.add(msg["from"])
+                    sent_to.add(msg["from_id"])
 
                 msg_time = datetime.fromtimestamp(msg["time"])
                 data += app.packets.send_message(
-                    sender=msg["from"],
+                    sender=msg["from_name"],
                     msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
-                    recipient=msg["to"],
+                    recipient=msg["to_name"],
                     sender_id=msg["from_id"],
                 )
 
@@ -1218,11 +1221,10 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await app.state.services.database.execute(
-                "INSERT INTO `mail` "
-                "(`from_id`, `to_id`, `msg`, `time`) "
-                "VALUES (:from, :to, :msg, UNIX_TIMESTAMP())",
-                {"from": player.id, "to": target.id, "msg": msg},
+            await mail_repo.create(
+                from_id=player.id,
+                to_id=target.id,
+                msg=msg,
             )
         else:
             # messaging the bot, check for commands & /np.
