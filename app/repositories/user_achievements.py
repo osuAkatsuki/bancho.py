@@ -34,7 +34,10 @@ async def create(user_id: int, achievement_id: int) -> UserAchievement:
         INSERT INTO user_achievements (userid, achid)
                 VALUES (:user_id, :achievement_id)
     """
-    params: dict[str, Any] = {"user_id": user_id, "achievement_id": achievement_id}
+    params: dict[str, Any] = {
+        "user_id": user_id,
+        "achievement_id": achievement_id,
+    }
     await app.state.services.database.execute(query, params)
 
     query = f"""\
@@ -60,7 +63,9 @@ async def fetch_many(
           FROM user_achievements
           WHERE userid = :user_id
     """
-    params: dict[str, Any] = {"user_id": user_id}
+    params: dict[str, Any] = {
+        "user_id": user_id,
+    }
 
     if not isinstance(page, _UnsetSentinel) and not isinstance(
         page_size,

@@ -157,7 +157,9 @@ async def create(
           FROM scores
          WHERE id = :id
     """
-    params = {"id": rec_id}
+    params = {
+        "id": rec_id,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
 
     assert rec is not None
@@ -170,7 +172,9 @@ async def fetch_one(id: int) -> Score | None:
           FROM scores
          WHERE id = :id
     """
-    params: dict[str, Any] = {"id": id}
+    params: dict[str, Any] = {
+        "id": id,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
 
     return cast(Score, dict(rec._mapping)) if rec is not None else None
@@ -258,15 +262,19 @@ async def update(
            SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
          WHERE id = :id
     """
-    values = {"id": id} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": id,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
          WHERE id = :id
     """
-    params: dict[str, Any] = {"id": id}
+    params = {
+        "id": id,
+    }
     rec = await app.state.services.database.fetch_one(query, params)
     return cast(Score, dict(rec._mapping)) if rec is not None else None
 

@@ -56,7 +56,7 @@ async def create(
         INSERT INTO comments (target_id, target_type, userid, time, comment, colour)
              VALUES (:target_id, :target_type, :userid, :time, :comment, :colour)
     """
-    params = {
+    params: dict[str, Any] = {
         "target_id": target_id,
         "target_type": target_type,
         "userid": userid,

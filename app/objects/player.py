@@ -5,8 +5,8 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
 from enum import IntEnum
+from enum import StrEnum
 from enum import unique
 from functools import cached_property
 from typing import Any
@@ -114,10 +114,11 @@ class Status:
 class LastNp(TypedDict):
     bmap: Beatmap
     mode_vn: int
+    mods: Mods | None
     timeout: float
 
 
-class OsuStream(str, Enum):
+class OsuStream(StrEnum):
     STABLE = "stable"
     BETA = "beta"
     CUTTINGEDGE = "cuttingedge"
@@ -302,7 +303,7 @@ class Player:
 
     @property
     def is_online(self) -> bool:
-        return self.token != ""
+        return bool(self.token != "")
 
     @property
     def url(self) -> str:

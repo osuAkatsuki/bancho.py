@@ -90,7 +90,12 @@ async def fetch_one(
            AND tag = COALESCE(:tag, tag)
            AND owner = COALESCE(:owner, owner)
     """
-    params: dict[str, Any] = {"id": id, "name": name, "tag": tag, "owner": owner}
+    params: dict[str, Any] = {
+        "id": id,
+        "name": name,
+        "tag": tag,
+        "owner": owner,
+    }
     clan = await app.state.services.database.fetch_one(query, params)
 
     return cast(Clan, dict(clan._mapping)) if clan is not None else None
@@ -150,15 +155,17 @@ async def update(
            SET {",".join(f"{k} = :{k}" for k in update_fields)}
          WHERE id = :id
     """
-    values = {"id": id} | update_fields
-    await app.state.services.database.execute(query, values)
+    params: dict[str, Any] = {
+        "id": id,
+    } | update_fields
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}
           FROM clans
          WHERE id = :id
     """
-    params: dict[str, Any] = {
+    params = {
         "id": id,
     }
     clan = await app.state.services.database.fetch_one(query, params)
@@ -183,6 +190,8 @@ async def delete(id: int) -> Clan | None:
         DELETE FROM clans
          WHERE id = :id
     """
-    params = {"id": id}
+    params = {
+        "id": id,
+    }
     clan = await app.state.services.database.execute(query, params)
     return cast(Clan, dict(clan._mapping)) if clan is not None else None

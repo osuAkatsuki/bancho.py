@@ -41,6 +41,8 @@ __all__ = (
     "Match",
 )
 
+MAX_MATCH_NAME_LENGTH = 50
+
 
 @unique
 @pymysql_encode(escape_enum)

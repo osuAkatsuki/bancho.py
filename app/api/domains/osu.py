@@ -36,14 +36,13 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
-from py3rijndael import Pkcs7Padding
-from py3rijndael import RijndaelCbc
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.packets
 import app.settings
 import app.state
 import app.utils
+from app import encryption
 from app._typing import UNSET
 from app.constants import regexes
 from app.constants.clientflags import LastFMFlags
@@ -106,7 +105,7 @@ def authenticate_player_session(
         # player login incorrect
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=err,  # TODO: make sure this works
+            detail=err,
         )
 
     return wrapper
@@ -114,106 +113,20 @@ def authenticate_player_session(
 
 """ /web/ handlers """
 
-# TODO
+# Unhandled endpoints:
+# POST /web/osu-error.php
 # POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
-OsuClientModes = Literal[
-    "Menu",
-    "Edit",
-    "Play",
-    "Exit",
-    "SelectEdit",
-    "SelectPlay",
-    "SelectDrawings",
-    "Rank",
-    "Update",
-    "Busy",
-    "Unknown",
-    "Lobby",
-    "MatchSetup",
-    "SelectMulti",
-    "RankingVs",
-    "OnlineSelection",
-    "OptionsOffsetWizard",
-    "RankingTagCoop",
-    "RankingTeam",
-    "BeatmapImport",
-    "PackageUpdater",
-    "Benchmark",
-    "Tourney",
-    "Charts",
-]
-
-OsuClientGameModes = Literal[
-    "Osu",
-    "Taiko",
-    "CatchTheBeat",
-    "OsuMania",
-]
-
-
-@router.post("/web/osu-error.php")
-async def osuError(
-    username: str | None = Form(None, alias="u"),
-    pw_md5: str | None = Form(None, alias="h"),
-    user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: OsuClientModes = Form(..., alias="osumode"),
-    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
-    game_time: int = Form(..., alias="gametime", ge=0),
-    audio_time: int = Form(..., alias="audiotime"),
-    culture: str = Form(...),
-    map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
-    map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
-    exception: str = Form(...),
-    feedback: str | None = Form(None),
-    stacktrace: str = Form(...),
-    soft: bool = Form(...),
-    map_count: int = Form(..., alias="beatmap_count", ge=0),
-    compatibility: bool = Form(...),
-    ram_used: int = Form(..., alias="ram", ge=0),
-    osu_version: str = Form(..., alias="version"),
-    exe_hash: str = Form(..., alias="exehash"),
-    config: str = Form(...),
-    screenshot_file: UploadFile | None = File(None, alias="ss"),
-) -> Response:
-    """Handle an error submitted from the osu! client."""
-    if not app.settings.DEBUG:
-        # only handle osu-error in debug mode
-        return Response(b"")
-
-    if username and pw_md5:
-        player = await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-        if not player:
-            # player login incorrect
-            await app.state.services.log_strange_occurrence("osu-error auth failed")
-            player = None
-    else:
-        player = None
-
-    err_desc = f"{feedback} ({exception})"
-    log(f'{player or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
-
-    # NOTE: this stacktrace can be a LOT of data
-    if app.settings.DEBUG and len(stacktrace) < 2000:
-        printc(stacktrace[:-2], Ansi.LMAGENTA)
-
-    # TODO: save error in db?
-
-    return Response(b"")
-
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
     player: Player = Depends(authenticate_player_session(Form, "u", "p")),
     endpoint_version: int = Form(..., alias="v"),
-    screenshot_file: UploadFile = File(..., alias="ss"),  # TODO: why can't i use bytes?
+    screenshot_file: UploadFile = File(..., alias="ss"),
 ) -> Response:
     with memoryview(await screenshot_file.read()) as screenshot_view:
         # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
@@ -406,8 +319,6 @@ async def lastFM(
 
             return Response(b"-3")
 
-        # TODO: make a tool to remove the flags & send this as a dm.
-        #       also add to db so they never are restricted on first one.
         player.enqueue(
             app.packets.notification(
                 "\n".join(
@@ -547,8 +458,6 @@ async def osuSearchSetHandler(
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
 ) -> Response:
-    # TODO: refactor this to use the new internal bmap(set) api
-
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
@@ -572,15 +481,16 @@ async def osuSearchSetHandler(
         # TODO: get from osu!
         return Response(b"")
 
+    rating = 10.0  # TODO: real data
     bmapset = dict(rec._mapping)
 
     return Response(
         (
             "{set_id}.osz|{artist}|{title}|{creator}|"
-            "{status}|10.0|{last_update}|{set_id}|"  # TODO: rating
+            "{status}|{rating:.1f}|{last_update}|{set_id}|"
             "0|0|0|0|0"
         )
-        .format(**bmapset)
+        .format(**bmapset, rating=rating)
         .encode(),
     )
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
@@ -608,7 +518,6 @@ def parse_form_data_score_params(
         replay_file = score_data.getlist("score")[1]
         assert isinstance(replay_file, StarletteUploadFile), "Invalid replay data"
     except AssertionError as exc:
-        # TODO: perhaps better logging?
         log(f"Failed to validate score multipart data: ({exc.args[0]})", Ansi.LRED)
         return None
     else:
@@ -616,32 +525,6 @@ def parse_form_data_score_params(
             score_data_b64.encode(),
             replay_file,
         )
-
-
-def decrypt_score_aes_data(
-    # to decode
-    score_data_b64: bytes,
-    client_hash_b64: bytes,
-    # used for decoding
-    iv_b64: bytes,
-    osu_version: str,
-) -> tuple[list[str], str]:
-    """Decrypt the base64'ed score data."""
-    # TODO: perhaps this should return TypedDict?
-
-    # attempt to decrypt score data
-    aes = RijndaelCbc(
-        key=f"osu!-scoreburgr---------{osu_version}".encode(),
-        iv=b64decode(iv_b64),
-        padding=Pkcs7Padding(32),
-        block_size=32,
-    )
-
-    score_data = aes.decrypt(b64decode(score_data_b64)).decode().split(":")
-    client_hash_decoded = aes.decrypt(b64decode(client_hash_b64)).decode()
-
-    # score data is delimited by colons (:).
-    return score_data, client_hash_decoded
 
 
 @router.post("/web/osu-submit-modular-selector.php")
@@ -659,13 +542,11 @@ async def osuSubmitModularSelector(
     updated_beatmap_hash: str = Form(..., alias="bmk"),
     storyboard_md5: str | None = Form(None, alias="sbk"),
     iv_b64: bytes = Form(..., alias="iv"),
-    unique_ids: str = Form(..., alias="c1"),  # TODO: more validaton
-    score_time: int = Form(..., alias="st"),  # TODO: is this real name?
+    unique_ids: str = Form(..., alias="c1"),
+    score_time: int = Form(..., alias="st"),
     pw_md5: str = Form(..., alias="pass"),
-    osu_version: str = Form(..., alias="osuver"),  # TODO: regex
+    osu_version: str = Form(..., alias="osuver"),
     client_hash_b64: bytes = Form(..., alias="s"),
-    # TODO: do these need to be Optional?
-    # TODO: validate this is actually what it is
     fl_cheat_screenshot: bytes | None = File(None, alias="i"),
 ) -> Response:
     """Handle a score submission from an osu! client with an active session."""
@@ -685,7 +566,7 @@ async def osuSubmitModularSelector(
     score_data_b64, replay_file = score_parameters
 
     # decrypt the score data (aes)
-    score_data, client_hash_decoded = decrypt_score_aes_data(
+    score_data, client_hash_decoded = encryption.decrypt_score_aes_data(
         score_data_b64,
         client_hash_b64,
         iv_b64,
@@ -823,26 +704,7 @@ async def osuSubmitModularSelector(
 
         score.time_elapsed = score_time if score.passed else fail_time
 
-        if (  # check for pp caps on ranked & approved maps for appropriate players.
-            score.bmap.awards_ranked_pp
-            and not (
-                score.player.priv & Privileges.WHITELISTED or score.player.restricted
-            )
-        ):
-            # Get the PP cap for the current context.
-            """# TODO: find where to put autoban pp
-            pp_cap = app.settings.AUTOBAN_PP[score.mode][score.mods & Mods.FLASHLIGHT != 0]
-
-            if score.pp > pp_cap:
-                await score.player.restrict(
-                    admin=app.state.sessions.bot,
-                    reason=f"[{score.mode!r} {score.mods!r}] autoban @ {score.pp:.2f}pp",
-                )
-
-                # refresh their client state
-                if score.player.online:
-                    score.player.logout()
-            """
+        # TODO: re-implement pp caps for non-whitelisted players?
 
         """ Score submission checks completed; submit the score. """
 
@@ -1113,12 +975,7 @@ async def osuSubmitModularSelector(
     """ score submission charts """
 
     # charts are only displayed for passes vanilla gamemodes.
-    if not score.passed or score.mode not in (
-        GameMode.VANILLA_OSU,
-        GameMode.VANILLA_TAIKO,
-        GameMode.VANILLA_CATCH,
-        GameMode.VANILLA_MANIA,
-    ):
+    if not score.passed:  # TODO: check if this is correct
         response = b"error: no"
     else:
         # construct and send achievements & ranking charts to the client
@@ -1413,7 +1270,7 @@ async def getScores(
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
-    map_filename: str = Query(..., alias="f"),  # TODO: regex?
+    map_filename: str = Query(..., alias="f"),
     mode_arg: int = Query(..., alias="m", ge=0, le=3),
     map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
@@ -1600,8 +1457,8 @@ async def osuComment(
         ret: list[str] = []
 
         for cmt in comments:
-            # TODO: maybe support player/creator colours?
-            # pretty expensive for very low gain, but completion :D
+            # note: this implementation does not support
+            #       "player" or "creator" comment colours
             if cmt["priv"] & Privileges.NOMINATOR:
                 fmt = "bat"
             elif cmt["priv"] & Privileges.DONATOR:
@@ -1637,8 +1494,12 @@ async def osuComment(
 
         if colour and not player.priv & Privileges.DONATOR:
             # only supporters can use colours.
-            # TODO: should we be restricting them?
             colour = None
+
+            log(
+                f"User {player} attempted to use a coloured comment without "
+                "supporter status. Submitting comment without a colour.",
+            )
 
         # insert into sql
         await comments_repo.create(
@@ -1691,7 +1552,7 @@ async def banchoConnect(
     client_hash: str | None = Query(None, alias="ch"),
     retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ) -> Response:
-    return Response(b"")  # TODO
+    return Response(b"")
 
 
 _checkupdates_cache = {  # default timeout is 1h, set on request.
@@ -1803,8 +1664,8 @@ async def register_account(
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
-    #
-    # TODO: allow nginx to be optional
+    # XXX: require/validate these headers; they are used later
+    # on in the registration process for resolving geolocation
     forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
     real_ip: str = Header(..., alias="X-Real-IP"),
 ) -> Response:
