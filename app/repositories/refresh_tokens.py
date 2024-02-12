@@ -12,13 +12,13 @@ import app.state.services
 from app.api.v2.common import json
 
 
-def create_refresh_token_key(code: Union[UUID, str]) -> str:
+def create_refresh_token_key(code: UUID | str) -> str:
     return f"bancho:refresh_tokens:{code}"
 
 
 async def create(
-    refresh_token: Union[UUID, str],
-    access_token: Union[UUID, str],
+    refresh_token: UUID | str,
+    access_token: UUID | str,
     client_id: int,
     scope: str,
 ) -> dict[str, Any]:
@@ -39,7 +39,7 @@ async def create(
     return data
 
 
-async def fetch_one(refresh_token: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def fetch_one(refresh_token: UUID | str) -> dict[str, Any] | None:
     data = await app.state.services.redis.hgetall(
         create_refresh_token_key(refresh_token),
     )
@@ -50,8 +50,8 @@ async def fetch_one(refresh_token: Union[UUID, str]) -> Optional[dict[str, Any]]
 
 
 async def fetch_all(
-    client_id: Optional[int] = None,
-    scope: Optional[str] = None,
+    client_id: int | None = None,
+    scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
 ) -> list[dict[str, Any]]:
@@ -89,7 +89,7 @@ async def fetch_all(
     return refresh_tokens
 
 
-async def delete(refresh_token: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def delete(refresh_token: UUID | str) -> dict[str, Any] | None:
     refresh_token_key = create_refresh_token_key(refresh_token)
 
     data = await app.state.services.redis.hgetall(refresh_token_key)

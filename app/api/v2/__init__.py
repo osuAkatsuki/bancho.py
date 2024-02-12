@@ -10,7 +10,6 @@ from fastapi import status
 from app.api.v2.common.oauth import OAuth2Scheme
 from app.repositories import access_tokens as access_tokens_repo
 
-
 oauth2_scheme = OAuth2Scheme(
     authorizationUrl="/v2/oauth/authorize",
     tokenUrl="/v2/oauth/token",
@@ -38,9 +37,9 @@ async def get_current_client(token: str = Depends(oauth2_scheme)) -> dict[str, A
 
 from . import clans
 from . import maps
+from . import oauth
 from . import players
 from . import scores
-from . import oauth
 
 apiv2_router = APIRouter(tags=["API v2"], prefix="/v2")
 

@@ -12,18 +12,18 @@ import app.state.services
 from app.api.v2.common import json
 
 
-def create_access_token_key(code: Union[UUID, str]) -> str:
+def create_access_token_key(code: UUID | str) -> str:
     return f"bancho:access_tokens:{code}"
 
 
 async def create(
-    access_token: Union[UUID, str],
+    access_token: UUID | str,
     client_id: int,
     grant_type: str,
     scope: str,
-    refresh_token: Optional[Union[UUID, str]] = "",
-    player_id: Optional[int] = "",
-    expires_in: Optional[int] = "",
+    refresh_token: UUID | str | None = "",
+    player_id: int | None = "",
+    expires_in: int | None = "",
 ) -> dict[str, Any]:
     access_token_key = create_access_token_key(access_token)
     now = datetime.now()
@@ -44,7 +44,7 @@ async def create(
     return data
 
 
-async def fetch_one(access_token: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def fetch_one(access_token: UUID | str) -> dict[str, Any] | None:
     data = await app.state.services.redis.hgetall(create_access_token_key(access_token))
 
     if data is None:
@@ -54,10 +54,10 @@ async def fetch_one(access_token: Union[UUID, str]) -> Optional[dict[str, Any]]:
 
 
 async def fetch_all(
-    client_id: Optional[int] = None,
-    scope: Optional[str] = None,
-    grant_type: Optional[str] = None,
-    player_id: Optional[int] = None,
+    client_id: int | None = None,
+    scope: str | None = None,
+    grant_type: str | None = None,
+    player_id: int | None = None,
     page: int = 1,
     page_size: int = 10,
 ) -> list[dict[str, Any]]:
@@ -101,7 +101,7 @@ async def fetch_all(
     return access_tokens
 
 
-async def delete(access_token: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def delete(access_token: UUID | str) -> dict[str, Any] | None:
     access_token_key = create_access_token_key(access_token)
 
     data = await app.state.services.redis.hgetall(access_token_key)

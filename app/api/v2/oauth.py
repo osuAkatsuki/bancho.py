@@ -1,4 +1,5 @@
 """ bancho.py's v2 apis for interacting with clans """
+
 from __future__ import annotations
 
 import uuid
@@ -66,10 +67,10 @@ async def token(
     grant_type: str = Form(),
     client_id: int = Form(default=None),
     client_secret: str = Form(default=None),
-    auth_credentials: Optional[dict[str, Any]] = Depends(
+    auth_credentials: dict[str, Any] | None = Depends(
         get_credentials_from_basic_auth,
     ),
-    code: Optional[str] = Form(default=None),
+    code: str | None = Form(default=None),
     scope: str = Form(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
 ) -> Token:
     """Get an access token for the API."""

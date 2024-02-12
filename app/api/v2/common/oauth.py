@@ -17,10 +17,10 @@ class OAuth2Scheme(OAuth2):
         self,
         authorizationUrl: str,
         tokenUrl: str,
-        refreshUrl: Optional[str] = None,
-        scheme_name: Optional[str] = None,
-        scopes: Optional[dict[str, str]] = None,
-        description: Optional[str] = None,
+        refreshUrl: str | None = None,
+        scheme_name: str | None = None,
+        scopes: dict[str, str] | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         if not scopes:
@@ -45,7 +45,7 @@ class OAuth2Scheme(OAuth2):
             auto_error=auto_error,
         )
 
-    async def __call__(self, request: Request) -> Optional[str]:
+    async def __call__(self, request: Request) -> str | None:
         authorization = request.headers.get("Authorization")
         scheme, param = get_authorization_scheme_param(authorization)
         if not authorization or scheme.lower() != "bearer":
@@ -63,7 +63,7 @@ class OAuth2Scheme(OAuth2):
 # https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/#client-authentication
 def get_credentials_from_basic_auth(
     request: Request,
-) -> Optional[dict[str, Union[str, int]]]:
+) -> dict[str, str | int] | None:
     authorization = request.headers.get("Authorization")
     scheme, param = get_authorization_scheme_param(authorization)
     if not authorization or scheme.lower() != "basic":

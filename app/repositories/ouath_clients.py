@@ -26,8 +26,8 @@ READ_PARAMS = textwrap.dedent(
 async def create(
     secret: str,
     owner: int,
-    name: Optional[str] = None,
-    redirect_uri: Optional[str] = None,
+    name: str | None = None,
+    redirect_uri: str | None = None,
 ) -> dict[str, Any]:
     """Create a new client in the database."""
     query = """\
@@ -57,11 +57,11 @@ async def create(
 
 
 async def fetch_one(
-    id: Optional[int] = None,
-    owner: Optional[int] = None,
-    secret: Optional[str] = None,
-    name: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    id: int | None = None,
+    owner: int | None = None,
+    secret: str | None = None,
+    name: str | None = None,
+) -> dict[str, Any] | None:
     """Fetch a signle client from the database."""
     if id is None and owner is None and secret is None:
         raise ValueError("Must provide at least one parameter.")
@@ -85,12 +85,12 @@ async def fetch_one(
 
 
 async def fetch_many(
-    id: Optional[int] = None,
-    owner: Optional[int] = None,
-    secret: Optional[str] = None,
-    page: Optional[int] = None,
-    page_size: Optional[int] = None,
-) -> Optional[list[dict[str, Any]]]:
+    id: int | None = None,
+    owner: int | None = None,
+    secret: str | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> list[dict[str, Any]] | None:
     """Fetch all clients from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -119,11 +119,11 @@ async def fetch_many(
 
 async def update(
     id: int,
-    secret: Optional[str] = None,
-    owner: Optional[int] = None,
-    name: Optional[str] = None,
-    redirect_uri: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    secret: str | None = None,
+    owner: int | None = None,
+    name: str | None = None,
+    redirect_uri: str | None = None,
+) -> dict[str, Any] | None:
     """Update an existing client in the database."""
     query = """\
         UPDATE oauth_clients

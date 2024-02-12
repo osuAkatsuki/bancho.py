@@ -10,12 +10,12 @@ import app.state.services
 from app.api.v2.common import json
 
 
-def create_authorization_code_key(code: Union[UUID, str]) -> str:
+def create_authorization_code_key(code: UUID | str) -> str:
     return f"bancho:authorization_codes:{code}"
 
 
 async def create(
-    code: Union[UUID, str],
+    code: UUID | str,
     client_id: int,
     scope: str,
     player_id: int,
@@ -28,7 +28,7 @@ async def create(
     )
 
 
-async def fetch_one(code: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def fetch_one(code: UUID | str) -> dict[str, Any] | None:
     data = await app.state.services.redis.get(create_authorization_code_key(code))
     if data is None:
         return None
@@ -37,8 +37,8 @@ async def fetch_one(code: Union[UUID, str]) -> Optional[dict[str, Any]]:
 
 
 async def fetch_all(
-    client_id: Optional[int] = None,
-    scope: Optional[str] = None,
+    client_id: int | None = None,
+    scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
 ) -> list[dict[str, Any]]:
@@ -76,7 +76,7 @@ async def fetch_all(
     return authorization_codes
 
 
-async def delete(code: Union[UUID, str]) -> Optional[dict[str, Any]]:
+async def delete(code: UUID | str) -> dict[str, Any] | None:
     authorization_code_key = create_authorization_code_key(code)
 
     data = await app.state.services.redis.get(authorization_code_key)

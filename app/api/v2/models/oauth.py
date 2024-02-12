@@ -6,7 +6,6 @@ from typing import Optional
 
 from . import BaseModel
 
-
 # input models
 
 
@@ -15,7 +14,7 @@ from . import BaseModel
 
 class Token(BaseModel):
     access_token: str
-    refresh_token: Optional[str]
+    refresh_token: str | None
     token_type: Literal["Bearer"]
     expires_in: int
     expires_at: str
