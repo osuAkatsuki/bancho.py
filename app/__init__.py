@@ -1,5 +1,5 @@
 # type: ignore
-from __future__ import annotations
+# isort: dont-add-imports
 
 from . import api
 from . import bg_loops

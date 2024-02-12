@@ -13,10 +13,10 @@ from enum import IntEnum
 from enum import unique
 from functools import cache
 from functools import lru_cache
-from typing import Any
-from typing import cast
-from typing import NamedTuple
 from typing import TYPE_CHECKING
+from typing import Any
+from typing import NamedTuple
+from typing import cast
 
 # from app.objects.beatmap import BeatmapInfo
 
@@ -278,12 +278,10 @@ class MultiplayerMatch:
 
 
 class BasePacket(ABC):
-    def __init__(self, reader: BanchoPacketReader) -> None:
-        ...
+    def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None:
-        ...
+    async def handle(self, player: Player) -> None: ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]

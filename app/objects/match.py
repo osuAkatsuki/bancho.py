@@ -27,8 +27,8 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from asyncio import TimerHandle
 
-    from app.objects.player import Player
     from app.objects.channel import Channel
+    from app.objects.player import Player
 
 __all__ = (
     "SlotStatus",

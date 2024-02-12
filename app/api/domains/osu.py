@@ -1,4 +1,5 @@
 """ osu: handle connections from web, api, and beyond? """
+
 from __future__ import annotations
 
 import copy
@@ -54,13 +55,14 @@ from app.logging import log
 from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
 from app.objects.beatmap import RankedStatus
+from app.objects.beatmap import ensure_local_osu_file
 from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import comments as comments_repo
+from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
@@ -70,7 +72,6 @@ from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
@@ -922,9 +923,7 @@ async def osuSubmitModularSelector(
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
-            )
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
             bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
@@ -1522,16 +1521,18 @@ async def osuMarkAsRead(
 ) -> Response:
     target_name = unquote(channel)  # TODO: unquote needed?
     if not target_name:
+        log(
+            f"User {player} attempted to mark a channel as read without a target.",
+            Ansi.LYELLOW,
+        )
         return Response(b"")  # no channel specified
 
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
         # mark any unread mail from this user as read.
-        await app.state.services.database.execute(
-            "UPDATE `mail` SET `read` = 1 "
-            "WHERE `to_id` = :to AND `from_id` = :from "
-            "AND `read` = 0",
-            {"to": player.id, "from": target.id},
+        await mail_repo.mark_conversation_as_read(
+            to_id=player.id,
+            from_id=target.id,
         )
 
     return Response(b"")
@@ -1577,17 +1578,18 @@ async def checkUpdates(
 
 
 if app.settings.REDIRECT_OSU_URLS:
-
-    async def osu_redirect(file_path: str) -> Response:
+    # NOTE: this will likely be removed with the addition of a frontend.
+    async def osu_redirect(request: Request, _: int = Path(...)) -> Response:
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{file_path}",
+            url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
     for pattern in (
-        "/beatmapsets/{file_path:path}",
-        "/beatmaps/{file_path:path}",
-        "/community/forums/topics/{file_path:path}",
+        "/beatmapsets/{_}",
+        "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
+        "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
 

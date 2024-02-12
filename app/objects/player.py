@@ -9,10 +9,10 @@ from enum import IntEnum
 from enum import StrEnum
 from enum import unique
 from functools import cached_property
-from typing import Any
-from typing import cast
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import TypedDict
+from typing import cast
 
 import databases.core
 
@@ -42,11 +42,11 @@ from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
+    from app.constants.privileges import ClanPrivileges
     from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
     from app.objects.score import Score
-    from app.constants.privileges import ClanPrivileges
 
 __all__ = ("ModeData", "Status", "Player")
 
@@ -196,13 +196,13 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    bot_client: `bool`
+    is_bot_client: `bool`
         Whether this is a bot account.
 
-    tourney_client: `bool`
+    is_tourney_client: `bool`
         Whether this is a management/spectator tourney client.
 
-    _queue: `bytearray`
+    _packet_queue: `bytearray`
         Bytes enqueued to the player which will be transmitted
         at the tail end of their next connection to the server.
         XXX: cls.enqueue() will add data to this queue, and
@@ -287,16 +287,15 @@ class Player:
         # subject to possible change in the future,
         # although if anything, bot accounts will
         # probably just use the /api/ routes?
-        self.bot_client = extras.get("bot_client", False)
-        if self.bot_client:
+        self.is_bot_client = extras.get("is_bot_client", False)
+        if self.is_bot_client:
             self.enqueue = lambda data: None  # type: ignore
 
-        self.tourney_client = extras.get("tourney_client", False)
+        self.is_tourney_client = extras.get("is_tourney_client", False)
 
         self.api_key = extras.get("api_key", None)
 
-        # packet queue
-        self._queue = bytearray()
+        self._packet_queue = bytearray()
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
@@ -1018,13 +1017,13 @@ class Player:
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
-        self._queue += data
+        self._packet_queue += data
 
     def dequeue(self) -> bytes | None:
         """Get data from the queue to send to the client."""
-        if self._queue:
-            data = bytes(self._queue)
-            self._queue.clear()
+        if self._packet_queue:
+            data = bytes(self._packet_queue)
+            self._packet_queue.clear()
             return data
 
         return None

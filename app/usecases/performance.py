@@ -101,7 +101,7 @@ def calculate_performances(
             # TODO: report to logserver
             pp = 0.0
         else:
-            pp = round(pp, 5)
+            pp = round(pp, 3)
 
         results.append(
             {
