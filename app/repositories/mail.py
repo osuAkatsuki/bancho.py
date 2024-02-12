@@ -62,7 +62,7 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
     return cast(Mail, dict(mail._mapping))
 
 
-async def fetch_all_for_user(
+async def fetch_all_mail_to_user(
     user_id: int,
     read: bool | None = None,
 ) -> list[MailWithUsernames]:

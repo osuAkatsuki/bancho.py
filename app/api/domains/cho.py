@@ -945,7 +945,10 @@ async def handle_osu_login_request(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await mail_repo.fetch_all_for_user(user_id=player.id, read=False)
+        mail_rows = await mail_repo.fetch_all_mail_to_user(
+            user_id=player.id,
+            read=False,
+        )
 
         if mail_rows:
             sent_to: set[int] = set()
