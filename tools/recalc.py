@@ -20,7 +20,6 @@ from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 from redis import asyncio as aioredis
 
-
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
