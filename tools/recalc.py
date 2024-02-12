@@ -263,7 +263,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
     await app.state.services.http_client.aclose()
     await db.disconnect()
-    await redis.close()
+    await redis.aclose()
 
     return 0
 

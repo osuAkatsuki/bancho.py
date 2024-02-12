@@ -114,6 +114,7 @@ class Status:
 class LastNp(TypedDict):
     bmap: Beatmap
     mode_vn: int
+    mods: Mods | None
     timeout: float
 
 

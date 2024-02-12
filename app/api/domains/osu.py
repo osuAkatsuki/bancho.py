@@ -112,99 +112,13 @@ def authenticate_player_session(
 
 """ /web/ handlers """
 
-# TODO (?) -- unhandled endpoints:
+# Unhandled endpoints:
+# POST /web/osu-error.php
 # POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
-
-OsuClientModes = Literal[
-    "Menu",
-    "Edit",
-    "Play",
-    "Exit",
-    "SelectEdit",
-    "SelectPlay",
-    "SelectDrawings",
-    "Rank",
-    "Update",
-    "Busy",
-    "Unknown",
-    "Lobby",
-    "MatchSetup",
-    "SelectMulti",
-    "RankingVs",
-    "OnlineSelection",
-    "OptionsOffsetWizard",
-    "RankingTagCoop",
-    "RankingTeam",
-    "BeatmapImport",
-    "PackageUpdater",
-    "Benchmark",
-    "Tourney",
-    "Charts",
-]
-
-OsuClientGameModes = Literal[
-    "Osu",
-    "Taiko",
-    "CatchTheBeat",
-    "OsuMania",
-]
-
-
-@router.post("/web/osu-error.php")
-async def osuError(
-    username: str | None = Form(None, alias="u"),
-    pw_md5: str | None = Form(None, alias="h"),
-    user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: OsuClientModes = Form(..., alias="osumode"),
-    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
-    game_time: int = Form(..., alias="gametime", ge=0),
-    audio_time: int = Form(..., alias="audiotime"),
-    culture: str = Form(...),
-    map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
-    map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
-    exception: str = Form(...),
-    feedback: str | None = Form(None),
-    stacktrace: str = Form(...),
-    soft: bool = Form(...),
-    map_count: int = Form(..., alias="beatmap_count", ge=0),
-    compatibility: bool = Form(...),
-    ram_used: int = Form(..., alias="ram", ge=0),
-    osu_version: str = Form(..., alias="version"),
-    exe_hash: str = Form(..., alias="exehash"),
-    config: str = Form(...),
-    screenshot_file: UploadFile | None = File(None, alias="ss"),
-) -> Response:
-    """Handle an error submitted from the osu! client."""
-    if not app.settings.DEBUG:
-        # only handle osu-error in debug mode
-        return Response(b"")
-
-    if username and pw_md5:
-        player = await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-        if not player:
-            # player login incorrect
-            await app.state.services.log_strange_occurrence("osu-error auth failed")
-            player = None
-    else:
-        player = None
-
-    err_desc = f"{feedback} ({exception})"
-    log(f'{player or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
-
-    # NOTE: this stacktrace can be a LOT of data
-    if app.settings.DEBUG and len(stacktrace) < 2000:
-        printc(stacktrace[:-2], Ansi.LMAGENTA)
-
-    # TODO: save error in db?
-
-    return Response(b"")
 
 
 @router.post("/web/osu-screenshot.php")
@@ -1661,17 +1575,18 @@ async def checkUpdates(
 
 
 if app.settings.REDIRECT_OSU_URLS:
-
-    async def osu_redirect(file_path: str) -> Response:
+    # NOTE: this will likely be removed with the addition of a frontend.
+    async def osu_redirect(request: Request, _: int = Path(...)) -> Response:
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{file_path}",
+            url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
     for pattern in (
-        "/beatmapsets/{file_path:path}",
-        "/beatmaps/{file_path:path}",
-        "/community/forums/topics/{file_path:path}",
+        "/beatmapsets/{_}",
+        "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
+        "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
 

@@ -72,6 +72,7 @@ BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 BASE_DOMAIN = app.settings.DOMAIN
 
+# TODO: dear god
 NOW_PLAYING_RGX = re.compile(
     r"^\x01ACTION is (?:playing|editing|watching|listening to) "
     rf"\[https://osu\.(?:{re.escape(BASE_DOMAIN)}|ppy\.sh)/beatmapsets/(?P<sid>\d{{1,10}})#/?(?:osu|taiko|fruits|mania)?/(?P<bid>\d{{1,10}})/? .+\]"
@@ -402,8 +403,14 @@ class SendMessage(BasePacket):
                         # use player mode if not specified
                         mode_vn = player.status.mode.as_vanilla
 
+                    # parse the mods from regex
+                    mods = None
+                    if r_match["mods"] is not None:
+                        mods = Mods.from_np(r_match["mods"][1:], mode_vn)
+
                     player.last_np = {
                         "bmap": bmap,
+                        "mods": mods,
                         "mode_vn": mode_vn,
                         "timeout": time.time() + 300,  # /np's last 5mins
                     }
@@ -1247,9 +1254,15 @@ class SendPrivateMessage(BasePacket):
                             # use player mode if not specified
                             mode_vn = player.status.mode.as_vanilla
 
+                        # parse the mods from regex
+                        mods = None
+                        if r_match["mods"] is not None:
+                            mods = Mods.from_np(r_match["mods"][1:], mode_vn)
+
                         player.last_np = {
                             "bmap": bmap,
                             "mode_vn": mode_vn,
+                            "mods": mods,
                             "timeout": time.time() + 300,  # /np's last 5mins
                         }
 
@@ -1269,12 +1282,11 @@ class SendPrivateMessage(BasePacket):
                             # calculate pp for common generic values
                             pp_calc_st = time.time_ns()
 
+                            mods = None
                             if r_match["mods"] is not None:
                                 # [1:] to remove leading whitespace
                                 mods_str = r_match["mods"][1:]
                                 mods = Mods.from_np(mods_str, mode_vn)
-                            else:
-                                mods = None
 
                             scores = [
                                 ScoreParams(

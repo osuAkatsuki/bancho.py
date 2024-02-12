@@ -272,13 +272,13 @@ async def api_get_player_info(
         # get all stats
         all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
 
-        for idx, mode_stats in enumerate(all_stats):
+        for mode_stats in all_stats:
             rank = await app.state.services.redis.zrevrank(
-                f"bancho:leaderboard:{idx}",
+                f"bancho:leaderboard:{mode_stats['mode']}",
                 str(resolved_user_id),
             )
             country_rank = await app.state.services.redis.zrevrank(
-                f"bancho:leaderboard:{idx}:{resolved_country}",
+                f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
                 str(resolved_user_id),
             )
 
