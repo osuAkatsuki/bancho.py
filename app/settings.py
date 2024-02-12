@@ -78,4 +78,6 @@ AUTOMATICALLY_REPORT_PROBLEMS = read_bool(os.environ["AUTOMATICALLY_REPORT_PROBL
 ##          read through what it enables.
 ##          you could put your server at risk.
 DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
-VERSION = tomllib.load("pyproject.toml")["tool"]["poetry"]["version"]
+
+with open("pyproject.toml", "rb") as f:
+    VERSION = tomllib.load(f)["tool"]["poetry"]["version"]
