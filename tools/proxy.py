@@ -9,11 +9,12 @@ domain = "cmyui.xyz"  # XXX: put your domain here
 import re
 import struct
 import sys
-from enum import unique
 from enum import IntEnum
+from enum import unique
+
+from mitmproxy import http
 
 from app.logging import RGB
-from mitmproxy import http
 
 
 @unique

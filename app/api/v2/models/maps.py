@@ -4,7 +4,6 @@ from datetime import datetime
 
 from . import BaseModel
 
-
 # input models
 
 

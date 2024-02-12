@@ -1,4 +1,5 @@
 """ osu: handle connections from web, api, and beyond? """
+
 from __future__ import annotations
 
 import copy
@@ -54,13 +55,14 @@ from app.logging import log
 from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.beatmap import RankedStatus
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import comments as comments_repo
+from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
@@ -70,7 +72,6 @@ from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
-
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
@@ -112,99 +113,13 @@ def authenticate_player_session(
 
 """ /web/ handlers """
 
-# TODO (?) -- unhandled endpoints:
+# Unhandled endpoints:
+# POST /web/osu-error.php
 # POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
 # GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
-
-OsuClientModes = Literal[
-    "Menu",
-    "Edit",
-    "Play",
-    "Exit",
-    "SelectEdit",
-    "SelectPlay",
-    "SelectDrawings",
-    "Rank",
-    "Update",
-    "Busy",
-    "Unknown",
-    "Lobby",
-    "MatchSetup",
-    "SelectMulti",
-    "RankingVs",
-    "OnlineSelection",
-    "OptionsOffsetWizard",
-    "RankingTagCoop",
-    "RankingTeam",
-    "BeatmapImport",
-    "PackageUpdater",
-    "Benchmark",
-    "Tourney",
-    "Charts",
-]
-
-OsuClientGameModes = Literal[
-    "Osu",
-    "Taiko",
-    "CatchTheBeat",
-    "OsuMania",
-]
-
-
-@router.post("/web/osu-error.php")
-async def osuError(
-    username: str | None = Form(None, alias="u"),
-    pw_md5: str | None = Form(None, alias="h"),
-    user_id: int = Form(..., alias="i", ge=3, le=2_147_483_647),
-    osu_mode: OsuClientModes = Form(..., alias="osumode"),
-    game_mode: OsuClientGameModes = Form(..., alias="gamemode"),
-    game_time: int = Form(..., alias="gametime", ge=0),
-    audio_time: int = Form(..., alias="audiotime"),
-    culture: str = Form(...),
-    map_id: int = Form(..., alias="beatmap_id", ge=0, le=2_147_483_647),
-    map_md5: str = Form(..., alias="beatmap_checksum", min_length=32, max_length=32),
-    exception: str = Form(...),
-    feedback: str | None = Form(None),
-    stacktrace: str = Form(...),
-    soft: bool = Form(...),
-    map_count: int = Form(..., alias="beatmap_count", ge=0),
-    compatibility: bool = Form(...),
-    ram_used: int = Form(..., alias="ram", ge=0),
-    osu_version: str = Form(..., alias="version"),
-    exe_hash: str = Form(..., alias="exehash"),
-    config: str = Form(...),
-    screenshot_file: UploadFile | None = File(None, alias="ss"),
-) -> Response:
-    """Handle an error submitted from the osu! client."""
-    if not app.settings.DEBUG:
-        # only handle osu-error in debug mode
-        return Response(b"")
-
-    if username and pw_md5:
-        player = await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-        if not player:
-            # player login incorrect
-            await app.state.services.log_strange_occurrence("osu-error auth failed")
-            player = None
-    else:
-        player = None
-
-    err_desc = f"{feedback} ({exception})"
-    log(f'{player or "Offline user"} sent osu-error: {err_desc}', Ansi.LCYAN)
-
-    # NOTE: this stacktrace can be a LOT of data
-    if app.settings.DEBUG and len(stacktrace) < 2000:
-        printc(stacktrace[:-2], Ansi.LMAGENTA)
-
-    # TODO: save error in db?
-
-    return Response(b"")
 
 
 @router.post("/web/osu-screenshot.php")
@@ -1007,9 +922,7 @@ async def osuSubmitModularSelector(
             stats_updates["acc"] = stats.acc
 
             # calculate new total weighted pp
-            weighted_pp = sum(
-                row["pp"] * 0.95**i for i, row in enumerate(best_scores)
-            )
+            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
             bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
             stats.pp = round(weighted_pp + bonus_pp)
             stats_updates["pp"] = stats.pp
@@ -1607,16 +1520,18 @@ async def osuMarkAsRead(
 ) -> Response:
     target_name = unquote(channel)  # TODO: unquote needed?
     if not target_name:
+        log(
+            f"User {player} attempted to mark a channel as read without a target.",
+            Ansi.LYELLOW,
+        )
         return Response(b"")  # no channel specified
 
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
         # mark any unread mail from this user as read.
-        await app.state.services.database.execute(
-            "UPDATE `mail` SET `read` = 1 "
-            "WHERE `to_id` = :to AND `from_id` = :from "
-            "AND `read` = 0",
-            {"to": player.id, "from": target.id},
+        await mail_repo.mark_conversation_as_read(
+            to_id=player.id,
+            from_id=target.id,
         )
 
     return Response(b"")
@@ -1662,17 +1577,18 @@ async def checkUpdates(
 
 
 if app.settings.REDIRECT_OSU_URLS:
-
-    async def osu_redirect(file_path: str) -> Response:
+    # NOTE: this will likely be removed with the addition of a frontend.
+    async def osu_redirect(request: Request, _: int = Path(...)) -> Response:
         return RedirectResponse(
-            url=f"https://osu.ppy.sh{file_path}",
+            url=f"https://osu.ppy.sh{request['path']}",
             status_code=status.HTTP_301_MOVED_PERMANENTLY,
         )
 
     for pattern in (
-        "/beatmapsets/{file_path:path}",
-        "/beatmaps/{file_path:path}",
-        "/community/forums/topics/{file_path:path}",
+        "/beatmapsets/{_}",
+        "/beatmaps/{_}",
+        "/beatmapsets/{_}/discussion",
+        "/community/forums/topics/{_}",
     ):
         router.get(pattern)(osu_redirect)
 

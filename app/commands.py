@@ -18,11 +18,11 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import NamedTuple
 from typing import NoReturn
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing import TypedDict
 from urllib.parse import urlparse
 
@@ -39,13 +39,13 @@ import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
-from app.constants.mods import Mods
 from app.constants.mods import SPEED_CHANGING_MODS
+from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.beatmap import RankedStatus
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.clan import Clan
 from app.objects.match import MapPool
 from app.objects.match import Match
@@ -414,8 +414,7 @@ async def top(ctx: Context) -> str | None:
     )
 
 
-class ParsingError(str):
-    ...
+class ParsingError(str): ...
 
 
 def parse__with__command_args(
@@ -862,13 +861,13 @@ async def user(ctx: Context) -> str | None:
 
     return "\n".join(
         (
-            f'[{"Bot" if player.bot_client else "Player"}] {player.full_name} ({player.id})',
+            f'[{"Bot" if player.is_bot_client else "Player"}] {player.full_name} ({player.id})',
             f"Privileges: {priv_list}",
             f"Donator: {donator_info}",
             f"Channels: {[c._name for c in player.channels]}",
             f"Logged in: {timeago.format(player.login_time)}",
             f"Last server interaction: {timeago.format(player.last_recv_time)}",
-            f"osu! build: {osu_version} | Tourney: {player.tourney_client}",
+            f"osu! build: {osu_version} | Tourney: {player.is_tourney_client}",
             f"Silenced: {player.silenced} | Spectating: {player.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {player.recent_score}",

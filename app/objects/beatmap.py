@@ -10,8 +10,8 @@ from enum import IntEnum
 from enum import unique
 from pathlib import Path
 from typing import Any
-from typing import cast
 from typing import TypedDict
+from typing import cast
 
 import httpx
 from tenacity import retry

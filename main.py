@@ -26,10 +26,11 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
+
 import uvicorn
 
-import app.utils
 import app.settings
+import app.utils
 from app.logging import Ansi
 from app.logging import log
 

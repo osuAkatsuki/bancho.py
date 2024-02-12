@@ -25,11 +25,12 @@ sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
 try:
-    from app.constants.privileges import Privileges
-    from app.constants.gamemodes import GameMode
-    from app.objects.beatmap import ensure_osu_file_is_available
     import app.settings
     import app.state.services
+    from app.constants.gamemodes import GameMode
+    from app.constants.mods import Mods
+    from app.constants.privileges import Privileges
+    from app.objects.beatmap import ensure_osu_file_is_available
 except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
@@ -271,7 +272,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
     await app.state.services.http_client.aclose()
     await db.disconnect()
-    await redis.close()
+    await redis.aclose()
 
     return 0
 
