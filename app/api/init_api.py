@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import os
 import pprint
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
+from typing import Never
 
 import starlette.routing
 from fastapi import FastAPI
@@ -64,6 +67,57 @@ class BanchoAPI(FastAPI):
         return self.openapi_schema
 
 
+@asynccontextmanager
+async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
+    app.state.loop = asyncio.get_running_loop()
+    if app.utils.is_running_as_admin():
+        log(
+            "Running the server with root privileges is not recommended.",
+            Ansi.LRED,
+        )
+
+    await app.state.services.database.connect()
+    await app.state.services.redis.initialize()
+
+    if app.state.services.datadog is not None:
+        app.state.services.datadog.start(
+            flush_in_thread=True,
+            flush_interval=15,
+        )
+        app.state.services.datadog.gauge("bancho.online_players", 0)
+
+    app.state.services.ip_resolver = app.state.services.IPResolver()
+
+    await app.state.services.run_sql_migrations()
+
+    async with app.state.services.database.connection() as db_conn:
+        await collections.initialize_ram_caches(db_conn)
+
+    await app.bg_loops.initialize_housekeeping_tasks()
+
+    log("Startup process complete.", Ansi.LGREEN)
+    log(
+        f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
+        Ansi.LMAGENTA,
+    )
+
+    yield  # type: ignore
+
+    # we want to attempt to gracefully finish any ongoing connections
+    # and shut down any of the housekeeping tasks running in the background.
+    await app.state.sessions.cancel_housekeeping_tasks()
+
+    # shutdown services
+
+    await app.state.services.http_client.aclose()
+    await app.state.services.database.disconnect()
+    await app.state.services.redis.aclose()
+
+    if app.state.services.datadog is not None:
+        app.state.services.datadog.stop()
+        app.state.services.datadog.flush()
+
+
 def init_exception_handlers(asgi_app: BanchoAPI) -> None:
     @asgi_app.exception_handler(RequestValidationError)
     async def handle_validation_error(
@@ -110,61 +164,6 @@ def init_middlewares(asgi_app: BanchoAPI) -> None:
             raise exc
 
 
-def init_events(asgi_app: BanchoAPI) -> None:
-    """Initialize our app's event handlers."""
-
-    @asgi_app.on_event("startup")
-    async def on_startup() -> None:
-        app.state.loop = asyncio.get_running_loop()
-
-        if app.utils.is_running_as_admin():
-            log(
-                "Running the server with root privileges is not recommended.",
-                Ansi.LRED,
-            )
-
-        await app.state.services.database.connect()
-        await app.state.services.redis.initialize()
-
-        if app.state.services.datadog is not None:
-            app.state.services.datadog.start(
-                flush_in_thread=True,
-                flush_interval=15,
-            )
-            app.state.services.datadog.gauge("bancho.online_players", 0)
-
-        app.state.services.ip_resolver = app.state.services.IPResolver()
-
-        await app.state.services.run_sql_migrations()
-
-        async with app.state.services.database.connection() as db_conn:
-            await collections.initialize_ram_caches(db_conn)
-
-        await app.bg_loops.initialize_housekeeping_tasks()
-
-        log("Startup process complete.", Ansi.LGREEN)
-        log(
-            f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
-            Ansi.LMAGENTA,
-        )
-
-    @asgi_app.on_event("shutdown")
-    async def on_shutdown() -> None:
-        # we want to attempt to gracefully finish any ongoing connections
-        # and shut down any of the housekeeping tasks running in the background.
-        await app.state.sessions.cancel_housekeeping_tasks()
-
-        # shutdown services
-
-        await app.state.services.http_client.aclose()
-        await app.state.services.database.disconnect()
-        await app.state.services.redis.close()
-
-        if app.state.services.datadog is not None:
-            app.state.services.datadog.stop()
-            app.state.services.datadog.flush()
-
-
 def init_routes(asgi_app: BanchoAPI) -> None:
     """Initialize our app's route endpoints."""
     for domain in ("ppy.sh", app.settings.DOMAIN):
@@ -180,11 +179,10 @@ def init_routes(asgi_app: BanchoAPI) -> None:
 
 def init_api() -> BanchoAPI:
     """Create & initialize our app."""
-    asgi_app = BanchoAPI()
+    asgi_app = BanchoAPI(lifespan=lifespan)
 
     init_middlewares(asgi_app)
     init_exception_handlers(asgi_app)
-    init_events(asgi_app)
     init_routes(asgi_app)
 
     return asgi_app
