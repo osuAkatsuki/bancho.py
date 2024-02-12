@@ -105,18 +105,18 @@ async def ensure_osu_file_is_available(
 
     Returns whether the file is available for use.
     """
-    if not disk_has_expected_osu_file(beatmap_id, expected_md5):
-        try:
-            latest_osu_file = await api_get_osu_file(beatmap_id)
-        except httpx.HTTPStatusError:
-            return False
-        except Exception:
-            log(f"Failed to fetch osu file for {beatmap_id}", Ansi.LRED)
-            return False
-        else:
-            write_osu_file_to_disk(beatmap_id, latest_osu_file)
+    if disk_has_expected_osu_file(beatmap_id, expected_md5):
+        return True
 
-    return True
+    try:
+        latest_osu_file = await api_get_osu_file(beatmap_id)
+    except httpx.HTTPStatusError:
+        return False
+    except Exception:
+        log(f"Failed to fetch osu file for {beatmap_id}", Ansi.LRED)
+        return False
+
+    write_osu_file_to_disk(beatmap_id, latest_osu_file)
 
 
 # for some ungodly reason, different values are used to
