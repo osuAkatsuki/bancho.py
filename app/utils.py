@@ -346,7 +346,7 @@ def is_running_as_admin() -> bool:
         pass
 
     try:
-        return ctypes.windll.shell32.IsUserAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]
+        return ctypes.windll.shell32.IsUserAnAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]
     except AttributeError:
         raise Exception(
             f"{sys.platform} is not currently supported on bancho.py, please create a github issue!",
