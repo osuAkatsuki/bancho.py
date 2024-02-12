@@ -72,9 +72,6 @@ make lint
 # run static type checking
 make type-check
 
-# all update dependencies
-make update
-
 # remove all unused dependencies
 make clean
 ```
