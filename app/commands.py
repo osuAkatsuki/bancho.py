@@ -668,7 +668,7 @@ async def _map(ctx: Context) -> str | None:
             map_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await map_requests_repo.update(active=False, map_ids=map_ids)
+        await map_requests_repo.mark_batch_as_inactive(map_ids=map_ids)
 
     return f"{bmap.embed} updated to {new_status!s}."
 

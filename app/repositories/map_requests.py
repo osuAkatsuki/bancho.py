@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import Any
 from typing import TypedDict
 from typing import cast
@@ -30,13 +31,7 @@ class MapRequest(TypedDict):
     id: int
     map_id: int
     player_id: int
-    datetime: str
-    active: bool
-
-
-class MapRequestUpdateFields(TypedDict, total=False):
-    map_id: int
-    player_id: int
+    datetime: datetime
     active: bool
 
 
@@ -151,24 +146,14 @@ async def fetch_all(
     return cast(list[MapRequest], [dict(m._mapping) for m in map_requests])
 
 
-async def update(
-    map_ids: list[Any],
-    player_id: int | _UnsetSentinel = UNSET,
-    active: bool | _UnsetSentinel = UNSET,
-) -> MapRequest | None:
-    """Update a map request entry in the database."""
-    update_fields: MapRequestUpdateFields = {}
-    if not isinstance(player_id, _UnsetSentinel):
-        update_fields["player_id"] = player_id
-    if not isinstance(active, _UnsetSentinel):
-        update_fields["active"] = active
-
+async def mark_batch_as_inactive(map_ids: list[Any]) -> list[MapRequest]:
+    """Mark a map request as inactive."""
     query = f"""\
         UPDATE map_requests
-           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
+           SET active = False
          WHERE map_id IN :map_ids
     """
-    params = {"map_id": map_ids} | update_fields
+    params = {"map_id": map_ids}
     await app.state.services.database.execute(query, params)
 
     query = f"""\
@@ -179,38 +164,5 @@ async def update(
     params = {
         "map_ids": map_ids,
     }
-    map_request = await app.state.services.database.fetch_one(query, params)
-    return (
-        cast(MapRequest, dict(map_request._mapping))
-        if map_request is not None
-        else None
-    )
-
-
-async def delete(id: int) -> MapRequest | None:
-    """Delete a map request entry from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM map_requests
-        WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
-        return None
-
-    query = """\
-        DELETE FROM map_requests
-              WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    map_request = await app.state.services.database.execute(query, params)
-    return (
-        cast(MapRequest, dict(map_request._mapping))
-        if map_request is not None
-        else None
-    )
+    map_requests = await app.state.services.database.fetch_all(query, params)
+    return cast(list[MapRequest], [dict(m._mapping) for m in map_requests])
