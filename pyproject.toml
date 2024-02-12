@@ -45,6 +45,7 @@ autoflake = "2.2.1"
 types-psutil = "5.9.5.20240205"
 types-pymysql = "1.1.0.1"
 types-requests = "2.31.0.20240125"
+mypy = "1.8.0"
 
 [build-system]
 requires = ["poetry-core"]
