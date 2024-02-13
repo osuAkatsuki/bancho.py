@@ -541,6 +541,14 @@ async def request(ctx: Context) -> str | None:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
+    map_requests = await map_requests_repo.fetch_all(
+        map_id=bmap.id,
+        player_id=ctx.player.id,
+        active=True,
+    )
+    if map_requests:
+        return "You already have an active nomination request for that map."
+
     await map_requests_repo.create(map_id=bmap.id, player_id=ctx.player.id, active=True)
 
     return "Request submitted."
