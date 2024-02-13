@@ -229,13 +229,13 @@ async def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument(
         "--scores",
-        description="Recalculate scores",
+        help="Recalculate scores",
         action="store_true",
         default=True,
     )
     parser.add_argument(
         "--stats",
-        description="Recalculate stats",
+        help="Recalculate stats",
         action="store_true",
         default=True,
     )
@@ -244,7 +244,8 @@ async def main(argv: Sequence[str] | None = None) -> int:
         "-m",
         "--mode",
         nargs=argparse.ONE_OR_MORE,
-        required=True,
+        required=False,
+        default=["0", "1", "2", "3", "4", "5", "6", "8"],
         # would love to do things like "vn!std", but "!" will break interpretation
         choices=["0", "1", "2", "3", "4", "5", "6", "8"],
     )
