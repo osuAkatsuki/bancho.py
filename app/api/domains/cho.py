@@ -754,7 +754,7 @@ async def handle_osu_login_request(
 
     # TODO: store adapters individually
 
-    hw_matches = await client_hashes_repo.fetch_many(
+    hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
         userid=user_info["id"],
         running_under_wine=running_under_wine,
         adapters=login_data["adapters_md5"],
