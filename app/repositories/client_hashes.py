@@ -102,6 +102,7 @@ async def fetch_any_hardware_matches_for_user(
     `adapters`, `uninstall_id` or `disk_serial` match other users
     from the database.
     """
+    hw_check_params: dict[str, Any]
     if running_under_wine:
         hw_check_subquery = """\
             h.uninstall_id = :uninstall_id
