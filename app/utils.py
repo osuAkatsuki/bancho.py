@@ -182,6 +182,28 @@ def running_via_asgi_webserver() -> bool:
     return any(map(sys.argv[0].endswith, ("hypercorn", "uvicorn")))
 
 
+def _install_synchronous_excepthook() -> None:
+    """Install a thin wrapper for sys.excepthook to catch bancho-related stuff."""
+    real_excepthook = sys.excepthook  # backup
+
+    def _excepthook(
+        type_: type[BaseException],
+        value: BaseException,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        if type_ is KeyboardInterrupt:
+            print("\33[2K\r", end="Aborted startup.")
+            return
+
+        printc(
+            f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
+            Ansi.RED,
+        )
+        real_excepthook(type_, value, traceback)
+
+    sys.excepthook = _excepthook
+
+
 class FrameInfo(TypedDict):
     function: str
     filename: str
@@ -263,6 +285,20 @@ def ensure_directory_structure() -> None:
 
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
+
+
+def setup_runtime_environment() -> None:
+    """Configure the server's runtime environment."""
+    # install a hook to catch exceptions outside the event loop,
+    # which will handle various situations where the error details
+    # can be cleared up for the developer; for example it will explain
+    # that the config has been updated when an unknown attribute is
+    # accessed, so the developer knows what to do immediately.
+    _install_synchronous_excepthook()
+
+    # we print utf-8 content quite often, so configure sys.stdout
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
 
 
 def _install_debugging_hooks() -> None:
