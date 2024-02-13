@@ -612,7 +612,7 @@ async def requests(ctx: Context) -> str | None:
         first_review = min(reviews, key=lambda r: r["datetime"])
 
         l.append(
-            f"[{bmap.embed}] ({len(reviews)} requests, from {first_review['datetime']:%Y-%m-%d})",
+            f"{len(reviews)}x request(s) starting {first_review['datetime']:%Y-%m-%d}: {bmap.embed}",
         )
 
     return "\n".join(l)
