@@ -3,7 +3,7 @@ version: "3.8"
 services:
   ## shared services
 
-  mysql:
+  mysql-test:
     image: mysql:latest
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
@@ -23,7 +23,7 @@ services:
       timeout: 20s
       retries: 10
 
-  redis:
+  redis-test:
     image: bitnami/redis:latest
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
@@ -36,15 +36,13 @@ services:
 
   ## application services
 
-  bancho:
+  bancho-test:
     # we also have a public image: osuakatsuki/bancho.py:latest
     image: bancho:latest
-    ports:
-      - ${APP_PORT}:${APP_PORT}
     depends_on:
-      mysql:
+      mysql-test:
         condition: service_healthy
-      redis:
+      redis-test:
         condition: service_started
     tty: true
     init: true

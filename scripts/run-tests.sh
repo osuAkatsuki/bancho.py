@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -eox pipefail
 
+export DB_HOST=mysql-test
+export REDIS_HOST=redis-test
+
 initDB() {
   echo "Initializing database..."
   if [[ "$DB_USE_SSL" == "true" ]]; then
