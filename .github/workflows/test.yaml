@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - master
+    paths:
+      - "**.py"
+      - "**.sh"
+      - "**.yml"
+      - "**.toml"
+      - "**.lock"
+      - "**.sql"
+      - "Dockerfile"
   pull_request:
 
 env:
