@@ -18,7 +18,11 @@ from app.api.init_api import asgi_app
 
 @pytest.fixture
 async def app() -> AsyncIterator[ASGIApp]:
-    async with LifespanManager(asgi_app) as manager:
+    async with LifespanManager(
+        asgi_app,
+        startup_timeout=None,
+        shutdown_timeout=None,
+    ) as manager:
         yield manager.app
 
 

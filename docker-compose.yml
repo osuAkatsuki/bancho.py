@@ -1,5 +1,43 @@
 version: "3.8"
 
+x-env: &x-env
+  APP_HOST: "${APP_HOST}"
+  APP_PORT: "${APP_PORT}"
+  DB_USER: "${DB_USER}"
+  DB_PASS: "${DB_PASS}"
+  DB_NAME: "${DB_NAME}"
+  DB_HOST: "${DB_HOST}"
+  DB_PORT: "${DB_PORT}"
+  REDIS_USER: "${REDIS_USER}"
+  REDIS_PASS: "${REDIS_PASS}"
+  REDIS_HOST: "${REDIS_HOST}"
+  REDIS_PORT: "${REDIS_PORT}"
+  REDIS_DB: "${REDIS_DB}"
+  OSU_API_KEY: "${OSU_API_KEY}"
+  MIRROR_SEARCH_ENDPOINT: "${MIRROR_SEARCH_ENDPOINT}"
+  MIRROR_DOWNLOAD_ENDPOINT: "${MIRROR_DOWNLOAD_ENDPOINT}"
+  DOMAIN: "${DOMAIN}"
+  COMMAND_PREFIX: "${COMMAND_PREFIX}"
+  SEASONAL_BGS: "${SEASONAL_BGS}"
+  MENU_ICON_URL: "${MENU_ICON_URL}"
+  MENU_ONCLICK_URL: "${MENU_ONCLICK_URL}"
+  DATADOG_API_KEY: "${DATADOG_API_KEY}"
+  DATADOG_APP_KEY: "${DATADOG_APP_KEY}"
+  DEBUG: "${DEBUG}"
+  REDIRECT_OSU_URLS: "${REDIRECT_OSU_URLS}"
+  PP_CACHED_ACCS: "${PP_CACHED_ACCS}"
+  DISALLOWED_NAMES: "${DISALLOWED_NAMES}"
+  DISALLOWED_PASSWORDS: "${DISALLOWED_PASSWORDS}"
+  DISALLOW_OLD_CLIENTS: "${DISALLOW_OLD_CLIENTS}"
+  DISCORD_AUDIT_LOG_WEBHOOK: "${DISCORD_AUDIT_LOG_WEBHOOK}"
+  AUTOMATICALLY_REPORT_PROBLEMS: "${AUTOMATICALLY_REPORT_PROBLEMS}"
+  SSL_CERT_PATH: "${SSL_CERT_PATH}"
+  SSL_KEY_PATH: "${SSL_KEY_PATH}"
+  DEVELOPER_MODE: "${DEVELOPER_MODE}"
+  # On deprecation path
+  SERVER_ADDR: "${SERVER_ADDR}"
+  SERVER_PORT: "${SERVER_PORT}"
+
 services:
   ## shared services
 
@@ -23,6 +61,26 @@ services:
       timeout: 20s
       retries: 10
 
+  mysql-test:
+    image: mysql:latest
+    # ports:
+    #   - ${DB_PORT}:${DB_PORT}
+    environment:
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      NYSQL_HOST: ${DB_HOST}
+      MYSQL_PORT: ${DB_PORT}
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+    volumes:
+      - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - test-db-data:/var/lib/mysql
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
   redis:
     image: bitnami/redis:latest
     # ports:
@@ -30,6 +88,17 @@ services:
     user: root
     volumes:
       - redis-data:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PASSWORD=${REDIS_PASS}
+
+  redis-test:
+    image: bitnami/redis:latest
+    # ports:
+    #   - ${REDIS_PORT}:${REDIS_PORT}
+    user: root
+    volumes:
+      - test-redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
@@ -52,44 +121,30 @@ services:
       - .:/srv/root
       - data:/srv/root/.data
     environment:
-      - APP_HOST=${APP_HOST}
-      - APP_PORT=${APP_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASS=${DB_PASS}
-      - DB_NAME=${DB_NAME}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - REDIS_USER=${REDIS_USER}
-      - REDIS_PASS=${REDIS_PASS}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_DB=${REDIS_DB}
-      - OSU_API_KEY=${OSU_API_KEY}
-      - MIRROR_SEARCH_ENDPOINT=${MIRROR_SEARCH_ENDPOINT}
-      - MIRROR_DOWNLOAD_ENDPOINT=${MIRROR_DOWNLOAD_ENDPOINT}
-      - DOMAIN=${DOMAIN}
-      - COMMAND_PREFIX=${COMMAND_PREFIX}
-      - SEASONAL_BGS=${SEASONAL_BGS}
-      - MENU_ICON_URL=${MENU_ICON_URL}
-      - MENU_ONCLICK_URL=${MENU_ONCLICK_URL}
-      - DATADOG_API_KEY=${DATADOG_API_KEY}
-      - DATADOG_APP_KEY=${DATADOG_APP_KEY}
-      - DEBUG=${DEBUG}
-      - REDIRECT_OSU_URLS=${REDIRECT_OSU_URLS}
-      - PP_CACHED_ACCS=${PP_CACHED_ACCS}
-      - DISALLOWED_NAMES=${DISALLOWED_NAMES}
-      - DISALLOWED_PASSWORDS=${DISALLOWED_PASSWORDS}
-      - DISALLOW_OLD_CLIENTS=${DISALLOW_OLD_CLIENTS}
-      - DISCORD_AUDIT_LOG_WEBHOOK=${DISCORD_AUDIT_LOG_WEBHOOK}
-      - AUTOMATICALLY_REPORT_PROBLEMS=${AUTOMATICALLY_REPORT_PROBLEMS}
-      - SSL_CERT_PATH=${SSL_CERT_PATH}
-      - SSL_KEY_PATH=${SSL_KEY_PATH}
-      - DEVELOPER_MODE=${DEVELOPER_MODE}
-      # On deprecation path
-      - SERVER_ADDR=${SERVER_ADDR}
-      - SERVER_PORT=${SERVER_PORT}
+      <<: *x-env
+
+  bancho-test:
+    # we also have a public image: osuakatsuki/bancho.py:latest
+    image: bancho:latest
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_started
+    tty: true
+    init: true
+    volumes:
+      - .:/srv/root
+      - test-data:/srv/root/.data
+    environment:
+      <<: *x-env
 
 volumes:
   data:
+  test-data:
   db-data:
+  test-db-data:
   redis-data:
+  test-redis-data:

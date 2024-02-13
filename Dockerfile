@@ -13,6 +13,9 @@ RUN pip install -U pip poetry
 RUN poetry config virtualenvs.create false
 RUN poetry install --no-root
 
+RUN apt update && \
+    apt install -y default-mysql-client redis-tools
+
 # NOTE: done last to avoid re-run of previous steps
 COPY . .
 
