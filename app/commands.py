@@ -582,37 +582,29 @@ async def requests(ctx: Context) -> str | None:
     if not rows:
         return "The queue is clean! (0 map request(s))"
 
-    per_map_id_reviews: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    # group rows into {map_id: [map_request, ...]}
+    grouped: dict[int, list[map_requests_repo.MapRequest]] = {}
     for row in rows:
-        map_id = row["map_id"]
-        player_id = row["player_id"]
-        dt = row["datetime"]
+        if row["map_id"] not in grouped:
+            grouped[row["map_id"]] = []
+        grouped[row["map_id"]].append(row)
 
-        # find player & map for each row, and add to output.
-        player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-        if not player:
-            log(
-                f"Failed to find beatmap request-submitting user ({player_id})?",
-                Ansi.LYELLOW,
-            )
-            continue
+    if not grouped:
+        return "The queue is clean! (0 map request(s))"
+
+    l = [f"Total requested beatmaps: {len(grouped)}"]
+    for map_id, reviews in grouped.items():
+        assert len(reviews) != 1
 
         bmap = await Beatmap.from_bid(map_id)
         if not bmap:
             log(f"Failed to find requested map ({map_id})?", Ansi.LYELLOW)
             continue
 
-        per_map_id_reviews[map_id].append({"player": player, "map": bmap, "dt": dt})
+        first_review = min(reviews, key=lambda r: r["datetime"])
 
-    if not per_map_id_reviews:
-        return "The queue is clean! (0 map request(s))"
-
-    l = [f"Total requested beatmaps: {len(per_map_id_reviews)}"]
-    for map_id, reviews in per_map_id_reviews.items():
-        bmap = reviews[0]["map"]
-        earliest_review = min(reviews, key=lambda r: r["dt"])
         l.append(
-            f"[{bmap.embed}] ({len(reviews)} requests, from {earliest_review['dt']:%Y-%m-%d})",
+            f"[{bmap.embed}] ({len(reviews)} requests, from {first_review['datetime']:%Y-%m-%d})",
         )
 
     return "\n".join(l)
