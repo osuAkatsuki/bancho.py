@@ -1,3 +1,37 @@
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+strict = true
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = ["var-annotated", "has-type"]
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "aiomysql.*",
+    "mitmproxy.*",
+    "py3rijndael.*",
+    "timeago.*",
+    "pytimeparse.*",
+    "cpuinfo.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_requird_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.isort]
+add_imports = ["from __future__ import annotations"]
+force_single_line = true
+profile = "black"
+
 [tool.poetry]
 name = "bancho-py"
 version = "5.0.0"
@@ -20,7 +54,8 @@ python-multipart = "0.0.9"
 requests = "2.31.0"
 timeago = "1.0.16"
 uvicorn = "0.27.1"
-uvloop = "0.19.0"
+uvloop = { markers = "sys_platform != 'win32'", version = "0.19.0" }
+winloop = { platform = "win32", version = "0.1.1" }
 py3rijndael = "0.3.3"
 pytimeparse = "1.1.8"
 pydantic = "2.6.1"
