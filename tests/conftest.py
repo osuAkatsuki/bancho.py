@@ -4,8 +4,10 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
+import respx
 from asgi_lifespan import LifespanManager
 from asgi_lifespan._types import ASGIApp
+from fastapi import status
 
 from app.api.init_api import asgi_app
 
@@ -17,7 +19,14 @@ from app.api.init_api import asgi_app
 
 
 @pytest.fixture
-async def app() -> AsyncIterator[ASGIApp]:
+async def app(respx_mock: respx.MockRouter) -> AsyncIterator[ASGIApp]:
+    respx_mock.get(url__regex="https://assets.ppy.sh/medals/client/.+").mock(
+        return_value=httpx.Response(
+            status_code=status.HTTP_200_OK,
+            headers={"Content-Type": "image/png"},
+            content=b"i am a png file",
+        ),
+    )
     async with LifespanManager(
         asgi_app,
         startup_timeout=None,
