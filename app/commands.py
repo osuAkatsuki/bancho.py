@@ -1948,7 +1948,12 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.tourney_pool.maps:
+    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+        pool_id=match.tourney_pool["id"],
+        mods=mods,
+        slot=slot,
+    )
+    if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) in match.bans:
@@ -1979,7 +1984,12 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.tourney_pool.maps:
+    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+        pool_id=match.tourney_pool["id"],
+        mods=mods,
+        slot=slot,
+    )
+    if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) not in match.bans:
@@ -2010,14 +2020,21 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.tourney_pool.maps:
+    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+        pool_id=match.tourney_pool["id"],
+        mods=mods,
+        slot=slot,
+    )
+    if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) in match.bans:
         return f"{mods_slot} has been banned from being picked."
 
-    # update match beatmap to the picked map.
-    bmap = match.tourney_pool.maps[(mods, slot)]
+    bmap = await Beatmap.from_bid(map_pick["map_id"])
+    if not bmap:
+        return f"Found no beatmap for {mods_slot} pick."
+
     match.map_md5 = bmap.md5
     match.map_id = bmap.id
     match.map_name = bmap.full_name
