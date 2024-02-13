@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from enum import StrEnum
 from typing import Any
-from typing import Optional
-from typing import Union
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -24,6 +23,13 @@ from app.repositories import ouath_clients as clients_repo
 from app.repositories import refresh_tokens as refresh_tokens_repo
 
 router = APIRouter()
+
+
+class GrantType(StrEnum):
+    AUTHORIZATION_CODE = "authorization_code"
+    CLIENT_CREDENTIALS = "client_credentials"
+
+    # TODO: Add support for other grant types
 
 
 @router.get("/oauth/authorize", status_code=status.HTTP_302_FOUND)
@@ -64,7 +70,7 @@ async def authorize(
 @router.post("/oauth/token", status_code=status.HTTP_200_OK)
 async def token(
     response: Response,
-    grant_type: str = Form(),
+    grant_type: GrantType = Form(),
     client_id: int = Form(default=None),
     client_secret: str = Form(default=None),
     auth_credentials: dict[str, Any] | None = Depends(
@@ -96,7 +102,7 @@ async def token(
     if client["secret"] != client_secret:
         return responses.failure("invalid_client")
 
-    if grant_type == "authorization_code":
+    if grant_type is GrantType.AUTHORIZATION_CODE:
         if code is None:
             return responses.failure("invalid_request")
 
@@ -137,7 +143,7 @@ async def token(
             expires_at=access_token["expires_at"],
             scope=scope,
         )
-    elif grant_type == "client_credentials":
+    elif grant_type is GrantType.CLIENT_CREDENTIALS:
         client = await clients_repo.fetch_one(client_id)
         if client is None:
             return responses.failure("invalid_client")
