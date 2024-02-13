@@ -67,7 +67,7 @@ async def create(
 async def fetch_all(
     map_id: int | None = None,
     player_id: int | None = None,
-    active: int | None = None,
+    active: bool | None = None,
 ) -> list[MapRequest]:
     """Fetch a list of map requests from the database."""
     query = f"""\
