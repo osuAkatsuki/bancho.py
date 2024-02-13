@@ -594,7 +594,7 @@ async def requests(ctx: Context) -> str | None:
 
     l = [f"Total requested beatmaps: {len(grouped)}"]
     for map_id, reviews in grouped.items():
-        assert len(reviews) != 1
+        assert len(reviews) != 0
 
         bmap = await Beatmap.from_bid(map_id)
         if not bmap:
