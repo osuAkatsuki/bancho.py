@@ -61,6 +61,7 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
+from app.repositories import client_hashes as client_hashes_repo
 from app.repositories import ingame_logins as logins_repo
 from app.repositories import mail as mail_repo
 from app.repositories import players as players_repo
@@ -743,43 +744,22 @@ async def handle_osu_login_request(
         osu_stream=osu_version.stream,
     )
 
-    await db_conn.execute(
-        "INSERT INTO client_hashes "
-        "(userid, osupath, adapters, uninstall_id,"
-        " disk_serial, latest_time, occurrences) "
-        "VALUES (:id, :osupath, :adapters, :uninstall, :disk_serial, NOW(), 1) "
-        "ON DUPLICATE KEY UPDATE "
-        "occurrences = occurrences + 1, "
-        "latest_time = NOW() ",
-        {
-            "id": user_info["id"],
-            "osupath": login_data["osu_path_md5"],
-            "adapters": login_data["adapters_md5"],
-            "uninstall": login_data["uninstall_md5"],
-            "disk_serial": login_data["disk_signature_md5"],
-        },
+    await client_hashes_repo.create(
+        userid=user_info["id"],
+        osupath=login_data["osu_path_md5"],
+        adapters=login_data["adapters_md5"],
+        uninstall_id=login_data["uninstall_md5"],
+        disk_serial=login_data["disk_signature_md5"],
     )
 
     # TODO: store adapters individually
 
-    if running_under_wine:
-        hw_checks = "h.uninstall_id = :uninstall"
-        hw_args = {"uninstall": login_data["uninstall_md5"]}
-    else:
-        hw_checks = "h.adapters = :adapters OR h.uninstall_id = :uninstall OR h.disk_serial = :disk_serial"
-        hw_args = {
-            "adapters": login_data["adapters_md5"],
-            "uninstall": login_data["uninstall_md5"],
-            "disk_serial": login_data["disk_signature_md5"],
-        }
-
-    hw_matches = await db_conn.fetch_all(
-        "SELECT u.name, u.priv, h.occurrences "
-        "FROM client_hashes h "
-        "INNER JOIN users u ON h.userid = u.id "
-        "WHERE h.userid != :user_id AND "
-        f"({hw_checks})",
-        {"user_id": user_info["id"], **hw_args},
+    hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
+        userid=user_info["id"],
+        running_under_wine=running_under_wine,
+        adapters=login_data["adapters_md5"],
+        uninstall_id=login_data["uninstall_md5"],
+        disk_serial=login_data["disk_signature_md5"],
     )
 
     if hw_matches:
