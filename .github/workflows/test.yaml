@@ -15,38 +15,36 @@ on:
   pull_request:
 
 env:
-  DB_USER: ${{ vars.DB_USER }}
-  DB_PASS: ${{ vars.DB_PASS }}
-  DB_NAME: ${{ vars.DB_NAME }}
-  DB_HOST: ${{ vars.DB_HOST }}
-  DB_PORT: ${{ vars.DB_PORT }}
-  REDIS_PASS: ${{ vars.REDIS_PASS }}
-  APP_PORT: ${{ vars.APP_PORT }}
-  APP_HOST: ${{ vars.APP_HOST }}
-  REDIS_USER: ${{ vars.REDIS_USER }}
-  REDIS_HOST: ${{ vars.REDIS_HOST }}
-  REDIS_PORT: ${{ vars.REDIS_PORT }}
-  REDIS_DB: ${{ vars.REDIS_DB }}
-  MIRROR_SEARCH_ENDPOINT: ${{ vars.MIRROR_SEARCH_ENDPOINT }}
-  MIRROR_DOWNLOAD_ENDPOINT: ${{ vars.MIRROR_DOWNLOAD_ENDPOINT }}
-  DOMAIN: ${{ vars.DOMAIN }}
-  COMMAND_PREFIX: ${{ vars.COMMAND_PREFIX }}
-  SEASONAL_BGS: ${{ vars.SEASONAL_BGS }}
-  MENU_ICON_URL: ${{ vars.MENU_ICON_URL }}
-  MENU_ONCLICK_URL: ${{ vars.MENU_ONCLICK_URL }}
-  DATADOG_API_KEY: ${{ vars.DATADOG_API_KEY }}
-  DATADOG_APP_KEY: ${{ vars.DATADOG_APP_KEY }}
-  DEBUG: ${{ vars.DEBUG }}
-  REDIRECT_OSU_URLS: ${{ vars.REDIRECT_OSU_URLS }}
-  PP_CACHED_ACCS: ${{ vars.PP_CACHED_ACCS }}
-  DISALLOWED_NAMES: ${{ vars.DISALLOWED_NAMES }}
-  DISALLOWED_PASSWORDS: ${{ vars.DISALLOWED_PASSWORDS }}
-  DISALLOW_OLD_CLIENTS: ${{ vars.DISALLOW_OLD_CLIENTS }}
-  DISCORD_AUDIT_LOG_WEBHOOK: ${{ vars.DISCORD_AUDIT_LOG_WEBHOOK }}
-  AUTOMATICALLY_REPORT_PROBLEMS: ${{ vars.AUTOMATICALLY_REPORT_PROBLEMS }}
-  SSL_CERT_PATH: ${{ vars.SSL_CERT_PATH }}
-  SSL_KEY_PATH: ${{ vars.SSL_KEY_PATH }}
-  DEVELOPER_MODE: ${{ vars.DEVELOPER_MODE }}
+  - APP_HOST: "0.0.0.0"
+  - APP_PORT: "10000"
+  - AUTOMATICALLY_REPORT_PROBLEMS: "False"
+  - COMMAND_PREFIX: "!"
+  - DATA_DIRECTORY: "not relevant"
+  - DB_HOST: "mysql"
+  - DB_NAME: "bancho"
+  - DB_PASS: "lol123"
+  - DB_PORT: "3306"
+  - DB_USER: "cmyui"
+  - DEBUG: "True"
+  - DEVELOPER_MODE: "True"
+  - DISALLOWED_NAMES: "mrekk,vaxei,btmc,cookiezi"
+  - DISALLOWED_PASSWORDS: "password,abc123"
+  - DISALLOW_OLD_CLIENTS: "False"
+  - DOMAIN: "cmyui.xyz"
+  - MENU_ICON_URL: "https://akatsuki.pw/static/logos/logo_ingame.png"
+  - MENU_ONCLICK_URL: "https://akatsuki.pw"
+  - MIRROR_DOWNLOAD_ENDPOINT: "https://catboy.best/d"
+  - MIRROR_SEARCH_ENDPOINT: "https://catboy.best/api/search"
+  - PP_CACHED_ACCS: "90,95,98,99,100"
+  - REDIRECT_OSU_URLS: "True"
+  - REDIS_DB: "0"
+  - REDIS_HOST: "redis"
+  - REDIS_PASS: "pass"
+  - REDIS_PORT: "6379"
+  - REDIS_USER: "default"
+  - SEASONAL_BGS: "https://akatsuki.pw/static/flower.png,https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg"
+  - SSL_CERT_PATH: "not relevant"
+  - SSL_KEY_PATH: "not relevant"
 
 jobs:
   run-test-suite:
