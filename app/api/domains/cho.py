@@ -41,7 +41,7 @@ from app.logging import Ansi
 from app.logging import log
 from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.channel import Channel
 from app.objects.clan import Clan
 from app.objects.match import MAX_MATCH_NAME_LENGTH
@@ -1270,12 +1270,11 @@ class SendPrivateMessage(BasePacket):
 
                         # calculate generic pp values from their /np
 
-                        osu_file_path = BEATMAPS_PATH / f"{bmap.id}.osu"
-                        if not await ensure_local_osu_file(
-                            osu_file_path,
+                        osu_file_available = await ensure_osu_file_is_available(
                             bmap.id,
-                            bmap.md5,
-                        ):
+                            expected_md5=bmap.md5,
+                        )
+                        if not osu_file_available:
                             resp_msg = (
                                 "Mapfile could not be found; "
                                 "this incident has been reported."
@@ -1300,7 +1299,7 @@ class SendPrivateMessage(BasePacket):
                             ]
 
                             results = app.usecases.performance.calculate_performances(
-                                osu_file_path=str(osu_file_path),
+                                osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
                                 scores=scores,
                             )
 

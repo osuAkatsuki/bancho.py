@@ -23,7 +23,7 @@ from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.clan import Clan
 from app.objects.player import Player
 from app.repositories import players as players_repo
@@ -140,11 +140,12 @@ async def api_calculate_pp(
             {"status": "Beatmap not found."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-    if not await ensure_local_osu_file(
-        BEATMAPS_PATH / f"{beatmap.id}.osu",
+
+    osu_file_available = await ensure_osu_file_is_available(
         beatmap.id,
-        beatmap.md5,
-    ):
+        expected_md5=beatmap.md5,
+    )
+    if not osu_file_available:
         return ORJSONResponse(
             {"status": "Beatmap file could not be fetched."},
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -56,7 +56,7 @@ from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
-from app.objects.beatmap import ensure_local_osu_file
+from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
@@ -686,13 +686,12 @@ async def osuSubmitModularSelector(
         # now we can calculate things based on our data.
         score.acc = score.calculate_accuracy()
 
-        osu_file_path = BEATMAPS_PATH / f"{score.bmap.id}.osu"
-        if await ensure_local_osu_file(
-            osu_file_path,
-            score.bmap.id,
-            score.bmap.md5,
-        ):
-            score.pp, score.sr = score.calculate_performance(osu_file_path)
+        osu_file_available = await ensure_osu_file_is_available(
+            bmap.id,
+            expected_md5=bmap.md5,
+        )
+        if osu_file_available:
+            score.pp, score.sr = score.calculate_performance(bmap.id)
 
             if score.passed:
                 await score.calculate_status()
