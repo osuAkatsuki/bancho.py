@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from enum import StrEnum
 from typing import Any
 
 from fastapi import APIRouter
@@ -14,8 +13,8 @@ from fastapi.param_functions import Form
 from fastapi.param_functions import Query
 
 from app.api.v2 import get_current_client
-from app.api.v2.common import responses
 from app.api.v2.common.oauth import get_credentials_from_basic_auth
+from app.api.v2.models.oauth import GrantType
 from app.api.v2.models.oauth import Token
 from app.repositories import access_tokens as access_tokens_repo
 from app.repositories import authorization_codes as authorization_codes_repo
@@ -25,11 +24,8 @@ from app.repositories import refresh_tokens as refresh_tokens_repo
 router = APIRouter()
 
 
-class GrantType(StrEnum):
-    AUTHORIZATION_CODE = "authorization_code"
-    CLIENT_CREDENTIALS = "client_credentials"
-
-    # TODO: Add support for other grant types
+def oauth_failure_response(reason: str) -> dict[str, Any]:
+    return {"error": reason}
 
 
 @router.get("/oauth/authorize", status_code=status.HTTP_302_FOUND)
@@ -40,20 +36,20 @@ async def authorize(
     player_id: int = Query(),
     scope: str = Query(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
     state: str = Query(default=None),
-) -> str:
+):
     """Authorize a client to access the API on behalf of a user."""
     # NOTE: We should have to implement the frontend part to request the user to authorize the client
     # and then redirect to the redirect_uri with the code.
     # For now, we just return the code and the state if it's provided.
     client = await clients_repo.fetch_one(client_id)
     if client is None:
-        return responses.failure("invalid_client")
+        return oauth_failure_response("invalid_client")
 
     if client["redirect_uri"] != redirect_uri:
-        return responses.failure("invalid_client")
+        return oauth_failure_response("invalid_client")
 
     if response_type != "code":
-        return responses.failure("unsupported_response_type")
+        return oauth_failure_response("unsupported_response_type")
 
     code = uuid.uuid4()
     await authorization_codes_repo.create(code, client_id, scope, player_id)
@@ -78,7 +74,7 @@ async def token(
     ),
     code: str | None = Form(default=None),
     scope: str = Form(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
-) -> Token:
+):
     """Get an access token for the API."""
     # https://www.rfc-editor.org/rfc/rfc6749#section-5.1
     response.headers["Content-Type"] = "application/json; charset=utf-8"
@@ -86,35 +82,35 @@ async def token(
     response.headers["Pragma"] = "no-cache"
 
     if (client_id is None or client_secret is None) and auth_credentials is None:
-        return responses.failure("invalid_request")
+        return oauth_failure_response("invalid_request")
 
     if client_id is None and client_secret is None:
         if auth_credentials is None:
-            return responses.failure("invalid_request")
+            return oauth_failure_response("invalid_request")
         else:
             client_id = auth_credentials["client_id"]
             client_secret = auth_credentials["client_secret"]
 
     client = await clients_repo.fetch_one(client_id)
     if client is None:
-        return responses.failure("invalid_client")
+        return oauth_failure_response("invalid_client")
 
     if client["secret"] != client_secret:
-        return responses.failure("invalid_client")
+        return oauth_failure_response("invalid_client")
 
     if grant_type is GrantType.AUTHORIZATION_CODE:
         if code is None:
-            return responses.failure("invalid_request")
+            return oauth_failure_response("invalid_request")
 
         authorization_code = await authorization_codes_repo.fetch_one(code)
         if not authorization_code:
-            return responses.failure("invalid_grant")
+            return oauth_failure_response("invalid_grant")
 
         if authorization_code["client_id"] != client_id:
-            return responses.failure("invalid_client")
+            return oauth_failure_response("invalid_client")
 
         if authorization_code["scopes"] != scope:
-            return responses.failure("invalid_scope")
+            return oauth_failure_response("invalid_scope")
         await authorization_codes_repo.delete(code)
 
         refresh_token = uuid.uuid4()
@@ -146,10 +142,10 @@ async def token(
     elif grant_type is GrantType.CLIENT_CREDENTIALS:
         client = await clients_repo.fetch_one(client_id)
         if client is None:
-            return responses.failure("invalid_client")
+            return oauth_failure_response("invalid_client")
 
         if client["secret"] != client_secret:
-            return responses.failure("invalid_client")
+            return oauth_failure_response("invalid_client")
 
         raw_access_token = uuid.uuid4()
         access_token = await access_tokens_repo.create(
@@ -169,7 +165,7 @@ async def token(
             scope=scope,
         )
     else:
-        return responses.failure("unsupported_grant_type")
+        return oauth_failure_response("unsupported_grant_type")
 
 
 @router.post("/oauth/refresh", status_code=status.HTTP_200_OK)
@@ -178,7 +174,7 @@ async def refresh(
     client: dict[str, Any] = Depends(get_current_client),
     grant_type: str = Form(),
     refresh_token: str = Form(),
-) -> Token:
+):
     """Refresh an access token."""
     # https://www.rfc-editor.org/rfc/rfc6749#section-5.1
     response.headers["Content-Type"] = "application/json; charset=utf-8"
@@ -186,13 +182,13 @@ async def refresh(
     response.headers["Pragma"] = "no-cache"
 
     if grant_type != "refresh_token":
-        return responses.failure("unsupported_grant_type")
+        return oauth_failure_response("unsupported_grant_type")
 
     if client["grant_type"] != "authorization_code":
-        return responses.failure("invalid_grant")
+        return oauth_failure_response("invalid_grant")
 
     if client["refresh_token"] != refresh_token:
-        return responses.failure("invalid_grant")
+        return oauth_failure_response("invalid_grant")
 
     raw_access_token = uuid.uuid4()
     access_token = await access_tokens_repo.create(
