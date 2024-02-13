@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eox pipefail
+set -eo pipefail
 
 export DB_HOST=mysql-test
 export REDIS_HOST=redis-test
