@@ -115,7 +115,9 @@ async def fetch_by_id(id: int) -> TourneyPool | None:
     }
     tourney_pool = await app.state.services.database.fetch_one(query, params)
     return (
-        None if tourney_pool is None else cast(TourneyPool, dict(tourney_pool._mapping))
+        cast(TourneyPool, dict(tourney_pool._mapping))
+        if tourney_pool is not None
+        else None
     )
 
 
