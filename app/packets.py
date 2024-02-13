@@ -216,8 +216,8 @@ class ScoreFrame:
     num_katu: int
     num_miss: int
     total_score: int
-    current_combo: int
     max_combo: int
+    current_combo: int
     perfect: bool
     current_hp: int
     tag_byte: int
@@ -672,8 +672,8 @@ def write_scoreframe(s: ScoreFrame) -> bytes:
         s.num_katu,
         s.num_miss,
         s.total_score,
-        s.current_combo,
         s.max_combo,
+        s.current_combo,
         s.perfect,
         s.current_hp,
         s.tag_byte,
