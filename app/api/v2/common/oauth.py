@@ -73,13 +73,13 @@ def get_credentials_from_basic_auth(
     if ":" not in data:
         return None
 
-    data = data.split(":")
-    if len(data) != 2:
+    split = data.split(":")
+    if len(split) != 2:
         return None
-    if not data[0].isdecimal():
+    if not split[0].isdecimal():
         return None
 
     return {
-        "client_id": int(data[0]),
-        "client_secret": data[1],
+        "client_id": int(split[0]),
+        "client_secret": split[1],
     }

@@ -1,39 +1,60 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
+from datetime import timedelta
 from typing import Literal
-from typing import Optional
-from typing import Union
+from typing import TypedDict
 from uuid import UUID
 
 import app.state.services
 from app.api.v2.common import json
 
+AUTHORIZATION_CODE_TTL = timedelta(minutes=3)
 
-def create_authorization_code_key(code: UUID | str) -> str:
+
+class AuthorizationCode(TypedDict):
+    client_id: int
+    scope: str
+    player_id: int
+    created_at: datetime
+    expires_at: datetime
+
+
+def create_authorization_code_key(code: UUID | Literal["*"]) -> str:
     return f"bancho:authorization_codes:{code}"
 
 
 async def create(
-    code: UUID | str,
+    code: UUID,
     client_id: int,
     scope: str,
     player_id: int,
-) -> None:
-    await app.state.services.redis.setex(
+) -> AuthorizationCode:
+    now = datetime.now()
+    expires_at = now + AUTHORIZATION_CODE_TTL
+    authorization_code: AuthorizationCode = {
+        "client_id": client_id,
+        "scope": scope,
+        "player_id": player_id,
+        "created_at": now,
+        "expires_at": expires_at,
+    }
+    await app.state.services.redis.set(
         create_authorization_code_key(code),
-        180,
-        client_id,
-        json.dumps({"client_id": client_id, "scope": scope, "player_id": player_id}),
+        json.dumps(authorization_code),
+        exat=expires_at,
     )
+    return authorization_code
 
 
-async def fetch_one(code: UUID | str) -> dict[str, Any] | None:
-    data = await app.state.services.redis.get(create_authorization_code_key(code))
-    if data is None:
+async def fetch_one(code: UUID) -> AuthorizationCode | None:
+    raw_authorization_code = await app.state.services.redis.get(
+        create_authorization_code_key(code),
+    )
+    if raw_authorization_code is None:
         return None
 
-    return json.loads(data)
+    return json.loads(raw_authorization_code)
 
 
 async def fetch_all(
@@ -41,7 +62,7 @@ async def fetch_all(
     scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[AuthorizationCode]:
     authorization_code_key = create_authorization_code_key("*")
 
     if page > 1:
@@ -76,13 +97,13 @@ async def fetch_all(
     return authorization_codes
 
 
-async def delete(code: UUID | str) -> dict[str, Any] | None:
+async def delete(code: UUID) -> AuthorizationCode | None:
     authorization_code_key = create_authorization_code_key(code)
 
-    data = await app.state.services.redis.get(authorization_code_key)
-    if data is None:
+    raw_authorization_code = await app.state.services.redis.get(authorization_code_key)
+    if raw_authorization_code is None:
         return None
 
     await app.state.services.redis.delete(authorization_code_key)
 
-    return json.loads(data)
+    return json.loads(raw_authorization_code)

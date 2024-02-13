@@ -3,51 +3,64 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
+from typing import Literal
+from typing import TypedDict
 from uuid import UUID
 
 import app.state.services
 from app.api.v2.common import json
 
+ACCESS_TOKEN_TTL = timedelta(hours=1)
 
-def create_access_token_key(code: UUID | str) -> str:
+
+class AccessToken(TypedDict):
+    refresh_token: UUID | None
+    client_id: int
+    grant_type: str
+    scope: str
+    player_id: int | None
+    created_at: datetime
+    expires_at: datetime
+
+
+def create_access_token_key(code: UUID | Literal["*"]) -> str:
     return f"bancho:access_tokens:{code}"
 
 
 async def create(
-    access_token: UUID | str,
+    access_token_id: UUID,
     client_id: int,
     grant_type: str,
     scope: str,
-    refresh_token: UUID | str | None = "",
-    player_id: int | None = "",
-    expires_in: int | None = "",
-) -> dict[str, Any]:
-    access_token_key = create_access_token_key(access_token)
+    refresh_token: UUID | None = None,
+    player_id: int | None = None,
+) -> AccessToken:
     now = datetime.now()
-    access_token_expires_at = now + timedelta(seconds=expires_in or 3600)
-
-    data = {
+    expires_at = now + ACCESS_TOKEN_TTL
+    access_token: AccessToken = {
         "refresh_token": refresh_token,
         "client_id": client_id,
         "grant_type": grant_type,
         "scope": scope,
         "player_id": player_id,
-        "created_at": now.isoformat(),
-        "expires_at": access_token_expires_at.isoformat(),
+        "created_at": now,
+        "expires_at": expires_at,
     }
-    await app.state.services.redis.hmset(access_token_key, data)
-    await app.state.services.redis.expireat(access_token_key, access_token_expires_at)
+    await app.state.services.redis.set(
+        create_access_token_key(access_token_id),
+        json.dumps(access_token),
+        exat=expires_at,
+    )
+    return access_token
 
-    return data
 
-
-async def fetch_one(access_token: UUID | str) -> dict[str, Any] | None:
-    data = await app.state.services.redis.hgetall(create_access_token_key(access_token))
-
-    if data is None:
+async def fetch_one(access_token_id: UUID) -> AccessToken | None:
+    raw_access_token = await app.state.services.redis.get(
+        create_access_token_key(access_token_id),
+    )
+    if raw_access_token is None:
         return None
-
-    return data
+    return json.loads(raw_access_token)
 
 
 async def fetch_all(
@@ -57,7 +70,7 @@ async def fetch_all(
     player_id: int | None = None,
     page: int = 1,
     page_size: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[AccessToken]:
     access_token_key = create_access_token_key("*")
 
     if page > 1:
@@ -98,13 +111,13 @@ async def fetch_all(
     return access_tokens
 
 
-async def delete(access_token: UUID | str) -> dict[str, Any] | None:
-    access_token_key = create_access_token_key(access_token)
+async def delete(access_token_id: UUID) -> AccessToken | None:
+    access_token_key = create_access_token_key(access_token_id)
 
-    data = await app.state.services.redis.hgetall(access_token_key)
-    if data is None:
+    raw_access_token = await app.state.services.redis.get(access_token_key)
+    if raw_access_token is None:
         return None
 
     await app.state.services.redis.delete(access_token_key)
 
-    return data
+    return json.loads(raw_access_token)

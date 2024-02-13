@@ -2,51 +2,59 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timedelta
-from typing import Any
 from typing import Literal
-from typing import Optional
-from typing import Union
+from typing import TypedDict
 from uuid import UUID
 
 import app.state.services
 from app.api.v2.common import json
 
 
-def create_refresh_token_key(code: UUID | str) -> str:
+class RefreshToken(TypedDict):
+    client_id: int
+    scope: str
+    refresh_token_id: UUID
+    access_token_id: UUID
+    created_at: datetime
+    expires_at: datetime
+
+
+def create_refresh_token_key(code: UUID | Literal["*"]) -> str:
     return f"bancho:refresh_tokens:{code}"
 
 
 async def create(
-    refresh_token: UUID | str,
-    access_token: UUID | str,
+    refresh_token_id: UUID,
+    access_token_id: UUID,
     client_id: int,
     scope: str,
-) -> dict[str, Any]:
-    refresh_token_key = create_refresh_token_key(refresh_token)
+) -> RefreshToken:
     now = datetime.now()
-    refresh_token_expires_at = now + timedelta(days=30)
-
-    data = {
+    expires_at = now + timedelta(days=30)
+    refresh_token: RefreshToken = {
         "client_id": client_id,
         "scope": scope,
-        "access_token": access_token,
-        "created_at": now.isoformat(),
-        "expires_at": refresh_token_expires_at.isoformat(),
+        "refresh_token_id": refresh_token_id,
+        "access_token_id": access_token_id,
+        "created_at": now,
+        "expires_at": expires_at,
     }
-    await app.state.services.redis.hmset(refresh_token_key, data)
-    await app.state.services.redis.expireat(refresh_token_key, refresh_token_expires_at)
-
-    return data
-
-
-async def fetch_one(refresh_token: UUID | str) -> dict[str, Any] | None:
-    data = await app.state.services.redis.hgetall(
-        create_refresh_token_key(refresh_token),
+    await app.state.services.redis.set(
+        create_refresh_token_key(refresh_token_id),
+        json.dumps(refresh_token),
+        exat=expires_at,
     )
-    if data is None:
+    return refresh_token
+
+
+async def fetch_one(refresh_token_id: UUID) -> RefreshToken | None:
+    raw_refresh_token = await app.state.services.redis.get(
+        create_refresh_token_key(refresh_token_id),
+    )
+    if raw_refresh_token is None:
         return None
 
-    return data
+    return json.loads(raw_refresh_token)
 
 
 async def fetch_all(
@@ -54,7 +62,7 @@ async def fetch_all(
     scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[RefreshToken]:
     refresh_token_key = create_refresh_token_key("*")
 
     if page > 1:
@@ -89,13 +97,13 @@ async def fetch_all(
     return refresh_tokens
 
 
-async def delete(refresh_token: UUID | str) -> dict[str, Any] | None:
-    refresh_token_key = create_refresh_token_key(refresh_token)
+async def delete(refresh_token_id: UUID) -> RefreshToken | None:
+    refresh_token_key = create_refresh_token_key(refresh_token_id)
 
-    data = await app.state.services.redis.hgetall(refresh_token_key)
-    if data is None:
+    raw_refresh_token = await app.state.services.redis.get(refresh_token_key)
+    if raw_refresh_token is None:
         return None
 
     await app.state.services.redis.delete(refresh_token_key)
 
-    return data
+    return json.loads(raw_refresh_token)
