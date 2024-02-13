@@ -21,6 +21,7 @@ from app.constants.mods import Mods
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
+from app.repositories.tourney_pools import TourneyPool
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -30,16 +31,6 @@ if TYPE_CHECKING:
     from app.objects.channel import Channel
     from app.objects.player import Player
 
-__all__ = (
-    "SlotStatus",
-    "MatchTeams",
-    #'MatchTypes',
-    "MatchWinConditions",
-    "MatchTeamTypes",
-    "MapPool",
-    "Slot",
-    "Match",
-)
 
 MAX_MATCH_NAME_LENGTH = 50
 
@@ -94,54 +85,6 @@ class MatchTeamTypes(IntEnum):
     tag_coop = 1
     team_vs = 2
     tag_team_vs = 3
-
-
-class MapPool:
-    def __init__(
-        self,
-        id: int,
-        name: str,
-        created_at: datetime,
-        created_by: Player,
-    ) -> None:
-        self.id = id
-        self.name = name
-        self.created_at = created_at
-        self.created_by = created_by
-
-        self.maps: dict[
-            tuple[Mods, int],
-            Beatmap,
-        ] = {}
-
-    def __repr__(self) -> str:
-        return f"<{self.name}>"
-
-    async def maps_from_sql(self, db_conn: databases.core.Connection) -> None:
-        """Retrieve all maps from sql to populate `self.maps`."""
-        for row in await db_conn.fetch_all(
-            "SELECT map_id, mods, slot FROM tourney_pool_maps WHERE pool_id = :pool_id",
-            {"pool_id": self.id},
-        ):
-            map_id = row["map_id"]
-            bmap = await Beatmap.from_bid(map_id)
-
-            if not bmap:
-                # map not found? remove it from the
-                # pool and log this incident to console.
-                # NOTE: it's intentional that this removes
-                # it from not only this pool, but all pools.
-                # TODO: perhaps discord webhook?
-                log(f"Removing {map_id} from pool {self.name} (not found).", Ansi.LRED)
-
-                await db_conn.execute(
-                    "DELETE FROM tourney_pool_maps WHERE map_id = :map_id",
-                    {"map_id": map_id},
-                )
-                continue
-
-            key: tuple[Mods, int] = (Mods(row["mods"]), row["slot"])
-            self.maps[key] = bmap
 
 
 class Slot:
@@ -247,7 +190,7 @@ class Match:
         self.starting: StartingTimers | None = None
         self.seed = seed  # used for mania random mod
 
-        self.pool: MapPool | None = None
+        self.tourney_pool: TourneyPool | None = None
 
         # scrimmage stuff
         self.is_scrimming = False

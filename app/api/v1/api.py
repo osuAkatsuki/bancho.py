@@ -29,6 +29,8 @@ from app.objects.player import Player
 from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
+from app.repositories import tourney_pools as tourney_pools_repo
 from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -994,22 +996,35 @@ async def api_get_pool(
 ) -> Response:
     """Return information of a given mappool."""
 
-    pool = app.state.sessions.pools.get(id=pool_id)
-    if not pool:
+    tourney_pool = await tourney_pools_repo.fetch_by_id(id=pool_id)
+    if tourney_pool is None:
         return ORJSONResponse(
             {"status": "Pool not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    tourney_pool_maps = {
+        (m["mods"], m["slot"]): await Beatmap.from_bid(m["map_id"])
+        for m in await tourney_pool_maps_repo.fetch_many(pool_id=pool_id)
+    }
+    tourney_pool_maps = {k: v for k, v in tourney_pool_maps.items() if v is not None}
+    pool_creator = app.state.sessions.players.get(id=tourney_pool["created_by"])
+
+    if pool_creator is None:
+        return ORJSONResponse(
+            {"status": "Pool creator not found."},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
     return ORJSONResponse(
         {
-            "id": pool.id,
-            "name": pool.name,
-            "created_at": pool.created_at,
-            "created_by": format_player_basic(pool.created_by),
+            "id": tourney_pool["id"],
+            "name": tourney_pool["name"],
+            "created_at": tourney_pool["created_at"],
+            "created_by": format_player_basic(pool_creator),
             "maps": {
                 f"{mods!r}{slot}": format_map_basic(bmap)
-                for (mods, slot), bmap in pool.maps.items()
+                for (mods, slot), bmap in tourney_pool_maps.items()
             },
         },
     )

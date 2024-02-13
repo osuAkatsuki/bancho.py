@@ -9,7 +9,6 @@ import signal
 import time
 import traceback
 import uuid
-from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -63,6 +62,8 @@ from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
+from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
+from app.repositories import tourney_pools as tourney_pools_repo
 from app.usecases.performance import ScoreParams
 from app.utils import seconds_readable
 
@@ -1895,15 +1896,18 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    pool = app.state.sessions.pools.get_by_name(name)
-    if not pool:
+    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    if match.pool is pool:
-        return f"{pool!r} already selected!"
+    if (
+        match.tourney_pool is not None
+        and match.tourney_pool["id"] == tourney_pool["id"]
+    ):
+        return f"{tourney_pool['name']} already selected!"
 
-    match.pool = pool
-    return f"{pool!r} selected."
+    match.tourney_pool = tourney_pool
+    return f"{tourney_pool['name']} selected."
 
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["ulp"])
@@ -1916,10 +1920,10 @@ async def mp_unloadpool(ctx: Context, match: Match) -> str | None:
     if ctx.player is not match.host:
         return "Only available to the host."
 
-    if not match.pool:
+    if not match.tourney_pool:
         return "No mappool currently selected!"
 
-    match.pool = None
+    match.tourney_pool = None
     return "Mappool unloaded."
 
 
@@ -1930,7 +1934,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp ban <pick>"
 
-    if not match.pool:
+    if not match.tourney_pool:
         return "No pool currently selected!"
 
     mods_slot = ctx.args[0]
@@ -1944,7 +1948,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.pool.maps:
+    if (mods, slot) not in match.tourney_pool.maps:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) in match.bans:
@@ -1961,7 +1965,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp unban <pick>"
 
-    if not match.pool:
+    if not match.tourney_pool:
         return "No pool currently selected!"
 
     mods_slot = ctx.args[0]
@@ -1975,7 +1979,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.pool.maps:
+    if (mods, slot) not in match.tourney_pool.maps:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) not in match.bans:
@@ -1992,7 +1996,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp pick <pick>"
 
-    if not match.pool:
+    if not match.tourney_pool:
         return "No pool currently loaded!"
 
     mods_slot = ctx.args[0]
@@ -2006,14 +2010,14 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    if (mods, slot) not in match.pool.maps:
+    if (mods, slot) not in match.tourney_pool.maps:
         return f"Found no {mods_slot} pick in the pool."
 
     if (mods, slot) in match.bans:
         return f"{mods_slot} has been banned from being picked."
 
     # update match beatmap to the picked map.
-    bmap = match.pool.maps[(mods, slot)]
+    bmap = match.tourney_pool.maps[(mods, slot)]
     match.map_md5 = bmap.md5
     match.map_id = bmap.id
     match.map_name = bmap.full_name
@@ -2067,37 +2071,13 @@ async def pool_create(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    if app.state.sessions.pools.get_by_name(name):
+    existing_pool = await tourney_pools_repo.fetch_by_name(name)
+    if existing_pool is not None:
         return "Pool already exists by that name!"
 
-    # insert pool into db
-    await app.state.services.database.execute(
-        "INSERT INTO tourney_pools "
-        "(name, created_at, created_by) "
-        "VALUES (:name, NOW(), :user_id)",
-        {"name": name, "user_id": ctx.player.id},
-    )
-
-    # add to cache (get from sql for id & time)
-    rec = await app.state.services.database.fetch_one(
-        "SELECT * FROM tourney_pools WHERE name = :name",
-        {"name": name},
-    )
-    assert rec is not None
-    row = dict(rec._mapping)
-
-    pool_creator = await app.state.sessions.players.from_cache_or_sql(
-        id=row["created_by"],
-    )
-    assert pool_creator is not None
-
-    app.state.sessions.pools.append(
-        MapPool(
-            id=row["id"],
-            name=row["name"],
-            created_at=row["created_at"],
-            created_by=pool_creator,
-        ),
+    tourney_pool = await tourney_pools_repo.create(
+        name=name,
+        created_by=ctx.player.id,
     )
 
     return f"{name} created."
@@ -2111,23 +2091,12 @@ async def pool_delete(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    pool = app.state.sessions.pools.get_by_name(name)
-    if not pool:
+    existing_pool = await tourney_pools_repo.fetch_by_name(name)
+    if existing_pool is None:
         return "Could not find a pool by that name!"
 
-    # delete from db
-    await app.state.services.database.execute(
-        "DELETE FROM tourney_pools WHERE id = :pool_id",
-        {"pool_id": pool.id},
-    )
-
-    await app.state.services.database.execute(
-        "DELETE FROM tourney_pool_maps WHERE pool_id = :pool_id",
-        {"pool_id": pool.id},
-    )
-
-    # remove from cache
-    app.state.sessions.pools.remove(pool)
+    await tourney_pools_repo.delete_by_id(existing_pool["id"])
+    await tourney_pool_maps_repo.delete_all_in_pool(pool_id=existing_pool["id"])
 
     return f"{name} deleted."
 
@@ -2157,26 +2126,28 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    pool = app.state.sessions.pools.get_by_name(name)
-    if not pool:
+    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    if (mods, slot) in pool.maps:
-        return f"{mods_slot} is already {pool.maps[(mods, slot)].embed}!"
-
-    if bmap in pool.maps.values():
-        return "Map is already in the pool!"
-
-    # insert into db
-    await app.state.services.database.execute(
-        "INSERT INTO tourney_pool_maps "
-        "(map_id, pool_id, mods, slot) "
-        "VALUES (:map_id, :pool_id, :mods, :slot)",
-        {"map_id": bmap.id, "pool_id": pool.id, "mods": mods, "slot": slot},
+    tourney_pool_maps = await tourney_pool_maps_repo.fetch_many(
+        pool_id=tourney_pool["id"],
     )
+    for pool_map in tourney_pool_maps:
+        if mods == pool_map["mods"] and slot == pool_map["slot"]:
+            pool_beatmap = await Beatmap.from_bid(pool_map["map_id"])
+            assert pool_beatmap is not None
+            return f"{mods_slot} is already {pool_beatmap.embed}!"
 
-    # add to cache
-    pool.maps[(mods, slot)] = bmap
+        if pool_map["map_id"] == bmap.id:
+            return f"{bmap.embed} is already in the pool!"
+
+    await tourney_pool_maps_repo.create(
+        map_id=bmap.id,
+        pool_id=tourney_pool["id"],
+        mods=mods,
+        slot=slot,
+    )
 
     return f"{bmap.embed} added to {name} as {mods_slot}."
 
@@ -2199,21 +2170,22 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    pool = app.state.sessions.pools.get_by_name(name)
-    if not pool:
+    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    if (mods, slot) not in pool.maps:
+    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+        pool_id=tourney_pool["id"],
+        mods=mods,
+        slot=slot,
+    )
+    if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
-    # delete from db
-    await app.state.services.database.execute(
-        "DELETE FROM tourney_pool_maps WHERE mods = :mods AND slot = :slot",
-        {"mods": mods, "slot": slot},
+    await tourney_pool_maps_repo.delete_map_from_pool(
+        map_pick["pool_id"],
+        map_pick["map_id"],
     )
-
-    # remove from cache
-    del pool.maps[(mods, slot)]
 
     return f"{mods_slot} removed from {name}."
 
@@ -2221,16 +2193,16 @@ async def pool_remove(ctx: Context) -> str | None:
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> str | None:
     """List all existing mappools information."""
-    pools = app.state.sessions.pools
-    if not pools:
+    tourney_pools = await tourney_pools_repo.fetch_many(page=None, page_size=None)
+    if not tourney_pools:
         return "There are currently no pools!"
 
-    l = [f"Mappools ({len(pools)})"]
+    l = [f"Mappools ({len(tourney_pools)})"]
 
-    for pool in pools:
+    for pool in tourney_pools:
         l.append(
-            f"[{pool.created_at:%Y-%m-%d}] {pool.id}. "
-            f"{pool.name}, by {pool.created_by}.",
+            f"[{pool['created_at']:%Y-%m-%d}] {pool['id']} "
+            f"{pool['name']}, by {pool['created_by']}.",
         )
 
     return "\n".join(l)
@@ -2244,20 +2216,26 @@ async def pool_info(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    pool = app.state.sessions.pools.get_by_name(name)
-    if not pool:
+    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    _time = pool.created_at.strftime("%H:%M:%S%p")
-    _date = pool.created_at.strftime("%Y-%m-%d")
+    _time = tourney_pool["created_at"].strftime("%H:%M:%S%p")
+    _date = tourney_pool["created_at"].strftime("%Y-%m-%d")
     datetime_fmt = f"Created at {_time} on {_date}"
-    l = [f"{pool.id}. {pool.name}, by {pool.created_by} | {datetime_fmt}."]
+    l = [
+        f"{tourney_pool['id']}. {tourney_pool['name']}, by {tourney_pool['created_by']} | {datetime_fmt}.",
+    ]
 
-    for (mods, slot), bmap in sorted(
-        pool.maps.items(),
-        key=lambda x: (repr(x[0][0]), x[0][1]),
+    for tourney_map in sorted(
+        await tourney_pool_maps_repo.fetch_many(pool_id=tourney_pool["id"]),
+        key=lambda x: (repr(x["mods"]), x["slot"]),
     ):
-        l.append(f"{mods!r}{slot}: {bmap.embed}")
+        bmap = await Beatmap.from_bid(tourney_map["map_id"])
+        if bmap is None:
+            log(f"Could not find beatmap {tourney_map['map_id']}.", Ansi.LRED)
+            continue
+        l.append(f"{tourney_map['mods']}{tourney_map['slot']}: {bmap.embed}")
 
     return "\n".join(l)
 
