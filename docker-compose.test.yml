@@ -13,10 +13,10 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       NYSQL_HOST: ${DB_HOST}
       MYSQL_PORT: ${DB_PORT}
-      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - db-data:/var/lib/mysql
+      - test-db-data:/var/lib/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
@@ -29,7 +29,7 @@ services:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - redis-data:/bitnami/redis/data
+      - test-redis-data:/bitnami/redis/data
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
@@ -50,7 +50,7 @@ services:
     init: true
     volumes:
       - .:/srv/root
-      - data:/srv/root/.data
+      - test-data:/srv/root/.data
     environment:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
@@ -90,6 +90,6 @@ services:
       - SERVER_PORT=${SERVER_PORT}
 
 volumes:
-  data:
-  db-data:
-  redis-data:
+  test-data:
+  test-db-data:
+  test-redis-data:
