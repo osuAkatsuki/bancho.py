@@ -1003,11 +1003,12 @@ async def api_get_pool(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    tourney_pool_maps = {
-        (m["mods"], m["slot"]): await Beatmap.from_bid(m["map_id"])
-        for m in await tourney_pool_maps_repo.fetch_many(pool_id=pool_id)
-    }
-    tourney_pool_maps = {k: v for k, v in tourney_pool_maps.items() if v is not None}
+    tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
+    for pool_map in await tourney_pool_maps_repo.fetch_many(pool_id=pool_id):
+        bmap = await Beatmap.from_bid(pool_map["map_id"])
+        if bmap is not None:
+            tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
+
     pool_creator = app.state.sessions.players.get(id=tourney_pool["created_by"])
 
     if pool_creator is None:
