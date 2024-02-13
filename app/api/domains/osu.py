@@ -66,6 +66,7 @@ from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
+from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories.achievements import Achievement
@@ -1117,32 +1118,18 @@ async def osuRate(
             return Response(b"not ranked")
 
         # osu! client is checking whether we can rate the map or not.
-        has_previous_rating = (
-            await app.state.services.database.fetch_one(
-                "SELECT 1 FROM ratings WHERE map_md5 = :map_md5 AND userid = :user_id",
-                {"map_md5": map_md5, "user_id": player.id},
-            )
-            is not None
-        )
-
         # the client hasn't rated the map, so simply
         # tell them that they can submit a rating.
-        if not has_previous_rating:
+        if not await ratings_repo.has_previous_rating(
+            map_md5=map_md5,
+            userid=player.id,
+        ):
             return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
-        await app.state.services.database.execute(
-            "INSERT INTO ratings VALUES (:user_id, :map_md5, :rating)",
-            {"user_id": player.id, "map_md5": map_md5, "rating": int(rating)},
-        )
+        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=int(rating))
 
-    ratings = [
-        row[0]
-        for row in await app.state.services.database.fetch_all(
-            "SELECT rating FROM ratings WHERE map_md5 = :map_md5",
-            {"map_md5": map_md5},
-        )
-    ]
+    ratings = [row["rating"] for row in await ratings_repo.fetch_all(map_md5)]
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
