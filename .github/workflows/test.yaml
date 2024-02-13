@@ -1,6 +1,10 @@
 name: Test Application Code
 
-on: push
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 env:
   DB_USER: ${{ vars.DB_USER }}
