@@ -70,6 +70,11 @@ DISALLOW_OLD_CLIENTS = read_bool(os.environ["DISALLOW_OLD_CLIENTS"])
 
 DISCORD_AUDIT_LOG_WEBHOOK = os.environ["DISCORD_AUDIT_LOG_WEBHOOK"]
 
+# TODO: store public keys in db; abstract towards jwks
+JWT_PUBLIC_KEY = os.environ["JWT_PUBLIC_KEY"]
+JWT_PRIVATE_KEY = os.environ["JWT_PRIVATE_KEY"]
+ROTATION_JWT_PRIVATE_KEY = os.environ["ROTATION_JWT_PRIVATE_KEY"]
+
 AUTOMATICALLY_REPORT_PROBLEMS = read_bool(os.environ["AUTOMATICALLY_REPORT_PROBLEMS"])
 
 # advanced dev settings

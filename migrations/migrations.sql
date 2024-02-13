@@ -410,12 +410,13 @@ alter table maps add primary key (id);
 alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
 unlock tables;
 
-# v4.7.3
-CREATE TABLE oauth_clients (
-	id INT(10) NOT NULL AUTO_INCREMENT,
-	name VARCHAR(16) NULL DEFAULT NULL,
-	secret VARCHAR(32) NOT NULL,
-	owner INT(10) NOT NULL,
-	redirect_uri TEXT NULL DEFAULT NULL,
-	PRIMARY KEY (`id`) USING BTREE
+# v5.1.0
+create table oauth_clients (
+	rec_id int(11) not null auto_increment,
+	client_id varchar(256) not null,
+	name varchar(16) null default null,
+	secret varchar(32) not null,
+	owner int(10) not null,
+	redirect_uri text null default null,
+	primary key (`rec_id`)
 )

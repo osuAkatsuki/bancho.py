@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Any
-from typing import Optional
+from typing import TypedDict
+from typing import cast
 
 import app.state.services
 
 # +--------------+-------------+------+-----+---------+----------------+
 # | Field        | Type        | Null | Key | Default | Extra          |
 # +--------------+-------------+------+-----+---------+----------------+
-# | id           | int         | NO   | PRI | NULL    | auto_increment |
+# | id           | varchar(64) | NO   | PRI | NULL    | auto_increment |
 # | name         | varchar(16) | YES  |     | NULL    |                |
 # | secret       | varchar(32) | NO   |     | NULL    |                |
 # | owner        | int         | NO   |     | NULL    |                |
@@ -23,12 +23,20 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
+class OAuthClient(TypedDict):
+    id: int
+    name: str | None
+    secret: str
+    owner: int
+    redirect_uri: str | None
+
+
 async def create(
     secret: str,
     owner: int,
     name: str | None = None,
     redirect_uri: str | None = None,
-) -> dict[str, Any]:
+) -> OAuthClient:
     """Create a new client in the database."""
     query = """\
         INSERT INTO oauth_clients (secret, owner, name, redirect_uri)
@@ -53,58 +61,37 @@ async def create(
 
     rec = await app.state.services.database.fetch_one(query, params)
     assert rec is not None
-    return dict(rec)
+    return cast(OAuthClient, dict(rec._mapping))
 
 
-async def fetch_one(
-    id: int | None = None,
-    owner: int | None = None,
-    secret: str | None = None,
-    name: str | None = None,
-) -> dict[str, Any] | None:
+async def fetch_one(id: str) -> OAuthClient | None:
     """Fetch a signle client from the database."""
-    if id is None and owner is None and secret is None:
-        raise ValueError("Must provide at least one parameter.")
-
     query = f"""\
         SELECT {READ_PARAMS}
           FROM oauth_clients
-         WHERE id = COALESCE(:id, id)
-            AND owner = COALESCE(:owner, owner)
-            AND secret = COALESCE(:secret, secret)
-            AND name = COALESCE(:name, name)
+         WHERE id = :id
     """
     params = {
         "id": id,
-        "owner": owner,
-        "secret": secret,
-        "name": name,
     }
     rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    return cast(OAuthClient, dict(rec._mapping)) if rec is not None else None
 
 
 async def fetch_many(
-    id: int | None = None,
     owner: int | None = None,
-    secret: str | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[dict[str, Any]] | None:
+) -> list[OAuthClient]:
     """Fetch all clients from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM oauth_clients
-         WHERE id = COALESCE(:id, id)
-            AND owner = COALESCE(:owner, owner)
-            AND secret = COALESCE(:secret, secret)
+         WHERE owner = COALESCE(:owner, owner)
     """
     params = {
-        "id": id,
         "owner": owner,
-        "secret": secret,
     }
-
     if page is not None and page_size is not None:
         query += """\
             LIMIT :limit
@@ -113,8 +100,8 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    recs = await app.state.services.database.fetch_all(query, params)
+    return cast(list[OAuthClient], [dict(rec._mapping) for rec in recs])
 
 
 async def update(
@@ -123,13 +110,13 @@ async def update(
     owner: int | None = None,
     name: str | None = None,
     redirect_uri: str | None = None,
-) -> dict[str, Any] | None:
+) -> OAuthClient | None:
     """Update an existing client in the database."""
     query = """\
         UPDATE oauth_clients
            SET secret = COALESCE(:secret, secret),
                owner = COALESCE(:owner, owner),
-               redirect_uri = COALESCE(:redirect_uri, redirect_uri)
+               redirect_uri = COALESCE(:redirect_uri, redirect_uri),
                name = COALESCE(:name, name)
          WHERE id = :id
     """
@@ -151,4 +138,4 @@ async def update(
         "id": id,
     }
     rec = await app.state.services.database.fetch_one(query, params)
-    return dict(rec) if rec is not None else None
+    return cast(OAuthClient, dict(rec._mapping)) if rec is not None else None

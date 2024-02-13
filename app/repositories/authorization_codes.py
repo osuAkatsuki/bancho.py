@@ -13,21 +13,21 @@ AUTHORIZATION_CODE_TTL = timedelta(minutes=3)
 
 
 class AuthorizationCode(TypedDict):
-    client_id: int
-    scope: str
+    client_id: str
+    scope: str | None
     player_id: int
     created_at: datetime
     expires_at: datetime
 
 
-def create_authorization_code_key(code: UUID | Literal["*"]) -> str:
+def create_authorization_code_key(code: str | Literal["*"]) -> str:
     return f"bancho:authorization_codes:{code}"
 
 
 async def create(
-    code: UUID,
-    client_id: int,
-    scope: str,
+    code: str,
+    client_id: str,
+    scope: str | None,
     player_id: int,
 ) -> AuthorizationCode:
     now = datetime.now()
@@ -47,7 +47,7 @@ async def create(
     return authorization_code
 
 
-async def fetch_one(code: UUID) -> AuthorizationCode | None:
+async def fetch_one(code: str) -> AuthorizationCode | None:
     raw_authorization_code = await app.state.services.redis.get(
         create_authorization_code_key(code),
     )
@@ -58,7 +58,7 @@ async def fetch_one(code: UUID) -> AuthorizationCode | None:
 
 
 async def fetch_all(
-    client_id: int | None = None,
+    client_id: str | None = None,
     scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
@@ -97,7 +97,7 @@ async def fetch_all(
     return authorization_codes
 
 
-async def delete(code: UUID) -> AuthorizationCode | None:
+async def delete(code: str) -> AuthorizationCode | None:
     authorization_code_key = create_authorization_code_key(code)
 
     raw_authorization_code = await app.state.services.redis.get(authorization_code_key)

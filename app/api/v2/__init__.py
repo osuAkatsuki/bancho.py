@@ -1,14 +1,16 @@
 # isort: dont-add-imports
 
 from typing import Any
+from typing import TypedDict
 
+import jwt
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import status
 
+from app import settings
 from app.api.v2.common.oauth import OAuth2Scheme
-from app.repositories import access_tokens as access_tokens_repo
 
 oauth2_scheme = OAuth2Scheme(
     authorizationUrl="/v2/oauth/authorize",
@@ -23,16 +25,45 @@ oauth2_scheme = OAuth2Scheme(
 )
 
 
-async def get_current_client(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
-    """Look up the token in the Redis-based token store"""
-    access_token = await access_tokens_repo.fetch_one(token)
-    if not access_token:
+class AuthorizationContext(TypedDict):
+    verified_claims: dict[str, Any]
+
+
+async def authenticate_api_request(
+    token: str = Depends(oauth2_scheme),
+) -> AuthorizationContext:
+    verified_claims: dict[str, Any] | None = None
+    try:
+        verified_claims = jwt.decode(
+            token,
+            settings.JWT_PRIVATE_KEY,
+            algorithms=["HS256"],
+            options={"require": ["exp", "nbf", "iss", "aud", "iat"]},
+        )
+    except jwt.InvalidTokenError:
+        pass
+
+    if verified_claims is None:
+        try:
+            verified_claims = jwt.decode(
+                token,
+                settings.ROTATION_JWT_PRIVATE_KEY,
+                algorithms=["HS256"],
+                options={"require": ["exp", "nbf", "iss", "aud", "iat"]},
+            )
+        except jwt.InvalidTokenError:
+            pass
+
+    if verified_claims is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return access_token
+
+    return AuthorizationContext(
+        verified_claims=verified_claims,
+    )
 
 
 from . import clans

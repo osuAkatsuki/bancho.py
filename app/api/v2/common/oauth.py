@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from typing import TypedDict
 
 from fastapi import Request
 from fastapi import status
@@ -60,10 +61,15 @@ class OAuth2Scheme(OAuth2):
         return param
 
 
+class BasicAuthCredentials(TypedDict):
+    client_id: str
+    client_secret: str
+
+
 # https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/#client-authentication
 def get_credentials_from_basic_auth(
     request: Request,
-) -> dict[str, str | int] | None:
+) -> BasicAuthCredentials | None:
     authorization = request.headers.get("Authorization")
     scheme, param = get_authorization_scheme_param(authorization)
     if not authorization or scheme.lower() != "basic":

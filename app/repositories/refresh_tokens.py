@@ -11,23 +11,21 @@ from app.api.v2.common import json
 
 
 class RefreshToken(TypedDict):
-    client_id: int
-    scope: str
+    client_id: str
+    scope: str | None
     refresh_token_id: UUID
-    access_token_id: UUID
     created_at: datetime
     expires_at: datetime
 
 
-def create_refresh_token_key(code: UUID | Literal["*"]) -> str:
-    return f"bancho:refresh_tokens:{code}"
+def create_refresh_token_key(refresh_token_id: UUID | Literal["*"]) -> str:
+    return f"bancho:refresh_tokens:{refresh_token_id}"
 
 
 async def create(
     refresh_token_id: UUID,
-    access_token_id: UUID,
-    client_id: int,
-    scope: str,
+    client_id: str,
+    scope: str | None,
 ) -> RefreshToken:
     now = datetime.now()
     expires_at = now + timedelta(days=30)
@@ -35,7 +33,6 @@ async def create(
         "client_id": client_id,
         "scope": scope,
         "refresh_token_id": refresh_token_id,
-        "access_token_id": access_token_id,
         "created_at": now,
         "expires_at": expires_at,
     }
@@ -58,7 +55,7 @@ async def fetch_one(refresh_token_id: UUID) -> RefreshToken | None:
 
 
 async def fetch_all(
-    client_id: int | None = None,
+    client_id: str | None = None,
     scope: str | None = None,
     page: int = 1,
     page_size: int = 10,
