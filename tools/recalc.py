@@ -253,28 +253,30 @@ async def recalculate_score_status(mode: GameMode, ctx: Context) -> None:
 
 async def main(argv: Sequence[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
-    if len(argv) == 0:
-        argv = ["--help"]
 
     parser = argparse.ArgumentParser(
         description="Provides tools for recalculating the PP and status of scores, and stats of users.",
     )
 
-    parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument(
-        "--scores",
-        help="Recalculates the PP of all scores",
+        "-d",
+        "--debug",
+        help="Enable debug logging",
         action="store_true",
     )
     parser.add_argument(
-        "--stats",
-        help="Recalculates the total PP and accuracy of all users",
+        "--no-scores",
+        help="Disable recalculating scores",
         action="store_true",
     )
     parser.add_argument(
-        "--statuses",
-        help="Re-evaluates the submission status (BEST, SUBMITTED) of scores",
-        help="Recalculate stats",
+        "--no-stats",
+        help="Disable recalculating user stats",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-status",
+        help="Disables recalculating submission status (BEST, SUBMITTED) of scores",
         action="store_true",
     )
 
@@ -302,13 +304,13 @@ async def main(argv: Sequence[str] | None = None) -> int:
     for mode in args.mode:
         mode = GameMode(int(mode))
 
-        if args.scores:
+        if not args.no_scores:
             await recalculate_mode_scores(mode, ctx)
 
-        if args.stats:
+        if not args.no_stats:
             await recalculate_mode_users(mode, ctx)
 
-        if args.statuses:
+        if not args.no_status:
             await recalculate_score_status(mode, ctx)
 
     await app.state.services.http_client.aclose()
