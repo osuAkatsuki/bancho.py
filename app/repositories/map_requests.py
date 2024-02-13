@@ -67,7 +67,7 @@ async def create(
 async def fetch_all(
     map_id: int | None = None,
     player_id: int | None = None,
-    active: int | None = None,
+    active: bool | None = None,
 ) -> list[MapRequest]:
     """Fetch a list of map requests from the database."""
     query = f"""\
@@ -94,7 +94,7 @@ async def mark_batch_as_inactive(map_ids: list[Any]) -> list[MapRequest]:
            SET active = False
          WHERE map_id IN :map_ids
     """
-    params = {"map_id": map_ids}
+    params = {"map_ids": map_ids}
     await app.state.services.database.execute(query, params)
 
     query = f"""\
