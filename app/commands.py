@@ -9,7 +9,6 @@ import signal
 import time
 import traceback
 import uuid
-from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -44,8 +43,6 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
@@ -582,7 +579,8 @@ async def requests(ctx: Context) -> str | None:
     if not rows:
         return "The queue is clean! (0 map request(s))"
 
-    per_map_id_reviews: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    l = [f"Total requests: {len(rows)}"]
+
     for row in rows:
         map_id = row["map_id"]
         player_id = row["player_id"]
@@ -591,29 +589,15 @@ async def requests(ctx: Context) -> str | None:
         # find player & map for each row, and add to output.
         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
         if not player:
-            log(
-                f"Failed to find beatmap request-submitting user ({player_id})?",
-                Ansi.LYELLOW,
-            )
+            l.append(f"Failed to find requesting player ({player_id})?")
             continue
 
         bmap = await Beatmap.from_bid(map_id)
         if not bmap:
-            log(f"Failed to find requested map ({map_id})?", Ansi.LYELLOW)
+            l.append(f"Failed to find requested map ({map_id})?")
             continue
 
-        per_map_id_reviews[map_id].append({"player": player, "map": bmap, "dt": dt})
-
-    if not per_map_id_reviews:
-        return "The queue is clean! (0 map request(s))"
-
-    l = [f"Total requested beatmaps: {len(per_map_id_reviews)}"]
-    for map_id, reviews in per_map_id_reviews.items():
-        bmap = reviews[0]["map"]
-        earliest_review = min(reviews, key=lambda r: r["dt"])
-        l.append(
-            f"[{bmap.embed}] ({len(reviews)} requests, from {earliest_review['dt']:%Y-%m-%d})",
-        )
+        l.append(f"[{player.embed} @ {dt:%b %d %I:%M%p}] {bmap.embed}.")
 
     return "\n".join(l)
 
@@ -665,7 +649,7 @@ async def _map(ctx: Context) -> str | None:
                 _bmap.frozen = True
 
             # select all map ids for clearing map requests.
-            modified_beatmap_ids = [
+            map_ids = [
                 row["id"]
                 for row in await maps_repo.fetch_many(
                     set_id=bmap.set_id,
@@ -681,10 +665,10 @@ async def _map(ctx: Context) -> str | None:
                 app.state.cache.beatmap[bmap.md5].status = new_status
                 app.state.cache.beatmap[bmap.md5].frozen = True
 
-            modified_beatmap_ids = [bmap.id]
+            map_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await map_requests_repo.mark_batch_as_inactive(map_ids=modified_beatmap_ids)
+        await map_requests_repo.mark_batch_as_inactive(map_ids=map_ids)
 
     return f"{bmap.embed} updated to {new_status!s}."
 
@@ -1284,7 +1268,7 @@ if app.settings.DEVELOPER_MODE:
     from sys import modules as installed_mods
 
     __py_namespace: dict[str, Any] = globals() | {
-        mod: importlib.import_module(mod)
+        mod: __import__(mod)
         for mod in (
             "asyncio",
             "dis",
