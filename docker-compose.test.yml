@@ -17,6 +17,8 @@ services:
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - test-db-data:/var/lib/mysql
+    networks:
+      - test-network
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
@@ -30,6 +32,8 @@ services:
     user: root
     volumes:
       - test-redis-data:/bitnami/redis/data
+    networks:
+      - test-network
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
@@ -49,6 +53,8 @@ services:
     volumes:
       - .:/srv/root
       - test-data:/srv/root/.data
+    networks:
+      - test-network
     environment:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
@@ -91,3 +97,6 @@ volumes:
   test-data:
   test-db-data:
   test-redis-data:
+
+networks:
+  test-network:
