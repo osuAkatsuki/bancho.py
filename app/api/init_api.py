@@ -69,6 +69,7 @@ class BanchoAPI(FastAPI):
 
 @asynccontextmanager
 async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
+    app.utils.setup_runtime_environment()
     app.utils.ensure_directory_structure()
 
     app.state.loop = asyncio.get_running_loop()
