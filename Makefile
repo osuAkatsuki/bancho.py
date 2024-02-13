@@ -18,7 +18,8 @@ shell:
 	poetry shell
 
 test:
-	docker-compose exec -T bancho /srv/root/scripts/run-tests.sh
+	docker-compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
+	docker-compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
 
 test-local:
 	poetry run pytest -vv tests/
