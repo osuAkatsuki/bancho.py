@@ -35,7 +35,7 @@ async def authorize(
     response_type: str = Query(regex="code"),
     player_id: int = Query(),
     scope: str = Query(default="", regex=r"\b\w+\b(?:,\s*\b\w+\b)*"),
-    state: str = Query(default=None),
+    state: str | None = Query(default=None),
 ):
     """Authorize a client to access the API on behalf of a user."""
     # NOTE: We should have to implement the frontend part to request the user to authorize the client
@@ -67,8 +67,8 @@ async def authorize(
 async def token(
     response: Response,
     grant_type: GrantType = Form(),
-    client_id: int = Form(default=None),
-    client_secret: str = Form(default=None),
+    client_id: int | None = Form(default=None),
+    client_secret: str | None = Form(default=None),
     auth_credentials: dict[str, Any] | None = Depends(
         get_credentials_from_basic_auth,
     ),
