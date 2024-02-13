@@ -20,7 +20,7 @@ from app.api.init_api import asgi_app
 
 @pytest.fixture
 async def app(respx_mock: respx.MockRouter) -> AsyncIterator[ASGIApp]:
-    respx_mock.get(url__regex="https://assets.ppy.sh/medals/client/.+").mock(
+    respx_mock.get(url__regex=r"https://assets.ppy.sh/medals/client/.+").mock(
         return_value=httpx.Response(
             status_code=status.HTTP_200_OK,
             headers={"Content-Type": "image/png"},
