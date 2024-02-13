@@ -270,6 +270,17 @@ def escape_enum(
     return str(int(val))
 
 
+def ensure_supported_platform() -> None:
+    """Ensure we're running on an appropriate platform for bancho.py."""
+    if sys.version_info < (3, 11):
+        log(
+            "bancho.py uses many modern python features, "
+            "and the minimum python version is 3.11.",
+            Ansi.LRED,
+        )
+        raise SystemExit(1)
+
+
 def ensure_directory_structure() -> None:
     """Ensure the .data directory and git submodules are ready."""
     # create /.data and its subdirectories.
