@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import base64
-from typing import Optional
-from typing import Union
 
 from fastapi import Request
 from fastapi import status
 from fastapi.exceptions import HTTPException
-from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
+from fastapi.openapi.models import OAuthFlowAuthorizationCode
+from fastapi.openapi.models import OAuthFlowClientCredentials
+from fastapi.openapi.models import OAuthFlows
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
 
@@ -25,18 +25,18 @@ class OAuth2Scheme(OAuth2):
     ):
         if not scopes:
             scopes = {}
-        flows = OAuthFlowsModel(
-            authorizationCode={
-                "authorizationUrl": authorizationUrl,
-                "tokenUrl": tokenUrl,
-                "refreshUrl": refreshUrl,
-                "scopes": scopes,
-            },
-            clientCredentials={
-                "tokenUrl": tokenUrl,
-                "refreshUrl": refreshUrl,
-                "scopes": scopes,
-            },
+        flows = OAuthFlows(
+            authorizationCode=OAuthFlowAuthorizationCode(
+                authorizationUrl=authorizationUrl,
+                tokenUrl=tokenUrl,
+                scopes=scopes,
+                refreshUrl=refreshUrl,
+            ),
+            clientCredentials=OAuthFlowClientCredentials(
+                tokenUrl=tokenUrl,
+                scopes=scopes,
+                refreshUrl=refreshUrl,
+            ),
         )
         super().__init__(
             flows=flows,
