@@ -106,7 +106,7 @@ async def token(
         if not authorization_code:
             return oauth_failure_response("invalid_grant")
 
-        if authorization_code["client_id"] != client_id:
+        if client_id is None or authorization_code["client_id"] != client_id:
             return oauth_failure_response("invalid_client")
 
         if authorization_code["scopes"] != scope:
@@ -140,6 +140,9 @@ async def token(
             scope=scope,
         )
     elif grant_type is GrantType.CLIENT_CREDENTIALS:
+        if client_id is None:
+            return oauth_failure_response("invalid_client")
+
         client = await clients_repo.fetch_one(client_id)
         if client is None:
             return oauth_failure_response("invalid_client")
