@@ -62,9 +62,11 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import comments as comments_repo
+from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
+from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories.achievements import Achievement
@@ -236,12 +238,11 @@ async def osuGetBeatmapInfo(
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ) -> Response:
-    rows = await app.state.services.database.fetch_all(
-        "SELECT setid FROM favourites WHERE userid = :user_id",
-        {"user_id": player.id},
-    )
+    favourites = await favourites_repo.fetch_all(userid=player.id)
 
-    return Response("\n".join([str(row["setid"]) for row in rows]).encode())
+    return Response(
+        "\n".join([str(favourite["setid"]) for favourite in favourites]).encode(),
+    )
 
 
 @router.get("/web/osu-addfavourite.php")
@@ -250,16 +251,13 @@ async def osuAddFavourite(
     map_set_id: int = Query(..., alias="a"),
 ) -> Response:
     # check if they already have this favourited.
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
-        {"user_id": player.id, "set_id": map_set_id},
-    ):
+    if await favourites_repo.fetch_one(player.id, map_set_id):
         return Response(b"You've already favourited this beatmap!")
 
     # add favourite
-    await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
-        {"user_id": player.id, "set_id": map_set_id},
+    await favourites_repo.create(
+        userid=player.id,
+        setid=map_set_id,
     )
 
     return Response(b"Added favourite!")
@@ -1120,32 +1118,16 @@ async def osuRate(
             return Response(b"not ranked")
 
         # osu! client is checking whether we can rate the map or not.
-        has_previous_rating = (
-            await app.state.services.database.fetch_one(
-                "SELECT 1 FROM ratings WHERE map_md5 = :map_md5 AND userid = :user_id",
-                {"map_md5": map_md5, "user_id": player.id},
-            )
-            is not None
-        )
-
         # the client hasn't rated the map, so simply
         # tell them that they can submit a rating.
-        if not has_previous_rating:
+        if not await ratings_repo.fetch_one(map_md5=map_md5, userid=player.id):
             return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
-        await app.state.services.database.execute(
-            "INSERT INTO ratings VALUES (:user_id, :map_md5, :rating)",
-            {"user_id": player.id, "map_md5": map_md5, "rating": int(rating)},
-        )
+        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=rating)
 
-    ratings = [
-        row[0]
-        for row in await app.state.services.database.fetch_all(
-            "SELECT rating FROM ratings WHERE map_md5 = :map_md5",
-            {"map_md5": map_md5},
-        )
-    ]
+    map_ratings = await ratings_repo.fetch_many(map_md5=map_md5)
+    ratings = [row["rating"] for row in map_ratings]
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
@@ -1382,9 +1364,13 @@ async def getScores(
         personal_best_score_row = None
 
     # fetch beatmap rating
-    rating = await bmap.fetch_rating()
-    if rating is None:
-        rating = 0.0
+    map_ratings = await ratings_repo.fetch_many(
+        map_md5=bmap.md5,
+        page=None,
+        page_size=None,
+    )
+    ratings = [row["rating"] for row in map_ratings]
+    map_avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
 
     ## construct response for osu! client
 
@@ -1394,7 +1380,7 @@ async def getScores(
         f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0|",
         # {offset}\n{beatmap_name}\n{rating}
         # TODO: server side beatmap offsets
-        f"0\n{bmap.full_name}\n{rating}",
+        f"0\n{bmap.full_name}\n{map_avg_rating}",
     ]
 
     if not score_rows:

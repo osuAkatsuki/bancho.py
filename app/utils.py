@@ -194,21 +194,6 @@ def _install_synchronous_excepthook() -> None:
         if type_ is KeyboardInterrupt:
             print("\33[2K\r", end="Aborted startup.")
             return
-        elif type_ is AttributeError and value.args[0].startswith(
-            "module 'config' has no attribute",
-        ):
-            attr_name = value.args[0][34:-1]
-            log(
-                "bancho.py's config has been updated, and has "
-                f"added a new `{attr_name}` attribute.",
-                Ansi.LMAGENTA,
-            )
-            log(
-                "Please refer to it's value & example in "
-                "ext/config.sample.py for additional info.",
-                Ansi.LCYAN,
-            )
-            return
 
         printc(
             f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
@@ -285,7 +270,7 @@ def escape_enum(
     return str(int(val))
 
 
-def ensure_supported_platform() -> int:
+def ensure_supported_platform() -> None:
     """Ensure we're running on an appropriate platform for bancho.py."""
     if sys.version_info < (3, 11):
         log(
@@ -293,12 +278,10 @@ def ensure_supported_platform() -> int:
             "and the minimum python version is 3.11.",
             Ansi.LRED,
         )
-        return 1
-
-    return 0
+        raise SystemExit(1)
 
 
-def ensure_directory_structure() -> int:
+def ensure_directory_structure() -> None:
     """Ensure the .data directory and git submodules are ready."""
     # create /.data and its subdirectories.
     DATA_PATH.mkdir(exist_ok=True)
@@ -313,8 +296,6 @@ def ensure_directory_structure() -> int:
 
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
-
-    return 0
 
 
 def setup_runtime_environment() -> None:
