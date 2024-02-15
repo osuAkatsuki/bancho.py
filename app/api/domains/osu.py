@@ -62,6 +62,7 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import comments as comments_repo
+from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
 from app.repositories import players as players_repo
@@ -236,12 +237,11 @@ async def osuGetBeatmapInfo(
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ) -> Response:
-    rows = await app.state.services.database.fetch_all(
-        "SELECT setid FROM favourites WHERE userid = :user_id",
-        {"user_id": player.id},
-    )
+    favourites = await favourites_repo.fetch_all(userid=player.id)
 
-    return Response("\n".join([str(row["setid"]) for row in rows]).encode())
+    return Response(
+        "\n".join([str(favourite["setid"]) for favourite in favourites]).encode(),
+    )
 
 
 @router.get("/web/osu-addfavourite.php")
@@ -250,16 +250,13 @@ async def osuAddFavourite(
     map_set_id: int = Query(..., alias="a"),
 ) -> Response:
     # check if they already have this favourited.
-    if await app.state.services.database.fetch_one(
-        "SELECT 1 FROM favourites WHERE userid = :user_id AND setid = :set_id",
-        {"user_id": player.id, "set_id": map_set_id},
-    ):
+    if await favourites_repo.fetch_one(player.id, map_set_id):
         return Response(b"You've already favourited this beatmap!")
 
     # add favourite
-    await app.state.services.database.execute(
-        "INSERT INTO favourites VALUES (:user_id, :set_id, UNIX_TIMESTAMP())",
-        {"user_id": player.id, "set_id": map_set_id},
+    await favourites_repo.create(
+        userid=player.id,
+        setid=map_set_id,
     )
 
     return Response(b"Added favourite!")
