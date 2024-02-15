@@ -61,17 +61,30 @@ async def create(
     return cast(Rating, dict(_rating._mapping))
 
 
-async def fetch_all(map_md5: str) -> list[Rating]:
+async def fetch_many(
+    userid: int | None = None,
+    map_md5: str | None = None,
+    page: int | None = 1,
+    page_size: int | None = 50,
+) -> list[Rating]:
     """Fetch all ratings for a map."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ratings
-         WHERE map_md5 = :map_md5
+         WHERE userid = COALESCE(:userid, userid)
+           AND map_md5 = COALESCE(:map_md5, map_md5)
     """
     params: dict[str, Any] = {
+        "userid": userid,
         "map_md5": map_md5,
     }
-
+    if page is not None and page_size is not None:
+        query += """\
+            LIMIT :page_size
+           OFFSET :offset
+        """
+        params["page"] = (page - 1) * page_size
+        params["page_size"] = page_size
     ratings = await app.state.services.database.fetch_all(query, params)
     return cast(list[Rating], [dict(r._mapping) for r in ratings])
 
