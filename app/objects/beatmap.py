@@ -11,7 +11,6 @@ from enum import unique
 from pathlib import Path
 from typing import Any
 from typing import TypedDict
-from typing import cast
 
 import httpx
 from tenacity import retry
@@ -539,18 +538,6 @@ class Beatmap:
     async def _from_bid_cache(bid: int) -> Beatmap | None:
         """Fetch a map from the cache by id."""
         return app.state.cache.beatmap.get(bid, None)
-
-    async def fetch_rating(self) -> float | None:
-        """Fetch the beatmap's rating from sql."""
-        row = await app.state.services.database.fetch_one(
-            "SELECT AVG(rating) rating FROM ratings WHERE map_md5 = :map_md5",
-            {"map_md5": self.md5},
-        )
-
-        if row is None:
-            return None
-
-        return cast(float | None, row["rating"])
 
 
 class BeatmapSet:
