@@ -1127,7 +1127,7 @@ async def osuRate(
             return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
-        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=int(rating))
+        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=rating)
 
     map_ratings = await ratings_repo.fetch_many(map_md5=map_md5)
     ratings = [row["rating"] for row in map_ratings]
