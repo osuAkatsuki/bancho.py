@@ -77,7 +77,7 @@ async def fetch_all(
           AND player_id = COALESCE(:player_id, player_id)
           AND active = COALESCE(:active, active)
     """
-    params = {
+    params: dict[str, Any] = {
         "map_id": map_id,
         "player_id": player_id,
         "active": active,
@@ -94,7 +94,9 @@ async def mark_batch_as_inactive(map_ids: list[Any]) -> list[MapRequest]:
            SET active = False
          WHERE map_id IN :map_ids
     """
-    params = {"map_ids": map_ids}
+    params: dict[str, Any] = {
+        "map_ids": map_ids,
+    }
     await app.state.services.database.execute(query, params)
 
     query = f"""\
