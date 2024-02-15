@@ -1644,7 +1644,16 @@ async def peppyDMHandler() -> Response:
 
 """ ingame registration """
 
-INGAME_REGISTRATION_DISALLOWED_ERROR = {"form_error": {"user": {"password": ["In-game registration is disabled. Please register on the website."]}}}
+INGAME_REGISTRATION_DISALLOWED_ERROR = {
+    "form_error": {
+        "user": {
+            "password": [
+                "In-game registration is disabled. Please register on the website.",
+            ],
+        },
+    },
+}
+
 
 @router.post("/users")
 async def register_account(
