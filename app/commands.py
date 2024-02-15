@@ -308,9 +308,7 @@ async def maplink(ctx: Context) -> str | None:
     if bmap is None:
         return "No map found!"
 
-    # gatari.pw & nerina.pw are pretty much the only
-    # reliable mirrors I know of? perhaps beatconnect
-    return f"[https://osu.gatari.pw/d/{bmap.set_id} {bmap.full_name}]"
+    return f"[{app.settings.MIRROR_DOWNLOAD_ENDPOINT}/{bmap.set_id} {bmap.full_name}]"
 
 
 @command(Privileges.UNRESTRICTED, aliases=["last", "r"])
