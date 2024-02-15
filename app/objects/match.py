@@ -259,10 +259,13 @@ class Match:
 
         self.tourney_clients: set[int] = set()  # player ids
 
-    @property  # TODO: test cache speed
+    @property
     def host(self) -> Player:
         player = app.state.sessions.players.get(id=self.host_id)
-        assert player is not None
+        if player is None:
+            raise ValueError(
+                f"Host with id {self.host_id} not found for match {self!r}",
+            )
         return player
 
     @property
