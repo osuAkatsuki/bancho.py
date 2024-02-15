@@ -48,7 +48,8 @@ async def create(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ratings
-         WHERE userid = :userid AND map_md5 = :map_md5
+         WHERE userid = :userid
+           AND map_md5 = :map_md5
     """
     params = {
         "userid": userid,
