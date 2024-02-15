@@ -250,7 +250,7 @@ async def osuAddFavourite(
     map_set_id: int = Query(..., alias="a"),
 ) -> Response:
     # check if they already have this favourited.
-    if await favourites_repo.is_already_favourite(player.id, map_set_id):
+    if await favourites_repo.fetch_one(player.id, map_set_id):
         return Response(b"You've already favourited this beatmap!")
 
     # add favourite

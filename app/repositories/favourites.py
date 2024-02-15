@@ -8,13 +8,13 @@ from typing import cast
 
 import app.state.services
 
-# +--------------+------------------------+------+-----+---------+----------------+
-# | Field        | Type                   | Null | Key | Default | Extra          |
-# +--------------+------------------------+------+-----+---------+----------------+
-# | userid       | int                    | NO   | PRI | NULL    |                |
-# | setid        | int                    | NO   |     | NULL    |                |
-# | created_at   | int                    | NO   |     | 0       |                |
-# +--------------+------------------------+------+-----+---------+----------------+
+# +------------+------+------+-----+---------+-------+
+# | Field      | Type | Null | Key | Default | Extra |
+# +------------+------+------+-----+---------+-------+
+# | userid     | int  | NO   | PRI | NULL    |       |
+# | setid      | int  | NO   | PRI | NULL    |       |
+# | created_at | int  | NO   |     | 0       |       |
+# +------------+------+------+-----+---------+-------+
 
 READ_PARAMS = textwrap.dedent(
     """\
@@ -48,9 +48,11 @@ async def create(
         SELECT {READ_PARAMS}
           FROM favourites
          WHERE userid = :userid
+           AND setid = :setid
     """
     params = {
         "userid": rec_id,
+        "setid": setid,
     }
     favourite = await app.state.services.database.fetch_one(query, params)
 
@@ -73,10 +75,10 @@ async def fetch_all(userid: int) -> list[Favourite]:
     return cast(list[Favourite], [dict(f._mapping) for f in favourites])
 
 
-async def is_already_favourite(userid: int, setid: int) -> bool:
+async def fetch_one(userid: int, setid: int) -> Favourite | None:
     """Check if a mapset is already a favourite."""
     query = f"""\
-        SELECT 1
+        SELECT {READ_PARAMS}
           FROM favourites
          WHERE userid = :userid
            AND setid = :setid
@@ -86,5 +88,5 @@ async def is_already_favourite(userid: int, setid: int) -> bool:
         "setid": setid,
     }
 
-    is_already_favourite = await app.state.services.database.fetch_one(query, params)
-    return bool(is_already_favourite)
+    favourite = await app.state.services.database.fetch_one(query, params)
+    return cast(Favourite, dict(favourite._mapping)) if favourite else None
