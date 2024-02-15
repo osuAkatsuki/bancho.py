@@ -89,18 +89,18 @@ async def fetch_many(
     return cast(list[Rating], [dict(r._mapping) for r in ratings])
 
 
-async def has_previous_rating(map_md5: str, userid: int) -> bool:
+async def fetch_one(userid: int, map_md5: str) -> Rating | None:
     """Check if a user has previously rated a map."""
     query = f"""\
-        SELECT 1
+        SELECT {READ_PARAMS}
           FROM ratings
-         WHERE map_md5 = :map_md5
-           AND userid = :userid
+         WHERE userid = :userid
+           AND map_md5 = :map_md5
     """
     params: dict[str, Any] = {
-        "map_md5": map_md5,
         "userid": userid,
+        "map_md5": map_md5,
     }
 
-    has_previous_rating = await app.state.services.database.fetch_one(query, params)
-    return bool(has_previous_rating)
+    rating = await app.state.services.database.fetch_one(query, params)
+    return cast(Rating, dict(rating._mapping)) if rating else None
