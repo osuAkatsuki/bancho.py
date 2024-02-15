@@ -1129,7 +1129,8 @@ async def osuRate(
         # the client is submitting a rating for the map.
         await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=int(rating))
 
-    ratings = [row["rating"] for row in await ratings_repo.fetch_many(map_md5)]
+    map_ratings = await ratings_repo.fetch_many(map_md5=map_md5)
+    ratings = [row["rating"] for row in map_ratings]
 
     # send back the average rating
     avg = sum(ratings) / len(ratings)
