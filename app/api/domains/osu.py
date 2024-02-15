@@ -1667,6 +1667,16 @@ async def register_account(
     # are safe for registration.
     errors: Mapping[str, list[str]] = defaultdict(list)
 
+    # Disable in-game registration if enabled
+    if app.settings.DISABLE_INGAME_REGISTRATION:
+        errors["password"].append("The in-game registration is disabled. Please register on the website.")
+        errors = {k: ["\n".join(v)] for k, v in errors.items()}
+        errors_full = {"form_error": {"user": errors}}
+        return ORJSONResponse(
+            content=errors_full,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     # Usernames must:
     # - be within 2-15 characters in length
     # - not contain both ' ' and '_', one is fine
