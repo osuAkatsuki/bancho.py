@@ -67,7 +67,7 @@ async def fetch_many(
     page: int | None = 1,
     page_size: int | None = 50,
 ) -> list[Rating]:
-    """Fetch all ratings for a map."""
+    """Fetch multiple ratings, optionally with filter params and pagination."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ratings
@@ -90,7 +90,7 @@ async def fetch_many(
 
 
 async def fetch_one(userid: int, map_md5: str) -> Rating | None:
-    """Check if a user has previously rated a map."""
+    """Fetch a single rating for a given user and map."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM ratings
