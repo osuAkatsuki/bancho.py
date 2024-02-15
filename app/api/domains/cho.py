@@ -1318,7 +1318,16 @@ class LobbyJoin(BasePacket):
 
         for match in app.state.sessions.matches:
             if match is not None:
-                player.enqueue(app.packets.new_match(match))
+                try:
+                    player.enqueue(app.packets.new_match(match))
+                except ValueError:
+                    log(
+                        f"Failed to send match {match.id} to player joining lobby; likely due to missing host",
+                        Ansi.LYELLOW,
+                    )
+                    stacktrace = app.utils.get_appropriate_stacktrace()
+                    await app.state.services.log_strange_occurrence(stacktrace)
+                    continue
 
 
 def validate_match_data(
