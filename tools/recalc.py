@@ -205,7 +205,7 @@ async def recalculate_mode_scores(mode: GameMode, ctx: Context) -> None:
               maps.id as `map_id`
             FROM scores
             INNER JOIN maps ON scores.map_md5 = maps.md5
-            WHERE scores.status = 2
+            WHERE scores.status > 0
               AND scores.mode = :mode
             ORDER BY scores.pp DESC
             """,
