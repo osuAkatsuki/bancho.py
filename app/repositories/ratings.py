@@ -7,13 +7,13 @@ from typing import cast
 
 import app.state.services
 
-# +-------------------+---------------+------+-----+---------+----------------+
-# | Field             | Type          | Null | Key | Default | Extra          |
-# +-------------------+---------------+------+-----+---------+----------------+
-# | userid            | int           | NO   | PRI | NULL    |                |
-# | map_md5           | char(32)      | NO   | PRI | NULL    |                |
-# | rating            | tinyint       | NO   | UNI | NULL    |                |
-# +-------------------+---------------+------+-----+---------+----------------+
+# +---------+----------+------+-----+---------+-------+
+# | Field   | Type     | Null | Key | Default | Extra |
+# +---------+----------+------+-----+---------+-------+
+# | userid  | int      | NO   | PRI | NULL    |       |
+# | map_md5 | char(32) | NO   | PRI | NULL    |       |
+# | rating  | tinyint  | NO   |     | NULL    |       |
+# +---------+----------+------+-----+---------+-------+
 
 READ_PARAMS = textwrap.dedent(
     """\
