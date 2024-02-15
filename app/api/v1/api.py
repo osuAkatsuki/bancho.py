@@ -480,17 +480,17 @@ async def api_get_player_scores(
     elif scope == "recent":
         if not include_failed:
             query.append("AND t.status != 0")
-    else: # "first"
+    else:  # "first"
         lb_sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
         query = [
             "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
             "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
             "t.status, t.mode, t.time_elapsed, t.play_time, t.perfect "
             "FROM scores t "
-           f"JOIN (SELECT map_md5, MAX({lb_sort}) AS points FROM scores WHERE status = 2 GROUP BY map_md5) max_scores "
-           f"ON t.map_md5 = max_scores.map_md5 AND t.{lb_sort} = max_scores.points "
+            f"JOIN (SELECT map_md5, MAX({lb_sort}) AS points FROM scores WHERE status = 2 GROUP BY map_md5) max_scores "
+            f"ON t.map_md5 = max_scores.map_md5 AND t.{lb_sort} = max_scores.points "
             "INNER JOIN maps b ON max_scores.map_md5 = b.md5 "
-            "WHERE t.userid = :user_id AND t.mode = :mode AND t.status = 2 AND b.status IN (2, 3, 5)"
+            "WHERE t.userid = :user_id AND t.mode = :mode AND t.status = 2 AND b.status IN (2, 3, 5)",
         ]
         sort = "t.play_time"
 
