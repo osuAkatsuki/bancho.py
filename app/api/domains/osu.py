@@ -1669,13 +1669,8 @@ async def register_account(
 
     # Disable in-game registration if enabled
     if app.settings.DISALLOW_INGAME_REGISTRATION:
-        errors["password"].append(
-            "The in-game registration is disabled. Please register on the website.",
-        )
-        errors = {k: ["\n".join(v)] for k, v in errors.items()}
-        errors_full = {"form_error": {"user": errors}}
         return ORJSONResponse(
-            content=errors_full,
+            content={"form_error": {"user": { "password": ["In-game registration is disabled. Please register on the website."]}}},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
