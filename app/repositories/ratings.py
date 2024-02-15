@@ -28,11 +28,7 @@ class Rating(TypedDict):
     rating: int
 
 
-async def create(
-    userid: int,
-    map_md5: str,
-    rating: int,
-) -> Rating:
+async def create(userid: int, map_md5: str, rating: int) -> Rating:
     """Create a new rating."""
     query = """\
         INSERT INTO ratings (userid, map_md5, rating)
