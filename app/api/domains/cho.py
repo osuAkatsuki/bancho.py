@@ -759,12 +759,21 @@ async def handle_osu_login_request(
 
     # TODO: store adapters individually
 
+    # some disk manufacturers have "0" for their disk serial, resulting in clashing md5 hashes of the string "0".
+    # these need to be ignored since otherwise people will be prevented from verifying a lot.
+    INACTIONABLE_DISK_SIGNATURE_MD5S = ["dcfcd07e645d245babe887e5e2daa016"]
+
+    if login_data["disk_signature_md5"] not in INACTIONABLE_DISK_SIGNATURE_MD5S:
+        disk_signature_md5 = login_data["disk_signature_md5"]
+    else:
+        disk_signature_md5 = None
+
     hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
         userid=user_info["id"],
         running_under_wine=running_under_wine,
         adapters=login_data["adapters_md5"],
         uninstall_id=login_data["uninstall_md5"],
-        disk_serial=login_data["disk_signature_md5"],
+        disk_serial=disk_signature_md5,
     )
 
     if hw_matches:
