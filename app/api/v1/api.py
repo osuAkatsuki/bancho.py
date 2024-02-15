@@ -382,7 +382,7 @@ async def api_get_player_status(
 
 @router.get("/get_player_scores")
 async def api_get_player_scores(
-    scope: Literal["recent", "best"],
+    scope: Literal["recent", "best", "first"],
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mods_arg: str | None = Query(None, alias="mods"),
@@ -391,7 +391,7 @@ async def api_get_player_scores(
     include_loved: bool = False,
     include_failed: bool = True,
 ) -> Response:
-    """Return a list of a given user's recent/best scores."""
+    """Return a list of a given user's recent/best/first scores."""
     if mode_arg in (
         GameMode.RELAX_MANIA,
         GameMode.AUTOPILOT_CATCH,
@@ -477,10 +477,21 @@ async def api_get_player_scores(
         query.append("AND t.status = 2 AND b.status IN :statuses")
         params["statuses"] = allowed_statuses
         sort = "t.pp"
-    else:
+    elif scope == "recent":
         if not include_failed:
             query.append("AND t.status != 0")
-
+    else: # "first"
+        lb_sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
+        query = [
+            "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
+            "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
+            "t.status, t.mode, t.time_elapsed, t.play_time, t.perfect "
+            "FROM scores t "
+           f"JOIN (SELECT map_md5, MAX({lb_sort}) AS points FROM scores WHERE status = 2 GROUP BY map_md5) max_scores "
+           f"ON t.map_md5 = max_scores.map_md5 AND t.{lb_sort} = max_scores.points "
+            "INNER JOIN maps b ON max_scores.map_md5 = b.md5 "
+            "WHERE t.userid = :user_id AND t.mode = :mode AND t.status = 2 AND b.status IN (2, 3, 5)"
+        ]
         sort = "t.play_time"
 
     query.append(f"ORDER BY {sort} DESC LIMIT :limit")
