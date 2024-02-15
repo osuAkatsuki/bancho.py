@@ -1668,7 +1668,7 @@ async def register_account(
     errors: Mapping[str, list[str]] = defaultdict(list)
 
     # Disable in-game registration if enabled
-    if app.settings.DISABLE_INGAME_REGISTRATION:
+    if app.settings.DISALLOW_INGAME_REGISTRATION:
         errors["password"].append(
             "The in-game registration is disabled. Please register on the website.",
         )
