@@ -1364,9 +1364,13 @@ async def getScores(
         personal_best_score_row = None
 
     # fetch beatmap rating
-    rating = await bmap.fetch_rating()
-    if rating is None:
-        rating = 0.0
+    map_ratings = await ratings_repo.fetch_many(
+        map_md5=bmap.md5,
+        page=None,
+        page_size=None,
+    )
+    ratings = [row["rating"] for row in map_ratings]
+    map_avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
 
     ## construct response for osu! client
 
@@ -1376,7 +1380,7 @@ async def getScores(
         f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0|",
         # {offset}\n{beatmap_name}\n{rating}
         # TODO: server side beatmap offsets
-        f"0\n{bmap.full_name}\n{rating}",
+        f"0\n{bmap.full_name}\n{map_avg_rating}",
     ]
 
     if not score_rows:
