@@ -1120,10 +1120,7 @@ async def osuRate(
         # osu! client is checking whether we can rate the map or not.
         # the client hasn't rated the map, so simply
         # tell them that they can submit a rating.
-        if not await ratings_repo.fetch_one(
-            map_md5=map_md5,
-            userid=player.id,
-        ):
+        if not await ratings_repo.fetch_one(map_md5=map_md5, userid=player.id):
             return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
