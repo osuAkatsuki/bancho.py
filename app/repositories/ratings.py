@@ -76,11 +76,11 @@ async def fetch_many(
     }
     if page is not None and page_size is not None:
         query += """\
-            LIMIT :page_size
+            LIMIT :limit
            OFFSET :offset
         """
-        params["page"] = (page - 1) * page_size
-        params["page_size"] = page_size
+        params["limit"] = page_size
+        params["offset"] = (page - 1) * page_size
     ratings = await app.state.services.database.fetch_all(query, params)
     return cast(list[Rating], [dict(r._mapping) for r in ratings])
 
