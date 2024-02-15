@@ -51,7 +51,7 @@ async def create(
            AND setid = :setid
     """
     params = {
-        "userid": rec_id,
+        "userid": userid,
         "setid": setid,
     }
     favourite = await app.state.services.database.fetch_one(query, params)
