@@ -12,7 +12,7 @@ run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
 logs:
-	docker-compose logs -f bancho mysql redis
+	docker-compose logs -f bancho mysql redis --tail 1
 
 shell:
 	poetry shell
