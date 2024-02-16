@@ -855,7 +855,7 @@ class BeatmapSet:
                     title=row["title"],
                     version=row["version"],
                     creator=row["creator"],
-                    last_update=datetime.fromisoformat(row["last_update"]),
+                    last_update=row["last_update"],
                     total_length=row["total_length"],
                     max_combo=row["max_combo"],
                     status=RankedStatus(row["status"]),
