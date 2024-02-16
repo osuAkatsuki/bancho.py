@@ -236,10 +236,7 @@ class Player:
         self.name = name
         self.safe_name = self.make_safe(self.name)
 
-        if pw_bcrypt is not None:
-            self.pw_bcrypt: bytes | None = pw_bcrypt
-        else:
-            self.pw_bcrypt = None
+        self.pw_bcrypt = pw_bcrypt
 
         # generate a token if not given
         if token is not None and isinstance(token, str):
