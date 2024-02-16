@@ -838,6 +838,7 @@ async def handle_osu_login_request(
         name=user_info["name"],
         priv=Privileges(user_info["priv"]),
         pw_bcrypt=user_info["pw_bcrypt"].encode(),
+        token=Player.generate_token(),
         clan=clan,
         clan_priv=clan_priv,
         geoloc=geoloc,

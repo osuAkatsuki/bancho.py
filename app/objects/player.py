@@ -213,8 +213,8 @@ class Player:
         id: int,
         name: str,
         priv: Privileges,
-        pw_bcrypt: bytes | None = None,
-        token: str | None = None,
+        pw_bcrypt: bytes | None,
+        token: str,
         clan: Clan | None = None,
         clan_priv: ClanPrivileges | None = None,
         geoloc: app.state.services.Geolocation | None = None,
@@ -228,20 +228,43 @@ class Player:
         is_tourney_client: bool = False,
         api_key: str | None = None,
     ) -> None:
+        if geoloc is None:
+            geoloc = {
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "country": {"acronym": "xx", "numeric": 0},
+            }
+
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
-
-        self.pw_bcrypt = pw_bcrypt
-
-        # generate a token if not given
-        if token is not None and isinstance(token, str):
-            self.token = token
-        else:
-            self.token = self.generate_token()
-
-        # ensure priv is of type Privileges
         self.priv = priv
+        self.pw_bcrypt = pw_bcrypt
+        self.token = token
+        self.clan = clan
+        self.clan_priv = clan_priv
+        self.geoloc = geoloc
+        self.utc_offset = utc_offset
+        self.pm_private = pm_private
+        self.silence_end = silence_end
+        self.donor_end = donor_end
+        self.client_details = client_details
+        self.login_time = login_time
+        self.last_recv_time = login_time
+        self.is_bot_client = is_bot_client
+        self.is_tourney_client = is_tourney_client
+        self.api_key = api_key
+
+        # avoid enqueuing packets to bot accounts.
+        if self.is_bot_client:
+
+            def _noop_enqueue(data: bytes) -> None:
+                pass
+
+            self.enqueue = _noop_enqueue  # type: ignore[method-assign]
+
+        self.away_msg: str | None = None
+        self.in_lobby = False
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
@@ -256,30 +279,7 @@ class Player:
         self.match: Match | None = None
         self.stealth = False
 
-        self.clan = clan
-        self.clan_priv = clan_priv
-
-        if geoloc is None:
-            geoloc = {
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {"acronym": "xx", "numeric": 0},
-            }
-        self.geoloc = geoloc
-
-        self.utc_offset = utc_offset
-        self.pm_private = pm_private
-        self.away_msg: str | None = None
-        self.silence_end = silence_end
-        self.donor_end = donor_end
-        self.in_lobby = False
-
-        self.client_details = client_details
         self.pres_filter = PresenceFilter.Nil
-
-        login_time = login_time
-        self.login_time = login_time
-        self.last_recv_time = login_time
 
         # XXX: below is mostly implementation-specific & internal stuff
 
@@ -290,20 +290,6 @@ class Player:
 
         # store the last beatmap /np'ed by the user.
         self.last_np: LastNp | None = None
-
-        self.is_bot_client = is_bot_client
-
-        # avoid enqueuing packets to bot accounts.
-        if self.is_bot_client:
-
-            def _noop_enqueue(data: bytes) -> None:
-                pass
-
-            self.enqueue = _noop_enqueue  # type: ignore[method-assign]
-
-        self.is_tourney_client = is_tourney_client
-
-        self.api_key = api_key
 
         self._packet_queue = bytearray()
 
