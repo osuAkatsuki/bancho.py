@@ -294,10 +294,10 @@ class Player:
         # avoid enqueuing packets to bot accounts.
         if self.is_bot_client:
 
-            def _noop_packet_handler(data: bytes) -> None:
+            def _noop_enqueue(data: bytes) -> None:
                 pass
 
-            self.enqueue = _noop_packet_handler
+            self.enqueue = _noop_enqueue
 
         self.is_tourney_client = is_tourney_client
 
