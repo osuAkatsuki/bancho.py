@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timedelta
 from functools import wraps
 from pathlib import Path
 from time import perf_counter_ns as clock_ns
@@ -64,7 +65,6 @@ from app.repositories import players as players_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.usecases.performance import ScoreParams
-from app.utils import seconds_readable
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -1258,7 +1258,7 @@ async def server(ctx: Context) -> str | None:
 
     return "\n".join(
         (
-            f"{build_str} | uptime: {seconds_readable(uptime)}",
+            f"{build_str} | uptime: {timedelta(seconds=uptime)}",
             f"cpu: {cpu_info_str}",
             f"ram: {ram_info}",
             f"search mirror: {mirror_search_url} | download mirror: {mirror_download_url}",

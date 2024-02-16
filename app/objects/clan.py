@@ -11,8 +11,6 @@ from app.repositories import players as players_repo
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-__all__ = ("Clan",)
-
 
 class Clan:
     """A class to represent a single bancho.py clan."""

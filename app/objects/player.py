@@ -10,7 +10,6 @@ from enum import StrEnum
 from enum import unique
 from functools import cached_property
 from typing import TYPE_CHECKING
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
@@ -36,6 +35,7 @@ from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories import logs as logs_repo
+from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
 from app.state.services import Geolocation
 from app.utils import escape_enum
@@ -238,7 +238,6 @@ class Player:
 
         self.id = id
         self.name = name
-        self.safe_name = self.make_safe(self.name)
         self.priv = priv
         self.pw_bcrypt = pw_bcrypt
         self.token = token
@@ -282,8 +281,6 @@ class Player:
 
         self.pres_filter = PresenceFilter.Nil
 
-        # XXX: below is mostly implementation-specific & internal stuff
-
         # store most recent score for each gamemode.
         self.recent_scores: dict[GameMode, Score | None] = {
             mode: None for mode in GameMode
@@ -296,6 +293,10 @@ class Player:
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
+
+    @property
+    def safe_name(self) -> str:
+        return make_safe_name(self.name)
 
     @property
     def is_online(self) -> bool:
@@ -384,11 +385,6 @@ class Player:
         """Generate a random uuid as a token."""
         return str(uuid.uuid4())
 
-    @staticmethod
-    def make_safe(name: str) -> str:
-        """Return a name safe for usage in sql."""
-        return make_safe_name(name)
-
     def logout(self) -> None:
         """Log `self` out of the server."""
         # invalidate the user's token.
@@ -421,27 +417,27 @@ class Player:
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
+
         self.priv = new
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await players_repo.update(
+            id=self.id,
+            priv=self.priv,
+        )
 
     async def add_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, adding `bits`."""
+
         self.priv |= bits
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await players_repo.update(
+            id=self.id,
+            priv=self.priv,
+        )
 
         if self.is_online:
             # if they're online, send a packet
@@ -450,15 +446,15 @@ class Player:
 
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
+
         self.priv &= ~bits
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await players_repo.update(
+            id=self.id,
+            priv=self.priv,
+        )
 
         if self.is_online:
             # if they're online, send a packet
@@ -542,9 +538,9 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await app.state.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-            {"silence_end": self.silence_end, "user_id": self.id},
+        await players_repo.update(
+            id=self.id,
+            silence_end=self.silence_end,
         )
 
         await logs_repo.create(
@@ -570,9 +566,9 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await app.state.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-            {"silence_end": self.silence_end, "user_id": self.id},
+        await players_repo.update(
+            id=self.id,
+            silence_end=self.silence_end,
         )
 
         await logs_repo.create(
@@ -1006,9 +1002,9 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = app.state.services.database.execute(
-            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
-            {"user_id": self.id},
+        task = players_repo.update(
+            id=self.id,
+            latest_activity=int(time.time()),
         )
         app.state.loop.create_task(task)
 

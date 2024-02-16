@@ -1593,9 +1593,16 @@ async def get_screenshot(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    if extension in ("jpg", "jpeg"):
+        media_type = "image/jpeg"
+    elif extension == "png":
+        media_type = "image/png"
+    else:
+        media_type = None
+
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=media_type,
     )
 
 
