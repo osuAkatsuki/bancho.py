@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime
 from typing import Any
 from typing import TypedDict
 from typing import cast
@@ -57,7 +58,7 @@ class Map(TypedDict):
     version: str
     creator: str
     filename: str
-    last_update: str
+    last_update: datetime
     total_length: int
     max_combo: int
     frozen: bool
@@ -82,7 +83,7 @@ class MapUpdateFields(TypedDict, total=False):
     version: str
     creator: str
     filename: str
-    last_update: str
+    last_update: datetime
     total_length: int
     max_combo: int
     frozen: bool
@@ -108,7 +109,7 @@ async def create(
     version: str,
     creator: str,
     filename: str,
-    last_update: str,
+    last_update: datetime,
     total_length: int,
     max_combo: int,
     frozen: bool,
@@ -298,7 +299,7 @@ async def update(
     version: str | _UnsetSentinel = UNSET,
     creator: str | _UnsetSentinel = UNSET,
     filename: str | _UnsetSentinel = UNSET,
-    last_update: str | _UnsetSentinel = UNSET,
+    last_update: datetime | _UnsetSentinel = UNSET,
     total_length: int | _UnsetSentinel = UNSET,
     max_combo: int | _UnsetSentinel = UNSET,
     frozen: bool | _UnsetSentinel = UNSET,
