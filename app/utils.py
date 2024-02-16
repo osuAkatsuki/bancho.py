@@ -2,13 +2,9 @@ from __future__ import annotations
 
 import ctypes
 import inspect
-import io
-import ipaddress
 import os
 import shutil
-import socket
 import sys
-import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -22,7 +18,6 @@ import pymysql
 import app.settings
 from app.logging import Ansi
 from app.logging import log
-from app.logging import printc
 
 T = TypeVar("T")
 
@@ -205,14 +200,6 @@ def ensure_directory_structure() -> None:
 
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
-
-
-def _install_debugging_hooks() -> None:
-    """Change internals to help with debugging & active development."""
-    if DEBUG_HOOKS_PATH.exists():
-        from _testing import runtime  # type: ignore
-
-        runtime.setup()
 
 
 def is_running_as_admin() -> bool:

@@ -7,10 +7,6 @@ from enum import unique
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("Mods",)
-
-# NOTE: the order of some of these = stupid
-
 
 @unique
 @pymysql_encode(escape_enum)
