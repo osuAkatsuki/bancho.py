@@ -247,12 +247,12 @@ async def log_strange_occurrence(obj: object) -> None:
             log(
                 "Logged strange occurrence to cmyui's server. "
                 "Thank you for your participation! <3",
-                logging.INFO,
+                Ansi.LBLUE,
             )
         else:
             log(
                 f"Autoupload to cmyui's server failed (HTTP {response.status_code})",
-                logging.ERROR,
+                Ansi.LRED,
             )
 
     if not uploaded:
@@ -267,12 +267,12 @@ async def log_strange_occurrence(obj: object) -> None:
 
         log(
             "Logged strange occurrence to" + "/".join(log_file.parts[-4:]),
-            logging.WARNING,
+            Ansi.LYELLOW,
         )
         log(
             "It would be greatly appreciated if you could forward this to the "
             "bancho.py development team. To do so, please email josh@akatsuki.gg",
-            logging.WARNING,
+            Ansi.LYELLOW,
         )
 
 
