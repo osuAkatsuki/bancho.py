@@ -43,7 +43,6 @@ from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.constants.privileges import ClanPrivileges
-    from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
     from app.objects.clan import Clan
     from app.objects.score import Score
@@ -214,19 +213,35 @@ class Player:
         id: int,
         name: str,
         priv: int | Privileges,
-        **extras: Any,
+        pw_bcrypt: bytes | None = None,
+        token: str | None = None,
+        clan: Clan | None = None,
+        clan_priv: ClanPrivileges | None = None,
+        geoloc: app.state.services.Geolocation = {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": {"acronym": "xx", "numeric": 0},
+        },
+        utc_offset: int = 0,
+        pm_private: bool = False,
+        silence_end: int = 0,
+        donor_end: int = 0,
+        client_details: ClientDetails | None = None,
+        login_time: float = 0.0,
+        is_bot_client: bool = False,
+        is_tourney_client: bool = False,
+        api_key: str | None = None,
     ) -> None:
         self.id = id
         self.name = name
         self.safe_name = self.make_safe(self.name)
 
-        if "pw_bcrypt" in extras:
-            self.pw_bcrypt: bytes | None = extras["pw_bcrypt"]
+        if pw_bcrypt is not None:
+            self.pw_bcrypt = pw_bcrypt
         else:
             self.pw_bcrypt = None
 
         # generate a token if not given
-        token = extras.get("token", None)
         if token is not None and isinstance(token, str):
             self.token = token
         else:
@@ -248,29 +263,22 @@ class Player:
         self.match: Match | None = None
         self.stealth = False
 
-        self.clan: Clan | None = extras.get("clan")
-        self.clan_priv: ClanPrivileges | None = extras.get("clan_priv")
+        self.clan = clan
+        self.clan_priv = clan_priv
 
-        self.geoloc: app.state.services.Geolocation = extras.get(
-            "geoloc",
-            {
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {"acronym": "xx", "numeric": 0},
-            },
-        )
+        self.geoloc = geoloc
 
-        self.utc_offset = extras.get("utc_offset", 0)
-        self.pm_private = extras.get("pm_private", False)
-        self.away_msg: str | None = None
-        self.silence_end = extras.get("silence_end", 0)
-        self.donor_end = extras.get("donor_end", 0)
+        self.utc_offset = utc_offset
+        self.pm_private = pm_private
+        self.away_msg = None
+        self.silence_end = silence_end
+        self.donor_end = donor_end
         self.in_lobby = False
 
-        self.client_details: ClientDetails | None = extras.get("client_details")
+        self.client_details = client_details
         self.pres_filter = PresenceFilter.Nil
 
-        login_time = extras.get("login_time", 0.0)
+        login_time = login_time
         self.login_time = login_time
         self.last_recv_time = login_time
 
@@ -287,13 +295,13 @@ class Player:
         # subject to possible change in the future,
         # although if anything, bot accounts will
         # probably just use the /api/ routes?
-        self.is_bot_client = extras.get("is_bot_client", False)
+        self.is_bot_client = is_bot_client
         if self.is_bot_client:
             self.enqueue = lambda data: None  # type: ignore
 
-        self.is_tourney_client = extras.get("is_tourney_client", False)
+        self.is_tourney_client = is_tourney_client
 
-        self.api_key = extras.get("api_key", None)
+        self.api_key = api_key
 
         self._packet_queue = bytearray()
 
