@@ -37,6 +37,7 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
+from app.state.services import Geolocation
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -217,7 +218,7 @@ class Player:
         token: str,
         clan: Clan | None = None,
         clan_priv: ClanPrivileges | None = None,
-        geoloc: app.state.services.Geolocation | None = None,
+        geoloc: Geolocation | None = None,
         utc_offset: int = 0,
         pm_private: bool = False,
         silence_end: int = 0,
