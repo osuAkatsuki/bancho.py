@@ -297,7 +297,7 @@ class Player:
             def _noop_enqueue(data: bytes) -> None:
                 pass
 
-            self.enqueue = _noop_enqueue
+            self.enqueue = _noop_enqueue  # type: ignore[method-assign]
 
         self.is_tourney_client = is_tourney_client
 
