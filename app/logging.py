@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging.config
+from collections.abc import Mapping
 from enum import IntEnum
 
 import yaml
@@ -42,7 +43,11 @@ class Ansi(IntEnum):
 ROOT_LOGGER = logging.getLogger()
 
 
-def log(msg: str, start_color: Ansi | None = None) -> None:
+def log(
+    msg: str,
+    start_color: Ansi | None = None,
+    extra: Mapping[str, object] | None = None,
+) -> None:
     """\
     Print a string, in a specified ansi color with timestamp.
 
@@ -63,7 +68,7 @@ def log(msg: str, start_color: Ansi | None = None) -> None:
 
     color_prefix = f"{start_color!r}" if start_color is not None else ""
     color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
-    ROOT_LOGGER.log(log_level, f"{color_prefix}{msg}{color_suffix}")
+    ROOT_LOGGER.log(log_level, f"{color_prefix}{msg}{color_suffix}", extra=extra)
 
 
 TIME_ORDER_SUFFIXES = ["nsec", "μsec", "msec", "sec"]
