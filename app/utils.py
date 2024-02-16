@@ -114,14 +114,15 @@ def has_internet_connectivity(timeout: float = 1.0) -> bool:
         "8.8.8.8",
         "8.8.4.4",
     )
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        for addr in COMMON_DNS_SERVERS:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout)
+        for host in COMMON_DNS_SERVERS:
             try:
-                sock.connect((addr, 53))
-                return True
+                client.connect((host, 53))
             except OSError:
                 continue
+            else:
+                return True
 
     # all connections failed
     return False
