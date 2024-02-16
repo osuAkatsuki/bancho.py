@@ -65,7 +65,6 @@ from app.repositories import players as players_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.usecases.performance import ScoreParams
-from app.utils import seconds_readable
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
