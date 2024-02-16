@@ -56,4 +56,5 @@ execDBStatement "source /srv/root/migrations/base.sql"
 
 # Run tests
 echo "Running tests..."
-pytest -vv -s tests/
+coverage run -m pytest -vv -s tests/
+coverage report
