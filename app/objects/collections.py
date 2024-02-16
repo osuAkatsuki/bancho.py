@@ -227,8 +227,9 @@ class Players(list[Player]):
         return Player(
             id=player["id"],
             name=player["name"],
-            pw_bcrypt=player["pw_bcrypt"].encode(),
             priv=Privileges(player["priv"]),
+            pw_bcrypt=player["pw_bcrypt"].encode(),
+            token=Player.generate_token(),
             clan=clan,
             clan_priv=clan_priv,
             geoloc={
@@ -466,8 +467,10 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     app.state.sessions.bot = Player(
         id=1,
         name=bot["name"],
-        login_time=float(0x7FFFFFFF),  # (never auto-dc)
         priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+        login_time=float(0x7FFFFFFF),  # (never auto-dc)
         is_bot_client=True,
     )
     app.state.sessions.players.append(app.state.sessions.bot)
