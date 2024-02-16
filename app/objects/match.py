@@ -151,6 +151,7 @@ class Match:
         id: int,
         name: str,
         password: str,
+        has_public_history: bool,
         map_name: str,
         map_id: int,
         map_md5: str,
@@ -166,6 +167,7 @@ class Match:
         self.id = id
         self.name = name
         self.passwd = password
+        self.has_public_history = has_public_history
 
         self.host_id = host_id
         self._refs: set[Player] = set()

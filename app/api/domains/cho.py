@@ -1392,7 +1392,8 @@ class MatchCreate(BasePacket):
         match = Match(
             id=match_id,
             name=self.match_data.name,
-            password=self.match_data.passwd,
+            password=self.match_data.passwd.removesuffix("//private"),
+            has_public_history=not self.match_data.passwd.endswith("//private"),
             map_name=self.match_data.map_name,
             map_id=self.match_data.map_id,
             map_md5=self.match_data.map_md5,
