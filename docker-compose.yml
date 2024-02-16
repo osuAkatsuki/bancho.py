@@ -86,9 +86,6 @@ services:
       - SSL_CERT_PATH=${SSL_CERT_PATH}
       - SSL_KEY_PATH=${SSL_KEY_PATH}
       - DEVELOPER_MODE=${DEVELOPER_MODE}
-      # On deprecation path
-      - SERVER_ADDR=${SERVER_ADDR}
-      - SERVER_PORT=${SERVER_PORT}
 
 volumes:
   data:
