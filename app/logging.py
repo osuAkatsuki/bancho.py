@@ -107,11 +107,11 @@ def log(
     elif col is Ansi.LRED:
         log_level = logging.ERROR
     else:
-        if col is None:
-            col = Ansi.GRAY
         log_level = logging.INFO
 
-    ROOT_LOGGER.log(log_level, f"{col!r}{msg}{Ansi.RESET!r}")
+    color_prefix = f"{col!r}" if col is not None else ""
+    color_suffix = f"{Ansi.RESET!r}" if col is not None else ""
+    ROOT_LOGGER.log(log_level, f"{color_prefix}{msg}{color_suffix}")
 
     if file:
         # log simple ascii output to file.
