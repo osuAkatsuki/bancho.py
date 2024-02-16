@@ -1779,8 +1779,11 @@ async def mp_condition(ctx: Context, match: Match) -> str | None:
 @ensure_match
 async def mp_scrim(ctx: Context, match: Match) -> str | None:
     """Start a scrim in the current match."""
+    if len(ctx.args) != 1:
+        return "Invalid syntax: !mp scrim <bo#>"
+
     r_match = regexes.BEST_OF.fullmatch(ctx.args[0])
-    if len(ctx.args) != 1 or not r_match:
+    if not r_match:
         return "Invalid syntax: !mp scrim <bo#>"
 
     best_of = int(r_match[1])
