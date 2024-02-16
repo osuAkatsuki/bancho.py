@@ -289,12 +289,15 @@ class Player:
         # store the last beatmap /np'ed by the user.
         self.last_np: LastNp | None = None
 
-        # subject to possible change in the future,
-        # although if anything, bot accounts will
-        # probably just use the /api/ routes?
         self.is_bot_client = is_bot_client
+
+        # avoid enqueuing packets to bot accounts.
         if self.is_bot_client:
-            self.enqueue = lambda data: None  # type: ignore
+
+            def _noop_packet_handler(data: bytes) -> None:
+                pass
+
+            self.enqueue = _noop_packet_handler
 
         self.is_tourney_client = is_tourney_client
 
