@@ -217,11 +217,7 @@ class Player:
         token: str | None = None,
         clan: Clan | None = None,
         clan_priv: ClanPrivileges | None = None,
-        geoloc: app.state.services.Geolocation = {
-            "latitude": 0.0,
-            "longitude": 0.0,
-            "country": {"acronym": "xx", "numeric": 0},
-        },
+        geoloc: app.state.services.Geolocation | None = None,
         utc_offset: int = 0,
         pm_private: bool = False,
         silence_end: int = 0,
@@ -263,6 +259,12 @@ class Player:
         self.clan = clan
         self.clan_priv = clan_priv
 
+        if geoloc is None:
+            geoloc = {
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "country": {"acronym": "xx", "numeric": 0},
+            }
         self.geoloc = geoloc
 
         self.utc_offset = utc_offset
