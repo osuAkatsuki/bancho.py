@@ -277,38 +277,56 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        map_set: BeatmapSet,
+        md5: str = "",
+        id: int = 0,
+        set_id: int = 0,
+        artist: str = "",
+        title: str = "",
+        version: str = "",
+        creator: str = "",
+        last_update: datetime = DEFAULT_LAST_UPDATE,
+        total_length: int = 0,
+        max_combo: int = 0,
+        status: RankedStatus = RankedStatus.Pending,
+        frozen: bool = False,
+        plays: int = 0,
+        passes: int = 0,
+        mode: GameMode = GameMode.VANILLA_OSU,
+        bpm: float = 0.0,
+        cs: float = 0.0,
+        od: float = 0.0,
+        ar: float = 0.0,
+        hp: float = 0.0,
+        diff: float = 0.0,
+        filename: str = "",
+    ) -> None:
         self.set = map_set
 
-        self.md5 = kwargs.get("md5", "")
-        self.id = kwargs.get("id", 0)
-        self.set_id = kwargs.get("set_id", 0)
-
-        self.artist = kwargs.get("artist", "")
-        self.title = kwargs.get("title", "")
-        self.version = kwargs.get("version", "")  # diff name
-        self.creator = kwargs.get("creator", "")
-
-        self.last_update = kwargs.get("last_update", DEFAULT_LAST_UPDATE)
-        self.total_length = kwargs.get("total_length", 0)
-        self.max_combo = kwargs.get("max_combo", 0)
-
-        self.status = RankedStatus(kwargs.get("status", 0))
-        self.frozen = kwargs.get("frozen", False) == 1
-
-        self.plays = kwargs.get("plays", 0)
-        self.passes = kwargs.get("passes", 0)
-        self.mode = GameMode(kwargs.get("mode", 0))
-        self.bpm = kwargs.get("bpm", 0.0)
-
-        self.cs = kwargs.get("cs", 0.0)
-        self.od = kwargs.get("od", 0.0)
-        self.ar = kwargs.get("ar", 0.0)
-        self.hp = kwargs.get("hp", 0.0)
-
-        self.diff = kwargs.get("diff", 0.0)
-
-        self.filename = kwargs.get("filename", "")
+        self.md5 = md5
+        self.id = id
+        self.set_id = set_id
+        self.artist = artist
+        self.title = title
+        self.version = version
+        self.creator = creator
+        self.last_update = last_update
+        self.total_length = total_length
+        self.max_combo = max_combo
+        self.status = status
+        self.frozen = frozen
+        self.plays = plays
+        self.passes = passes
+        self.mode = mode
+        self.bpm = bpm
+        self.cs = cs
+        self.od = od
+        self.ar = ar
+        self.hp = hp
+        self.diff = diff
+        self.filename = filename
 
     def __repr__(self) -> str:
         return self.full_name
