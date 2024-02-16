@@ -87,7 +87,7 @@ async def fetch_many(
     ]
 
 
-async def fetch_by_name(name: str) -> TourneyPool:
+async def fetch_by_name(name: str) -> TourneyPool | None:
     """Fetch a tourney pool by name from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
@@ -98,9 +98,11 @@ async def fetch_by_name(name: str) -> TourneyPool:
         "name": name,
     }
     tourney_pool = await app.state.services.database.fetch_one(query, params)
-
-    assert tourney_pool is not None
-    return cast(TourneyPool, dict(tourney_pool._mapping))
+    return (
+        cast(TourneyPool, dict(tourney_pool._mapping))
+        if tourney_pool is not None
+        else None
+    )
 
 
 async def fetch_by_id(id: int) -> TourneyPool | None:
