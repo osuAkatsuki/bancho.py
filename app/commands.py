@@ -2245,13 +2245,13 @@ async def pool_info(ctx: Context) -> str | None:
 
     for tourney_map in sorted(
         await tourney_pool_maps_repo.fetch_many(pool_id=tourney_pool["id"]),
-        key=lambda x: (repr(x["mods"]), x["slot"]),
+        key=lambda x: (repr(Mods(x["mods"])), x["slot"]),
     ):
         bmap = await Beatmap.from_bid(tourney_map["map_id"])
         if bmap is None:
             log(f"Could not find beatmap {tourney_map['map_id']}.", Ansi.LRED)
             continue
-        l.append(f"{tourney_map['mods']}{tourney_map['slot']}: {bmap.embed}")
+        l.append(f"{Mods(tourney_map['mods'])!r}{tourney_map['slot']}: {bmap.embed}")
 
     return "\n".join(l)
 
