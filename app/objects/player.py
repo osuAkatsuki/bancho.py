@@ -237,7 +237,7 @@ class Player:
         self.safe_name = self.make_safe(self.name)
 
         if pw_bcrypt is not None:
-            self.pw_bcrypt = pw_bcrypt
+            self.pw_bcrypt: bytes | None = pw_bcrypt
         else:
             self.pw_bcrypt = None
 
@@ -270,7 +270,7 @@ class Player:
 
         self.utc_offset = utc_offset
         self.pm_private = pm_private
-        self.away_msg = None
+        self.away_msg: str | None = None
         self.silence_end = silence_end
         self.donor_end = donor_end
         self.in_lobby = False
