@@ -234,6 +234,9 @@ def display_startup_dialog() -> None:
                 Ansi.LRED,
             )
 
+    if not has_internet_connectivity():
+        log("No internet connectivity detected", Ansi.LYELLOW)
+
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
     return data_view[:4] == b"\xff\xd8\xff\xe0" and data_view[6:11] == b"JFIF\x00"
