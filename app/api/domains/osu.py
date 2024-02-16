@@ -1673,16 +1673,16 @@ async def register_account(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # ensure all args passed
-    # are safe for registration.
-    errors: Mapping[str, list[str]] = defaultdict(list)
-
     # Disable in-game registration if enabled
     if app.settings.DISALLOW_INGAME_REGISTRATION:
         return ORJSONResponse(
             content=INGAME_REGISTRATION_DISALLOWED_ERROR,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    # ensure all args passed
+    # are safe for registration.
+    errors: Mapping[str, list[str]] = defaultdict(list)
 
     # Usernames must:
     # - be within 2-15 characters in length
