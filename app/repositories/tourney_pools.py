@@ -59,7 +59,7 @@ async def create(name: str, created_by: int) -> TourneyPool:
 
 
 async def fetch_many(
-    pool_id: int | None = None,
+    id: int | None = None,
     created_by: int | None = None,
     page: int | None = 1,
     page_size: int | None = 50,
@@ -67,11 +67,11 @@ async def fetch_many(
     query = f"""\
         SELECT {READ_PARAMS}
           FROM tourney_pools
-          WHERE pool_id = COALESCE(:pool_id, pool_id)
+          WHERE id = COALESCE(:id, id)
             AND created_by = COALESCE(:created_by, created_by)
     """
     params: dict[str, Any] = {
-        "pool_id": pool_id,
+        "id": id,
         "created_by": created_by,
     }
     if page and page_size:
