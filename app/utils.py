@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import inspect
 import os
+import socket
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -101,6 +102,29 @@ def download_default_avatar(default_avatar_path: Path) -> None:
 
     log("Downloaded default avatar.", Ansi.LGREEN)
     default_avatar_path.write_bytes(resp.content)
+
+
+def has_internet_connectivity(timeout: float = 1.0) -> bool:
+    """Check for an active internet connection."""
+    COMMON_DNS_SERVERS = (
+        # Cloudflare
+        "1.1.1.1",
+        "1.0.0.1",
+        # Google
+        "8.8.8.8",
+        "8.8.4.4",
+    )
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
+        for addr in COMMON_DNS_SERVERS:
+            try:
+                sock.connect((addr, 53))
+                return True
+            except OSError:
+                continue
+
+    # all connections failed
+    return False
 
 
 class FrameInfo(TypedDict):

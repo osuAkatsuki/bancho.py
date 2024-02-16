@@ -7,10 +7,14 @@ import uvicorn
 
 import app.settings
 import app.utils
+from app.logging import Ansi
+from app.logging import log
 
 
 def main() -> int:
     app.utils.display_startup_dialog()
+    if not app.utils.has_internet_connectivity():
+        log("No internet connectivity detected", Ansi.LYELLOW)
     uvicorn.run(
         "app.api.init_api:asgi_app",
         reload=app.settings.DEBUG,
