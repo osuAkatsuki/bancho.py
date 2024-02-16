@@ -425,7 +425,7 @@ class SendMessage(BasePacket):
             t_chan.send(msg, sender=player)
 
         player.update_latest_activity_soon()
-        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
 
 
 @register(ClientPackets.LOGOUT, restricted=True)
@@ -1299,7 +1299,7 @@ class SendPrivateMessage(BasePacket):
                     player.send(resp_msg, sender=target)
 
         player.update_latest_activity_soon()
-        log(f"{player} @ {target}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+        log(f"{player} @ {target}: {msg}", Ansi.LCYAN)
 
 
 @register(ClientPackets.PART_LOBBY)
