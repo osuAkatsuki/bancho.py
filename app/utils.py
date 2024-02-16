@@ -222,7 +222,7 @@ def is_running_as_admin() -> bool:
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if app.settings.DEVELOPER_MODE:
-        log("running in advanced mode", Ansi.LRED)
+        log("running in advanced mode", Ansi.LYELLOW)
     if app.settings.DEBUG:
         log("running in debug mode", Ansi.LMAGENTA)
 
@@ -230,16 +230,14 @@ def display_startup_dialog() -> None:
     # unnecessary power over the operating system and is not advised.
     if is_running_as_admin():
         log(
-            "It is not recommended to run bancho.py as root/admin, especially in production..",
+            "It is not recommended to run bancho.py as root/admin, especially in production."
+            + (
+                " You are at increased risk as developer mode is enabled."
+                if app.settings.DEVELOPER_MODE
+                else ""
+            ),
             Ansi.LYELLOW,
         )
-
-        if app.settings.DEVELOPER_MODE:
-            log(
-                "The risk is even greater with features "
-                "such as config.advanced enabled.",
-                Ansi.LRED,
-            )
 
     if not has_internet_connectivity():
         log("No internet connectivity detected", Ansi.LYELLOW)
