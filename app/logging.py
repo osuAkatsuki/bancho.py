@@ -49,10 +49,9 @@ def log(
     extra: Mapping[str, object] | None = None,
 ) -> None:
     """\
-    Print a string, in a specified ansi color with timestamp.
-
-    Allows for the functionality to write to a file as
-    well by passing the filepath with the `file` parameter.
+    A thin wrapper around the stdlib logging module to handle mostly
+    backwards-compatibility for colours during our migration to the
+    standard library logging module.
     """
 
     # TODO: decouple colors from the base logging function; move it to
