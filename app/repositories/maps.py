@@ -392,8 +392,8 @@ async def delete(id: int) -> Map | None:
     params: dict[str, Any] = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
+    map = await app.state.services.database.fetch_one(query, params)
+    if map is None:
         return None
 
     query = """\
@@ -403,5 +403,5 @@ async def delete(id: int) -> Map | None:
     params = {
         "id": id,
     }
-    map = await app.state.services.database.execute(query, params)
+    await app.state.services.database.execute(query, params)
     return cast(Map, dict(map._mapping)) if map is not None else None
