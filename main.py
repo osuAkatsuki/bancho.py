@@ -5,8 +5,11 @@ import logging
 
 import uvicorn
 
+import app.logging
 import app.settings
 import app.utils
+
+app.logging.configure_logging()
 
 
 def main() -> int:

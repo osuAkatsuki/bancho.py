@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import struct
 import time
@@ -303,7 +304,7 @@ class SendMessage(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if player.silenced:
-            log(f"{player} sent a message while silenced.", Ansi.LYELLOW)
+            log(f"{player} sent a message while silenced.", logging.WARNING)
             return
 
         # remove leading/trailing whitespace
@@ -337,7 +338,7 @@ class SendMessage(BasePacket):
             t_chan = app.state.sessions.channels.get_by_name(recipient)
 
         if not t_chan:
-            log(f"{player} wrote to non-existent {recipient}.", Ansi.LYELLOW)
+            log(f"{player} wrote to non-existent {recipient}.", logging.WARNING)
             return
 
         if player not in t_chan:
@@ -1036,7 +1037,7 @@ class StartSpectating(BasePacket):
         if not new_host:
             log(
                 f"{player} tried to spectate nonexistant id {self.target_id}.",
-                Ansi.LYELLOW,
+                logging.WARNING,
             )
             return
 
@@ -1124,7 +1125,7 @@ class SendPrivateMessage(BasePacket):
     async def handle(self, player: Player) -> None:
         if player.silenced:
             if app.settings.DEBUG:
-                log(f"{player} tried to send a dm while silenced.", Ansi.LYELLOW)
+                log(f"{player} tried to send a dm while silenced.", logging.WARNING)
             return
 
         # remove leading/trailing whitespace
@@ -1142,7 +1143,7 @@ class SendPrivateMessage(BasePacket):
             if app.settings.DEBUG:
                 log(
                     f"{player} tried to write to non-existent user {target_name}.",
-                    Ansi.LYELLOW,
+                    logging.WARNING,
                 )
             return
 
@@ -1319,7 +1320,7 @@ class LobbyJoin(BasePacket):
                 except ValueError:
                     log(
                         f"Failed to send match {match.id} to player joining lobby; likely due to missing host",
-                        Ansi.LYELLOW,
+                        logging.WARNING,
                     )
                     stacktrace = app.utils.get_appropriate_stacktrace()
                     await app.state.services.log_strange_occurrence(stacktrace)
@@ -1345,7 +1346,7 @@ class MatchCreate(BasePacket):
 
     async def handle(self, player: Player) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
-            log(f"{player} tried to create a match with invalid data.", Ansi.LYELLOW)
+            log(f"{player} tried to create a match with invalid data.", logging.WARNING)
             return
 
         if player.restricted:
@@ -1469,7 +1470,7 @@ class MatchChangeSlot(BasePacket):
             return
 
         if player.match.slots[self.slot_id].status != SlotStatus.open:
-            log(f"{player} tried to move into non-open slot.", Ansi.LYELLOW)
+            log(f"{player} tried to move into non-open slot.", logging.WARNING)
             return
 
         # swap with current slot.
@@ -1505,7 +1506,7 @@ class MatchLock(BasePacket):
             return
 
         if player is not player.match.host:
-            log(f"{player} attempted to lock match as non-host.", Ansi.LYELLOW)
+            log(f"{player} attempted to lock match as non-host.", logging.WARNING)
             return
 
         # read new slot ID
@@ -1542,7 +1543,7 @@ class MatchChangeSettings(BasePacket):
         if not validate_match_data(self.match_data, expected_host_id=player.id):
             log(
                 f"{player} tried to change match settings with invalid data.",
-                Ansi.LYELLOW,
+                logging.WARNING,
             )
             return
 
@@ -1550,7 +1551,7 @@ class MatchChangeSettings(BasePacket):
             return
 
         if player is not player.match.host:
-            log(f"{player} attempted to change settings as non-host.", Ansi.LYELLOW)
+            log(f"{player} attempted to change settings as non-host.", logging.WARNING)
             return
 
         if self.match_data.freemods != player.match.freemods:
@@ -1669,7 +1670,7 @@ class MatchStart(BasePacket):
             return
 
         if player is not player.match.host:
-            log(f"{player} attempted to start match as non-host.", Ansi.LYELLOW)
+            log(f"{player} attempted to start match as non-host.", logging.WARNING)
             return
 
         player.match.start()
@@ -1765,7 +1766,7 @@ class MatchChangeMods(BasePacket):
             slot.mods = Mods(self.mods & ~SPEED_CHANGING_MODS)
         else:
             if player is not player.match.host:
-                log(f"{player} attempted to change mods as non-host.", Ansi.LYELLOW)
+                log(f"{player} attempted to change mods as non-host.", logging.WARNING)
                 return
 
             # not freemods, set match mods.
@@ -1881,7 +1882,7 @@ class ChannelJoin(BasePacket):
         channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel or not player.join_channel(channel):
-            log(f"{player} failed to join {self.name}.", Ansi.LYELLOW)
+            log(f"{player} failed to join {self.name}.", logging.WARNING)
             return
 
 
@@ -1895,7 +1896,7 @@ class MatchTransferHost(BasePacket):
             return
 
         if player is not player.match.host:
-            log(f"{player} attempted to transfer host as non-host.", Ansi.LYELLOW)
+            log(f"{player} attempted to transfer host as non-host.", logging.WARNING)
             return
 
         # read new slot ID
@@ -2047,7 +2048,7 @@ class ChannelPart(BasePacket):
         channel = app.state.sessions.channels.get_by_name(self.name)
 
         if not channel:
-            log(f"{player} failed to leave {self.name}.", Ansi.LYELLOW)
+            log(f"{player} failed to leave {self.name}.", logging.WARNING)
             return
 
         if player not in channel:
@@ -2135,7 +2136,7 @@ class MatchChangePassword(BasePacket):
         if not validate_match_data(self.match_data, expected_host_id=player.id):
             log(
                 f"{player} tried to change match password with invalid data.",
-                Ansi.LYELLOW,
+                logging.WARNING,
             )
             return
 
@@ -2143,7 +2144,7 @@ class MatchChangePassword(BasePacket):
             return
 
         if player is not player.match.host:
-            log(f"{player} attempted to change pw as non-host.", Ansi.LYELLOW)
+            log(f"{player} attempted to change pw as non-host.", logging.WARNING)
             return
 
         player.match.passwd = self.match_data.passwd

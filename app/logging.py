@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import colorsys
 import datetime
+import logging.config
 from enum import IntEnum
 from zoneinfo import ZoneInfo
+
+import yaml
+
+
+def configure_logging() -> None:
+    with open("logging.yaml") as f:
+        config = yaml.safe_load(f.read())
+        logging.config.dictConfig(config)
 
 
 class Ansi(IntEnum):
@@ -76,16 +85,13 @@ def set_timezone(tz: ZoneInfo) -> None:
     _log_tz = tz
 
 
-def printc(msg: str, col: Colour_Types, end: str = "\n") -> None:
-    """Print a string, in a specified ansi colour."""
-    print(f"{col!r}{msg}{Ansi.RESET!r}", end=end)
+ROOT_LOGGER = logging.getLogger()
 
 
 def log(
     msg: str,
     col: Colour_Types | None = None,
     file: str | None = None,
-    end: str = "\n",
 ) -> None:
     """\
     Print a string, in a specified ansi colour with timestamp.
@@ -94,17 +100,18 @@ def log(
     well by passing the filepath with the `file` parameter.
     """
 
-    ts_short = get_timestamp(full=False, tz=_log_tz)
-
-    if col:
-        if col is Rainbow:
-            print(f"{Ansi.GRAY!r}[{ts_short}] {_fmt_rainbow(msg, 2/3)}", end=end)
-            print(f"{Ansi.GRAY!r}[{ts_short}] {_fmt_rainbow(msg, 2/3)}", end=end)
-        else:
-            # normal colour
-            print(f"{Ansi.GRAY!r}[{ts_short}] {col!r}{msg}{Ansi.RESET!r}", end=end)
+    if col is Ansi.GRAY:
+        log_level = logging.INFO
+    elif col is Ansi.LYELLOW:
+        log_level = logging.WARNING
+    elif col is Ansi.LRED:
+        log_level = logging.ERROR
     else:
-        print(f"{Ansi.GRAY!r}[{ts_short}]{Ansi.RESET!r} {msg}", end=end)
+        if col is None:
+            col = Ansi.GRAY
+        log_level = logging.INFO
+
+    ROOT_LOGGER.log(log_level, f"{col!r}{msg}{Ansi.RESET!r}")
 
     if file:
         # log simple ascii output to file.

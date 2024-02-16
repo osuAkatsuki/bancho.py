@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import pickle
 import re
 import secrets
@@ -22,9 +23,7 @@ import app.state
 from app._typing import IPAddress
 from app.adapters.database import Database
 from app.logging import Ansi
-from app.logging import Rainbow
 from app.logging import log
-from app.logging import printc
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
@@ -245,12 +244,15 @@ async def log_strange_occurrence(obj: object) -> None:
         )
         if response.status_code == 200 and response.read() == b"ok":
             uploaded = True
-            log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
-            log("Thank you for your participation! <3", Rainbow)
+            log(
+                "Logged strange occurrence to cmyui's server. "
+                "Thank you for your participation! <3",
+                logging.INFO,
+            )
         else:
             log(
                 f"Autoupload to cmyui's server failed (HTTP {response.status_code})",
-                Ansi.LRED,
+                logging.ERROR,
             )
 
     if not uploaded:
@@ -263,12 +265,14 @@ async def log_strange_occurrence(obj: object) -> None:
         log_file.touch(exist_ok=False)
         log_file.write_bytes(pickled_obj)
 
-        log("Logged strange occurrence to", Ansi.LYELLOW, end=" ")
-        printc("/".join(log_file.parts[-4:]), Ansi.LBLUE)
-
         log(
-            "Greatly appreciated if you could forward this to cmyui#0425 :)",
-            Ansi.LYELLOW,
+            "Logged strange occurrence to" + "/".join(log_file.parts[-4:]),
+            logging.WARNING,
+        )
+        log(
+            "It would be greatly appreciated if you could forward this to the "
+            "bancho.py development team. To do so, please email josh@akatsuki.gg",
+            logging.WARNING,
         )
 
 

@@ -51,7 +51,6 @@ from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
-from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus

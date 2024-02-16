@@ -10,7 +10,6 @@ from starlette.responses import Response
 from app.logging import Ansi
 from app.logging import log
 from app.logging import magnitude_fmt_time
-from app.logging import printc
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
@@ -33,8 +32,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
         url = f"{request.headers['host']}{request['path']}"
 
-        log(f"[{request.method}] {response.status_code} {url}", col, end=" | ")
-        printc(f"Request took: {magnitude_fmt_time(time_elapsed)}", Ansi.LBLUE)
+        log(
+            f"[{request.method}] {response.status_code} {url}{Ansi.RESET!r} | {Ansi.LBLUE!r}Request took: {magnitude_fmt_time(time_elapsed)}",
+            col,
+        )
 
         response.headers["process-time"] = str(round(time_elapsed) / 1e6)
         return response
