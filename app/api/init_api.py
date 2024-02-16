@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import pprint
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -69,7 +71,9 @@ class BanchoAPI(FastAPI):
 
 @asynccontextmanager
 async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
-    app.utils.setup_runtime_environment()
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     app.utils.ensure_supported_platform()
     app.utils.ensure_directory_structure()
 

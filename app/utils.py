@@ -128,82 +128,6 @@ def seconds_readable(seconds: int) -> str:
     return ":".join(r)
 
 
-def check_connection(timeout: float = 1.0) -> bool:
-    """Check for an active internet connection."""
-    # attempt to connect to common dns servers
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        for addr in (
-            "1.1.1.1",
-            "1.0.0.1",  # cloudflare
-            "8.8.8.8",
-            "8.8.4.4",
-        ):  # google
-            try:
-                sock.connect((addr, 53))
-                return True
-            except OSError:
-                continue
-
-    # all connections failed
-    return False
-
-
-def processes_listening_on_unix_socket(socket_path: str) -> int:
-    """Return the number of processes currently listening on this socket."""
-    with open("/proc/net/unix") as f:  # TODO: does this require root privs?
-        unix_socket_data = f.read().splitlines(keepends=False)
-
-    process_count = 0
-
-    for line in unix_socket_data[1:]:
-        # 0000000045fe59d0: 00000002 00000000 00010000 0005 01 17665 /tmp/bancho.sock
-        tokens = line.split()
-
-        # unused params
-        # (
-        #     kernel_table_slot_num,
-        #     ref_count,
-        #     protocol,
-        #     flags,
-        #     sock_type,
-        #     sock_state,
-        #     inode,
-        # )  = tokens[0:7]
-
-        # path may or may not be set
-        if len(tokens) == 8 and tokens[7] == socket_path:
-            process_count += 1
-
-    return process_count
-
-
-def running_via_asgi_webserver() -> bool:
-    return any(map(sys.argv[0].endswith, ("hypercorn", "uvicorn")))
-
-
-def _install_synchronous_excepthook() -> None:
-    """Install a thin wrapper for sys.excepthook to catch bancho-related stuff."""
-    real_excepthook = sys.excepthook  # backup
-
-    def _excepthook(
-        type_: type[BaseException],
-        value: BaseException,
-        traceback: types.TracebackType | None,
-    ) -> None:
-        if type_ is KeyboardInterrupt:
-            print("\33[2K\r", end="Aborted startup.")
-            return
-
-        printc(
-            f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
-            Ansi.RED,
-        )
-        real_excepthook(type_, value, traceback)
-
-    sys.excepthook = _excepthook
-
-
 class FrameInfo(TypedDict):
     function: str
     filename: str
@@ -234,21 +158,6 @@ def get_appropriate_stacktrace() -> list[FrameInfo]:
         # call closest to the command line
         for frame in reversed(stack[:idx])
     ]
-
-
-def is_valid_inet_address(address: str) -> bool:
-    """Check whether address is a valid ipv(4/6) address."""
-    try:
-        ipaddress.ip_address(address)
-    except ValueError:
-        return False
-    else:
-        return True
-
-
-def is_valid_unix_address(address: str) -> bool:
-    """Check whether address is a valid unix address."""
-    return address.endswith(".sock")
 
 
 def pymysql_encode(
@@ -296,20 +205,6 @@ def ensure_directory_structure() -> None:
 
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
-
-
-def setup_runtime_environment() -> None:
-    """Configure the server's runtime environment."""
-    # install a hook to catch exceptions outside the event loop,
-    # which will handle various situations where the error details
-    # can be cleared up for the developer; for example it will explain
-    # that the config has been updated when an unknown attribute is
-    # accessed, so the developer knows what to do immediately.
-    _install_synchronous_excepthook()
-
-    # we print utf-8 content quite often, so configure sys.stdout
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8")
 
 
 def _install_debugging_hooks() -> None:
