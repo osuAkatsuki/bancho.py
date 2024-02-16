@@ -212,7 +212,7 @@ class Player:
         self,
         id: int,
         name: str,
-        priv: int | Privileges,
+        priv: Privileges,
         pw_bcrypt: bytes | None = None,
         token: str | None = None,
         clan: Clan | None = None,
@@ -241,7 +241,7 @@ class Player:
             self.token = self.generate_token()
 
         # ensure priv is of type Privileges
-        self.priv = priv if isinstance(priv, Privileges) else Privileges(priv)
+        self.priv = priv
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
