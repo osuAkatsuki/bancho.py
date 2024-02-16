@@ -11,8 +11,9 @@ run-bg:
 run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
+last?=1
 logs:
-	docker-compose logs -f bancho mysql redis
+	docker-compose logs -f bancho mysql redis --tail ${last}
 
 shell:
 	poetry shell
