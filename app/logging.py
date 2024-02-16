@@ -68,6 +68,7 @@ def log(
 
     color_prefix = f"{start_color!r}" if start_color is not None else ""
     color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
+
     ROOT_LOGGER.log(log_level, f"{color_prefix}{msg}{color_suffix}", extra=extra)
 
 
