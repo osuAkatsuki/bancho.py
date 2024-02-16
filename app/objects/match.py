@@ -10,16 +10,12 @@ from enum import unique
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import databases.core
-
 import app.packets
 import app.settings
 import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.logging import Ansi
-from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.repositories.tourney_pools import TourneyPool
 from app.utils import escape_enum
@@ -466,6 +462,8 @@ class Match:
                     return str(score)
 
             if ffa:
+                from app.objects.player import Player
+
                 assert isinstance(winner, Player)
 
                 msg.append(
