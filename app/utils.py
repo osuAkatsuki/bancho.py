@@ -3,7 +3,6 @@ from __future__ import annotations
 import ctypes
 import inspect
 import os
-import shutil
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -12,7 +11,6 @@ from typing import TypedDict
 from typing import TypeVar
 
 import httpx
-import orjson
 import pymysql
 
 import app.settings
@@ -88,8 +86,9 @@ def download_achievement_images(achievements_path: Path) -> None:
         log("Failed to download achievement images.", Ansi.LRED)
         achievements_path.rmdir()
 
-        # allow passthrough (don't hard crash) as the server will
-        # _mostly_ work in this state.
+        # allow passthrough (don't hard crash).
+        # the server will *mostly* work in this state.
+        pass
 
 
 def download_default_avatar(default_avatar_path: Path) -> None:
@@ -102,25 +101,6 @@ def download_default_avatar(default_avatar_path: Path) -> None:
 
     log("Downloaded default avatar.", Ansi.LGREEN)
     default_avatar_path.write_bytes(resp.content)
-
-
-def seconds_readable(seconds: int) -> str:
-    """Turn seconds as an int into 'DD:HH:MM:SS'."""
-    r: list[str] = []
-
-    days, seconds = divmod(seconds, 60 * 60 * 24)
-    if days:
-        r.append(f"{days:02d}")
-
-    hours, seconds = divmod(seconds, 60 * 60)
-    if hours:
-        r.append(f"{hours:02d}")
-
-    minutes, seconds = divmod(seconds, 60)
-    r.append(f"{minutes:02d}")
-
-    r.append(f"{seconds % 60:02d}")
-    return ":".join(r)
 
 
 class FrameInfo(TypedDict):
@@ -174,30 +154,21 @@ def escape_enum(
     return str(int(val))
 
 
-def ensure_supported_platform() -> None:
-    """Ensure we're running on an appropriate platform for bancho.py."""
-    if sys.version_info < (3, 11):
-        log(
-            "bancho.py uses many modern python features, "
-            "and the minimum python version is 3.11.",
-            Ansi.LRED,
-        )
-        raise SystemExit(1)
-
-
-def ensure_directory_structure() -> None:
-    """Ensure the .data directory and git submodules are ready."""
-    # create /.data and its subdirectories.
+def ensure_persistent_volumes_are_available() -> None:
+    # create /.data directory
     DATA_PATH.mkdir(exist_ok=True)
 
+    # create /.data/... subdirectories
     for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
         subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
 
+    # download achievement images from osu!
     if not ACHIEVEMENTS_ASSETS_PATH.exists():
         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
         download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
 
+    # download a default avatar image for new users
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
 
@@ -237,25 +208,6 @@ def display_startup_dialog() -> None:
                 "such as config.advanced enabled.",
                 Ansi.LRED,
             )
-
-
-def create_config_from_default() -> None:
-    """Create the default config from ext/config.sample.py"""
-    shutil.copy("ext/config.sample.py", "config.py")
-
-
-def orjson_serialize_to_str(*args: Any, **kwargs: Any) -> str:
-    return orjson.dumps(*args, **kwargs).decode()
-
-
-def get_media_type(extension: str) -> str | None:
-    if extension in ("jpg", "jpeg"):
-        return "image/jpeg"
-    elif extension == "png":
-        return "image/png"
-
-    # return none, fastapi will attempt to figure it out
-    return None
 
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
