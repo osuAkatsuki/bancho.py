@@ -16,26 +16,14 @@ from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
-from app.objects.achievement import Achievement
 from app.objects.channel import Channel
 from app.objects.clan import Clan
-from app.objects.match import MapPool
 from app.objects.match import Match
 from app.objects.player import Player
-from app.repositories import achievements as achievements_repo
 from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import players as players_repo
 from app.utils import make_safe_name
-
-__all__ = (
-    "Channels",
-    "Matches",
-    "Players",
-    "MapPools",
-    "Clans",
-    "initialize_ram_caches",
-)
 
 # TODO: decorator for these collections which automatically
 # adds debugging to their append/remove/insert/extend methods.
@@ -302,85 +290,6 @@ class Players(list[Player]):
         super().remove(player)
 
 
-class MapPools(list[MapPool]):
-    """The currently active mappools on the server."""
-
-    def __iter__(self) -> Iterator[MapPool]:
-        return super().__iter__()
-
-    def get(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-    ) -> MapPool | None:
-        """Get a mappool by id, or name from cache."""
-        for player in self:
-            if id is not None:
-                if player.id == id:
-                    return player
-            elif name is not None:
-                if player.name == name:
-                    return player
-
-        return None
-
-    def __contains__(self, o: object) -> bool:
-        """Check whether internal list contains `o`."""
-        # Allow string to be passed to compare vs. name.
-        if isinstance(o, str):
-            return o in (pool.name for pool in self)
-        else:
-            return o in self
-
-    def get_by_name(self, name: str) -> MapPool | None:
-        """Get a pool from the list by `name`."""
-        for player in self:
-            if player.name == name:
-                return player
-
-        return None
-
-    def append(self, mappool: MapPool) -> None:
-        """Append `mappool` to the list."""
-        super().append(mappool)
-
-        if app.settings.DEBUG:
-            log(f"{mappool} added to mappools list.")
-
-    def extend(self, mappools: Iterable[MapPool]) -> None:
-        """Extend the list with `mappools`."""
-        super().extend(mappools)
-
-        if app.settings.DEBUG:
-            log(f"{mappools} added to mappools list.")
-
-    def remove(self, mappool: MapPool) -> None:
-        """Remove `mappool` from the list."""
-        super().remove(mappool)
-
-        if app.settings.DEBUG:
-            log(f"{mappool} removed from mappools list.")
-
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching mappools from sql.", Ansi.LCYAN)
-        for row in await db_conn.fetch_all("SELECT * FROM tourney_pools"):
-            created_by = await app.state.sessions.players.from_cache_or_sql(
-                id=row["created_by"],
-            )
-
-            assert created_by is not None
-
-            pool = MapPool(
-                id=row["id"],
-                name=row["name"],
-                created_at=row["created_at"],
-                created_by=created_by,
-            )
-            await pool.maps_from_sql(db_conn)
-            self.append(pool)
-
-
 class Clans(list[Clan]):
     """The currently active clans on the server."""
 
@@ -457,7 +366,6 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     # fetch channels, clans and pools from db
     await app.state.sessions.channels.prepare(db_conn)
     await app.state.sessions.clans.prepare(db_conn)
-    await app.state.sessions.pools.prepare(db_conn)
 
     bot = await players_repo.fetch_one(id=1)
     if bot is None:
