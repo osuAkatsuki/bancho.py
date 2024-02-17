@@ -34,6 +34,7 @@ from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
@@ -214,7 +215,7 @@ class Player:
         priv: Privileges,
         pw_bcrypt: bytes | None,
         token: str,
-        clan: Clan | None = None,
+        clan_id: int | None = None,
         clan_priv: ClanPrivileges | None = None,
         geoloc: Geolocation | None = None,
         utc_offset: int = 0,
@@ -239,7 +240,7 @@ class Player:
         self.priv = priv
         self.pw_bcrypt = pw_bcrypt
         self.token = token
-        self.clan = clan
+        self.clan_id = clan_id
         self.clan_priv = clan_priv
         self.geoloc = geoloc
         self.utc_offset = utc_offset
@@ -314,14 +315,6 @@ class Player:
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
         return f"https://a.{app.settings.DOMAIN}/{self.id}"
-
-    @property
-    def full_name(self) -> str:
-        """The user's "full" name; including their clan tag."""
-        if self.clan:
-            return f"[{self.clan.tag}] {self.name}"
-        else:
-            return self.name
 
     # TODO: chat embed with clan tag hyperlinked?
 
@@ -692,24 +685,6 @@ class Player:
             self.match.enqueue_state()
 
         self.match = None
-
-    async def join_clan(self, clan: Clan) -> bool:
-        """Attempt to add `self` to `clan`."""
-        if self.id in clan.member_ids:
-            return False
-
-        if not "invited":  # TODO
-            return False
-
-        await clan.add_member(self)
-        return True
-
-    async def leave_clan(self) -> None:
-        """Attempt to remove `self` from `c`."""
-        if not self.clan:
-            return
-
-        await self.clan.remove_member(self)
 
     def join_channel(self, channel: Channel) -> bool:
         """Attempt to add `self` to `channel`."""
