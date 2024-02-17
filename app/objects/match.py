@@ -372,15 +372,14 @@ class Match:
             while True:
                 assert s.player is not None
                 rc_score = s.player.recent_score
-                assert rc_score is not None
 
                 max_age = datetime.now() - timedelta(
                     seconds=bmap.total_length + time_waited + 0.5,
                 )
 
-                assert rc_score.bmap is not None
                 if (
                     rc_score
+                    and rc_score.bmap
                     and rc_score.bmap.md5 == self.map_md5
                     and rc_score.server_time > max_age
                 ):
