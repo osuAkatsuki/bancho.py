@@ -214,7 +214,7 @@ async def bancho_handler(
             ),
         )
 
-    if player.restricted:
+    if player.is_restricted:
         # restricted users may only use certain packet handlers.
         packet_map = app.state.packets["restricted"]
     else:
@@ -293,7 +293,7 @@ class ChangeAction(BasePacket):
         player.status.map_id = self.map_id
 
         # broadcast it to all online players.
-        if not player.restricted:
+        if not player.is_restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
 
@@ -306,7 +306,7 @@ class SendMessage(BasePacket):
         self.msg = reader.read_message()
 
     async def handle(self, player: Player) -> None:
-        if player.silenced:
+        if player.is_silenced:
             log(f"{player} sent a message while silenced.", Ansi.LYELLOW)
             return
 
@@ -914,14 +914,14 @@ async def handle_osu_login_request(
 
     data += user_data
 
-    if not player.restricted:
+    if not player.is_restricted:
         # player is unrestricted, two way data
         for o in app.state.sessions.players:
             # enqueue us to them
             o.enqueue(user_data)
 
             # enqueue them to us.
-            if not o.restricted:
+            if not o.is_restricted:
                 if o is app.state.sessions.bot:
                     # optimization for bot since it's
                     # the most frequently requested user
@@ -1012,7 +1012,7 @@ async def handle_osu_login_request(
     app.state.sessions.players.append(player)
 
     if app.state.services.datadog:
-        if not player.restricted:
+        if not player.is_restricted:
             app.state.services.datadog.increment("bancho.online_players")
 
         time_taken = time.time() - login_time
@@ -1127,7 +1127,7 @@ class SendPrivateMessage(BasePacket):
         self.msg = reader.read_message()
 
     async def handle(self, player: Player) -> None:
-        if player.silenced:
+        if player.is_silenced:
             if app.settings.DEBUG:
                 log(f"{player} tried to send a dm while silenced.", Ansi.LYELLOW)
             return
@@ -1165,7 +1165,7 @@ class SendPrivateMessage(BasePacket):
                 log(f"{player} tried to message {target}, but they are blocking dms.")
             return
 
-        if target.silenced:
+        if target.is_silenced:
             # if target is silenced, inform player.
             player.enqueue(app.packets.target_silenced(target_name))
 
@@ -1353,7 +1353,7 @@ class MatchCreate(BasePacket):
             log(f"{player} tried to create a match with invalid data.", Ansi.LYELLOW)
             return
 
-        if player.restricted:
+        if player.is_restricted:
             player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(
@@ -1362,7 +1362,7 @@ class MatchCreate(BasePacket):
             )
             return
 
-        if player.silenced:
+        if player.is_silenced:
             player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(
@@ -1431,7 +1431,7 @@ class MatchJoin(BasePacket):
             player.enqueue(app.packets.match_join_fail())
             return
 
-        if player.restricted:
+        if player.is_restricted:
             player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(
@@ -1440,7 +1440,7 @@ class MatchJoin(BasePacket):
             )
             return
 
-        if player.silenced:
+        if player.is_silenced:
             player.enqueue(
                 app.packets.match_join_fail()
                 + app.packets.notification(

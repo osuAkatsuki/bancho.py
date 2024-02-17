@@ -812,7 +812,7 @@ async def unsilence(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    if not target.silenced:
+    if not target.is_silenced:
         return f"{target} is not silenced."
 
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
@@ -877,7 +877,7 @@ async def user(ctx: Context) -> str | None:
             f"Logged in: {timeago.format(player.login_time)}",
             f"Last server interaction: {timeago.format(player.last_recv_time)}",
             f"osu! build: {osu_version} | Tourney: {player.is_tourney_client}",
-            f"Silenced: {player.silenced} | Spectating: {player.spectating}",
+            f"Silenced: {player.is_silenced} | Spectating: {player.spectating}",
             f"Last /np: {last_np}",
             f"Recent score: {player.recent_score}",
             f"Match: {player.match}",
@@ -900,7 +900,7 @@ async def restrict(ctx: Context) -> str | None:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    if target.restricted:
+    if target.is_restricted:
         return f"{target} is already restricted!"
 
     reason = " ".join(ctx.args[1:])
@@ -931,7 +931,7 @@ async def unrestrict(ctx: Context) -> str | None:
     if target.priv & Privileges.STAFF and not ctx.player.priv & Privileges.DEVELOPER:
         return "Only developers can manage staff members."
 
-    if not target.restricted:
+    if not target.is_restricted:
         return f"{target} is not restricted!"
 
     reason = " ".join(ctx.args[1:])
@@ -1137,19 +1137,24 @@ async def givedonator(ctx: Context) -> str | None:
     if not target:
         return "Could not find user."
 
+    new_donor_end = time.time()
+
+    # keep existing time
+    if target.has_donator:
+        new_donor_end = target.donor_end
+
+    # add new time
     timespan = timeparse(ctx.args[1])
     if not timespan:
         return "Invalid timespan."
+    new_donor_end += timespan
 
-    if target.donor_end < time.time():
-        timespan += int(time.time())
-    else:
-        timespan += target.donor_end
-
-    target.donor_end = timespan
-    await app.state.services.database.execute(
-        "UPDATE users SET donor_end = :end WHERE id = :user_id",
-        {"end": timespan, "user_id": target.id},
+    # persist to db
+    new_donor_end = int(new_donor_end)
+    target.donor_end = new_donor_end
+    await players_repo.update(
+        id=target.id,
+        donor_end=new_donor_end,
     )
 
     await target.add_privs(Privileges.SUPPORTER)
@@ -1903,12 +1908,12 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
         return "Could not find a pool by that name!"
 
     if (
-        match.tourney_pool is not None
-        and match.tourney_pool["id"] == tourney_pool["id"]
+        match.tourney_pool_id is not None
+        and match.tourney_pool_id == tourney_pool["id"]
     ):
         return f"{tourney_pool['name']} already selected!"
 
-    match.tourney_pool = tourney_pool
+    match.tourney_pool_id = tourney_pool["id"]
     return f"{tourney_pool['name']} selected."
 
 
@@ -1922,10 +1927,10 @@ async def mp_unloadpool(ctx: Context, match: Match) -> str | None:
     if ctx.player is not match.host:
         return "Only available to the host."
 
-    if not match.tourney_pool:
+    if not match.tourney_pool_id:
         return "No mappool currently selected!"
 
-    match.tourney_pool = None
+    match.tourney_pool_id = None
     return "Mappool unloaded."
 
 
@@ -1936,7 +1941,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp ban <pick>"
 
-    if not match.tourney_pool:
+    if not match.tourney_pool_id:
         return "No pool currently selected!"
 
     mods_slot = ctx.args[0]
@@ -1951,7 +1956,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool_id,
         mods=mods,
         slot=slot,
     )
@@ -1972,7 +1977,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp unban <pick>"
 
-    if not match.tourney_pool:
+    if not match.tourney_pool_id:
         return "No pool currently selected!"
 
     mods_slot = ctx.args[0]
@@ -1987,7 +1992,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool_id,
         mods=mods,
         slot=slot,
     )
@@ -2008,7 +2013,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp pick <pick>"
 
-    if not match.tourney_pool:
+    if not match.tourney_pool_id:
         return "No pool currently loaded!"
 
     mods_slot = ctx.args[0]
@@ -2023,7 +2028,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool_id,
         mods=mods,
         slot=slot,
     )

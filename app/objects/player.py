@@ -333,9 +333,13 @@ class Player:
         return max(0, int(self.silence_end - time.time()))
 
     @property
-    def silenced(self) -> bool:
+    def is_silenced(self) -> bool:
         """Whether or not the player is silenced."""
         return self.remaining_silence != 0
+
+    @property
+    def has_donator(self) -> bool:
+        return self.donor_end > time.time()
 
     @cached_property
     def bancho_priv(self) -> ClientPrivileges:
@@ -354,7 +358,7 @@ class Player:
         return ret
 
     @property
-    def restricted(self) -> bool:
+    def is_restricted(self) -> bool:
         """Return whether the player is restricted."""
         return not self.priv & Privileges.UNRESTRICTED
 
@@ -407,7 +411,7 @@ class Player:
         # enqueue logout to all users.
         app.state.sessions.players.remove(self)
 
-        if not self.restricted:
+        if not self.is_restricted:
             if app.state.services.datadog:
                 app.state.services.datadog.decrement("bancho.online_players")
 
@@ -937,7 +941,7 @@ class Player:
         self.friends.add(1)
 
     async def get_global_rank(self, mode: GameMode) -> int:
-        if self.restricted:
+        if self.is_restricted:
             return 0
 
         rank = await app.state.services.redis.zrevrank(
@@ -947,7 +951,7 @@ class Player:
         return cast(int, rank) + 1 if rank is not None else 0
 
     async def get_country_rank(self, mode: GameMode) -> int:
-        if self.restricted:
+        if self.is_restricted:
             return 0
 
         country = self.geoloc["country"]["acronym"]
@@ -962,7 +966,7 @@ class Player:
         country = self.geoloc["country"]["acronym"]
         stats = self.stats[mode]
 
-        if not self.restricted:
+        if not self.is_restricted:
             # global rank
             await app.state.services.redis.zadd(
                 f"bancho:leaderboard:{mode.value}",
