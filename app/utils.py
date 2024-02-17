@@ -20,7 +20,7 @@ from app.logging import Ansi
 from app.logging import log
 
 if TYPE_CHECKING:
-    from app.repositories.players import Player
+    from app.repositories.users import Player
 
 T = TypeVar("T")
 
