@@ -6,7 +6,6 @@ import copy
 import hashlib
 import random
 import secrets
-from base64 import b64decode
 from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable

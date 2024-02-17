@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import textwrap
-from datetime import datetime
 from typing import Any
 from typing import TypedDict
 from typing import cast
@@ -42,7 +41,7 @@ async def create(
         "userid": userid,
         "setid": setid,
     }
-    rec_id = await app.state.services.database.execute(query, params)
+    await app.state.services.database.execute(query, params)
 
     query = f"""\
         SELECT {READ_PARAMS}

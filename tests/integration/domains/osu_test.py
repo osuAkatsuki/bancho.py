@@ -104,7 +104,7 @@ async def test_score_submission(
 
     # cho token must be valid uuid
     try:
-        session_token = UUID(response.headers["cho-token"])
+        UUID(response.headers["cho-token"])
     except ValueError:
         raise AssertionError(
             "cho-token is not a valid uuid",
