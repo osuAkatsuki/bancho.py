@@ -43,7 +43,7 @@ READ_PARAMS = textwrap.dedent(
 )
 
 
-class Player(TypedDict):
+class User(TypedDict):
     id: int
     name: str
     safe_name: str
@@ -89,8 +89,8 @@ async def create(
     email: str,
     pw_bcrypt: bytes,
     country: str,
-) -> Player:
-    """Create a new player in the database."""
+) -> User:
+    """Create a new user in the database."""
     query = f"""\
         INSERT INTO users (name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity)
              VALUES (:name, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())
@@ -112,10 +112,10 @@ async def create(
     params = {
         "id": rec_id,
     }
-    player = await app.state.services.database.fetch_one(query, params)
+    user = await app.state.services.database.fetch_one(query, params)
 
-    assert player is not None
-    return cast(Player, dict(player._mapping))
+    assert user is not None
+    return cast(User, dict(user._mapping))
 
 
 async def fetch_one(
@@ -123,8 +123,8 @@ async def fetch_one(
     name: str | None = None,
     email: str | None = None,
     fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> Player | None:
-    """Fetch a single player from the database."""
+) -> User | None:
+    """Fetch a single user from the database."""
     if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
 
@@ -140,8 +140,8 @@ async def fetch_one(
         "safe_name": make_safe_name(name) if name is not None else None,
         "email": email,
     }
-    player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, dict(player._mapping)) if player is not None else None
+    user = await app.state.services.database.fetch_one(query, params)
+    return cast(User, dict(user._mapping)) if user is not None else None
 
 
 async def fetch_count(
@@ -152,7 +152,7 @@ async def fetch_count(
     preferred_mode: int | None = None,
     play_style: int | None = None,
 ) -> int:
-    """Fetch the number of players in the database."""
+    """Fetch the number of users in the database."""
     query = """\
         SELECT COUNT(*) AS count
           FROM users
@@ -185,8 +185,8 @@ async def fetch_many(
     play_style: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
-) -> list[Player]:
-    """Fetch multiple players from the database."""
+) -> list[User]:
+    """Fetch multiple users from the database."""
     query = f"""\
         SELECT {READ_PARAMS}
           FROM users
@@ -214,8 +214,8 @@ async def fetch_many(
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-    players = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Player], [dict(p._mapping) for p in players])
+    users = await app.state.services.database.fetch_all(query, params)
+    return cast(list[User], [dict(p._mapping) for p in users])
 
 
 async def update(
@@ -236,8 +236,8 @@ async def update(
     custom_badge_icon: str | None | _UnsetSentinel = UNSET,
     userpage_content: str | None | _UnsetSentinel = UNSET,
     api_key: str | None | _UnsetSentinel = UNSET,
-) -> Player | None:
-    """Update a player in the database."""
+) -> User | None:
+    """Update a user in the database."""
     update_fields: PlayerUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
@@ -291,8 +291,8 @@ async def update(
     params = {
         "id": id,
     }
-    player = await app.state.services.database.fetch_one(query, params)
-    return cast(Player, dict(player._mapping)) if player is not None else None
+    user = await app.state.services.database.fetch_one(query, params)
+    return cast(User, dict(user._mapping)) if user is not None else None
 
 
 # TODO: delete?

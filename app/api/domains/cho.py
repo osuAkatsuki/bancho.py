@@ -598,7 +598,7 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
 async def authenticate(
     username: str,
     untrusted_password: bytes,
-) -> users_repo.Player | None:
+) -> users_repo.User | None:
     user_info = await users_repo.fetch_one(
         name=username,
         fetch_all_fields=True,

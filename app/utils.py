@@ -20,7 +20,7 @@ from app.logging import Ansi
 from app.logging import log
 
 if TYPE_CHECKING:
-    from app.repositories.users import Player
+    from app.repositories.users import User
 
 T = TypeVar("T")
 
@@ -35,7 +35,7 @@ def make_safe_name(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
-def determine_highest_ranking_clan_member(members: list[Player]) -> Player:
+def determine_highest_ranking_clan_member(members: list[User]) -> User:
     return next(iter(sorted(members, key=lambda m: m["clan_priv"], reverse=True)))
 
 

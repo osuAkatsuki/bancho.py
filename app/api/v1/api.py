@@ -972,7 +972,7 @@ async def api_get_pool(
         )
 
     pool_creator_clan = await clans_repo.fetch_one(id=pool_creator.clan_id)
-    pool_creator_clan_members: list[users_repo.Player] = []
+    pool_creator_clan_members: list[users_repo.User] = []
     if pool_creator_clan is not None:
         pool_creator_clan_members = await users_repo.fetch_many(
             clan_id=pool_creator.clan_id,
