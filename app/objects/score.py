@@ -23,8 +23,6 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-__all__ = ("Grade", "SubmissionStatus", "Score")
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 

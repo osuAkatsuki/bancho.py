@@ -48,8 +48,6 @@ if TYPE_CHECKING:
     from app.objects.clan import Clan
     from app.objects.score import Score
 
-__all__ = ("ModeData", "Status", "Player")
-
 
 @unique
 @pymysql_encode(escape_enum)
