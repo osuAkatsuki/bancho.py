@@ -17,27 +17,6 @@ from app.api.init_api import asgi_app
 # will no longer need to use the asgi-lifespan dependency.
 # (We do not need an asynchronous http client for our tests)
 
-
-@pytest.fixture(autouse=True)
-def mock_out_initial_image_downloads(respx_mock: respx.MockRouter) -> None:
-    # mock out default avatar download
-    respx_mock.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png").mock(
-        return_value=httpx.Response(
-            status_code=status.HTTP_200_OK,
-            headers={"Content-Type": "image/png"},
-            content=b"i am a png file",
-        ),
-    )
-    # mock out achievement image downloads
-    respx_mock.get(url__regex=r"https://assets.ppy.sh/medals/client/.+").mock(
-        return_value=httpx.Response(
-            status_code=status.HTTP_200_OK,
-            headers={"Content-Type": "image/png"},
-            content=b"i am a png file",
-        ),
-    )
-
-
 @pytest.fixture
 async def app() -> AsyncIterator[ASGIApp]:
     async with LifespanManager(

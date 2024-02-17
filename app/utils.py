@@ -22,86 +22,14 @@ T = TypeVar("T")
 
 
 DATA_PATH = Path.cwd() / ".data"
-ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
-DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
+ASSETS_PATH = Path.cwd() / "assets"
+ACHIEVEMENTS_ASSETS_PATH = ASSETS_PATH / "medals"
+DEFAULT_AVATAR_PATH = ASSETS_PATH / "default_avatar.jpg"
 
 
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
-
-
-def _download_achievement_images_osu(achievements_path: Path) -> bool:
-    """Download all used achievement images (one by one, from osu!)."""
-    achs: list[str] = []
-
-    for resolution in ("", "@2x"):
-        for mode in ("osu", "taiko", "fruits", "mania"):
-            # only osu!std has 9 & 10 star pass/fc medals.
-            for star_rating in range(1, 1 + (10 if mode == "osu" else 8)):
-                achs.append(f"{mode}-skill-pass-{star_rating}{resolution}.png")
-                achs.append(f"{mode}-skill-fc-{star_rating}{resolution}.png")
-
-        for combo in (500, 750, 1000, 2000):
-            achs.append(f"osu-combo-{combo}{resolution}.png")
-
-        for mod in (
-            "suddendeath",
-            "hidden",
-            "perfect",
-            "hardrock",
-            "doubletime",
-            "flashlight",
-            "easy",
-            "nofail",
-            "nightcore",
-            "halftime",
-            "spunout",
-        ):
-            achs.append(f"all-intro-{mod}{resolution}.png")
-
-    log("Downloading achievement images from osu!.", Ansi.LCYAN)
-
-    for ach in achs:
-        resp = httpx.get(f"https://assets.ppy.sh/medals/client/{ach}")
-        if resp.status_code != 200:
-            return False
-
-        log(f"Saving achievement: {ach}", Ansi.LCYAN)
-        (achievements_path / ach).write_bytes(resp.content)
-
-    return True
-
-
-def download_achievement_images(achievements_path: Path) -> None:
-    """Download all used achievement images (using the best available source)."""
-
-    # download individual files from the official osu! servers
-    downloaded = _download_achievement_images_osu(achievements_path)
-
-    if downloaded:
-        log("Downloaded all achievement images.", Ansi.LGREEN)
-    else:
-        # TODO: make the code safe in this state
-        log("Failed to download achievement images.", Ansi.LRED)
-        achievements_path.rmdir()
-
-        # allow passthrough (don't hard crash).
-        # the server will *mostly* work in this state.
-        pass
-
-
-def download_default_avatar(default_avatar_path: Path) -> None:
-    """Download an avatar to use as the server's default."""
-    resp = httpx.get("https://i.cmyui.xyz/U24XBZw-4wjVME-JaEz3.png")
-
-    if resp.status_code != 200:
-        log("Failed to fetch default avatar.", Ansi.LRED)
-        return
-
-    log("Downloaded default avatar.", Ansi.LGREEN)
-    default_avatar_path.write_bytes(resp.content)
-
 
 def has_internet_connectivity(timeout: float = 1.0) -> bool:
     """Check for an active internet connection."""
@@ -186,16 +114,6 @@ def ensure_persistent_volumes_are_available() -> None:
     for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
         subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
-
-    # download achievement images from osu!
-    if not ACHIEVEMENTS_ASSETS_PATH.exists():
-        ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
-        download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
-
-    # download a default avatar image for new users
-    if not DEFAULT_AVATAR_PATH.exists():
-        download_default_avatar(DEFAULT_AVATAR_PATH)
-
 
 def is_running_as_admin() -> bool:
     try:
