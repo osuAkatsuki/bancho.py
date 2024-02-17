@@ -17,7 +17,6 @@ from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 from app.objects.channel import Channel
-from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories import channels as channels_repo

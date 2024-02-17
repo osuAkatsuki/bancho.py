@@ -42,7 +42,6 @@ from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.channel import Channel
-from app.objects.clan import Clan
 from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Match
 from app.objects.match import MatchTeams

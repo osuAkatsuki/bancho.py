@@ -46,7 +46,6 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from app.constants.privileges import ClanPrivileges
     from app.objects.beatmap import Beatmap
-    from app.objects.clan import Clan
     from app.objects.score import Score
 
 
