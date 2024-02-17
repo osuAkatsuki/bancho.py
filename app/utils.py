@@ -24,7 +24,6 @@ T = TypeVar("T")
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
-DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 
 
 def make_safe_name(name: str) -> str:
