@@ -64,7 +64,7 @@ class User(TypedDict):
     api_key: str | None
 
 
-class PlayerUpdateFields(TypedDict, total=False):
+class UserUpdateFields(TypedDict, total=False):
     name: str
     safe_name: str
     email: str
@@ -238,7 +238,7 @@ async def update(
     api_key: str | None | _UnsetSentinel = UNSET,
 ) -> User | None:
     """Update a user in the database."""
-    update_fields: PlayerUpdateFields = {}
+    update_fields: UserUpdateFields = {}
     if not isinstance(name, _UnsetSentinel):
         update_fields["name"] = name
         update_fields["safe_name"] = make_safe_name(name)
