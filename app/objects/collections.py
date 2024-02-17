@@ -1,5 +1,3 @@
-# TODO: there is still a lot of inconsistency
-# in a lot of these classes; needs refactor.
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -23,9 +21,6 @@ from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import users as users_repo
 from app.utils import make_safe_name
-
-# TODO: decorator for these collections which automatically
-# adds debugging to their append/remove/insert/extend methods.
 
 
 class Channels(list[Channel]):
