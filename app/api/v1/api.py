@@ -915,7 +915,7 @@ async def api_get_clan(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await players_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
 
     owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
     assert owner is not None
@@ -972,9 +972,9 @@ async def api_get_pool(
         )
 
     pool_creator_clan = await clans_repo.fetch_one(id=pool_creator.clan_id)
-    pool_creator_clan_members: list[players_repo.Player] = []
+    pool_creator_clan_members: list[users_repo.Player] = []
     if pool_creator_clan is not None:
-        pool_creator_clan_members = await players_repo.fetch_many(
+        pool_creator_clan_members = await users_repo.fetch_many(
             clan_id=pool_creator.clan_id,
         )
 

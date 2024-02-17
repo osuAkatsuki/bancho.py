@@ -2363,10 +2363,10 @@ async def clan_disband(ctx: Context) -> str | None:
     # remove all members from the clan
     clan_member_ids = [
         clan_member["id"]
-        for clan_member in await players_repo.fetch_many(clan_id=clan["id"])
+        for clan_member in await users_repo.fetch_many(clan_id=clan["id"])
     ]
     for member_id in clan_member_ids:
-        await players_repo.update(member_id, clan_id=0, clan_priv=0)
+        await users_repo.update(member_id, clan_id=0, clan_priv=0)
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
@@ -2417,9 +2417,9 @@ async def clan_leave(ctx: Context) -> str | None:
     if not clan:
         return "You're not in a clan."
 
-    clan_members = await players_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
 
-    await players_repo.update(ctx.player.id, clan_id=0, clan_priv=0)
+    await users_repo.update(ctx.player.id, clan_id=0, clan_priv=0)
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
 
