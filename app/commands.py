@@ -61,9 +61,9 @@ from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
 from app.repositories import maps as maps_repo
-from app.repositories import players as players_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
+from app.repositories import users as users_repo
 from app.usecases.performance import ScoreParams
 
 if TYPE_CHECKING:
@@ -275,11 +275,11 @@ async def changename(ctx: Context) -> str | None:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await players_repo.fetch_one(name=name):
+    if await users_repo.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await players_repo.update(ctx.player.id, name=name)
+    await users_repo.update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -565,7 +565,7 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await players_repo.update(ctx.player.id, api_key=ctx.player.api_key)
+    await users_repo.update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
@@ -2330,7 +2330,7 @@ async def clan_create(ctx: Context) -> str | None:
     clan.owner_id = ctx.player.id
     clan.member_ids.add(ctx.player.id)
 
-    await players_repo.update(
+    await users_repo.update(
         ctx.player.id,
         clan_id=clan.id,
         clan_priv=ClanPrivileges.Owner,
@@ -2369,7 +2369,7 @@ async def clan_disband(ctx: Context) -> str | None:
     # reset their clan privs (cache & sql).
     # NOTE: only online players need be to be uncached.
     for member_id in clan.member_ids:
-        await players_repo.update(member_id, clan_id=0, clan_priv=0)
+        await users_repo.update(member_id, clan_id=0, clan_priv=0)
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
@@ -2398,7 +2398,7 @@ async def clan_info(ctx: Context) -> str | None:
     msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
-    clan_members = await players_repo.fetch_many(clan_id=clan.id)
+    clan_members = await users_repo.fetch_many(clan_id=clan.id)
     for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
         priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
         msg.append(f"[{priv_str}] {member['name']}")

@@ -35,8 +35,8 @@ from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories import logs as logs_repo
-from app.repositories import players as players_repo
 from app.repositories import stats as stats_repo
+from app.repositories import users as users_repo
 from app.state.services import Geolocation
 from app.utils import escape_enum
 from app.utils import make_safe_name
@@ -420,7 +420,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await players_repo.update(
+        await users_repo.update(
             id=self.id,
             priv=self.priv,
         )
@@ -432,7 +432,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await players_repo.update(
+        await users_repo.update(
             id=self.id,
             priv=self.priv,
         )
@@ -449,7 +449,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await players_repo.update(
+        await users_repo.update(
             id=self.id,
             priv=self.priv,
         )
@@ -536,7 +536,7 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await players_repo.update(
+        await users_repo.update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -564,7 +564,7 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await players_repo.update(
+        await users_repo.update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -1000,7 +1000,7 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = players_repo.update(
+        task = users_repo.update(
             id=self.id,
             latest_activity=int(time.time()),
         )

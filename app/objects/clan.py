@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import app.state
 from app.constants.privileges import ClanPrivileges
 from app.repositories import clans as clans_repo
-from app.repositories import players as players_repo
+from app.repositories import users as users_repo
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -53,7 +53,7 @@ class Clan:
         """Remove a given player from the clan's members."""
         self.member_ids.remove(player.id)
 
-        await players_repo.update(player.id, clan_id=0, clan_priv=0)
+        await users_repo.update(player.id, clan_id=0, clan_priv=0)
 
         if not self.member_ids:
             # no members left, disband clan.
@@ -66,7 +66,7 @@ class Clan:
             self.owner_id = next(iter(self.member_ids))
 
             await clans_repo.update(self.id, owner=self.owner_id)
-            await players_repo.update(self.owner_id, clan_priv=ClanPrivileges.Owner)
+            await users_repo.update(self.owner_id, clan_priv=ClanPrivileges.Owner)
 
         player.clan = None
         player.clan_priv = None
