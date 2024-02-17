@@ -372,15 +372,14 @@ class Match:
             while True:
                 assert s.player is not None
                 rc_score = s.player.recent_score
-                assert rc_score is not None
 
                 max_age = datetime.now() - timedelta(
                     seconds=bmap.total_length + time_waited + 0.5,
                 )
 
-                assert rc_score.bmap is not None
                 if (
                     rc_score
+                    and rc_score.bmap
                     and rc_score.bmap.md5 == self.map_md5
                     and rc_score.server_time > max_age
                 ):
@@ -432,122 +431,122 @@ class Match:
         for player in didnt_submit:
             self.chat.send_bot(f"{player} didn't submit a score (timeout: 10s).")
 
-        if scores:
-            ffa = self.team_type in (
-                MatchTeamTypes.head_to_head,
-                MatchTeamTypes.tag_coop,
+        if not scores:
+            self.chat.send_bot("Scores could not be calculated.")
+            return None
+
+        ffa = self.team_type in (
+            MatchTeamTypes.head_to_head,
+            MatchTeamTypes.tag_coop,
+        )
+
+        # all scores are equal, it was a tie.
+        if len(scores) != 1 and len(set(scores.values())) == 1:
+            self.winners.append(None)
+            self.chat.send_bot("The point has ended in a tie!")
+            return None
+
+        # Find the winner & increment their matchpoints.
+        winner: Player | MatchTeams = max(scores, key=lambda k: scores[k])
+        self.winners.append(winner)
+        self.match_points[winner] += 1
+
+        msg: list[str] = []
+
+        def add_suffix(score: int | float) -> str | int | float:
+            if self.use_pp_scoring:
+                return f"{score:.2f}pp"
+            elif self.win_condition == MatchWinConditions.accuracy:
+                return f"{score:.2f}%"
+            elif self.win_condition == MatchWinConditions.combo:
+                return f"{score}x"
+            else:
+                return str(score)
+
+        if ffa:
+            from app.objects.player import Player
+
+            assert isinstance(winner, Player)
+
+            msg.append(
+                f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
+                f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
             )
 
-            # all scores are equal, it was a tie.
-            if len(scores) != 1 and len(set(scores.values())) == 1:
-                self.winners.append(None)
-                self.chat.send_bot("The point has ended in a tie!")
-                return None
+            wmp = self.match_points[winner]
 
-            # Find the winner & increment their matchpoints.
-            winner: Player | MatchTeams = max(scores, key=lambda k: scores[k])
-            self.winners.append(winner)
-            self.match_points[winner] += 1
+            # check if match point #1 has enough points to win.
+            if self.winning_pts and wmp == self.winning_pts:
+                # we have a champion, announce & reset our match.
+                self.is_scrimming = False
+                self.reset_scrim()
+                self.bans.clear()
 
-            msg: list[str] = []
+                m = f"{winner.name} takes the match! Congratulations!"
+            else:
+                # no winner, just announce the match points so far.
+                # for ffa, we'll only announce the top <=3 players.
+                m_points = sorted(self.match_points.items(), key=lambda x: x[1])
+                m = f"Total Score: {' | '.join([f'{k.name} - {v}' for k, v in m_points])}"
 
-            def add_suffix(score: int | float) -> str | int | float:
-                if self.use_pp_scoring:
-                    return f"{score:.2f}pp"
-                elif self.win_condition == MatchWinConditions.accuracy:
-                    return f"{score:.2f}%"
-                elif self.win_condition == MatchWinConditions.combo:
-                    return f"{score}x"
-                else:
-                    return str(score)
+            msg.append(m)
+            del m
 
-            if ffa:
-                from app.objects.player import Player
+        else:  # teams
+            assert isinstance(winner, MatchTeams)
 
-                assert isinstance(winner, Player)
+            r_match = regexes.TOURNEY_MATCHNAME.match(self.name)
+            if r_match:
+                match_name = r_match["name"]
+                team_names = {
+                    MatchTeams.blue: r_match["T1"],
+                    MatchTeams.red: r_match["T2"],
+                }
+            else:
+                match_name = self.name
+                team_names = {MatchTeams.blue: "Blue", MatchTeams.red: "Red"}
+
+            # teams are binary, so we have a loser.
+            if winner is MatchTeams.blue:
+                loser = MatchTeams.red
+            else:
+                loser = MatchTeams.blue
+
+            # from match name if available, else blue/red.
+            wname = team_names[winner]
+            lname = team_names[loser]
+
+            # scores from the recent play
+            # (according to win condition)
+            ws = add_suffix(scores[winner])
+            ls = add_suffix(scores[loser])
+
+            # total win/loss score in the match.
+            wmp = self.match_points[winner]
+            lmp = self.match_points[loser]
+
+            # announce the score for the most recent play.
+            msg.append(f"{wname} takes the point! ({ws} vs. {ls})")
+
+            # check if the winner has enough match points to win the match.
+            if self.winning_pts and wmp == self.winning_pts:
+                # we have a champion, announce & reset our match.
+                self.is_scrimming = False
+                self.reset_scrim()
 
                 msg.append(
-                    f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
-                    f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
+                    f"{wname} takes the match, finishing {match_name} "
+                    f"with a score of {wmp} - {lmp}! Congratulations!",
                 )
+            else:
+                # no winner, just announce the match points so far.
+                msg.append(f"Total Score: {wname} | {wmp} - {lmp} | {lname}")
 
-                wmp = self.match_points[winner]
+        if didnt_submit:
+            self.chat.send_bot(
+                "If you'd like to perform a rematch, "
+                "please use the `!mp rematch` command.",
+            )
 
-                # check if match point #1 has enough points to win.
-                if self.winning_pts and wmp == self.winning_pts:
-                    # we have a champion, announce & reset our match.
-                    self.is_scrimming = False
-                    self.reset_scrim()
-                    self.bans.clear()
-
-                    m = f"{winner.name} takes the match! Congratulations!"
-                else:
-                    # no winner, just announce the match points so far.
-                    # for ffa, we'll only announce the top <=3 players.
-                    m_points = sorted(self.match_points.items(), key=lambda x: x[1])
-                    m = f"Total Score: {' | '.join([f'{k.name} - {v}' for k, v in m_points])}"
-
-                msg.append(m)
-                del m
-
-            else:  # teams
-                assert isinstance(winner, MatchTeams)
-
-                r_match = regexes.TOURNEY_MATCHNAME.match(self.name)
-                if r_match:
-                    match_name = r_match["name"]
-                    team_names = {
-                        MatchTeams.blue: r_match["T1"],
-                        MatchTeams.red: r_match["T2"],
-                    }
-                else:
-                    match_name = self.name
-                    team_names = {MatchTeams.blue: "Blue", MatchTeams.red: "Red"}
-
-                # teams are binary, so we have a loser.
-                if winner is MatchTeams.blue:
-                    loser = MatchTeams.red
-                else:
-                    loser = MatchTeams.blue
-
-                # from match name if available, else blue/red.
-                wname = team_names[winner]
-                lname = team_names[loser]
-
-                # scores from the recent play
-                # (according to win condition)
-                ws = add_suffix(scores[winner])
-                ls = add_suffix(scores[loser])
-
-                # total win/loss score in the match.
-                wmp = self.match_points[winner]
-                lmp = self.match_points[loser]
-
-                # announce the score for the most recent play.
-                msg.append(f"{wname} takes the point! ({ws} vs. {ls})")
-
-                # check if the winner has enough match points to win the match.
-                if self.winning_pts and wmp == self.winning_pts:
-                    # we have a champion, announce & reset our match.
-                    self.is_scrimming = False
-                    self.reset_scrim()
-
-                    msg.append(
-                        f"{wname} takes the match, finishing {match_name} "
-                        f"with a score of {wmp} - {lmp}! Congratulations!",
-                    )
-                else:
-                    # no winner, just announce the match points so far.
-                    msg.append(f"Total Score: {wname} | {wmp} - {lmp} | {lname}")
-
-            if didnt_submit:
-                self.chat.send_bot(
-                    "If you'd like to perform a rematch, "
-                    "please use the `!mp rematch` command.",
-                )
-
-            for line in msg:
-                self.chat.send_bot(line)
-
-        else:
-            self.chat.send_bot("Scores could not be calculated.")
+        for line in msg:
+            self.chat.send_bot(line)
