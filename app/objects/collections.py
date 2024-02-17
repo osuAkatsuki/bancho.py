@@ -290,62 +290,6 @@ class Players(list[Player]):
         super().remove(player)
 
 
-class Clans(list[Clan]):
-    """The currently active clans on the server."""
-
-    def __iter__(self) -> Iterator[Clan]:
-        return super().__iter__()
-
-    def __contains__(self, o: object) -> bool:
-        """Check whether internal list contains `o`."""
-        # Allow string to be passed to compare vs. name.
-        if isinstance(o, str):
-            return o in (clan.name for clan in self)
-        else:
-            return o in self
-
-    def get(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-        tag: str | None = None,
-    ) -> Clan | None:
-        """Get a clan by name, tag, or id."""
-        for clan in self:
-            if id is not None:
-                if clan.id == id:
-                    return clan
-            elif name is not None:
-                if clan.name == name:
-                    return clan
-            elif tag is not None:
-                if clan.tag == tag:
-                    return clan
-
-        return None
-
-    def append(self, clan: Clan) -> None:
-        """Append `clan` to the list."""
-        super().append(clan)
-
-        if app.settings.DEBUG:
-            log(f"{clan} added to clans list.")
-
-    def extend(self, clans: Iterable[Clan]) -> None:
-        """Extend the list with `clans`."""
-        super().extend(clans)
-
-        if app.settings.DEBUG:
-            log(f"{clans} added to clans list.")
-
-    def remove(self, clan: Clan) -> None:
-        """Remove `clan` from the list."""
-        super().remove(clan)
-
-        if app.settings.DEBUG:
-            log(f"{clan} removed from clans list.")
-
-
 async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
     # fetch channels, clans and pools from db
