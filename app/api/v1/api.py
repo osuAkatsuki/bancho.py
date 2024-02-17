@@ -930,7 +930,7 @@ async def api_get_clan(
                     "id": member["id"],
                     "name": member["name"],
                     "country": member["country"],
-                    "rank": ("Member", "Officer", "Owner")[member["clan_priv"] - 1],  # type: ignore
+                    "rank": ("Member", "Officer", "Owner")[member["clan_priv"] - 1],
                 }
                 for member in clan_members
             ],
