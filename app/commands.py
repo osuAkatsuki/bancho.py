@@ -2300,7 +2300,10 @@ async def clan_create(ctx: Context) -> str | None:
         return "Clan name may be 2-16 characters long."
 
     if ctx.player.clan_id:
-        return f"You're already a member of {ctx.player.clan_id}!"
+        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+        if clan:
+            clan_display_name = f"[{clan['tag']}] {clan['name']}"
+            return f"You're already a member of {clan_display_name}!"
 
     if await clans_repo.fetch_one(name=name):
         return "That name has already been claimed by another clan."
@@ -2347,6 +2350,9 @@ async def clan_disband(ctx: Context) -> str | None:
         if not clan:
             return "Could not find a clan by that tag."
     else:
+        if ctx.player.clan_id is None:
+            return "You're not a member of a clan!"
+
         # disband the player's clan
         clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
         if not clan:
@@ -2428,12 +2434,6 @@ async def clan_leave(ctx: Context) -> str | None:
         if announce_chan:
             msg = f"\x01ACTION disbanded {clan_display_name}."
             announce_chan.send(msg, sender=ctx.player, to_self=True)
-
-    elif ctx.player.id == clan["owner"]:
-        # owner is leaving and members remain -- transfer ownership to the highest privileged member
-        new_owner = app.utils.determine_highest_ranking_clan_member(clan_members)
-        await clans_repo.update(clan["id"], owner=new_owner["id"])
-        await players_repo.update(new_owner["id"], clan_priv=ClanPrivileges.Owner)
 
     return f"You have successfully left {clan_display_name}."
 
