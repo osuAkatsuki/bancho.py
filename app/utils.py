@@ -31,6 +31,7 @@ def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
 
+
 def has_internet_connectivity(timeout: float = 1.0) -> bool:
     """Check for an active internet connection."""
     COMMON_DNS_SERVERS = (
@@ -114,6 +115,7 @@ def ensure_persistent_volumes_are_available() -> None:
     for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
         subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
+
 
 def is_running_as_admin() -> bool:
     try:

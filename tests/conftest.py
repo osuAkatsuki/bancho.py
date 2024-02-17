@@ -17,6 +17,7 @@ from app.api.init_api import asgi_app
 # will no longer need to use the asgi-lifespan dependency.
 # (We do not need an asynchronous http client for our tests)
 
+
 @pytest.fixture
 async def app() -> AsyncIterator[ASGIApp]:
     async with LifespanManager(
