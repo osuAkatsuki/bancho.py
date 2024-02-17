@@ -973,7 +973,7 @@ async def api_get_pool(
 
     pool_creator_clan = await clans_repo.fetch_one(id=pool_creator.clan_id)
     pool_creator_clan_members: list[players_repo.Player] = []
-    if pool_creator_clan:
+    if pool_creator_clan is not None:
         pool_creator_clan_members = await players_repo.fetch_many(
             clan_id=pool_creator.clan_id,
         )
@@ -994,7 +994,7 @@ async def api_get_pool(
                         "tag": pool_creator_clan["tag"],
                         "members": len(pool_creator_clan_members),
                     }
-                    if pool_creator_clan
+                    if pool_creator_clan is not None
                     else None
                 ),
                 "online": pool_creator.is_online,
