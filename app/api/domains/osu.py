@@ -64,10 +64,10 @@ from app.repositories import comments as comments_repo
 from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
-from app.repositories import players as players_repo
 from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
@@ -1705,7 +1705,7 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        if await players_repo.fetch_one(name=username):
+        if await users_repo.fetch_one(name=username):
             errors["username"].append("Username already taken by another player.")
 
     # Emails must:
@@ -1714,7 +1714,7 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        if await players_repo.fetch_one(email=email):
+        if await users_repo.fetch_one(email=email):
             errors["user_email"].append("Email already taken by another player.")
 
     # Passwords must:
@@ -1754,7 +1754,7 @@ async def register_account(
 
         async with app.state.services.database.transaction():
             # add to `users` table.
-            player = await players_repo.create(
+            player = await users_repo.create(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,

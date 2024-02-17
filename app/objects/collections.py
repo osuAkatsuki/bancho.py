@@ -22,7 +22,7 @@ from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
-from app.repositories import players as players_repo
+from app.repositories import users as users_repo
 from app.utils import make_safe_name
 
 # TODO: decorator for these collections which automatically
@@ -198,7 +198,7 @@ class Players(list[Player]):
     ) -> Player | None:
         """Get a player by token, id, or name from sql."""
         # try to get from sql.
-        player = await players_repo.fetch_one(
+        player = await users_repo.fetch_one(
             id=id,
             name=name,
             fetch_all_fields=True,
@@ -349,7 +349,7 @@ class Clans(list[Clan]):
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching clans from sql.", Ansi.LCYAN)
         for row in await clans_repo.fetch_many():
-            clan_members = await players_repo.fetch_many(clan_id=row["id"])
+            clan_members = await users_repo.fetch_many(clan_id=row["id"])
             clan = Clan(
                 id=row["id"],
                 name=row["name"],
@@ -367,7 +367,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     await app.state.sessions.channels.prepare(db_conn)
     await app.state.sessions.clans.prepare(db_conn)
 
-    bot = await players_repo.fetch_one(id=1)
+    bot = await users_repo.fetch_one(id=1)
     if bot is None:
         raise RuntimeError("Bot account not found in database.")
 

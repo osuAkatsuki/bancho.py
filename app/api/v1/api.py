@@ -26,11 +26,11 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.clan import Clan
 from app.objects.player import Player
-from app.repositories import players as players_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
+from app.repositories import users as users_repo
 from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -228,7 +228,7 @@ async def api_get_player_count() -> Response:
             "counts": {
                 # -1 for the bot, who is always online
                 "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": await players_repo.fetch_count(),
+                "total": await users_repo.fetch_count(),
             },
         },
     )
@@ -249,9 +249,9 @@ async def api_get_player_info(
 
     # get user info from username or user id
     if username:
-        user_info = await players_repo.fetch_one(name=username)
+        user_info = await users_repo.fetch_one(name=username)
     else:  # if user_id
-        user_info = await players_repo.fetch_one(id=user_id)
+        user_info = await users_repo.fetch_one(id=user_id)
 
     if user_info is None:
         return ORJSONResponse(
@@ -339,9 +339,9 @@ async def api_get_player_status(
         # no such player online, return their last seen time if they exist in sql
 
         if username:
-            row = await players_repo.fetch_one(name=username)
+            row = await users_repo.fetch_one(name=username)
         else:  # if userid
-            row = await players_repo.fetch_one(id=user_id)
+            row = await users_repo.fetch_one(id=user_id)
 
         if not row:
             return ORJSONResponse(

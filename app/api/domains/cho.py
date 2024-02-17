@@ -63,7 +63,7 @@ from app.packets import LoginFailureReason
 from app.repositories import client_hashes as client_hashes_repo
 from app.repositories import ingame_logins as logins_repo
 from app.repositories import mail as mail_repo
-from app.repositories import players as players_repo
+from app.repositories import users as users_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
 
@@ -599,8 +599,8 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
 async def authenticate(
     username: str,
     untrusted_password: bytes,
-) -> players_repo.Player | None:
-    user_info = await players_repo.fetch_one(
+) -> users_repo.Player | None:
+    user_info = await users_repo.fetch_one(
         name=username,
         fetch_all_fields=True,
     )
@@ -817,7 +817,7 @@ async def handle_osu_login_request(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await players_repo.update(
+        await users_repo.update(
             id=user_info["id"],
             country=geoloc["country"]["acronym"],
         )
