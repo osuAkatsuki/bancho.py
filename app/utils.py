@@ -7,6 +7,7 @@ import socket
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import TypedDict
 from typing import TypeVar
@@ -17,6 +18,9 @@ import pymysql
 import app.settings
 from app.logging import Ansi
 from app.logging import log
+
+if TYPE_CHECKING:
+    from app.repositories.users import Player
 
 T = TypeVar("T")
 
@@ -29,6 +33,10 @@ DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
+
+
+def determine_highest_ranking_clan_member(members: list[Player]) -> Player:
+    return next(iter(sorted(members, key=lambda m: m["clan_priv"], reverse=True)))
 
 
 def _download_achievement_images_osu(achievements_path: Path) -> bool:

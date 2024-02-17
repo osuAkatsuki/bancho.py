@@ -182,8 +182,8 @@ async def delete(id: int) -> Clan | None:
     params: dict[str, Any] = {
         "id": id,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
+    clan = await app.state.services.database.fetch_one(query, params)
+    if clan is None:
         return None
 
     query = """\
@@ -193,5 +193,5 @@ async def delete(id: int) -> Clan | None:
     params = {
         "id": id,
     }
-    clan = await app.state.services.database.execute(query, params)
-    return cast(Clan, dict(clan._mapping)) if clan is not None else None
+    await app.state.services.database.execute(query, params)
+    return cast(Clan, dict(clan._mapping))

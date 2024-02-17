@@ -24,8 +24,7 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
-from app.objects.clan import Clan
-from app.objects.player import Player
+from app.repositories import clans as clans_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
@@ -68,50 +67,6 @@ oauth2_scheme = HTTPBearer(auto_error=False)
 # POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
-
-
-def format_clan_basic(clan: Clan) -> dict[str, object]:
-    return {
-        "id": clan.id,
-        "name": clan.name,
-        "tag": clan.tag,
-        "members": len(clan.member_ids),
-    }
-
-
-def format_player_basic(player: Player) -> dict[str, object]:
-    return {
-        "id": player.id,
-        "name": player.name,
-        "country": player.geoloc["country"]["acronym"],
-        "clan": format_clan_basic(player.clan) if player.clan else None,
-        "online": player.is_online,
-    }
-
-
-def format_map_basic(m: Beatmap) -> dict[str, object]:
-    return {
-        "id": m.id,
-        "md5": m.md5,
-        "set_id": m.set_id,
-        "artist": m.artist,
-        "title": m.title,
-        "version": m.version,
-        "creator": m.creator,
-        "last_update": m.last_update,
-        "total_length": m.total_length,
-        "max_combo": m.max_combo,
-        "status": m.status,
-        "plays": m.plays,
-        "passes": m.passes,
-        "mode": m.mode,
-        "bpm": m.bpm,
-        "cs": m.cs,
-        "od": m.od,
-        "ar": m.ar,
-        "hp": m.hp,
-        "diff": m.diff,
-    }
 
 
 @router.get("/calculate_pp")
@@ -498,16 +453,20 @@ async def api_get_player_scores(
         bmap = await Beatmap.from_md5(row.pop("map_md5"))
         row["beatmap"] = bmap.as_dict if bmap else None
 
+    clan: clans_repo.Clan | None = None
+    if player.clan_id:
+        clan = await clans_repo.fetch_one(id=player.clan_id)
+
     player_info = {
         "id": player.id,
         "name": player.name,
         "clan": (
             {
-                "id": player.clan.id,
-                "name": player.clan.name,
-                "tag": player.clan.tag,
+                "id": clan["id"],
+                "name": clan["name"],
+                "tag": clan["tag"],
             }
-            if player.clan
+            if clan is not None
             else None
         ),
     }
@@ -949,36 +908,31 @@ async def api_get_clan(
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
 ) -> Response:
     """Return information of a given clan."""
-    clan = app.state.sessions.clans.get(id=clan_id)
+    clan = await clans_repo.fetch_one(id=clan_id)
     if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    members: list[Player] = []
+    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
 
-    for member_id in clan.member_ids:
-        member = await app.state.sessions.players.from_cache_or_sql(id=member_id)
-        assert member is not None
-        members.append(member)
-
-    owner = await app.state.sessions.players.from_cache_or_sql(id=clan.owner_id)
+    owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
     assert owner is not None
 
     return ORJSONResponse(
         {
-            "id": clan.id,
-            "name": clan.name,
-            "tag": clan.tag,
+            "id": clan["id"],
+            "name": clan["name"],
+            "tag": clan["tag"],
             "members": [
                 {
-                    "id": member.id,
-                    "name": member.name,
-                    "country": member.geoloc["country"]["acronym"],
-                    "rank": ("Member", "Officer", "Owner")[member.clan_priv - 1],  # type: ignore
+                    "id": member["id"],
+                    "name": member["name"],
+                    "country": member["country"],
+                    "rank": ("Member", "Officer", "Owner")[member["clan_priv"] - 1],
                 }
-                for member in members
+                for member in clan_members
             ],
             "owner": {
                 "id": owner.id,
@@ -1017,14 +971,57 @@ async def api_get_pool(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    pool_creator_clan = await clans_repo.fetch_one(id=pool_creator.clan_id)
+    pool_creator_clan_members: list[users_repo.Player] = []
+    if pool_creator_clan is not None:
+        pool_creator_clan_members = await users_repo.fetch_many(
+            clan_id=pool_creator.clan_id,
+        )
+
     return ORJSONResponse(
         {
             "id": tourney_pool["id"],
             "name": tourney_pool["name"],
             "created_at": tourney_pool["created_at"],
-            "created_by": format_player_basic(pool_creator),
+            "created_by": {
+                "id": pool_creator.id,
+                "name": pool_creator.name,
+                "country": pool_creator.geoloc["country"]["acronym"],
+                "clan": (
+                    {
+                        "id": pool_creator_clan["id"],
+                        "name": pool_creator_clan["name"],
+                        "tag": pool_creator_clan["tag"],
+                        "members": len(pool_creator_clan_members),
+                    }
+                    if pool_creator_clan is not None
+                    else None
+                ),
+                "online": pool_creator.is_online,
+            },
             "maps": {
-                f"{mods!r}{slot}": format_map_basic(bmap)
+                f"{mods!r}{slot}": {
+                    "id": bmap.id,
+                    "md5": bmap.md5,
+                    "set_id": bmap.set_id,
+                    "artist": bmap.artist,
+                    "title": bmap.title,
+                    "version": bmap.version,
+                    "creator": bmap.creator,
+                    "last_update": bmap.last_update,
+                    "total_length": bmap.total_length,
+                    "max_combo": bmap.max_combo,
+                    "status": bmap.status,
+                    "plays": bmap.plays,
+                    "passes": bmap.passes,
+                    "mode": bmap.mode,
+                    "bpm": bmap.bpm,
+                    "cs": bmap.cs,
+                    "od": bmap.od,
+                    "ar": bmap.ar,
+                    "hp": bmap.hp,
+                    "diff": bmap.diff,
+                }
                 for (mods, slot), bmap in tourney_pool_maps.items()
             },
         },

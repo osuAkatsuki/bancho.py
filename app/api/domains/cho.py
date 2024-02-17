@@ -42,7 +42,6 @@ from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.channel import Channel
-from app.objects.clan import Clan
 from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Match
 from app.objects.match import MatchTeams
@@ -791,10 +790,10 @@ async def handle_osu_login_request(
     """ All checks passed, player is safe to login """
 
     # get clan & clan priv if we're in a clan
-    clan: Clan | None = None
+    clan_id: int | None = None
     clan_priv: ClanPrivileges | None = None
     if user_info["clan_id"] != 0:
-        clan = app.state.sessions.clans.get(id=user_info["clan_id"])
+        clan_id = user_info["clan_id"]
         clan_priv = ClanPrivileges(user_info["clan_priv"])
 
     db_country = user_info["country"]
@@ -838,7 +837,7 @@ async def handle_osu_login_request(
         priv=Privileges(user_info["priv"]),
         pw_bcrypt=user_info["pw_bcrypt"].encode(),
         token=Player.generate_token(),
-        clan=clan,
+        clan_id=clan_id,
         clan_priv=clan_priv,
         geoloc=geoloc,
         utc_offset=login_data["utc_offset"],

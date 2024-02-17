@@ -60,6 +60,7 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import clans as clans_repo
 from app.repositories import comments as comments_repo
 from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
@@ -1387,10 +1388,16 @@ async def getScores(
         return Response("\n".join(response_lines).encode())
 
     if personal_best_score_row is not None:
+        user_clan = await clans_repo.fetch_one(id=player.clan_id)
+        display_name = (
+            f"[{user_clan['tag']}] {player.name}"
+            if user_clan is not None
+            else player.name
+        )
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
                 **personal_best_score_row,
-                name=player.full_name,
+                name=display_name,
                 userid=player.id,
                 score=int(round(personal_best_score_row["_score"])),
                 has_replay="1",

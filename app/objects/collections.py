@@ -1,5 +1,3 @@
-# TODO: there is still a lot of inconsistency
-# in a lot of these classes; needs refactor.
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -17,16 +15,12 @@ from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 from app.objects.channel import Channel
-from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories import channels as channels_repo
 from app.repositories import clans as clans_repo
 from app.repositories import users as users_repo
 from app.utils import make_safe_name
-
-# TODO: decorator for these collections which automatically
-# adds debugging to their append/remove/insert/extend methods.
 
 
 class Channels(list[Channel]):
@@ -206,10 +200,10 @@ class Players(list[Player]):
         if player is None:
             return None
 
-        clan: Clan | None = None
+        clan_id: int | None = None
         clan_priv: ClanPrivileges | None = None
         if player["clan_id"] != 0:
-            clan = app.state.sessions.clans.get(id=player["clan_id"])
+            clan_id = player["clan_id"]
             clan_priv = ClanPrivileges(player["clan_priv"])
 
         return Player(
@@ -218,7 +212,7 @@ class Players(list[Player]):
             priv=Privileges(player["priv"]),
             pw_bcrypt=player["pw_bcrypt"].encode(),
             token=Player.generate_token(),
-            clan=clan,
+            clan_id=clan_id,
             clan_priv=clan_priv,
             geoloc={
                 "latitude": 0.0,
@@ -290,82 +284,10 @@ class Players(list[Player]):
         super().remove(player)
 
 
-class Clans(list[Clan]):
-    """The currently active clans on the server."""
-
-    def __iter__(self) -> Iterator[Clan]:
-        return super().__iter__()
-
-    def __contains__(self, o: object) -> bool:
-        """Check whether internal list contains `o`."""
-        # Allow string to be passed to compare vs. name.
-        if isinstance(o, str):
-            return o in (clan.name for clan in self)
-        else:
-            return o in self
-
-    def get(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-        tag: str | None = None,
-    ) -> Clan | None:
-        """Get a clan by name, tag, or id."""
-        for clan in self:
-            if id is not None:
-                if clan.id == id:
-                    return clan
-            elif name is not None:
-                if clan.name == name:
-                    return clan
-            elif tag is not None:
-                if clan.tag == tag:
-                    return clan
-
-        return None
-
-    def append(self, clan: Clan) -> None:
-        """Append `clan` to the list."""
-        super().append(clan)
-
-        if app.settings.DEBUG:
-            log(f"{clan} added to clans list.")
-
-    def extend(self, clans: Iterable[Clan]) -> None:
-        """Extend the list with `clans`."""
-        super().extend(clans)
-
-        if app.settings.DEBUG:
-            log(f"{clans} added to clans list.")
-
-    def remove(self, clan: Clan) -> None:
-        """Remove `clan` from the list."""
-        super().remove(clan)
-
-        if app.settings.DEBUG:
-            log(f"{clan} removed from clans list.")
-
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching clans from sql.", Ansi.LCYAN)
-        for row in await clans_repo.fetch_many():
-            clan_members = await users_repo.fetch_many(clan_id=row["id"])
-            clan = Clan(
-                id=row["id"],
-                name=row["name"],
-                tag=row["tag"],
-                created_at=row["created_at"],
-                owner_id=row["owner"],
-                member_ids={member["id"] for member in clan_members},
-            )
-            self.append(clan)
-
-
 async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     """Setup & cache the global collections before listening for connections."""
     # fetch channels, clans and pools from db
     await app.state.sessions.channels.prepare(db_conn)
-    await app.state.sessions.clans.prepare(db_conn)
 
     bot = await users_repo.fetch_one(id=1)
     if bot is None:

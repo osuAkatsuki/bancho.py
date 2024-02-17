@@ -49,7 +49,6 @@ from app.logging import log
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
-from app.objects.clan import Clan
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -868,9 +867,14 @@ async def user(ctx: Context) -> str | None:
         else "False"
     )
 
+    user_clan = await clans_repo.fetch_one(id=player.clan_id)
+    display_name = (
+        f"[{user_clan['tag']}] {player.name}" if user_clan is not None else player.name
+    )
+
     return "\n".join(
         (
-            f'[{"Bot" if player.is_bot_client else "Player"}] {player.full_name} ({player.id})',
+            f'[{"Bot" if player.is_bot_client else "Player"}] {display_name} ({player.id})',
             f"Privileges: {priv_list}",
             f"Donator: {donator_info}",
             f"Channels: {[c._name for c in player.channels]}",
@@ -2295,54 +2299,43 @@ async def clan_create(ctx: Context) -> str | None:
     if not 2 <= len(name) <= 16:
         return "Clan name may be 2-16 characters long."
 
-    if ctx.player.clan:
-        return f"You're already a member of {ctx.player.clan}!"
+    if ctx.player.clan_id:
+        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+        if clan:
+            clan_display_name = f"[{clan['tag']}] {clan['name']}"
+            return f"You're already a member of {clan_display_name}!"
 
-    if app.state.sessions.clans.get(name=name):
+    if await clans_repo.fetch_one(name=name):
         return "That name has already been claimed by another clan."
 
-    if app.state.sessions.clans.get(tag=tag):
+    if await clans_repo.fetch_one(tag=tag):
         return "That tag has already been claimed by another clan."
 
-    created_at = datetime.now()
-
     # add clan to sql
-    persisted_clan = await clans_repo.create(
+    new_clan = await clans_repo.create(
         name=name,
         tag=tag,
         owner=ctx.player.id,
     )
 
-    # add clan to cache
-    clan = Clan(
-        id=persisted_clan["id"],
-        name=name,
-        tag=tag,
-        created_at=created_at,
-        owner_id=ctx.player.id,
-    )
-    app.state.sessions.clans.append(clan)
-
     # set owner's clan & clan priv (cache & sql)
-    ctx.player.clan = clan
+    ctx.player.clan_id = new_clan["id"]
     ctx.player.clan_priv = ClanPrivileges.Owner
-
-    clan.owner_id = ctx.player.id
-    clan.member_ids.add(ctx.player.id)
 
     await users_repo.update(
         ctx.player.id,
-        clan_id=clan.id,
+        clan_id=new_clan["id"],
         clan_priv=ClanPrivileges.Owner,
     )
 
     # announce clan creation
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
+    clan_display_name = f"[{new_clan['tag']}] {new_clan['name']}"
     if announce_chan:
-        msg = f"\x01ACTION founded {clan!r}."
+        msg = f"\x01ACTION founded {clan_display_name}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
-    return f"{clan!r} created."
+    return f"{clan_display_name} founded."
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["delete", "d"])
@@ -2353,36 +2346,41 @@ async def clan_disband(ctx: Context) -> str | None:
         if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        clan = app.state.sessions.clans.get(tag=" ".join(ctx.args).upper())
+        clan = await clans_repo.fetch_one(tag=" ".join(ctx.args).upper())
         if not clan:
             return "Could not find a clan by that tag."
     else:
+        if ctx.player.clan_id is None:
+            return "You're not a member of a clan!"
+
         # disband the player's clan
-        clan = ctx.player.clan
+        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
         if not clan:
             return "You're not a member of a clan!"
 
-    await clans_repo.delete(clan.id)
-    app.state.sessions.clans.remove(clan)
+    await clans_repo.delete(clan["id"])
 
-    # remove all members from the clan,
-    # reset their clan privs (cache & sql).
-    # NOTE: only online players need be to be uncached.
-    for member_id in clan.member_ids:
+    # remove all members from the clan
+    clan_member_ids = [
+        clan_member["id"]
+        for clan_member in await users_repo.fetch_many(clan_id=clan["id"])
+    ]
+    for member_id in clan_member_ids:
         await users_repo.update(member_id, clan_id=0, clan_priv=0)
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
-            member.clan = None
+            member.clan_id = None
             member.clan_priv = None
 
     # announce clan disbanding
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
+    clan_display_name = f"[{clan['tag']}] {clan['name']}"
     if announce_chan:
-        msg = f"\x01ACTION disbanded {clan!r}."
+        msg = f"\x01ACTION disbanded {clan_display_name}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
-    return f"{clan!r} disbanded."
+    return f"{clan_display_name} disbanded."
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["i"])
@@ -2391,14 +2389,15 @@ async def clan_info(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = app.state.sessions.clans.get(tag=" ".join(ctx.args).upper())
+    clan = await clans_repo.fetch_one(tag=" ".join(ctx.args).upper())
     if not clan:
         return "Could not find a clan by that tag."
 
-    msg = [f"{clan!r} | Founded {clan.created_at:%b %d, %Y}."]
+    clan_display_name = f"[{clan['tag']}] {clan['name']}"
+    msg = [f"{clan_display_name} | Founded {clan['created_at']:%b %d, %Y}."]
 
     # get members privs from sql
-    clan_members = await users_repo.fetch_many(clan_id=clan.id)
+    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
     for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
         priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
         msg.append(f"[{priv_str}] {member['name']}")
@@ -2409,13 +2408,34 @@ async def clan_info(ctx: Context) -> str | None:
 @clan_commands.add(Privileges.UNRESTRICTED)
 async def clan_leave(ctx: Context) -> str | None:
     """Leaves the clan you're in."""
-    if not ctx.player.clan:
+    if not ctx.player.clan_id:
         return "You're not in a clan."
     elif ctx.player.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    await ctx.player.clan.remove_member(ctx.player)
-    return f"You have successfully left {ctx.player.clan!r}."
+    clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+    if not clan:
+        return "You're not in a clan."
+
+    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
+
+    await users_repo.update(ctx.player.id, clan_id=0, clan_priv=0)
+    ctx.player.clan_id = None
+    ctx.player.clan_priv = None
+
+    clan_display_name = f"[{clan['tag']}] {clan['name']}"
+
+    if not clan_members:
+        # no members left, disband clan
+        await clans_repo.delete(clan["id"])
+
+        # announce clan disbanding
+        announce_chan = app.state.sessions.channels.get_by_name("#announce")
+        if announce_chan:
+            msg = f"\x01ACTION disbanded {clan_display_name}."
+            announce_chan.send(msg, sender=ctx.player, to_self=True)
+
+    return f"You have successfully left {clan_display_name}."
 
 
 # TODO: !clan inv, !clan join, !clan leave
@@ -2432,14 +2452,16 @@ async def clan_list(ctx: Context) -> str | None:
     else:
         offset = 0
 
-    total_clans = len(app.state.sessions.clans)
-    if offset >= total_clans:
+    all_clans = await clans_repo.fetch_many(page=None, page_size=None)
+    num_clans = len(all_clans)
+    if offset >= num_clans:
         return "No clans found."
 
-    msg = [f"bancho.py clans listing ({total_clans} total)."]
+    msg = [f"bancho.py clans listing ({num_clans} total)."]
 
-    for idx, clan in enumerate(app.state.sessions.clans, offset):
-        msg.append(f"{idx + 1}. {clan!r}")
+    for idx, clan in enumerate(all_clans, offset):
+        clan_display_name = f"[{clan['tag']}] {clan['name']}"
+        msg.append(f"{idx + 1}. {clan_display_name}")
 
     return "\n".join(msg)
 
