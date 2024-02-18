@@ -218,7 +218,7 @@ async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
         if err_msg == "invalid query":
             err_msg += f" ({url})"
 
-        log(f"Failed to get geoloc data: {err_msg}.", Ansi.LRED)
+        log(f"Failed to get geoloc data: {err_msg} for ip {ip}.", Ansi.LRED)
         return None
 
     country_acronym = lines[0].lower()
