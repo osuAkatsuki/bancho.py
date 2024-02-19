@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.sql.elements import ClauseElement
 
 import app.state.services
 from app._typing import UNSET
@@ -160,7 +161,7 @@ async def create(
     perfect: int,
     online_checksum: str,
 ) -> Score:
-    stmt = insert(ScoresTable).values(
+    stmt: ClauseElement = insert(ScoresTable).values(
         map_md5=map_md5,
         score=score,
         pp=pp,
@@ -200,7 +201,7 @@ async def create(
 
 
 async def fetch_one(id: int) -> Score | None:
-    stmt = select(READ_PARAMS).where(ScoresTable.id == id)
+    stmt: ClauseElement = select(READ_PARAMS).where(ScoresTable.id == id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
@@ -217,7 +218,7 @@ async def fetch_count(
     mode: int | None = None,
     user_id: int | None = None,
 ) -> int:
-    stmt = select(func.count().label("count")).select_from(ScoresTable)
+    stmt: ClauseElement = select(func.count().label("count")).select_from(ScoresTable)
     if map_md5 is not None:
         stmt = stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
@@ -247,7 +248,7 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
-    stmt = select(READ_PARAMS)
+    stmt: ClauseElement = select(READ_PARAMS)
     if map_md5 is not None:
         stmt = stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
@@ -276,7 +277,7 @@ async def partial_update(
     status: int | _UnsetSentinel = UNSET,
 ) -> Score | None:
     """Update an existing score."""
-    stmt = update(ScoresTable).where(ScoresTable.id == id)
+    stmt: ClauseElement = update(ScoresTable).where(ScoresTable.id == id)
     if not isinstance(pp, _UnsetSentinel):
         stmt = stmt.values(pp=pp)
     if not isinstance(status, _UnsetSentinel):

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy.dialects import mysql
+from typing import Any
+
+from sqlalchemy.dialects.mysql.mysqldb import MySQLDialect_mysqldb
 from sqlalchemy.orm import declarative_base
 
-Base = declarative_base()
+Base: Any = declarative_base()
 
 
-class MySQLDialect(mysql.dialect):
+class MySQLDialect(MySQLDialect_mysqldb):
     default_paramstyle = "named"
 
 
