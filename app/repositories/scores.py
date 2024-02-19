@@ -1,47 +1,89 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
+
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+from sqlalchemy import update
+from sqlalchemy.dialects.mysql import FLOAT
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.repositories import DIALECT
+from app.repositories import Base
 
-# +-----------------+-----------------+------+-----+---------+----------------+
-# | Field           | Type            | Null | Key | Default | Extra          |
-# +-----------------+-----------------+------+-----+---------+----------------+
-# | id              | bigint unsigned | NO   | PRI | NULL    | auto_increment |
-# | map_md5         | char(32)        | NO   |     | NULL    |                |
-# | score           | int             | NO   |     | NULL    |                |
-# | pp              | float(7,3)      | NO   |     | NULL    |                |
-# | acc             | float(6,3)      | NO   |     | NULL    |                |
-# | max_combo       | int             | NO   |     | NULL    |                |
-# | mods            | int             | NO   |     | NULL    |                |
-# | n300            | int             | NO   |     | NULL    |                |
-# | n100            | int             | NO   |     | NULL    |                |
-# | n50             | int             | NO   |     | NULL    |                |
-# | nmiss           | int             | NO   |     | NULL    |                |
-# | ngeki           | int             | NO   |     | NULL    |                |
-# | nkatu           | int             | NO   |     | NULL    |                |
-# | grade           | varchar(2)      | NO   |     | N       |                |
-# | status          | tinyint         | NO   |     | NULL    |                |
-# | mode            | tinyint         | NO   |     | NULL    |                |
-# | play_time       | datetime        | NO   |     | NULL    |                |
-# | time_elapsed    | int             | NO   |     | NULL    |                |
-# | client_flags    | int             | NO   |     | NULL    |                |
-# | userid          | int             | NO   |     | NULL    |                |
-# | perfect         | tinyint(1)      | NO   |     | NULL    |                |
-# | online_checksum | char(32)        | NO   |     | NULL    |                |
-# +-----------------+-----------------+------+-----+---------+----------------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, map_md5, score, pp, acc, max_combo, mods, n300, n100, n50, nmiss, ngeki, nkatu,
-        grade, status, mode, play_time, time_elapsed, client_flags, userid, perfect, online_checksum
-    """,
+class ScoresTable(Base):
+    __tablename__ = "scores"
+
+    id = Column("id", Integer, primary_key=True)
+    map_md5 = Column("map_md5", String(32), nullable=False)
+    score = Column("score", Integer, nullable=False)
+    pp = Column("pp", FLOAT(precision=6, scale=3), nullable=False)
+    acc = Column("acc", FLOAT(precision=6, scale=3), nullable=False)
+    max_combo = Column("max_combo", Integer, nullable=False)
+    mods = Column("mods", Integer, nullable=False)
+    n300 = Column("n300", Integer, nullable=False)
+    n100 = Column("n100", Integer, nullable=False)
+    n50 = Column("n50", Integer, nullable=False)
+    nmiss = Column("nmiss", Integer, nullable=False)
+    ngeki = Column("ngeki", Integer, nullable=False)
+    nkatu = Column("nkatu", Integer, nullable=False)
+    grade = Column("grade", String(2), nullable=False, default="N")
+    status = Column("status", Integer, nullable=False)
+    mode = Column("mode", Integer, nullable=False)
+    play_time = Column("play_time", DateTime, nullable=False)
+    time_elapsed = Column("time_elapsed", Integer, nullable=False)
+    client_flags = Column("client_flags", Integer, nullable=False)
+    userid = Column("userid", Integer, nullable=False)
+    perfect = Column("perfect", Integer, nullable=False)
+    online_checksum = Column("online_checksum", String(32), nullable=False)
+
+    __table_args__ = (
+        Index("scores_map_md5_index", map_md5),
+        Index("scores_score_index", score),
+        Index("scores_pp_index", pp),
+        Index("scores_mods_index", mods),
+        Index("scores_status_index", status),
+        Index("scores_mode_index", mode),
+        Index("scores_play_time_index", play_time),
+        Index("scores_userid_index", userid),
+        Index("scores_online_checksum_index", online_checksum),
+    )
+
+
+READ_PARAMS = (
+    ScoresTable.id,
+    ScoresTable.map_md5,
+    ScoresTable.score,
+    ScoresTable.pp,
+    ScoresTable.acc,
+    ScoresTable.max_combo,
+    ScoresTable.mods,
+    ScoresTable.n300,
+    ScoresTable.n100,
+    ScoresTable.n50,
+    ScoresTable.nmiss,
+    ScoresTable.ngeki,
+    ScoresTable.nkatu,
+    ScoresTable.grade,
+    ScoresTable.status,
+    ScoresTable.mode,
+    ScoresTable.play_time,
+    ScoresTable.time_elapsed,
+    ScoresTable.client_flags,
+    ScoresTable.userid,
+    ScoresTable.perfect,
+    ScoresTable.online_checksum,
 )
 
 
@@ -117,65 +159,52 @@ async def create(
     perfect: int,
     online_checksum: str,
 ) -> Score:
-    query = """\
-        INSERT INTO scores (map_md5, score, pp, acc, max_combo, mods, n300,
-                            n100, n50, nmiss, ngeki, nkatu, grade, status,
-                            mode, play_time, time_elapsed, client_flags,
-                            userid, perfect, online_checksum)
-             VALUES (:map_md5, :score, :pp, :acc, :max_combo, :mods, :n300,
-                     :n100, :n50, :nmiss, :ngeki, :nkatu, :grade, :status,
-                     :mode, :play_time, :time_elapsed, :client_flags,
-                     :userid, :perfect, :online_checksum)
-    """
-    params: dict[str, Any] = {
-        "map_md5": map_md5,
-        "score": score,
-        "pp": pp,
-        "acc": acc,
-        "max_combo": max_combo,
-        "mods": mods,
-        "n300": n300,
-        "n100": n100,
-        "n50": n50,
-        "nmiss": nmiss,
-        "ngeki": ngeki,
-        "nkatu": nkatu,
-        "grade": grade,
-        "status": status,
-        "mode": mode,
-        "play_time": play_time,
-        "time_elapsed": time_elapsed,
-        "client_flags": client_flags,
-        "userid": user_id,
-        "perfect": perfect,
-        "online_checksum": online_checksum,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    stmt = insert(ScoresTable).values(
+        map_md5=map_md5,
+        score=score,
+        pp=pp,
+        acc=acc,
+        max_combo=max_combo,
+        mods=mods,
+        n300=n300,
+        n100=n100,
+        n50=n50,
+        nmiss=nmiss,
+        ngeki=ngeki,
+        nkatu=nkatu,
+        grade=grade,
+        status=status,
+        mode=mode,
+        play_time=play_time,
+        time_elapsed=time_elapsed,
+        client_flags=client_flags,
+        userid=user_id,
+        perfect=perfect,
+        online_checksum=online_checksum,
+    )
+    compiled = stmt.compile(dialect=DIALECT)
+    rec_id = await app.state.services.database.execute(
+        query=str(compiled),
+        values=compiled.params,
+    )
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM scores
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
-
+    stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
+    compiled = stmt.compile(dialect=DIALECT)
+    rec = await app.state.services.database.fetch_one(
+        query=str(compiled),
+        values=compiled.params,
+    )
     assert rec is not None
     return cast(Score, dict(rec._mapping))
 
 
 async def fetch_one(id: int) -> Score | None:
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM scores
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
+    stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    compiled = stmt.compile(dialect=DIALECT)
+    rec = await app.state.services.database.fetch_one(
+        query=str(compiled),
+        values=compiled.params,
+    )
 
     return cast(Score, dict(rec._mapping)) if rec is not None else None
 
@@ -187,23 +216,23 @@ async def fetch_count(
     mode: int | None = None,
     user_id: int | None = None,
 ) -> int:
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM scores
-         WHERE map_md5 = COALESCE(:map_md5, map_md5)
-           AND mods = COALESCE(:mods, mods)
-           AND status = COALESCE(:status, status)
-           AND mode = COALESCE(:mode, mode)
-           AND userid = COALESCE(:userid, userid)
-    """
-    params: dict[str, Any] = {
-        "map_md5": map_md5,
-        "mods": mods,
-        "status": status,
-        "mode": mode,
-        "userid": user_id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
+    stmt = select(func.count().label("count")).select_from(ScoresTable)
+    if map_md5 is not None:
+        stmt = stmt.where(ScoresTable.map_md5 == map_md5)
+    if mods is not None:
+        stmt = stmt.where(ScoresTable.mods == mods)
+    if status is not None:
+        stmt = stmt.where(ScoresTable.status == status)
+    if mode is not None:
+        stmt = stmt.where(ScoresTable.mode == mode)
+    if user_id is not None:
+        stmt = stmt.where(ScoresTable.userid == user_id)
+
+    compiled = stmt.compile(dialect=DIALECT)
+    rec = await app.state.services.database.fetch_one(
+        query=str(compiled),
+        values=compiled.params,
+    )
     assert rec is not None
     return cast(int, rec._mapping["count"])
 
@@ -217,65 +246,52 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM scores
-         WHERE map_md5 = COALESCE(:map_md5, map_md5)
-           AND mods = COALESCE(:mods, mods)
-           AND status = COALESCE(:status, status)
-           AND mode = COALESCE(:mode, mode)
-           AND userid = COALESCE(:userid, userid)
-    """
-    params: dict[str, Any] = {
-        "map_md5": map_md5,
-        "mods": mods,
-        "status": status,
-        "mode": mode,
-        "userid": user_id,
-    }
-    if page is not None and page_size is not None:
-        query += """\
-            LIMIT :page_size
-           OFFSET :offset
-        """
-        params["page_size"] = page_size
-        params["offset"] = (page - 1) * page_size
+    stmt = select(*READ_PARAMS)
+    if map_md5 is not None:
+        stmt = stmt.where(ScoresTable.map_md5 == map_md5)
+    if mods is not None:
+        stmt = stmt.where(ScoresTable.mods == mods)
+    if status is not None:
+        stmt = stmt.where(ScoresTable.status == status)
+    if mode is not None:
+        stmt = stmt.where(ScoresTable.mode == mode)
+    if user_id is not None:
+        stmt = stmt.where(ScoresTable.userid == user_id)
 
-    recs = await app.state.services.database.fetch_all(query, params)
+    if page is not None and page_size is not None:
+        stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+
+    compiled = stmt.compile(dialect=DIALECT)
+    recs = await app.state.services.database.fetch_all(
+        query=str(compiled),
+        values=compiled.params,
+    )
     return cast(list[Score], [dict(r._mapping) for r in recs])
 
 
-async def update(
+async def partial_update(
     id: int,
     pp: float | _UnsetSentinel = UNSET,
     status: int | _UnsetSentinel = UNSET,
 ) -> Score | None:
     """Update an existing score."""
-    update_fields: ScoreUpdateFields = {}
+    stmt = update(ScoresTable).where(ScoresTable.id == id)
     if not isinstance(pp, _UnsetSentinel):
-        update_fields["pp"] = pp
+        stmt = stmt.values(pp=pp)
     if not isinstance(status, _UnsetSentinel):
-        update_fields["status"] = status
+        stmt = stmt.values(status=status)
+    compiled = stmt.compile(dialect=DIALECT)
+    await app.state.services.database.execute(
+        query=str(compiled),
+        values=compiled.params,
+    )
 
-    query = f"""\
-        UPDATE scores
-           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    } | update_fields
-    await app.state.services.database.execute(query, params)
-
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM scores
-         WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
+    stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    compiled = stmt.compile(dialect=DIALECT)
+    rec = await app.state.services.database.fetch_one(
+        query=str(compiled),
+        values=compiled.params,
+    )
     return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 
