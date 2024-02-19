@@ -14,6 +14,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
+from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
@@ -45,7 +46,7 @@ class ScoresTable(Base):
     time_elapsed = Column("time_elapsed", Integer, nullable=False)
     client_flags = Column("client_flags", Integer, nullable=False)
     userid = Column("userid", Integer, nullable=False)
-    perfect = Column("perfect", Integer, nullable=False)
+    perfect = Column("perfect", TINYINT(1), nullable=False)
     online_checksum = Column("online_checksum", String(32), nullable=False)
 
     __table_args__ = (

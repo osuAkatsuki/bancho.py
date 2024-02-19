@@ -928,7 +928,7 @@ async def osuSubmitModularSelector(
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
 
-    await stats_repo.update(
+    await stats_repo.partial_update(
         score.player.id,
         score.mode.value,
         plays=stats_updates.get("plays", UNSET),
