@@ -60,8 +60,7 @@ py3rijndael = "0.3.3"
 pytimeparse = "1.1.8"
 pydantic = "2.6.1"
 redis = { extras = ["hiredis"], version = "5.0.1" }
-sqlalchemy = "1.4.41"
-databases = { extras = ["mysql"], version = "0.6.2" }
+sqlalchemy = ">=1.4.42,<1.5"
 akatsuki-pp-py = "1.0.0"
 cryptography = "42.0.2"
 tenacity = "8.2.3"
@@ -73,6 +72,7 @@ asgi-lifespan = "2.1.0"
 respx = "0.20.2"
 tzdata = "2024.1"
 coverage = "^7.4.1"
+databases = {version = "^0.8.0", extras = ["mysql"]}
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "3.6.1"
@@ -84,6 +84,7 @@ types-pymysql = "1.1.0.1"
 types-requests = "2.31.0.20240125"
 mypy = "1.8.0"
 types-pyyaml = "^6.0.12.12"
+sqlalchemy2-stubs = "^0.0.2a38"
 
 [build-system]
 requires = ["poetry-core"]

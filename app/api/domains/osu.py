@@ -928,7 +928,7 @@ async def osuSubmitModularSelector(
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
 
-    await stats_repo.update(
+    await stats_repo.partial_update(
         score.player.id,
         score.mode.value,
         plays=stats_updates.get("plays", UNSET),
@@ -1388,7 +1388,11 @@ async def getScores(
         return Response("\n".join(response_lines).encode())
 
     if personal_best_score_row is not None:
-        user_clan = await clans_repo.fetch_one(id=player.clan_id)
+        user_clan = (
+            await clans_repo.fetch_one(id=player.clan_id)
+            if player.clan_id is not None
+            else None
+        )
         display_name = (
             f"[{user_clan['tag']}] {player.name}"
             if user_clan is not None
