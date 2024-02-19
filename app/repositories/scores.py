@@ -26,7 +26,7 @@ from app.repositories import Base
 class ScoresTable(Base):
     __tablename__ = "scores"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     map_md5 = Column("map_md5", String(32), nullable=False)
     score = Column("score", Integer, nullable=False)
     pp = Column("pp", FLOAT(precision=6, scale=3), nullable=False)
@@ -182,7 +182,6 @@ async def fetch_one(id: int) -> Score | None:
         query=str(compiled),
         values=compiled.params,
     )
-
     return cast(Score, dict(rec._mapping)) if rec is not None else None
 
 

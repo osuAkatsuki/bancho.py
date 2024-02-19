@@ -979,7 +979,7 @@ async def osuSubmitModularSelector(
 
             server_achievements = await achievements_usecases.fetch_many()
             player_achievements = await user_achievements_usecases.fetch_many(
-                score.player.id,
+                user_id=score.player.id,
             )
 
             for server_achievement in server_achievements:

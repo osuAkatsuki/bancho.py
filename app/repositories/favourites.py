@@ -1,24 +1,30 @@
 from __future__ import annotations
 
-import textwrap
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
+from sqlalchemy import Column
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+
 import app.state.services
+from app.repositories import DIALECT
+from app.repositories import Base
 
-# +------------+------+------+-----+---------+-------+
-# | Field      | Type | Null | Key | Default | Extra |
-# +------------+------+------+-----+---------+-------+
-# | userid     | int  | NO   | PRI | NULL    |       |
-# | setid      | int  | NO   | PRI | NULL    |       |
-# | created_at | int  | NO   |     | 0       |       |
-# +------------+------+------+-----+---------+-------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        userid, setid, created_at
-    """,
+class FavouritesTable(Base):
+    __tablename__ = "favourites"
+
+    userid = Column("userid", nullable=False, primary_key=True)
+    setid = Column("setid", nullable=False, primary_key=True)
+    created_at = Column("integer", nullable=False, server_default="0")
+
+
+READ_PARAMS = (
+    FavouritesTable.userid,
+    FavouritesTable.setid,
+    FavouritesTable.created_at,
 )
 
 
@@ -33,27 +39,24 @@ async def create(
     setid: int,
 ) -> Favourite:
     """Create a new favourite mapset entry in the database."""
-    query = f"""\
-        INSERT INTO favourites (userid, setid, created_at)
-             VALUES (:userid, :setid, UNIX_TIMESTAMP())
-    """
-    params: dict[str, Any] = {
-        "userid": userid,
-        "setid": setid,
-    }
-    await app.state.services.database.execute(query, params)
+    insert_stmt = insert(FavouritesTable).values(
+        userid=userid,
+        setid=setid,
+        created_at=func.unix_timestamp(),
+    )
+    compiled = insert_stmt.compile(dialect=DIALECT)
+    await app.state.services.database.execute(str(compiled), compiled.params)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM favourites
-         WHERE userid = :userid
-           AND setid = :setid
-    """
-    params = {
-        "userid": userid,
-        "setid": setid,
-    }
-    favourite = await app.state.services.database.fetch_one(query, params)
+    select_stmt = (
+        select(READ_PARAMS)
+        .where(FavouritesTable.userid == userid)
+        .where(FavouritesTable.setid == setid)
+    )
+    compiled = select_stmt.compile(dialect=DIALECT)
+    favourite = await app.state.services.database.fetch_one(
+        str(compiled),
+        compiled.params,
+    )
 
     assert favourite is not None
     return cast(Favourite, dict(favourite._mapping))
@@ -61,31 +64,27 @@ async def create(
 
 async def fetch_all(userid: int) -> list[Favourite]:
     """Fetch all favourites from a player."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM favourites
-         WHERE userid = :userid
-    """
-    params: dict[str, Any] = {
-        "userid": userid,
-    }
+    select_stmt = select(READ_PARAMS).where(FavouritesTable.userid == userid)
+    compiled = select_stmt.compile(dialect=DIALECT)
 
-    favourites = await app.state.services.database.fetch_all(query, params)
+    favourites = await app.state.services.database.fetch_all(
+        str(compiled),
+        compiled.params,
+    )
     return cast(list[Favourite], [dict(f._mapping) for f in favourites])
 
 
 async def fetch_one(userid: int, setid: int) -> Favourite | None:
     """Check if a mapset is already a favourite."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM favourites
-         WHERE userid = :userid
-           AND setid = :setid
-    """
-    params: dict[str, Any] = {
-        "userid": userid,
-        "setid": setid,
-    }
+    select_stmt = (
+        select(READ_PARAMS)
+        .where(FavouritesTable.userid == userid)
+        .where(FavouritesTable.setid == setid)
+    )
+    compiled = select_stmt.compile(dialect=DIALECT)
 
-    favourite = await app.state.services.database.fetch_one(query, params)
+    favourite = await app.state.services.database.fetch_one(
+        str(compiled),
+        compiled.params,
+    )
     return cast(Favourite, dict(favourite._mapping)) if favourite else None

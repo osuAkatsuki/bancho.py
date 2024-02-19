@@ -1,28 +1,46 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+
 import app.state.services
+from app.repositories import DIALECT
+from app.repositories import Base
 
-# +--------------+------------------------+------+-----+---------+-----------------------------+
-# | Field        | Type                   | Null | Key | Default | Extra                       |
-# +--------------+------------------------+------+-----+---------+-----------------------------+
-# | id           | int                    | NO   | PRI | NULL    | auto_increment              |
-# | from         | int                    | NO   |     | NULL    |                             |
-# | to           | int                    | NO   |     | NULL    |                             |
-# | action       | varchar(32)            | NO   |     | NULL    |                             |
-# | msg          | varchar(2048)          | YES  |     | NULL    |                             |
-# | time         | datetime               | NO   |     | NULL    | on update current_timestamp |
-# +--------------+------------------------+------+-----+---------+-----------------------------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        `id`, `from`, `to`, `action`, `msg`, `time`
-    """,
+class LogTable(Base):
+    __tablename__ = "logs"
+
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
+    _from = Column("from", Integer, nullable=False)
+    to = Column("to", Integer, nullable=False)
+    action = Column("action", String(32), nullable=False)
+    msg = Column("msg", String(2048, collation="utf8"), nullable=True)
+    time = Column(
+        "time",
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+READ_PARAMS = (
+    LogTable.id,
+    LogTable._from.label("from"),
+    LogTable.to,
+    LogTable.action,
+    LogTable.msg,
+    LogTable.time,
 )
 
 
@@ -42,26 +60,16 @@ async def create(
     msg: str,
 ) -> Log:
     """Create a new log entry in the database."""
-    query = f"""\
-        INSERT INTO logs (`from`, `to`, `action`, `msg`, `time`)
-            VALUES (:from, :to, :action, :msg, NOW())
-    """
-    params: dict[str, Any] = {
-        "from": _from,
-        "to": to,
-        "action": action,
-        "msg": msg,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(LogTable).values(
+        _from=_from,
+        to=to,
+        action=action,
+        msg=msg,
+    )
+    compiled = insert_stmt.compile(dialect=DIALECT)
+    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM logs
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
-    assert rec is not None
-    return cast(Log, dict(rec._mapping))
+    query = select(READ_PARAMS).where(LogTable.id == rec_id)
+    log = await app.state.services.database.fetch_one(str(query))
+    assert log is not None
+    return cast(Log, dict(log._mapping))

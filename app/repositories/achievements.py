@@ -29,7 +29,7 @@ from sqlalchemy import update
 class AchievementsTable(Base):
     __tablename__ = "achievements"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
     file = Column("file", String(128), nullable=False)
     name = Column("name", String(128, collation="utf8"), nullable=False)
     desc = Column("desc", String(256, collation="utf8"), nullable=False)

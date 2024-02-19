@@ -10,8 +10,6 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
-
-# from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
@@ -25,7 +23,7 @@ from app.repositories import Base
 class StatsTable(Base):
     __tablename__ = "stats"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     mode = Column("mode", TINYINT(1), primary_key=True)
     tscore = Column("tscore", Integer, nullable=False, server_default="0")
     rscore = Column("rscore", Integer, nullable=False, server_default="0")

@@ -813,7 +813,7 @@ async def handle_osu_login_request(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=user_info["id"],
             country=geoloc["country"]["acronym"],
         )

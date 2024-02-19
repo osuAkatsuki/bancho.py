@@ -278,7 +278,7 @@ async def changename(ctx: Context) -> str | None:
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await users_repo.update(ctx.player.id, name=name)
+    await users_repo.partial_update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -564,7 +564,7 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await users_repo.update(ctx.player.id, api_key=ctx.player.api_key)
+    await users_repo.partial_update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
@@ -654,7 +654,7 @@ async def _map(ctx: Context) -> str | None:
         if ctx.args[1] == "set":
             # update all maps in the set
             for _bmap in bmap.set.maps:
-                await maps_repo.update(_bmap.id, status=new_status, frozen=True)
+                await maps_repo.partial_update(_bmap.id, status=new_status, frozen=True)
 
             # make sure cache and db are synced about the newest change
             for _bmap in app.state.cache.beatmapset[bmap.set_id].maps:
@@ -671,7 +671,7 @@ async def _map(ctx: Context) -> str | None:
 
         else:
             # update only map
-            await maps_repo.update(bmap.id, status=new_status, frozen=True)
+            await maps_repo.partial_update(bmap.id, status=new_status, frozen=True)
 
             # make sure cache and db are synced about the newest change
             if bmap.md5 in app.state.cache.beatmap:
@@ -2326,7 +2326,7 @@ async def clan_create(ctx: Context) -> str | None:
     ctx.player.clan_id = new_clan["id"]
     ctx.player.clan_priv = ClanPrivileges.Owner
 
-    await users_repo.update(
+    await users_repo.partial_update(
         ctx.player.id,
         clan_id=new_clan["id"],
         clan_priv=ClanPrivileges.Owner,
@@ -2362,7 +2362,7 @@ async def clan_disband(ctx: Context) -> str | None:
         if not clan:
             return "You're not a member of a clan!"
 
-    await clans_repo.delete(clan["id"])
+    await clans_repo.delete_one(clan["id"])
 
     # remove all members from the clan
     clan_member_ids = [
@@ -2370,7 +2370,7 @@ async def clan_disband(ctx: Context) -> str | None:
         for clan_member in await users_repo.fetch_many(clan_id=clan["id"])
     ]
     for member_id in clan_member_ids:
-        await users_repo.update(member_id, clan_id=0, clan_priv=0)
+        await users_repo.partial_update(member_id, clan_id=0, clan_priv=0)
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
@@ -2423,7 +2423,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     clan_members = await users_repo.fetch_many(clan_id=clan["id"])
 
-    await users_repo.update(ctx.player.id, clan_id=0, clan_priv=0)
+    await users_repo.partial_update(ctx.player.id, clan_id=0, clan_priv=0)
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
 
@@ -2431,7 +2431,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     if not clan_members:
         # no members left, disband clan
-        await clans_repo.delete(clan["id"])
+        await clans_repo.delete_one(clan["id"])
 
         # announce clan disbanding
         announce_chan = app.state.sessions.channels.get_by_name("#announce")

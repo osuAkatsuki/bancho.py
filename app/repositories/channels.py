@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import textwrap
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
@@ -26,7 +24,7 @@ from app.repositories import Base
 class ChannelsTable(Base):
     __tablename__ = "channels"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
     name = Column("name", String(32), nullable=False)
     topic = Column("topic", String(256), nullable=False)
     read_priv = Column("read_priv", Integer, nullable=False, server_default="1")

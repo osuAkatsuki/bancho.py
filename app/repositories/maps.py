@@ -1,79 +1,109 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
+from enum import StrEnum
 from typing import TypedDict
 from typing import cast
+
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+from sqlalchemy import update
+from sqlalchemy.dialects.mysql import FLOAT
+from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.repositories import DIALECT
+from app.repositories import Base
 
-# +--------------+------------------------+------+-----+---------+-------+
-# | Field        | Type                   | Null | Key | Default | Extra |
-# +--------------+------------------------+------+-----+---------+-------+
-# | id           | int                    | NO   | PRI | NULL    |       |
-# | server       | enum('osu!','private') | NO   |     | osu!    |       |
-# | set_id       | int                    | NO   |     | NULL    |       |
-# | status       | int                    | NO   |     | NULL    |       |
-# | md5          | char(32)               | NO   | UNI | NULL    |       |
-# | artist       | varchar(128)           | NO   |     | NULL    |       |
-# | title        | varchar(128)           | NO   |     | NULL    |       |
-# | version      | varchar(128)           | NO   |     | NULL    |       |
-# | creator      | varchar(19)            | NO   |     | NULL    |       |
-# | filename     | varchar(256)           | NO   |     | NULL    |       |
-# | last_update  | datetime               | NO   |     | NULL    |       |
-# | total_length | int                    | NO   |     | NULL    |       |
-# | max_combo    | int                    | NO   |     | NULL    |       |
-# | frozen       | tinyint(1)             | NO   |     | 0       |       |
-# | plays        | int                    | NO   |     | 0       |       |
-# | passes       | int                    | NO   |     | 0       |       |
-# | mode         | tinyint(1)             | NO   |     | 0       |       |
-# | bpm          | float(12,2)            | NO   |     | 0.00    |       |
-# | cs           | float(4,2)             | NO   |     | 0.00    |       |
-# | ar           | float(4,2)             | NO   |     | 0.00    |       |
-# | od           | float(4,2)             | NO   |     | 0.00    |       |
-# | hp           | float(4,2)             | NO   |     | 0.00    |       |
-# | diff         | float(6,3)             | NO   |     | 0.000   |       |
-# +--------------+------------------------+------+-----+---------+-------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, server, set_id, status, md5, artist, title, version, creator, filename,
-        last_update, total_length, max_combo, frozen, plays, passes, mode, bpm, cs,
-        ar, od, hp, diff
-    """,
+class MapServer(StrEnum):
+    OSU = "osu!"
+    PRIVATE = "private"
+
+
+class MapsTable(Base):
+    __tablename__ = "maps"
+
+    server = Column(
+        Enum(MapServer, name="server"),
+        nullable=False,
+        server_default="osu!",
+        primary_key=True,
+    )
+    id = Column(Integer, nullable=False, primary_key=True)
+    set_id = Column(Integer, nullable=False)
+    status = Column(Integer, nullable=False)
+    md5 = Column(String(32), nullable=False)
+    artist = Column(String(128, collation="utf8"), nullable=False)
+    title = Column(String(128, collation="utf8"), nullable=False)
+    version = Column(String(128, collation="utf8"), nullable=False)
+    creator = Column(String(19, collation="utf8"), nullable=False)
+    filename = Column(String(256, collation="utf8"), nullable=False)
+    last_update = Column(DateTime, nullable=False)
+    total_length = Column(Integer, nullable=False)
+    max_combo = Column(Integer, nullable=False)
+    frozen = Column(TINYINT(1), nullable=False, server_default="0")
+    plays = Column(Integer, nullable=False, server_default="0")
+    passes = Column(Integer, nullable=False, server_default="0")
+    mode = Column(TINYINT(1), nullable=False, server_default="0")
+    bpm = Column(FLOAT(12, 2), nullable=False, server_default="0.00")
+    cs = Column(FLOAT(4, 2), nullable=False, server_default="0.00")
+    ar = Column(FLOAT(4, 2), nullable=False, server_default="0.00")
+    od = Column(FLOAT(4, 2), nullable=False, server_default="0.00")
+    hp = Column(FLOAT(4, 2), nullable=False, server_default="0.00")
+    diff = Column(FLOAT(6, 3), nullable=False, server_default="0.000")
+
+    __table_args__ = (
+        Index("maps_set_id_index", "set_id"),
+        Index("maps_status_index", "status"),
+        Index("maps_filename_index", "filename"),
+        Index("maps_plays_index", "plays"),
+        Index("maps_mode_index", "mode"),
+        Index("maps_frozen_index", "frozen"),
+        Index("maps_md5_uindex", "md5", unique=True),
+        Index("maps_id_uindex", "id", unique=True),
+    )
+
+
+READ_PARAMS = (
+    MapsTable.id,
+    MapsTable.server,
+    MapsTable.set_id,
+    MapsTable.status,
+    MapsTable.md5,
+    MapsTable.artist,
+    MapsTable.title,
+    MapsTable.version,
+    MapsTable.creator,
+    MapsTable.filename,
+    MapsTable.last_update,
+    MapsTable.total_length,
+    MapsTable.max_combo,
+    MapsTable.frozen,
+    MapsTable.plays,
+    MapsTable.passes,
+    MapsTable.mode,
+    MapsTable.bpm,
+    MapsTable.cs,
+    MapsTable.ar,
+    MapsTable.od,
+    MapsTable.hp,
+    MapsTable.diff,
 )
 
 
 class Map(TypedDict):
     id: int
-    server: str
-    set_id: int
-    status: int
-    md5: str
-    artist: str
-    title: str
-    version: str
-    creator: str
-    filename: str
-    last_update: datetime
-    total_length: int
-    max_combo: int
-    frozen: bool
-    plays: int
-    passes: int
-    mode: int
-    bpm: float
-    cs: float
-    ar: float
-    od: float
-    hp: float
-    diff: float
-
-
-class MapUpdateFields(TypedDict, total=False):
     server: str
     set_id: int
     status: int
@@ -124,53 +154,37 @@ async def create(
     diff: float,
 ) -> Map:
     """Create a new beatmap entry in the database."""
-    query = f"""\
-        INSERT INTO maps (id, server, set_id, status, md5, artist, title,
-                          version, creator, filename, last_update,
-                          total_length, max_combo, frozen, plays, passes,
-                          mode, bpm, cs, ar, od, hp, diff)
-             VALUES (:id, :server, :set_id, :status, :md5, :artist, :title,
-                     :version, :creator, :filename, :last_update, :total_length,
-                     :max_combo, :frozen, :plays, :passes, :mode, :bpm, :cs, :ar,
-                     :od, :hp, :diff)
-    """
-    params: dict[str, Any] = {
-        "id": id,
-        "server": server,
-        "set_id": set_id,
-        "status": status,
-        "md5": md5,
-        "artist": artist,
-        "title": title,
-        "version": version,
-        "creator": creator,
-        "filename": filename,
-        "last_update": last_update,
-        "total_length": total_length,
-        "max_combo": max_combo,
-        "frozen": frozen,
-        "plays": plays,
-        "passes": passes,
-        "mode": mode,
-        "bpm": bpm,
-        "cs": cs,
-        "ar": ar,
-        "od": od,
-        "hp": hp,
-        "diff": diff,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(MapsTable).values(
+        id=id,
+        server=server,
+        set_id=set_id,
+        status=status,
+        md5=md5,
+        artist=artist,
+        title=title,
+        version=version,
+        creator=creator,
+        filename=filename,
+        last_update=last_update,
+        total_length=total_length,
+        max_combo=max_combo,
+        frozen=frozen,
+        plays=plays,
+        passes=passes,
+        mode=mode,
+        bpm=bpm,
+        cs=cs,
+        ar=ar,
+        od=od,
+        hp=hp,
+        diff=diff,
+    )
+    compiled = insert_stmt.compile(dialect=DIALECT)
+    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM maps
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    map = await app.state.services.database.fetch_one(query, params)
-
+    select_stmt = select(READ_PARAMS).where(MapsTable.id == rec_id)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     assert map is not None
     return cast(Map, dict(map._mapping))
 
@@ -184,20 +198,15 @@ async def fetch_one(
     if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM maps
-         WHERE id = COALESCE(:id, id)
-           AND md5 = COALESCE(:md5, md5)
-           AND filename = COALESCE(:filename, filename)
-    """
-    params: dict[str, Any] = {
-        "id": id,
-        "md5": md5,
-        "filename": filename,
-    }
-    map = await app.state.services.database.fetch_one(query, params)
-
+    select_stmt = select(READ_PARAMS)
+    if id is not None:
+        select_stmt = select_stmt.where(MapsTable.id == id)
+    if md5 is not None:
+        select_stmt = select_stmt.where(MapsTable.md5 == md5)
+    if filename is not None:
+        select_stmt = select_stmt.where(MapsTable.filename == filename)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     return cast(Map, dict(map._mapping)) if map is not None else None
 
 
@@ -212,30 +221,25 @@ async def fetch_count(
     frozen: bool | None = None,
 ) -> int:
     """Fetch the number of maps in the database."""
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM maps
-        WHERE server = COALESCE(:server, server)
-          AND set_id = COALESCE(:set_id, set_id)
-          AND status = COALESCE(:status, status)
-          AND artist = COALESCE(:artist, artist)
-          AND creator = COALESCE(:creator, creator)
-          AND filename = COALESCE(:filename, filename)
-          AND mode = COALESCE(:mode, mode)
-          AND frozen = COALESCE(:frozen, frozen)
-
-    """
-    params: dict[str, Any] = {
-        "server": server,
-        "set_id": set_id,
-        "status": status,
-        "artist": artist,
-        "creator": creator,
-        "filename": filename,
-        "mode": mode,
-        "frozen": frozen,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(func.count().label("count")).select_from(MapsTable)
+    if server is not None:
+        select_stmt = select_stmt.where(MapsTable.server == server)
+    if set_id is not None:
+        select_stmt = select_stmt.where(MapsTable.set_id == set_id)
+    if status is not None:
+        select_stmt = select_stmt.where(MapsTable.status == status)
+    if artist is not None:
+        select_stmt = select_stmt.where(MapsTable.artist == artist)
+    if creator is not None:
+        select_stmt = select_stmt.where(MapsTable.creator == creator)
+    if filename is not None:
+        select_stmt = select_stmt.where(MapsTable.filename == filename)
+    if mode is not None:
+        select_stmt = select_stmt.where(MapsTable.mode == mode)
+    if frozen is not None:
+        select_stmt = select_stmt.where(MapsTable.frozen == frozen)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     assert rec is not None
     return cast(int, rec._mapping["count"])
 
@@ -253,42 +257,31 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Map]:
     """Fetch a list of maps from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM maps
-         WHERE server = COALESCE(:server, server)
-           AND set_id = COALESCE(:set_id, set_id)
-           AND status = COALESCE(:status, status)
-           AND artist = COALESCE(:artist, artist)
-           AND creator = COALESCE(:creator, creator)
-           AND filename = COALESCE(:filename, filename)
-           AND mode = COALESCE(:mode, mode)
-           AND frozen = COALESCE(:frozen, frozen)
-    """
-    params: dict[str, Any] = {
-        "server": server,
-        "set_id": set_id,
-        "status": status,
-        "artist": artist,
-        "creator": creator,
-        "filename": filename,
-        "mode": mode,
-        "frozen": frozen,
-    }
-
+    select_stmt = select(READ_PARAMS)
+    if server is not None:
+        select_stmt = select_stmt.where(MapsTable.server == server)
+    if set_id is not None:
+        select_stmt = select_stmt.where(MapsTable.set_id == set_id)
+    if status is not None:
+        select_stmt = select_stmt.where(MapsTable.status == status)
+    if artist is not None:
+        select_stmt = select_stmt.where(MapsTable.artist == artist)
+    if creator is not None:
+        select_stmt = select_stmt.where(MapsTable.creator == creator)
+    if filename is not None:
+        select_stmt = select_stmt.where(MapsTable.filename == filename)
+    if mode is not None:
+        select_stmt = select_stmt.where(MapsTable.mode == mode)
+    if frozen is not None:
+        select_stmt = select_stmt.where(MapsTable.frozen == frozen)
     if page is not None and page_size is not None:
-        query += """\
-            LIMIT :limit
-           OFFSET :offset
-        """
-        params["limit"] = page_size
-        params["offset"] = (page - 1) * page_size
-
-    maps = await app.state.services.database.fetch_all(query, params)
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    maps = await app.state.services.database.fetch_all(str(compiled), compiled.params)
     return cast(list[Map], [dict(m._mapping) for m in maps])
 
 
-async def update(
+async def partial_update(
     id: int,
     server: str | _UnsetSentinel = UNSET,
     set_id: int | _UnsetSentinel = UNSET,
@@ -314,94 +307,70 @@ async def update(
     diff: float | _UnsetSentinel = UNSET,
 ) -> Map | None:
     """Update a beatmap entry in the database."""
-    update_fields: MapUpdateFields = {}
+    update_stmt = update(MapsTable).where(MapsTable.id == id)
     if not isinstance(server, _UnsetSentinel):
-        update_fields["server"] = server
+        update_stmt = update_stmt.values(server=server)
     if not isinstance(set_id, _UnsetSentinel):
-        update_fields["set_id"] = set_id
+        update_stmt = update_stmt.values(set_id=set_id)
     if not isinstance(status, _UnsetSentinel):
-        update_fields["status"] = status
+        update_stmt = update_stmt.values(status=status)
     if not isinstance(md5, _UnsetSentinel):
-        update_fields["md5"] = md5
+        update_stmt = update_stmt.values(md5=md5)
     if not isinstance(artist, _UnsetSentinel):
-        update_fields["artist"] = artist
+        update_stmt = update_stmt.values(artist=artist)
     if not isinstance(title, _UnsetSentinel):
-        update_fields["title"] = title
+        update_stmt = update_stmt.values(title=title)
     if not isinstance(version, _UnsetSentinel):
-        update_fields["version"] = version
+        update_stmt = update_stmt.values(version=version)
     if not isinstance(creator, _UnsetSentinel):
-        update_fields["creator"] = creator
+        update_stmt = update_stmt.values(creator=creator)
     if not isinstance(filename, _UnsetSentinel):
-        update_fields["filename"] = filename
+        update_stmt = update_stmt.values(filename=filename)
     if not isinstance(last_update, _UnsetSentinel):
-        update_fields["last_update"] = last_update
+        update_stmt = update_stmt.values(last_update=last_update)
     if not isinstance(total_length, _UnsetSentinel):
-        update_fields["total_length"] = total_length
+        update_stmt = update_stmt.values(total_length=total_length)
     if not isinstance(max_combo, _UnsetSentinel):
-        update_fields["max_combo"] = max_combo
+        update_stmt = update_stmt.values(max_combo=max_combo)
     if not isinstance(frozen, _UnsetSentinel):
-        update_fields["frozen"] = frozen
+        update_stmt = update_stmt.values(frozen=frozen)
     if not isinstance(plays, _UnsetSentinel):
-        update_fields["plays"] = plays
+        update_stmt = update_stmt.values(plays=plays)
     if not isinstance(passes, _UnsetSentinel):
-        update_fields["passes"] = passes
+        update_stmt = update_stmt.values(passes=passes)
     if not isinstance(mode, _UnsetSentinel):
-        update_fields["mode"] = mode
+        update_stmt = update_stmt.values(mode=mode)
     if not isinstance(bpm, _UnsetSentinel):
-        update_fields["bpm"] = bpm
+        update_stmt = update_stmt.values(bpm=bpm)
     if not isinstance(cs, _UnsetSentinel):
-        update_fields["cs"] = cs
+        update_stmt = update_stmt.values(cs=cs)
     if not isinstance(ar, _UnsetSentinel):
-        update_fields["ar"] = ar
+        update_stmt = update_stmt.values(ar=ar)
     if not isinstance(od, _UnsetSentinel):
-        update_fields["od"] = od
+        update_stmt = update_stmt.values(od=od)
     if not isinstance(hp, _UnsetSentinel):
-        update_fields["hp"] = hp
+        update_stmt = update_stmt.values(hp=hp)
     if not isinstance(diff, _UnsetSentinel):
-        update_fields["diff"] = diff
+        update_stmt = update_stmt.values(diff=diff)
 
-    query = f"""\
-        UPDATE maps
-           SET {",".join(f"{k} = COALESCE(:{k}, {k})" for k in update_fields)}
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    } | update_fields
-    await app.state.services.database.execute(query, params)
+    compiled = update_stmt.compile(dialect=DIALECT)
+    await app.state.services.database.execute(str(compiled), compiled.params)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM maps
-        WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    map = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(READ_PARAMS).where(MapsTable.id == id)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     return cast(Map, dict(map._mapping)) if map is not None else None
 
 
-async def delete(id: int) -> Map | None:
+async def delete_one(id: int) -> Map | None:
     """Delete a beatmap entry from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM maps
-        WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    map = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(READ_PARAMS).where(MapsTable.id == id)
+    compiled = select_stmt.compile(dialect=DIALECT)
+    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     if map is None:
         return None
 
-    query = """\
-        DELETE FROM maps
-              WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    await app.state.services.database.execute(query, params)
-    return cast(Map, dict(map._mapping)) if map is not None else None
+    delete_stmt = delete(MapsTable).where(MapsTable.id == id)
+    compiled = delete_stmt.compile(dialect=DIALECT)
+    await app.state.services.database.execute(str(compiled), compiled.params)
+    return cast(Map, dict(map._mapping))
