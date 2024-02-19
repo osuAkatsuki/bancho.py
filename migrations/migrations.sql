@@ -418,6 +418,10 @@ create index maps_set_id_index
 	on maps (set_id);
 create index maps_status_index
 	on maps (status);
+create index maps_filename_index
+	on maps (filename);
+create index maps_plays_index
+	on maps (plays);
 create index maps_mode_index
 	on maps (mode);
 create index maps_frozen_index
@@ -435,6 +439,8 @@ create index scores_status_index
 	on scores (status);
 create index scores_mode_index
 	on scores (mode);
+create index scores_play_time_index
+	on scores (play_time);
 create index scores_userid_index
 	on scores (userid);
 
