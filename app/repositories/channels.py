@@ -87,7 +87,7 @@ async def create(
     compiled = stmt.compile(dialect=DIALECT)
     rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(*READ_PARAMS).where(ChannelsTable.id == rec_id)
+    stmt = select(READ_PARAMS).where(ChannelsTable.id == rec_id)
     compiled = stmt.compile(dialect=DIALECT)
     channel = await app.state.services.database.fetch_one(
         str(compiled),
@@ -106,7 +106,7 @@ async def fetch_one(
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
 
-    stmt = select(*READ_PARAMS)
+    stmt = select(READ_PARAMS)
 
     if id is not None:
         stmt = stmt.where(ChannelsTable.id == id)
@@ -153,7 +153,7 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Channel]:
     """Fetch multiple channels from the database."""
-    stmt = select(*READ_PARAMS)
+    stmt = select(READ_PARAMS)
 
     if read_priv is not None:
         stmt = stmt.where(ChannelsTable.read_priv == read_priv)
@@ -195,7 +195,7 @@ async def partial_update(
     compiled = stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
+    stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
     compiled = stmt.compile(dialect=DIALECT)
     channel = await app.state.services.database.fetch_one(
         str(compiled),
@@ -208,7 +208,7 @@ async def delete_one(
     name: str,
 ) -> Channel | None:
     """Delete a channel from the database."""
-    stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
+    stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     if rec is None:

@@ -115,7 +115,7 @@ async def create(player_id: int, mode: int) -> Stat:
         values=compiled.params,
     )
 
-    stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
+    stmt = select(READ_PARAMS).where(StatsTable.id == rec_id)
     compiled = stmt.compile(dialect=DIALECT)
     stat = await app.state.services.database.fetch_one(
         query=str(compiled),
@@ -145,7 +145,7 @@ async def create_all_modes(player_id: int) -> list[Stat]:
     compiled = stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
+    stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
     compiled = stmt.compile(dialect=DIALECT)
     stats = await app.state.services.database.fetch_all(
         query=str(compiled),
@@ -157,7 +157,7 @@ async def create_all_modes(player_id: int) -> list[Stat]:
 async def fetch_one(player_id: int, mode: int) -> Stat | None:
     """Fetch a player stats entry from the database."""
     stmt = (
-        select(*READ_PARAMS)
+        select(READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
@@ -193,7 +193,7 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Stat]:
-    stmt = select(*READ_PARAMS)
+    stmt = select(READ_PARAMS)
     if player_id is not None:
         stmt = stmt.where(StatsTable.id == player_id)
     if mode is not None:
@@ -265,7 +265,7 @@ async def partial_update(
     await app.state.services.database.execute(str(compiled), compiled.params)
 
     stmt = (
-        select(*READ_PARAMS)
+        select(READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )

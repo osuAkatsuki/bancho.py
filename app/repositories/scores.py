@@ -189,7 +189,7 @@ async def create(
         values=compiled.params,
     )
 
-    stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
+    stmt = select(READ_PARAMS).where(ScoresTable.id == rec_id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
@@ -200,7 +200,7 @@ async def create(
 
 
 async def fetch_one(id: int) -> Score | None:
-    stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    stmt = select(READ_PARAMS).where(ScoresTable.id == id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
@@ -247,7 +247,7 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
-    stmt = select(*READ_PARAMS)
+    stmt = select(READ_PARAMS)
     if map_md5 is not None:
         stmt = stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
@@ -287,7 +287,7 @@ async def partial_update(
         values=compiled.params,
     )
 
-    stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    stmt = select(READ_PARAMS).where(ScoresTable.id == id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),

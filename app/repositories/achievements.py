@@ -72,7 +72,7 @@ async def create(
 
     rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(*READ_PARAMS).where(AchievementsTable.id == rec_id)
+    stmt = select(READ_PARAMS).where(AchievementsTable.id == rec_id)
     compiled = stmt.compile(dialect=DIALECT)
 
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
@@ -98,7 +98,7 @@ async def fetch_one(
         where_conditions.append(AchievementsTable.name == name)
 
     # TODO: wtf?
-    stmt = select(*READ_PARAMS).where(or_(*where_conditions))
+    stmt = select(READ_PARAMS).where(or_(*where_conditions))
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
 
@@ -125,7 +125,7 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Achievement]:
     """Fetch a list of achievements."""
-    stmt = select(*READ_PARAMS)
+    stmt = select(READ_PARAMS)
     if page is not None and page_size is not None:
         stmt = stmt.limit(page_size).offset((page - 1) * page_size)
 
@@ -167,7 +167,7 @@ async def partial_update(
     compiled = stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+    stmt = select(READ_PARAMS).where(AchievementsTable.id == id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     assert rec is not None
@@ -181,7 +181,7 @@ async def delete_one(
     id: int,
 ) -> Achievement | None:
     """Delete an existing achievement."""
-    stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+    stmt = select(READ_PARAMS).where(AchievementsTable.id == id)
     compiled = stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     if rec is None:
