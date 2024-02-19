@@ -324,8 +324,6 @@ class Score:
             mode=mode_vn,
             mods=int(self.mods),
             combo=self.max_combo,
-            # prefer to use the score's specific params that add up to the acc
-            acc=self.acc,
             ngeki=self.ngeki,
             n300=self.n300,
             nkatu=self.nkatu,
