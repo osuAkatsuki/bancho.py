@@ -867,7 +867,11 @@ async def user(ctx: Context) -> str | None:
         else "False"
     )
 
-    user_clan = await clans_repo.fetch_one(id=player.clan_id)
+    user_clan = (
+        await clans_repo.fetch_one(id=player.clan_id)
+        if player.clan_id is not None
+        else None
+    )
     display_name = (
         f"[{user_clan['tag']}] {player.name}" if user_clan is not None else player.name
     )
