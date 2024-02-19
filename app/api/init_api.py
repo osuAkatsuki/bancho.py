@@ -25,6 +25,7 @@ from starlette.requests import ClientDisconnect
 import app.bg_loops
 import app.settings
 import app.state
+import app.telemetry
 import app.utils
 from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
@@ -82,6 +83,8 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
             "Running the server with root privileges is not recommended.",
             Ansi.LRED,
         )
+
+    app.telemetry.hook_database_calls()
 
     await app.state.services.database.connect()
     await app.state.services.redis.initialize()
