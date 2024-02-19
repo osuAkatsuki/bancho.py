@@ -184,18 +184,23 @@ async def fetch_one(
     if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
 
+    filters: list[str] = []
+    params: dict[str, Any] = {}
+    if id is not None:
+        filters.append("id = :id")
+        params["id"] = id
+    if md5 is not None:
+        filters.append("md5 = :md5")
+        params["md5"] = md5
+    if filename is not None:
+        filters.append("filename = :filename")
+        params["filename"] = filename
+
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE id = COALESCE(:id, id)
-           AND md5 = COALESCE(:md5, md5)
-           AND filename = COALESCE(:filename, filename)
+            WHERE {' AND '.join(filters)}
     """
-    params: dict[str, Any] = {
-        "id": id,
-        "md5": md5,
-        "filename": filename,
-    }
     map = await app.state.services.database.fetch_one(query, params)
 
     return cast(Map, dict(map._mapping)) if map is not None else None

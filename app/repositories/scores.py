@@ -217,22 +217,29 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
+    filters: list[str] = []
+    params: dict[str, Any] = {}
+    if map_md5 is not None:
+        filters.append("map_md5 = :map_md5")
+        params["map_md5"] = map_md5
+    if mods is not None:
+        filters.append("mods = :mods")
+        params["mods"] = mods
+    if status is not None:
+        filters.append("status = :status")
+        params["status"] = status
+    if mode is not None:
+        filters.append("mode = :mode")
+        params["mode"] = mode
+    if user_id is not None:
+        filters.append("userid = :userid")
+        params["userid"] = user_id
+
     query = f"""\
         SELECT {READ_PARAMS}
           FROM scores
-         WHERE map_md5 = COALESCE(:map_md5, map_md5)
-           AND mods = COALESCE(:mods, mods)
-           AND status = COALESCE(:status, status)
-           AND mode = COALESCE(:mode, mode)
-           AND userid = COALESCE(:userid, userid)
+         {f"WHERE {' AND '.join(filters)}" if filters else ""}
     """
-    params: dict[str, Any] = {
-        "map_md5": map_md5,
-        "mods": mods,
-        "status": status,
-        "mode": mode,
-        "userid": user_id,
-    }
     if page is not None and page_size is not None:
         query += """\
             LIMIT :page_size
