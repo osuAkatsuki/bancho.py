@@ -1653,6 +1653,21 @@ pymysql = ["pymysql", "pymysql (<1)"]
 sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
+name = "sqlalchemy-stubs"
+version = "0.4"
+description = "SQLAlchemy stubs and mypy plugin"
+optional = false
+python-versions = "*"
+files = [
+    {file = "sqlalchemy-stubs-0.4.tar.gz", hash = "sha256:c665d6dd4482ef642f01027fa06c3d5e91befabb219dc71fc2a09e7d7695f7ae"},
+    {file = "sqlalchemy_stubs-0.4-py3-none-any.whl", hash = "sha256:5eec7aa110adf9b957b631799a72fef396b23ff99fe296df726645d01e312aa5"},
+]
+
+[package.dependencies]
+mypy = ">=0.790"
+typing-extensions = ">=3.7.4"
+
+[[package]]
 name = "starlette"
 version = "0.36.3"
 description = "The little ASGI library that shines."
@@ -1739,17 +1754,6 @@ files = [
 
 [package.dependencies]
 urllib3 = ">=2"
-
-[[package]]
-name = "types-sqlalchemy"
-version = "1.4.53.38"
-description = "Typing stubs for SQLAlchemy"
-optional = false
-python-versions = "*"
-files = [
-    {file = "types-SQLAlchemy-1.4.53.38.tar.gz", hash = "sha256:5bb7463537e04e1aa5a3557eb725930df99226dcfd3c9bf93008025bfe5c169e"},
-    {file = "types_SQLAlchemy-1.4.53.38-py3-none-any.whl", hash = "sha256:7e60e74f823931cc9a9e8adb0a4c05e5533e6708b8a266807893a739faf4eaaa"},
-]
 
 [[package]]
 name = "typing-extensions"
@@ -1892,4 +1896,4 @@ cython = "*"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "96e01b37182be5d53678c55a2e5374888aa62b63042a54d5aa1ecacb03bbe23a"
+content-hash = "26252f12bc482e1786a067d5c57c62da0f67970e5daa2fa814d4fbabafc4a75b"

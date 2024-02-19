@@ -84,7 +84,7 @@ types-pymysql = "1.1.0.1"
 types-requests = "2.31.0.20240125"
 mypy = "1.8.0"
 types-pyyaml = "^6.0.12.12"
-types-sqlalchemy = "^1.4.53.38"
+sqlalchemy-stubs = "^0.4"
 
 [build-system]
 requires = ["poetry-core"]
