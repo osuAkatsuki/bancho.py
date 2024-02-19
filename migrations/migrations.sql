@@ -409,3 +409,52 @@ alter table maps drop primary key;
 alter table maps add primary key (id);
 alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
 unlock tables;
+
+# v5.0.1
+create index channels_auto_join_index
+	on channels (auto_join);
+
+create index maps_set_id_index
+	on maps (set_id);
+create index maps_status_index
+	on maps (status);
+create index maps_mode_index
+	on maps (mode);
+create index maps_frozen_index
+	on maps (frozen);
+
+create index scores_map_md5_index
+	on scores (map_md5);
+create index scores_score_index
+	on scores (score);
+create index scores_pp_index
+	on scores (pp);
+create index scores_mods_index
+	on scores (mods);
+create index scores_status_index
+	on scores (status);
+create index scores_mode_index
+	on scores (mode);
+create index scores_userid_index
+	on scores (userid);
+
+create index stats_mode_index
+	on stats (mode);
+create index stats_pp_index
+	on stats (pp);
+create index stats_tscore_index
+	on stats (tscore);
+create index stats_rscore_index
+	on stats (rscore);
+
+create index tourney_pool_maps_mods_slot_index
+	on tourney_pool_maps (mods, slot);
+
+create index users_priv_index
+	on users (priv);
+create index users_clan_id_index
+	on users (clan_id);
+create index users_clan_priv_index
+	on users (clan_priv);
+create index users_country_index
+	on users (country);
