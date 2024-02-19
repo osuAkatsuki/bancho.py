@@ -77,18 +77,18 @@ async def create(
     auto_join: bool,
 ) -> Channel:
     """Create a new channel."""
-    stmt = insert(ChannelsTable).values(
+    insert_stmt = insert(ChannelsTable).values(
         name=name,
         topic=topic,
         read_priv=read_priv,
         write_priv=write_priv,
         auto_join=auto_join,
     )
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = insert_stmt.compile(dialect=DIALECT)
     rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(READ_PARAMS).where(ChannelsTable.id == rec_id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ChannelsTable.id == rec_id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     channel = await app.state.services.database.fetch_one(
         str(compiled),
         compiled.params,
@@ -106,14 +106,14 @@ async def fetch_one(
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
 
-    stmt = select(READ_PARAMS)
+    select_stmt = select(READ_PARAMS)
 
     if id is not None:
-        stmt = stmt.where(ChannelsTable.id == id)
+        select_stmt = select_stmt.where(ChannelsTable.id == id)
     if name is not None:
-        stmt = stmt.where(ChannelsTable.name == name)
+        select_stmt = select_stmt.where(ChannelsTable.name == name)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     channel = await app.state.services.database.fetch_one(
         str(compiled),
         compiled.params,
@@ -130,16 +130,16 @@ async def fetch_count(
     if read_priv is None and write_priv is None and auto_join is None:
         raise ValueError("Must provide at least one parameter.")
 
-    stmt = select(func.count().label("count")).select_from(ChannelsTable)
+    select_stmt = select(func.count().label("count")).select_from(ChannelsTable)
 
     if read_priv is not None:
-        stmt = stmt.where(ChannelsTable.read_priv == read_priv)
+        select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
     if write_priv is not None:
-        stmt = stmt.where(ChannelsTable.write_priv == write_priv)
+        select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
     if auto_join is not None:
-        stmt = stmt.where(ChannelsTable.auto_join == auto_join)
+        select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     assert rec is not None
     return cast(int, rec._mapping["count"])
@@ -153,19 +153,19 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Channel]:
     """Fetch multiple channels from the database."""
-    stmt = select(READ_PARAMS)
+    select_stmt = select(READ_PARAMS)
 
     if read_priv is not None:
-        stmt = stmt.where(ChannelsTable.read_priv == read_priv)
+        select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
     if write_priv is not None:
-        stmt = stmt.where(ChannelsTable.write_priv == write_priv)
+        select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
     if auto_join is not None:
-        stmt = stmt.where(ChannelsTable.auto_join == auto_join)
+        select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
 
     if page is not None and page_size is not None:
-        stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     channels = await app.state.services.database.fetch_all(
         str(compiled),
         compiled.params,
@@ -181,22 +181,22 @@ async def partial_update(
     auto_join: bool | _UnsetSentinel = UNSET,
 ) -> Channel | None:
     """Update a channel in the database."""
-    stmt = update(ChannelsTable).where(ChannelsTable.name == name)
+    update_stmt = update(ChannelsTable).where(ChannelsTable.name == name)
 
     if not isinstance(topic, _UnsetSentinel):
-        stmt = stmt.values(topic=topic)
+        update_stmt = update_stmt.values(topic=topic)
     if not isinstance(read_priv, _UnsetSentinel):
-        stmt = stmt.values(read_priv=read_priv)
+        update_stmt = update_stmt.values(read_priv=read_priv)
     if not isinstance(write_priv, _UnsetSentinel):
-        stmt = stmt.values(write_priv=write_priv)
+        update_stmt = update_stmt.values(write_priv=write_priv)
     if not isinstance(auto_join, _UnsetSentinel):
-        stmt = stmt.values(auto_join=auto_join)
+        update_stmt = update_stmt.values(auto_join=auto_join)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = update_stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
+    compiled = select_stmt.compile(dialect=DIALECT)
     channel = await app.state.services.database.fetch_one(
         str(compiled),
         compiled.params,
@@ -208,13 +208,13 @@ async def delete_one(
     name: str,
 ) -> Channel | None:
     """Delete a channel from the database."""
-    stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ChannelsTable.name == name)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
     if rec is None:
         return None
 
-    stmt = delete(ChannelsTable).where(ChannelsTable.name == name)
-    compiled = stmt.compile(dialect=DIALECT)
+    delete_stmt = delete(ChannelsTable).where(ChannelsTable.name == name)
+    compiled = delete_stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
     return cast(Channel, dict(rec._mapping)) if rec is not None else None

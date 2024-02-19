@@ -108,15 +108,15 @@ class Stat(TypedDict):
 
 async def create(player_id: int, mode: int) -> Stat:
     """Create a new player stats entry in the database."""
-    stmt = insert(StatsTable).values(id=player_id, mode=mode)
-    compiled = stmt.compile(dialect=DIALECT)
+    insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
+    compiled = insert_stmt.compile(dialect=DIALECT)
     rec_id = await app.state.services.database.execute(
         query=str(compiled),
         values=compiled.params,
     )
 
-    stmt = select(READ_PARAMS).where(StatsTable.id == rec_id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(StatsTable.id == rec_id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     stat = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -127,7 +127,7 @@ async def create(player_id: int, mode: int) -> Stat:
 
 async def create_all_modes(player_id: int) -> list[Stat]:
     """Create new player stats entries for each game mode in the database."""
-    stmt = insert(StatsTable).values(
+    insert_stmt = insert(StatsTable).values(
         [
             {"id": player_id, "mode": mode}
             for mode in (
@@ -142,11 +142,11 @@ async def create_all_modes(player_id: int) -> list[Stat]:
             )
         ],
     )
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = insert_stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     stats = await app.state.services.database.fetch_all(
         query=str(compiled),
         values=compiled.params,
@@ -156,12 +156,12 @@ async def create_all_modes(player_id: int) -> list[Stat]:
 
 async def fetch_one(player_id: int, mode: int) -> Stat | None:
     """Fetch a player stats entry from the database."""
-    stmt = (
+    select_stmt = (
         select(READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     stat = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -173,12 +173,12 @@ async def fetch_count(
     player_id: int | None = None,
     mode: int | None = None,
 ) -> int:
-    stmt = select(func.count().label("count")).select_from(StatsTable)
+    select_stmt = select(func.count().label("count")).select_from(StatsTable)
     if player_id is not None:
-        stmt = stmt.where(StatsTable.id == player_id)
+        select_stmt = select_stmt.where(StatsTable.id == player_id)
     if mode is not None:
-        stmt = stmt.where(StatsTable.mode == mode)
-    compiled = stmt.compile(dialect=DIALECT)
+        select_stmt = select_stmt.where(StatsTable.mode == mode)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -193,14 +193,14 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Stat]:
-    stmt = select(READ_PARAMS)
+    select_stmt = select(READ_PARAMS)
     if player_id is not None:
-        stmt = stmt.where(StatsTable.id == player_id)
+        select_stmt = select_stmt.where(StatsTable.id == player_id)
     if mode is not None:
-        stmt = stmt.where(StatsTable.mode == mode)
+        select_stmt = select_stmt.where(StatsTable.mode == mode)
     if page is not None and page_size is not None:
-        stmt = stmt.limit(page_size).offset((page - 1) * page_size)
-    compiled = stmt.compile(dialect=DIALECT)
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+    compiled = select_stmt.compile(dialect=DIALECT)
     stats = await app.state.services.database.fetch_all(
         query=str(compiled),
         values=compiled.params,
@@ -227,49 +227,49 @@ async def partial_update(
     a_count: int | _UnsetSentinel = UNSET,
 ) -> Stat | None:
     """Update a player stats entry in the database."""
-    stmt = (
+    update_stmt = (
         update(StatsTable)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
     if not isinstance(tscore, _UnsetSentinel):
-        stmt = stmt.values(tscore=tscore)
+        update_stmt = update_stmt.values(tscore=tscore)
     if not isinstance(rscore, _UnsetSentinel):
-        stmt = stmt.values(rscore=rscore)
+        update_stmt = update_stmt.values(rscore=rscore)
     if not isinstance(pp, _UnsetSentinel):
-        stmt = stmt.values(pp=pp)
+        update_stmt = update_stmt.values(pp=pp)
     if not isinstance(plays, _UnsetSentinel):
-        stmt = stmt.values(plays=plays)
+        update_stmt = update_stmt.values(plays=plays)
     if not isinstance(playtime, _UnsetSentinel):
-        stmt = stmt.values(playtime=playtime)
+        update_stmt = update_stmt.values(playtime=playtime)
     if not isinstance(acc, _UnsetSentinel):
-        stmt = stmt.values(acc=acc)
+        update_stmt = update_stmt.values(acc=acc)
     if not isinstance(max_combo, _UnsetSentinel):
-        stmt = stmt.values(max_combo=max_combo)
+        update_stmt = update_stmt.values(max_combo=max_combo)
     if not isinstance(total_hits, _UnsetSentinel):
-        stmt = stmt.values(total_hits=total_hits)
+        update_stmt = update_stmt.values(total_hits=total_hits)
     if not isinstance(replay_views, _UnsetSentinel):
-        stmt = stmt.values(replay_views=replay_views)
+        update_stmt = update_stmt.values(replay_views=replay_views)
     if not isinstance(xh_count, _UnsetSentinel):
-        stmt = stmt.values(xh_count=xh_count)
+        update_stmt = update_stmt.values(xh_count=xh_count)
     if not isinstance(x_count, _UnsetSentinel):
-        stmt = stmt.values(x_count=x_count)
+        update_stmt = update_stmt.values(x_count=x_count)
     if not isinstance(sh_count, _UnsetSentinel):
-        stmt = stmt.values(sh_count=sh_count)
+        update_stmt = update_stmt.values(sh_count=sh_count)
     if not isinstance(s_count, _UnsetSentinel):
-        stmt = stmt.values(s_count=s_count)
+        update_stmt = update_stmt.values(s_count=s_count)
     if not isinstance(a_count, _UnsetSentinel):
-        stmt = stmt.values(a_count=a_count)
+        update_stmt = update_stmt.values(a_count=a_count)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = update_stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(str(compiled), compiled.params)
 
-    stmt = (
+    select_stmt = (
         select(READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     stat = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,

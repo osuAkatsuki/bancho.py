@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
-from sqlalchemy.sql.elements import ClauseElement
 
 import app.state.services
 from app._typing import UNSET
@@ -161,7 +160,7 @@ async def create(
     perfect: int,
     online_checksum: str,
 ) -> Score:
-    stmt: ClauseElement = insert(ScoresTable).values(
+    insert_stmt = insert(ScoresTable).values(
         map_md5=map_md5,
         score=score,
         pp=pp,
@@ -184,14 +183,14 @@ async def create(
         perfect=perfect,
         online_checksum=online_checksum,
     )
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = insert_stmt.compile(dialect=DIALECT)
     rec_id = await app.state.services.database.execute(
         query=str(compiled),
         values=compiled.params,
     )
 
-    stmt = select(READ_PARAMS).where(ScoresTable.id == rec_id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ScoresTable.id == rec_id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -201,8 +200,8 @@ async def create(
 
 
 async def fetch_one(id: int) -> Score | None:
-    stmt: ClauseElement = select(READ_PARAMS).where(ScoresTable.id == id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ScoresTable.id == id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -218,19 +217,19 @@ async def fetch_count(
     mode: int | None = None,
     user_id: int | None = None,
 ) -> int:
-    stmt: ClauseElement = select(func.count().label("count")).select_from(ScoresTable)
+    select_stmt = select(func.count().label("count")).select_from(ScoresTable)
     if map_md5 is not None:
-        stmt = stmt.where(ScoresTable.map_md5 == map_md5)
+        select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
-        stmt = stmt.where(ScoresTable.mods == mods)
+        select_stmt = select_stmt.where(ScoresTable.mods == mods)
     if status is not None:
-        stmt = stmt.where(ScoresTable.status == status)
+        select_stmt = select_stmt.where(ScoresTable.status == status)
     if mode is not None:
-        stmt = stmt.where(ScoresTable.mode == mode)
+        select_stmt = select_stmt.where(ScoresTable.mode == mode)
     if user_id is not None:
-        stmt = stmt.where(ScoresTable.userid == user_id)
+        select_stmt = select_stmt.where(ScoresTable.userid == user_id)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
@@ -248,22 +247,22 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
-    stmt: ClauseElement = select(READ_PARAMS)
+    select_stmt = select(READ_PARAMS)
     if map_md5 is not None:
-        stmt = stmt.where(ScoresTable.map_md5 == map_md5)
+        select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
-        stmt = stmt.where(ScoresTable.mods == mods)
+        select_stmt = select_stmt.where(ScoresTable.mods == mods)
     if status is not None:
-        stmt = stmt.where(ScoresTable.status == status)
+        select_stmt = select_stmt.where(ScoresTable.status == status)
     if mode is not None:
-        stmt = stmt.where(ScoresTable.mode == mode)
+        select_stmt = select_stmt.where(ScoresTable.mode == mode)
     if user_id is not None:
-        stmt = stmt.where(ScoresTable.userid == user_id)
+        select_stmt = select_stmt.where(ScoresTable.userid == user_id)
 
     if page is not None and page_size is not None:
-        stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = stmt.compile(dialect=DIALECT)
+    compiled = select_stmt.compile(dialect=DIALECT)
     recs = await app.state.services.database.fetch_all(
         query=str(compiled),
         values=compiled.params,
@@ -277,19 +276,19 @@ async def partial_update(
     status: int | _UnsetSentinel = UNSET,
 ) -> Score | None:
     """Update an existing score."""
-    stmt: ClauseElement = update(ScoresTable).where(ScoresTable.id == id)
+    update_stmt = update(ScoresTable).where(ScoresTable.id == id)
     if not isinstance(pp, _UnsetSentinel):
-        stmt = stmt.values(pp=pp)
+        update_stmt = update_stmt.values(pp=pp)
     if not isinstance(status, _UnsetSentinel):
-        stmt = stmt.values(status=status)
-    compiled = stmt.compile(dialect=DIALECT)
+        update_stmt = update_stmt.values(status=status)
+    compiled = update_stmt.compile(dialect=DIALECT)
     await app.state.services.database.execute(
         query=str(compiled),
         values=compiled.params,
     )
 
-    stmt = select(READ_PARAMS).where(ScoresTable.id == id)
-    compiled = stmt.compile(dialect=DIALECT)
+    select_stmt = select(READ_PARAMS).where(ScoresTable.id == id)
+    compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(
         query=str(compiled),
         values=compiled.params,
