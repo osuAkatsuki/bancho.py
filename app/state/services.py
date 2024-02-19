@@ -401,16 +401,26 @@ async def _get_current_sql_structure_version() -> Version | None:
 
 async def run_sql_migrations() -> None:
     """Update the sql structure, if it has changed."""
-    current_ver = await _get_current_sql_structure_version()
-    if not current_ver:
-        return  # already up to date (server has never run before)
-
-    latest_ver = Version.from_str(app.settings.VERSION)
-
-    if latest_ver is None:
+    software_version = Version.from_str(app.settings.VERSION)
+    if software_version is None:
         raise RuntimeError(f"Invalid bancho.py version '{app.settings.VERSION}'")
 
-    if latest_ver == current_ver:
+    last_run_migration_version = await _get_current_sql_structure_version()
+    if not last_run_migration_version:
+        # Migrations have never run before - this is the first time starting the server.
+        # We'll insert the current version into the database, so future versions know to migrate.
+        await app.state.services.database.execute(
+            "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
+            "VALUES (:major, :minor, :micro, NOW())",
+            {
+                "major": software_version.major,
+                "minor": software_version.minor,
+                "micro": software_version.micro,
+            },
+        )
+        return  # already up to date (server has never run before)
+
+    if software_version == last_run_migration_version:
         return  # already up to date
 
     # version changed; there may be sql changes.
@@ -437,7 +447,7 @@ async def run_sql_migrations() -> None:
 
         # we only need the updates between the
         # previous and new version of the server.
-        if current_ver < update_ver <= latest_ver:
+        if last_run_migration_version < update_ver <= software_version:
             if line.endswith(";"):
                 if q_lines:
                     q_lines.append(line)
@@ -450,7 +460,7 @@ async def run_sql_migrations() -> None:
 
     if queries:
         log(
-            f"Updating mysql structure (v{current_ver!r} -> v{latest_ver!r}).",
+            f"Updating mysql structure (v{last_run_migration_version!r} -> v{software_version!r}).",
             Ansi.LMAGENTA,
         )
 
@@ -477,8 +487,8 @@ async def run_sql_migrations() -> None:
                 "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
                 "VALUES (:major, :minor, :micro, NOW())",
                 {
-                    "major": latest_ver.major,
-                    "minor": latest_ver.minor,
-                    "micro": latest_ver.micro,
+                    "major": software_version.major,
+                    "minor": software_version.minor,
+                    "micro": software_version.micro,
                 },
             )
