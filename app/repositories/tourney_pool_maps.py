@@ -18,10 +18,10 @@ from app.repositories import Base
 class TourneyPoolMapsTable(Base):
     __tablename__ = "tourney_pool_maps"
 
-    map_id: Column = Column("map_id", Integer, nullable=False, primary_key=True)
-    pool_id: Column = Column("pool_id", Integer, primary_key=True)
-    mods: Column = Column("mods", Integer)
-    slot: Column = Column("slot", Integer)
+    map_id = Column("map_id", Integer, nullable=False, primary_key=True)
+    pool_id = Column("pool_id", Integer, nullable=False, primary_key=True)
+    mods = Column("mods", Integer, nullable=False)
+    slot = Column("slot", Integer, nullable=False)
 
     __table_args__ = (
         Index("tourney_pool_maps_mods_slot_index", mods, slot),
