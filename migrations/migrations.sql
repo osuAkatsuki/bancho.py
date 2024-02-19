@@ -443,6 +443,8 @@ create index scores_play_time_index
 	on scores (play_time);
 create index scores_userid_index
 	on scores (userid);
+create index scores_online_checksum_index
+	on scores (online_checksum);
 
 create index stats_mode_index
 	on stats (mode);
@@ -455,6 +457,11 @@ create index stats_rscore_index
 
 create index tourney_pool_maps_mods_slot_index
 	on tourney_pool_maps (mods, slot);
+
+create index user_achievements_achid_index
+	on user_achievements (achid);
+create index user_achievements_userid_index
+	on user_achievements (userid);
 
 create index users_priv_index
 	on users (priv);

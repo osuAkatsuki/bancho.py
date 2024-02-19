@@ -252,6 +252,8 @@ create index scores_play_time_index
 	on scores (play_time);
 create index scores_userid_index
 	on scores (userid);
+create index scores_online_checksum_index
+	on scores (online_checksum);
 
 
 create table startups
@@ -324,6 +326,10 @@ create table user_achievements
 	achid int not null,
 	primary key (userid, achid)
 );
+create index user_achievements_achid_index
+	on user_achievements (achid);
+create index user_achievements_userid_index
+	on user_achievements (userid);
 
 create table users
 (
