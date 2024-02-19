@@ -27,20 +27,25 @@ class StatsTable(Base):
 
     id = Column("id", Integer, primary_key=True)
     mode = Column("mode", TINYINT(1), primary_key=True)
-    tscore = Column("tscore", Integer, nullable=False, default=0)
-    rscore = Column("rscore", Integer, nullable=False, default=0)
-    pp = Column("pp", Integer, nullable=False, default=0)
-    plays = Column("plays", Integer, nullable=False, default=0)
-    playtime = Column("playtime", Integer, nullable=False, default=0)
-    acc = Column("acc", FLOAT(precision=6, scale=3), nullable=False, default=0.000)
-    max_combo = Column("max_combo", Integer, nullable=False, default=0)
-    total_hits = Column("total_hits", Integer, nullable=False, default=0)
-    replay_views = Column("replay_views", Integer, nullable=False, default=0)
-    xh_count = Column("xh_count", Integer, nullable=False, default=0)
-    x_count = Column("x_count", Integer, nullable=False, default=0)
-    sh_count = Column("sh_count", Integer, nullable=False, default=0)
-    s_count = Column("s_count", Integer, nullable=False, default=0)
-    a_count = Column("a_count", Integer, nullable=False, default=0)
+    tscore = Column("tscore", Integer, nullable=False, server_default="0")
+    rscore = Column("rscore", Integer, nullable=False, server_default="0")
+    pp = Column("pp", Integer, nullable=False, server_default="0")
+    plays = Column("plays", Integer, nullable=False, server_default="0")
+    playtime = Column("playtime", Integer, nullable=False, server_default="0")
+    acc = Column(
+        "acc",
+        FLOAT(precision=6, scale=3),
+        nullable=False,
+        server_default="0.000",
+    )
+    max_combo = Column("max_combo", Integer, nullable=False, server_default="0")
+    total_hits = Column("total_hits", Integer, nullable=False, server_default="0")
+    replay_views = Column("replay_views", Integer, nullable=False, server_default="0")
+    xh_count = Column("xh_count", Integer, nullable=False, server_default="0")
+    x_count = Column("x_count", Integer, nullable=False, server_default="0")
+    sh_count = Column("sh_count", Integer, nullable=False, server_default="0")
+    s_count = Column("s_count", Integer, nullable=False, server_default="0")
+    a_count = Column("a_count", Integer, nullable=False, server_default="0")
 
     __table_args__ = (
         Index("stats_mode_index", mode),
@@ -89,23 +94,6 @@ class Stat(TypedDict):
     a_count: int
 
 
-# class StatUpdateFields(TypedDict, total=False):
-#     tscore: int
-#     rscore: int
-#     pp: int
-#     plays: int
-#     playtime: int
-#     acc: float
-#     max_combo: int
-#     total_hits: int
-#     replay_views: int
-#     xh_count: int
-#     x_count: int
-#     sh_count: int
-#     s_count: int
-#     a_count: int
-
-
 async def create(player_id: int, mode: int) -> Stat:
     """Create a new player stats entry in the database."""
     insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
@@ -127,23 +115,22 @@ async def create(player_id: int, mode: int) -> Stat:
 
 async def create_all_modes(player_id: int) -> list[Stat]:
     """Create new player stats entries for each game mode in the database."""
-    insert_stmt = insert(StatsTable).values(
-        [
-            {"id": player_id, "mode": mode}
-            for mode in (
-                0,  # vn!std
-                1,  # vn!taiko
-                2,  # vn!catch
-                3,  # vn!mania
-                4,  # rx!std
-                5,  # rx!taiko
-                6,  # rx!catch
-                8,  # ap!std
-            )
-        ],
-    )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    for mode in (
+        0,  # vn!std
+        1,  # vn!taiko
+        2,  # vn!catch
+        3,  # vn!mania
+        4,  # rx!std
+        5,  # rx!taiko
+        6,  # rx!catch
+        8,  # ap!std
+    ):
+        insert_stmt = insert(StatsTable).values(
+            id=player_id,
+            mode=mode,
+        )
+        compiled = insert_stmt.compile(dialect=DIALECT)
+        await app.state.services.database.execute(str(compiled), compiled.params)
 
     select_stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
     compiled = select_stmt.compile(dialect=DIALECT)

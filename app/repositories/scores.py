@@ -39,7 +39,7 @@ class ScoresTable(Base):
     nmiss = Column("nmiss", Integer, nullable=False)
     ngeki = Column("ngeki", Integer, nullable=False)
     nkatu = Column("nkatu", Integer, nullable=False)
-    grade = Column("grade", String(2), nullable=False, default="N")
+    grade = Column("grade", String(2), nullable=False, server_default="N")
     status = Column("status", Integer, nullable=False)
     mode = Column("mode", Integer, nullable=False)
     play_time = Column("play_time", DateTime, nullable=False)
@@ -90,30 +90,6 @@ READ_PARAMS = (
 
 class Score(TypedDict):
     id: int
-    map_md5: str
-    score: int
-    pp: float
-    acc: float
-    max_combo: int
-    mods: int
-    n300: int
-    n100: int
-    n50: int
-    nmiss: int
-    ngeki: int
-    nkatu: int
-    grade: str
-    status: int
-    mode: int
-    play_time: datetime
-    time_elapsed: int
-    client_flags: int
-    userid: int
-    perfect: int
-    online_checksum: str
-
-
-class ScoreUpdateFields(TypedDict, total=False):
     map_md5: str
     score: int
     pp: float

@@ -22,17 +22,6 @@ from app._typing import _UnsetSentinel
 from app.repositories import DIALECT
 from app.repositories import Base
 
-# +------------+--------------+------+-----+---------+----------------+
-# | Field      | Type         | Null | Key | Default | Extra          |
-# +------------+--------------+------+-----+---------+----------------+
-# | id         | int          | NO   | PRI | NULL    | auto_increment |
-# | name       | varchar(32)  | NO   | UNI | NULL    |                |
-# | topic      | varchar(256) | NO   |     | NULL    |                |
-# | read_priv  | int          | NO   |     | 1       |                |
-# | write_priv | int          | NO   |     | 2       |                |
-# | auto_join  | tinyint(1)   | NO   |     | 0       |                |
-# +------------+--------------+------+-----+---------+----------------+
-
 
 class ChannelsTable(Base):
     __tablename__ = "channels"
@@ -40,9 +29,9 @@ class ChannelsTable(Base):
     id = Column("id", Integer, primary_key=True)
     name = Column("name", String(32), nullable=False)
     topic = Column("topic", String(256), nullable=False)
-    read_priv = Column("read_priv", Integer, nullable=False, default=1)
-    write_priv = Column("write_priv", Integer, nullable=False, default=2)
-    auto_join = Column("auto_join", TINYINT(1), nullable=False, default=0)
+    read_priv = Column("read_priv", Integer, nullable=False, server_default="1")
+    write_priv = Column("write_priv", Integer, nullable=False, server_default="2")
+    auto_join = Column("auto_join", TINYINT(1), nullable=False, server_default="0")
 
     __table_args__ = (
         Index("channels_name_uindex", name, unique=True),
