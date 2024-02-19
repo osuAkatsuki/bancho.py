@@ -35,6 +35,10 @@ from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
+from app.constants.multiplayer import MatchTeams
+from app.constants.multiplayer import MatchTeamTypes
+from app.constants.multiplayer import MatchWinConditions
+from app.constants.multiplayer import SlotStatus
 from app.constants.osu_client_details import ClientDetails
 from app.constants.osu_client_details import OsuStream
 from app.constants.osu_client_details import OsuVersion
@@ -61,15 +65,12 @@ from app.repositories import client_hashes as client_hashes_repo
 from app.repositories import ingame_logins as logins_repo
 from app.repositories import mail as mail_repo
 from app.repositories import multiplayer_matches as matches_repo
+from app.repositories import multiplayer_slots as match_slots_repo
 from app.repositories import osu_sessions as osu_sessions_repo
 from app.repositories import relationships as relationships_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
-from app.repositories.multiplayer_matches import MatchSlot
-from app.repositories.multiplayer_matches import MatchTeams
-from app.repositories.multiplayer_matches import MatchTeamTypes
-from app.repositories.multiplayer_matches import MatchWinConditions
-from app.repositories.multiplayer_matches import SlotStatus
+from app.repositories.multiplayer_slots import MatchSlot
 from app.repositories.relationships import RelationshipType
 from app.state import services
 from app.usecases import osu_sessions as osu_sessions_usecases
@@ -1773,23 +1774,7 @@ class MatchCreate(BasePacket):
             )
             return
 
-        match_id = app.state.sessions.matches.get_free()
-
-        if match_id is None:
-            # failed to create match (match slots full).
-            await osu_sessions_repo.unicast_osu_data(
-                target_session_id=osu_session["session_id"],
-                data=(
-                    app.packets.send_message(
-                        sender=builtin_bot.BOT_USER_NAME,
-                        msg="Failed to create match (no slots available).",
-                        recipient=osu_session["name"],
-                        sender_id=builtin_bot.BOT_USER_ID,
-                    )
-                    + app.packets.match_join_fail()
-                ),
-            )
-            return
+        match_id = await matches_repo.reserve_new_match_id()
 
         multiplayer_channel = await channels_repo.create(
             name=f"#multi_{match_id}",
@@ -1801,7 +1786,7 @@ class MatchCreate(BasePacket):
         )
 
         match = await matches_repo.create(
-            id=match_id,
+            match_id=match_id,
             name=self.match_data.name,
             password=self.match_data.password.removesuffix("//private"),
             has_public_history=not self.match_data.password.endswith("//private"),
@@ -1840,9 +1825,92 @@ class MatchCreate(BasePacket):
             )
             return
 
-        osu_session.join_match(match, self.match_data.password)
+        match_slots = await match_slots_repo.fetch_all_for_match(
+            match_id=match["match_id"],
+        )
+        slot_statuses: list[int] = []
+        slot_teams: list[int] = []
+        slot_user_ids: list[int | None] = []
+        slot_mods: list[int] = []
+        for slot_id in range(16):
+            slot = match_slots.get(str(slot_id))
+            if slot is not None:
+                slot_statuses.append(slot["status"].value)
+                slot_teams.append(slot["team"].value)
+                slot_user_ids.append(slot["user_id"])
+                slot_mods.append(slot["mods"].value)
+            else:
+                slot_statuses.append(SlotStatus.OPEN.value)
+                slot_teams.append(MatchTeams.NEUTRAL.value)
+                slot_user_ids.append(None)
+                slot_mods.append(Mods.NOMOD.value)
 
-        match.chat_channel_id.send_bot(f"Match created by {osu_session.name}.")
+        await osu_sessions_repo.unicast_osu_data(
+            target_session_id=osu_session["session_id"],
+            data=app.packets.match_join_success(
+                match_id=match["match_id"],
+                in_progress=match["in_progress"],
+                mods=match["mods"],
+                name=match["name"],
+                passwd=match["password"],
+                map_name=match["map_name"],
+                map_id=match["map_id"],
+                map_md5=match["map_md5"],
+                slot_statuses=slot_statuses,
+                slot_teams=slot_teams,
+                slot_user_ids=slot_user_ids,
+                host_id=match["host_id"],
+                mode=match["mode"],
+                win_condition=match["win_condition"],
+                team_type=match["team_type"],
+                freemods=match["freemods"],
+                slot_mods=slot_mods,
+                seed=match["seed"],
+                include_plaintext_password_in_data=True,
+            ),
+        )
+
+        # enqueue match state to all new users in the match & #lobby
+        lobby_channel_memberships = await channel_memberships_repo.fetch_all(
+            channel_name="#lobby",
+        )
+        await osu_sessions_repo.multicast_osu_data(
+            target_session_ids=(
+                {m["session_id"] for m in lobby_channel_memberships}
+                | {osu_session["session_id"]}
+            ),
+            data=app.packets.update_match(
+                match_id=match["match_id"],
+                in_progress=match["in_progress"],
+                mods=match["mods"],
+                name=match["name"],
+                passwd=match["password"],
+                map_name=match["map_name"],
+                map_id=match["map_id"],
+                map_md5=match["map_md5"],
+                slot_statuses=slot_statuses,
+                slot_teams=slot_teams,
+                slot_user_ids=slot_user_ids,
+                host_id=match["host_id"],
+                mode=match["mode"],
+                win_condition=match["win_condition"],
+                team_type=match["team_type"],
+                freemods=match["freemods"],
+                slot_mods=slot_mods,
+                seed=match["seed"],
+                include_plaintext_password_in_data=False,
+            ),
+        )
+
+        await osu_sessions_repo.unicast_osu_data(
+            target_session_id=osu_session["session_id"],
+            data=app.packets.send_message(
+                sender=builtin_bot.BOT_USER_NAME,
+                msg="Match created.",  # TODO: mp links
+                recipient=osu_session["name"],
+                sender_id=builtin_bot.BOT_USER_ID,
+            ),
+        )
 
         # update user's latest activity
         await users_repo.partial_update(
@@ -1859,40 +1927,80 @@ class MatchJoin(BasePacket):
         self.match_id = reader.read_i32()
         self.match_passwd = reader.read_string()
 
-    async def handle(self, player: osu_sessions_repo.OsuSession) -> None:
-        match = app.state.sessions.matches[self.match_id]
-        if not match:
-            log(f"{player} tried to join a non-existant mp lobby?")
-            player.enqueue(app.packets.match_join_fail())
+    async def handle(self, osu_session: osu_sessions_repo.OsuSession) -> None:
+        match = await matches_repo.fetch_one(match_id=self.match_id)
+        if match is None:
+            log(f"{osu_session} tried to join a non-existant mp lobby?")
+            await osu_sessions_repo.unicast_osu_data(
+                target_session_id=osu_session["session_id"],
+                data=app.packets.match_join_fail(),
+            )
             return
 
-        if player.restricted:
-            player.enqueue(
-                app.packets.match_join_fail()
-                + app.packets.notification(
-                    "Multiplayer is not available while restricted.",
+        if is_restricted(osu_session["priv"]):
+            await osu_sessions_repo.unicast_osu_data(
+                target_session_id=osu_session["session_id"],
+                data=(
+                    app.packets.match_join_fail()
+                    + app.packets.notification(
+                        "Multiplayer is not available while restricted.",
+                    )
                 ),
             )
             return
 
-        if player.silenced:
-            player.enqueue(
-                app.packets.match_join_fail()
-                + app.packets.notification(
-                    "Multiplayer is not available while silenced.",
+        if is_silenced(osu_session["silence_end"]):
+            await osu_sessions_repo.unicast_osu_data(
+                target_session_id=osu_session["session_id"],
+                data=(
+                    app.packets.match_join_fail()
+                    + app.packets.notification(
+                        "Multiplayer is not available while silenced.",
+                    )
                 ),
             )
             return
 
-        player.update_latest_activity_soon()
-        player.join_match(match, self.match_passwd)
+        error = await users_usecases.join_multiplayer_match(
+            session_id=osu_session["session_id"],
+            multiplayer_match_id=self.match_id,
+            untrusted_password=self.match_passwd,
+        )
+        if error is not None:
+            await osu_sessions_repo.unicast_osu_data(
+                target_session_id=osu_session["session_id"],
+                data=app.packets.match_join_fail(),
+            )
+            return
+
+        await users_repo.partial_update(
+            id=osu_session["user_id"],
+            latest_activity=int(time.time()),
+        )
 
 
 @register(ClientPackets.PART_MATCH)
 class MatchPart(BasePacket):
-    async def handle(self, player: osu_sessions_repo.OsuSession) -> None:
-        player.update_latest_activity_soon()
-        player.leave_match()
+    async def handle(self, osu_session: osu_sessions_repo.OsuSession) -> None:
+        if osu_session["match_id"] is None:
+            log(
+                f"{osu_session} tried to leave a match when they're not in one.",
+                Ansi.LYELLOW,
+            )
+            return
+
+        error = await users_usecases.leave_multiplayer_match(
+            session_id=osu_session["session_id"],
+            multiplayer_match_id=osu_session["match_id"],
+        )
+        if error is not None:
+            log(f"Error leaving match: {error}", Ansi.LRED)
+            return
+
+        await users_repo.partial_update(
+            id=osu_session["user_id"],
+            latest_activity=int(time.time()),
+        )
 
 
 @register(ClientPackets.MATCH_CHANGE_SLOT)

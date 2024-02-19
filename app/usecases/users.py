@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Collection
 from functools import cache
 
 import app.packets
+from app.constants.mods import Mods
+from app.constants.multiplayer import MatchTeams
+from app.constants.multiplayer import SlotStatus
 from app.constants.osu_client_details import OsuStream
 from app.constants.privileges import Privileges
 from app.errors import Error
@@ -12,13 +16,17 @@ from app.logging import log
 from app.repositories import channel_memberships as channel_memberships_repo
 from app.repositories import channels as channels_repo
 from app.repositories import multiplayer_matches as matches_repo
+from app.repositories import multiplayer_slots as multiplayer_slots_repo
 from app.repositories import osu_sessions as osu_sessions_repo
 from app.repositories import users as users_repo
 from app.repositories.channel_memberships import GrantType
 from app.repositories.multiplayer_matches import MatchTeamTypes
-from app.repositories.multiplayer_matches import MutliplayerMatch
+from app.repositories.multiplayer_matches import MultiplayerMatch
+from app.repositories.multiplayer_slots import MatchSlot
 from app.repositories.osu_sessions import OsuSession
 from app.repositories.users import User
+
+MULTIPLAYER_MATCH_CREATION_LOCK_KEY = "bancho:multiplayer_match_creation_lock"
 
 
 @cache
@@ -304,43 +312,79 @@ async def join_multiplayer_match(
         )
 
     # 2. if the joining user is host, they're creating the match. give them slot 0.
-    if osu_session["user_id"] == multiplayer_match["host_id"]:
-        new_slot_id = "TODO"
-    # - otherwise, they're just joining. verify their passwd, find a slot for them
-    else:
-        if untrusted_password != multiplayer_match["password"]:
+    # TODO: ensure password joining works on initial match creation
+    #       (there has been some logic changed here from origin/master)
+    if untrusted_password != multiplayer_match["password"]:
+        return Error(
+            user_feedback="Invalid password.",
+            error_code=ErrorCode.INVALID_REQUEST,
+        )
+
+    async with app.state.services.redis.lock(
+        name=MULTIPLAYER_MATCH_CREATION_LOCK_KEY,
+        timeout=5.0,
+    ):
+        match_slot_id = await multiplayer_slots_repo.reserve_match_slot_id(
+            match_id=multiplayer_match["match_id"],
+        )
+        if match_slot_id is None:
             return Error(
-                user_feedback="Invalid password.",
-                error_code=ErrorCode.INVALID_REQUEST,
+                user_feedback="Failed to reserve a match slot.",
+                error_code=ErrorCode.INTERNAL_SERVER_ERROR,
             )
 
-        new_slot_id = "TODO"
+        match_slot = await multiplayer_slots_repo.create(
+            match_id=multiplayer_match["match_id"],
+            slot_id=match_slot_id,
+            user_id=osu_session["user_id"],
+            session_id=osu_session["session_id"],
+            status=SlotStatus.OPEN,
+            team=MatchTeams.NEUTRAL,
+            mods=Mods.NOMOD,
+            loaded=False,
+            skipped=False,
+        )
 
     # 3. join the multiplayer channel
     await channel_memberships_repo.create(
         session_id=osu_session["session_id"],
-        channel_name=f"#multi_{multiplayer_match['id']}",
+        channel_name=f"#multi_{multiplayer_match['match_id']}",
         grant_type=GrantType.IMPLICIT,
     )
+
     # 4. leave the #lobby channel
     await channel_memberships_repo.revoke(
         session_id=osu_session["session_id"],
         channel_name="#lobby",
     )
+
     # 5. assign them a team if it's team-vs
     if multiplayer_match["team_type"] is MatchTeamTypes.TEAM_VS:
-        ...  # TODO
+        maybe_slot = await multiplayer_slots_repo.partial_update(
+            match_id=multiplayer_match["match_id"],
+            slot_id=match_slot["slot_id"],
+            team=MatchTeams.RED,
+        )
+        assert maybe_slot is not None
+        match_slot = maybe_slot
 
-    # 6. update slot & player to have the match info
-    # 7. enqueue new match state to all the players in it, and in #lobby
+    # 6. update osu session to have the match info
+    maybe_session = await osu_sessions_repo.partial_update(
+        session_id=osu_session["session_id"],
+        match_id=multiplayer_match["match_id"],
+    )
+    assert maybe_session is not None
+    osu_session = maybe_session
+
+    return None
 
 
 async def leave_multiplayer_match(
-    host_session_id: str | OsuSession,
+    session_id: str | OsuSession,
     multiplayer_match_id: int,
 ) -> None | Error:
-    host_session = await resolve_session_id(host_session_id)
-    if host_session is None:
+    osu_session = await resolve_session_id(session_id)
+    if osu_session is None:
         return Error(
             user_feedback="Host session not found.",
             error_code=ErrorCode.RESOURCE_NOT_FOUND,
@@ -352,3 +396,121 @@ async def leave_multiplayer_match(
             user_feedback="Match not found.",
             error_code=ErrorCode.RESOURCE_NOT_FOUND,
         )
+
+    # 1. remove the slot from the match
+    match_slot = await multiplayer_slots_repo.fetch_user_slot_in_match(
+        match_id=multiplayer_match["match_id"],
+        user_id=osu_session["user_id"],
+    )
+    if match_slot is None:
+        return Error(
+            user_feedback="You are not in the match.",
+            error_code=ErrorCode.INVALID_REQUEST,
+        )
+
+    maybe_slot = await multiplayer_slots_repo.delete(
+        match_id=multiplayer_match["match_id"],
+        slot_id=match_slot["slot_id"],
+    )
+    assert maybe_slot is not None
+    match_slot = maybe_slot
+
+    # 2. leave the multiplayer channel
+    await channel_memberships_repo.revoke(
+        session_id=osu_session["session_id"],
+        channel_name=f"#multi_{multiplayer_match['match_id']}",
+    )
+
+    # 3. if the multi is now empty, delete it & inform lobby
+    match_slots = await multiplayer_slots_repo.fetch_all_for_match(
+        match_id=multiplayer_match["match_id"],
+    )
+    if not match_slots:
+        maybe_match = await matches_repo.delete(match_id=multiplayer_match["match_id"])
+        assert maybe_match is not None
+        multiplayer_match = maybe_match
+
+        # inform the lobby of the match deletion
+        lobby_channel_memberships = await channel_memberships_repo.fetch_all(
+            channel_name=f"#lobby",
+        )
+        await osu_sessions_repo.multicast_osu_data(
+            target_session_ids={m["session_id"] for m in lobby_channel_memberships},
+            data=app.packets.dispose_match(id=multiplayer_match["match_id"]),
+        )
+
+    # - otherwise, if the user was host/ref, transfer/remove it
+    else:
+
+        def determine_new_host_user_id(
+            match_slots: Collection[MatchSlot],
+        ) -> int | None:
+            for slot in match_slots:
+                if slot["user_id"] is not None:
+                    return slot["user_id"]
+            return None
+
+        if osu_session["user_id"] == multiplayer_match["host_id"]:
+            new_host_user_id = determine_new_host_user_id(match_slots.values())
+            assert new_host_user_id is not None
+
+            maybe_match = await matches_repo.partial_update(
+                match_id=multiplayer_match["match_id"],
+                host_id=new_host_user_id,
+            )
+            assert maybe_match is not None
+            multiplayer_match = maybe_match
+
+        if osu_session["user_id"] in multiplayer_match["referees"]:
+            maybe_match = await matches_repo.partial_update(
+                match_id=multiplayer_match["match_id"],
+                referees=multiplayer_match["referees"] - {osu_session["user_id"]},
+            )
+            assert maybe_match is not None
+            multiplayer_match = maybe_match
+
+        slot_statuses: list[int] = []
+        slot_teams: list[int] = []
+        slot_user_ids: list[int | None] = []
+        slot_mods: list[int] = []
+        for slot_id in range(16):
+            slot = match_slots.get(str(slot_id))
+            if slot is not None:
+                slot_statuses.append(slot["status"].value)
+                slot_teams.append(slot["team"].value)
+                slot_user_ids.append(slot["user_id"])
+                slot_mods.append(slot["mods"].value)
+            else:
+                slot_statuses.append(SlotStatus.OPEN.value)
+                slot_teams.append(MatchTeams.NEUTRAL.value)
+                slot_user_ids.append(None)
+                slot_mods.append(Mods.NOMOD.value)
+
+        await osu_sessions_repo.multicast_osu_data(
+            target_session_ids={s["session_id"] for s in match_slots.values()},
+            data=app.packets.update_match(
+                match_id=multiplayer_match["match_id"],
+                in_progress=multiplayer_match["in_progress"],
+                mods=multiplayer_match["mods"],
+                name=multiplayer_match["name"],
+                passwd=multiplayer_match["password"],
+                map_name=multiplayer_match["map_name"],
+                map_id=multiplayer_match["map_id"],
+                map_md5=multiplayer_match["map_md5"],
+                slot_statuses=slot_statuses,
+                slot_teams=slot_teams,
+                slot_user_ids=slot_user_ids,
+                host_id=multiplayer_match["host_id"],
+                mode=multiplayer_match["mode"],
+                win_condition=multiplayer_match["win_condition"],
+                team_type=multiplayer_match["team_type"],
+                freemods=multiplayer_match["freemods"],
+                slot_mods=slot_mods,
+                seed=multiplayer_match["seed"],
+                include_plaintext_password_in_data=True,
+            ),
+        )
+
+    # 4. update osu session to have no match info
+
+    # 5. enqueue new match state if match still exists

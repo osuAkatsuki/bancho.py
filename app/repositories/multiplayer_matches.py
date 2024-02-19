@@ -1,54 +1,18 @@
 from __future__ import annotations
 
 import json
-import textwrap
 from asyncio import TimerHandle
 from collections import defaultdict
-from enum import IntEnum
-from enum import unique
-from typing import Any
 from typing import TypedDict
-from typing import cast
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.constants.gamemodes import GameMode
-from app.constants.grades import Grade
 from app.constants.mods import Mods
-from app.constants.osu_client_details import ClientDetails
-from app.constants.osu_client_details import OsuStream
-from app.constants.privileges import ClanPrivileges
-from app.constants.privileges import Privileges
-from app.utils import escape_enum
-from app.utils import make_safe_name
-from app.utils import pymysql_encode
-
-
-@unique
-@pymysql_encode(escape_enum)
-class MatchWinConditions(IntEnum):
-    SCORE = 0
-    ACCURACY = 1
-    COMBO = 2
-    SCORE_V2 = 3
-
-
-@unique
-@pymysql_encode(escape_enum)
-class MatchTeamTypes(IntEnum):
-    HEAD_TO_HEAD = 0
-    TAG_CO_OP = 1
-    TEAM_VS = 2
-    TAG_TEAM_VS = 3
-
-
-@unique
-@pymysql_encode(escape_enum)
-class MatchTeams(IntEnum):
-    NEUTRAL = 0
-    BLUE = 1
-    RED = 2
+from app.constants.multiplayer import MatchTeams
+from app.constants.multiplayer import MatchTeamTypes
+from app.constants.multiplayer import MatchWinConditions
 
 
 class StartingTimers(TypedDict):
@@ -57,8 +21,8 @@ class StartingTimers(TypedDict):
     time: float
 
 
-class MutliplayerMatch(TypedDict):
-    id: int
+class MultiplayerMatch(TypedDict):
+    match_id: int
     name: str
     password: str
     has_public_history: bool
@@ -113,43 +77,10 @@ class MultiplayerMatchUpdateFields(TypedDict, total=False):
     referees: set[int] | _UnsetSentinel
 
 
-@unique
-@pymysql_encode(escape_enum)
-class SlotStatus(IntEnum):
-    open = 1
-    locked = 2
-    not_ready = 4
-    ready = 8
-    no_map = 16
-    playing = 32
-    complete = 64
-    quit = 128
-
-    # has_player = not_ready | ready | no_map | playing | complete
-
-
-class MatchSlot(TypedDict):
-    session_id: str | None
-    status: SlotStatus
-    team: MatchTeams
-    mods: Mods
-    loaded: bool
-    skipped: bool
-
-
-class MatchSlotUpdateFields(TypedDict, total=False):
-    session_id: str | _UnsetSentinel
-    status: SlotStatus | _UnsetSentinel
-    team: MatchTeams | _UnsetSentinel
-    mods: Mods | _UnsetSentinel
-    loaded: bool | _UnsetSentinel
-    skipped: bool | _UnsetSentinel
-
-
-def serialize(match: MutliplayerMatch) -> str:
+def serialize(match: MultiplayerMatch) -> str:
     """Serialize a match to a string."""
     serializable = {
-        "id": match["id"],
+        "match_id": match["match_id"],
         "name": match["name"],
         "password": match["password"],
         "has_public_history": match["has_public_history"],
@@ -178,11 +109,11 @@ def serialize(match: MutliplayerMatch) -> str:
     return json.dumps(serializable)
 
 
-def deserialize(serialized: str) -> MutliplayerMatch:
+def deserialize(serialized: str) -> MultiplayerMatch:
     """Deserialize a match from a string."""
     deserialized = json.loads(serialized)
-    match: MutliplayerMatch = {
-        "id": deserialized["id"],
+    match: MultiplayerMatch = {
+        "match_id": deserialized["match_id"],
         "name": deserialized["name"],
         "password": deserialized["password"],
         "has_public_history": deserialized["has_public_history"],
@@ -211,8 +142,12 @@ def deserialize(serialized: str) -> MutliplayerMatch:
     return match
 
 
+def make_redis_key(match_id: int) -> str:
+    return f"bancho:multiplayer_matches:{match_id}"
+
+
 async def create(
-    id: int,
+    match_id: int,
     name: str,
     password: str,
     has_public_history: bool,
@@ -237,10 +172,10 @@ async def create(
     use_pp_scoring: bool,
     tourney_client_user_ids: set[int],
     referees: set[int],
-) -> MutliplayerMatch:
+) -> MultiplayerMatch:
     """Create a new match in redis."""
-    match: MutliplayerMatch = {
-        "id": id,
+    match: MultiplayerMatch = {
+        "match_id": match_id,
         "name": name,
         "password": password,
         "has_public_history": has_public_history,
@@ -267,28 +202,20 @@ async def create(
         "referees": referees,
     }
     await app.state.services.redis.set(
-        name=f"bancho:multiplayer_matches:{id}",
+        name=f"bancho:multiplayer_matches:{match_id}",
         value=serialize(match),
     )
     return match
 
 
-async def fetch_one(match_id: int) -> MutliplayerMatch | None:
+async def fetch_one(match_id: int) -> MultiplayerMatch | None:
     """Fetch a match from redis."""
     serialized = await app.state.services.redis.get(
-        name=f"bancho:multiplayer_matches:{match_id}",
+        name=make_redis_key(match_id),
     )
     if serialized is None:
         return None
     return deserialize(serialized)
-
-
-async def reserve_new_match_id() -> int:
-    """Reserve a new match ID."""
-    new_match_id = await app.state.services.redis.incr(
-        name="bancho:multiplayer_match_ids",
-    )
-    return new_match_id
 
 
 async def partial_update(
@@ -316,9 +243,98 @@ async def partial_update(
     use_pp_scoring: bool | _UnsetSentinel = UNSET,
     tourney_client_user_ids: set[int] | _UnsetSentinel = UNSET,
     referees: set[int] | _UnsetSentinel = UNSET,
-) -> MutliplayerMatch | None:
+) -> MultiplayerMatch | None:
     """Update a match in redis."""
-    pass
+    raw_multiplayer_match = await app.state.services.redis.get(
+        name=make_redis_key(match_id),
+    )
+    if raw_multiplayer_match is None:
+        return None
+
+    multiplayer_match = deserialize(raw_multiplayer_match)
+
+    update_fields: MultiplayerMatchUpdateFields = {}
+
+    if not isinstance(name, _UnsetSentinel):
+        update_fields["name"] = name
+    if not isinstance(password, _UnsetSentinel):
+        update_fields["password"] = password
+    if not isinstance(map_name, _UnsetSentinel):
+        update_fields["map_name"] = map_name
+    if not isinstance(map_id, _UnsetSentinel):
+        update_fields["map_id"] = map_id
+    if not isinstance(map_md5, _UnsetSentinel):
+        update_fields["map_md5"] = map_md5
+    if not isinstance(host_id, _UnsetSentinel):
+        update_fields["host_id"] = host_id
+    if not isinstance(mode, _UnsetSentinel):
+        update_fields["mode"] = mode
+    if not isinstance(mods, _UnsetSentinel):
+        update_fields["mods"] = mods
+    if not isinstance(win_condition, _UnsetSentinel):
+        update_fields["win_condition"] = win_condition
+    if not isinstance(team_type, _UnsetSentinel):
+        update_fields["team_type"] = team_type
+    if not isinstance(freemods, _UnsetSentinel):
+        update_fields["freemods"] = freemods
+    if not isinstance(seed, _UnsetSentinel):
+        update_fields["seed"] = seed
+    if not isinstance(in_progress, _UnsetSentinel):
+        update_fields["in_progress"] = in_progress
+    if not isinstance(starting, _UnsetSentinel):
+        update_fields["starting"] = starting
+    if not isinstance(tourney_pool_id, _UnsetSentinel):
+        update_fields["tourney_pool_id"] = tourney_pool_id
+    if not isinstance(is_scrimming, _UnsetSentinel):
+        update_fields["is_scrimming"] = is_scrimming
+    if not isinstance(team_match_points, _UnsetSentinel):
+        update_fields["team_match_points"] = team_match_points
+    if not isinstance(ffa_match_points, _UnsetSentinel):
+        update_fields["ffa_match_points"] = ffa_match_points
+    if not isinstance(bans, _UnsetSentinel):
+        update_fields["bans"] = bans
+    if not isinstance(winning_pts, _UnsetSentinel):
+        update_fields["winning_pts"] = winning_pts
+    if not isinstance(use_pp_scoring, _UnsetSentinel):
+        update_fields["use_pp_scoring"] = use_pp_scoring
+    if not isinstance(tourney_client_user_ids, _UnsetSentinel):
+        update_fields["tourney_client_user_ids"] = tourney_client_user_ids
+    if not isinstance(referees, _UnsetSentinel):
+        update_fields["referees"] = referees
+
+    updated_multiplayer_match: MultiplayerMatch = {**multiplayer_match, **update_fields}
+
+    await app.state.services.redis.set(
+        name=make_redis_key(match_id),
+        value=serialize(updated_multiplayer_match),
+    )
+    return updated_multiplayer_match
 
 
-# TODO: slots should prolly live in another file
+async def delete(match_id: int) -> MultiplayerMatch | None:
+    """Delete a match from redis."""
+    serialized = await app.state.services.redis.get(
+        name=make_redis_key(match_id),
+    )
+    if serialized is None:
+        return None
+
+    await app.state.services.redis.delete(
+        make_redis_key(match_id),
+    )
+    return deserialize(serialized)
+
+
+# match ids
+
+
+def make_match_ids_redis_key() -> str:
+    return "bancho:multiplayer_match_ids"
+
+
+async def reserve_new_match_id() -> int:
+    """Reserve a new match ID."""
+    new_match_id = await app.state.services.redis.incr(
+        name=make_match_ids_redis_key(),
+    )
+    return new_match_id

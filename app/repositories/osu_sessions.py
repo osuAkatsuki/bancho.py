@@ -437,14 +437,10 @@ async def partial_update(
     raw_osu_session = await app.state.services.redis.get(
         name=make_redis_key(session_id),
     )
-
     if raw_osu_session is None:
         return None
 
     osu_session = deserialize(raw_osu_session)
-
-    if osu_session is None:
-        return None
 
     update_fields: OsuSessionUpdateFields = {}
 
