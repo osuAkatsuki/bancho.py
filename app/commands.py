@@ -995,14 +995,9 @@ async def switchserv(ctx: Context) -> str | None:
     return "Have a nice journey.."
 
 
-@command(Privileges.ADMINISTRATOR, aliases=["restart"])
+@command(Privileges.ADMINISTRATOR)
 async def shutdown(ctx: Context) -> str | None | NoReturn:
     """Gracefully shutdown the server."""
-    if ctx.trigger == "restart":
-        _signal = signal.SIGUSR1
-    else:
-        _signal = signal.SIGTERM
-
     if ctx.args:  # shutdown after a delay
         delay = timeparse(ctx.args[0])
         if not delay:
@@ -1020,10 +1015,10 @@ async def shutdown(ctx: Context) -> str | None | NoReturn:
 
             app.state.sessions.players.enqueue(app.packets.notification(alert_msg))
 
-        app.state.loop.call_later(delay, os.kill, os.getpid(), _signal)
+        app.state.loop.call_later(delay, os.kill, os.getpid(), signal.SIGTERM)
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
-        os.kill(os.getpid(), _signal)
+        os.kill(os.getpid(), signal.SIGTERM)
         return "Process killed"
 
 
