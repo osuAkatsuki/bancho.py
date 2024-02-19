@@ -22,7 +22,6 @@ from sqlalchemy import String
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 
