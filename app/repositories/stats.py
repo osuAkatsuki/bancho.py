@@ -115,22 +115,23 @@ async def create(player_id: int, mode: int) -> Stat:
 
 async def create_all_modes(player_id: int) -> list[Stat]:
     """Create new player stats entries for each game mode in the database."""
-    for mode in (
-        0,  # vn!std
-        1,  # vn!taiko
-        2,  # vn!catch
-        3,  # vn!mania
-        4,  # rx!std
-        5,  # rx!taiko
-        6,  # rx!catch
-        8,  # ap!std
-    ):
-        insert_stmt = insert(StatsTable).values(
-            id=player_id,
-            mode=mode,
-        )
-        compiled = insert_stmt.compile(dialect=DIALECT)
-        await app.state.services.database.execute(str(compiled), compiled.params)
+    insert_stmt = insert(StatsTable).values(
+        [
+            {"id": player_id, "mode": mode}
+            for mode in (
+                0,  # vn!std
+                1,  # vn!taiko
+                2,  # vn!catch
+                3,  # vn!mania
+                4,  # rx!std
+                5,  # rx!taiko
+                6,  # rx!catch
+                8,  # ap!std
+            )
+        ],
+    )
+    compiled = insert_stmt.compile(dialect=DIALECT)
+    await app.state.services.database.execute(str(compiled), compiled.params)
 
     select_stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
     compiled = select_stmt.compile(dialect=DIALECT)
