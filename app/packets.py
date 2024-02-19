@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 import struct
 from abc import ABC
 from abc import abstractmethod
@@ -18,11 +17,9 @@ from typing import Any
 from typing import NamedTuple
 from typing import cast
 
-# from app.objects.beatmap import BeatmapInfo
-
 if TYPE_CHECKING:
-    from app.objects.match import Match
     from app.objects.player import Player
+    from app.repositories.osu_sessions import OsuSession
 
 # tuple of some of struct's format specifiers
 # for clean access within packet pack/unpack.
@@ -255,7 +252,7 @@ class MultiplayerMatch:
     powerplay: int = 0  # i8
     mods: int = 0  # i32
     name: str = ""
-    passwd: str = ""
+    password: str = ""
 
     map_name: str = ""
     map_id: int = 0  # i32
@@ -281,7 +278,7 @@ class BasePacket(ABC):
     def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None: ...
+    async def handle(self, osu_session: OsuSession) -> None: ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]
@@ -486,7 +483,7 @@ class BanchoPacketReader:
             powerplay=self.read_i8(),
             mods=self.read_i32(),
             name=self.read_string(),
-            passwd=self.read_string(),
+            password=self.read_string(),
             map_name=self.read_string(),
             map_id=self.read_i32(),
             map_md5=self.read_string(),
@@ -602,58 +599,64 @@ def write_channel(name: str, topic: str, count: int) -> bytearray:
     return ret
 
 
-# XXX: deprecated
-# def write_mapInfoReply(maps: Sequence[BeatmapInfo]) -> bytearray:
-#    """ Write `maps` into bytes (osu! map info). """
-#    ret = bytearray(len(maps).to_bytes(4, 'little'))
-#
-#    # Write files
-#    for map in maps:
-#        ret += struct.pack('<hiiiBbbbb',
-#            map.id, map.map_id, map.set_id, map.thread_id, map.status,
-#            map.osu_rank, map.fruits_rank, map.taiko_rank, map.mania_rank
-#        )
-#        ret += write_string(map.map_md5)
-#
-#    return ret
+def write_match(
+    match_id: int,
+    in_progress: bool,
+    mods: int,
+    name: str,
+    passwd: str,
+    map_name: str,
+    map_id: int,
+    map_md5: str,
+    slot_statuses: list[int],
+    slot_teams: list[int],
+    slot_user_ids: list[int | None],
+    host_id: int,
+    mode: int,
+    win_condition: int,
+    team_type: int,
+    freemods: bool,
+    slot_mods: list[int],
+    seed: int,
+    *,
+    include_plaintext_password_in_data: bool = True,
+) -> bytearray:
+    """\
+    Write params into bytes (osu! match).
 
+    This is a helper function for `write_match`.
+    """
+    ret = bytearray(struct.pack("<HbbI", match_id, in_progress, 0, mods))
+    ret += write_string(name)
 
-def write_match(m: Match, send_pw: bool = True) -> bytearray:
-    """Write `m` into bytes (osu! match)."""
-    # 0 is for match type
-    ret = bytearray(struct.pack("<HbbI", m.id, m.in_progress, 0, m.mods))
-    ret += write_string(m.name)
-
-    # osu expects \x0b\x00 if there's a password, but it's
-    # not being sent, and \x00 if there's no password.
-    if m.passwd:
-        if send_pw:
-            ret += write_string(m.passwd)
+    if passwd:
+        if include_plaintext_password_in_data:
+            ret += write_string(passwd)
         else:
             ret += b"\x0b\x00"
     else:
         ret += b"\x00"
 
-    ret += write_string(m.map_name)
-    ret += m.map_id.to_bytes(4, "little", signed=True)
-    ret += write_string(m.map_md5)
+    ret += write_string(map_name)
+    ret += map_id.to_bytes(4, "little", signed=True)
+    ret += write_string(map_md5)
 
-    ret.extend([s.status for s in m.slots])
-    ret.extend([s.team for s in m.slots])
+    ret.extend(slot_statuses)
+    ret.extend(slot_teams)
 
-    for s in m.slots:
-        if s.status & 0b01111100 != 0:  # SlotStatus.has_player
-            assert s.player is not None
-            ret += s.player.id.to_bytes(4, "little")
+    for slot_status, slot_user_id in zip(slot_statuses, slot_user_ids):
+        if slot_status & 0b01111100 != 0:
+            assert slot_user_id is not None
+            ret += slot_user_id.to_bytes(4, "little")
 
-    ret += m.host.id.to_bytes(4, "little")
-    ret.extend((m.mode, m.win_condition, m.team_type, m.freemods))
+    ret += host_id.to_bytes(4, "little")
+    ret.extend((mode, win_condition, team_type, freemods))
 
-    if m.freemods:
-        for s in m.slots:
-            ret += s.mods.to_bytes(4, "little")
+    if freemods:
+        for mods in slot_mods:
+            ret += mods.to_bytes(4, "little")
 
-    ret += m.seed.to_bytes(4, "little")
+    ret += seed.to_bytes(4, "little")
     return ret
 
 
@@ -705,7 +708,6 @@ _expand_types: dict[osuTypes, Callable[..., bytearray]] = {
     # multiarg, tuple expansion
     osuTypes.message: write_message,
     osuTypes.channel: write_channel,
-    osuTypes.match: write_match,
 }
 
 
@@ -732,7 +734,7 @@ def write(packid: int, *args: tuple[Any, osuTypes]) -> bytes:
 
 
 class LoginFailureReason(IntEnum):
-    AUTHENTICATION_FAILED = -1
+    AUTHORIZATION_FAILED = -1
     OLD_CLIENT = -2
     BANNED = -3
     # BANNED = -4
@@ -778,48 +780,8 @@ def change_username(old: str, new: str) -> bytes:
     )
 
 
-BOT_STATUSES = (
-    (3, "the source code.."),  # editing
-    (6, "geohot livestreams.."),  # watching
-    (6, "asottile tutorials.."),  # watching
-    (6, "over the server.."),  # watching
-    (8, "out new features.."),  # testing
-    (9, "a pull request.."),  # submitting
-)
-
-# since the bot is always online and is
-# also automatically added to all player's
-# friends list, their stats are requested
-# *very* frequently, and should be cached.
-# NOTE: this is cleared once in a while by
-# `bg_loops.reroll_bot_status` to keep fresh.
-
-
-@cache
-def bot_stats(player: Player) -> bytes:
-    # pick at random from list of potential statuses.
-    status_id, status_txt = random.choice(BOT_STATUSES)
-
-    return write(
-        ServerPackets.USER_STATS,
-        (player.id, osuTypes.i32),  # id
-        (status_id, osuTypes.u8),  # action
-        (status_txt, osuTypes.string),  # info_text
-        ("", osuTypes.string),  # map_md5
-        (0, osuTypes.i32),  # mods
-        (0, osuTypes.u8),  # mode
-        (0, osuTypes.i32),  # map_id
-        (0, osuTypes.i64),  # rscore
-        (0.0, osuTypes.f32),  # acc
-        (0, osuTypes.i32),  # plays
-        (0, osuTypes.i64),  # tscore
-        (0, osuTypes.i32),  # rank
-        (0, osuTypes.i16),  # pp
-    )
-
-
 # packet id: 11
-def _user_stats(
+def user_stats(
     user_id: int,
     action: int,
     info_text: str,
@@ -855,35 +817,6 @@ def _user_stats(
         (total_score, osuTypes.i64),
         (global_rank, osuTypes.i32),
         (pp, osuTypes.i16),
-    )
-
-
-def user_stats(player: Player) -> bytes:
-    gm_stats = player.gm_stats
-    if gm_stats.pp > 0x7FFF:
-        # HACK: if pp is over osu!'s ingame cap,
-        # we can instead display it as ranked score
-        rscore = gm_stats.pp
-        pp = 0
-    else:
-        rscore = gm_stats.rscore
-        pp = gm_stats.pp
-
-    return write(
-        ServerPackets.USER_STATS,
-        (player.id, osuTypes.i32),
-        (player.status.action, osuTypes.u8),
-        (player.status.info_text, osuTypes.string),
-        (player.status.map_md5, osuTypes.string),
-        (player.status.mods, osuTypes.i32),
-        (player.status.mode.as_vanilla, osuTypes.u8),
-        (player.status.map_id, osuTypes.i32),
-        (rscore, osuTypes.i64),
-        (gm_stats.acc / 100.0, osuTypes.f32),
-        (gm_stats.plays, osuTypes.i32),
-        (gm_stats.tscore, osuTypes.i64),
-        (gm_stats.rank, osuTypes.i32),
-        (pp, osuTypes.i16),  # why not u16 peppy :(
     )
 
 
@@ -940,13 +873,107 @@ def notification(msg: str) -> bytes:
 
 
 # packet id: 26
-def update_match(m: Match, send_pw: bool = True) -> bytes:
-    return write(ServerPackets.UPDATE_MATCH, ((m, send_pw), osuTypes.match))
+def update_match(
+    match_id: int,
+    in_progress: bool,
+    mods: int,
+    name: str,
+    passwd: str,
+    map_name: str,
+    map_id: int,
+    map_md5: str,
+    slot_statuses: list[int],
+    slot_teams: list[int],
+    slot_user_ids: list[int | None],
+    host_id: int,
+    mode: int,
+    win_condition: int,
+    team_type: int,
+    freemods: bool,
+    slot_mods: list[int],
+    seed: int,
+    *,
+    include_plaintext_password_in_data: bool,
+) -> bytes:
+    return write(
+        ServerPackets.UPDATE_MATCH,
+        (
+            (
+                match_id,
+                in_progress,
+                mods,
+                name,
+                passwd,
+                map_name,
+                map_id,
+                map_md5,
+                slot_statuses,
+                slot_teams,
+                slot_user_ids,
+                host_id,
+                mode,
+                win_condition,
+                team_type,
+                freemods,
+                slot_mods,
+                seed,
+                include_plaintext_password_in_data,
+            ),
+            osuTypes.match,
+        ),
+    )
 
 
 # packet id: 27
-def new_match(m: Match) -> bytes:
-    return write(ServerPackets.NEW_MATCH, ((m, True), osuTypes.match))
+def new_match(
+    match_id: int,
+    in_progress: bool,
+    mods: int,
+    name: str,
+    passwd: str,
+    map_name: str,
+    map_id: int,
+    map_md5: str,
+    slot_statuses: list[int],
+    slot_teams: list[int],
+    slot_user_ids: list[int | None],
+    host_id: int,
+    mode: int,
+    win_condition: int,
+    team_type: int,
+    freemods: bool,
+    slot_mods: list[int],
+    seed: int,
+    *,
+    include_plaintext_password_in_data: bool,
+) -> bytes:
+    return write(
+        ServerPackets.NEW_MATCH,
+        (
+            (
+                match_id,
+                in_progress,
+                mods,
+                name,
+                passwd,
+                map_name,
+                map_id,
+                map_md5,
+                slot_statuses,
+                slot_teams,
+                slot_user_ids,
+                host_id,
+                mode,
+                win_condition,
+                team_type,
+                freemods,
+                slot_mods,
+                seed,
+                include_plaintext_password_in_data,
+            ),
+            osuTypes.match,
+        ),
+    )
 
 
 # packet id: 28
@@ -962,8 +989,55 @@ def toggle_block_non_friend_dm() -> bytes:
 
 
 # packet id: 36
-def match_join_success(m: Match) -> bytes:
-    return write(ServerPackets.MATCH_JOIN_SUCCESS, ((m, True), osuTypes.match))
+def match_join_success(
+    match_id: int,
+    in_progress: bool,
+    mods: int,
+    name: str,
+    passwd: str,
+    map_name: str,
+    map_id: int,
+    map_md5: str,
+    slot_statuses: list[int],
+    slot_teams: list[int],
+    slot_user_ids: list[int | None],
+    host_id: int,
+    mode: int,
+    win_condition: int,
+    team_type: int,
+    freemods: bool,
+    slot_mods: list[int],
+    seed: int,
+    *,
+    include_plaintext_password_in_data: bool,
+) -> bytes:
+    return write(
+        ServerPackets.MATCH_JOIN_SUCCESS,
+        (
+            (
+                match_id,
+                in_progress,
+                mods,
+                name,
+                passwd,
+                map_name,
+                map_id,
+                map_md5,
+                slot_statuses,
+                slot_teams,
+                slot_user_ids,
+                host_id,
+                mode,
+                win_condition,
+                team_type,
+                freemods,
+                slot_mods,
+                seed,
+                include_plaintext_password_in_data,
+            ),
+            osuTypes.match,
+        ),
+    )
 
 
 # packet id: 37
@@ -985,8 +1059,55 @@ def fellow_spectator_left(user_id: int) -> bytes:
 
 
 # packet id: 46
-def match_start(m: Match) -> bytes:
-    return write(ServerPackets.MATCH_START, ((m, True), osuTypes.match))
+def match_start(
+    match_id: int,
+    in_progress: bool,
+    mods: int,
+    name: str,
+    passwd: str,
+    map_name: str,
+    map_id: int,
+    map_md5: str,
+    slot_statuses: list[int],
+    slot_teams: list[int],
+    slot_user_ids: list[int | None],
+    host_id: int,
+    mode: int,
+    win_condition: int,
+    team_type: int,
+    freemods: bool,
+    slot_mods: list[int],
+    seed: int,
+    *,
+    include_plaintext_password_in_data: bool,
+) -> bytes:
+    return write(
+        ServerPackets.MATCH_START,
+        (
+            (
+                match_id,
+                in_progress,
+                mods,
+                name,
+                passwd,
+                map_name,
+                map_id,
+                map_md5,
+                slot_statuses,
+                slot_teams,
+                slot_user_ids,
+                host_id,
+                mode,
+                win_condition,
+                team_type,
+                freemods,
+                slot_mods,
+                seed,
+                include_plaintext_password_in_data,
+            ),
+            osuTypes.match,
+        ),
+    )
 
 
 # packet id: 48
@@ -1056,6 +1177,7 @@ def channel_auto_join(name: str, topic: str, p_count: int) -> bytes:
 
 
 # packet id: 69
+# NOTE: deprecated
 # def beatmap_info_reply(maps: Sequence[BeatmapInfo]) -> bytes:
 #    return write(
 #        Packets.CHO_BEATMAP_INFO_REPLY,
@@ -1070,8 +1192,8 @@ def bancho_privileges(priv: int) -> bytes:
 
 
 # packet id: 72
-def friends_list(friends: Collection[int]) -> bytes:
-    return write(ServerPackets.FRIENDS_LIST, (friends, osuTypes.i32_list))
+def friends_list(friend_ids: Collection[int]) -> bytes:
+    return write(ServerPackets.FRIENDS_LIST, (friend_ids, osuTypes.i32_list))
 
 
 # packet id: 75
@@ -1109,35 +1231,16 @@ def match_player_skipped(user_id: int) -> bytes:
     return write(ServerPackets.MATCH_PLAYER_SKIPPED, (user_id, osuTypes.i32))
 
 
-# since the bot is always online and is
-# also automatically added to all player's
-# friends list, their presence is requested
-# *very* frequently; only build it once.
-@cache
-def bot_presence(player: Player) -> bytes:
-    return write(
-        ServerPackets.USER_PRESENCE,
-        (player.id, osuTypes.i32),
-        (player.name, osuTypes.string),
-        (-5 + 24, osuTypes.u8),
-        (245, osuTypes.u8),  # satellite provider
-        (31, osuTypes.u8),
-        (1234.0, osuTypes.f32),  # send coordinates waaay
-        (4321.0, osuTypes.f32),  # off the map for the bot
-        (0, osuTypes.i32),
-    )
-
-
 # packet id: 83
-def _user_presence(
+def user_presence(
     user_id: int,
     name: str,
     utc_offset: int,
     country_code: int,
     bancho_privileges: int,
     mode: int,
-    latitude: int,
-    longitude: int,
+    latitude: float,
+    longitude: float,
     global_rank: int,
 ) -> bytes:
     return write(
@@ -1150,20 +1253,6 @@ def _user_presence(
         (longitude, osuTypes.f32),
         (latitude, osuTypes.f32),
         (global_rank, osuTypes.i32),
-    )
-
-
-def user_presence(player: Player) -> bytes:
-    return write(
-        ServerPackets.USER_PRESENCE,
-        (player.id, osuTypes.i32),
-        (player.name, osuTypes.string),
-        (player.utc_offset + 24, osuTypes.u8),
-        (player.geoloc["country"]["numeric"], osuTypes.u8),
-        (player.bancho_priv | (player.status.mode.as_vanilla << 5), osuTypes.u8),
-        (player.geoloc["longitude"], osuTypes.f32),
-        (player.geoloc["latitude"], osuTypes.f32),
-        (player.gm_stats.rank, osuTypes.i32),
     )
 
 

@@ -4,9 +4,7 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import date
 from enum import IntEnum
-from enum import StrEnum
 from enum import unique
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -18,9 +16,9 @@ import databases.core
 import app.packets
 import app.settings
 import app.state
-from app._typing import IPAddress
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.osu_client_details import ClientDetails
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.discord import Webhook
@@ -114,61 +112,6 @@ class LastNp(TypedDict):
     mode_vn: int
     mods: Mods | None
     timeout: float
-
-
-class OsuStream(StrEnum):
-    STABLE = "stable"
-    BETA = "beta"
-    CUTTINGEDGE = "cuttingedge"
-    TOURNEY = "tourney"
-    DEV = "dev"
-
-
-class OsuVersion:
-    # b20200201.2cuttingedge
-    # date = 2020/02/01
-    # revision = 2
-    # stream = cuttingedge
-    def __init__(
-        self,
-        date: date,
-        revision: int | None,  # TODO: should this be optional?
-        stream: OsuStream,
-    ) -> None:
-        self.date = date
-        self.revision = revision
-        self.stream = stream
-
-
-class ClientDetails:
-    def __init__(
-        self,
-        osu_version: OsuVersion,
-        osu_path_md5: str,
-        adapters_md5: str,
-        uninstall_md5: str,
-        disk_signature_md5: str,
-        adapters: list[str],
-        ip: IPAddress,
-    ) -> None:
-        self.osu_version = osu_version
-        self.osu_path_md5 = osu_path_md5
-        self.adapters_md5 = adapters_md5
-        self.uninstall_md5 = uninstall_md5
-        self.disk_signature_md5 = disk_signature_md5
-
-        self.adapters = adapters
-        self.ip = ip
-
-    @cached_property
-    def client_hash(self) -> str:
-        return (
-            # NOTE the extra '.' and ':' appended to ends
-            f"{self.osu_path_md5}:{'.'.join(self.adapters)}."
-            f":{self.adapters_md5}:{self.uninstall_md5}:{self.disk_signature_md5}:"
-        )
-
-    # TODO: __str__ to pack like osu! hashes?
 
 
 class Player:
@@ -275,7 +218,6 @@ class Player:
         self.spectators: list[Player] = []
         self.spectating: Player | None = None
         self.match: Match | None = None
-        self.stealth = False
 
         self.pres_filter = PresenceFilter.Nil
 
@@ -412,7 +354,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -424,7 +366,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -441,7 +383,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -528,7 +470,7 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -556,7 +498,7 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -604,8 +546,8 @@ class Player:
             # match is being created
             slot_id = 0
 
-        if not self.join_channel(match.chat):
-            log(f"{self} failed to join {match.chat}.", Ansi.LYELLOW)
+        if not self.join_channel(match.chat_channel_id):
+            log(f"{self} failed to join {match.chat_channel_id}.", Ansi.LYELLOW)
             return False
 
         lobby = app.state.sessions.channels.get_by_name("#lobby")
@@ -646,7 +588,7 @@ class Player:
 
         slot.reset(new_status=new_status)
 
-        self.leave_channel(self.match.chat)
+        self.leave_channel(self.match.chat_channel_id)
 
         if all(s.empty() for s in self.match.slots):
             # multi is now empty, chat has been removed.
@@ -678,7 +620,9 @@ class Player:
 
             if self in self.match._refs:
                 self.match._refs.remove(self)
-                self.match.chat.send_bot(f"{self.name} removed from match referees.")
+                self.match.chat_channel_id.send_bot(
+                    f"{self.name} removed from match referees.",
+                )
 
             # notify others of our deprature
             self.match.enqueue_state()
@@ -778,18 +722,12 @@ class Player:
             log(f"{self} failed to join {spec_chan}?", Ansi.LYELLOW)
             return
 
-        if not player.stealth:
-            player_joined = app.packets.fellow_spectator_joined(player.id)
-            for spectator in self.spectators:
-                spectator.enqueue(player_joined)
-                player.enqueue(app.packets.fellow_spectator_joined(spectator.id))
+        player_joined = app.packets.fellow_spectator_joined(player.id)
+        for spectator in self.spectators:
+            spectator.enqueue(player_joined)
+            player.enqueue(app.packets.fellow_spectator_joined(spectator.id))
 
-            self.enqueue(app.packets.spectator_joined(player.id))
-        else:
-            # player is admin in stealth, only give
-            # other players data to us, not vice-versa.
-            for spectator in self.spectators:
-                player.enqueue(app.packets.fellow_spectator_joined(spectator.id))
+        self.enqueue(app.packets.spectator_joined(player.id))
 
         self.spectators.append(player)
         player.spectating = self
@@ -974,7 +912,7 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = users_repo.update(
+        task = users_repo.partial_update(
             id=self.id,
             latest_activity=int(time.time()),
         )

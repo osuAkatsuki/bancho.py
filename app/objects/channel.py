@@ -75,17 +75,23 @@ class Channel:
 
         return priv & self.write_priv != 0
 
-    def send(self, msg: str, sender: Player, to_self: bool = False) -> None:
+    def send(
+        self,
+        msg: str,
+        sender_name: str,
+        sender_id: int,
+        to_self: bool = False,
+    ) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""
         data = app.packets.send_message(
-            sender=sender.name,
+            sender=sender_name,
             msg=msg,
             recipient=self.name,
-            sender_id=sender.id,
+            sender_id=sender_id,
         )
 
         for player in self.players:
-            if sender.id not in player.blocks and (to_self or player.id != sender.id):
+            if sender_id not in player.blocks and (to_self or player.id != sender_id):
                 player.enqueue(data)
 
     def send_bot(self, msg: str) -> None:

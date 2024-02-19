@@ -409,3 +409,6 @@ alter table maps drop primary key;
 alter table maps add primary key (id);
 alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
 unlock tables;
+
+# v5.1.0
+alter table channels add instance tinyint(1) default 0 not null;

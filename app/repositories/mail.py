@@ -64,7 +64,7 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
 
 async def fetch_all_mail_to_user(
     user_id: int,
-    read: bool | None = None,
+    unread_only: bool | None = None,
 ) -> list[MailWithUsernames]:
     """Fetch all of mail to a given target from the database."""
     query = f"""\
@@ -77,7 +77,7 @@ async def fetch_all_mail_to_user(
     """
     params = {
         "to_id": user_id,
-        "read": read,
+        "read": False if unread_only else None,
     }
 
     mail = await app.state.services.database.fetch_all(query, params)

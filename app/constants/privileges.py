@@ -3,6 +3,7 @@ from __future__ import annotations
 from enum import IntEnum
 from enum import IntFlag
 from enum import unique
+from functools import cache
 
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -59,3 +60,20 @@ class ClanPrivileges(IntEnum):
     Member = 1
     Officer = 2
     Owner = 3
+
+
+@cache
+def get_client_privileges(server_privileges: Privileges) -> ClientPrivileges:
+    """The player's privileges according to the client."""
+    ret = ClientPrivileges(0)
+    if server_privileges & Privileges.UNRESTRICTED:
+        ret |= ClientPrivileges.PLAYER
+    if server_privileges & Privileges.DONATOR:
+        ret |= ClientPrivileges.SUPPORTER
+    if server_privileges & Privileges.MODERATOR:
+        ret |= ClientPrivileges.MODERATOR
+    if server_privileges & Privileges.ADMINISTRATOR:
+        ret |= ClientPrivileges.DEVELOPER
+    if server_privileges & Privileges.DEVELOPER:
+        ret |= ClientPrivileges.OWNER
+    return ret

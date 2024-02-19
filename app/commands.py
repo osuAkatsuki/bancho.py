@@ -278,7 +278,7 @@ async def changename(ctx: Context) -> str | None:
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await users_repo.update(ctx.player.id, name=name)
+    await users_repo.partial_update(ctx.player.id, name=name)
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -564,7 +564,7 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await users_repo.update(ctx.player.id, api_key=ctx.player.api_key)
+    await users_repo.partial_update(ctx.player.id, api_key=ctx.player.api_key)
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
@@ -1034,16 +1034,6 @@ async def shutdown(ctx: Context) -> str | None | NoReturn:
 
 
 @command(Privileges.DEVELOPER)
-async def stealth(ctx: Context) -> str | None:
-    """Toggle the developer's stealth, allowing them to be hidden."""
-    # NOTE: this command is a large work in progress and currently
-    # half works; eventually it will be moved to the Admin level.
-    ctx.player.stealth = not ctx.player.stealth
-
-    return f'Stealth {"enabled" if ctx.player.stealth else "disabled"}.'
-
-
-@command(Privileges.DEVELOPER)
 async def recalc(ctx: Context) -> str | None:
     """Recalculate pp for a given map, or all maps."""
     return (
@@ -1349,7 +1339,7 @@ def ensure_match(
             # player not in a match
             return None
 
-        if ctx.recipient is not match.chat:
+        if ctx.recipient is not match.chat_channel_id:
             # message not in match channel
             return None
 
@@ -1423,15 +1413,15 @@ async def mp_start(ctx: Context, match: Match) -> str | None:
                 # make sure player didn't leave the
                 # match since queueing this start lol...
                 if ctx.player not in {slot.player for slot in match.slots}:
-                    match.chat.send_bot("Player left match? (cancelled)")
+                    match.chat_channel_id.send_bot("Player left match? (cancelled)")
                     return
 
                 match.start()
-                match.chat.send_bot("Starting match.")
+                match.chat_channel_id.send_bot("Starting match.")
 
             def _alert_start(t: int) -> None:
                 """Alert the match of the impending start."""
-                match.chat.send_bot(f"Match starting in {t} seconds.")
+                match.chat_channel_id.send_bot(f"Match starting in {t} seconds.")
 
             # add timers to our match object,
             # so we can cancel them if needed.
@@ -2322,7 +2312,7 @@ async def clan_create(ctx: Context) -> str | None:
     ctx.player.clan_id = new_clan["id"]
     ctx.player.clan_priv = ClanPrivileges.Owner
 
-    await users_repo.update(
+    await users_repo.partial_update(
         ctx.player.id,
         clan_id=new_clan["id"],
         clan_priv=ClanPrivileges.Owner,
@@ -2366,7 +2356,7 @@ async def clan_disband(ctx: Context) -> str | None:
         for clan_member in await users_repo.fetch_many(clan_id=clan["id"])
     ]
     for member_id in clan_member_ids:
-        await users_repo.update(member_id, clan_id=0, clan_priv=0)
+        await users_repo.partial_update(member_id, clan_id=0, clan_priv=0)
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
@@ -2419,7 +2409,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     clan_members = await users_repo.fetch_many(clan_id=clan["id"])
 
-    await users_repo.update(ctx.player.id, clan_id=0, clan_priv=0)
+    await users_repo.partial_update(ctx.player.id, clan_id=0, clan_priv=0)
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
 

@@ -18,11 +18,12 @@ from app._typing import _UnsetSentinel
 # | read_priv  | int          | NO   |     | 1       |                |
 # | write_priv | int          | NO   |     | 2       |                |
 # | auto_join  | tinyint(1)   | NO   |     | 0       |                |
+# | instance   | tinyint(1)   | NO   |     | 0       |                |
 # +------------+--------------+------+-----+---------+----------------+
 
 READ_PARAMS = textwrap.dedent(
     """\
-        id, name, topic, read_priv, write_priv, auto_join
+        id, name, topic, read_priv, write_priv, auto_join, instance
     """,
 )
 
@@ -34,6 +35,7 @@ class Channel(TypedDict):
     read_priv: int
     write_priv: int
     auto_join: bool
+    instance: bool
 
 
 class ChannelUpdateFields(TypedDict, total=False):
@@ -49,12 +51,14 @@ async def create(
     read_priv: int,
     write_priv: int,
     auto_join: bool,
+    instance: bool,
 ) -> Channel:
     """Create a new channel."""
     query = """\
-        INSERT INTO channels (name, topic, read_priv, write_priv, auto_join)
-             VALUES (:name, :topic, :read_priv, :write_priv, :auto_join)
-
+        INSERT INTO channels (name, topic, read_priv, write_priv, auto_join,
+                              instance)
+             VALUES (:name, :topic, :read_priv, :write_priv, :auto_join,
+                     :instance)
     """
     params: dict[str, Any] = {
         "name": name,
@@ -62,6 +66,7 @@ async def create(
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
+        "instance": instance,
     }
     rec_id = await app.state.services.database.execute(query, params)
 
@@ -106,21 +111,21 @@ async def fetch_count(
     read_priv: int | None = None,
     write_priv: int | None = None,
     auto_join: bool | None = None,
+    instance: bool | None = None,
 ) -> int:
-    if read_priv is None and write_priv is None and auto_join is None:
-        raise ValueError("Must provide at least one parameter.")
-
     query = """\
         SELECT COUNT(*) AS count
           FROM channels
          WHERE read_priv = COALESCE(:read_priv, read_priv)
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
+           AND instance = COALESCE(:instance, instance)
     """
     params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
+        "instance": instance,
     }
 
     rec = await app.state.services.database.fetch_one(query, params)
@@ -132,6 +137,7 @@ async def fetch_many(
     read_priv: int | None = None,
     write_priv: int | None = None,
     auto_join: bool | None = None,
+    instance: bool | None = None,
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Channel]:
@@ -142,11 +148,13 @@ async def fetch_many(
          WHERE read_priv = COALESCE(:read_priv, read_priv)
            AND write_priv = COALESCE(:write_priv, write_priv)
            AND auto_join = COALESCE(:auto_join, auto_join)
+           AND instance = COALESCE(:instance, instance)
     """
     params: dict[str, Any] = {
         "read_priv": read_priv,
         "write_priv": write_priv,
         "auto_join": auto_join,
+        "instance": instance,
     }
 
     if page is not None and page_size is not None:
@@ -213,8 +221,8 @@ async def delete(
     params: dict[str, Any] = {
         "name": name,
     }
-    rec = await app.state.services.database.fetch_one(query, params)
-    if rec is None:
+    channel = await app.state.services.database.fetch_one(query, params)
+    if channel is None:
         return None
 
     query = """\
@@ -224,5 +232,5 @@ async def delete(
     params = {
         "name": name,
     }
-    channel = await app.state.services.database.execute(query, params)
+    await app.state.services.database.execute(query, params)
     return cast(Channel, dict(channel._mapping)) if channel is not None else None

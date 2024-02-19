@@ -6,6 +6,7 @@ import time
 import app.packets
 import app.settings
 import app.state
+from app import builtin_bot
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
@@ -86,4 +87,4 @@ async def _update_bot_status(interval: int) -> None:
     """Re roll the bot status, every `interval`."""
     while True:
         await asyncio.sleep(interval)
-        app.packets.bot_stats.cache_clear()
+        builtin_bot.bot_user_stats.cache_clear()

@@ -23,6 +23,7 @@ create table channels
 	read_priv int default 1 not null,
 	write_priv int default 2 not null,
 	auto_join tinyint(1) default 0 not null,
+	instance tinyint(1) default 0 not null,
 	constraint channels_name_uindex
 		unique (name)
 );

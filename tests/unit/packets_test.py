@@ -106,7 +106,7 @@ def test_write_change_username(test_input, expected):
     ],
 )
 def test_write_user_stats(test_input, expected):
-    assert app.packets._user_stats(**test_input) == expected
+    assert app.packets.user_stats(**test_input) == expected
 
 
 @pytest.mark.parametrize(
@@ -508,7 +508,7 @@ def test_write_match_player_skipped(test_input, expected):
     ],
 )
 def test_write_user_presence(test_input, expected):
-    assert app.packets._user_presence(**test_input) == expected
+    assert app.packets.user_presence(**test_input) == expected
 
 
 @pytest.mark.parametrize(

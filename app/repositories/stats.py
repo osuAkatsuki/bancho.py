@@ -8,6 +8,7 @@ from typing import cast
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.gamemodes import GameMode
 
 # +--------------+-----------------+------+-----+---------+----------------+
 # | Field        | Type            | Null | Key | Default | Extra          |
@@ -200,6 +201,23 @@ async def fetch_many(
 
     stats = await app.state.services.database.fetch_all(query, params)
     return cast(list[Stat], [dict(s._mapping) for s in stats])
+
+
+async def get_global_rank(user_id: int, mode: GameMode) -> int:
+    rank = await app.state.services.redis.zrevrank(
+        f"bancho:leaderboard:{mode.value}",
+        str(user_id),
+    )
+    return cast(int, rank) + 1 if rank is not None else 0
+
+
+async def get_country_rank(user_id: int, country: str, mode: GameMode) -> int:
+    rank = await app.state.services.redis.zrevrank(
+        f"bancho:leaderboard:{mode.value}:{country}",
+        str(user_id),
+    )
+
+    return cast(int, rank) + 1 if rank is not None else 0
 
 
 async def update(

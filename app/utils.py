@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 from collections.abc import Callable
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any

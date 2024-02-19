@@ -158,7 +158,6 @@ class Match:
         team_type: MatchTeamTypes,
         freemods: bool,
         seed: int,
-        chat_channel: Channel,
     ) -> None:
         self.id = id
         self.name = name
@@ -177,7 +176,6 @@ class Match:
         self.mode = mode
         self.freemods = freemods
 
-        self.chat = chat_channel
         self.slots = [Slot() for _ in range(16)]
 
         # self.type = MatchTypes.standard
@@ -192,7 +190,7 @@ class Match:
 
         # scrimmage stuff
         self.is_scrimming = False
-        self.match_points: dict[MatchTeams | Player, int] = defaultdict(int)
+        self.match_points: defaultdict[MatchTeams | Player, int] = defaultdict(int)
         self.bans: set[tuple[Mods, int]] = set()
         self.winners: list[Player | MatchTeams | None] = []  # none for tie
         self.winning_pts = 0
@@ -293,7 +291,7 @@ class Match:
         immune: Sequence[int] = [],
     ) -> None:
         """Add data to be sent to all clients in the match."""
-        self.chat.enqueue(data, immune)
+        self.chat_channel.enqueue(data, immune)
 
         lchan = app.state.sessions.channels.get_by_name("#lobby")
         if lobby and lchan and lchan.players:
@@ -304,7 +302,7 @@ class Match:
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
-        self.chat.enqueue(app.packets.update_match(self, send_pw=True))
+        self.chat_channel.enqueue(app.packets.update_match(self, send_pw=True))
 
         lchan = app.state.sessions.channels.get_by_name("#lobby")
         if lobby and lchan and lchan.players:
@@ -429,10 +427,12 @@ class Match:
         scores, didnt_submit = await self.await_submissions(was_playing)
 
         for player in didnt_submit:
-            self.chat.send_bot(f"{player} didn't submit a score (timeout: 10s).")
+            self.chat_channel.send_bot(
+                f"{player} didn't submit a score (timeout: 10s).",
+            )
 
         if not scores:
-            self.chat.send_bot("Scores could not be calculated.")
+            self.chat_channel.send_bot("Scores could not be calculated.")
             return None
 
         ffa = self.team_type in (
@@ -443,7 +443,7 @@ class Match:
         # all scores are equal, it was a tie.
         if len(scores) != 1 and len(set(scores.values())) == 1:
             self.winners.append(None)
-            self.chat.send_bot("The point has ended in a tie!")
+            self.chat_channel.send_bot("The point has ended in a tie!")
             return None
 
         # Find the winner & increment their matchpoints.
@@ -543,10 +543,10 @@ class Match:
                 msg.append(f"Total Score: {wname} | {wmp} - {lmp} | {lname}")
 
         if didnt_submit:
-            self.chat.send_bot(
+            self.chat_channel.send_bot(
                 "If you'd like to perform a rematch, "
                 "please use the `!mp rematch` command.",
             )
 
         for line in msg:
-            self.chat.send_bot(line)
+            self.chat_channel.send_bot(line)

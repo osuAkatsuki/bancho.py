@@ -218,7 +218,7 @@ async def fetch_many(
     return cast(list[User], [dict(p._mapping) for p in users])
 
 
-async def update(
+async def partial_update(
     id: int,
     name: str | _UnsetSentinel = UNSET,
     email: str | _UnsetSentinel = UNSET,
