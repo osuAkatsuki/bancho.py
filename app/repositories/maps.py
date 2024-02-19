@@ -258,29 +258,38 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Map]:
     """Fetch a list of maps from the database."""
+    filters: list[str] = []
+    params: dict[str, Any] = {}
+    if server is not None:
+        filters.append("server = :server")
+        params["server"] = server
+    if set_id is not None:
+        filters.append("set_id = :set_id")
+        params["set_id"] = set_id
+    if status is not None:
+        filters.append("status = :status")
+        params["status"] = status
+    if artist is not None:
+        filters.append("artist = :artist")
+        params["artist"] = artist
+    if creator is not None:
+        filters.append("creator = :creator")
+        params["creator"] = creator
+    if filename is not None:
+        filters.append("filename = :filename")
+        params["filename"] = filename
+    if mode is not None:
+        filters.append("mode = :mode")
+        params["mode"] = mode
+    if frozen is not None:
+        filters.append("frozen = :frozen")
+        params["frozen"] = frozen
+
     query = f"""\
         SELECT {READ_PARAMS}
           FROM maps
-         WHERE server = COALESCE(:server, server)
-           AND set_id = COALESCE(:set_id, set_id)
-           AND status = COALESCE(:status, status)
-           AND artist = COALESCE(:artist, artist)
-           AND creator = COALESCE(:creator, creator)
-           AND filename = COALESCE(:filename, filename)
-           AND mode = COALESCE(:mode, mode)
-           AND frozen = COALESCE(:frozen, frozen)
+         {f"WHERE {' AND '.join(filters)}" if filters else ""}
     """
-    params: dict[str, Any] = {
-        "server": server,
-        "set_id": set_id,
-        "status": status,
-        "artist": artist,
-        "creator": creator,
-        "filename": filename,
-        "mode": mode,
-        "frozen": frozen,
-    }
-
     if page is not None and page_size is not None:
         query += """\
             LIMIT :limit
