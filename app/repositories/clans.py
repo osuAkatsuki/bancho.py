@@ -27,14 +27,7 @@ class ClansTable(Base):
 
     id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
     name = Column("name", String(16, collation="utf8"), nullable=False)
-    tag = Column(
-        "tag",
-        String(
-            6,
-            collation="utf8",
-        ),
-        nullable=False,
-    )
+    tag = Column("tag", String(6, collation="utf8"), nullable=False)
     owner = Column("owner", Integer, nullable=False)
     created_at = Column("created_at", DateTime, nullable=False)
 
