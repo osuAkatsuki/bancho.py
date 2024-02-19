@@ -97,8 +97,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
 
     await app.state.services.run_sql_migrations()
 
-    async with app.state.services.database.connection() as db_conn:
-        await collections.initialize_ram_caches(db_conn)
+    await collections.initialize_ram_caches()
 
     await app.bg_loops.initialize_housekeeping_tasks()
 

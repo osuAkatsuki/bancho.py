@@ -464,31 +464,29 @@ async def run_sql_migrations() -> None:
             Ansi.LMAGENTA,
         )
 
-    # XXX: so it turns out we can't use a transaction here (at least with mysql)
-    #      to roll back changes, as any structural changes to tables implicitly
-    #      commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    async with app.state.services.database.connection() as db_conn:
-        for query in queries:
-            try:
-                await db_conn.execute(query)
-            except pymysql.err.MySQLError as exc:
-                log(f"Failed: {query}", Ansi.GRAY)
-                log(repr(exc))
-                log(
-                    "SQL failed to update - unless you've been "
-                    "modifying sql and know what caused this, "
-                    "please please contact cmyui#0425.",
-                    Ansi.LRED,
-                )
-                raise KeyboardInterrupt from exc
-        else:
-            # all queries executed successfully
-            await db_conn.execute(
-                "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-                "VALUES (:major, :minor, :micro, NOW())",
-                {
-                    "major": software_version.major,
-                    "minor": software_version.minor,
-                    "micro": software_version.micro,
-                },
+    # XXX: we can't use a transaction here with mysql as structural changes to
+    # tables implicitly commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
+    for query in queries:
+        try:
+            await app.state.services.database.execute(query)
+        except pymysql.err.MySQLError as exc:
+            log(f"Failed: {query}", Ansi.GRAY)
+            log(repr(exc))
+            log(
+                "SQL failed to update - unless you've been "
+                "modifying sql and know what caused this, "
+                "please please contact cmyui#0425.",
+                Ansi.LRED,
             )
+            raise KeyboardInterrupt from exc
+    else:
+        # all queries executed successfully
+        await app.state.services.database.execute(
+            "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
+            "VALUES (:major, :minor, :micro, NOW())",
+            {
+                "major": software_version.major,
+                "minor": software_version.minor,
+                "micro": software_version.micro,
+            },
+        )
