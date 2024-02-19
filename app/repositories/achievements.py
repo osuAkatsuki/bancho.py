@@ -96,14 +96,13 @@ async def fetch_one(
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
 
-    where_conditions = []
-    if id is not None:
-        where_conditions.append(AchievementsTable.id == id)
-    if name is not None:
-        where_conditions.append(AchievementsTable.name == name)
+    select_stmt = select(READ_PARAMS)
 
-    # TODO: wtf?
-    select_stmt = select(READ_PARAMS).where(or_(*where_conditions))
+    if id is not None:
+        select_stmt = select_stmt.where(AchievementsTable.id == id)
+    if name is not None:
+        select_stmt = select_stmt.where(AchievementsTable.name == name)
+
     compiled = select_stmt.compile(dialect=DIALECT)
     rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
 
