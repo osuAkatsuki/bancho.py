@@ -16,7 +16,6 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 from app.utils import make_safe_name
 
@@ -113,14 +112,12 @@ async def create(
         creation_time=func.unix_timestamp(),
         latest_activity=func.unix_timestamp(),
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(UsersTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    user = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(UsersTable.id == rec_id)
+    user = await app.state.services.database.fetch_one(select_stmt)
     assert user is not None
-    return cast(User, dict(user._mapping))
+    return cast(User, user)
 
 
 async def fetch_one(
@@ -133,16 +130,20 @@ async def fetch_one(
     if id is None and name is None and email is None:
         raise ValueError("Must provide at least one parameter.")
 
-    select_stmt = select(UsersTable if fetch_all_fields else READ_PARAMS)
+    if fetch_all_fields:
+        select_stmt = select(UsersTable)
+    else:
+        select_stmt = select(*READ_PARAMS)
+
     if id is not None:
         select_stmt = select_stmt.where(UsersTable.id == id)
     if name is not None:
         select_stmt = select_stmt.where(UsersTable.safe_name == make_safe_name(name))
     if email is not None:
         select_stmt = select_stmt.where(UsersTable.email == email)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    user = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    return cast(User, dict(user._mapping)) if user is not None else None
+
+    user = await app.state.services.database.fetch_one(select_stmt)
+    return cast(User | None, user)
 
 
 async def fetch_count(
@@ -167,10 +168,10 @@ async def fetch_count(
         select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
     if play_style is not None:
         select_stmt = select_stmt.where(UsersTable.play_style == play_style)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -184,7 +185,7 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[User]:
     """Fetch multiple users from the database."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if priv is not None:
         select_stmt = select_stmt.where(UsersTable.priv == priv)
     if country is not None:
@@ -197,11 +198,12 @@ async def fetch_many(
         select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
     if play_style is not None:
         select_stmt = select_stmt.where(UsersTable.play_style == play_style)
+
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    users = await app.state.services.database.fetch_all(str(compiled), compiled.params)
-    return cast(list[User], [dict(u._mapping) for u in users])
+
+    users = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[User], users)
 
 
 async def partial_update(
@@ -225,9 +227,6 @@ async def partial_update(
 ) -> User | None:
     """Update a user in the database."""
     update_stmt = update(UsersTable).where(UsersTable.id == id)
-    if not isinstance(name, _UnsetSentinel):
-        update_stmt = update_stmt.values(name=name, safe_name=make_safe_name(name))
-
     if not isinstance(name, _UnsetSentinel):
         update_stmt = update_stmt.values(name=name, safe_name=make_safe_name(name))
     if not isinstance(email, _UnsetSentinel):
@@ -261,13 +260,11 @@ async def partial_update(
     if not isinstance(api_key, _UnsetSentinel):
         update_stmt = update_stmt.values(api_key=api_key)
 
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(update_stmt)
 
-    select_stmt = select(READ_PARAMS).where(UsersTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    user = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    return cast(User, dict(user._mapping)) if user is not None else None
+    select_stmt = select(*READ_PARAMS).where(UsersTable.id == id)
+    user = await app.state.services.database.fetch_one(select_stmt)
+    return cast(User | None, user)
 
 
 # TODO: delete?

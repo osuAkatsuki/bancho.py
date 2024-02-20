@@ -13,7 +13,6 @@ from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -60,13 +59,12 @@ async def create(from_id: int, to_id: int, msg: str) -> Mail:
         msg=msg,
         time=func.unix_timestamp(),
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = select(READ_PARAMS).where(MailTable.id == rec_id)
-    mail = await app.state.services.database.fetch_one(query)
+    select_stmt = select(*READ_PARAMS).where(MailTable.id == rec_id)
+    mail = await app.state.services.database.fetch_one(select_stmt)
     assert mail is not None
-    return cast(Mail, dict(mail._mapping))
+    return cast(Mail, mail)
 
 
 from app.repositories.users import UsersTable
@@ -79,27 +77,28 @@ async def fetch_all_mail_to_user(
     """Fetch all of mail to a given target from the database."""
     from_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.from_id)
     to_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.to_id)
+
     select_stmt = select(
         *READ_PARAMS,
         from_subquery.label("from_name"),
         to_subquery.label("to_name"),
-    )
-    select_stmt = select_stmt.where(MailTable.to_id == user_id)
+    ).where(MailTable.to_id == user_id)
+
     if read is not None:
         select_stmt = select_stmt.where(MailTable.read == read)
+
     mail = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[MailWithUsernames], [dict(m._mapping) for m in mail])
+    return cast(list[MailWithUsernames], mail)
 
 
 async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
     """Mark any mail in a user's conversation with another user as read."""
-    select_stmt = select(READ_PARAMS).where(
+    select_stmt = select(*READ_PARAMS).where(
         MailTable.to_id == to_id,
         MailTable.from_id == from_id,
         MailTable.read == False,
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    mail = await app.state.services.database.fetch_all(str(compiled), compiled.params)
+    mail = await app.state.services.database.fetch_all(select_stmt)
     if not mail:
         return []
 
@@ -110,6 +109,5 @@ async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
         .where(MailTable.read == False)
         .values(read=True)
     )
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
-    return cast(list[Mail], [dict(m._mapping) for m in mail])
+    await app.state.services.database.execute(update_stmt)
+    return cast(list[Mail], mail)

@@ -11,7 +11,6 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -52,21 +51,16 @@ async def create(map_id: int, pool_id: int, mods: int, slot: int) -> TourneyPool
         mods=mods,
         slot=slot,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(insert_stmt)
 
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(TourneyPoolMapsTable.map_id == map_id)
         .where(TourneyPoolMapsTable.pool_id == pool_id)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    tourney_pool_map = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+    tourney_pool_map = await app.state.services.database.fetch_one(select_stmt)
     assert tourney_pool_map is not None
-    return cast(TourneyPoolMap, dict(tourney_pool_map._mapping))
+    return cast(TourneyPoolMap, tourney_pool_map)
 
 
 async def fetch_many(
@@ -77,7 +71,7 @@ async def fetch_many(
     page_size: int | None = 50,
 ) -> list[TourneyPoolMap]:
     """Fetch a list of map pool entries from the database."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if pool_id is not None:
         select_stmt = select_stmt.where(TourneyPoolMapsTable.pool_id == pool_id)
     if mods is not None:
@@ -86,15 +80,9 @@ async def fetch_many(
         select_stmt = select_stmt.where(TourneyPoolMapsTable.slot == slot)
     if page and page_size:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    tourney_pool_maps = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(
-        list[TourneyPoolMap],
-        [dict(tourney_pool_map._mapping) for tourney_pool_map in tourney_pool_maps],
-    )
+
+    tourney_pool_maps = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[TourneyPoolMap], tourney_pool_maps)
 
 
 async def fetch_by_pool_and_pick(
@@ -104,35 +92,24 @@ async def fetch_by_pool_and_pick(
 ) -> TourneyPoolMap | None:
     """Fetch a map pool entry by pool and pick from the database."""
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(TourneyPoolMapsTable.pool_id == pool_id)
         .where(TourneyPoolMapsTable.mods == mods)
         .where(TourneyPoolMapsTable.slot == slot)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    tourney_pool_map = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
-    return (
-        cast(TourneyPoolMap, dict(tourney_pool_map._mapping))
-        if tourney_pool_map
-        else None
-    )
+    tourney_pool_map = await app.state.services.database.fetch_one(select_stmt)
+    return cast(TourneyPoolMap | None, tourney_pool_map)
 
 
 async def delete_map_from_pool(pool_id: int, map_id: int) -> TourneyPoolMap | None:
     """Delete a map pool entry from a given tourney pool from the database."""
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(TourneyPoolMapsTable.pool_id == pool_id)
         .where(TourneyPoolMapsTable.map_id == map_id)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    tourney_pool_map = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+
+    tourney_pool_map = await app.state.services.database.fetch_one(select_stmt)
     if tourney_pool_map is None:
         return None
 
@@ -141,28 +118,20 @@ async def delete_map_from_pool(pool_id: int, map_id: int) -> TourneyPoolMap | No
         .where(TourneyPoolMapsTable.pool_id == pool_id)
         .where(TourneyPoolMapsTable.map_id == map_id)
     )
-    compiled = delete_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
-    return cast(TourneyPoolMap, dict(tourney_pool_map._mapping))
+
+    await app.state.services.database.execute(delete_stmt)
+    return cast(TourneyPoolMap, tourney_pool_map)
 
 
 async def delete_all_in_pool(pool_id: int) -> list[TourneyPoolMap]:
     """Delete all map pool entries from a given tourney pool from the database."""
-    select_stmt = select(READ_PARAMS).where(TourneyPoolMapsTable.pool_id == pool_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    tourney_pool_maps = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
+    select_stmt = select(*READ_PARAMS).where(TourneyPoolMapsTable.pool_id == pool_id)
+    tourney_pool_maps = await app.state.services.database.fetch_all(select_stmt)
     if not tourney_pool_maps:
         return []
 
     delete_stmt = delete(TourneyPoolMapsTable).where(
         TourneyPoolMapsTable.pool_id == pool_id,
     )
-    compiled = delete_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
-    return cast(
-        list[TourneyPoolMap],
-        [dict(tourney_pool_map._mapping) for tourney_pool_map in tourney_pool_maps],
-    )
+    await app.state.services.database.execute(delete_stmt)
+    return cast(list[TourneyPoolMap], tourney_pool_maps)

@@ -15,7 +15,6 @@ from sqlalchemy.dialects.mysql import Insert as MysqlInsert
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -83,25 +82,20 @@ async def create(
         )
     )
 
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(insert_stmt)
 
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(ClientHashesTable.userid == userid)
         .where(ClientHashesTable.osupath == osupath)
         .where(ClientHashesTable.adapters == adapters)
         .where(ClientHashesTable.uninstall_id == uninstall_id)
         .where(ClientHashesTable.disk_serial == disk_serial)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    client_hash = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+    client_hash = await app.state.services.database.fetch_one(select_stmt)
 
     assert client_hash is not None
-    return cast(ClientHash, dict(client_hash._mapping))
+    return cast(ClientHash, client_hash)
 
 
 async def fetch_any_hardware_matches_for_user(
@@ -133,13 +127,5 @@ async def fetch_any_hardware_matches_for_user(
             ),
         )
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-
-    client_hashes = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(
-        list[ClientHashWithPlayer],
-        [dict(client_hash._mapping) for client_hash in client_hashes],
-    )
+    client_hashes = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[ClientHashWithPlayer], client_hashes)

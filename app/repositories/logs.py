@@ -13,7 +13,6 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -66,10 +65,9 @@ async def create(
         action=action,
         msg=msg,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = select(READ_PARAMS).where(LogTable.id == rec_id)
-    log = await app.state.services.database.fetch_one(str(query))
+    select_stmt = select(*READ_PARAMS).where(LogTable.id == rec_id)
+    log = await app.state.services.database.fetch_one(select_stmt)
     assert log is not None
-    return cast(Log, dict(log._mapping))
+    return cast(Log, log)

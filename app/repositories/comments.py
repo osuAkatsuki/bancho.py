@@ -16,7 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.dialects.mysql import FLOAT
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -77,18 +76,13 @@ async def create(
         comment=comment,
         colour=colour,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(CommentsTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    _comment = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+    select_stmt = select(*READ_PARAMS).where(CommentsTable.id == rec_id)
+    _comment = await app.state.services.database.fetch_one(select_stmt)
 
     assert _comment is not None
-    return cast(Comment, dict(_comment._mapping))
+    return cast(Comment, _comment)
 
 
 class CommentWithUserPrivileges(Comment):
@@ -107,7 +101,7 @@ async def fetch_all_relevant_to_replay(
         - `map_id`
     """
     select_stmt = (
-        select(*READ_PARAMS, UsersTable.priv)
+        select(READ_PARAMS, UsersTable.priv)
         .join(UsersTable, CommentsTable.userid == UsersTable.id)
         .where(
             or_(
@@ -126,10 +120,6 @@ async def fetch_all_relevant_to_replay(
             ),
         )
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
 
-    comments = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(list[CommentWithUserPrivileges], [dict(c._mapping) for c in comments])
+    comments = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[CommentWithUserPrivileges], comments)

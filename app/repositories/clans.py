@@ -18,7 +18,6 @@ from sqlalchemy import update
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -67,15 +66,13 @@ async def create(
         owner=owner,
         created_at=func.now(),
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(ClansTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    clan = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == rec_id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
 
     assert clan is not None
-    return cast(Clan, dict(clan._mapping))
+    return cast(Clan, clan)
 
 
 async def fetch_one(
@@ -88,7 +85,7 @@ async def fetch_one(
     if id is None and name is None and tag is None and owner is None:
         raise ValueError("Must provide at least one parameter.")
 
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
 
     if id is not None:
         select_stmt = select_stmt.where(ClansTable.id == id)
@@ -99,19 +96,17 @@ async def fetch_one(
     if owner is not None:
         select_stmt = select_stmt.where(ClansTable.owner == owner)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    clan = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-
-    return cast(Clan, dict(clan._mapping)) if clan is not None else None
+    clan = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Clan | None, clan)
 
 
 async def fetch_count() -> int:
     """Fetch the number of clans in the database."""
     select_stmt = select(func.count().label("count")).select_from(ClansTable)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled))
+    rec = await app.state.services.database.fetch_one(select_stmt)
+
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -119,13 +114,12 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Clan]:
     """Fetch many clans from the database."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    clans = await app.state.services.database.fetch_all(str(compiled), compiled.params)
-    return cast(list[Clan], [dict(c._mapping) for c in clans])
+    clans = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Clan], clans)
 
 
 async def partial_update(
@@ -143,24 +137,20 @@ async def partial_update(
     if not isinstance(owner, _UnsetSentinel):
         update_stmt = update_stmt.values(owner=owner)
 
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(update_stmt)
 
-    select_stmt = select(READ_PARAMS).where(ClansTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    clan = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    return cast(Clan, dict(clan._mapping)) if clan is not None else None
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Clan | None, clan)
 
 
 async def delete_one(id: int) -> Clan | None:
     """Delete a clan from the database."""
-    select_stmt = select(READ_PARAMS).where(ClansTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    clan = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
     if clan is None:
         return None
 
     delete_stmt = delete(ClansTable).where(ClansTable.id == id)
-    compiled = delete_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
-    return cast(Clan, dict(clan._mapping))
+    await app.state.services.database.execute(delete_stmt)
+    return cast(Clan, clan)

@@ -12,7 +12,6 @@ from sqlalchemy import select
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -45,21 +44,16 @@ async def create(user_id: int, achievement_id: int) -> UserAchievement:
         userid=user_id,
         achid=achievement_id,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(insert_stmt)
 
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(UserAchievementsTable.userid == user_id)
         .where(UserAchievementsTable.achid == achievement_id)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    user_achievement = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+    user_achievement = await app.state.services.database.fetch_one(select_stmt)
     assert user_achievement is not None
-    return cast(UserAchievement, dict(user_achievement._mapping))
+    return cast(UserAchievement, user_achievement)
 
 
 async def fetch_many(
@@ -69,20 +63,17 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[UserAchievement]:
     """Fetch a list of user achievements."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if not isinstance(user_id, _UnsetSentinel):
         select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
     if not isinstance(achievement_id, _UnsetSentinel):
         select_stmt = select_stmt.where(UserAchievementsTable.achid == achievement_id)
+
     if page and page_size:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    user_achievements = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(list[UserAchievement], [dict(a._mapping) for a in user_achievements])
+    user_achievements = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[UserAchievement], user_achievements)
 
 
 # TODO: delete?

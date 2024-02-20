@@ -22,7 +22,6 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -179,14 +178,12 @@ async def create(
         hp=hp,
         diff=diff,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(MapsTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(MapsTable.id == rec_id)
+    map = await app.state.services.database.fetch_one(select_stmt)
     assert map is not None
-    return cast(Map, dict(map._mapping))
+    return cast(Map, map)
 
 
 async def fetch_one(
@@ -198,16 +195,16 @@ async def fetch_one(
     if id is None and md5 is None and filename is None:
         raise ValueError("Must provide at least one parameter.")
 
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if id is not None:
         select_stmt = select_stmt.where(MapsTable.id == id)
     if md5 is not None:
         select_stmt = select_stmt.where(MapsTable.md5 == md5)
     if filename is not None:
         select_stmt = select_stmt.where(MapsTable.filename == filename)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    return cast(Map, dict(map._mapping)) if map is not None else None
+
+    map = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Map | None, map)
 
 
 async def fetch_count(
@@ -238,10 +235,10 @@ async def fetch_count(
         select_stmt = select_stmt.where(MapsTable.mode == mode)
     if frozen is not None:
         select_stmt = select_stmt.where(MapsTable.frozen == frozen)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -257,7 +254,7 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Map]:
     """Fetch a list of maps from the database."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if server is not None:
         select_stmt = select_stmt.where(MapsTable.server == server)
     if set_id is not None:
@@ -274,11 +271,12 @@ async def fetch_many(
         select_stmt = select_stmt.where(MapsTable.mode == mode)
     if frozen is not None:
         select_stmt = select_stmt.where(MapsTable.frozen == frozen)
+
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    maps = await app.state.services.database.fetch_all(str(compiled), compiled.params)
-    return cast(list[Map], [dict(m._mapping) for m in maps])
+
+    maps = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Map], maps)
 
 
 async def partial_update(
@@ -353,24 +351,20 @@ async def partial_update(
     if not isinstance(diff, _UnsetSentinel):
         update_stmt = update_stmt.values(diff=diff)
 
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(update_stmt)
 
-    select_stmt = select(READ_PARAMS).where(MapsTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    return cast(Map, dict(map._mapping)) if map is not None else None
+    select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
+    map = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Map | None, map)
 
 
 async def delete_one(id: int) -> Map | None:
     """Delete a beatmap entry from the database."""
-    select_stmt = select(READ_PARAMS).where(MapsTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    map = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
+    map = await app.state.services.database.fetch_one(select_stmt)
     if map is None:
         return None
 
     delete_stmt = delete(MapsTable).where(MapsTable.id == id)
-    compiled = delete_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
-    return cast(Map, dict(map._mapping))
+    await app.state.services.database.execute(delete_stmt)
+    return cast(Map, map)

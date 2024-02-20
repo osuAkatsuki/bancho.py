@@ -388,21 +388,17 @@ async def top(ctx: Context) -> str | None:
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
-    scores = [
-        dict(s._mapping)
-        for s in await app.state.services.database.fetch_all(
-            "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
-            "FROM scores s "
-            "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-            "WHERE s.userid = :user_id "
-            "AND s.mode = :mode "
-            "AND s.status = 2 "
-            "AND b.status in (2, 3) "
-            "ORDER BY s.pp DESC LIMIT 10",
-            {"user_id": player.id, "mode": mode},
-        )
-    ]
-
+    scores = await app.state.services.database.fetch_all(
+        "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
+        "FROM scores s "
+        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
+        "WHERE s.userid = :user_id "
+        "AND s.mode = :mode "
+        "AND s.status = 2 "
+        "AND b.status in (2, 3) "
+        "ORDER BY s.pp DESC LIMIT 10",
+        {"user_id": player.id, "mode": mode},
+    )
     if not scores:
         return "No scores"
 

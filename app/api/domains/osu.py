@@ -468,19 +468,17 @@ async def osuSearchSetHandler(
         return Response(b"")  # invalid args
 
     # Get all set data.
-    rec = await app.state.services.database.fetch_one(
+    bmapset = await app.state.services.database.fetch_one(
         "SELECT DISTINCT set_id, artist, "
         "title, status, creator, last_update "
         f"FROM maps WHERE {k} = :v",
         {"v": v},
     )
-
-    if rec is None:
+    if bmapset is None:
         # TODO: get from osu!
         return Response(b"")
 
     rating = 10.0  # TODO: real data
-    bmapset = dict(rec._mapping)
 
     return Response(
         (
@@ -1184,17 +1182,14 @@ async def get_leaderboard_scores(
     # TODO: customizability of the number of scores
     query.append("ORDER BY _score DESC LIMIT 50")
 
-    score_rows = [
-        dict(r._mapping)
-        for r in await app.state.services.database.fetch_all(
-            " ".join(query),
-            params,
-        )
-    ]
+    score_rows = await app.state.services.database.fetch_all(
+        " ".join(query),
+        params,
+    )
 
     if score_rows:  # None or []
         # fetch player's personal best score
-        personal_best_score_rec = await app.state.services.database.fetch_one(
+        personal_best_score_row = await app.state.services.database.fetch_one(
             f"SELECT id, {scoring_metric} AS _score, "
             "max_combo, n50, n100, n300, "
             "nmiss, nkatu, ngeki, perfect, mods, "
@@ -1206,9 +1201,7 @@ async def get_leaderboard_scores(
             {"map_md5": map_md5, "mode": mode, "user_id": player.id},
         )
 
-        if personal_best_score_rec is not None:
-            personal_best_score_row = dict(personal_best_score_rec._mapping)
-
+        if personal_best_score_row is not None:
             # calculate the rank of the score.
             p_best_rank = 1 + await app.state.services.database.fetch_val(
                 "SELECT COUNT(*) FROM scores s "
@@ -1226,8 +1219,6 @@ async def get_leaderboard_scores(
 
             # attach rank to personal best row
             personal_best_score_row["rank"] = p_best_rank
-        else:
-            personal_best_score_row = None
     else:
         score_rows = []
         personal_best_score_row = None

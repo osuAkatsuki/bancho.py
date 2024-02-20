@@ -9,7 +9,6 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 import app.state.services
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
@@ -44,47 +43,32 @@ async def create(
         setid=setid,
         created_at=func.unix_timestamp(),
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(insert_stmt)
 
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(FavouritesTable.userid == userid)
         .where(FavouritesTable.setid == setid)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    favourite = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
+    favourite = await app.state.services.database.fetch_one(select_stmt)
 
     assert favourite is not None
-    return cast(Favourite, dict(favourite._mapping))
+    return cast(Favourite, favourite)
 
 
 async def fetch_all(userid: int) -> list[Favourite]:
     """Fetch all favourites from a player."""
-    select_stmt = select(READ_PARAMS).where(FavouritesTable.userid == userid)
-    compiled = select_stmt.compile(dialect=DIALECT)
-
-    favourites = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(list[Favourite], [dict(f._mapping) for f in favourites])
+    select_stmt = select(*READ_PARAMS).where(FavouritesTable.userid == userid)
+    favourites = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Favourite], favourites)
 
 
 async def fetch_one(userid: int, setid: int) -> Favourite | None:
     """Check if a mapset is already a favourite."""
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(FavouritesTable.userid == userid)
         .where(FavouritesTable.setid == setid)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-
-    favourite = await app.state.services.database.fetch_one(
-        str(compiled),
-        compiled.params,
-    )
-    return cast(Favourite, dict(favourite._mapping)) if favourite else None
+    favourite = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Favourite | None, favourite)
