@@ -186,13 +186,11 @@ async def bancho_handler(
 
     if osu_token is None:
         # the client is performing a login
-        async with app.state.services.database.connection() as db_conn:
-            login_data = await handle_osu_login_request(
-                request.headers,
-                await request.body(),
-                ip,
-                db_conn,
-            )
+        login_data = await handle_osu_login_request(
+            request.headers,
+            await request.body(),
+            ip,
+        )
 
         return Response(
             content=login_data["response_body"],
@@ -625,7 +623,6 @@ async def handle_osu_login_request(
     headers: Mapping[str, str],
     body: bytes,
     ip: IPAddress,
-    db_conn: databases.core.Connection,
 ) -> LoginResponse:
     """\
     Login has no specific packet, but happens when the osu!
@@ -895,8 +892,8 @@ async def handle_osu_login_request(
 
     # fetch some of the player's
     # information from sql to be cached.
-    await player.stats_from_sql_full(db_conn)
-    await player.relationships_from_sql(db_conn)
+    await player.stats_from_sql_full()
+    await player.relationships_from_sql()
 
     # TODO: fetch player.recent_scores from sql
 

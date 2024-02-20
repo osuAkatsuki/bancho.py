@@ -497,8 +497,7 @@ class Player:
         )
 
         if not self.is_online:
-            async with app.state.services.database.connection() as db_conn:
-                await self.stats_from_sql_full(db_conn)
+            await self.stats_from_sql_full()
 
         for mode, stats in self.stats.items():
             await app.state.services.redis.zadd(
@@ -894,9 +893,9 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
+    async def relationships_from_sql(self) -> None:
         """Retrieve `self`'s relationships from sql."""
-        for row in await db_conn.fetch_all(
+        for row in await app.state.services.database.fetch_all(
             "SELECT user2, type FROM relationships WHERE user1 = :user1",
             {"user1": self.id},
         ):
@@ -949,7 +948,7 @@ class Player:
 
         return await self.get_global_rank(mode)
 
-    async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
+    async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         for row in await stats_repo.fetch_many(player_id=self.id):
             game_mode = GameMode(row["mode"])

@@ -650,7 +650,7 @@ async def _map(ctx: Context) -> str | None:
     # for updating cache would be faster?
     # surely this will not scale as well...
 
-    async with app.state.services.database.connection() as db_conn:
+    async with app.state.services.database.transaction():
         if ctx.args[1] == "set":
             # update all maps in the set
             for _bmap in bmap.set.maps:

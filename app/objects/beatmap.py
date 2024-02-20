@@ -834,62 +834,61 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the database by set id."""
-        async with app.state.services.database.connection() as db_conn:
-            last_osuapi_check = await db_conn.fetch_val(
-                "SELECT last_osuapi_check FROM mapsets WHERE id = :set_id",
-                {"set_id": bsid},
-                column=0,  # last_osuapi_check
+        last_osuapi_check = await app.state.services.database.fetch_val(
+            "SELECT last_osuapi_check FROM mapsets WHERE id = :set_id",
+            {"set_id": bsid},
+            column=0,  # last_osuapi_check
+        )
+
+        if last_osuapi_check is None:
+            return None
+
+        bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
+
+        for row in await maps_repo.fetch_many(set_id=bsid):
+            bmap = Beatmap(
+                md5=row["md5"],
+                id=row["id"],
+                set_id=row["set_id"],
+                artist=row["artist"],
+                title=row["title"],
+                version=row["version"],
+                creator=row["creator"],
+                last_update=row["last_update"],
+                total_length=row["total_length"],
+                max_combo=row["max_combo"],
+                status=RankedStatus(row["status"]),
+                frozen=row["frozen"],
+                plays=row["plays"],
+                passes=row["passes"],
+                mode=GameMode(row["mode"]),
+                bpm=row["bpm"],
+                cs=row["cs"],
+                od=row["od"],
+                ar=row["ar"],
+                hp=row["hp"],
+                diff=row["diff"],
+                filename=row["filename"],
+                map_set=bmap_set,
             )
 
-            if last_osuapi_check is None:
-                return None
-
-            bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
-
-            for row in await maps_repo.fetch_many(set_id=bsid):
-                bmap = Beatmap(
-                    md5=row["md5"],
-                    id=row["id"],
-                    set_id=row["set_id"],
-                    artist=row["artist"],
-                    title=row["title"],
-                    version=row["version"],
-                    creator=row["creator"],
-                    last_update=row["last_update"],
-                    total_length=row["total_length"],
-                    max_combo=row["max_combo"],
-                    status=RankedStatus(row["status"]),
-                    frozen=row["frozen"],
-                    plays=row["plays"],
-                    passes=row["passes"],
-                    mode=GameMode(row["mode"]),
-                    bpm=row["bpm"],
-                    cs=row["cs"],
-                    od=row["od"],
-                    ar=row["ar"],
-                    hp=row["hp"],
-                    diff=row["diff"],
-                    filename=row["filename"],
-                    map_set=bmap_set,
+            # XXX: tempfix for bancho.py <v3.4.1,
+            # where filenames weren't stored.
+            if not bmap.filename:
+                bmap.filename = (
+                    ("{artist} - {title} ({creator}) [{version}].osu")
+                    .format(
+                        artist=row["artist"],
+                        title=row["title"],
+                        creator=row["creator"],
+                        version=row["version"],
+                    )
+                    .translate(IGNORED_BEATMAP_CHARS)
                 )
 
-                # XXX: tempfix for bancho.py <v3.4.1,
-                # where filenames weren't stored.
-                if not bmap.filename:
-                    bmap.filename = (
-                        ("{artist} - {title} ({creator}) [{version}].osu")
-                        .format(
-                            artist=row["artist"],
-                            title=row["title"],
-                            creator=row["creator"],
-                            version=row["version"],
-                        )
-                        .translate(IGNORED_BEATMAP_CHARS)
-                    )
+                await maps_repo.update(bmap.id, filename=bmap.filename)
 
-                    await maps_repo.update(bmap.id, filename=bmap.filename)
-
-                bmap_set.maps.append(bmap)
+            bmap_set.maps.append(bmap)
 
         return bmap_set
 

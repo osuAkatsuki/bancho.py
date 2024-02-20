@@ -72,7 +72,7 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{channel} removed from channels list.")
 
-    async def prepare(self, db_conn: databases.core.Connection) -> None:
+    async def prepare(self) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
         for row in await channels_repo.fetch_many():
@@ -284,10 +284,10 @@ class Players(list[Player]):
         super().remove(player)
 
 
-async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
+async def initialize_ram_caches() -> None:
     """Setup & cache the global collections before listening for connections."""
     # fetch channels, clans and pools from db
-    await app.state.sessions.channels.prepare(db_conn)
+    await app.state.sessions.channels.prepare()
 
     bot = await users_repo.fetch_one(id=1)
     if bot is None:
@@ -308,7 +308,7 @@ async def initialize_ram_caches(db_conn: databases.core.Connection) -> None:
     # static api keys
     app.state.sessions.api_keys = {
         row["api_key"]: row["id"]
-        for row in await db_conn.fetch_all(
+        for row in await app.state.services.database.fetch_all(
             "SELECT id, api_key FROM users WHERE api_key IS NOT NULL",
         )
     }
