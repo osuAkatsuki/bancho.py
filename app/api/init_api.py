@@ -8,7 +8,6 @@ import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
-from typing import Never
 
 import starlette.routing
 from fastapi import FastAPI
@@ -69,7 +68,7 @@ class BanchoAPI(FastAPI):
 
 
 @asynccontextmanager
-async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
+async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
 
@@ -107,7 +106,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
         Ansi.LMAGENTA,
     )
 
-    yield  # type: ignore
+    yield
 
     # we want to attempt to gracefully finish any ongoing connections
     # and shut down any of the housekeeping tasks running in the background.
