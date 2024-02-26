@@ -72,6 +72,7 @@ from app.usecases.performance import ScoreParams
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
+DISK_CHAT_LOG_FILE = ".data/logs/chat.log"
 
 BASE_DOMAIN = app.settings.DOMAIN
 
@@ -429,7 +430,8 @@ class SendMessage(BasePacket):
         player.update_latest_activity_soon()
 
         log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
-        with open(".data/logs/chat.log", "a+") as f:
+
+        with open(DISK_CHAT_LOG_FILE, "a+") as f:
             f.write(
                 f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {t_chan}: {msg}\n",
             )
@@ -1308,7 +1310,7 @@ class SendPrivateMessage(BasePacket):
         player.update_latest_activity_soon()
 
         log(f"{player} @ {target}: {msg}", Ansi.LCYAN)
-        with open(".data/logs/chat.log", "a+") as f:
+        with open(DISK_CHAT_LOG_FILE, "a+") as f:
             f.write(
                 f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {target}: {msg}\n",
             )
