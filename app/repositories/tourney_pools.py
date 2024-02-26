@@ -8,11 +8,11 @@ from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Index
 from sqlalchemy import Integer
-from sqlalchemy import String
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app.repositories import Base
@@ -22,7 +22,7 @@ class TourneyPoolsTable(Base):
     __tablename__ = "tourney_pools"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    name = Column("name", String(16), nullable=False)
+    name = Column("name", VARCHAR(length=64), nullable=False)
     created_at = Column("created_at", DateTime, nullable=False)
     created_by = Column("created_by", Integer, nullable=False)
 

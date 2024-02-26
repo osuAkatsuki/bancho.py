@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TypedDict
 from typing import cast
 
@@ -18,12 +19,18 @@ from app.repositories import Base
 from app.repositories.users import UsersTable
 
 
+class TargetType(StrEnum):
+    replay = "replay"
+    map = "map"
+    song = "song"
+
+
 class CommentsTable(Base):
     __tablename__ = "comments"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     target_id = Column("target_id", Integer, nullable=False)
-    target_type = Column(ENUM("replay", "map", "song"), nullable=False)
+    target_type = Column(ENUM(TargetType), nullable=False)
     userid = Column("userid", Integer, nullable=False)
     time = Column("time", Integer, nullable=False)
     comment = Column(
@@ -48,7 +55,7 @@ READ_PARAMS = (
 class Comment(TypedDict):
     id: int
     target_id: int
-    target_type: TargetType
+    target_type: str
     userid: int
     time: float
     comment: str
