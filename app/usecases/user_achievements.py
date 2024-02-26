@@ -15,13 +15,13 @@ async def create(user_id: int, achievement_id: int) -> UserAchievement:
 
 
 async def fetch_many(
-    user_id: int,
-    page: int | _UnsetSentinel = UNSET,
-    page_size: int | _UnsetSentinel = UNSET,
+    user_id: int | _UnsetSentinel = UNSET,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[UserAchievement]:
     user_achievements = await app.repositories.user_achievements.fetch_many(
-        user_id,
-        page,
-        page_size,
+        user_id=user_id,
+        page=page,
+        page_size=page_size,
     )
     return user_achievements

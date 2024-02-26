@@ -10,22 +10,19 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
-
-# from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
 class StatsTable(Base):
     __tablename__ = "stats"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     mode = Column("mode", TINYINT(1), primary_key=True)
     tscore = Column("tscore", Integer, nullable=False, server_default="0")
     rscore = Column("rscore", Integer, nullable=False, server_default="0")
@@ -97,20 +94,12 @@ class Stat(TypedDict):
 async def create(player_id: int, mode: int) -> Stat:
     """Create a new player stats entry in the database."""
     insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(
-        query=str(compiled),
-        values=compiled.params,
-    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(StatsTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    stat = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
+    select_stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
+    stat = await app.state.services.database.fetch_one(select_stmt)
     assert stat is not None
-    return cast(Stat, dict(stat._mapping))
+    return cast(Stat, stat)
 
 
 async def create_all_modes(player_id: int) -> list[Stat]:
@@ -130,31 +119,22 @@ async def create_all_modes(player_id: int) -> list[Stat]:
             )
         ],
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(StatsTable.id == player_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    stats = await app.state.services.database.fetch_all(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(list[Stat], [dict(s._mapping) for s in stats])
+    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
+    stats = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Stat], stats)
 
 
 async def fetch_one(player_id: int, mode: int) -> Stat | None:
     """Fetch a player stats entry from the database."""
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    stat = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(Stat, dict(stat._mapping)) if stat is not None else None
+    stat = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Stat | None, stat)
 
 
 async def fetch_count(
@@ -166,13 +146,10 @@ async def fetch_count(
         select_stmt = select_stmt.where(StatsTable.id == player_id)
     if mode is not None:
         select_stmt = select_stmt.where(StatsTable.mode == mode)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
+
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -181,19 +158,16 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Stat]:
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if player_id is not None:
         select_stmt = select_stmt.where(StatsTable.id == player_id)
     if mode is not None:
         select_stmt = select_stmt.where(StatsTable.mode == mode)
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    stats = await app.state.services.database.fetch_all(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(list[Stat], [dict(s._mapping) for s in stats])
+
+    stats = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Stat], stats)
 
 
 async def partial_update(
@@ -249,20 +223,15 @@ async def partial_update(
     if not isinstance(a_count, _UnsetSentinel):
         update_stmt = update_stmt.values(a_count=a_count)
 
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(update_stmt)
 
     select_stmt = (
-        select(READ_PARAMS)
+        select(*READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
-    compiled = select_stmt.compile(dialect=DIALECT)
-    stat = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(Stat, dict(stat._mapping)) if stat is not None else None
+    stat = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Stat | None, stat)
 
 
 # TODO: delete?

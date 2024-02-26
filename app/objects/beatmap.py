@@ -885,8 +885,7 @@ class BeatmapSet:
                     )
                     .translate(IGNORED_BEATMAP_CHARS)
                 )
-
-                await maps_repo.update(bmap.id, filename=bmap.filename)
+                await maps_repo.partial_update(bmap.id, filename=bmap.filename)
 
             bmap_set.maps.append(bmap)
 

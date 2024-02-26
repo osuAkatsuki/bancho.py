@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import TypedDict
 
-import databases
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import httpx
@@ -21,14 +20,11 @@ from redis import asyncio as aioredis
 import app.settings
 import app.state
 from app._typing import IPAddress
+from app.adapters.database import Database
 from app.logging import Ansi
 from app.logging import Rainbow
 from app.logging import log
 from app.logging import printc
-
-if TYPE_CHECKING:
-    import databases.core
-
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
@@ -39,7 +35,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 """ session objects """
 
 http_client = httpx.AsyncClient()
-database = databases.Database(app.settings.DB_DSN)
+database = Database(app.settings.DB_DSN)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
 datadog: datadog_client.ThreadStats | None = None
@@ -394,7 +390,7 @@ async def _get_current_sql_structure_version() -> Version | None:
     )
 
     if res:
-        return Version(*map(int, res))
+        return Version(res["ver_major"], res["ver_minor"], res["ver_micro"])
 
     return None
 

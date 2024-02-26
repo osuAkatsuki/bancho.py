@@ -1,21 +1,40 @@
 from __future__ import annotations
 
-import textwrap
 from typing import TypedDict
 from typing import cast
 
-import app.state.services
+from sqlalchemy import Column
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+from sqlalchemy import update
+from sqlalchemy.dialects.mysql import TINYINT
 
-# +--------------+------------------------+------+-----+---------+-------+
-# | Field        | Type                   | Null | Key | Default | Extra |
-# +--------------+------------------------+------+-----+---------+-------+
-# | id           | int                    | NO   | PRI | NULL    |       |
-# | from_id      | int                    | NO   |     | NULL    |       |
-# | to_id        | int                    | NO   |     | NULL    |       |
-# | msg          | varchar(2048)          | NO   |     | NULL    |       |
-# | time         | int                    | YES  |     | NULL    |       |
-# | read         | tinyint(1)             | NO   |     | NULL    |       |
-# +--------------+------------------------+------+-----+---------+-------+
+import app.state.services
+from app.repositories import Base
+
+
+class MailTable(Base):
+    __tablename__ = "mail"
+
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
+    from_id = Column("from_id", Integer, nullable=False)
+    to_id = Column("to_id", Integer, nullable=False)
+    msg = Column("msg", String(2048, collation="utf8"), nullable=False)
+    time = Column("time", Integer, nullable=True)
+    read = Column("read", TINYINT(1), nullable=False, server_default="0")
+
+
+READ_PARAMS = (
+    MailTable.id,
+    MailTable.from_id,
+    MailTable.to_id,
+    MailTable.msg,
+    MailTable.time,
+    MailTable.read,
+)
 
 
 class Mail(TypedDict):
@@ -32,34 +51,23 @@ class MailWithUsernames(Mail):
     to_name: str
 
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, from_id, to_id, msg, time, `read`
-    """,
-)
-
-
 async def create(from_id: int, to_id: int, msg: str) -> Mail:
     """Create a new mail entry in the database."""
-    query = f"""\
-        INSERT INTO mail (from_id, to_id, msg, time)
-             VALUES (:from_id, :to_id, :msg, UNIX_TIMESTAMP())
-    """
-    params = {"from_id": from_id, "to_id": to_id, "msg": msg}
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(MailTable).values(
+        from_id=from_id,
+        to_id=to_id,
+        msg=msg,
+        time=func.unix_timestamp(),
+    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM mail
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    mail = await app.state.services.database.fetch_one(query, params)
-
+    select_stmt = select(*READ_PARAMS).where(MailTable.id == rec_id)
+    mail = await app.state.services.database.fetch_one(select_stmt)
     assert mail is not None
-    return cast(Mail, dict(mail._mapping))
+    return cast(Mail, mail)
+
+
+from app.repositories.users import UsersTable
 
 
 async def fetch_all_mail_to_user(
@@ -67,51 +75,39 @@ async def fetch_all_mail_to_user(
     read: bool | None = None,
 ) -> list[MailWithUsernames]:
     """Fetch all of mail to a given target from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS},
-         (SELECT name FROM users WHERE id = m.`from_id`) AS `from_name`,
-         (SELECT name FROM users WHERE id = m.`to_id`) AS `to_name`
-          FROM `mail` m
-         WHERE m.`to_id` = :to_id
-           AND m.`read` = COALESCE(:read, `read`)
-    """
-    params = {
-        "to_id": user_id,
-        "read": read,
-    }
+    from_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.from_id)
+    to_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.to_id)
 
-    mail = await app.state.services.database.fetch_all(query, params)
-    return cast(list[MailWithUsernames], [dict(m._mapping) for m in mail])
+    select_stmt = select(
+        *READ_PARAMS,
+        from_subquery.label("from_name"),
+        to_subquery.label("to_name"),
+    ).where(MailTable.to_id == user_id)
+
+    if read is not None:
+        select_stmt = select_stmt.where(MailTable.read == read)
+
+    mail = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[MailWithUsernames], mail)
 
 
 async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
     """Mark any mail in a user's conversation with another user as read."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM mail
-        WHERE to_id = :to_id
-          AND from_id = :from_id
-          AND `read` = False
-    """
-    params = {
-        "to_id": to_id,
-        "from_id": from_id,
-    }
-    all_mail = await app.state.services.database.fetch_all(query, params)
-    if not all_mail:
+    select_stmt = select(*READ_PARAMS).where(
+        MailTable.to_id == to_id,
+        MailTable.from_id == from_id,
+        MailTable.read == False,
+    )
+    mail = await app.state.services.database.fetch_all(select_stmt)
+    if not mail:
         return []
 
-    query = """\
-        UPDATE mail
-           SET `read` = True
-         WHERE to_id = :to_id
-            AND from_id = :from_id
-            AND `read` = False
-    """
-    params = {
-        "to_id": to_id,
-        "from_id": from_id,
-    }
-    await app.state.services.database.execute(query, params)
-
-    return cast(list[Mail], [dict(mail._mapping) for mail in all_mail])
+    update_stmt = (
+        update(MailTable)
+        .where(MailTable.to_id == to_id)
+        .where(MailTable.from_id == from_id)
+        .where(MailTable.read == False)
+        .values(read=True)
+    )
+    await app.state.services.database.execute(update_stmt)
+    return cast(list[Mail], mail)

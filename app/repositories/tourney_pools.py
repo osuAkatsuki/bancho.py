@@ -1,21 +1,32 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
-import app.state.services
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
 
-# +------------+-------------+------+-----+---------+----------------+
-# | Field      | Type        | Null | Key | Default | Extra          |
-# +------------+-------------+------+-----+---------+----------------+
-# | id         | int         | NO   | PRI | NULL    | auto_increment |
-# | name       | varchar(16) | NO   |     | NULL    |                |
-# | created_at | datetime    | NO   |     | NULL    |                |
-# | created_by | int         | NO   | MUL | NULL    |                |
-# +------------+-------------+------+-----+---------+----------------+
+import app.state.services
+from app.repositories import Base
+
+
+class TourneyPoolsTable(Base):
+    __tablename__ = "tourney_pools"
+
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
+    name = Column("name", String(16), nullable=False)
+    created_at = Column("created_at", DateTime, nullable=False)
+    created_by = Column("created_by", Integer, nullable=False)
+
+    __table_args__ = (Index("tourney_pools_users_id_fk", created_by),)
 
 
 class TourneyPool(TypedDict):
@@ -25,37 +36,27 @@ class TourneyPool(TypedDict):
     created_by: int
 
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, name, created_at, created_by
-    """,
+READ_PARAMS = (
+    TourneyPoolsTable.id,
+    TourneyPoolsTable.name,
+    TourneyPoolsTable.created_at,
+    TourneyPoolsTable.created_by,
 )
 
 
 async def create(name: str, created_by: int) -> TourneyPool:
     """Create a new tourney pool entry in the database."""
-    query = f"""\
-        INSERT INTO tourney_pools (name, created_at, created_by)
-             VALUES (:name, NOW(), :user_id)
-    """
-    params: dict[str, Any] = {
-        "name": name,
-        "user_id": created_by,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(TourneyPoolsTable).values(
+        name=name,
+        created_at=func.now(),
+        created_by=created_by,
+    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM tourney_pools
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    tourney_pool = await app.state.services.database.fetch_one(query, params)
-
+    select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.id == rec_id)
+    tourney_pool = await app.state.services.database.fetch_one(select_stmt)
     assert tourney_pool is not None
-    return cast(TourneyPool, dict(tourney_pool._mapping))
+    return cast(TourneyPool, tourney_pool)
 
 
 async def fetch_many(
@@ -64,85 +65,40 @@ async def fetch_many(
     page: int | None = 1,
     page_size: int | None = 50,
 ) -> list[TourneyPool]:
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM tourney_pools
-          WHERE id = COALESCE(:id, id)
-            AND created_by = COALESCE(:created_by, created_by)
-    """
-    params: dict[str, Any] = {
-        "id": id,
-        "created_by": created_by,
-    }
+    """Fetch many tourney pools from the database."""
+    select_stmt = select(*READ_PARAMS)
+    if id is not None:
+        select_stmt = select_stmt.where(TourneyPoolsTable.id == id)
+    if created_by is not None:
+        select_stmt = select_stmt.where(TourneyPoolsTable.created_by == created_by)
     if page and page_size:
-        query += """\
-            LIMIT :limit
-           OFFSET :offset
-        """
-        params["limit"] = page_size
-        params["offset"] = (page - 1) * page_size
-    tourney_pools = await app.state.services.database.fetch_all(query, params)
-    return [
-        cast(TourneyPool, dict(tourney_pool._mapping)) for tourney_pool in tourney_pools
-    ]
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+
+    tourney_pools = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[TourneyPool], tourney_pools)
 
 
 async def fetch_by_name(name: str) -> TourneyPool | None:
     """Fetch a tourney pool by name from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM tourney_pools
-         WHERE name = :name
-    """
-    params: dict[str, Any] = {
-        "name": name,
-    }
-    tourney_pool = await app.state.services.database.fetch_one(query, params)
-    return (
-        cast(TourneyPool, dict(tourney_pool._mapping))
-        if tourney_pool is not None
-        else None
-    )
+    select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.name == name)
+    tourney_pool = await app.state.services.database.fetch_one(select_stmt)
+    return cast(TourneyPool | None, tourney_pool)
 
 
 async def fetch_by_id(id: int) -> TourneyPool | None:
     """Fetch a tourney pool by id from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM tourney_pools
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    tourney_pool = await app.state.services.database.fetch_one(query, params)
-    return (
-        cast(TourneyPool, dict(tourney_pool._mapping))
-        if tourney_pool is not None
-        else None
-    )
+    select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.id == id)
+    tourney_pool = await app.state.services.database.fetch_one(select_stmt)
+    return cast(TourneyPool | None, tourney_pool)
 
 
 async def delete_by_id(id: int) -> TourneyPool | None:
     """Delete a tourney pool by id from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM tourney_pools
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    tourney_pool = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.id == id)
+    tourney_pool = await app.state.services.database.fetch_one(select_stmt)
     if tourney_pool is None:
         return None
 
-    query = f"""\
-        DELETE FROM tourney_pools
-              WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    await app.state.services.database.execute(query, params)
-    return cast(TourneyPool, dict(tourney_pool._mapping))
+    delete_stmt = delete(TourneyPoolsTable).where(TourneyPoolsTable.id == id)
+    await app.state.services.database.execute(delete_stmt)
+    return cast(TourneyPool, tourney_pool)

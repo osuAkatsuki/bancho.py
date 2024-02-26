@@ -1,29 +1,48 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
+
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+from sqlalchemy import update
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.repositories import Base
 
-# +------------+-------------+------+-----+---------+----------------+
-# | Field      | Type        | Null | Key | Default | Extra          |
-# +------------+-------------+------+-----+---------+----------------+
-# | id         | int         | NO   | PRI | NULL    | auto_increment |
-# | name       | varchar(16) | NO   | UNI | NULL    |                |
-# | tag        | varchar(6)  | NO   | UNI | NULL    |                |
-# | owner      | int         | NO   | UNI | NULL    |                |
-# | created_at | datetime    | NO   |     | NULL    |                |
-# +------------+-------------+------+-----+---------+----------------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, name, tag, owner, created_at
-    """,
+class ClansTable(Base):
+    __tablename__ = "clans"
+
+    id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
+    name = Column("name", String(16, collation="utf8"), nullable=False)
+    tag = Column("tag", String(6, collation="utf8"), nullable=False)
+    owner = Column("owner", Integer, nullable=False)
+    created_at = Column("created_at", DateTime, nullable=False)
+
+    __table_args__ = (
+        Index("clans_name_uindex", name, unique=False),
+        Index("clans_owner_uindex", owner, unique=True),
+        Index("clans_tag_uindex", tag, unique=True),
+    )
+
+
+READ_PARAMS = (
+    ClansTable.id,
+    ClansTable.name,
+    ClansTable.tag,
+    ClansTable.owner,
+    ClansTable.created_at,
 )
 
 
@@ -35,41 +54,25 @@ class Clan(TypedDict):
     created_at: datetime
 
 
-class ClanUpdateFields(TypedDict, total=False):
-    name: str
-    tag: str
-    owner: int
-
-
 async def create(
     name: str,
     tag: str,
     owner: int,
 ) -> Clan:
     """Create a new clan in the database."""
-    query = f"""\
-        INSERT INTO clans (name, tag, owner, created_at)
-             VALUES (:name, :tag, :owner, NOW())
-    """
-    params: dict[str, Any] = {
-        "name": name,
-        "tag": tag,
-        "owner": owner,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(ClansTable).values(
+        name=name,
+        tag=tag,
+        owner=owner,
+        created_at=func.now(),
+    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM clans
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    clan = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == rec_id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
 
     assert clan is not None
-    return cast(Clan, dict(clan._mapping))
+    return cast(Clan, clan)
 
 
 async def fetch_one(
@@ -82,34 +85,28 @@ async def fetch_one(
     if id is None and name is None and tag is None and owner is None:
         raise ValueError("Must provide at least one parameter.")
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM clans
-         WHERE id = COALESCE(:id, id)
-           AND name = COALESCE(:name, name)
-           AND tag = COALESCE(:tag, tag)
-           AND owner = COALESCE(:owner, owner)
-    """
-    params: dict[str, Any] = {
-        "id": id,
-        "name": name,
-        "tag": tag,
-        "owner": owner,
-    }
-    clan = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(*READ_PARAMS)
 
-    return cast(Clan, dict(clan._mapping)) if clan is not None else None
+    if id is not None:
+        select_stmt = select_stmt.where(ClansTable.id == id)
+    if name is not None:
+        select_stmt = select_stmt.where(ClansTable.name == name)
+    if tag is not None:
+        select_stmt = select_stmt.where(ClansTable.tag == tag)
+    if owner is not None:
+        select_stmt = select_stmt.where(ClansTable.owner == owner)
+
+    clan = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Clan | None, clan)
 
 
 async def fetch_count() -> int:
     """Fetch the number of clans in the database."""
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM clans
-    """
-    rec = await app.state.services.database.fetch_one(query)
+    select_stmt = select(func.count().label("count")).select_from(ClansTable)
+    rec = await app.state.services.database.fetch_one(select_stmt)
+
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -117,81 +114,43 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Clan]:
     """Fetch many clans from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM clans
-    """
-    params: dict[str, Any] = {}
-
+    select_stmt = select(*READ_PARAMS)
     if page is not None and page_size is not None:
-        query += """\
-            LIMIT :limit
-           OFFSET :offset
-        """
-        params["limit"] = page_size
-        params["offset"] = (page - 1) * page_size
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    clans = await app.state.services.database.fetch_all(query, params)
-    return cast(list[Clan], [dict(c._mapping) for c in clans])
+    clans = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Clan], clans)
 
 
-async def update(
+async def partial_update(
     id: int,
     name: str | _UnsetSentinel = UNSET,
     tag: str | _UnsetSentinel = UNSET,
     owner: int | _UnsetSentinel = UNSET,
 ) -> Clan | None:
     """Update a clan in the database."""
-    update_fields: ClanUpdateFields = {}
+    update_stmt = update(ClansTable).where(ClansTable.id == id)
     if not isinstance(name, _UnsetSentinel):
-        update_fields["name"] = name
+        update_stmt = update_stmt.values(name=name)
     if not isinstance(tag, _UnsetSentinel):
-        update_fields["tag"] = tag
+        update_stmt = update_stmt.values(tag=tag)
     if not isinstance(owner, _UnsetSentinel):
-        update_fields["owner"] = owner
+        update_stmt = update_stmt.values(owner=owner)
 
-    query = f"""\
-        UPDATE clans
-           SET {",".join(f"{k} = :{k}" for k in update_fields)}
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    } | update_fields
-    await app.state.services.database.execute(query, params)
+    await app.state.services.database.execute(update_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM clans
-         WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    clan = await app.state.services.database.fetch_one(query, params)
-    return cast(Clan, dict(clan._mapping)) if clan is not None else None
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Clan | None, clan)
 
 
-async def delete(id: int) -> Clan | None:
+async def delete_one(id: int) -> Clan | None:
     """Delete a clan from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM clans
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    clan = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(*READ_PARAMS).where(ClansTable.id == id)
+    clan = await app.state.services.database.fetch_one(select_stmt)
     if clan is None:
         return None
 
-    query = """\
-        DELETE FROM clans
-         WHERE id = :id
-    """
-    params = {
-        "id": id,
-    }
-    await app.state.services.database.execute(query, params)
-    return cast(Clan, dict(clan._mapping))
+    delete_stmt = delete(ClansTable).where(ClansTable.id == id)
+    await app.state.services.database.execute(delete_stmt)
+    return cast(Clan, clan)

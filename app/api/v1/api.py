@@ -804,7 +804,7 @@ async def api_get_replay(
                 'attachment; filename="{username} - '
                 "{artist} - {title} [{version}] "
                 '({play_time:%Y-%m-%d}).osr"'
-            ).format(**dict(row._mapping)),
+            ).format(**row),
         },
     )
 

@@ -19,14 +19,13 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 
 class ScoresTable(Base):
     __tablename__ = "scores"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     map_md5 = Column("map_md5", String(32), nullable=False)
     score = Column("score", Integer, nullable=False)
     pp = Column("pp", FLOAT(precision=6, scale=3), nullable=False)
@@ -159,31 +158,18 @@ async def create(
         perfect=perfect,
         online_checksum=online_checksum,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
-    rec_id = await app.state.services.database.execute(
-        query=str(compiled),
-        values=compiled.params,
-    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(READ_PARAMS).where(ScoresTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    assert rec is not None
-    return cast(Score, dict(rec._mapping))
+    select_stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    assert _score is not None
+    return cast(Score, _score)
 
 
 async def fetch_one(id: int) -> Score | None:
-    select_stmt = select(READ_PARAMS).where(ScoresTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
-
-    return cast(Score, dict(rec._mapping)) if rec is not None else None
+    select_stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
 
 
 async def fetch_count(
@@ -205,13 +191,9 @@ async def fetch_count(
     if user_id is not None:
         select_stmt = select_stmt.where(ScoresTable.userid == user_id)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -223,7 +205,7 @@ async def fetch_many(
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Score]:
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if map_md5 is not None:
         select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
     if mods is not None:
@@ -238,12 +220,8 @@ async def fetch_many(
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    recs = await app.state.services.database.fetch_all(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(list[Score], [dict(r._mapping) for r in recs])
+    scores = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Score], scores)
 
 
 async def partial_update(
@@ -257,19 +235,12 @@ async def partial_update(
         update_stmt = update_stmt.values(pp=pp)
     if not isinstance(status, _UnsetSentinel):
         update_stmt = update_stmt.values(status=status)
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(
-        query=str(compiled),
-        values=compiled.params,
-    )
 
-    select_stmt = select(READ_PARAMS).where(ScoresTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(
-        query=str(compiled),
-        values=compiled.params,
-    )
-    return cast(Score, dict(rec._mapping)) if rec is not None else None
+    await app.state.services.database.execute(update_stmt)
+
+    select_stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
 
 
 # TODO: delete

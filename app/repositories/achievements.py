@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
-from app.repositories import DIALECT
 from app.repositories import Base
 
 if TYPE_CHECKING:
@@ -29,7 +27,7 @@ from sqlalchemy import update
 class AchievementsTable(Base):
     __tablename__ = "achievements"
 
-    id = Column("id", Integer, primary_key=True)
+    id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
     file = Column("file", String(128), nullable=False)
     name = Column("name", String(128, collation="utf8"), nullable=False)
     desc = Column("desc", String(256, collation="utf8"), nullable=False)
@@ -72,18 +70,13 @@ async def create(
         desc=desc,
         cond=cond,
     )
-    compiled = insert_stmt.compile(dialect=DIALECT)
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    rec_id = await app.state.services.database.execute(str(compiled), compiled.params)
+    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == rec_id)
+    achievement = await app.state.services.database.fetch_one(select_stmt)
+    assert achievement is not None
 
-    select_stmt = select(READ_PARAMS).where(AchievementsTable.id == rec_id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    assert rec is not None
-
-    achievement = dict(rec._mapping)
-    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
     return cast(Achievement, achievement)
 
 
@@ -95,32 +88,28 @@ async def fetch_one(
     if id is None and name is None:
         raise ValueError("Must provide at least one parameter.")
 
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
 
     if id is not None:
         select_stmt = select_stmt.where(AchievementsTable.id == id)
     if name is not None:
         select_stmt = select_stmt.where(AchievementsTable.name == name)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-
-    if rec is None:
+    achievement = await app.state.services.database.fetch_one(select_stmt)
+    if achievement is None:
         return None
 
-    achievement = dict(rec._mapping)
-    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
     return cast(Achievement, achievement)
 
 
 async def fetch_count() -> int:
     """Fetch the number of achievements."""
     select_stmt = select(func.count().label("count")).select_from(AchievementsTable)
-    compiled = select_stmt.compile(dialect=DIALECT)
 
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -128,23 +117,13 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[Achievement]:
     """Fetch a list of achievements."""
-    select_stmt = select(READ_PARAMS)
+    select_stmt = select(*READ_PARAMS)
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    compiled = select_stmt.compile(dialect=DIALECT)
-
-    records = await app.state.services.database.fetch_all(
-        str(compiled),
-        compiled.params,
-    )
-
-    achievements: list[dict[str, Any]] = []
-
-    for rec in records:
-        achievement = dict(rec._mapping)
-        achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
-        achievements.append(achievement)
+    achievements = await app.state.services.database.fetch_all(select_stmt)
+    for achievement in achievements:
+        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
 
     return cast(list[Achievement], achievements)
 
@@ -167,16 +146,14 @@ async def partial_update(
     if not isinstance(cond, _UnsetSentinel):
         update_stmt = update_stmt.values(cond=cond)
 
-    compiled = update_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(update_stmt)
 
-    select_stmt = select(READ_PARAMS).where(AchievementsTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    assert rec is not None
+    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+    achievement = await app.state.services.database.fetch_one(select_stmt)
+    if achievement is None:
+        return None
 
-    achievement = dict(rec._mapping)
-    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
     return cast(Achievement, achievement)
 
 
@@ -184,16 +161,13 @@ async def delete_one(
     id: int,
 ) -> Achievement | None:
     """Delete an existing achievement."""
-    select_stmt = select(READ_PARAMS).where(AchievementsTable.id == id)
-    compiled = select_stmt.compile(dialect=DIALECT)
-    rec = await app.state.services.database.fetch_one(str(compiled), compiled.params)
-    if rec is None:
+    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+    achievement = await app.state.services.database.fetch_one(select_stmt)
+    if achievement is None:
         return None
 
     delete_stmt = delete(AchievementsTable).where(AchievementsTable.id == id)
-    compiled = delete_stmt.compile(dialect=DIALECT)
-    await app.state.services.database.execute(str(compiled), compiled.params)
+    await app.state.services.database.execute(delete_stmt)
 
-    achievement = dict(rec._mapping)
-    achievement["cond"] = eval(f'lambda score, mode_vn: {rec["cond"]}')
+    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
     return cast(Achievement, achievement)

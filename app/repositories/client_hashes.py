@@ -1,29 +1,44 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
+from sqlalchemy import CHAR
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Integer
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.dialects.mysql import Insert as MysqlInsert
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+
 import app.state.services
+from app.repositories import Base
+from app.repositories.users import UsersTable
 
-# +--------------+------------------------+------+-----+---------+----------------+
-# | Field        | Type                   | Null | Key | Default | Extra          |
-# +--------------+------------------------+------+-----+---------+----------------+
-# | userid       | int                    | NO   | PRI | NULL    |                |
-# | osupath      | char(32)               | NO   | PRI | NULL    |                |
-# | adapters     | char(32)               | NO   | PRI | NULL    |                |
-# | uninstall_id | char(32)               | NO   | PRI | NULL    |                |
-# | disk_serial  | char(32)               | NO   | PRI | NULL    |                |
-# | latest_time  | datetime               | NO   |     | NULL    |                |
-# | occurrences  | int                    | NO   |     | 0       |                |
-# +--------------+------------------------+------+-----+---------+----------------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        userid, osupath, adapters, uninstall_id, disk_serial, latest_time, occurrences
-    """,
+class ClientHashesTable(Base):
+    __tablename__ = "client_hashes"
+
+    userid = Column("userid", Integer, nullable=False, primary_key=True)
+    osupath = Column("osupath", CHAR(32), nullable=False, primary_key=True)
+    adapters = Column("adapters", CHAR(32), nullable=False, primary_key=True)
+    uninstall_id = Column("uninstall_id", CHAR(32), nullable=False, primary_key=True)
+    disk_serial = Column("disk_serial", CHAR(32), nullable=False, primary_key=True)
+    latest_time = Column("latest_time", DateTime, nullable=False)
+    occurrences = Column("occurrences", Integer, nullable=False, server_default="0")
+
+
+READ_PARAMS = (
+    ClientHashesTable.userid,
+    ClientHashesTable.osupath,
+    ClientHashesTable.adapters,
+    ClientHashesTable.uninstall_id,
+    ClientHashesTable.disk_serial,
+    ClientHashesTable.latest_time,
+    ClientHashesTable.occurrences,
 )
 
 
@@ -50,44 +65,37 @@ async def create(
     disk_serial: str,
 ) -> ClientHash:
     """Create a new client hash entry in the database."""
-    query = f"""\
-        INSERT INTO client_hashes (userid, osupath, adapters, uninstall_id,
-                    disk_serial, latest_time, occurrences)
-             VALUES (:userid, :osupath, :adapters, :uninstall_id,
-                     :disk_serial, NOW(), 1)
-        ON DUPLICATE KEY UPDATE
-            latest_time = NOW(),
-            occurrences = occurrences + 1
-    """
-    params: dict[str, Any] = {
-        "userid": userid,
-        "osupath": osupath,
-        "adapters": adapters,
-        "uninstall_id": uninstall_id,
-        "disk_serial": disk_serial,
-    }
-    await app.state.services.database.execute(query, params)
+    insert_stmt: MysqlInsert = (
+        mysql_insert(ClientHashesTable)
+        .values(
+            userid=userid,
+            osupath=osupath,
+            adapters=adapters,
+            uninstall_id=uninstall_id,
+            disk_serial=disk_serial,
+            latest_time=func.now(),
+            occurrences=1,
+        )
+        .on_duplicate_key_update(
+            latest_time=func.now(),
+            occurrences=ClientHashesTable.occurrences + 1,
+        )
+    )
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM client_hashes
-         WHERE userid = :userid
-           AND osupath = :osupath
-           AND adapters = :adapters
-           AND uninstall_id = :uninstall_id
-           AND disk_serial = :disk_serial
-    """
-    params = {
-        "userid": userid,
-        "osupath": osupath,
-        "adapters": adapters,
-        "uninstall_id": uninstall_id,
-        "disk_serial": disk_serial,
-    }
-    client_hash = await app.state.services.database.fetch_one(query, params)
+    await app.state.services.database.execute(insert_stmt)
+
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(ClientHashesTable.userid == userid)
+        .where(ClientHashesTable.osupath == osupath)
+        .where(ClientHashesTable.adapters == adapters)
+        .where(ClientHashesTable.uninstall_id == uninstall_id)
+        .where(ClientHashesTable.disk_serial == disk_serial)
+    )
+    client_hash = await app.state.services.database.fetch_one(select_stmt)
 
     assert client_hash is not None
-    return cast(ClientHash, dict(client_hash._mapping))
+    return cast(ClientHash, client_hash)
 
 
 async def fetch_any_hardware_matches_for_user(
@@ -102,42 +110,22 @@ async def fetch_any_hardware_matches_for_user(
     `adapters`, `uninstall_id` or `disk_serial` match other users
     from the database.
     """
-    hw_check_params: dict[str, Any]
-    if running_under_wine:
-        hw_check_subquery = """\
-            h.uninstall_id = :uninstall_id
-        """
-        hw_check_params = {"uninstall_id": uninstall_id}
-    else:
-        assert (
-            adapters is not None
-            and uninstall_id is not None
-            and disk_serial is not None
-        )
-        hw_check_subquery = """\
-            h.adapters = :adapters
-         OR h.uninstall_id = :uninstall_id
-         OR h.disk_serial = :disk_serial
-        """
-        hw_check_params = {
-            "adapters": adapters,
-            "uninstall_id": uninstall_id,
-            "disk_serial": disk_serial,
-        }
-
-    query = f"""\
-        SELECT {READ_PARAMS}, u.name, u.priv
-          FROM client_hashes h
-          INNER JOIN users u ON h.userid = u.id
-            WHERE h.userid != :userid AND ({hw_check_subquery})
-    """
-    params: dict[str, Any] = {
-        "userid": userid,
-        **hw_check_params,
-    }
-
-    client_hashes = await app.state.services.database.fetch_all(query, params)
-    return cast(
-        list[ClientHashWithPlayer],
-        [dict(client_hash._mapping) for client_hash in client_hashes],
+    select_stmt = (
+        select(*READ_PARAMS, UsersTable.name, UsersTable.priv)
+        .join(UsersTable, ClientHashesTable.userid == UsersTable.id)
+        .where(ClientHashesTable.userid != userid)
     )
+
+    if running_under_wine:
+        select_stmt = select_stmt.where(ClientHashesTable.uninstall_id == uninstall_id)
+    else:
+        select_stmt = select_stmt.where(
+            or_(
+                ClientHashesTable.adapters == adapters,
+                ClientHashesTable.uninstall_id == uninstall_id,
+                ClientHashesTable.disk_serial == disk_serial,
+            ),
+        )
+
+    client_hashes = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[ClientHashWithPlayer], client_hashes)

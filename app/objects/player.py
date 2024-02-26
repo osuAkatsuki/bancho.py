@@ -412,7 +412,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -424,7 +424,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -441,7 +441,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -527,7 +527,7 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -555,7 +555,7 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await users_repo.update(
+        await users_repo.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
@@ -973,7 +973,7 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = users_repo.update(
+        task = users_repo.partial_update(
             id=self.id,
             latest_activity=int(time.time()),
         )
