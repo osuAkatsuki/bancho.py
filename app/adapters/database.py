@@ -52,7 +52,7 @@ class Database:
         row = await self._database.fetch_one(query, params)
         if settings.DEBUG:
             log(
-                "Executed SQL query",
+                f"Executed SQL query: {query} {params}",
                 extra={"query": query, "params": params},
             )
 
