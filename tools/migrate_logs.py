@@ -11,6 +11,7 @@ import databases
 sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
+import app.adapters.database
 import app.settings
 
 LOG_REGEX = re.compile(
@@ -19,7 +20,17 @@ LOG_REGEX = re.compile(
 
 
 async def main() -> int:
-    async with databases.Database(app.settings.DB_DSN) as db:
+    async with databases.Database(
+        url=app.adapters.database.make_dsn(
+            dialect="mysql",
+            user=app.settings.DB_USER,
+            host=app.settings.DB_HOST,
+            port=app.settings.DB_PORT,
+            database=app.settings.DB_NAME,
+            driver="aiomysql",
+            password=app.settings.DB_PASS,
+        ),
+    ) as db:
         async with (
             db.connection() as select_conn,
             db.connection() as update_conn,

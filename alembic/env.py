@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import create_engine
 from sqlalchemy import pool
 
+import app.adapters.database
 from alembic import context
 from app import settings
 from app.repositories import Base
@@ -31,7 +32,15 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return settings.DB_DSN
+    return app.adapters.database.make_dsn(
+        dialect="mysql",
+        user=settings.DB_USER,
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        database=settings.DB_HOST,
+        driver="pymysql",
+        password=settings.DB_PASS,
+    )
 
 
 def run_migrations_offline() -> None:
