@@ -10,6 +10,7 @@ from sqlalchemy.sql.compiler import Compiled
 from sqlalchemy.sql.expression import ClauseElement
 
 from app import settings
+from app.logging import log
 
 
 class MySQLDialect(MySQLDialect_mysqldb):
@@ -38,8 +39,6 @@ class Database:
             dialect=DIALECT,
             compile_kwargs={"render_postcompile": True},
         )
-        if settings.DEBUG:
-            print(str(compiled), compiled.params)
         return str(compiled), compiled.params
 
     async def fetch_one(
@@ -51,6 +50,12 @@ class Database:
             query, params = self._compile(query)
 
         row = await self._database.fetch_one(query, params)
+        if settings.DEBUG:
+            log(
+                f"Executed SQL query: {query} {params}",
+                extra={"query": query, "params": params},
+            )
+
         return dict(row._mapping) if row is not None else None
 
     async def fetch_all(

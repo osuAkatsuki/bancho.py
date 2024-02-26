@@ -79,7 +79,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     if app.utils.is_running_as_admin():
         log(
             "Running the server with root privileges is not recommended.",
-            Ansi.LRED,
+            Ansi.LYELLOW,
         )
 
     await app.state.services.database.connect()

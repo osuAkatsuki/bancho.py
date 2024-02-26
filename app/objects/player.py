@@ -403,7 +403,7 @@ class Player:
 
             app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
-        log(f"{self} logged out.", Ansi.LYELLOW)
+        log(f"{self} logged out.")
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
