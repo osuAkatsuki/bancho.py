@@ -2222,9 +2222,14 @@ async def pool_list(ctx: Context) -> str | None:
     l = [f"Mappools ({len(tourney_pools)})"]
 
     for pool in tourney_pools:
+        created_by = await users_repo.fetch_one(id=pool["created_by"])
+        if created_by is None:
+            log(f"Could not find pool creator (Id {pool['created_by']}).", Ansi.LRED)
+            continue
+
         l.append(
-            f"[{pool['created_at']:%Y-%m-%d}] {pool['id']} "
-            f"{pool['name']}, by {pool['created_by']}.",
+            f"[{pool['created_at']:%Y-%m-%d}] "
+            f"{pool['name']}, by {created_by['name']}.",
         )
 
     return "\n".join(l)
