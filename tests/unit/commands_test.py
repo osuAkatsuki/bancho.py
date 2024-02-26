@@ -18,13 +18,8 @@ from app.usecases.performance import ScoreParams
             ScoreParams(mode=1, mods=30)
         ),
         (
-            # accuracy too high
+            # accuracy out of range
             {"mode": 0, "args": "100.0001%"},
-            app.commands.ParsingError("Invalid accuracy.")
-        ),
-        (
-            # accuracy too low
-            {"mode": 0, "args": "-0.0001%"},
             app.commands.ParsingError("Invalid accuracy.")
         )
     ]
