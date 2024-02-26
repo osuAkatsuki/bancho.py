@@ -390,7 +390,7 @@ async def _get_current_sql_structure_version() -> Version | None:
     )
 
     if res:
-        return Version(*map(int, res))
+        return Version(res["ver_major"], res["ver_minor"], res["ver_micro"])
 
     return None
 
