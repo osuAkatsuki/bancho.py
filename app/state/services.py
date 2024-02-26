@@ -17,6 +17,7 @@ import httpx
 import pymysql
 from redis import asyncio as aioredis
 
+import app.adapters.database
 import app.settings
 import app.state
 from app._typing import IPAddress
@@ -33,7 +34,17 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 """ session objects """
 
 http_client = httpx.AsyncClient()
-database = Database(app.settings.DB_DSN)
+database = Database(
+    url=app.adapters.database.make_dsn(
+        dialect="mysql",
+        user=app.settings.DB_USER,
+        host=app.settings.DB_HOST,
+        port=app.settings.DB_PORT,
+        database=app.settings.DB_NAME,
+        driver="aiomysql",
+        password=app.settings.DB_PASS,
+    ),
+)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
 
 datadog: datadog_client.ThreadStats | None = None

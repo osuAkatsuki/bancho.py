@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.abspath(os.pardir))
 os.chdir(os.path.abspath(os.pardir))
 
 try:
+    import app.adapters.database
     import app.settings
     import app.state.services
     from app.constants.gamemodes import GameMode
@@ -252,7 +253,17 @@ async def main(argv: Sequence[str] | None = None) -> int:
     global debug_mode_enabled
     debug_mode_enabled = args.debug
 
-    db = databases.Database(app.settings.DB_DSN)
+    db = databases.Database(
+        url=app.adapters.database.make_dsn(
+            dialect="mysql",
+            user=app.settings.DB_USER,
+            host=app.settings.DB_HOST,
+            port=app.settings.DB_PORT,
+            database=app.settings.DB_NAME,
+            driver="aiomysql",
+            password=app.settings.DB_PASS,
+        ),
+    )
     await db.connect()
 
     redis = await aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
