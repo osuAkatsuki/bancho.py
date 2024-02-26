@@ -1997,7 +1997,7 @@ class TourneyMatchLeaveChannel(BasePacket):
             return  # insufficient privs
 
         match = app.state.sessions.matches[self.match_id]
-        if not match:
+        if not (match and player.id in match.tourney_clients):
             return  # match not found
 
         # attempt to join match chan
