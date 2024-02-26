@@ -7,19 +7,14 @@ from typing import Any
 from app.logging import Ansi
 from app.logging import log
 from app.objects.collections import Channels
-from app.objects.collections import Clans
-from app.objects.collections import MapPools
 from app.objects.collections import Matches
 from app.objects.collections import Players
 
 if TYPE_CHECKING:
-    from app.objects.achievement import Achievement
     from app.objects.player import Player
 
 players = Players()
 channels = Channels()
-pools = MapPools()
-clans = Clans()
 matches = Matches()
 
 api_keys: dict[str, int] = {}

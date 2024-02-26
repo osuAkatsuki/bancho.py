@@ -26,6 +26,8 @@ create table channels
 	constraint channels_name_uindex
 		unique (name)
 );
+create index channels_auto_join_index
+	on channels (auto_join);
 
 create table clans
 (
@@ -147,6 +149,18 @@ create table maps
 	constraint maps_md5_uindex
 		unique (md5)
 );
+create index maps_set_id_index
+	on maps (set_id);
+create index maps_status_index
+	on maps (status);
+create index maps_filename_index
+	on maps (filename);
+create index maps_plays_index
+	on maps (plays);
+create index maps_mode_index
+	on maps (mode);
+create index maps_frozen_index
+	on maps (frozen);
 
 create table mapsets
 (
@@ -222,6 +236,25 @@ create table scores
 	perfect tinyint(1) not null,
 	online_checksum char(32) not null
 );
+create index scores_map_md5_index
+	on scores (map_md5);
+create index scores_score_index
+	on scores (score);
+create index scores_pp_index
+	on scores (pp);
+create index scores_mods_index
+	on scores (mods);
+create index scores_status_index
+	on scores (status);
+create index scores_mode_index
+	on scores (mode);
+create index scores_play_time_index
+	on scores (play_time);
+create index scores_userid_index
+	on scores (userid);
+create index scores_online_checksum_index
+	on scores (online_checksum);
+
 
 create table startups
 (
@@ -253,6 +286,14 @@ create table stats
 	a_count int unsigned default 0 not null,
 	primary key (id, mode)
 );
+create index stats_mode_index
+	on stats (mode);
+create index stats_pp_index
+	on stats (pp);
+create index stats_tscore_index
+	on stats (tscore);
+create index stats_rscore_index
+	on stats (rscore);
 
 create table tourney_pool_maps
 (
@@ -262,7 +303,8 @@ create table tourney_pool_maps
 	slot tinyint not null,
 	primary key (map_id, pool_id)
 );
-
+create index tourney_pool_maps_mods_slot_index
+	on tourney_pool_maps (mods, slot);
 create index tourney_pool_maps_tourney_pools_id_fk
 	on tourney_pool_maps (pool_id);
 
@@ -284,6 +326,10 @@ create table user_achievements
 	achid int not null,
 	primary key (userid, achid)
 );
+create index user_achievements_achid_index
+	on user_achievements (achid);
+create index user_achievements_userid_index
+	on user_achievements (userid);
 
 create table users
 (
@@ -316,6 +362,14 @@ create table users
 	constraint users_safe_name_uindex
 		unique (safe_name)
 );
+create index users_priv_index
+	on users (priv);
+create index users_clan_id_index
+	on users (clan_id);
+create index users_clan_priv_index
+	on users (clan_priv);
+create index users_country_index
+	on users (country);
 
 insert into users (id, name, safe_name, priv, country, silence_end, email, pw_bcrypt, creation_time, latest_activity)
 values (1, 'BanchoBot', 'banchobot', 1, 'ca', 0, 'bot@akatsuki.pw',

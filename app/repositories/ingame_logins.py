@@ -1,29 +1,41 @@
 from __future__ import annotations
 
-import textwrap
 from datetime import date
 from datetime import datetime
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
+from sqlalchemy import Column
+from sqlalchemy import Date
+from sqlalchemy import DateTime
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import func
+from sqlalchemy import insert
+from sqlalchemy import select
+
 import app.state.services
+from app.repositories import Base
 
-# +--------------+------------------------+------+-----+---------+-------+
-# | Field        | Type                   | Null | Key | Default | Extra |
-# +--------------+------------------------+------+-----+---------+-------+
-# | id           | int                    | NO   | PRI | NULL    |       |
-# | userid       | int                    | NO   |     | NULL    |       |
-# | ip           | varchar(45)            | NO   |     | NULL    |       |
-# | osu_ver      | date                   | NO   |     | NULL    |       |
-# | osu_stream   | varchar(11)            | NO   |     | NULL    |       |
-# | datetime     | datetime               | NO   |     | NULL    |       |
-# +--------------+------------------------+------+-----+---------+-------+
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        id, userid, ip, osu_ver, osu_stream, datetime
-    """,
+class IngameLoginsTable(Base):
+    __tablename__ = "ingame_logins"
+
+    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
+    userid = Column("userid", Integer, nullable=False)
+    ip = Column("ip", String(45), nullable=False)
+    osu_ver = Column("osu_ver", Date, nullable=False)
+    osu_stream = Column("osu_stream", String(11), nullable=False)
+    datetime = Column("datetime", DateTime, nullable=False)
+
+
+READ_PARAMS = (
+    IngameLoginsTable.id,
+    IngameLoginsTable.userid,
+    IngameLoginsTable.ip,
+    IngameLoginsTable.osu_ver,
+    IngameLoginsTable.osu_stream,
+    IngameLoginsTable.datetime,
 )
 
 
@@ -50,45 +62,27 @@ async def create(
     osu_stream: str,
 ) -> IngameLogin:
     """Create a new login entry in the database."""
-    query = f"""\
-        INSERT INTO ingame_logins (userid, ip, osu_ver, osu_stream, datetime)
-             VALUES (:userid, :ip, :osu_ver, :osu_stream, NOW())
-    """
-    params: dict[str, Any] = {
-        "userid": user_id,
-        "ip": ip,
-        "osu_ver": osu_ver,
-        "osu_stream": osu_stream,
-    }
-    rec_id = await app.state.services.database.execute(query, params)
+    insert_stmt = insert(IngameLoginsTable).values(
+        userid=user_id,
+        ip=ip,
+        osu_ver=osu_ver,
+        osu_stream=osu_stream,
+        datetime=func.now(),
+    )
+    rec_id = await app.state.services.database.execute(insert_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM ingame_logins
-         WHERE id = :id
-    """
-    params = {
-        "id": rec_id,
-    }
-    ingame_login = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(*READ_PARAMS).where(IngameLoginsTable.id == rec_id)
+    ingame_login = await app.state.services.database.fetch_one(select_stmt)
 
     assert ingame_login is not None
-    return cast(IngameLogin, dict(ingame_login._mapping))
+    return cast(IngameLogin, ingame_login)
 
 
 async def fetch_one(id: int) -> IngameLogin | None:
     """Fetch a login entry from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM ingame_logins
-         WHERE id = :id
-    """
-    params: dict[str, Any] = {
-        "id": id,
-    }
-    ingame_login = await app.state.services.database.fetch_one(query, params)
-
-    return cast(IngameLogin, ingame_login) if ingame_login is not None else None
+    select_stmt = select(*READ_PARAMS).where(IngameLoginsTable.id == id)
+    ingame_login = await app.state.services.database.fetch_one(select_stmt)
+    return cast(IngameLogin | None, ingame_login)
 
 
 async def fetch_count(
@@ -96,19 +90,15 @@ async def fetch_count(
     ip: str | None = None,
 ) -> int:
     """Fetch the number of logins in the database."""
-    query = """\
-        SELECT COUNT(*) AS count
-          FROM ingame_logins
-        WHERE userid = COALESCE(:userid, userid)
-          AND ip = COALESCE(:ip, ip)
-    """
-    params: dict[str, Any] = {
-        "userid": user_id,
-        "ip": ip,
-    }
-    rec = await app.state.services.database.fetch_one(query, params)
+    select_stmt = select(func.count().label("count")).select_from(IngameLoginsTable)
+    if user_id is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.userid == user_id)
+    if ip is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.ip == ip)
+
+    rec = await app.state.services.database.fetch_one(select_stmt)
     assert rec is not None
-    return cast(int, rec._mapping["count"])
+    return cast(int, rec["count"])
 
 
 async def fetch_many(
@@ -120,28 +110,19 @@ async def fetch_many(
     page_size: int | None = None,
 ) -> list[IngameLogin]:
     """Fetch a list of logins from the database."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM ingame_logins
-         WHERE userid = COALESCE(:userid, userid)
-           AND ip = COALESCE(:ip, ip)
-           AND osu_ver = COALESCE(:osu_ver, osu_ver)
-           AND osu_stream = COALESCE(:osu_stream, osu_stream)
-    """
-    params: dict[str, Any] = {
-        "userid": user_id,
-        "ip": ip,
-        "osu_ver": osu_ver,
-        "osu_stream": osu_stream,
-    }
+    select_stmt = select(*READ_PARAMS)
+
+    if user_id is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.userid == user_id)
+    if ip is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.ip == ip)
+    if osu_ver is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.osu_ver == osu_ver)
+    if osu_stream is not None:
+        select_stmt = select_stmt.where(IngameLoginsTable.osu_stream == osu_stream)
 
     if page is not None and page_size is not None:
-        query += """\
-            LIMIT :limit
-           OFFSET :offset
-        """
-        params["limit"] = page_size
-        params["offset"] = (page - 1) * page_size
+        select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    ingame_logins = await app.state.services.database.fetch_all(query, params)
+    ingame_logins = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[IngameLogin], ingame_logins)

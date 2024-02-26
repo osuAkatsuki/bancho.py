@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import re
 
-__all__ = ("OSU_VERSION", "USERNAME", "EMAIL", "BEST_OF")
-
-
 OSU_VERSION = re.compile(
     r"^b(?P<date>\d{8})(?:\.(?P<revision>\d))?"
     r"(?P<stream>beta|cuttingedge|dev|tourney)?$",
