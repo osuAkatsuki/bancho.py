@@ -17,10 +17,9 @@ class ScoreParams:
     mods: int | None = None
     combo: int | None = None
 
-    # caller may pass either acc OR 300/100/50/geki/katu/miss
+    # caller may pass either acc OR 100/50/geki/katu/miss
     acc: float | None = None
 
-    n300: int | None = None
     n100: int | None = None
     n50: int | None = None
     ngeki: int | None = None
@@ -86,7 +85,6 @@ def calculate_performances(
             mods=score.mods or 0,
             combo=score.combo,
             acc=score.acc,
-            n300=score.n300,
             n100=score.n100,
             n50=score.n50,
             n_geki=score.ngeki,
