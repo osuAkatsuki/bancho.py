@@ -50,6 +50,9 @@ REDIRECT_OSU_URLS = read_bool(os.environ["REDIRECT_OSU_URLS"])
 
 PP_CACHED_ACCURACIES = [int(acc) for acc in read_list(os.environ["PP_CACHED_ACCS"])]
 
+ALLOW_MCOSU_CLIENTS = read_bool(os.environ["ALLOW_MCOSU_CLIENTS"])
+ALLOW_MCOSU_SCORES = read_bool(os.environ["ALLOW_MCOSU_SCORES"])
+
 DISALLOWED_NAMES = read_list(os.environ["DISALLOWED_NAMES"])
 DISALLOWED_PASSWORDS = read_list(os.environ["DISALLOWED_PASSWORDS"])
 DISALLOW_OLD_CLIENTS = read_bool(os.environ["DISALLOW_OLD_CLIENTS"])

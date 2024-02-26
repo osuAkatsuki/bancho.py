@@ -186,8 +186,18 @@ async def bancho_handler(
     request: Request,
     osu_token: str | None = Header(None),
     user_agent: Literal["osu!"] = Header(...),
+    x_mcosu_ver: str | None = Header(None),
 ) -> Response:
     ip = app.state.services.ip_resolver.get_ip(request.headers)
+
+    if x_mcosu_ver is not None and app.settings.ALLOW_MCOSU_CLIENTS is False:
+        return Response(
+            headers={"cho-token": "no"},
+            content=(
+                app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
+                + app.packets.notification("McOsu clients are not allowed on this server.")
+            ),
+        )
 
     if osu_token is None:
         # the client is performing a login
@@ -199,7 +209,10 @@ async def bancho_handler(
 
         return Response(
             content=login_data["response_body"],
-            headers={"cho-token": login_data["osu_token"]},
+            headers={
+                "cho-token": login_data["osu_token"],
+                "x-mcosu-features": f"submit={1 if app.settings.ALLOW_MCOSU_SCORES else 0}",
+            },
         )
 
     # get the player from the specified osu token.
