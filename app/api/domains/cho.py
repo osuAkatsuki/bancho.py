@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import struct
@@ -759,9 +760,11 @@ async def handle_osu_login_request(
 
     # TODO: store adapters individually
 
-    # some disk manufacturers have "0" for their disk serial, resulting in clashing md5 hashes of the string "0".
-    # these need to be ignored since otherwise people will be prevented from verifying a lot.
-    INACTIONABLE_DISK_SIGNATURE_MD5S = ["dcfcd07e645d245babe887e5e2daa016"]
+    # Some disk manufacturers set constant/shared ids for their products.
+    # In these cases, there's not a whole lot we can do -- we'll allow them thru.
+    INACTIONABLE_DISK_SIGNATURE_MD5S: list[str] = [
+        hashlib.md5(b"0").hexdigest(),  # "0" is likely the most common variant
+    ]
 
     if login_data["disk_signature_md5"] not in INACTIONABLE_DISK_SIGNATURE_MD5S:
         disk_signature_md5 = login_data["disk_signature_md5"]
