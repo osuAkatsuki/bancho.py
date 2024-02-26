@@ -37,7 +37,7 @@ def get_url() -> str:
         user=settings.DB_USER,
         host=settings.DB_HOST,
         port=settings.DB_PORT,
-        database=settings.DB_HOST,
+        database=settings.DB_NAME,
         driver="pymysql",
         password=settings.DB_PASS,
     )
