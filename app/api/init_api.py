@@ -94,8 +94,6 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
 
     app.state.services.ip_resolver = app.state.services.IPResolver()
 
-    await app.state.services.run_sql_migrations()
-
     await collections.initialize_ram_caches()
 
     await app.bg_loops.initialize_housekeeping_tasks()
