@@ -24,13 +24,7 @@ class LogTable(Base):
     to = Column("to", Integer, nullable=False)
     action = Column("action", String(32), nullable=False)
     msg = Column("msg", String(2048, collation="utf8"), nullable=True)
-    time = Column(
-        "time",
-        DateTime,
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
+    time = Column("time", DateTime, nullable=False, onupdate=func.now())
 
 
 READ_PARAMS = (
@@ -60,10 +54,13 @@ async def create(
 ) -> Log:
     """Create a new log entry in the database."""
     insert_stmt = insert(LogTable).values(
-        _from=_from,
-        to=to,
-        action=action,
-        msg=msg,
+        {
+            "from": _from,
+            "to": to,
+            "action": action,
+            "msg": msg,
+            "time": func.now(),
+        },
     )
     rec_id = await app.state.services.database.execute(insert_stmt)
 
