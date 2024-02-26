@@ -66,7 +66,6 @@ async def recalculate_score(
     calculator = Calculator(
         mode=GameMode(score["mode"]).as_vanilla,
         mods=score["mods"],
-        acc=score["acc"],
         combo=score["max_combo"],
         n_geki=score["ngeki"],  # Mania 320s
         n300=score["n300"],
