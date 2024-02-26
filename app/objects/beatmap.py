@@ -625,6 +625,9 @@ class BeatmapSet:
         expired and needs an update from the osu!api."""
         current_datetime = datetime.now()
 
+        if not self.maps:
+            return True
+
         # the delta between cache invalidations will increase depending
         # on how long it's been since the map was last updated on osu!
         last_map_update = max(bmap.last_update for bmap in self.maps)
@@ -758,19 +761,20 @@ class BeatmapSet:
             # TODO: a couple of open questions here:
             # - should we delete the beatmap from the database if it's not in the osu!api?
             # - are 404 and 200 the only cases where we should delete the beatmap?
-            map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
+            if self.maps:
+                map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
 
-            # delete maps
-            await app.state.services.database.execute(
-                "DELETE FROM maps WHERE md5 IN :map_md5s",
-                {"map_md5s": map_md5s_to_delete},
-            )
+                # delete maps
+                await app.state.services.database.execute(
+                    "DELETE FROM maps WHERE md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
 
-            # delete scores on the maps
-            await app.state.services.database.execute(
-                "DELETE FROM scores WHERE map_md5 IN :map_md5s",
-                {"map_md5s": map_md5s_to_delete},
-            )
+                # delete scores on the maps
+                await app.state.services.database.execute(
+                    "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
 
             # delete set
             await app.state.services.database.execute(

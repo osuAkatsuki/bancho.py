@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import struct
@@ -759,12 +760,23 @@ async def handle_osu_login_request(
 
     # TODO: store adapters individually
 
+    # Some disk manufacturers set constant/shared ids for their products.
+    # In these cases, there's not a whole lot we can do -- we'll allow them thru.
+    INACTIONABLE_DISK_SIGNATURE_MD5S: list[str] = [
+        hashlib.md5(b"0").hexdigest(),  # "0" is likely the most common variant
+    ]
+
+    if login_data["disk_signature_md5"] not in INACTIONABLE_DISK_SIGNATURE_MD5S:
+        disk_signature_md5 = login_data["disk_signature_md5"]
+    else:
+        disk_signature_md5 = None
+
     hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
         userid=user_info["id"],
         running_under_wine=running_under_wine,
         adapters=login_data["adapters_md5"],
         uninstall_id=login_data["uninstall_md5"],
-        disk_serial=login_data["disk_signature_md5"],
+        disk_serial=disk_signature_md5,
     )
 
     if hw_matches:
@@ -1985,7 +1997,7 @@ class TourneyMatchLeaveChannel(BasePacket):
             return  # insufficient privs
 
         match = app.state.sessions.matches[self.match_id]
-        if not match:
+        if not (match and player.id in match.tourney_clients):
             return  # match not found
 
         # attempt to join match chan
