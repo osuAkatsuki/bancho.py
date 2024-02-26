@@ -8,12 +8,12 @@ from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Index
 from sqlalchemy import Integer
-from sqlalchemy import String
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app._typing import UNSET
@@ -25,13 +25,21 @@ class ClansTable(Base):
     __tablename__ = "clans"
 
     id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
-    name = Column("name", String(16, collation="utf8"), nullable=False)
-    tag = Column("tag", String(6, collation="utf8"), nullable=False)
+    name = Column(
+        "name",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=16),
+        nullable=False,
+    )
+    tag = Column(
+        "tag",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=6),
+        nullable=False,
+    )
     owner = Column("owner", Integer, nullable=False)
     created_at = Column("created_at", DateTime, nullable=False)
 
     __table_args__ = (
-        Index("clans_name_uindex", name, unique=False),
+        Index("clans_name_uindex", name, unique=True),
         Index("clans_owner_uindex", owner, unique=True),
         Index("clans_tag_uindex", tag, unique=True),
     )

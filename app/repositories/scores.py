@@ -13,6 +13,8 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import BIGINT
+from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
@@ -25,10 +27,16 @@ from app.repositories import Base
 class ScoresTable(Base):
     __tablename__ = "scores"
 
-    id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    map_md5 = Column("map_md5", String(32), nullable=False)
+    id = Column(
+        "id",
+        BIGINT(unsigned=True),
+        nullable=False,
+        primary_key=True,
+        autoincrement=True,
+    )
+    map_md5 = Column("map_md5", CHAR(length=32), nullable=False)
     score = Column("score", Integer, nullable=False)
-    pp = Column("pp", FLOAT(precision=6, scale=3), nullable=False)
+    pp = Column("pp", FLOAT(precision=7, scale=3), nullable=False)
     acc = Column("acc", FLOAT(precision=6, scale=3), nullable=False)
     max_combo = Column("max_combo", Integer, nullable=False)
     mods = Column("mods", Integer, nullable=False)
@@ -39,14 +47,14 @@ class ScoresTable(Base):
     ngeki = Column("ngeki", Integer, nullable=False)
     nkatu = Column("nkatu", Integer, nullable=False)
     grade = Column("grade", String(2), nullable=False, server_default="N")
-    status = Column("status", Integer, nullable=False)
-    mode = Column("mode", Integer, nullable=False)
+    status = Column("status", TINYINT, nullable=False)
+    mode = Column("mode", TINYINT, nullable=False)
     play_time = Column("play_time", DateTime, nullable=False)
     time_elapsed = Column("time_elapsed", Integer, nullable=False)
     client_flags = Column("client_flags", Integer, nullable=False)
     userid = Column("userid", Integer, nullable=False)
     perfect = Column("perfect", TINYINT(1), nullable=False)
-    online_checksum = Column("online_checksum", String(32), nullable=False)
+    online_checksum = Column("online_checksum", CHAR(length=32), nullable=False)
 
     __table_args__ = (
         Index("scores_map_md5_index", map_md5),
