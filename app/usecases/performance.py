@@ -18,6 +18,7 @@ class ScoreParams:
     combo: int | None = None
 
     # caller may pass either acc OR 300/100/50/geki/katu/miss
+    # passing both will result in a value error being raised
     acc: float | None = None
 
     n300: int | None = None
@@ -60,12 +61,23 @@ def calculate_performances(
     osu_file_path: str,
     scores: Iterable[ScoreParams],
 ) -> list[PerformanceResult]:
+    """\
+    Calculate performance for multiple scores on a single beatmap.
+
+    Typically most useful for mass-recalculation situations.
+
+    TODO: Some level of error handling & returning to caller should be
+    implemented here to handle cases where e.g. the beatmap file is invalid
+    or there an issue during calculation.
+    """
     calc_bmap = Beatmap(path=osu_file_path)
 
     results: list[PerformanceResult] = []
 
     for score in scores:
-        if score.acc and (score.ngeki or score.nkatu or score.n50 or score.n100):
+        if score.acc and (
+            score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
+        ):
             raise ValueError("Must not specify both accuracy and geki/katu/50s/100s.")
 
         # rosupp ignores NC and requires DT
