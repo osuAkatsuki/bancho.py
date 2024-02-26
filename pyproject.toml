@@ -90,6 +90,7 @@ types-requests = "2.31.0.20240125"
 mypy = "1.8.0"
 types-pyyaml = "^6.0.12.12"
 sqlalchemy2-stubs = "^0.0.2a38"
+alembic = "^1.13.1"
 
 [build-system]
 requires = ["poetry-core"]
