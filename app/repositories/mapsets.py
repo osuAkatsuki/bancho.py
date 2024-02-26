@@ -10,6 +10,8 @@ from app.repositories import Base
 
 
 class MapsetsTable(Base):
+    __tablename__ = "mapsets"
+
     server = Column(
         "server",
         ENUM("osu!", "private"),
