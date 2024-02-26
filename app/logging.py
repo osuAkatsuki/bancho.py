@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging.config
+import re
 from collections.abc import Mapping
 from enum import IntEnum
 
 import yaml
+
+from app import settings
 
 
 def configure_logging() -> None:
@@ -40,6 +43,13 @@ class Ansi(IntEnum):
         return f"\x1b[{self.value}m"
 
 
+ANSI_ESCAPE_REGEX = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]")
+
+
+def escape_ansi(line: str) -> str:
+    return ANSI_ESCAPE_REGEX.sub("", line)
+
+
 ROOT_LOGGER = logging.getLogger()
 
 
@@ -63,8 +73,12 @@ def log(
     else:
         log_level = logging.INFO
 
-    color_prefix = f"{start_color!r}" if start_color is not None else ""
-    color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
+    if settings.LOG_WITH_COLORS:
+        color_prefix = f"{start_color!r}" if start_color is not None else ""
+        color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
+    else:
+        msg = escape_ansi(msg)
+        color_prefix = color_suffix = ""
 
     ROOT_LOGGER.log(log_level, f"{color_prefix}{msg}{color_suffix}", extra=extra)
 

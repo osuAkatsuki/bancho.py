@@ -17,3 +17,4 @@ tools/cf_records.txt
 /.redis-data/
 poetry.toml
 .coverage
+logs.log

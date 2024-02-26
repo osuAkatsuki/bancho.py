@@ -59,6 +59,8 @@ DISCORD_AUDIT_LOG_WEBHOOK = os.environ["DISCORD_AUDIT_LOG_WEBHOOK"]
 
 AUTOMATICALLY_REPORT_PROBLEMS = read_bool(os.environ["AUTOMATICALLY_REPORT_PROBLEMS"])
 
+LOG_WITH_COLORS = read_bool(os.environ["LOG_WITH_COLORS"])
+
 # advanced dev settings
 
 ## WARNING touch this once you've
