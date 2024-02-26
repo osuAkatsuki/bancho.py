@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import datetime
 import logging.config
 import re
 from collections.abc import Mapping
 from enum import IntEnum
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -41,6 +43,11 @@ class Ansi(IntEnum):
 
     def __repr__(self) -> str:
         return f"\x1b[{self.value}m"
+
+
+def get_timestamp(full: bool = False, tz: ZoneInfo | None = None) -> str:
+    fmt = "%d/%m/%Y %I:%M:%S%p" if full else "%I:%M:%S%p"
+    return f"{datetime.datetime.now(tz=tz):{fmt}}"
 
 
 ANSI_ESCAPE_REGEX = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]")

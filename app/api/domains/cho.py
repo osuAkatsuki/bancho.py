@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from typing import TypedDict
+from zoneinfo import ZoneInfo
 
 import bcrypt
 import databases.core
@@ -38,6 +39,7 @@ from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.logging import Ansi
+from app.logging import get_timestamp
 from app.logging import log
 from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
@@ -426,6 +428,9 @@ class SendMessage(BasePacket):
 
         player.update_latest_activity_soon()
         log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
+
+        with open(".data/logs/chat.log", "a+") as f:
+            f.write(f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {msg}\n")
 
 
 @register(ClientPackets.LOGOUT, restricted=True)
@@ -1300,6 +1305,8 @@ class SendPrivateMessage(BasePacket):
 
         player.update_latest_activity_soon()
         log(f"{player} @ {target}: {msg}", Ansi.LCYAN)
+        with open(".data/logs/chat.log", "a+") as f:
+            f.write(f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {msg}\n")
 
 
 @register(ClientPackets.PART_LOBBY)
