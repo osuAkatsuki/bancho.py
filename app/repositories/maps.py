@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import TypedDict
 from typing import cast
 
@@ -25,11 +26,17 @@ from app._typing import _UnsetSentinel
 from app.repositories import Base
 
 
+class Server(StrEnum):
+    replay = "replay"
+    map = "map"
+    song = "song"
+
+
 class MapsTable(Base):
     __tablename__ = "maps"
 
     server = Column(
-        ENUM("replay", "map", "song"),
+        ENUM(Server),
         nullable=False,
         server_default="osu!",
         primary_key=True,
