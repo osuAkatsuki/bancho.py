@@ -421,50 +421,36 @@ async def top(ctx: Context) -> str | None:
 class ParsingError(str): ...
 
 
-def parse__with__command_args(
+def parse__with__args(
     mode: int,
     args: Sequence[str],
-) -> Mapping[str, Any] | ParsingError:
+) -> ScoreParams | ParsingError:
     """Parse arguments for the !with command."""
-
-    if not args or len(args) > 4:
-        return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
-
-    # !with 95% 1m 429x hddt
-    acc = mods = combo = nmiss = None
-
-    # parse acc, misses, combo and mods from arguments.
-    # tried to balance complexity vs correctness here
-    for arg in (str.lower(arg) for arg in args):
-        # mandatory suffix, combo & nmiss
-        if combo is None and arg.endswith("x") and arg[:-1].isdecimal():
-            combo = int(arg[:-1])
-            # if combo > bmap.max_combo:
-            #    return "Invalid combo."
-        elif nmiss is None and arg.endswith("m") and arg[:-1].isdecimal():
-            nmiss = int(arg[:-1])
-            # TODO: store nobjects?
-            # if nmiss > bmap.combo:
-            #    return "Invalid misscount."
+    score_args = ScoreParams(mode=mode)
+    
+    for arg in args:
+        if arg.endswith("%") and arg[:-1].replace(".", "", 1).isdecimal():
+            score_args.acc = float(arg[:-1])
+            if not 0 <= score_args.acc <= 100:
+                raise TypeError("Invalid accuracy.")
+        elif arg.endswith("x") and arg[:-1].isdecimal(): # ignore mods like "dtrx"
+            score_args.combo = int(arg[:-1])
+        elif arg.endswith("m"):
+            score_args.nmiss = int(arg[:-1])
+        elif arg.endswith("x100"):
+            score_args.n100 = int(arg[:-4])
+        elif arg.endswith("x50"):
+            score_args.n50 = int(arg[:-3])
+        elif arg.endswith("xkatu"):
+            score_args.nkatu = int(arg[:-5])
+        elif arg.endswith("xgeki"):
+            score_args.ngeki = int(arg[:-5])
+        elif len(mods_str := arg.removeprefix("+")) % 2 == 0:
+            score_args.mods = Mods.from_modstr(mods_str).filter_invalid_combos(mode)
         else:
-            # optional prefix/suffix, mods & accuracy
-            arg_stripped = arg.removeprefix("+").removesuffix("%")
-            if mods is None and arg_stripped.isalpha() and len(arg_stripped) % 2 == 0:
-                mods = Mods.from_modstr(arg_stripped)
-                mods = mods.filter_invalid_combos(mode)
-            elif acc is None and arg_stripped.replace(".", "", 1).isdecimal():
-                acc = float(arg_stripped)
-                if not 0 <= acc <= 100:
-                    return ParsingError("Invalid accuracy.")
-            else:
-                return ParsingError(f"Unknown argument: {arg}")
-
-    return {
-        "acc": acc,
-        "mods": mods,
-        "combo": combo,
-        "nmiss": nmiss,
-    }
+            return ParsingError(f"Invalid parameter '{arg}'.")
+        
+    return score_args
 
 
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
@@ -487,41 +473,16 @@ async def _with(ctx: Context) -> str | None:
 
     mode_vn = ctx.player.last_np["mode_vn"]
 
-    command_args = parse__with__command_args(mode_vn, ctx.args)
-    if isinstance(command_args, ParsingError):
-        return str(command_args)
-
-    msg_fields = []
-
-    score_args = ScoreParams(mode=mode_vn)
-
-    mods = command_args["mods"]
-    if mods is not None:
-        score_args.mods = mods
-        msg_fields.append(f"{mods!r}")
-
-    nmiss = command_args["nmiss"]
-    if nmiss:
-        score_args.nmiss = nmiss
-        msg_fields.append(f"{nmiss}m")
-
-    combo = command_args["combo"]
-    if combo is not None:
-        score_args.combo = combo
-        msg_fields.append(f"{combo}x")
-
-    acc = command_args["acc"]
-    if acc is not None:
-        score_args.acc = acc
-        msg_fields.append(f"{acc:.2f}%")
+    score_args = parse__with__args(mode_vn, ctx.args)
+    if isinstance(score_args, ParsingError):
+        return str(score_args)
 
     result = app.usecases.performance.calculate_performances(
         osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
         scores=[score_args],  # calculate one score
     )
 
-    return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
-        msg=" ".join(msg_fields),
+    return "{pp:.2f}pp ({stars:.2f}*)".format(
         pp=result[0]["performance"]["pp"],
         stars=result[0]["difficulty"]["stars"],  # (first score result)
     )
