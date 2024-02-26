@@ -432,7 +432,7 @@ def parse__with__args(
         if arg.endswith("%") and arg[:-1].replace(".", "", 1).isdecimal():
             score_args.acc = float(arg[:-1])
             if not 0 <= score_args.acc <= 100:
-                raise TypeError("Invalid accuracy.")
+                return ParsingError("Invalid accuracy.")
         elif arg.endswith("x") and arg[:-1].isdecimal(): # ignore mods like "dtrx"
             score_args.combo = int(arg[:-1])
         elif arg.endswith("m"):
