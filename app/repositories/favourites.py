@@ -4,6 +4,7 @@ from typing import TypedDict
 from typing import cast
 
 from sqlalchemy import Column
+from sqlalchemy import Integer
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
@@ -15,9 +16,9 @@ from app.repositories import Base
 class FavouritesTable(Base):
     __tablename__ = "favourites"
 
-    userid = Column("userid", nullable=False, primary_key=True)
-    setid = Column("setid", nullable=False, primary_key=True)
-    created_at = Column("integer", nullable=False, server_default="0")
+    userid = Column("userid", Integer, nullable=False, primary_key=True)
+    setid = Column("setid", Integer, nullable=False, primary_key=True)
+    created_at = Column("created_at", Integer, nullable=False, server_default="0")
 
 
 READ_PARAMS = (
