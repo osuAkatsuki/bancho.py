@@ -115,7 +115,7 @@ def hook_database_calls() -> None:
 
             if seconds_elapsed >= MIN_SLOW_QUERY_SECONDS:
                 event_data = {
-                    "query": args[0],
+                    "query": kwargs.get("query", args and args[0]),
                     "seconds_elapsed": seconds_elapsed,
                 }
                 await report_event(event_data)
