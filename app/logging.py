@@ -56,9 +56,7 @@ def log(
 
     # TODO: decouple colors from the base logging function; move it to
     # be a formatter-specific concern such that we can log without color.
-    if start_color is Ansi.GRAY:
-        log_level = logging.INFO
-    elif start_color is Ansi.LYELLOW:
+    if start_color is Ansi.LYELLOW:
         log_level = logging.WARNING
     elif start_color is Ansi.LRED:
         log_level = logging.ERROR
