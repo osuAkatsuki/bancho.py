@@ -195,7 +195,9 @@ async def bancho_handler(
             headers={"cho-token": "no"},
             content=(
                 app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
-                + app.packets.notification("McOsu clients are not allowed on this server.")
+                + app.packets.notification(
+                    "McOsu clients are not allowed on this server.",
+                )
             ),
         )
 
