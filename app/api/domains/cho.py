@@ -427,10 +427,12 @@ class SendMessage(BasePacket):
             t_chan.send(msg, sender=player)
 
         player.update_latest_activity_soon()
-        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
 
+        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
         with open(".data/logs/chat.log", "a+") as f:
-            f.write(f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {msg}\n")
+            f.write(
+                f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {t_chan}: {msg}\n",
+            )
 
 
 @register(ClientPackets.LOGOUT, restricted=True)
@@ -1304,9 +1306,12 @@ class SendPrivateMessage(BasePacket):
                     player.send(resp_msg, sender=target)
 
         player.update_latest_activity_soon()
+
         log(f"{player} @ {target}: {msg}", Ansi.LCYAN)
         with open(".data/logs/chat.log", "a+") as f:
-            f.write(f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {msg}\n")
+            f.write(
+                f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {target}: {msg}\n",
+            )
 
 
 @register(ClientPackets.PART_LOBBY)
