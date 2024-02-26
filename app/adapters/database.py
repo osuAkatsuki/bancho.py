@@ -9,6 +9,8 @@ from sqlalchemy.dialects.mysql.mysqldb import MySQLDialect_mysqldb
 from sqlalchemy.sql.compiler import Compiled
 from sqlalchemy.sql.expression import ClauseElement
 
+from app import settings
+
 
 class MySQLDialect(MySQLDialect_mysqldb):
     default_paramstyle = "named"
@@ -36,7 +38,8 @@ class Database:
             dialect=DIALECT,
             compile_kwargs={"render_postcompile": True},
         )
-        print(str(compiled), compiled.params)
+        if settings.DEBUG:
+            print(str(compiled), compiled.params)
         return str(compiled), compiled.params
 
     async def fetch_one(
