@@ -13,6 +13,8 @@ from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import Insert as MysqlInsert
 from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.sql import ColumnElement
+from sqlalchemy.types import Boolean
 
 import app.state.services
 from app.repositories import Base
@@ -101,8 +103,8 @@ async def create(
 async def fetch_any_hardware_matches_for_user(
     userid: int,
     running_under_wine: bool,
-    adapters: str | None = None,
-    uninstall_id: str | None = None,
+    adapters: str,
+    uninstall_id: str,
     disk_serial: str | None = None,
 ) -> list[ClientHashWithPlayer]:
     """\
@@ -119,13 +121,13 @@ async def fetch_any_hardware_matches_for_user(
     if running_under_wine:
         select_stmt = select_stmt.where(ClientHashesTable.uninstall_id == uninstall_id)
     else:
-        select_stmt = select_stmt.where(
-            or_(
-                ClientHashesTable.adapters == adapters,
-                ClientHashesTable.uninstall_id == uninstall_id,
-                ClientHashesTable.disk_serial == disk_serial,
-            ),
-        )
+        # make disk serial optional in the OR
+        oneof_filters: list[ColumnElement[Boolean]] = []
+        oneof_filters.append(ClientHashesTable.adapters == adapters)
+        oneof_filters.append(ClientHashesTable.uninstall_id == uninstall_id)
+        if disk_serial is not None:
+            oneof_filters.append(ClientHashesTable.disk_serial == disk_serial)
+        select_stmt = select_stmt.where(or_(*oneof_filters))
 
     client_hashes = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[ClientHashWithPlayer], client_hashes)
