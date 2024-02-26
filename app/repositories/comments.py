@@ -117,7 +117,7 @@ async def fetch_all_relevant_to_replay(
                     CommentsTable.target_id == map_set_id,
                 ),
                 and_(
-                    CommentsTable.target_type == TargetType.beatmap,
+                    CommentsTable.target_type == TargetType.map,
                     CommentsTable.target_id == map_id,
                 ),
             ),
