@@ -59,21 +59,26 @@ def calculate_performances(
     osu_file_path: str,
     scores: Iterable[ScoreParams],
 ) -> list[PerformanceResult]:
+    """\
+    Calculate performance for multiple scores on a single beatmap.
+
+    Typically most useful for mass-recalculation situations.
+
+    TODO: Some level of error handling & returning to caller should be
+    implemented here to handle cases where e.g. the beatmap file is invalid
+    or there an issue during calculation.
+    """
     calc_bmap = Beatmap(path=osu_file_path)
 
     results: list[PerformanceResult] = []
 
     for score in scores:
-        # assert either acc OR 300/100/50/geki/katu/miss is present, but not both
-        # if (score.acc is None) == (
-        #     score.n300 is None
-        #     and score.n100 is None
-        #     and score.n50 is None
-        #     and score.ngeki is None
-        #     and score.nkatu is None
-        #     and score.nmiss is None
-        # ):
-        #     raise ValueError("Either acc OR 300/100/50/geki/katu/miss must be present")
+        if score.acc and (
+            score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
+        ):
+            raise ValueError(
+                "Must not specify accuracy AND 300/100/50/geki/katu. Only one or the other.",
+            )
 
         # rosupp ignores NC and requires DT
         if score.mods is not None:

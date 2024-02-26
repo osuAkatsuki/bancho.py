@@ -66,7 +66,6 @@ async def recalculate_score(
     calculator = Calculator(
         mode=GameMode(score["mode"]).as_vanilla,
         mods=score["mods"],
-        acc=score["acc"],
         combo=score["max_combo"],
         n_geki=score["ngeki"],  # Mania 320s
         n300=score["n300"],
@@ -134,15 +133,13 @@ async def recalculate_user(
     if not total_scores:
         return
 
-    top_100_pp = best_scores[:100]
-
     # calculate new total weighted accuracy
-    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(top_100_pp))
+    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_acc = 100.0 / (20 * (1 - 0.95**total_scores))
     acc = (weighted_acc * bonus_acc) / 100
 
     # calculate new total weighted pp
-    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(top_100_pp))
+    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
     pp = round(weighted_pp + bonus_pp)
 

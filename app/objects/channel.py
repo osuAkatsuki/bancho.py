@@ -10,8 +10,6 @@ from app.constants.privileges import Privileges
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-__all__ = ("Channel",)
-
 
 class Channel:
     """An osu! chat channel.

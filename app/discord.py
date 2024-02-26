@@ -10,20 +10,6 @@ from tenacity import wait_exponential
 
 from app.state import services
 
-# NOTE: this module currently only implements discord webhooks
-
-__all__ = (
-    "Footer",
-    "Image",
-    "Thumbnail",
-    "Video",
-    "Provider",
-    "Author",
-    "Field",
-    "Embed",
-    "Webhook",
-)
-
 
 class Footer:
     def __init__(self, text: str, **kwargs: Any) -> None:

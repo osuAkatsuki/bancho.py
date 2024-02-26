@@ -2,27 +2,25 @@ from __future__ import annotations
 
 import ctypes
 import inspect
-import io
-import ipaddress
 import os
-import shutil
 import socket
 import sys
-import types
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import TypedDict
 from typing import TypeVar
 
 import httpx
-import orjson
 import pymysql
 
 import app.settings
 from app.logging import Ansi
 from app.logging import log
-from app.logging import printc
+
+if TYPE_CHECKING:
+    from app.repositories.users import User
 
 T = TypeVar("T")
 
@@ -30,12 +28,15 @@ T = TypeVar("T")
 DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
-DEBUG_HOOKS_PATH = Path.cwd() / "_testing/runtime.py"
 
 
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
+
+
+def determine_highest_ranking_clan_member(members: list[User]) -> User:
+    return next(iter(sorted(members, key=lambda m: m["clan_priv"], reverse=True)))
 
 
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
@@ -93,8 +94,9 @@ def download_achievement_images(achievements_path: Path) -> None:
         log("Failed to download achievement images.", Ansi.LRED)
         achievements_path.rmdir()
 
-        # allow passthrough (don't hard crash) as the server will
-        # _mostly_ work in this state.
+        # allow passthrough (don't hard crash).
+        # the server will *mostly* work in this state.
+        pass
 
 
 def download_default_avatar(default_avatar_path: Path) -> None:
@@ -109,99 +111,28 @@ def download_default_avatar(default_avatar_path: Path) -> None:
     default_avatar_path.write_bytes(resp.content)
 
 
-def seconds_readable(seconds: int) -> str:
-    """Turn seconds as an int into 'DD:HH:MM:SS'."""
-    r: list[str] = []
-
-    days, seconds = divmod(seconds, 60 * 60 * 24)
-    if days:
-        r.append(f"{days:02d}")
-
-    hours, seconds = divmod(seconds, 60 * 60)
-    if hours:
-        r.append(f"{hours:02d}")
-
-    minutes, seconds = divmod(seconds, 60)
-    r.append(f"{minutes:02d}")
-
-    r.append(f"{seconds % 60:02d}")
-    return ":".join(r)
-
-
-def check_connection(timeout: float = 1.0) -> bool:
+def has_internet_connectivity(timeout: float = 1.0) -> bool:
     """Check for an active internet connection."""
-    # attempt to connect to common dns servers
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        for addr in (
-            "1.1.1.1",
-            "1.0.0.1",  # cloudflare
-            "8.8.8.8",
-            "8.8.4.4",
-        ):  # google
+    COMMON_DNS_SERVERS = (
+        # Cloudflare
+        "1.1.1.1",
+        "1.0.0.1",
+        # Google
+        "8.8.8.8",
+        "8.8.4.4",
+    )
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout)
+        for host in COMMON_DNS_SERVERS:
             try:
-                sock.connect((addr, 53))
-                return True
+                client.connect((host, 53))
             except OSError:
                 continue
+            else:
+                return True
 
     # all connections failed
     return False
-
-
-def processes_listening_on_unix_socket(socket_path: str) -> int:
-    """Return the number of processes currently listening on this socket."""
-    with open("/proc/net/unix") as f:  # TODO: does this require root privs?
-        unix_socket_data = f.read().splitlines(keepends=False)
-
-    process_count = 0
-
-    for line in unix_socket_data[1:]:
-        # 0000000045fe59d0: 00000002 00000000 00010000 0005 01 17665 /tmp/bancho.sock
-        tokens = line.split()
-
-        # unused params
-        # (
-        #     kernel_table_slot_num,
-        #     ref_count,
-        #     protocol,
-        #     flags,
-        #     sock_type,
-        #     sock_state,
-        #     inode,
-        # )  = tokens[0:7]
-
-        # path may or may not be set
-        if len(tokens) == 8 and tokens[7] == socket_path:
-            process_count += 1
-
-    return process_count
-
-
-def running_via_asgi_webserver() -> bool:
-    return any(map(sys.argv[0].endswith, ("hypercorn", "uvicorn")))
-
-
-def _install_synchronous_excepthook() -> None:
-    """Install a thin wrapper for sys.excepthook to catch bancho-related stuff."""
-    real_excepthook = sys.excepthook  # backup
-
-    def _excepthook(
-        type_: type[BaseException],
-        value: BaseException,
-        traceback: types.TracebackType | None,
-    ) -> None:
-        if type_ is KeyboardInterrupt:
-            print("\33[2K\r", end="Aborted startup.")
-            return
-
-        printc(
-            f"bancho.py v{app.settings.VERSION} ran into an issue before starting up :(",
-            Ansi.RED,
-        )
-        real_excepthook(type_, value, traceback)
-
-    sys.excepthook = _excepthook
 
 
 class FrameInfo(TypedDict):
@@ -236,21 +167,6 @@ def get_appropriate_stacktrace() -> list[FrameInfo]:
     ]
 
 
-def is_valid_inet_address(address: str) -> bool:
-    """Check whether address is a valid ipv(4/6) address."""
-    try:
-        ipaddress.ip_address(address)
-    except ValueError:
-        return False
-    else:
-        return True
-
-
-def is_valid_unix_address(address: str) -> bool:
-    """Check whether address is a valid unix address."""
-    return address.endswith(".sock")
-
-
 def pymysql_encode(
     conv: Callable[[Any, dict[object, object] | None], str],
 ) -> Callable[[type[T]], type[T]]:
@@ -270,54 +186,23 @@ def escape_enum(
     return str(int(val))
 
 
-def ensure_supported_platform() -> None:
-    """Ensure we're running on an appropriate platform for bancho.py."""
-    if sys.version_info < (3, 11):
-        log(
-            "bancho.py uses many modern python features, "
-            "and the minimum python version is 3.11.",
-            Ansi.LRED,
-        )
-        raise SystemExit(1)
-
-
-def ensure_directory_structure() -> None:
-    """Ensure the .data directory and git submodules are ready."""
-    # create /.data and its subdirectories.
+def ensure_persistent_volumes_are_available() -> None:
+    # create /.data directory
     DATA_PATH.mkdir(exist_ok=True)
 
+    # create /.data/... subdirectories
     for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
         subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
 
+    # download achievement images from osu!
     if not ACHIEVEMENTS_ASSETS_PATH.exists():
         ACHIEVEMENTS_ASSETS_PATH.mkdir(parents=True)
         download_achievement_images(ACHIEVEMENTS_ASSETS_PATH)
 
+    # download a default avatar image for new users
     if not DEFAULT_AVATAR_PATH.exists():
         download_default_avatar(DEFAULT_AVATAR_PATH)
-
-
-def setup_runtime_environment() -> None:
-    """Configure the server's runtime environment."""
-    # install a hook to catch exceptions outside the event loop,
-    # which will handle various situations where the error details
-    # can be cleared up for the developer; for example it will explain
-    # that the config has been updated when an unknown attribute is
-    # accessed, so the developer knows what to do immediately.
-    _install_synchronous_excepthook()
-
-    # we print utf-8 content quite often, so configure sys.stdout
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8")
-
-
-def _install_debugging_hooks() -> None:
-    """Change internals to help with debugging & active development."""
-    if DEBUG_HOOKS_PATH.exists():
-        from _testing import runtime  # type: ignore
-
-        runtime.setup()
 
 
 def is_running_as_admin() -> bool:
@@ -337,7 +222,7 @@ def is_running_as_admin() -> bool:
 def display_startup_dialog() -> None:
     """Print any general information or warnings to the console."""
     if app.settings.DEVELOPER_MODE:
-        log("running in advanced mode", Ansi.LRED)
+        log("running in advanced mode", Ansi.LYELLOW)
     if app.settings.DEBUG:
         log("running in debug mode", Ansi.LMAGENTA)
 
@@ -345,35 +230,17 @@ def display_startup_dialog() -> None:
     # unnecessary power over the operating system and is not advised.
     if is_running_as_admin():
         log(
-            "It is not recommended to run bancho.py as root/admin, especially in production..",
+            "It is not recommended to run bancho.py as root/admin, especially in production."
+            + (
+                " You are at increased risk as developer mode is enabled."
+                if app.settings.DEVELOPER_MODE
+                else ""
+            ),
             Ansi.LYELLOW,
         )
 
-        if app.settings.DEVELOPER_MODE:
-            log(
-                "The risk is even greater with features "
-                "such as config.advanced enabled.",
-                Ansi.LRED,
-            )
-
-
-def create_config_from_default() -> None:
-    """Create the default config from ext/config.sample.py"""
-    shutil.copy("ext/config.sample.py", "config.py")
-
-
-def orjson_serialize_to_str(*args: Any, **kwargs: Any) -> str:
-    return orjson.dumps(*args, **kwargs).decode()
-
-
-def get_media_type(extension: str) -> str | None:
-    if extension in ("jpg", "jpeg"):
-        return "image/jpeg"
-    elif extension == "png":
-        return "image/png"
-
-    # return none, fastapi will attempt to figure it out
-    return None
+    if not has_internet_connectivity():
+        log("No internet connectivity detected", Ansi.LYELLOW)
 
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:

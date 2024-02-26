@@ -16,3 +16,6 @@ tools/cf_records.txt
 /.db-data/
 /.redis-data/
 poetry.toml
+.coverage
+logging.yaml
+logs.log

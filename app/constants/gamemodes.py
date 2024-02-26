@@ -8,8 +8,6 @@ from app.constants.mods import Mods
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("GAMEMODE_REPR_LIST", "GameMode")
-
 GAMEMODE_REPR_LIST = (
     "vn!std",
     "vn!taiko",

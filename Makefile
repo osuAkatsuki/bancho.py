@@ -11,8 +11,9 @@ run-bg:
 run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
+last?=1
 logs:
-	docker-compose logs -f bancho mysql redis
+	docker-compose logs -f bancho mysql redis --tail ${last}
 
 shell:
 	poetry shell
@@ -20,12 +21,6 @@ shell:
 test:
 	docker-compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
 	docker-compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
-
-test-local:
-	poetry run pytest -vv tests/
-
-test-dbg:
-	poetry run pytest -vv --pdb -s tests/
 
 lint:
 	poetry run pre-commit run --all-files

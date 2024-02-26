@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import io
 import pprint
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
-from typing import Never
 
 import starlette.routing
 from fastapi import FastAPI
@@ -68,16 +68,18 @@ class BanchoAPI(FastAPI):
 
 
 @asynccontextmanager
-async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
-    app.utils.setup_runtime_environment()
-    app.utils.ensure_supported_platform()
-    app.utils.ensure_directory_structure()
+async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+    app.utils.ensure_persistent_volumes_are_available()
 
     app.state.loop = asyncio.get_running_loop()
+
     if app.utils.is_running_as_admin():
         log(
             "Running the server with root privileges is not recommended.",
-            Ansi.LRED,
+            Ansi.LYELLOW,
         )
 
     await app.state.services.database.connect()
@@ -94,8 +96,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
 
     await app.state.services.run_sql_migrations()
 
-    async with app.state.services.database.connection() as db_conn:
-        await collections.initialize_ram_caches(db_conn)
+    await collections.initialize_ram_caches()
 
     await app.bg_loops.initialize_housekeeping_tasks()
 
@@ -105,7 +106,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[Never]:
         Ansi.LMAGENTA,
     )
 
-    yield  # type: ignore
+    yield
 
     # we want to attempt to gracefully finish any ongoing connections
     # and shut down any of the housekeeping tasks running in the background.
