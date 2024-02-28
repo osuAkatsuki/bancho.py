@@ -5,18 +5,19 @@ services:
 
   mysql:
     image: mysql:latest
-    # ports:
-    #   - ${DB_PORT}:${DB_PORT}
+    ports:
+      - ${DB_PORT}:${DB_PORT}
     environment:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
       MYSQL_DATABASE: ${DB_NAME}
       NYSQL_HOST: ${DB_HOST}
       MYSQL_PORT: ${DB_PORT}
-      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - db-data:/var/lib/mysql
+      - ./mysql-files:/var/lib/mysql-files
     healthcheck:
       test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
       interval: 2s
@@ -25,8 +26,8 @@ services:
 
   redis:
     image: bitnami/redis:latest
-    # ports:
-    #   - ${REDIS_PORT}:${REDIS_PORT}
+    ports:
+      - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
       - redis-data:/bitnami/redis/data

@@ -19,3 +19,4 @@ poetry.toml
 .coverage
 logging.yaml
 logs.log
+mysql-files/
