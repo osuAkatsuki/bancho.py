@@ -472,6 +472,6 @@ create index users_clan_priv_index
 create index users_country_index
 	on users (country);
 
-# v5.2.1
+# v5.2.2
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);
