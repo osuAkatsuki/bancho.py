@@ -56,7 +56,7 @@ class Database:
         if settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed:.2f} seconds.",
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
                 extra={
                     "query": query,
                     "params": params,
@@ -80,7 +80,7 @@ class Database:
         if settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed:.2f} seconds.",
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
                 extra={
                     "query": query,
                     "params": params,
@@ -105,7 +105,7 @@ class Database:
         if settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed:.2f} seconds.",
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
                 extra={
                     "query": query,
                     "params": params,
@@ -125,7 +125,7 @@ class Database:
         if settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed:.2f} seconds.",
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
                 extra={
                     "query": query,
                     "params": params,
@@ -147,7 +147,7 @@ class Database:
         if settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed:.2f} seconds.",
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
                 extra={
                     "query": query,
                     "params": params,
