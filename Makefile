@@ -1,3 +1,5 @@
+#!/usr/bin/env make
+
 build:
 	if [ -d ".dbdata" ]; then sudo chmod -R 755 .dbdata; fi
 	docker build -t bancho:latest .
